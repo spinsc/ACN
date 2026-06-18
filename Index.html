@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACN SINAL VERDE - Supabase Cloud</title>
+    <!-- SDKs -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-gray-800">
+
+    <!-- BARRA DE USUÁRIO -->
+    <div id="user-bar" class="bg-slate-900 text-white text-[10px] px-4 py-1 flex justify-end gap-4 hidden">
+        <span id="user-email"></span>
+        <button onclick="handleLogout()" class="text-red-400 font-bold hover:underline">SAIR DO SISTEMA</button>
+    </div>
+
+    <header class="bg-slate-800 text-white p-4 shadow-md">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-wide text-green-400">ACN SINAL VERDE</h1>
+                <p class="text-xs text-gray-400 font-mono">ID: pwourvwtigkuyeiwlggr</p>
+            </div>
+        </div>
+    </header>
+
+    <nav class="bg-slate-700 text-white shadow sticky top-0 z-40 overflow-x-auto">
+        <div class="container mx-auto flex text-xs font-semibold p-1 gap-1">
+            <button onclick="showTab('dashboard')" id="btn-dashboard" class="tab-btn px-3 py-2.5 bg-slate-900 border-b-4 border-green-500 text-green-400 rounded">📊 Dashboard</button>
+            <button onclick="showTab('comercial')" id="btn-comercial" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🤝 1. Comercial</button>
+        </div>
+    </nav>
+
+    <main class="container mx-auto my-4 p-4">
+        
+        <!-- LOGIN MODAL -->
+        <div id="login-modal" class="fixed inset-0 bg-slate-900/95 flex items-center justify-center z-[100]">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+                <h2 class="text-2xl font-bold mb-2 text-slate-800">ACN - Cloud Login</h2>
+                <p class="text-xs text-gray-500 mb-6">Entre com seu e-mail do Supabase Auth</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">E-mail</label>
+                        <input type="email" id="login-email" class="w-full border p-2 rounded bg-slate-50 outline-none focus:ring-2 ring-green-400">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase">Senha</label>
+                        <input type="password" id="login-pass" class="w-full border p-2 rounded bg-slate-50 outline-none focus:ring-2 ring-green-400">
+                    </div>
+                    <button onclick="handleLogin()" id="btn-login" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded transition-all">ENTRAR NO SISTEMA</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <section id="tab-dashboard" class="tab-content active space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-6 rounded-xl border shadow-sm">
+                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">OPLs Ativas no Banco</h4>
+                    <p id="stat-total" class="text-3xl font-bold text-slate-800">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl border shadow-sm">
+                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">Status: Pendente</h4>
+                    <p id="stat-pendente" class="text-3xl font-bold text-amber-500">0</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMERCIAL -->
+        <section id="tab-comercial" class="tab-content space-y-4">
+            <div class="bg-white p-5 rounded-xl border">
+                <h2 class="text-base font-bold mb-3 text-slate-800">🤝 Entrada de Demanda Comercial</h2>
+                <form id="form-comercial" onsubmit="cadastrarOplSupabase(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2.5 bg-slate-50 p-4 rounded-lg">
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">DATA ENTRADA</label>
+                        <input type="date" required id="com-data" class="border p-2 rounded text-xs bg-white">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">NÚMERO OPL</label>
+                        <input type="text" required id="com-opl" placeholder="Ex: 2024-001" class="border p-2 rounded text-xs bg-white">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">CHASSI / ID ÚNICO</label>
+                        <input type="text" required id="com-chassi" placeholder="Identificação" class="border p-2 rounded text-xs bg-white">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">MODELO EQUIPAMENTO</label>
+                        <input type="text" required id="com-modelo" placeholder="Ex: VTR Toyota" class="border p-2 rounded text-xs bg-white">
+                    </div>
+                    
+                    <div class="md:col-span-2 flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">TIPO DE PROJETO</label>
+                        <select id="com-tipo-projeto" class="border p-2 rounded text-xs bg-white w-full">
+                            <option value="Transformação Veicular Ostensiva">🚓 Transformação Veicular Ostensiva</option>
+                            <option value="Transformação Veicular Discreta">🕵️ Transformação Veicular Discreta</option>
+                            <option value="Manutenção / Garantia">🔧 Manutenção / Garantia</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">PREVISÃO ENTREGA</label>
+                        <input type="date" id="com-data-entrega" class="border p-2 rounded text-xs bg-white w-full" required>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-[10px] font-bold text-slate-400">RESP. COMERCIAL</label>
+                        <input type="text" id="com-responsavel" placeholder="Nome" class="border p-2 rounded text-xs bg-white w-full">
+                    </div>
+                    <button type="submit" id="btn-save" class="md:col-span-4 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold p-3 rounded shadow transition-all">
+                        🚀 SALVAR NA NUVEM (SUPABASE)
+                    </button>
+                </form>
+            </div>
+
+            <!-- TABELA -->
+            <div class="bg-white p-4 rounded-xl border shadow-sm">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-slate-700 uppercase">OPLs Registradas</h3>
+                    <button onclick="loadData()" class="text-[10px] bg-slate-100 px-3 py-1 rounded hover:bg-slate-200">🔄 Sincronizar Agora</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px]">
+                            <tr>
+                                <th class="p-3">Entrada</th>
+                                <th class="p-3">OPL</th>
+                                <th class="p-3">Chassi</th>
+                                <th class="p-3">Modelo</th>
+                                <th class="p-3">Status Geral</th>
+                                <th class="p-3 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-comercial-body" class="divide-y">
+                            <!-- JS DATA -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // --- CONFIGURAÇÃO API SUPABASE ---
+        const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
+        const S_KEY = "COLE_AQUI_SUA_CHAVE_ANON_API"; // <--- COLOQUE SUA CHAVE AQUI
+        
+        const supabaseClient = supabase.createClient(S_URL, S_KEY);
+
+        // --- ESTADO LOCAL ---
+        let dbData = [];
+
+        // --- CONTROLE DE TABS ---
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
+                b.classList.add('hover:bg-slate-600');
+            });
+
+            document.getElementById('tab-' + tabId).classList.add('active');
+            const btn = document.getElementById('btn-' + tabId);
+            btn.classList.add('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
+        }
+
+        // --- AUTENTICAÇÃO ---
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-pass').value;
+            const btn = document.getElementById('btn-login');
+
+            btn.innerText = "VERIFICANDO...";
+            
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+
+            if (error) {
+                alert("Falha no login: " + error.message);
+                btn.innerText = "ENTRAR NO SISTEMA";
+            } else {
+                checkSession();
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            location.reload();
+        }
+
+        async function checkSession() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                document.getElementById('login-modal').style.display = 'none';
+                document.getElementById('user-bar').classList.remove('hidden');
+                document.getElementById('user-email').innerText = session.user.email;
+                loadData();
+            }
+        }
+
+        // --- CRUD SUPABASE ---
+        async function loadData() {
+            const { data, error } = await supabaseClient
+                .from('oples')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Erro ao buscar dados:", error);
+            } else {
+                dbData = data;
+                renderAll();
+            }
+        }
+
+        async function cadastrarOplSupabase(event) {
+            event.preventDefault();
+            const btn = document.getElementById('btn-save');
+            btn.innerText = "⏳ SALVANDO NA NUVEM...";
+            btn.disabled = true;
+
+            const payload = {
+                data_entrada: document.getElementById('com-data').value,
+                opl: document.getElementById('com-opl').value,
+                chassi: document.getElementById('com-chassi').value.toUpperCase(),
+                modelo: document.getElementById('com-modelo').value,
+                tipo_projeto: document.getElementById('com-tipo-projeto').value,
+                data_entrega_prevista: document.getElementById('com-data-entrega').value,
+                responsavel_comercial: document.getElementById('com-responsavel').value,
+                logs: [{msg: "Entrada comercial via App", user: document.getElementById('user-email').innerText}]
+            };
+
+            const { error } = await supabaseClient.from('oples').insert([payload]);
+
+            if (error) {
+                alert("Erro ao salvar: " + error.message);
+            } else {
+                document.getElementById('form-comercial').reset();
+                loadData();
+            }
+
+            btn.innerText = "🚀 SALVAR NA NUVEM (SUPABASE)";
+            btn.disabled = false;
+        }
+
+        async function deletarOpl(id) {
+            if(!confirm("Excluir definitivamente do banco de dados?")) return;
+            const { error } = await supabaseClient.from('oples').delete().eq('id', id);
+            if(error) alert(error.message);
+            else loadData();
+        }
+
+        // --- RENDERIZAÇÃO ---
+        function renderAll() {
+            // Render Tabela Comercial
+            const tbody = document.getElementById('table-comercial-body');
+            tbody.innerHTML = dbData.map(item => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-3">${new Date(item.data_entrada).toLocaleDateString('pt-BR')}</td>
+                    <td class="p-3 font-bold text-slate-700">${item.opl}</td>
+                    <td class="p-3 font-mono text-blue-600">${item.chassi}</td>
+                    <td class="p-3">${item.modelo}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-bold text-[9px]">
+                            ${item.status_geral}
+                        </span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="deletarOpl('${item.id}')" class="text-red-400 hover:text-red-600 transition-all">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Render Dashboard
+            document.getElementById('stat-total').innerText = dbData.length;
+            document.getElementById('stat-pendente').innerText = dbData.filter(x => x.status_geral === 'Engenharia Pendente').length;
+        }
+
+        // --- STARTUP ---
+        window.onload = checkSession;
+
+    </script>
+</body>
+</html>
