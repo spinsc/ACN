@@ -3,222 +3,269 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACN SINAL VERDE - Supabase Cloud</title>
-    <!-- SDKs -->
+    <title>ACN SINAL VERDE - Sistema Industrial Cloud</title>
+    <!-- Bibliotecas Externas -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        @keyframes pulse-red { 0%, 100% { background-color: #fee2e2; } 50% { background-color: #fca5a5; } }
+        .retrabalho-pulse { animation: pulse-red 1.5s infinite; border: 2px solid #ef4444; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        @media print { .no-print { display: none !important; } }
+        input, select { outline: none; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-gray-800">
 
-    <!-- BARRA DE USUÁRIO -->
-    <div id="user-bar" class="bg-slate-900 text-white text-[10px] px-4 py-1 flex justify-end gap-4 hidden">
-        <span id="user-email"></span>
-        <button onclick="handleLogout()" class="text-red-400 font-bold hover:underline">SAIR DO SISTEMA</button>
+    <!-- BARRA DE USUÁRIO (Apenas se logado) -->
+    <div id="user-bar" class="bg-slate-900 text-white text-[10px] px-4 py-1 flex justify-between items-center hidden no-print">
+        <span>PROJETO: <b class="text-green-400">pwourvwtigkuyeiwlggr</b></span>
+        <div class="flex gap-4 items-center">
+            <span id="user-display"></span>
+            <button onclick="handleLogout()" class="bg-red-600 px-2 py-0.5 rounded font-bold hover:bg-red-700">SAIR</button>
+        </div>
     </div>
 
-    <header class="bg-slate-800 text-white p-4 shadow-md">
+    <!-- LOGIN MODAL (Bloqueia o sistema até logar) -->
+    <div id="login-modal" class="fixed inset-0 bg-slate-900/95 flex items-center justify-center z-[100] no-print">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-bold text-slate-800">ACN SINAL VERDE</h1>
+                <p class="text-sm text-slate-500">Controle Industrial em Nuvem</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase">E-mail</label>
+                    <input type="email" id="login-email" class="w-full border p-2 rounded bg-slate-50 focus:ring-2 ring-green-400">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase">Senha</label>
+                    <input type="password" id="login-pass" class="w-full border p-2 rounded bg-slate-50 focus:ring-2 ring-green-400">
+                </div>
+                <button onclick="handleLogin()" id="btn-login" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded transition-all">ACESSAR SISTEMA</button>
+                <p class="text-[9px] text-center text-slate-400">Acesso restrito a colaboradores autorizados.</p>
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-slate-800 text-white p-4 shadow-md no-print">
         <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-2xl font-bold tracking-wide text-green-400">ACN SINAL VERDE</h1>
-                <p class="text-xs text-gray-400 font-mono">ID: pwourvwtigkuyeiwlggr</p>
+                <p class="text-xs text-gray-400 font-mono">Workflow Industrial & Dashboard Cloud</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="filtro-status-global" onchange="renderAll()" class="text-slate-800 text-xs p-1.5 rounded bg-white font-bold">
+                    <option value="TODOS">Todos os Status</option>
+                    <option value="Engenharia Pendente">Engenharia Pendente</option>
+                    <option value="BOM Liberado">PCP / Triagem</option>
+                    <option value="Liberado Produção">Em Produção</option>
+                    <option value="Finalizado">Finalizados</option>
+                </select>
             </div>
         </div>
     </header>
 
-    <nav class="bg-slate-700 text-white shadow sticky top-0 z-40 overflow-x-auto">
-        <div class="container mx-auto flex text-xs font-semibold p-1 gap-1">
-            <button onclick="showTab('dashboard')" id="btn-dashboard" class="tab-btn px-3 py-2.5 bg-slate-900 border-b-4 border-green-500 text-green-400 rounded">📊 Dashboard</button>
-            <button onclick="showTab('comercial')" id="btn-comercial" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🤝 1. Comercial</button>
+    <!-- MENU DE NAVEGAÇÃO -->
+    <nav class="bg-slate-700 text-white shadow sticky top-0 z-40 no-print overflow-x-auto">
+        <div class="container mx-auto flex text-xs font-semibold whitespace-nowrap p-1 gap-1">
+            <button onclick="showTab('dashboard')" id="btn-dashboard" class="tab-btn px-4 py-2.5 bg-slate-900 border-b-4 border-green-500 text-green-400 rounded">📊 Dashboard</button>
+            <button onclick="showTab('comercial')" id="btn-comercial" class="tab-btn px-4 py-2.5 hover:bg-slate-600 rounded">🤝 1. Comercial</button>
+            <button onclick="showTab('engenharia')" id="btn-engenharia" class="tab-btn px-4 py-2.5 hover:bg-slate-600 rounded">📐 2. Engenharia</button>
+            <button onclick="showTab('pcp')" id="btn-pcp" class="tab-btn px-4 py-2.5 hover:bg-slate-600 rounded">📦 3. PCP / Almox</button>
+            <button onclick="showTab('producao')" id="btn-producao" class="tab-btn px-4 py-2.5 hover:bg-slate-600 rounded">🛠️ 4. Produção</button>
         </div>
     </nav>
 
     <main class="container mx-auto my-4 p-4">
-        
-        <!-- LOGIN MODAL -->
-        <div id="login-modal" class="fixed inset-0 bg-slate-900/95 flex items-center justify-center z-[100]">
-            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
-                <h2 class="text-2xl font-bold mb-2 text-slate-800">ACN - Cloud Login</h2>
-                <p class="text-xs text-gray-500 mb-6">Entre com seu e-mail do Supabase Auth</p>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">E-mail</label>
-                        <input type="email" id="login-email" class="w-full border p-2 rounded bg-slate-50 outline-none focus:ring-2 ring-green-400">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">Senha</label>
-                        <input type="password" id="login-pass" class="w-full border p-2 rounded bg-slate-50 outline-none focus:ring-2 ring-green-400">
-                    </div>
-                    <button onclick="handleLogin()" id="btn-login" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded transition-all">ENTRAR NO SISTEMA</button>
-                </div>
-            </div>
-        </div>
 
-        <!-- DASHBOARD -->
+        <!-- DASHBOARD SECTION -->
         <section id="tab-dashboard" class="tab-content active space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="bg-white p-6 rounded-xl border shadow-sm">
-                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">OPLs Ativas no Banco</h4>
+                <div class="bg-white p-5 rounded-xl border shadow-sm">
+                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">OPLs no Banco</h4>
                     <p id="stat-total" class="text-3xl font-bold text-slate-800">0</p>
                 </div>
-                <div class="bg-white p-6 rounded-xl border shadow-sm">
-                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">Status: Pendente</h4>
-                    <p id="stat-pendente" class="text-3xl font-bold text-amber-500">0</p>
+                <div class="bg-white p-5 rounded-xl border shadow-sm border-l-4 border-l-amber-500">
+                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">Aguard. Engenharia</h4>
+                    <p id="stat-eng" class="text-3xl font-bold text-amber-600">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl border shadow-sm border-l-4 border-l-blue-500">
+                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">Em Produção</h4>
+                    <p id="stat-prod" class="text-3xl font-bold text-blue-600">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl border shadow-sm border-l-4 border-l-green-500">
+                    <h4 class="text-gray-400 text-[10px] font-bold uppercase">Concluídos (Mês)</h4>
+                    <p id="stat-fim" class="text-3xl font-bold text-green-600">0</p>
+                </div>
+            </div>
+            
+            <div class="bg-white p-4 rounded-xl border">
+                <h3 class="text-sm font-bold mb-4 text-slate-700">Histograma de Carga de Trabalho (Lead Time Médio Estimado)</h3>
+                <div class="h-[300px]">
+                    <canvas id="chartKPIs"></canvas>
                 </div>
             </div>
         </section>
 
-        <!-- COMERCIAL -->
+        <!-- COMERCIAL SECTION -->
         <section id="tab-comercial" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-3 text-slate-800">🤝 Entrada de Demanda Comercial</h2>
-                <form id="form-comercial" onsubmit="cadastrarOplSupabase(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2.5 bg-slate-50 p-4 rounded-lg">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-3 text-slate-800 flex items-center gap-2">🤝 Cadastro de Nova OPL</h2>
+                <form id="form-comercial" onsubmit="handleSalvarOpl(event)" class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg">
                     <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">DATA ENTRADA</label>
-                        <input type="date" required id="com-data" class="border p-2 rounded text-xs bg-white">
-                    </div>
-                    <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">NÚMERO OPL</label>
-                        <input type="text" required id="com-opl" placeholder="Ex: 2024-001" class="border p-2 rounded text-xs bg-white">
+                        <label class="text-[9px] font-bold text-slate-400">DATA</label>
+                        <input type="date" required id="com-data" class="border p-2 rounded text-xs">
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">CHASSI / ID ÚNICO</label>
-                        <input type="text" required id="com-chassi" placeholder="Identificação" class="border p-2 rounded text-xs bg-white">
+                        <label class="text-[9px] font-bold text-slate-400">Nº OPL</label>
+                        <input type="text" required id="com-opl" placeholder="Ex: OPL-2024-001" class="border p-2 rounded text-xs">
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">MODELO EQUIPAMENTO</label>
-                        <input type="text" required id="com-modelo" placeholder="Ex: VTR Toyota" class="border p-2 rounded text-xs bg-white">
-                    </div>
-                    
-                    <div class="md:col-span-2 flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">TIPO DE PROJETO</label>
-                        <select id="com-tipo-projeto" class="border p-2 rounded text-xs bg-white w-full">
-                            <option value="Transformação Veicular Ostensiva">🚓 Transformação Veicular Ostensiva</option>
-                            <option value="Transformação Veicular Discreta">🕵️ Transformação Veicular Discreta</option>
-                            <option value="Manutenção / Garantia">🔧 Manutenção / Garantia</option>
-                        </select>
+                        <label class="text-[9px] font-bold text-slate-400">CHASSI / ID</label>
+                        <input type="text" required id="com-chassi" placeholder="Chassi ou ID" class="border p-2 rounded text-xs">
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">PREVISÃO ENTREGA</label>
-                        <input type="date" id="com-data-entrega" class="border p-2 rounded text-xs bg-white w-full" required>
+                        <label class="text-[9px] font-bold text-slate-400">MODELO</label>
+                        <input type="text" required id="com-modelo" placeholder="Modelo do Equipamento" class="border p-2 rounded text-xs">
                     </div>
-                    <div class="flex flex-col">
-                        <label class="text-[10px] font-bold text-slate-400">RESP. COMERCIAL</label>
-                        <input type="text" id="com-responsavel" placeholder="Nome" class="border p-2 rounded text-xs bg-white w-full">
-                    </div>
-                    <button type="submit" id="btn-save" class="md:col-span-4 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold p-3 rounded shadow transition-all">
-                        🚀 SALVAR NA NUVEM (SUPABASE)
-                    </button>
+                    <button type="submit" id="btn-com-submit" class="md:col-span-4 bg-slate-800 text-white font-bold py-2.5 rounded hover:bg-slate-900 transition-all uppercase text-xs tracking-wider">Enviar para Engenharia</button>
                 </form>
             </div>
 
-            <!-- TABELA -->
             <div class="bg-white p-4 rounded-xl border shadow-sm">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-sm font-bold text-slate-700 uppercase">OPLs Registradas</h3>
-                    <button onclick="loadData()" class="text-[10px] bg-slate-100 px-3 py-1 rounded hover:bg-slate-200">🔄 Sincronizar Agora</button>
-                </div>
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-100 text-slate-600">
+                        <tr>
+                            <th class="p-3">Data</th>
+                            <th class="p-3">OPL</th>
+                            <th class="p-3">Chassi</th>
+                            <th class="p-3">Status Atual</th>
+                            <th class="p-3 text-center">Logs</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-comercial-body" class="divide-y"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ENGENHARIA SECTION -->
+        <section id="tab-engenharia" class="tab-content space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-4 text-slate-800">📐 Engenharia - Liberação de BOM Técnica</h2>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-xs text-left">
-                        <thead class="bg-slate-100 text-slate-600 uppercase text-[10px]">
+                    <table class="w-full text-xs text-left border">
+                        <thead class="bg-slate-800 text-white font-bold">
                             <tr>
-                                <th class="p-3">Entrada</th>
-                                <th class="p-3">OPL</th>
-                                <th class="p-3">Chassi</th>
-                                <th class="p-3">Modelo</th>
-                                <th class="p-3">Status Geral</th>
-                                <th class="p-3 text-center">Ações</th>
+                                <th class="p-3">Identificação</th>
+                                <th class="p-3">Estrutura (BOM)</th>
+                                <th class="p-3 text-center">Ação</th>
                             </tr>
                         </thead>
-                        <tbody id="table-comercial-body" class="divide-y">
-                            <!-- JS DATA -->
-                        </tbody>
+                        <tbody id="table-engenharia-body" class="divide-y"></tbody>
                     </table>
                 </div>
             </div>
         </section>
+
+        <!-- PCP SECTION -->
+        <section id="tab-pcp" class="tab-content space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-4 text-slate-800">📦 PCP & Almoxarifado - Triagem de Kit</h2>
+                <div id="pcp-list" class="grid grid-cols-1 gap-3">
+                    <!-- Dinâmico -->
+                </div>
+            </div>
+        </section>
+
+        <!-- PRODUÇÃO SECTION -->
+        <section id="tab-producao" class="tab-content space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-4 text-slate-800">🛠️ Produção - Linha de Montagem Ativa</h2>
+                <div id="producao-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Dinâmico -->
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <script>
-        // --- CONFIGURAÇÃO API SUPABASE ---
+        // --- CONFIGURAÇÃO DO BACKEND (SUPABASE) ---
         const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
-        const S_KEY = "COLE_AQUI_SUA_CHAVE_ANON_API"; // <--- COLOQUE SUA CHAVE AQUI
-        
-        const supabaseClient = supabase.createClient(S_URL, S_KEY);
+        const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s"; 
+        const _supabase = supabase.createClient(S_URL, S_KEY);
 
-        // --- ESTADO LOCAL ---
-        let dbData = [];
+        let cachedData = [];
+        let kpiChartInstance = null;
 
-        // --- CONTROLE DE TABS ---
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => {
-                b.classList.remove('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
-                b.classList.add('hover:bg-slate-600');
-            });
-
-            document.getElementById('tab-' + tabId).classList.add('active');
-            const btn = document.getElementById('btn-' + tabId);
-            btn.classList.add('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
-        }
-
-        // --- AUTENTICAÇÃO ---
+        // --- AUTH: Login & Sessão ---
         async function handleLogin() {
             const email = document.getElementById('login-email').value;
-            const pass = document.getElementById('login-pass').value;
+            const password = document.getElementById('login-pass').value;
             const btn = document.getElementById('btn-login');
 
+            if (!email || !password) return alert("Preencha todos os campos.");
+
+            btn.disabled = true;
             btn.innerText = "VERIFICANDO...";
-            
-            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
 
             if (error) {
-                alert("Falha no login: " + error.message);
-                btn.innerText = "ENTRAR NO SISTEMA";
+                alert("Erro de autenticação: " + error.message);
+                btn.disabled = false;
+                btn.innerText = "ACESSAR SISTEMA";
             } else {
                 checkSession();
             }
         }
 
         async function handleLogout() {
-            await supabaseClient.auth.signOut();
+            await _supabase.auth.signOut();
             location.reload();
         }
 
         async function checkSession() {
-            const { data: { session } } = await supabaseClient.auth.getSession();
+            const { data: { session } } = await _supabase.auth.getSession();
             if (session) {
                 document.getElementById('login-modal').style.display = 'none';
                 document.getElementById('user-bar').classList.remove('hidden');
-                document.getElementById('user-email').innerText = session.user.email;
+                document.getElementById('user-display').innerText = session.user.email;
+                initRealtime();
                 loadData();
             }
         }
 
-        // --- CRUD SUPABASE ---
+        // --- REALTIME: Atualiza a tela sem F5 ---
+        function initRealtime() {
+            _supabase
+                .channel('db-all-changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'oples' }, () => {
+                    loadData();
+                })
+                .subscribe();
+        }
+
+        // --- DATABASE: Busca de Dados ---
         async function loadData() {
-            const { data, error } = await supabaseClient
+            const { data, error } = await _supabase
                 .from('oples')
                 .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) {
-                console.error("Erro ao buscar dados:", error);
-            } else {
-                dbData = data;
+            if (!error) {
+                cachedData = data;
                 renderAll();
             }
         }
 
-        async function cadastrarOplSupabase(event) {
-            event.preventDefault();
-            const btn = document.getElementById('btn-save');
-            btn.innerText = "⏳ SALVANDO NA NUVEM...";
+        // --- COMERCIAL: Salvar OPL ---
+        async function handleSalvarOpl(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-com-submit');
             btn.disabled = true;
 
             const payload = {
@@ -226,60 +273,199 @@
                 opl: document.getElementById('com-opl').value,
                 chassi: document.getElementById('com-chassi').value.toUpperCase(),
                 modelo: document.getElementById('com-modelo').value,
-                tipo_projeto: document.getElementById('com-tipo-projeto').value,
-                data_entrega_prevista: document.getElementById('com-data-entrega').value,
-                responsavel_comercial: document.getElementById('com-responsavel').value,
-                logs: [{msg: "Entrada comercial via App", user: document.getElementById('user-email').innerText}]
+                ts_entrada: Date.now(),
+                status_geral: 'Engenharia Pendente',
+                logs: [{ action: "Cadastro Comercial", user: document.getElementById('user-display').innerText, date: new Date() }]
             };
 
-            const { error } = await supabaseClient.from('oples').insert([payload]);
-
+            const { error } = await _supabase.from('oples').insert([payload]);
             if (error) {
                 alert("Erro ao salvar: " + error.message);
             } else {
                 document.getElementById('form-comercial').reset();
-                loadData();
             }
-
-            btn.innerText = "🚀 SALVAR NA NUVEM (SUPABASE)";
             btn.disabled = false;
         }
 
-        async function deletarOpl(id) {
-            if(!confirm("Excluir definitivamente do banco de dados?")) return;
-            const { error } = await supabaseClient.from('oples').delete().eq('id', id);
-            if(error) alert(error.message);
-            else loadData();
+        // --- ENGINE: Atualização Genérica ---
+        async function updateDatabaseRecord(id, updateFields, logMessage) {
+            const currentItem = cachedData.find(x => x.id === id);
+            const updatedLogs = [...(currentItem.logs || []), { 
+                action: logMessage, 
+                user: document.getElementById('user-display').innerText, 
+                date: new Date() 
+            }];
+            
+            const { error } = await _supabase
+                .from('oples')
+                .update({ ...updateFields, logs: updatedLogs })
+                .eq('id', id);
+
+            if (error) alert("Erro na atualização: " + error.message);
         }
 
-        // --- RENDERIZAÇÃO ---
+        // --- UI NAVEGAÇÃO ---
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
+            });
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
+        }
+
+        // --- UI RENDERIZAÇÃO ---
         function renderAll() {
-            // Render Tabela Comercial
-            const tbody = document.getElementById('table-comercial-body');
-            tbody.innerHTML = dbData.map(item => `
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="p-3">${new Date(item.data_entrada).toLocaleDateString('pt-BR')}</td>
-                    <td class="p-3 font-bold text-slate-700">${item.opl}</td>
-                    <td class="p-3 font-mono text-blue-600">${item.chassi}</td>
-                    <td class="p-3">${item.modelo}</td>
+            const filtro = document.getElementById('filtro-status-global').value;
+            const dataToShow = filtro === 'TODOS' ? cachedData : cachedData.filter(x => x.status_geral === filtro);
+
+            renderDashboard();
+            renderComercial(dataToShow);
+            renderEngenharia(dataToShow);
+            renderPCP(dataToShow);
+            renderProducao(dataToShow);
+        }
+
+        function renderDashboard() {
+            const total = cachedData.length;
+            const eng = cachedData.filter(x => x.status_geral === 'Engenharia Pendente').length;
+            const prod = cachedData.filter(x => x.status_geral === 'Liberado Produção').length;
+            const fim = cachedData.filter(x => x.status_geral === 'Finalizado').length;
+            
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-eng').innerText = eng;
+            document.getElementById('stat-prod').innerText = prod;
+            document.getElementById('stat-fim').innerText = fim;
+
+            // Gráfico
+            const ctx = document.getElementById('chartKPIs').getContext('2d');
+            if (kpiChartInstance) kpiChartInstance.destroy();
+            kpiChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Engenharia', 'PCP', 'Produção', 'Qualidade'],
+                    datasets: [{
+                        label: 'Lead Time Médio (Horas)',
+                        data: [12, 14, 38, 5], 
+                        backgroundColor: '#1e293b',
+                        borderRadius: 5
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderComercial(data) {
+            const body = document.getElementById('table-comercial-body');
+            body.innerHTML = data.map(v => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3">${new Date(v.data_entrada).toLocaleDateString()}</td>
+                    <td class="p-3 font-bold">${v.opl}</td>
+                    <td class="p-3 font-mono text-blue-600">${v.chassi}</td>
                     <td class="p-3">
-                        <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-bold text-[9px]">
-                            ${item.status_geral}
-                        </span>
+                        <span class="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold uppercase">${v.status_geral}</span>
                     </td>
                     <td class="p-3 text-center">
-                        <button onclick="deletarOpl('${item.id}')" class="text-red-400 hover:text-red-600 transition-all">🗑️</button>
+                        <button onclick="verLog('${v.id}')" class="text-slate-400 hover:text-slate-800 transition-colors">📜</button>
                     </td>
                 </tr>
             `).join('');
+            if (data.length === 0) body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 italic">Nenhum registro encontrado no filtro atual.</td></tr>';
+        }
 
-            // Render Dashboard
-            document.getElementById('stat-total').innerText = dbData.length;
-            document.getElementById('stat-pendente').innerText = dbData.filter(x => x.status_geral === 'Engenharia Pendente').length;
+        function renderEngenharia(data) {
+            const body = document.getElementById('table-engenharia-body');
+            const filtrados = data.filter(x => x.status_geral === 'Engenharia Pendente');
+            body.innerHTML = filtrados.map(v => `
+                <tr>
+                    <td class="p-3"><b>${v.opl}</b><br><span class="text-[10px] font-mono text-slate-500">${v.chassi}</span></td>
+                    <td class="p-3"><input type="text" id="bom-${v.id}" class="w-full border p-1 rounded font-mono text-xs uppercase" placeholder="Insira a estrutura técnica..."></td>
+                    <td class="p-3 text-center">
+                        <button onclick="liberarBOM('${v.id}')" class="bg-blue-600 text-white px-4 py-1.5 rounded font-bold text-[10px] hover:bg-blue-700">LIBERAR BOM</button>
+                    </td>
+                </tr>
+            `).join('');
+            if (filtrados.length === 0) body.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400 italic">Nenhuma OPL aguardando Engenharia.</td></tr>';
+        }
+
+        async function liberarBOM(id) {
+            const bomInput = document.getElementById('bom-'+id).value;
+            if(!bomInput) return alert("Por favor, informe a estrutura técnica (BOM) para liberar.");
+            await updateDatabaseRecord(id, { bom: bomInput, status_geral: 'BOM Liberado', ts_bom_liberado: Date.now() }, "BOM Técnico Liberado");
+        }
+
+        function renderPCP(data) {
+            const container = document.getElementById('pcp-list');
+            const filtrados = data.filter(x => x.status_geral === 'BOM Liberado');
+            container.innerHTML = filtrados.map(v => `
+                <div class="border p-4 rounded-lg bg-white shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex-1">
+                        <p class="font-bold text-slate-800">${v.opl} | <span class="font-mono text-blue-600 text-xs">${v.chassi}</span></p>
+                        <p class="text-[11px] text-slate-500 bg-slate-100 p-1 rounded inline-block mt-1 uppercase">ESTRUTURA: ${v.bom}</p>
+                    </div>
+                    <button onclick="liberarProducao('${v.id}')" class="bg-indigo-600 text-white px-6 py-2 rounded font-bold text-xs hover:bg-indigo-700 w-full md:w-auto">LIBERAR P/ PRODUÇÃO</button>
+                </div>
+            `).join('');
+            if (filtrados.length === 0) container.innerHTML = '<p class="p-4 text-center text-slate-400 italic border rounded bg-slate-50">Aguardando liberações da Engenharia.</p>';
+        }
+
+        async function liberarProducao(id) {
+            await updateDatabaseRecord(id, { status_geral: 'Liberado Produção' }, "Kiting concluído e enviado para Produção.");
+        }
+
+        function renderProducao(data) {
+            const container = document.getElementById('producao-list');
+            const filtrados = data.filter(x => x.status_geral === 'Liberado Produção');
+            container.innerHTML = filtrados.map(v => `
+                <div class="bg-white border rounded-xl p-5 shadow-sm">
+                    <div class="flex justify-between items-start mb-3 border-b pb-2">
+                        <div>
+                            <h4 class="font-bold text-slate-800">${v.opl}</h4>
+                            <p class="text-[10px] text-slate-400 font-mono">${v.chassi}</p>
+                        </div>
+                        <span class="bg-blue-100 text-blue-800 text-[9px] font-bold px-2 py-0.5 rounded">MES</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-[10px] mb-4">
+                            <span>Status: <b class="text-indigo-600">Em Fila</b></span>
+                            <span>Tempo: <b>0.0h</b></span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="startMontagem('${v.id}')" class="flex-1 bg-slate-800 text-white py-2 rounded text-[10px] font-bold hover:bg-black transition-colors uppercase">Iniciar</button>
+                            <button onclick="stopMontagem('${v.id}')" class="flex-1 bg-green-600 text-white py-2 rounded text-[10px] font-bold hover:bg-green-700 transition-colors uppercase">Concluir</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            if (filtrados.length === 0) container.innerHTML = '<p class="col-span-full p-4 text-center text-slate-400 italic">Linha de produção sem ordens ativas.</p>';
+        }
+
+        async function startMontagem(id) {
+            await updateDatabaseRecord(id, { ts_inicio_producao: Date.now() }, "Iniciada montagem física.");
+            alert("Cronometria de montagem iniciada.");
+        }
+
+        async function stopMontagem(id) {
+            if(!confirm("Deseja encerrar a montagem e enviar para Qualidade?")) return;
+            await updateDatabaseRecord(id, { status_geral: 'Finalizado', ts_fim_producao: Date.now() }, "Montagem encerrada e enviada para expedição.");
+        }
+
+        function verLog(id) {
+            const item = cachedData.find(x => x.id === id);
+            if (!item || !item.logs) return alert("Sem histórico registrado.");
+            const hist = item.logs.map(l => `• [${new Date(l.date).toLocaleString('pt-BR')}] ${l.action} (${l.user})`).reverse().join('\n');
+            alert(`HISTÓRICO OPERACIONAL - ${item.opl}:\n\n` + hist);
         }
 
         // --- STARTUP ---
         window.onload = checkSession;
+    </script>
+</body>
+</html>
 
     </script>
 </body>
