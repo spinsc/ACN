@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACN SINAL VERDE - Sistema Operacional Unificado V23 Cloud</title>
+    <title>ACN SINAL VERDE - V23 Cloud Full (Admin Edition)</title>
     <!-- Bibliotecas -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -18,6 +18,19 @@
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-gray-800">
+
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="fixed inset-0 bg-slate-900/98 flex items-center justify-center z-[300]">
+        <div class="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-sm text-center">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">ACN SINAL VERDE</h1>
+            <p class="text-slate-500 text-xs mb-8 uppercase tracking-widest">Workflow Industrial Cloud</p>
+            <div class="space-y-4">
+                <input id="login-u" type="text" placeholder="Usuário" class="w-full border p-3 rounded-lg outline-none focus:ring-2 ring-green-400">
+                <input id="login-p" type="password" placeholder="Senha" class="w-full border p-3 rounded-lg outline-none focus:ring-2 ring-green-400">
+                <button onclick="acnDoLogin()" class="w-full bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-black transition-all">ENTRAR</button>
+            </div>
+        </div>
+    </div>
 
     <!-- BARRA DE USUÁRIO -->
     <div id="user-bar" class="bg-slate-900 text-white text-[10px] px-4 py-1 flex justify-between items-center hidden no-print">
@@ -34,17 +47,15 @@
                 <h1 class="text-2xl font-bold tracking-wide text-green-400">ACN SINAL VERDE</h1>
                 <p class="text-xs text-gray-400 font-mono">Workflow Industrial, Logística Avançada e KPIs em Horas</p>
             </div>
-            <div class="flex items-center gap-2 bg-slate-700 p-2 rounded border border-slate-600">
+            <div class="flex items-center gap-2">
                 <span class="text-xs text-white font-bold">📅 Período:</span>
                 <input type="date" id="filtro-data-inicio" onchange="loadAllData()" class="text-slate-800 text-xs p-1.5 rounded bg-white outline-none">
-                <span class="text-xs text-white font-bold">até</span>
                 <input type="date" id="filtro-data-fim" onchange="loadAllData()" class="text-slate-800 text-xs p-1.5 rounded bg-white outline-none">
             </div>
             <select id="filtro-status-global" onchange="renderizarTabelas()" class="text-slate-800 text-xs p-2 rounded border outline-none bg-white font-bold">
                 <option value="TODOS">Todos os Status</option>
-                <option value="CRITICO">Críticos / Retrabalho / Pendências</option>
-                <option value="EM_TRABALHO">Em Trabalho / Execução</option>
-                <option value="FINALIZADO_MES">Finalizados no Mês</option>
+                <option value="CRITICO">Críticos / Retrabalho</option>
+                <option value="EM_TRABALHO">Em Trabalho</option>
             </select>
         </div>
     </header>
@@ -53,13 +64,12 @@
         <div class="container mx-auto flex text-xs font-semibold whitespace-nowrap p-1 gap-1">
             <button onclick="showTab('dashboard')" id="btn-dashboard" class="tab-btn px-3 py-2.5 bg-slate-900 border-b-4 border-green-500 text-green-400 rounded">📊 Dashboard</button>
             <button onclick="showTab('comercial')" id="btn-comercial" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🤝 1. Comercial</button>
+            <button onclick="showTab('crm')" id="btn-crm" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">📞 CRM</button>
             <button onclick="showTab('engenharia')" id="btn-engenharia" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">📐 2. Engenharia</button>
             <button onclick="showTab('ajustes')" id="btn-ajustes" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🛠️ 2b. Ajustes</button>
             <button onclick="showTab('pcp')" id="btn-pcp" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">📦 3. PCP</button>
             <button onclick="showTab('serralheria')" id="btn-serralheria" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🔩 4b. Serralheria</button>
             <button onclick="showTab('chicotes')" id="btn-chicotes" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">⚡ 4c. Chicotes</button>
-            <button onclick="showTab('laboratorio')" id="btn-laboratorio" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🔬 5. Lab</button>
-            <button onclick="showTab('compras')" id="btn-compras" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🛒 6. Compras</button>
             <button onclick="showTab('almoxarifado')" id="btn-almoxarifado" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🏢 7. Almox</button>
             <button onclick="showTab('producao')" id="btn-producao" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🛠️ 8. Produção</button>
             <button onclick="showTab('qualidade')" id="btn-qualidade" class="tab-btn px-3 py-2.5 hover:bg-slate-600 rounded">🛡️ 9. CQ</button>
@@ -73,274 +83,181 @@
 
         <!-- DASHBOARD -->
         <section id="tab-dashboard" class="tab-content active space-y-4">
-            <div class="bg-white p-4 rounded-xl shadow-sm border">
-                <h2 class="text-sm font-bold text-slate-800 mb-3">📋 Painel Metas Metodologia Autogerenciável (Horas)</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead><tr class="bg-slate-100 border-b font-bold"><th>Métrica Analisada</th><th class="text-center">Meta</th><th class="text-center">Tolerância</th><th class="text-center">Realizado</th><th class="text-center">Status</th><th>Diretriz</th></tr></thead>
-                        <tbody id="dashboard-tbody" class="divide-y"></tbody>
-                    </table>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4" id="kpi-cards"></div>
+            
+            <div class="bg-white p-4 rounded-xl border shadow-sm">
+                <h3 class="font-bold mb-4">Lead Time e Eficiência Operacional</h3>
+                <div class="h-[340px]"><canvas id="chartIndicadores"></canvas></div>
+            </div>
+
+            <!-- GESTÃO DE USUÁRIOS (ADMIN ONLY) -->
+            <div id="admin-user-management" class="hidden bg-white p-5 rounded-xl border border-red-200 shadow-sm mt-8">
+                <h2 class="text-base font-bold mb-4 text-red-800 flex items-center gap-2">🔐 Gestão de Acessos (Admin)</h2>
+                <form onsubmit="cadastrarUsuarioCloud(event)" class="grid grid-cols-1 md:grid-cols-5 gap-3 bg-red-50 p-4 rounded-lg">
+                    <input type="text" id="new-user-nome" required placeholder="Nome Completo" class="border p-2 rounded text-xs">
+                    <input type="text" id="new-user-login" required placeholder="Login/Usuário" class="border p-2 rounded text-xs font-bold uppercase">
+                    <input type="password" id="new-user-senha" required placeholder="Senha" class="border p-2 rounded text-xs">
+                    <select id="new-user-perfil" class="border p-2 rounded text-xs">
+                        <option>Comercial</option><option>Engenharia</option><option>PCP</option><option>Produção</option><option>Admin</option>
+                    </select>
+                    <button type="submit" class="bg-red-700 text-white font-bold py-2 rounded hover:bg-red-800 transition-all text-xs">CRIAR USUÁRIO</button>
+                </form>
+                <div class="mt-4 overflow-x-auto">
+                    <table class="w-full text-[11px] text-left border"><thead class="bg-slate-100"><tr><th class="p-2">Nome</th><th>Login</th><th>Perfil</th><th class="text-center">Ação</th></tr></thead><tbody id="table-usuarios-list"></tbody></table>
                 </div>
-            </div>
-            <div class="bg-white p-4 rounded-xl shadow-sm border">
-                <h3 class="text-sm font-bold text-slate-800 mb-2">📈 Histograma de Eficiência</h3>
-                <div class="chart-container relative w-full h-[340px]"><canvas id="chartIndicadores"></canvas></div>
-            </div>
-            <div class="bg-white p-4 rounded-xl shadow-sm border">
-                <h3 class="text-sm font-bold text-slate-800 mb-2">🛠️ Produção - Checklist Global</h3>
-                <div id="kpi-producao-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs"></div>
             </div>
         </section>
 
         <!-- COMERCIAL -->
         <section id="tab-comercial" class="tab-content space-y-4">
             <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-3">🤝 Entrada de Demanda Comercial</h2>
-                <form id="form-comercial" onsubmit="cadastrarVeiculo(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2.5 bg-slate-50 p-4 rounded-lg">
-                    <input type="date" required id="com-data" class="border p-2 rounded text-xs bg-white">
-                    <input type="text" required id="com-opl" placeholder="Número da OPL" class="border p-2 rounded text-xs bg-white">
-                    <input type="text" required id="com-chassi" placeholder="Chassi ou ID Único" class="border p-2 rounded text-xs bg-white font-mono">
-                    <input type="text" required id="com-modelo" placeholder="Modelo do Equipamento" class="border p-2 rounded text-xs bg-white">
-                    <div class="md:col-span-4">
-                        <select id="com-tipo-projeto" class="border p-2 rounded text-xs bg-white w-full">
-                            <option>Transformação Veicular Ostensiva</option>
-                            <option>Transformação Veicular Discreta</option>
-                            <option>Módulo Expansível</option>
-                            <option>Rádio</option>
-                            <option>Manutenção</option>
-                            <option value="Demanda Direta Engenharia">🎯 Demanda Direta para Engenharia</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-[10px] font-bold text-slate-500">📅 Previsão Entrega ao Cliente:</label>
-                        <input type="date" id="com-data-entrega" class="border p-2 rounded text-xs bg-white w-full" required>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-[10px] font-bold text-slate-500">👤 Responsável Comercial:</label>
-                        <input type="text" id="com-responsavel" placeholder="Nome" class="border p-2 rounded text-xs bg-white w-full">
-                    </div>
-                    <button type="submit" class="md:col-span-4 bg-slate-800 text-white font-bold p-2 rounded shadow">Liberar para Engenharia</button>
+                <h2 class="font-bold mb-4 text-slate-800">🤝 Entrada de Demanda Comercial</h2>
+                <form onsubmit="cadastrarVeiculoCloud(event)" class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg">
+                    <input type="date" required id="com-data" class="border p-2 rounded text-xs">
+                    <input type="text" required id="com-opl" placeholder="Número OPL" class="border p-2 rounded text-xs">
+                    <input type="text" required id="com-chassi" placeholder="Chassi" class="border p-2 rounded text-xs font-mono">
+                    <input type="text" required id="com-modelo" placeholder="Modelo" class="border p-2 rounded text-xs">
+                    <select id="com-tipo" class="border p-2 rounded text-xs md:col-span-2">
+                        <option>Transformação Veicular Ostensiva</option><option>Transformação Veicular Discreta</option><option>Módulo Expansível</option><option>Manutenção</option>
+                    </select>
+                    <input type="date" id="com-prev" class="border p-2 rounded text-xs" title="Previsão Entrega">
+                    <button class="bg-slate-800 text-white font-bold py-2 rounded">LIBERAR P/ ENGENHARIA</button>
                 </form>
             </div>
-            <div id="painel-opls-referencia" class="flex flex-wrap gap-1.5 p-4 bg-blue-50 border rounded-xl"></div>
-            <div class="bg-white p-4 rounded-xl border">
-                <h3 class="text-sm font-bold mb-2">Histórico de Projetos & Expedição</h3>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Tipo</th><th>Entrega</th><th>Status</th><th>Ações</th></tr></thead><tbody id="table-comercial"></tbody></table></div>
+            <div class="bg-white p-4 rounded border overflow-x-auto">
+                <table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Status</th><th>Ações</th></tr></thead><tbody id="table-comercial"></tbody></table>
             </div>
         </section>
 
         <!-- CRM -->
         <section id="tab-crm" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-3">📞 CRM — Controle de Contatos</h2>
-                <form id="form-crm" onsubmit="registrarContatoCRM(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2.5 bg-blue-50 p-4 rounded-lg">
-                    <input type="text" id="crm-nome" required placeholder="Nome do Cliente" class="border p-2 rounded text-xs">
-                    <input type="text" id="crm-empresa" placeholder="Empresa" class="border p-2 rounded text-xs">
-                    <input type="date" id="crm-proximo" required class="border p-2 rounded text-xs">
-                    <button type="submit" class="bg-blue-700 text-white font-bold py-2 rounded">Salvar Contato</button>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4">📞 CRM - Gestão de Clientes</h2>
+                <form onsubmit="crmSalvar(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+                    <input type="text" id="crm-nome" required placeholder="Cliente" class="border p-2 rounded">
+                    <input type="text" id="crm-emp" placeholder="Empresa" class="border p-2 rounded">
+                    <input type="date" id="crm-prox" required class="border p-2 rounded">
+                    <button class="bg-blue-600 text-white font-bold rounded">REGISTRAR</button>
                 </form>
-                <div id="crm-alertas-painel" class="hidden p-3 bg-red-100 text-red-700 rounded-lg text-xs font-bold my-2"></div>
-                <div class="overflow-x-auto mt-3"><table class="w-full text-xs text-left"><thead class="bg-blue-100"><tr><th>Nome</th><th>Empresa</th><th>Próximo Contato</th><th>Ações</th></tr></thead><tbody id="table-crm"></tbody></table></div>
+                <div class="overflow-x-auto mt-4"><table class="w-full text-xs text-left"><thead><tr class="bg-slate-100"><th>Nome</th><th>Empresa</th><th>Próximo Contato</th></tr></thead><tbody id="table-crm"></tbody></table></div>
             </div>
         </section>
 
         <!-- ENGENHARIA -->
         <section id="tab-engenharia" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-2">📐 Engenharia - Geração de BOM</h2>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th>Chassi</th><th>OPL</th><th>BOM Técnica</th><th>Ação</th></tr></thead><tbody id="table-engenharia"></tbody></table></div>
-                
-                <h2 class="text-base font-bold mt-8 mb-2 text-orange-600">🛠️ Ajustes Pendentes</h2>
-                <div id="eng-alertas-prazos"></div>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left"><thead class="bg-orange-100"><tr><th>Data</th><th>OPL</th><th>Responsável</th><th>Status</th><th>Ações</th></tr></thead><tbody id="table-engenharia-ajustes"></tbody></table></div>
-            </div>
-        </section>
-
-        <!-- AJUSTES 2B -->
-        <section id="tab-ajustes" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-2">🛠️ Lançar Solicitação de Ajuste</h2>
-                <form id="form-ajuste" onsubmit="registrarSolicitacaoAjuste(event)" class="grid grid-cols-1 md:grid-cols-3 gap-2.5 bg-orange-50 p-4 rounded-lg">
-                    <input type="text" required id="aj-opl" placeholder="OPL" class="border p-2 rounded text-xs font-mono">
-                    <input type="text" required id="aj-requerente" placeholder="Requerente" class="border p-2 rounded text-xs">
-                    <select id="aj-prioridade" class="border p-2 rounded text-xs"><option>Normal</option><option>Alta</option><option>Crítica</option></select>
-                    <textarea id="aj-descricao" required placeholder="Descrição do problema" class="border p-2 rounded text-xs md:col-span-3"></textarea>
-                    <button class="bg-orange-600 text-white font-bold p-2 rounded shadow md:col-span-3 uppercase">Enviar para Engenharia</button>
-                </form>
-                <div id="table-ajustes-abertas-container" class="mt-6">
-                    <h3 class="font-bold mb-2">Solicitações em Aberto</h3>
-                    <div class="overflow-x-auto"><table class="w-full text-xs text-left border"><thead class="bg-slate-100"><tr><th>Data</th><th>OPL</th><th>Requerente</th><th>Status</th><th>Ação</th></tr></thead><tbody id="table-ajustes-abertas"></tbody></table></div>
-                </div>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4">📐 Engenharia - Liberação de BOM</h2>
+                <div class="overflow-x-auto"><table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th>Chassi</th><th>OPL</th><th>BOM</th><th>Ação</th></tr></thead><tbody id="table-engenharia"></tbody></table></div>
             </div>
         </section>
 
         <!-- PCP -->
         <section id="tab-pcp" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border shadow-sm">
-                <h2 class="text-base font-bold mb-4">📦 PCP - Centro de Distribuição</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs text-left border-collapse">
-                        <thead class="bg-slate-800 text-white"><tr><th class="p-3 border">Identificação</th><th class="p-3 border">Ordens Setoriais</th><th class="p-3 border">Gargalo</th><th class="p-3 border">Ações</th></tr></thead>
-                        <tbody id="table-pcp"></tbody>
-                    </table>
-                </div>
+            <div class="bg-white p-5 rounded border shadow-sm">
+                <h2 class="font-bold mb-4">📦 PCP - Distribuição de Ordens</h2>
+                <div class="overflow-x-auto"><table class="w-full text-xs text-left border"><thead class="bg-slate-800 text-white"><tr><th class="p-2">Identificação</th><th>Setores</th><th>Ações</th></tr></thead><tbody id="table-pcp"></tbody></table></div>
             </div>
         </section>
 
         <!-- ALMOXARIFADO -->
         <section id="tab-almoxarifado" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border border-blue-200">
-                <h2 class="text-base font-bold mb-4 text-blue-700">🏢 Almoxarifado - Triagem de Kiting</h2>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left border"><thead class="bg-slate-100"><tr><th>OPL/Chassi</th><th>BOM</th><th>Status Triagem</th><th>Ações</th></tr></thead><tbody id="table-almoxarifado"></tbody></table></div>
+            <div class="bg-white p-5 rounded border-l-8 border-l-blue-600 shadow-sm">
+                <h2 class="font-bold mb-4 text-blue-700">🏢 Almoxarifado - Triagem e Kiting</h2>
+                <div id="lista-almox" class="space-y-3"></div>
             </div>
         </section>
 
         <!-- PRODUÇÃO -->
         <section id="tab-producao" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-4">🛠️ Célula de Produção Ativa</h2>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left border"><thead class="bg-slate-100"><tr><th>OPL/Chassi</th><th>Operador</th><th>Tempo</th><th>Fase</th><th>Ações</th></tr></thead><tbody id="table-producao"></tbody></table></div>
+            <div class="bg-white p-5 rounded border shadow-sm">
+                <h2 class="font-bold mb-4 text-indigo-700">🛠️ Produção - Cronometria Ativa</h2>
+                <div id="lista-producao" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
             </div>
         </section>
 
         <!-- CHICOTES -->
         <section id="tab-chicotes" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-4">⚡ Departamento de Chicotes</h2>
-                <div id="chicotes-cards-container" class="grid grid-cols-1 gap-3"></div>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4">⚡ Departamento de Chicotes</h2>
+                <div id="lista-chicotes" class="space-y-2"></div>
             </div>
         </section>
 
         <!-- SERRALHERIA -->
         <section id="tab-serralheria" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-4">🔩 Serralheria Industrial</h2>
-                <div id="serralheria-alerta-gargalo" class="hidden p-3 bg-red-100 text-red-700 font-bold text-xs rounded mb-2 animate-pulse"></div>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left border"><thead class="bg-slate-800 text-white"><tr><th>OPL</th><th>Descrição</th><th>Prazo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="table-serralheria-ativas"></tbody></table></div>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4">🔩 Serralheria</h2>
+                <div id="lista-serralheria" class="space-y-2"></div>
             </div>
         </section>
 
-        <!-- QUALIDADE -->
-        <section id="tab-qualidade" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-4">🛡️ Controle de Qualidade</h2>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left mb-6"><thead class="bg-slate-100"><tr><th>Chassi</th><th>Tipo</th><th class="text-center">Auditoria</th></tr></thead><tbody id="table-qualidade"></tbody></table></div>
-                <h3 class="font-bold border-t pt-4">📜 Histórico de Checklists</h3>
-                <div class="overflow-x-auto"><table class="w-full text-[11px] text-left"><thead class="bg-slate-200"><tr><th>Data</th><th>OPL</th><th>Resultado</th><th>Observação</th></tr></thead><tbody id="table-historico-checklists"></tbody></table></div>
-            </div>
-        </section>
-
-        <!-- LOGÍSTICA -->
+        <!-- LOGISTICA -->
         <section id="tab-logistica" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-2">🔄 Logística - Manifesto de Cargas</h2>
-                <form id="form-logistica-manual" onsubmit="registrarLogisticaManualForm(event)" class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg text-xs">
-                    <input type="text" id="log-chassi" required placeholder="Vínculo Chassi" class="border p-2 rounded">
-                    <input type="text" id="log-material" required placeholder="Material" class="border p-2 rounded">
-                    <input type="text" id="log-nf" required placeholder="Nº Nota" class="border p-2 rounded">
-                    <input type="date" id="log-retorno" required class="border p-2 rounded" title="Previsão Retorno">
-                    <div class="md:col-span-4 flex items-center gap-4 py-2 border-t mt-1">
-                        <label class="font-bold">📷 Anexar Foto?</label>
-                        <input type="file" id="log-file-input" accept="image/*" class="text-[10px]">
-                    </div>
-                    <button class="md:col-span-4 bg-indigo-600 text-white font-bold py-2 rounded">Despachar Componente 🔄</button>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4">🔄 Logística - Manifesto de Cargas</h2>
+                <form onsubmit="logSalvar(event)" class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                    <input type="text" id="log-ch" placeholder="Chassi" class="border p-2 rounded">
+                    <input type="text" id="log-mt" placeholder="Material" class="border p-2 rounded">
+                    <input type="file" id="log-ft" accept="image/*" class="border p-1 rounded">
+                    <button class="bg-indigo-600 text-white font-bold rounded">DESPACHAR</button>
                 </form>
-                <div class="overflow-x-auto mt-6"><table class="w-full text-xs text-left border"><thead class="bg-slate-100"><tr><th>Vínculo</th><th>Material</th><th>Prazo</th><th>Foto</th><th>Ação</th></tr></thead><tbody id="table-logistica"></tbody></table></div>
+                <div id="lista-logistica" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
             </div>
         </section>
 
         <!-- VISTORIAS -->
         <section id="tab-vistorias" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded-xl border">
-                <h2 class="text-base font-bold mb-4">📸 Laudo de Vistoria de Pátio</h2>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4 text-slate-800">📸 Laudo de Vistoria (Assinatura)</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-3">
-                        <input type="text" id="vis-chassi" placeholder="Chassi Vínculo" class="w-full border p-3 rounded font-mono text-sm">
-                        <input type="text" id="vis-equip" placeholder="Identificação do Equipamento" class="w-full border p-3 rounded text-sm">
-                        <div>
-                            <p class="text-[10px] font-bold text-slate-400 mb-1">VISTO DE QUEM ENVIA:</p>
-                            <canvas id="canv-envia" class="canvas-signature" width="350" height="100"></canvas>
-                            <button onclick="clearSign('canv-envia')" class="text-[9px] text-red-500 underline">Limpar Assinatura</button>
-                        </div>
+                    <div>
+                        <input type="text" id="vis-ch" placeholder="Chassi" class="w-full border p-2 mb-2 rounded text-sm font-mono uppercase">
+                        <input type="text" id="vis-eq" placeholder="Equipamento" class="w-full border p-2 mb-2 rounded text-sm">
+                        <p class="text-[10px] font-bold">ASSINATURA ENVIO:</p>
+                        <canvas id="canv-envia" class="canvas-signature" width="350" height="100"></canvas>
+                        <button onclick="clearSign('canv-envia')" class="text-[9px] text-red-500 underline">Limpar</button>
                     </div>
                     <div class="flex flex-col justify-end">
-                        <div>
-                            <p class="text-[10px] font-bold text-slate-400 mb-1 uppercase">Visto de quem recebe/transporta:</p>
-                            <canvas id="canv-recebe" class="canvas-signature" width="350" height="100"></canvas>
-                            <button onclick="clearSign('canv-recebe')" class="text-[9px] text-red-500 underline">Limpar Assinatura</button>
-                        </div>
-                        <button onclick="salvarVistoriaCloud()" class="w-full bg-slate-800 text-white font-bold py-3 mt-4 rounded shadow-lg uppercase tracking-wider">Registrar Laudo 📄</button>
+                        <p class="text-[10px] font-bold">ASSINATURA RECEBIMENTO:</p>
+                        <canvas id="canv-recebe" class="canvas-signature" width="350" height="100"></canvas>
+                        <button onclick="clearSign('canv-recebe')" class="text-[9px] text-red-500 underline">Limpar</button>
+                        <button onclick="salvarVistoriaCloud()" class="w-full bg-slate-800 text-white font-bold py-3 mt-4 rounded uppercase">Registrar Laudo 📄</button>
                     </div>
                 </div>
-                <div id="table-vistorias-dados" class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                <div id="lista-vistorias" class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4"></div>
             </div>
         </section>
 
         <!-- FISCAL -->
         <section id="tab-fiscal" class="tab-content space-y-4">
-            <div class="bg-white p-5 rounded border shadow-sm">
-                <h2 class="text-base font-bold mb-4">📄 Fiscal - Faturamento NF-e</h2>
-                <div class="overflow-x-auto"><table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th>Chassi</th><th>OPL</th><th>Nº Nota Fiscal</th><th>Ação</th></tr></thead><tbody id="table-fiscal"></tbody></table></div>
-                <h3 class="font-bold border-t pt-6 mt-6">Últimas 10 Notas Emitidas</h3>
-                <div id="table-fiscal-historico" class="space-y-1 mt-2"></div>
+            <div class="bg-white p-5 rounded border">
+                <h2 class="font-bold mb-4">📄 Fiscal - Emissão de NF-e</h2>
+                <div id="lista-fiscal" class="space-y-2"></div>
             </div>
         </section>
 
     </main>
 
-    <!-- MODAL CHECKLIST -->
-    <div id="modal-checklist" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center hidden z-[200] p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h3 id="chk-title" class="text-lg font-bold mb-4">Checklist Técnico</h3>
-            <div id="chk-content" class="space-y-3 text-sm"></div>
-            <div class="mt-6 border-t pt-4 flex gap-2 justify-end">
-                <button onclick="fecharChecklistModal()" class="px-4 py-2 border rounded">Cancelar</button>
-                <button id="btn-chk-reprovar" class="px-4 py-2 bg-red-600 text-white rounded font-bold">REPROVAR</button>
-                <button id="btn-chk-aprovar" class="px-4 py-2 bg-green-600 text-white rounded font-bold">APROVAR</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- SCRIPTS -->
+    <!-- SCRIPTS CORE -->
     <script>
-        // CONFIGURAÇÃO SUPABASE
         const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
         const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
         const _supa = supabase.createClient(S_URL, S_KEY);
 
-        // VARIÁVEIS GLOBAIS (SINCRONIZADAS COM DB)
-        let ACN_DATA = [], DEMANDAS_DIRETAS = [], CRM = [], AJUSTES = [], COMPRAS = [], CQ = [], VISTORIAS = [], LOGS = [], USERS = [];
+        let DB = { oples: [], diretas: [], crm: [], vis: [], log: [] };
         let ACN_USER = null;
-        let chartInstance = null;
 
-        // --- AUTH & LOGIN ---
-        function _injetarLoginUI() {
-            const overlay = document.createElement('div');
-            overlay.id = 'acn-login-modal';
-            overlay.className = 'fixed inset-0 bg-slate-900/98 z-[300] flex items-center justify-center';
-            overlay.innerHTML = `
-                <div class="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-sm text-center">
-                    <h1 class="text-3xl font-bold text-slate-800 mb-2">ACN SINAL VERDE</h1>
-                    <p class="text-slate-500 text-xs mb-8 uppercase tracking-widest">Workflow Industrial Cloud</p>
-                    <div class="space-y-4">
-                        <input id="login-u" type="text" placeholder="Usuário" class="w-full border p-3 rounded-lg outline-none focus:ring-2 ring-green-400">
-                        <input id="login-p" type="password" placeholder="Senha" class="w-full border p-3 rounded-lg outline-none focus:ring-2 ring-green-400">
-                        <button onclick="acnDoLogin()" class="w-full bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-black transition-all">ENTRAR</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(overlay);
-        }
-
+        // --- AUTH ---
         async function acnDoLogin() {
-            const u = document.getElementById('login-u').value;
+            const u = document.getElementById('login-u').value.trim().toLowerCase();
             const p = document.getElementById('login-p').value;
             const { data, error } = await _supa.from('usuarios_acn').select('*').eq('login', u).eq('senha', p).single();
-            if (error || !data) return alert("Acesso negado.");
+            if (error || !data) return alert("Erro de acesso.");
             ACN_USER = data;
             sessionStorage.setItem('ACN_USER_ATIVO', JSON.stringify(ACN_USER));
-            document.getElementById('acn-login-modal').remove();
-            loadAllData();
+            document.getElementById('login-modal').remove();
             initBarra();
+            loadAllData();
         }
 
         function acnLogout() { sessionStorage.clear(); location.reload(); }
@@ -348,142 +265,35 @@
         function initBarra() {
             document.getElementById('user-bar').classList.remove('hidden');
             document.getElementById('user-info-display').innerText = `👤 ${ACN_USER.nome} (${ACN_USER.perfil})`;
+            if (ACN_USER.perfil === 'Admin') {
+                document.getElementById('admin-user-management').classList.remove('hidden');
+                renderizarListaUsuarios();
+            }
         }
 
         // --- DATA SYNC ---
         async function loadAllData() {
-            const f_ini = document.getElementById('filtro-data-inicio').value;
-            const f_fim = document.getElementById('filtro-data-fim').value;
-
-            const [o, d, c, a, cp, cq, v, l] = await Promise.all([
+            const [o, d, c, v, l] = await Promise.all([
                 _supa.from('oples').select('*').order('id', {ascending: false}),
                 _supa.from('demandas_diretas').select('*').order('id', {ascending: false}),
                 _supa.from('crm_clientes').select('*'),
-                _supa.from('ajustes_projeto').select('*').order('id', {ascending: false}),
-                _supa.from('compras_requisicoes').select('*').order('id', {ascending: false}),
-                _supa.from('qualidade_historico').select('*').order('id', {ascending: false}),
                 _supa.from('vistorias_patio').select('*').order('id', {ascending: false}),
                 _supa.from('logistica_manifestos').select('*').order('id', {ascending: false})
             ]);
-
-            ACN_DATA = o.data || [];
-            DEMANDAS_DIRETAS = d.data || [];
-            CRM = c.data || [];
-            AJUSTES = a.data || [];
-            COMPRAS = cp.data || [];
-            CQ = cq.data || [];
-            VISTORIAS = v.data || [];
-            LOGS = l.data || [];
-
+            DB = { oples: o.data||[], diretas: d.data||[], crm: c.data||[], vis: v.data||[], log: l.data||[] };
             renderizarTabelas();
             processarDashboard();
-            renderizarCRM();
-            renderizarVistorias();
+            setupCanvases();
         }
 
-        // --- RENDERIZADORES ---
-        function renderizarTabelas() {
-            const statusFiltro = document.getElementById('filtro-status-global').value;
-            const filtered = ACN_DATA.filter(v => statusFiltro === 'TODOS' || v.status_geral.includes(statusFiltro));
-
-            // COMERCIAL
-            document.getElementById('table-comercial').innerHTML = filtered.map(v => `
-                <tr class="hover:bg-slate-50 border-b">
-                    <td class="p-2">${v.data_entrada}</td>
-                    <td class="p-2 font-bold">${v.opl}</td>
-                    <td class="p-2 font-mono text-blue-600">${v.chassi}</td>
-                    <td class="p-2">${v.tipo_projeto}</td>
-                    <td class="p-2">${v.data_prevista_entrega}</td>
-                    <td class="p-2"><span class="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold uppercase">${v.status_geral}</span></td>
-                    <td class="p-2"><button onclick="verLogsOpl('${v.id}')" class="text-blue-500">📜</button></td>
-                </tr>
-            `).join('');
-
-            // ENGENHARIA
-            const engP = filtered.filter(x => x.status_geral === 'Engenharia Pendente');
-            document.getElementById('table-engenharia').innerHTML = engP.map(v => `
-                <tr class="border-b">
-                    <td class="p-2 font-mono"><b>${v.chassi}</b></td>
-                    <td class="p-2">${v.opl}</td>
-                    <td class="p-2"><input type="text" id="bom-${v.id}" class="border w-full p-1 rounded font-mono text-xs" placeholder="Inserir BOM..."></td>
-                    <td class="p-2"><button onclick="liberarBOM('${v.id}')" class="bg-green-600 text-white px-3 py-1 rounded text-[10px] font-bold">LIBERAR</button></td>
-                </tr>
-            `).join('');
-
-            // PCP
-            const pcpP = filtered.filter(x => x.status_geral === 'BOM Lançado - Análise PCP');
-            document.getElementById('table-pcp').innerHTML = pcpP.map(v => `
-                <tr class="border-b">
-                    <td class="p-2"><b>${v.opl}</b><br><span class="text-[10px] font-mono">${v.chassi}</span></td>
-                    <td class="p-2 space-y-1">
-                        <button onclick="pcpDisparar('${v.id}', 'Chicotes')" class="bg-indigo-100 text-indigo-700 text-[9px] px-2 rounded block">⚡ Chicote</button>
-                        <button onclick="pcpDisparar('${v.id}', 'Serralheria')" class="bg-orange-100 text-orange-700 text-[9px] px-2 rounded block">🔩 Serralheria</button>
-                    </td>
-                    <td class="p-2 text-[10px]">Aguardando Insumos</td>
-                    <td class="p-2"><button onclick="enviarAlmox('${v.id}')" class="bg-blue-600 text-white px-3 py-1 rounded text-[10px]">Liberar Almox</button></td>
-                </tr>
-            `).join('');
-
-            // ALMOX
-            const almP = filtered.filter(x => x.status_geral === 'Em Triagem (Almoxarifado)');
-            document.getElementById('table-almoxarifado').innerHTML = almP.map(v => `
-                <tr class="border-b"><td class="p-2"><b>${v.opl}</b></td><td class="p-2 text-[10px] uppercase font-mono">${v.bom}</td><td class="p-2 text-blue-600 font-bold">Em Separação</td>
-                <td class="p-2"><button onclick="almoxFim('${v.id}')" class="bg-green-600 text-white px-3 py-1 rounded text-[10px]">KITING OK</button></td></tr>
-            `).join('');
-
-            // PRODUÇÃO
-            const prodP = filtered.filter(x => x.status_geral === 'Liberado Produção');
-            document.getElementById('table-producao').innerHTML = prodP.map(v => `
-                <tr class="border-b"><td class="p-2"><b>${v.opl}</b></td><td class="p-2">${v.tecnico || 'Fábrica'}</td><td class="p-2 font-mono text-[10px]">${v.ts_inicio_prod ? 'Em andamento' : 'Aguardando'}</td><td class="p-2 text-indigo-600 font-bold">${v.status_producao || 'Fila'}</td>
-                <td class="p-2 flex gap-1">
-                    <button onclick="prodIniciar('${v.id}')" class="bg-slate-700 text-white px-2 py-1 rounded text-[9px]">INICIAR</button>
-                    <button onclick="abrirChecklist('${v.id}')" class="bg-green-600 text-white px-2 py-1 rounded text-[9px]">FINALIZAR</button>
-                </td></tr>
-            `).join('');
-
-            // CHICOTES (Cards)
-            const chiP = DEMANDAS_DIRETAS.filter(d => d.setor === 'Chicotes' && d.status !== 'Finalizada');
-            document.getElementById('chicotes-cards-container').innerHTML = chiP.map(c => `
-                <div class="bg-white border-l-4 border-l-indigo-600 p-4 rounded shadow-sm flex justify-between items-center">
-                    <div><b class="text-indigo-800">CHICOTE ${c.num_chicote}</b> <br> <span class="text-xs text-slate-500">OPL: ${c.opl} | Desc: ${c.descricao}</span></div>
-                    <button onclick="finalizarDireta('${c.id}')" class="bg-indigo-600 text-white px-4 py-2 rounded font-bold text-xs">CONCLUIR</button>
-                </div>
-            `).join('');
-
-            // SERRALHERIA
-            const serP = DEMANDAS_DIRETAS.filter(d => d.setor === 'Serralheria' && d.status !== 'Finalizada');
-            document.getElementById('table-serralheria-ativas').innerHTML = serP.map(s => `
-                <div class="bg-white border p-3 rounded flex justify-between">
-                    <div><b>${s.opl}</b> <br> ${s.descricao}</div>
-                    <button onclick="finalizarDireta('${s.id}')" class="bg-orange-600 text-white px-3 py-1 rounded text-[10px]">Concluir</button>
-                </div>
-            `).join('');
-
-            // QUALIDADE
-            const qP = filtered.filter(x => x.status_geral === 'Aguardando Qualidade');
-            document.getElementById('table-qualidade').innerHTML = qP.map(v => `
-                <tr class="border-b"><td><b>${v.chassi}</b></td><td>${v.tipo_projeto}</td><td class="text-center"><button onclick="abrirChecklist('${v.id}')" class="bg-blue-600 text-white px-4 py-1 rounded text-[10px]">AVALIAR</button></td></tr>
-            `).join('');
-
-            // AJUSTES
-            const ajP = AJUSTES.filter(x => x.status !== 'Finalizada');
-            document.getElementById('table-ajustes-abertas').innerHTML = ajP.map(a => `
-                <tr><td>${a.data_abertura}</td><td>${a.opl}</td><td>${a.requerente}</td><td>${a.status}</td><td><button onclick="finalizarAjuste('${a.id}')" class="text-blue-500">Concluir</button></td></tr>
-            `).join('');
-
-            // LOGISTICA
-            document.getElementById('table-logistica').innerHTML = LOGS.map(l => `
-                <tr class="border-b"><td>${l.chassi}</td><td>${l.material}</td><td>${l.previsao_retorno}</td><td>${l.foto_cam ? '🖼️ OK' : '-'}</td><td><button onclick="baixaLog('${l.id}')" class="text-green-600">Baixa</button></td></tr>
-            `).join('');
-
-            // FISCAL
-            const fisP = filtered.filter(x => x.status_geral === 'Liberado para Faturamento');
-            document.getElementById('table-fiscal').innerHTML = fisP.map(v => `
-                <tr><td>${v.chassi}</td><td>${v.opl}</td><td><input type="text" id="nfe-${v.id}" class="border p-1"></td><td><button onclick="faturar('${v.id}')" class="bg-blue-600 text-white px-2 py-1 rounded">Faturar</button></td></tr>
-            `).join('');
+        async function updateOpl(id, fields, msg) {
+            const item = DB.oples.find(x => x.id == id);
+            const logs = [...(item.logs_operacionais_tracking||[]), `[${new Date().toLocaleString()}] ${msg} - ${ACN_USER.nome}`];
+            await _supa.from('oples').update({ ...fields, logs_operacionais_tracking: logs }).eq('id', id);
+            loadAllData();
         }
 
-        // --- BUSINESS LOGIC (CLOUD ADAPTED) ---
+        // --- NEGÓCIO: COMERCIAL ---
         async function cadastrarVeiculo(e) {
             e.preventDefault();
             const payload = {
@@ -492,111 +302,193 @@
                 opl: document.getElementById('com-opl').value,
                 chassi: document.getElementById('com-chassi').value.toUpperCase(),
                 modelo: document.getElementById('com-modelo').value,
-                tipo_projeto: document.getElementById('com-tipo-projeto').value,
-                data_prevista_entrega: document.getElementById('com-data-entrega').value,
+                tipo_projeto: document.getElementById('com-tipo').value,
+                data_prevista_entrega: document.getElementById('com-prev').value,
                 status_geral: 'Engenharia Pendente',
                 ts_entrada: Date.now(),
                 logs_operacionais_tracking: [`[${new Date().toLocaleString()}] OPL Aberta por ${ACN_USER.nome}`]
             };
             await _supa.from('oples').insert([payload]);
-            loadAllData();
             e.target.reset();
+            loadAllData();
         }
 
+        // --- NEGÓCIO: ENGENHARIA ---
         async function liberarBOM(id) {
             const val = document.getElementById(`bom-${id}`).value;
-            if(!val) return alert("BOM obrigatório");
-            const item = ACN_DATA.find(x => x.id == id);
-            item.bom = val;
-            item.status_geral = 'BOM Lançado - Análise PCP';
-            item.ts_bom = Date.now();
-            item.ts_sol_kiting = Date.now();
-            await _supa.from('oples').upsert(item);
-            loadAllData();
+            if(!val) return alert("BOM Requerido");
+            await updateOpl(id, { bom: val, status_geral: 'BOM Lançado - Análise PCP' }, "BOM Liberado");
         }
 
+        // --- NEGÓCIO: PCP ---
         async function pcpDisparar(id, setor) {
+            const item = DB.oples.find(x => x.id == id);
             const desc = prompt(`Tarefa para ${setor}:`);
-            const item = ACN_DATA.find(x => x.id == id);
+            if(!desc) return;
             await _supa.from('demandas_diretas').insert({
-                id: Date.now(), setor, opl: item.opl, chassi: item.chassi, descricao: desc, status: 'Pendente', num_chicote: Math.floor(Math.random()*900)
+                id: Date.now(), setor, opl: item.opl, chassi: item.chassi, descricao: desc, status: 'Pendente'
             });
             loadAllData();
         }
 
-        async function enviarAlmox(id) {
-            await _supa.from('oples').update({ status_geral: 'Em Triagem (Almoxarifado)' }).eq('id', id);
-            loadAllData();
+        async function enviarAlmoxarifado(id) {
+            await updateOpl(id, { status_geral: 'Em Triagem (Almoxarifado)' }, "Enviado ao Almoxarifado");
         }
 
-        async function almoxFim(id) {
-            await _supa.from('oples').update({ status_geral: 'Liberado Produção', ts_kiting_fim: Date.now() }).eq('id', id);
-            loadAllData();
+        async function kitingOk(id) {
+            await updateOpl(id, { status_geral: 'Liberado Produção', ts_kiting_fim: Date.now() }, "Kiting Concluído");
         }
 
-        async function prodIniciar(id) {
-            await _supa.from('oples').update({ ts_inicio_prod: Date.now(), status_producao: 'Em Montagem' }).eq('id', id);
-            loadAllData();
+        // --- NEGÓCIO: PRODUÇÃO ---
+        async function prodInicio(id) {
+            await updateOpl(id, { ts_inicio_prod: Date.now(), status_producao: 'Em Montagem' }, "Iniciado Montagem");
+        }
+        async function prodFim(id) {
+            await updateOpl(id, { ts_fim_prod: Date.now(), status_geral: 'Aguardando Qualidade' }, "Montagem Finalizada");
         }
 
-        async function faturar(id) {
-            const nf = document.getElementById('nfe-'+id).value;
-            await _supa.from('oples').update({ nfe: nf, status_geral: 'Finalizado', ts_nf: Date.now() }).eq('id', id);
-            loadAllData();
-        }
-
-        async function finalizarDireta(id) {
-            await _supa.from('demandas_diretas').update({ status: 'Finalizada', ts_fim: Date.now() }).eq('id', id);
-            loadAllData();
-        }
-
-        // --- VISTORIAS CANVAS ---
-        let canvEnv, ctxEnv, canvRec, ctxRec, paintEnv = false, paintRec = false;
-        function setupCanvases() {
-            canvEnv = document.getElementById('canv-envia'); ctxEnv = canvEnv.getContext('2d');
-            canvRec = document.getElementById('canv-recebe'); ctxRec = canvRec.getContext('2d');
-            const handler = (canv, ctx, prop) => {
-                canv.onmousedown = () => window[prop] = true;
-                canv.onmouseup = () => { window[prop] = false; ctx.beginPath(); };
-                canv.onmousemove = (e) => {
-                    if(!window[prop]) return;
-                    ctx.lineWidth = 2; ctx.lineCap = 'round';
-                    const r = canv.getBoundingClientRect();
-                    ctx.lineTo(e.clientX - r.left, e.clientY - r.top);
-                    ctx.stroke(); ctx.beginPath(); ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
-                }
+        // --- ADMIN: USUÁRIOS ---
+        async function cadastrarUsuarioCloud(e) {
+            e.preventDefault();
+            const payload = {
+                nome: document.getElementById('new-user-nome').value,
+                login: document.getElementById('new-user-login').value.trim().toLowerCase(),
+                senha: document.getElementById('new-user-senha').value,
+                perfil: document.getElementById('new-user-perfil').value
             };
-            handler(canvEnv, ctxEnv, 'paintEnv'); handler(canvRec, ctxRec, 'paintRec');
+            const { error } = await _supa.from('usuarios_acn').insert([payload]);
+            if (error) alert("Erro: " + error.message);
+            else { alert("Usuário Criado!"); e.target.reset(); renderizarListaUsuarios(); }
         }
 
-        function clearSign(id) { const c = document.getElementById(id); c.getContext('2d').clearRect(0,0,c.width,c.height); }
+        async function deletarUsuario(id) {
+            if(confirm("Remover acesso?")) { await _supa.from('usuarios_acn').delete().eq('id', id); renderizarListaUsuarios(); }
+        }
+
+        async function renderizarListaUsuarios() {
+            const { data } = await _supa.from('usuarios_acn').select('*');
+            if(data) document.getElementById('table-usuarios-list').innerHTML = data.map(u => `
+                <tr class="border-b"><td class="p-2">${u.nome}</td><td class="p-2 font-mono">${u.login}</td><td class="p-2">${u.perfil}</td><td class="text-center"><button onclick="deletarUsuario('${u.id}')" class="text-red-600">Excluir</button></td></tr>
+            `).join('');
+        }
+
+        // --- CANVAS (VISTORIAS) ---
+        let canvE, ctxE, canvR, ctxR, pE = false, pR = false;
+        function setupCanvases() {
+            const setup = (cid, ctxVar, paintVar) => {
+                const c = document.getElementById(cid); if(!c) return;
+                const ctx = c.getContext('2d'); ctx.lineWidth = 2; ctx.lineCap = 'round';
+                c.onmousedown = () => window[paintVar] = true;
+                c.onmouseup = () => { window[paintVar] = false; ctx.beginPath(); };
+                c.onmousemove = (e) => {
+                    if(!window[paintVar]) return;
+                    const r = c.getBoundingClientRect();
+                    ctx.lineTo(e.clientX - r.left, e.clientY - r.top); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
+                };
+                window[ctxVar] = ctx;
+            }
+            setup('canv-envia', 'ctxE', 'pE'); setup('canv-recebe', 'ctxR', 'pR');
+        }
+        function clearSign(id) { 
+            const c = document.getElementById(id);
+            c.getContext('2d').clearRect(0,0,c.width,c.height);
+        }
 
         async function salvarVistoriaCloud() {
             const payload = {
                 id: Date.now(),
-                chassi: document.getElementById('vis-chassi').value,
-                material: document.getElementById('vis-equip').value,
-                data_hora: new Date().toLocaleString(),
-                sign_env: canvEnv.toDataURL(),
-                sign_rec: canvRec.toDataURL(),
-                status: 'Finalizado'
+                chassi: document.getElementById('vis-ch').value,
+                material: document.getElementById('vis-eq').value,
+                sign_env: document.getElementById('canv-envia').toDataURL(),
+                sign_rec: document.getElementById('canv-recebe').toDataURL(),
+                data_hora: new Date().toLocaleString()
             };
             await _supa.from('vistorias_patio').insert([payload]);
-            alert("Laudo Registrado!");
+            alert("Laudo Salvo!");
             loadAllData();
         }
 
-        function renderizarVistorias() {
-            document.getElementById('table-vistorias-dados').innerHTML = VISTORIAS.map(v => `
-                <div class="bg-white p-3 rounded border shadow-sm text-[10px]">
-                    <b>${v.chassi}</b> - ${v.material} <br>
-                    <div class="flex gap-2 mt-2">
-                        <img src="${v.sign_env}" class="h-8 border bg-slate-50">
-                        <img src="${v.sign_rec}" class="h-8 border bg-slate-50">
-                    </div>
-                </div>
-            `).join('');
+        // --- CRM SALVAR ---
+        async function crmSalvar(e) {
+            e.preventDefault();
+            await _supa.from('crm_clientes').insert({
+                id: Date.now(), nome: document.getElementById('crm-nome').value, empresa: document.getElementById('crm-emp').value, data_proximo_contato: document.getElementById('crm-prox').value
+            });
+            loadAllData();
         }
+
+        // --- LOGISTICA SALVAR ---
+        async function logSalvar(e) {
+            e.preventDefault();
+            const file = document.getElementById('log-ft').files[0];
+            const reader = new FileReader();
+            reader.onload = async () => {
+                await _supa.from('logistica_manifestos').insert({
+                    id: Date.now(), chassi: document.getElementById('log-ch').value, material: document.getElementById('log-mt').value, foto_cam: reader.result
+                });
+                loadAllData();
+            };
+            if(file) reader.readAsDataURL(file);
+        }
+
+        // --- RENDER TABELAS CORE ---
+        function renderizarTabelas() {
+            // COMERCIAL
+            document.getElementById('table-comercial').innerHTML = DB.oples.map(v => `
+                <tr class="border-b"><td>${v.data_entrada}</td><td class="font-bold">${v.opl}</td><td class="font-mono text-blue-600">${v.chassi}</td><td>${v.status_geral}</td><td>📜</td></tr>
+            `).join('');
+
+            // ENGENHARIA
+            document.getElementById('table-engenharia').innerHTML = DB.oples.filter(x=>x.status_geral==='Engenharia Pendente').map(v => `
+                <tr><td>${v.chassi}</td><td>${v.opl}</td><td><input type="text" id="bom-${v.id}" class="border p-1 w-full text-xs"></td><td><button onclick="liberarBOM('${v.id}')" class="bg-green-600 text-white px-2 py-1 rounded">Ok</button></td></tr>
+            `).join('');
+
+            // PCP
+            document.getElementById('table-pcp').innerHTML = DB.oples.filter(x=>x.status_geral==='BOM Lançado - Análise PCP').map(v => `
+                <tr><td><b>${v.opl}</b><br>${v.chassi}</td><td class="flex gap-1"><button onclick="pcpDisparar('${v.id}','Chicotes')" class="bg-indigo-100 text-[9px] p-1">⚡</button><button onclick="pcpDisparar('${v.id}','Serralheria')" class="bg-orange-100 text-[9px] p-1">🔩</button></td>
+                <td><button onclick="enviarAlmoxarifado('${v.id}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px]">Almox</button></td></tr>
+            `).join('');
+
+            // ALMOX
+            document.getElementById('lista-almox').innerHTML = DB.oples.filter(x=>x.status_geral==='Em Triagem (Almoxarifado)').map(v => `
+                <div class="bg-slate-50 border p-3 rounded flex justify-between items-center"><div><b>${v.opl}</b><br><small>${v.bom}</small></div><button onclick="kitingOk('${v.id}')" class="bg-blue-700 text-white px-3 py-1 rounded text-xs">Kiting OK</button></div>
+            `).join('');
+
+            // PRODUÇÃO
+            document.getElementById('lista-producao').innerHTML = DB.oples.filter(x=>x.status_geral==='Liberado Produção').map(v => `
+                <div class="bg-white border-l-4 border-l-indigo-600 p-4 rounded shadow-sm"><b>${v.opl}</b><div class="flex gap-1 mt-2"><button onclick="prodInicio('${v.id}')" class="bg-slate-800 text-white px-3 py-1 rounded text-xs">Iniciar</button><button onclick="prodFim('${v.id}')" class="bg-green-600 text-white px-3 py-1 rounded text-xs">Terminar</button></div></div>
+            `).join('');
+
+            // CHICOTES
+            document.getElementById('lista-chicotes').innerHTML = DB.diretas.filter(x=>x.setor==='Chicotes' && x.status!=='Finalizada').map(c => `
+                <div class="bg-white p-3 border rounded flex justify-between items-center"><div><b>${c.opl}</b>: ${c.descricao}</div><button onclick="finalizarD('${c.id}')" class="bg-indigo-600 text-white px-4 py-1 rounded text-xs">Fim</button></div>
+            `).join('');
+
+            // SERRALHERIA
+            document.getElementById('lista-serralheria').innerHTML = DB.diretas.filter(x=>x.setor==='Serralheria' && x.status!=='Finalizada').map(s => `
+                <div class="bg-white p-3 border rounded flex justify-between items-center"><div><b>${s.opl}</b>: ${s.descricao}</div><button onclick="finalizarD('${s.id}')" class="bg-orange-600 text-white px-4 py-1 rounded text-xs">Fim</button></div>
+            `).join('');
+
+            // FISCAL
+            document.getElementById('lista-fiscal').innerHTML = DB.oples.filter(x=>x.status_geral==='Liberado para Faturamento').map(v => `
+                <div class="bg-slate-50 p-2 border rounded flex justify-between items-center"><b>${v.opl}</b><button class="bg-slate-800 text-white px-3 py-1 rounded text-xs">Emitir NF</button></div>
+            `).join('');
+
+            // LOGISTICA RENDER
+            document.getElementById('lista-logistica').innerHTML = DB.log.map(l => `
+                <div class="bg-white p-2 border rounded flex gap-3 items-center"><img src="${l.foto_cam}" class="w-12 h-12 object-cover rounded"><div><b>${l.chassi}</b><br><small>${l.material}</small></div></div>
+            `).join('');
+
+            // VISTORIAS RENDER
+            document.getElementById('lista-vistorias').innerHTML = DB.vis.map(v => `
+                <div class="bg-white p-3 border rounded"><small>${v.data_hora}</small><br><b>${v.chassi}</b><div class="flex gap-2 mt-2"><img src="${v.sign_env}" class="h-8 border"><img src="${v.sign_rec}" class="h-8 border"></div></div>
+            `).join('');
+            
+            document.getElementById('table-crm').innerHTML = DB.crm.map(c => `<tr><td>${c.nome}</td><td>${c.empresa}</td><td>${c.data_proximo_contato}</td></tr>`).join('');
+        }
+
+        async function finalizarD(id) { await _supa.from('demandas_diretas').update({ status: 'Finalizada' }).eq('id', id); loadAllData(); }
 
         // --- DASHBOARD ENGINE ---
         function processarDashboard() {
@@ -606,69 +498,20 @@
                 type: 'bar',
                 data: {
                     labels: ['Comercial', 'Engenharia', 'PCP', 'Produção'],
-                    datasets: [{ label: 'Horas Médias Realizadas', data: [8, 14, 28, 48], backgroundColor: '#1e293b' }]
+                    datasets: [{ label: 'Lead Time Médio (Horas)', data: [8, 14, 28, 48], backgroundColor: '#1e293b' }]
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
 
-            document.getElementById('dashboard-tbody').innerHTML = `
-                <tr><td class="p-2">Lead Time Liberação BOM</td><td class="text-center">8h</td><td class="text-center">16h</td><td class="text-center">12.5h</td><td class="text-center">🟢</td><td>Fluxo Normal</td></tr>
-                <tr><td class="p-2">Lead Time Produção</td><td class="text-center">16h</td><td class="text-center">40h</td><td class="text-center">38h</td><td class="text-center">🟡</td><td>Atenção Gargalo</td></tr>
-            `;
-
-            document.getElementById('kpi-producao-cards').innerHTML = `
-                <div class="bg-green-50 p-3 rounded text-center border border-green-200">Total OPLs: <b>${ACN_DATA.length}</b></div>
-                <div class="bg-blue-50 p-3 rounded text-center border border-blue-200">Em Produção: <b>${ACN_DATA.filter(x=>x.status_geral==='Liberado Produção').length}</b></div>
-                <div class="bg-amber-50 p-3 rounded text-center border border-amber-200">Pend. Engenharia: <b>${ACN_DATA.filter(x=>x.status_geral==='Engenharia Pendente').length}</b></div>
-                <div class="bg-slate-100 p-3 rounded text-center border">Concluídas: <b>${ACN_DATA.filter(x=>x.status_geral==='Finalizado').length}</b></div>
+            document.getElementById('kpi-cards').innerHTML = `
+                <div class="bg-white p-5 border rounded shadow-sm">Total OPLs: <b class="text-2xl block">${DB.oples.length}</b></div>
+                <div class="bg-white p-5 border rounded shadow-sm border-l-4 border-l-blue-500">Em Produção: <b class="text-2xl block">${DB.oples.filter(x=>x.status_geral==='Liberado Produção').length}</b></div>
+                <div class="bg-white p-5 border rounded shadow-sm border-l-4 border-l-amber-500">Pend. Engenharia: <b class="text-2xl block">${DB.oples.filter(x=>x.status_geral==='Engenharia Pendente').length}</b></div>
+                <div class="bg-white p-5 border rounded shadow-sm border-l-4 border-l-green-500">Finalizadas: <b class="text-2xl block">${DB.oples.filter(x=>x.status_geral==='Finalizado').length}</b></div>
             `;
         }
 
-        // --- CRM ---
-        async function registrarContatoCRM(e) {
-            e.preventDefault();
-            await _supa.from('crm_clientes').insert({
-                id: Date.now(), nome: document.getElementById('crm-nome').value, empresa: document.getElementById('crm-empresa').value, data_proximo_contato: document.getElementById('crm-proximo').value, status: 'Ativo'
-            });
-            loadAllData();
-        }
-
-        function renderizarCRM() {
-            document.getElementById('table-crm').innerHTML = CRM.map(c => `<tr><td>${c.nome}</td><td>${c.empresa}</td><td>${c.data_proximo_contato}</td><td><button class="text-blue-500">Interagir</button></td></tr>`).join('');
-        }
-
-        // --- AJUSTES ---
-        async function registrarSolicitacaoAjuste(e) {
-            e.preventDefault();
-            await _supa.from('ajustes_projeto').insert({
-                id: Date.now(), data_abertura: new Date().toLocaleDateString(), opl: document.getElementById('aj-opl').value, requerente: document.getElementById('aj-requerente').value, descricao: document.getElementById('aj-descricao').value, status: 'Aberta'
-            });
-            loadAllData();
-        }
-
-        // --- LOGISTICA FOTO ---
-        async function registrarLogisticaManualForm(e) {
-            e.preventDefault();
-            const file = document.getElementById('log-file-input').files[0];
-            let base64 = null;
-            if(file) {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = async () => {
-                    await _supa.from('logistica_manifestos').insert({
-                        id: Date.now(), chassi: document.getElementById('log-chassi').value, material: document.getElementById('log-material').value, previsao_retorno: document.getElementById('log-retorno').value, foto_cam: reader.result, status: 'Em Trânsito'
-                    });
-                    loadAllData();
-                }
-            } else {
-                await _supa.from('logistica_manifestos').insert({
-                    id: Date.now(), chassi: document.getElementById('log-chassi').value, material: document.getElementById('log-material').value, previsao_retorno: document.getElementById('log-retorno').value, status: 'Em Trânsito'
-                });
-                loadAllData();
-            }
-        }
-
-        // --- NAVEGAÇÃO ---
+        // --- UI CORE ---
         function showTab(id) {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.getElementById('tab-' + id).classList.add('active');
@@ -676,41 +519,13 @@
             document.getElementById('btn-' + id).classList.add('bg-slate-900', 'border-b-4', 'border-green-500', 'text-green-400');
         }
 
-        // --- MODAL CHECKLIST ---
-        function abrirChecklist(id) {
-            const item = ACN_DATA.find(x => x.id == id);
-            document.getElementById('chk-title').innerText = `Auditoria OPL ${item.opl}`;
-            document.getElementById('chk-content').innerHTML = `
-                <label class="flex items-center gap-2"><input type="checkbox" checked> Conferência do BOM concluída?</label>
-                <label class="flex items-center gap-2"><input type="checkbox" checked> Teste funcional realizado?</label>
-                <textarea id="chk-obs" class="w-full border p-2 rounded mt-2" placeholder="Observações de qualidade..."></textarea>`;
-            document.getElementById('btn-chk-aprovar').onclick = () => finalizarAuditoria(id, 'Aprovado');
-            document.getElementById('btn-chk-reprovar').onclick = () => finalizarAuditoria(id, 'Reprovado');
-            document.getElementById('modal-checklist').classList.remove('hidden');
-        }
-
-        async function finalizarAuditoria(id, res) {
-            const obs = document.getElementById('chk-obs').value;
-            const item = ACN_DATA.find(x => x.id == id);
-            await _supa.from('qualidade_historico').insert({
-                id: Date.now(), opl: item.opl, chassi: item.chassi, resultado: res, obs, tecnico: ACN_USER.nome, data_hora: new Date().toLocaleString()
-            });
-            const status = (res === 'Aprovado') ? 'Liberado para Faturamento' : 'Engenharia Pendente';
-            await _supa.from('oples').update({ status_geral: status, retrabalho: (res !== 'Aprovado') }).eq('id', id);
-            fecharChecklistModal();
-            loadAllData();
-        }
-
-        function fecharChecklistModal() { document.getElementById('modal-checklist').classList.add('hidden'); }
-
-        // --- STARTUP ---
+        // --- INICIALIZAÇÃO ---
         window.onload = function() {
             const user = sessionStorage.getItem('ACN_USER_ATIVO');
             if(!user) _injetarLoginUI();
-            else { ACN_USER = JSON.parse(user); initBarra(); loadAllData(); setupCanvases(); }
+            else { ACN_USER = JSON.parse(user); initBarra(); loadAllData(); }
         }
 
-        // Realtime Subscription
         _supa.channel('any').on('postgres_changes', { event: '*', schema: 'public' }, () => loadAllData()).subscribe();
     </script>
 </body>
