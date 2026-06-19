@@ -13,40 +13,6 @@
         }
         .retrabalho-pulse { animation: pulse-red 1.5s infinite; border-width: 2px; }
         @media print { .no-print { display: none !important; } }
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-        // --- CONFIGURAÇÃO SUPABASE ---
-const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
-const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
-const supa = supabase.createClient(S_URL, S_KEY);
-
-// --- FUNÇÕES DE PERSISTÊNCIA INTEGRADA ---
-
-// 1. Obter dados (Substitui localStorage.getItem)
-async function getDB(chave, fallback = []) {
-    try {
-        const { data, error } = await supa.from('db_acn').select('valor').eq('chave', chave).single();
-        if (data && data.valor) {
-            await setDB(chave, JSON.stringify(data.valor));
-            return data.valor;
-        }
-    } catch (e) {
-        console.warn("Supabase offline, lendo do local...");
-    }
-    const local = localStorage.getItem(chave);
-    return local ? JSON.parse(local) : fallback;
-}
-
-// 2. Salvar dados (Substitui localStorage.setItem)
-async function setDB(chave, objeto) {
-    await setDB(chave, JSON.stringify(objeto));
-    await supa.from('db_acn').upsert({ chave: chave, valor: objeto });
-}
-
-// 3. Remover dados (Substitui localStorage.removeItem)
-async function delDB(chave) {
-    await delDB(chave);
-    await supa.from('db_acn').delete().eq('chave', chave);
-}
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-gray-800">
@@ -826,12 +792,12 @@ async function delDB(chave) {
                             v.logsOperacionaisTracking = ["Inicializado por corretor automático síncrono."];
                         }
                     });
-                    await setDB('ACN_MASTER_HORAS_V5', JSON.stringify(parsed));
+                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(parsed));
                 }
             }
         } catch(e) {
             console.warn("Limpando cache inconsistente anterior.");
-            await delDB('ACN_MASTER_HORAS_V5');
+            localStorage.removeItem('ACN_MASTER_HORAS_V5');
         }
 
         function carregarLS(chave, fallback) {
@@ -842,7 +808,7 @@ async function delDB(chave) {
                 return v == null ? fallback : v;
             } catch (e) {
                 console.warn("Falha ao carregar " + chave + ", resetando.", e);
-                try { await delDB(chave); } catch(_) {}
+                try { localStorage.removeItem(chave); } catch(_) {}
                 return fallback;
             }
         }
@@ -914,8 +880,8 @@ async function delDB(chave) {
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [COMERCIAL] Demanda cadastrada e enviada para Engenharia.${itemEnvio ? ' 🚚 ITEM DE ENVIO — atenção brevidade.' : ''}${isDemandaDireta ? ' 🎯 DEMANDA DIRETA ENGENHARIA.' : ''}`]
             };
             ACN_DATA.push(novo);
-           await setDB('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
-            await setDB('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             document.getElementById('form-comercial').reset();
             if(document.getElementById('com-item-envio')) document.getElementById('com-item-envio').checked = false;
             if(document.getElementById('com-envio-extra')) document.getElementById('com-envio-extra').classList.add('hidden');
@@ -935,7 +901,7 @@ async function delDB(chave) {
 
         // ===== CRM — CONTROLE DE CONTATOS COMERCIAIS =====
         let ACN_CLIENTES_CRM = (function(){ try{ return JSON.parse(localStorage.getItem('ACN_CRM_V1')||'[]'); }catch(_){return [];} })();
-        function salvarCRM(){ await setDB('ACN_CRM_V1', JSON.stringify(ACN_CLIENTES_CRM)); }
+        function salvarCRM(){ localStorage.setItem('ACN_CRM_V1', JSON.stringify(ACN_CLIENTES_CRM)); }
 
         function registrarContatoCRM(event) {
             event.preventDefault();
@@ -1127,7 +1093,7 @@ async function delDB(chave) {
                 demandasPcp: { compras: "N/A", serralheria: "N/A", engenharia: "N/A", chicotes: "N/A", producao: "N/A" },
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [ENGENHARIA] Projeto Especial ${peCodigo} gerado diretamente na Engenharia.`]
             };
-            peContador++; await setDB('ACN_PE_COUNT_V5', peContador);
+            peContador++; localStorage.setItem('ACN_PE_COUNT_V5', peContador);
             ACN_DATA.push(novoPE); document.getElementById('form-engenharia-pe').reset(); salvarEAtualizar();
         }
 
@@ -1198,14 +1164,14 @@ async function delDB(chave) {
                 itens: itens, dataCompra: "", dataRecebimento: "", status: "Pendente", recebedor: ""
             };
             COMPRAS_REQ.push(req);
-            await setDB('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
+            localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Emitida requisição de compras: ${itens}`);
             salvarEAtualizar();
         }
 
         function chicSalvar() {
-            await setDB('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
+            localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
         }
 
         function abrirJanelaChicotePcp(chassi, opl) {
@@ -1420,7 +1386,7 @@ async function delDB(chave) {
                 tsSolic: obterTimestamp(), status: "Em Análise/Teste"
             };
             LABORATORIO_DATA.push(lab);
-            await setDB('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
+            localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Equipamento [${equipamento}] enviado para ensaio no Laboratório.`);
             renderizarTabelas();
@@ -1497,7 +1463,7 @@ async function delDB(chave) {
                 ACN_DATA[idx].logsOperacionaisTracking.push(
                     "[" + obterDataHoraLog() + "] [ALMOXARIFADO] ⚠ LIBERADO COM PENDÊNCIA por " + usuarioAtualNome() + ". Just.: " + motivo.trim()
                 );
-                await setDB('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+                localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
                 renderizarTabelas();
                 alert("✔ OPL liberada com pendência.\nO PCP já pode liberar para produção.");
             } catch(e) { alert("Erro: " + e.message); console.error(e); }
@@ -1526,7 +1492,7 @@ async function delDB(chave) {
                 log: [`[${obterDataHoraLog()}] [PCP→SERRALHERIA] Tarefa despachada pelo PCP. Desc: ${descricao}. Qtd: ${qtd}. Resp: ${resp}.`]
             };
             SERRALHERIA_DATA.push(tarefa);
-            await setDB('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Ordem de serralheria despachada: ${descricao} (${qtd} peças) → ${resp}.`);
             salvarEAtualizar();
             alert(`✔ Tarefa enviada para Serralheria!
@@ -1540,7 +1506,7 @@ OPL ${opl} | ${descricao}`);
             if(!prev) return;
             t.previsaoEntregaSerralheria = prev;
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de conclusão definida: ${formatarDataBR(prev)}.`);
-            await setDB('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de entrega definida: ${formatarDataBR(prev)}.`);
             salvarEAtualizar();
@@ -1556,7 +1522,7 @@ OPL ${opl} | ${descricao}`);
             t.tsInicio = obterTimestamp();
             t.status = "Em Execução";
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa iniciada.`);
-            await setDB('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Execução iniciada por ${t.resp}.`);
             salvarEAtualizar();
@@ -1571,7 +1537,7 @@ OPL ${opl} | ${descricao}`);
             t.status = "Concluído";
             t.dataFinalizacao = obterDataHoraLog();
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa FINALIZADA por ${t.resp}. ${obs ? "Obs: " + obs : ""}`);
-            await setDB('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa concluída e entregue ao almoxarifado.`);
             salvarEAtualizar();
@@ -1603,7 +1569,7 @@ OPL ${opl} | ${descricao}`);
         function finalizarFabricacaoChicote(id) {
             const c = CHICOTES_DATA.find(x => x.id === id);
             if(c) {
-                c.status = "Concluído"; await setDB('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
+                c.status = "Concluído"; localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
                 let v = ACN_DATA.find(x => x.chassi === c.chassi);
                 if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [CHICOTE] Fabricação do chicote concluída e disponibilizada.`);
                 renderizarTabelas();
@@ -1613,7 +1579,7 @@ OPL ${opl} | ${descricao}`);
         function devolverLaboratorioAoPcp(id) {
             const l = LABORATORIO_DATA.find(x => x.id === id);
             if(l) {
-                l.status = "Concluído & Devolvido"; await setDB('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
+                l.status = "Concluído & Devolvido"; localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
                 let v = ACN_DATA.find(x => x.chassi === l.chassi);
                 if(v) { v.statusGeral = "BOM Lançado - Análise PCP"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LABORATÓRIO] Reparo concluído e devolvido ao PCP.`); }
                 salvarEAtualizar();
@@ -1628,7 +1594,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.dataCompra = dCompra; req.dataRecebimento = dRec; req.status = "Entrega Futura (Pedido Efetivado)";
-                await setDB('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
+                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Comprado - Aguardando Chegada"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [COMPRAS] Pedido efetivado. Previsão: ${dRec}`); }
                 salvarEAtualizar();
@@ -1642,7 +1608,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.recebedor = nomeFirma; req.status = `Recebido por ${nomeFirma} em ${new Date().toLocaleDateString('pt-BR')}`;
-                await setDB('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
+                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Recebido (Aguardando Triagem de Kiting)"; v.pendenciaAlmoxarifado = false; v.detalhesPendencia = ""; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ALMOXARIFADO] Materiais recebidos por ${nomeFirma}.`); }
                 salvarEAtualizar();
@@ -1676,7 +1642,7 @@ OPL ${opl} | ${descricao}`);
                     ACN_DATA[idx].logsOperacionaisTracking.push(
                         "[" + obterDataHoraLog() + "] [ALMOXARIFADO] ✅ Kiting 100% OK liberado por " + usuarioAtualNome() + "."
                     );
-                    await setDB('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
                     renderizarTabelas();
                     processarDashboard();
                     alert("✅ Kiting marcado como 100% OK!\n\nOPL: " + ACN_DATA[idx].opl + "\nO PCP já pode liberar para a produção.");
@@ -1684,7 +1650,7 @@ OPL ${opl} | ${descricao}`);
                     // Outros status (apontar pendência etc.)
                     ACN_DATA[idx].statusAlmoxarifado    = status;
                     ACN_DATA[idx].pendenciaAlmoxarifado = true;
-                    await setDB('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
                     renderizarTabelas();
                 }
             } catch(e) {
@@ -1837,7 +1803,7 @@ OPL ${opl} | ${descricao}`);
                 resultado: aprovado ? "APROVADO" : "REPROVADO", tipo: tipo, obs: obs || "Conforme.", tecnico: v.tecnico, assinatura: canvasData
             };
             CHECKLISTS_HISTORICO.push(log);
-            await setDB('ACN_CQ_HIST_V5', JSON.stringify(CHECKLISTS_HISTORICO));
+            localStorage.setItem('ACN_CQ_HIST_V5', JSON.stringify(CHECKLISTS_HISTORICO));
 
             v.tsFimChecklist = obterTimestamp();
 
@@ -1878,7 +1844,7 @@ OPL ${opl} | ${descricao}`);
                 fotoGal: fotoGal
             };
             TERCEIROS_DATA.push(item);
-            await setDB('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA));
+            localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassiL);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Despachado material [${item.material}] via manifesto logístico.${(fotoCam||fotoGal) ? " 📷 Foto anexada." : ""}`);
             // Reset form e variáveis de foto
@@ -1936,7 +1902,7 @@ OPL ${opl} | ${descricao}`);
 
         function darBaixaRetiradaEstoqueLogistica(id) {
             let t = TERCEIROS_DATA.find(x => x.id == id);
-            if(t) { t.status = "Retornado ao Estoque"; await setDB('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA)); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
+            if(t) { t.status = "Retornado ao Estoque"; localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA)); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
         }
 
         function registrarVistoriaPatio(event) {
@@ -1951,7 +1917,7 @@ OPL ${opl} | ${descricao}`);
                 signEnv: document.getElementById('canvas-envia').toDataURL(), signRec: document.getElementById('canvas-recebe').toDataURL()
             };
             VISTORIAS_DATA.push(vis);
-            await setDB('ACN_VIS_PATIO_V5', JSON.stringify(VISTORIAS_DATA));
+            localStorage.setItem('ACN_VIS_PATIO_V5', JSON.stringify(VISTORIAS_DATA));
             document.getElementById('form-vistoria').reset();
             limparCanvasPatio('envia'); limparCanvasPatio('recebe');
             salvarEAtualizar();
@@ -2825,14 +2791,14 @@ OPL ${opl} | ${descricao}`);
         function fecharChecklistModal() { document.getElementById('modal-checklist').classList.add('hidden'); }
 
         function salvarEAtualizar() {
-            await setDB('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
             renderizarTabelas();
             processarDashboard();
         }
 
         // ===== MÓDULO: SOLICITAÇÕES DE AJUSTE DE PROJETO =====
         function salvarAjustes() {
-            try { await setDB('ACN_AJUSTES_V5', JSON.stringify(AJUSTES_DATA)); } catch(e){}
+            try { localStorage.setItem('ACN_AJUSTES_V5', JSON.stringify(AJUSTES_DATA)); } catch(e){}
         }
         function diasEntre(dataIsoA, dataIsoB) {
             const a = new Date(dataIsoA + "T00:00:00");
@@ -3262,7 +3228,7 @@ OPL ${opl} | ${descricao}`);
         let ACN_USUARIOS = carregarLS('ACN_USUARIOS_V1', null);
         if (!ACN_USUARIOS) {
             ACN_USUARIOS = [{ login:"admin", senha:"admin", nome:"Administrador", perfil:"Admin" }];
-            await setDB('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
+            localStorage.setItem('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
         }
         let ACN_USER = null;
         try { ACN_USER = JSON.parse(sessionStorage.getItem('ACN_USER_ATIVO') || "null"); } catch(_) { ACN_USER = null; }
@@ -3390,7 +3356,7 @@ OPL ${opl} | ${descricao}`);
                 if(ACN_USUARIOS.some(x=>x.login.toLowerCase()===login.toLowerCase())) { alert("Login já existe."); return; }
                 ACN_USUARIOS.push({ login, senha: senhaInput, nome: nome||login, perfil, abasCustom: abasSelecionadas });
             }
-            await setDB('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
+            localStorage.setItem('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
             document.getElementById('acn-user-mgmt-modal').remove();
             alert(`✔ Usuário ${login} ${editarLogin?'atualizado':'cadastrado'} com sucesso!`);
         }
@@ -3472,7 +3438,7 @@ OPL ${opl} | ${descricao}`);
                 pendenciasSetores: {},
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [ENGENHARIA] ${_logUsuario()} abriu Projeto Especial ${peCodigo} (${tipo}, prio ${prior}, resp ${resp||'—'}, prev ${prev||'—'}).`]
             };
-            peContador++; await setDB('ACN_PE_COUNT_V5', peContador);
+            peContador++; localStorage.setItem('ACN_PE_COUNT_V5', peContador);
             ACN_DATA.push(novoPE);
             document.getElementById('form-engenharia-pe').reset();
             alert("✔ Projeto Especial "+peCodigo+" criado!");
@@ -3633,7 +3599,7 @@ OPL ${opl} | ${descricao}`);
             _renderizarDemandasDiretas();
         }
         function ddSalvar() {
-            await setDB('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
         }
         function ddDefinirPrazo(id) {
             const d = DEMANDAS_DIRETAS.find(x=>x.id==id); if(!d) return;
