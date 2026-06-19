@@ -137,4 +137,258 @@
             <div class="bg-white p-5 rounded-xl border border-blue-200">
                 <h2 class="text-base font-bold mb-4 text-blue-700">🏢 Almoxarifado - Triagem de Kitings</h2>
                 <table class="w-full text-xs text-left border">
-                    <thead class="bg-slate-100"><tr><th>OPL/Chassi</th><th>Estrutura Té
+                    <thead class="bg-slate-100"><tr><th>OPL/Chassi</th><th>Estrutura Técnica</th><th>Status</th><th>Ação</th></tr></thead>
+                    <tbody id="table-almoxarifado"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- PRODUÇÃO -->
+        <section id="tab-producao" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-4 text-indigo-700">🛠️ Célula de Produção Ativa</h2>
+                <table class="w-full text-xs text-left border">
+                    <thead class="bg-slate-100"><tr><th>Chassi/OPL</th><th>Técnico</th><th>Cronometria</th><th>Fase</th><th>Ação</th></tr></thead>
+                    <tbody id="table-producao"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SERRALHERIA, CHICOTES, LAB (Estilo Card) -->
+        <section id="tab-serralheria" class="tab-content hidden space-y-4">
+            <h2 class="text-base font-bold">🔩 Serralheria</h2>
+            <div id="table-serralheria-ativas" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </section>
+
+        <section id="tab-chicotes" class="tab-content hidden space-y-4">
+            <h2 class="text-base font-bold">⚡ Departamento de Chicotes</h2>
+            <div id="chicotes-cards-container" class="space-y-3"></div>
+        </section>
+
+        <!-- FISCAL -->
+        <section id="tab-fiscal" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded border">
+                <h2 class="text-base font-bold mb-4">📄 Fiscal - Emissão de NF-e</h2>
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-100"><tr><th>Chassi</th><th>OPL</th><th>Nº Nota</th><th>Ação</th></tr></thead>
+                    <tbody id="table-fiscal"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- VISTORIAS -->
+        <section id="tab-vistorias" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded border">
+                <h2 class="text-base font-bold mb-4">📸 Laudo de Vistoria de Pátio</h2>
+                <form onsubmit="registrarVistoriaCloud(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <input type="text" id="vis-chassi" placeholder="Chassi Vínculo" class="border p-2 rounded">
+                    <input type="text" id="vis-equip" placeholder="Equipamento" class="border p-2 rounded">
+                    <button type="submit" class="bg-slate-800 text-white py-2 rounded font-bold">Salvar Vistoria</button>
+                </form>
+                <div id="lista-vistorias" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // CONFIGURAÇÕES SUPABASE
+        const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
+        const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
+        const _supa = supabase.createClient(S_URL, S_KEY);
+
+        // VARIÁVEIS DE ESTADO (MEMÓRIA LOCAL SINCRONIZADA)
+        let ACN_DATA = [];
+        let DEMANDAS_DIRETAS = [];
+        let VISTORIAS_DATA = [];
+        let ACN_USER = null;
+
+        // --- AUTH E LOGIN (LÓGICA DO V23) ---
+        function _injetarLoginUI() {
+            if (document.getElementById('acn-login-modal')) return;
+            const div = document.createElement('div');
+            div.id = 'acn-login-modal';
+            div.className = 'fixed inset-0 bg-slate-900/95 z-[100] flex items-center justify-center';
+            div.innerHTML = `
+                <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
+                    <h2 class="text-xl font-bold mb-4">🔐 ACN Cloud Login</h2>
+                    <input id="acn-login-user" type="text" placeholder="Usuário" class="w-full border p-2 mb-2 rounded">
+                    <input id="acn-login-pass" type="password" placeholder="Senha" class="w-full border p-2 mb-4 rounded">
+                    <button onclick="acnDoLogin()" class="w-full bg-green-600 text-white font-bold py-2 rounded">Entrar</button>
+                    <p class="text-[10px] text-slate-400 mt-4 text-center">Padrão: admin / admin</p>
+                </div>`;
+            document.body.appendChild(div);
+        }
+
+        async function acnDoLogin() {
+            const u = document.getElementById('acn-login-user').value;
+            const p = document.getElementById('acn-login-pass').value;
+            
+            const { data, error } = await _supa.from('usuarios_acn').select('*').eq('login', u).eq('senha', p).single();
+            
+            if (error || !data) { alert("Usuário/Senha incorretos"); return; }
+            
+            ACN_USER = data;
+            sessionStorage.setItem('ACN_USER_ATIVO', JSON.stringify(ACN_USER));
+            document.getElementById('acn-login-modal').remove();
+            loadAllData();
+        }
+
+        // --- DATA SYNC (MOTOR PRINCIPAL) ---
+        async function loadAllData() {
+            const [o, d, v] = await Promise.all([
+                _supa.from('oples').select('*').order('id', {ascending: false}),
+                _supa.from('demandas_diretas').select('*'),
+                _supa.from('vistorias_patio').select('*')
+            ]);
+            
+            ACN_DATA = o.data || [];
+            DEMANDAS_DIRETAS = d.data || [];
+            VISTORIAS_DATA = v.data || [];
+            
+            renderizarTabelas();
+            processarDashboard();
+        }
+
+        async function dbSaveOpl(item) {
+            await _supa.from('oples').upsert(item);
+            loadAllData();
+        }
+
+        // --- FUNÇÕES DE NEGÓCIO ---
+        async function cadastrarVeiculoCloud(event) {
+            event.preventDefault();
+            const novo = {
+                id: Date.now(),
+                data_entrada: document.getElementById('com-data').value,
+                opl: document.getElementById('com-opl').value,
+                chassi: document.getElementById('com-chassi').value.toUpperCase(),
+                modelo: document.getElementById('com-modelo').value,
+                tipo_projeto: document.getElementById('com-tipo-projeto').value,
+                status_geral: 'Engenharia Pendente',
+                logs_operacionais_tracking: [`[${new Date().toLocaleString()}] OPL Cadastrada via Cloud por ${ACN_USER.nome}`]
+            };
+            await dbSaveOpl(novo);
+            event.target.reset();
+        }
+
+        async function liberarBOM(id) {
+            const val = document.getElementById(`bom-${id}`).value;
+            const item = ACN_DATA.find(x => x.id == id);
+            item.bom = val;
+            item.status_geral = 'BOM Lançado - Análise PCP';
+            await dbSaveOpl(item);
+        }
+
+        async function pcpDispararSetor(id, setor) {
+            const item = ACN_DATA.find(x => x.id == id);
+            const desc = prompt(`O que deve ser feito na ${setor}?`);
+            if(!desc) return;
+            
+            await _supa.from('demandas_diretas').insert({
+                id: Date.now(), setor, opl: item.opl, chassi: item.chassi, descricao: desc, status: 'Pendente'
+            });
+            loadAllData();
+        }
+
+        async function pcpEnviarAlmox(id) {
+            const item = ACN_DATA.find(x => x.id == id);
+            item.status_geral = 'Em Triagem (Almoxarifado)';
+            await dbSaveOpl(item);
+        }
+
+        async function almoxLiberarProducao(id) {
+            const item = ACN_DATA.find(x => x.id == id);
+            item.status_geral = 'Liberado Produção';
+            await dbSaveOpl(item);
+        }
+
+        // --- RENDERIZADORES ---
+        function renderizarTabelas() {
+            // COMERCIAL
+            document.getElementById('table-comercial').innerHTML = ACN_DATA.map(v => `
+                <tr class="border-b"><td>${v.data_entrada}</td><td class="font-bold">${v.opl}</td><td>${v.chassi}</td><td>${v.status_geral}</td><td>📜</td></tr>
+            `).join('');
+
+            // ENGENHARIA
+            const eng = ACN_DATA.filter(x => x.status_geral === 'Engenharia Pendente');
+            document.getElementById('table-engenharia').innerHTML = eng.map(v => `
+                <tr class="border-b"><td>${v.chassi}</td><td>${v.opl}</td>
+                <td><input type="text" id="bom-${v.id}" class="border p-1 w-full" placeholder="Definir estrutura..."></td>
+                <td><button onclick="liberarBOM(${v.id})" class="bg-green-600 text-white px-2 py-1 rounded">Liberar</button></td></tr>
+            `).join('');
+
+            // PCP
+            const pcp = ACN_DATA.filter(x => x.status_geral === 'BOM Lançado - Análise PCP');
+            document.getElementById('table-pcp').innerHTML = pcp.map(v => `
+                <tr class="border-b">
+                    <td><b>${v.opl}</b><br>${v.chassi}</td>
+                    <td class="flex gap-1">
+                        <button onclick="pcpDispararSetor(${v.id}, 'Chicotes')" class="bg-indigo-100 text-indigo-700 p-1 rounded">⚡</button>
+                        <button onclick="pcpDispararSetor(${v.id}, 'Serralheria')" class="bg-orange-100 text-orange-700 p-1 rounded">🔩</button>
+                    </td>
+                    <td>Aguardando...</td>
+                    <td>Log...</td>
+                    <td><button onclick="pcpEnviarAlmox(${v.id})" class="bg-blue-600 text-white px-2 py-1 rounded">Enviar Almox</button></td>
+                </tr>
+            `).join('');
+
+            // ALMOXARIFADO
+            const alm = ACN_DATA.filter(x => x.status_geral === 'Em Triagem (Almoxarifado)');
+            document.getElementById('table-almoxarifado').innerHTML = alm.map(v => `
+                <tr class="border-b"><td>${v.opl}</td><td>${v.bom}</td><td>Em Separação</td>
+                <td><button onclick="almoxLiberarProducao(${v.id})" class="bg-blue-700 text-white px-2 py-1 rounded text-[10px]">KITING OK</button></td></tr>
+            `).join('');
+
+            // CHICOTES (Cards)
+            const chi = DEMANDAS_DIRETAS.filter(x => x.setor === 'Chicotes' && x.status !== 'Finalizada');
+            document.getElementById('chicotes-cards-container').innerHTML = chi.map(c => `
+                <div class="bg-white border p-3 rounded flex justify-between items-center shadow-sm">
+                    <div><b>${c.opl}</b>: ${c.descricao}</div>
+                    <button onclick="finalizarDemanda(${c.id})" class="bg-indigo-600 text-white px-3 py-1 rounded">Finalizar</button>
+                </div>
+            `).join('');
+        }
+
+        async function finalizarDemanda(id) {
+            await _supa.from('demandas_diretas').update({ status: 'Finalizada' }).eq('id', id);
+            loadAllData();
+        }
+
+        function processarDashboard() {
+            const ctx = document.getElementById('chartIndicadores').getContext('2d');
+            if(window.myChart) window.chartInstancia.destroy();
+            window.chartInstancia = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Engenharia', 'PCP', 'Produção'],
+                    datasets: [{ label: 'Horas Médias', data: [12, 18, 45], backgroundColor: '#1e293b' }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+            
+            document.getElementById('dashboard-tbody').innerHTML = `
+                <tr><td>Lead Time Geral</td><td class="text-center font-bold">120h</td><td class="text-center">78h</td><td class="text-center">🟢</td></tr>
+            `;
+        }
+
+        // --- NAVEGAÇÃO ---
+        function showTab(id) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('block'));
+            document.getElementById('tab-' + id).classList.add('block');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('bg-slate-900','border-b-4','border-green-500','text-green-400'));
+            document.getElementById('btn-' + id).classList.add('bg-slate-900','border-b-4','border-green-500','text-green-400');
+        }
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = function() {
+            const user = sessionStorage.getItem('ACN_USER_ATIVO');
+            if(!user) _injetarLoginUI();
+            else { ACN_USER = JSON.parse(user); loadAllData(); }
+        };
+
+        // Realtime
+        _supa.channel('any').on('postgres_changes', { event: '*', schema: 'public' }, () => loadAllData()).subscribe();
+    </script>
+</body>
+</html>
