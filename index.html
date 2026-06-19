@@ -3,25 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACN SINAL VERDE - V23 Cloud Full</title>
-    <!-- Bibliotecas mantidas -->
+    <title>ACN SINAL VERDE - Sistema Cloud V23</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @keyframes pulse-red {
-            0%, 100% { background-color: #fee2e2; border-color: #ef4444; }
-            50% { background-color: #fca5a5; border-color: #b91c1c; }
-        }
+        @keyframes pulse-red { 0%, 100% { background-color: #fee2e2; border-color: #ef4444; } 50% { background-color: #fca5a5; border-color: #b91c1c; } }
         .retrabalho-pulse { animation: pulse-red 1.5s infinite; border-width: 2px; }
         .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .tab-content.block { display: block; }
         @media print { .no-print { display: none !important; } }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-gray-800">
 
-    <!-- Cabeçalho e Navegação (Estrutura original mantida) -->
     <header class="bg-slate-800 text-white p-4 shadow-md no-print">
         <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
@@ -30,17 +25,15 @@
             </div>
             <div class="flex items-center gap-2 bg-slate-700 p-2 rounded border border-slate-600">
                 <span class="text-xs text-white font-bold">📅 Período:</span>
-                <input type="date" id="filtro-data-inicio" onchange="aplicarFiltroPeriodoGlobal()" class="text-slate-800 text-xs p-1.5 rounded bg-white outline-none">
+                <input type="date" id="filtro-data-inicio" onchange="loadAllData()" class="text-slate-800 text-xs p-1.5 rounded bg-white outline-none">
                 <span class="text-xs text-white font-bold">até</span>
-                <input type="date" id="filtro-data-fim" onchange="aplicarFiltroPeriodoGlobal()" class="text-slate-800 text-xs p-1.5 rounded bg-white outline-none">
-                <button onclick="limparFiltroPeriodoGlobal()" class="bg-slate-600 hover:bg-slate-500 text-white text-[10px] uppercase font-bold px-2 py-1.5 rounded transition-all">Limpar</button>
+                <input type="date" id="filtro-data-fim" onchange="loadAllData()" class="text-slate-800 text-xs p-1.5 rounded bg-white outline-none">
             </div>
             <div class="flex gap-1 items-center">
-                <select id="filtro-status-global" onchange="aplicarFiltroStatusGlobal()" class="text-slate-800 text-xs p-2 rounded border outline-none bg-white">
+                <select id="filtro-status-global" onchange="renderizarTabelas()" class="text-slate-800 text-xs p-2 rounded border outline-none bg-white">
                     <option value="TODOS">Todos os Status</option>
-                    <option value="CRITICO">Críticos / Retrabalho / Pendências</option>
+                    <option value="CRITICO">Críticos / Retrabalho</option>
                     <option value="EM_TRABALHO">Em Trabalho / Execução</option>
-                    <option value="FINALIZADO_MES">Finalizados no Mês</option>
                 </select>
             </div>
         </div>
@@ -66,214 +59,82 @@
         </div>
     </nav>
 
-    <!-- O conteúdo de MAIN permanece exatamente igual ao seu arquivo original V23 -->
-    <!-- (Dashboard, Comercial, Engenharia, PCP, etc... omitidos aqui para manter o foco na lógica do Supabase) -->
-    <!-- ... Cole aqui todas as seções <section> do seu arquivo original ... -->
+    <main class="container mx-auto my-4 p-4 no-print">
 
-    <main id="main-content" class="container mx-auto my-4 p-4 no-print">
-        <!-- O sistema renderizará dinamicamente aqui as abas conforme seu código V23 -->
-        <!-- NOTA: Mantenha todos os IDs das tabelas e inputs originais -->
-    </main>
+        <!-- DASHBOARD -->
+        <section id="tab-dashboard" class="tab-content block space-y-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm border">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-sm font-bold text-slate-800">📋 Painel Metas Metodologia Autogerenciável (Horas)</h2>
+                    <button onclick="imprimirDashboardPDF()" class="bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded">🖨️ IMPRIMIR PDF</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead><tr class="bg-slate-100 font-bold text-slate-700">
+                            <th class="p-2">Métrica</th><th class="p-2 text-center">Meta</th><th class="p-2 text-center">Realizado</th><th class="p-2 text-center">Status</th>
+                        </tr></thead>
+                        <tbody id="dashboard-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border">
+                <div class="chart-container relative w-full" style="height:340px"><canvas id="chartIndicadores"></canvas></div>
+            </div>
+        </section>
 
-    <!-- MODAL CHECKLIST (original) -->
-    <div id="modal-checklist" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
-        <!-- ... estrutura do modal original ... -->
-    </div>
+        <!-- COMERCIAL -->
+        <section id="tab-comercial" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-3">🤝 Entrada de Demanda Comercial</h2>
+                <form id="form-comercial" onsubmit="cadastrarVeiculoCloud(event)" class="grid grid-cols-1 md:grid-cols-4 gap-2.5 bg-slate-50 p-4 rounded-lg">
+                    <input type="date" required id="com-data" class="border p-2 rounded text-xs">
+                    <input type="text" required id="com-opl" placeholder="Número OPL" class="border p-2 rounded text-xs">
+                    <input type="text" required id="com-chassi" placeholder="Chassi" class="border p-2 rounded text-xs">
+                    <input type="text" required id="com-modelo" placeholder="Modelo" class="border p-2 rounded text-xs">
+                    <select id="com-tipo-projeto" class="border p-2 rounded text-xs md:col-span-2">
+                        <option>Transformação Veicular Ostensiva</option>
+                        <option>Rádio</option>
+                        <option>Módulo Expansível</option>
+                    </select>
+                    <input type="date" id="com-data-entrega" class="border p-2 rounded text-xs" title="Prev. Entrega">
+                    <button type="submit" class="bg-slate-800 text-white font-bold py-2 rounded">Liberar Engenharia</button>
+                </form>
+            </div>
+            <div class="bg-white p-4 rounded border">
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-100"><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Status Geral</th><th>Ações</th></tr></thead>
+                    <tbody id="table-comercial"></tbody>
+                </table>
+            </div>
+        </section>
 
-    <script>
-        // ==========================================
-        // CONFIGURAÇÃO SUPABASE (Credenciais Fornecidas)
-        // ==========================================
-        const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
-        const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
-        const _supa = supabase.createClient(S_URL, S_KEY);
+        <!-- ENGENHARIA -->
+        <section id="tab-engenharia" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-4">📐 Engenharia - Geração de BOM Técnica</h2>
+                <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-100"><tr><th>Chassi</th><th>OPL</th><th>Estrutura BOM</th><th>Ação</th></tr></thead>
+                    <tbody id="table-engenharia"></tbody>
+                </table>
+            </div>
+        </section>
 
-        // ==========================================
-        // VARIÁVEIS GLOBAIS (Originais)
-        // ==========================================
-        let ACN_DATA = [];
-        let TERCEIROS_DATA = [];
-        let CHICOTES_DATA = [];
-        let LABORATORIO_DATA = [];
-        let COMPRAS_REQ = [];
-        let CHECKLISTS_HISTORICO = [];
-        let VISTORIAS_DATA = [];
-        let AJUSTES_DATA = [];
-        let SERRALHERIA_DATA = [];
-        let ACN_CLIENTES_CRM = [];
-        let DEMANDAS_DIRETAS = [];
-        let ACN_USUARIOS = [];
+        <!-- PCP -->
+        <section id="tab-pcp" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl border shadow-sm">
+                <h2 class="text-base font-bold mb-4 border-b pb-2">📦 PCP - Triagem e Distribuição de Tarefas</h2>
+                <table class="w-full text-xs text-left border">
+                    <thead class="bg-slate-800 text-white"><tr>
+                        <th class="p-2">Identificação</th><th>Setores</th><th>Painel de Gargalo</th><th>Histórico</th><th>Ações</th>
+                    </tr></thead>
+                    <tbody id="table-pcp"></tbody>
+                </table>
+            </div>
+        </section>
 
-        let chartInstancia = null;
-        let peContador = 1;
-        let filtroStatus = "TODOS";
-        let fDataInicio = "";
-        let fDataFim = "";
-
-        // ==========================================
-        // CAMADA DE SINCRONIZAÇÃO SUPABASE
-        // ==========================================
-
-        async function carregarTudoDoSupabase() {
-            try {
-                const [o, d, c, a, req, cq, v, l, crm, usr] = await Promise.all([
-                    _supa.from('oples').select('*'),
-                    _supa.from('demandas_diretas').select('*'),
-                    _supa.from('chicotes').select('*'), // se usar tabela separada
-                    _supa.from('ajustes_projeto').select('*'),
-                    _supa.from('compras_requisicoes').select('*'),
-                    _supa.from('qualidade_historico').select('*'),
-                    _supa.from('vistorias_patio').select('*'),
-                    _supa.from('logistica_manifestos').select('*'),
-                    _supa.from('crm_clientes').select('*'),
-                    _supa.from('usuarios_acn').select('*')
-                ]);
-
-                ACN_DATA = o.data || [];
-                DEMANDAS_DIRETAS = d.data || [];
-                AJUSTES_DATA = a.data || [];
-                COMPRAS_REQ = req.data || [];
-                CHECKLISTS_HISTORICO = cq.data || [];
-                VISTORIAS_DATA = v.data || [];
-                TERCEIROS_DATA = l.data || [];
-                ACN_CLIENTES_CRM = crm.data || [];
-                ACN_USUARIOS = usr.data || [];
-                
-                // Filtros para Chicotes e Serralheria se estiverem na tabela de demandas_diretas
-                CHICOTES_DATA = DEMANDAS_DIRETAS.filter(x => x.setor === 'Chicotes');
-                SERRALHERIA_DATA = DEMANDAS_DIRETAS.filter(x => x.setor === 'Serralheria');
-
-                renderizarTabelas();
-                processarDashboard();
-            } catch (err) {
-                console.error("Erro ao carregar dados do Cloud:", err);
-            }
-        }
-
-        // Funções de salvamento que substituem o localStorage.setItem
-        async function dbUpsert(tabela, data) {
-            const { error } = await _supa.from(tabela).upsert(data);
-            if (error) console.error(`Erro ao salvar na tabela ${tabela}:`, error);
-        }
-
-        // ==========================================
-        // SUBSTITUIÇÃO DAS FUNÇÕES ORIGINAIS
-        // ==========================================
-
-        // Substitui salvarEAtualizar()
-        async function salvarEAtualizar() {
-            // Mantém a lógica de logar no console se necessário
-            await dbUpsert('oples', ACN_DATA);
-            renderizarTabelas();
-            processarDashboard();
-        }
-
-        // Substitui salvarAjustes()
-        async function salvarAjustes() {
-            await dbUpsert('ajustes_projeto', AJUSTES_DATA);
-            renderizarTabelas();
-        }
-
-        // Substitui salvarCRM()
-        async function salvarCRM() {
-            await dbUpsert('crm_clientes', ACN_CLIENTES_CRM);
-            renderizarCRM();
-        }
-
-        // Substitui ddSalvar()
-        async function ddSalvar() {
-            await dbUpsert('demandas_diretas', DEMANDAS_DIRETAS);
-            _renderizarDemandasDiretas();
-        }
-
-        // Substitui chicSalvar()
-        async function chicSalvar() {
-            // No V23 Chicotes costumam ir para demandas_diretas ou tabela própria
-            await dbUpsert('demandas_diretas', DEMANDAS_DIRETAS);
-            _renderizarChicotes();
-        }
-
-        // Reescrita da função de login para consultar o Supabase
-        async function acnDoLogin() {
-            const u = document.getElementById('acn-login-user').value.trim().toLowerCase();
-            const p = document.getElementById('acn-login-pass').value;
-            
-            const { data: user, error } = await _supa
-                .from('usuarios_acn')
-                .select('*')
-                .eq('login', u)
-                .eq('senha', p)
-                .single();
-
-            if (error || !user) {
-                alert("⛔ Usuário ou senha inválidos.");
-                return;
-            }
-
-            ACN_USER = { login: user.login, nome: user.nome, perfil: user.perfil };
-            sessionStorage.setItem('ACN_USER_ATIVO', JSON.stringify(ACN_USER));
-            document.getElementById('acn-login-modal').remove();
-            _aplicarPermissoesAbas();
-            _injetarBarraUsuario();
-        }
-
-        // ==========================================
-        // HELPERS E LÓGICA DE UI (MANTIDOS)
-        // ==========================================
-
-        function obterTimestamp() { return Date.now(); }
-        
-        function obterDataHoraLog() {
-            const d = new Date();
-            const p = n => String(n).padStart(2, '0');
-            return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-        }
-
-        function showTab(nome) {
-            document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
-            const alvo = document.getElementById('tab-' + nome);
-            if (alvo) alvo.classList.add('active');
-            
-            document.querySelectorAll('.tab-btn').forEach(b => {
-                b.classList.remove('bg-slate-900','border-b-4','border-green-500','text-green-400');
-                b.classList.add('hover:bg-slate-600');
-            });
-            const btn = document.getElementById('btn-' + nome);
-            if (btn) {
-                btn.classList.add('bg-slate-900','border-b-4','border-green-500','text-green-400');
-                btn.classList.remove('hover:bg-slate-600');
-            }
-        }
-
-        // ... Mantenha todas as outras funções originais do V23 (cadastrarVeiculo, renderizarGrafico, etc.) ...
-        // APENAS certifique-se de que onde houver "localStorage.setItem", você chame a respectiva função Cloud acima.
-
-        // ==========================================
-        // BOOTSTRAP (Modificado para Cloud)
-        // ==========================================
-
-        window.onload = async function() {
-            // 1. Carrega dados do Supabase
-            await carregarTudoDoSupabase();
-            
-            // 2. Inicializa UI original
-            injetarPaineisOPL();
-            initCanvasEvents();
-            
-            // 3. Verifica Login (Customizado)
-            if (!sessionStorage.getItem('ACN_USER_ATIVO')) {
-                _injetarLoginUI();
-            } else {
-                ACN_USER = JSON.parse(sessionStorage.getItem('ACN_USER_ATIVO'));
-                _aplicarPermissoesAbas();
-                _injetarBarraUsuario();
-            }
-        };
-
-        // NOTA: Para que as funções de "upsert" funcionem, os objetos no Supabase 
-        // precisam ter uma Primary Key chamada 'id' (BigInt ou UUID). 
-        // Seu código original já gera IDs usando Date.now(), o que é compatível.
-
-    </script>
-</body>
-</html>
+        <!-- ALMOXARIFADO -->
+        <section id="tab-almoxarifado" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl border border-blue-200">
+                <h2 class="text-base font-bold mb-4 text-blue-700">🏢 Almoxarifado - Triagem de Kitings</h2>
+                <table class="w-full text-xs text-left border">
+                    <thead class="bg-slate-100"><tr><th>OPL/Chassi</th><th>Estrutura Té
