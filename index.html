@@ -8,53 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    // --- CONFIGURAÇÃO SUPABASE ---
-const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
-const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
-const supa = supabase.createClient(S_URL, S_KEY);
-
-/**
- * Função para salvar dados localmente E sincronizar com o Supabase.
- * Substitua seus atuais localStorage.setItem('chave', JSON.stringify(dados)) por:
- * salvarDados('chave', dados);
- */
-async function salvarDados(chave, dados) {
-    // Salva Local
-    localStorage.setItem(chave, JSON.stringify(dados));
-    
-    // Sincroniza com Supabase (tabela: dados_acn)
-    try {
-        await supa.from('dados_acn').upsert({ id: chave, conteudo: dados });
-    } catch (e) {
-        console.error("Erro ao sincronizar com Supabase:", e);
-    }
-}
-
-/**
- * Função para carregar dados. Tenta buscar no Supabase primeiro.
- * Se não encontrar, busca no localStorage (fallback).
- */
-async function carregarDados(chave, fallback) {
-    try {
-        const { data, error } = await supa.from('dados_acn').select('conteudo').eq('id', chave).single();
-        if (data && data.conteudo) {
-            localStorage.setItem(chave, JSON.stringify(data.conteudo));
-            return data.conteudo;
-        }
-    } catch (e) {
-        console.warn("Acesso Supabase falhou, usando backup local.");
-    }
-    
-    const local = localStorage.getItem(chave);
-    return local ? JSON.parse(local) : fallback;
-}
-    <style>
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        @keyframes pulse-red { 0%, 100% { background-color: #fee2e2; border-color: #ef4444; } 50% { background-color: #fca5a5; border-color: #b91c1c; } }
-        .retrabalho-pulse { animation: pulse-red 1.5s infinite; border-width: 2px; }
-        .canvas-sign { border: 1px solid #cbd5e1; background: #f8fafc; cursor: crosshair; border-radius: 8px; width: 100%; height: 100px; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-gray-800">
