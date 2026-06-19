@@ -15,6 +15,40 @@
         .tab-content.active { display: block; }
         @media print { .no-print { display: none !important; } }
         .canvas-signature { border: 1px dashed #ccc; background: #fafafa; cursor: crosshair; }
+     
+        // --- CONFIGURAÇÃO SUPABASE ---
+const S_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
+const S_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
+const supa = supabase.createClient(S_URL, S_KEY);
+
+// --- FUNÇÕES DE PERSISTÊNCIA INTEGRADA ---
+
+// 1. Obter dados (Substitui localStorage.getItem)
+async function getDB(chave, fallback = []) {
+    try {
+        const { data, error } = await supa.from('db_acn').select('valor').eq('chave', chave).single();
+        if (data && data.valor) {
+            await setDB(chave, JSON.stringify(data.valor));
+            return data.valor;
+        }
+    } catch (e) {
+        console.warn("Supabase offline, lendo do local...");
+    }
+    const local = localStorage.getItem(chave);
+    return local ? JSON.parse(local) : fallback;
+}
+
+// 2. Salvar dados (Substitui localStorage.setItem)
+async function setDB(chave, objeto) {
+    await setDB(chave, JSON.stringify(objeto));
+    await supa.from('db_acn').upsert({ chave: chave, valor: objeto });
+}
+
+// 3. Remover dados (Substitui localStorage.removeItem)
+async function delDB(chave) {
+    await delDB(chave);
+    await supa.from('db_acn').delete().eq('chave', chave);
+}
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-gray-800">
