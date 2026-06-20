@@ -1,61 +1,469 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <!-- ═══════════════════════════════════════════════════════════
+         ACN SINAL VERDE — SUPABASE SYNC LAYER (V24)
+         Estratégia: Proxy sobre localStorage.
+         O HTML/JS original funciona SEM ALTERAÇÃO.
+         Cada setItem espelha para Supabase em background.
+         Cada getItem serve do localStorage (cache local já populado no boot).
+    ═══════════════════════════════════════════════════════════ -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+    (function() {
+        'use strict';
+
+        const SUPA_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
+        const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
+        const _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+        // ─── mapa: chave localStorage → { table, serialize, deserialize } ───
+        // serialize: converte array JS → rows para Supabase upsert
+        // deserialize: converte rows Supabase → array JS para localStorage
+
+        function _snakeOpl(v) {
+            return {
+                id: v.id,
+                data_entrada: v.dataEntrada || '',
+                ts_entrada: v.tsEntrada || null,
+                opl: v.opl || '',
+                chassi: v.chassi || '',
+                modelo: v.modelo || '',
+                tipo_projeto: v.tipoProjeto || '',
+                data_prevista_entrega: v.dataPrevistaEntrega || '',
+                responsavel_comercial: v.responsavelComercial || '',
+                item_envio: v.itemEnvio || false,
+                envio_obs: v.envioObs || '',
+                is_demanda_direta_engenharia: v.isDemandaDiretaEngenharia || false,
+                bom: v.bom || '',
+                status_geral: v.statusGeral || '',
+                status_producao: v.statusProducao || '',
+                status_almoxarifado: v.statusAlmoxarifado || '',
+                tecnico: v.tecnico || '',
+                nfe: v.nfe || '',
+                retrabalho: v.retrabalho || false,
+                pendencia_almoxarifado: v.pendenciaAlmoxarifado || false,
+                detalhes_pendencia: v.detalhesPendencia || '',
+                ts_inicio_prod: v.tsInicioProd || null,
+                ts_fim_prod: v.tsFimProd || null,
+                ts_sol_checklist: v.tsSolChecklist || null,
+                ts_fim_checklist: v.tsFimChecklist || null,
+                ts_bom: v.tsBOM || null,
+                ts_faturamento_lib: v.tsFaturamentoLib || null,
+                ts_nf: v.tsNF || null,
+                ts_sol_kiting: v.tsSolKiting || null,
+                ts_kiting_fim: v.tsKitingFim || null,
+                logs_operacionais_tracking: v.logsOperacionaisTracking || [],
+                pendencias_setores: v.pendenciasSetores || {},
+                liberado_com_pendencia: v.liberadoComPendencia || false,
+                retornado_da_producao: v.retornadoDaProducao || false,
+                devolucao_pcp: v.devolucaoPcp || null,
+                devolucao_comercial: v.devolucaoComercial || null
+            };
+        }
+        function _camelOpl(r) {
+            return {
+                id: r.id,
+                dataEntrada: r.data_entrada || '',
+                tsEntrada: r.ts_entrada || null,
+                opl: r.opl || '',
+                chassi: r.chassi || '',
+                modelo: r.modelo || '',
+                tipoProjeto: r.tipo_projeto || '',
+                dataPrevistaEntrega: r.data_prevista_entrega || '',
+                responsavelComercial: r.responsavel_comercial || '',
+                itemEnvio: r.item_envio || false,
+                envioObs: r.envio_obs || '',
+                isDemandaDiretaEngenharia: r.is_demanda_direta_engenharia || false,
+                bom: r.bom || '',
+                statusGeral: r.status_geral || '',
+                statusProducao: r.status_producao || '',
+                statusAlmoxarifado: r.status_almoxarifado || '',
+                tecnico: r.tecnico || '',
+                nfe: r.nfe || '',
+                retrabalho: r.retrabalho || false,
+                pendenciaAlmoxarifado: r.pendencia_almoxarifado || false,
+                detalhesPendencia: r.detalhes_pendencia || '',
+                tsInicioProd: r.ts_inicio_prod || null,
+                tsFimProd: r.ts_fim_prod || null,
+                tsSolChecklist: r.ts_sol_checklist || null,
+                tsFimChecklist: r.ts_fim_checklist || null,
+                tsBOM: r.ts_bom || null,
+                tsFaturamentoLib: r.ts_faturamento_lib || null,
+                tsNF: r.ts_nf || null,
+                tsSolKiting: r.ts_sol_kiting || null,
+                tsKitingFim: r.ts_kiting_fim || null,
+                logsOperacionaisTracking: r.logs_operacionais_tracking || [],
+                pendenciasSetores: r.pendencias_setores || {},
+                liberadoComPendencia: r.liberado_com_pendencia || false,
+                retornadoDaProducao: r.retornado_da_producao || false,
+                demandasPcp: { compras:'N/A', serralheria:'N/A', engenharia:'N/A', chicotes:'N/A', producao:'N/A' },
+                devolucaoPcp: r.devolucao_pcp || null,
+                devolucaoComercial: r.devolucao_comercial || null
+            };
+        }
+
+        const SYNC_MAP = {
+            'ACN_MASTER_HORAS_V5': {
+                table: 'oples',
+                toRows: arr => arr.map(_snakeOpl),
+                fromRows: rows => rows.map(_camelOpl)
+            },
+            'ACN_LOGISTICA_V5': {
+                table: 'logistica_manifestos',
+                toRows: arr => arr.map(t => ({
+                    id: t.id, chassi: t.chassi, material: t.material || '',
+                    nf_remessa: t.nfRemessa || '', data_envio: t.dataEnvio || '',
+                    previsao_retorno: t.previsaoRetorno || '', fluxo: t.fluxo || '',
+                    responsavel_saida: t.responsavelSaida || '',
+                    status: t.status || 'Em Trânsito',
+                    foto_cam: t.fotoCam || '', foto_gal: t.fotoGal || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, chassi: r.chassi, material: r.material || '',
+                    nfRemessa: r.nf_remessa || '', dataEnvio: r.data_envio || '',
+                    previsaoRetorno: r.previsao_retorno || '', fluxo: r.fluxo || '',
+                    responsavelSaida: r.responsavel_saida || '',
+                    status: r.status || 'Em Trânsito',
+                    fotoCam: r.foto_cam || '', fotoGal: r.foto_gal || ''
+                }))
+            },
+            'ACN_CHICOTES_V5': {
+                table: 'chicotes_fabricacao',
+                toRows: arr => arr.map(c => ({
+                    id: c.id, chassi: c.chassi, opl: c.opl || '',
+                    num_chicote: c.numChicote || '', qtd: c.qtd || '',
+                    data_envio: c.dataEnvio || '', resp: c.resp || '',
+                    status: c.status || 'Em Fabricação',
+                    ts_fim: c.tsFim || null, data_finalizacao: c.dataFinalizacao || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, chassi: r.chassi, opl: r.opl || '',
+                    numChicote: r.num_chicote || '', qtd: r.qtd || '',
+                    dataEnvio: r.data_envio || '', resp: r.resp || '',
+                    status: r.status || 'Em Fabricação',
+                    tsFim: r.ts_fim || null, dataFinalizacao: r.data_finalizacao || ''
+                }))
+            },
+            'ACN_LAB_V5': {
+                table: 'laboratorio_equipamentos',
+                toRows: arr => arr.map(l => ({
+                    id: l.id, chassi: l.chassi, opl: l.opl || '',
+                    equipamento: l.equipamento || '', propriedade: l.propriedade || '',
+                    data_solicitacao: l.dataSolicitacao || '', ts_solic: l.tsSolic || null,
+                    ts_fim: l.tsFim || null, status: l.status || 'Em Análise/Teste',
+                    data_devolucao: l.dataDevolucao || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, chassi: r.chassi, opl: r.opl || '',
+                    equipamento: r.equipamento || '', propriedade: r.propriedade || '',
+                    dataSolicitacao: r.data_solicitacao || '', tsSolic: r.ts_solic || null,
+                    tsFim: r.ts_fim || null, status: r.status || 'Em Análise/Teste',
+                    dataDevolucao: r.data_devolucao || ''
+                }))
+            },
+            'ACN_REQ_COMPRAS_V5': {
+                table: 'compras_requisicoes',
+                toRows: arr => arr.map(c => ({
+                    id: c.id, chassi: c.chassi, opl: c.opl || '',
+                    solicitante: c.solicitante || '', data_emissao: c.dataEmissao || '',
+                    ts_solicitacao: c.tsSolicitacao || null, itens: c.itens || '',
+                    data_compra: c.dataCompra || '', data_recebimento: c.dataRecebimento || '',
+                    status: c.status || '', recebedor: c.recebedor || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, chassi: r.chassi, opl: r.opl || '',
+                    solicitante: r.solicitante || '', dataEmissao: r.data_emissao || '',
+                    tsSolicitacao: r.ts_solicitacao || null, itens: r.itens || '',
+                    dataCompra: r.data_compra || '', dataRecebimento: r.data_recebimento || '',
+                    status: r.status || '', recebedor: r.recebedor || ''
+                }))
+            },
+            'ACN_CQ_HIST_V5': {
+                table: 'qualidade_historico',
+                toRows: arr => arr.map(c => ({
+                    id: c.id, data_hora: c.dataHora || '', chassi: c.chassi || '',
+                    opl: c.opl || '', resultado: c.resultado || '',
+                    tipo: c.tipo || '', obs: c.obs || '',
+                    tecnico: c.tecnico || '', assinatura: c.assinatura || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, dataHora: r.data_hora || '', chassi: r.chassi || '',
+                    opl: r.opl || '', resultado: r.resultado || '',
+                    tipo: r.tipo || '', obs: r.obs || '',
+                    tecnico: r.tecnico || '', assinatura: r.assinatura || ''
+                }))
+            },
+            'ACN_VIS_PATIO_V5': {
+                table: 'vistorias_patio',
+                toRows: arr => arr.map(v => ({
+                    id: v.id, data_hora: v.dataHora || '', chassi: v.chassi || '',
+                    finalidade: v.finalidade || '', material: v.material || '',
+                    responsavel: v.responsavel || '', status: v.status || '',
+                    sign_env: v.signEnv || '', sign_rec: v.signRec || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, dataHora: r.data_hora || '', chassi: r.chassi || '',
+                    finalidade: r.finalidade || '', material: r.material || '',
+                    responsavel: r.responsavel || '', status: r.status || '',
+                    signEnv: r.sign_env || '', signRec: r.sign_rec || ''
+                }))
+            },
+            'ACN_AJUSTES_V5': {
+                table: 'ajustes_projeto',
+                toRows: arr => arr.map(a => ({
+                    id: a.id, data_abertura: a.dataAbertura || '', opl: a.opl || '',
+                    requerente: a.requerente || '', prioridade: a.prioridade || 'Normal',
+                    descricao: a.descricao || '', data_limite: a.dataLimite || '',
+                    data_resolucao: a.dataResolucao || '', solucao: a.solucao || '',
+                    responsavel: a.responsavel || '', status: a.status || 'Aberta',
+                    ts_ultimo_log: a.tsUltimoLog || null, logs: a.logs || []
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, dataAbertura: r.data_abertura || '', opl: r.opl || '',
+                    requerente: r.requerente || '', prioridade: r.prioridade || 'Normal',
+                    descricao: r.descricao || '', dataLimite: r.data_limite || '',
+                    dataResolucao: r.data_resolucao || '', solucao: r.solucao || '',
+                    responsavel: r.responsavel || '', status: r.status || 'Aberta',
+                    tsUltimoLog: r.ts_ultimo_log || null, logs: r.logs || []
+                }))
+            },
+            'ACN_SERRALHERIA_V5': {
+                table: 'serralheria_tarefas',
+                toRows: arr => arr.map(t => ({
+                    id: t.id, chassi: t.chassi, opl: t.opl || '',
+                    descricao: t.descricao || '', qtd: t.qtd || '', resp: t.resp || '',
+                    data_envio: t.dataEnvio || '', ts_recebimento: t.tsRecebimento || null,
+                    ts_inicio: t.tsInicio || null, ts_fim: t.tsFim || null,
+                    previsao_entrega_serralheria: t.previsaoEntregaSerralheria || '',
+                    data_prevista_entrega_opl: t.dataPrevistaEntregaOpl || '',
+                    status: t.status || 'Aguardando Início',
+                    data_finalizacao: t.dataFinalizacao || '', log: t.log || []
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, chassi: r.chassi, opl: r.opl || '',
+                    descricao: r.descricao || '', qtd: r.qtd || '', resp: r.resp || '',
+                    dataEnvio: r.data_envio || '', tsRecebimento: r.ts_recebimento || null,
+                    tsInicio: r.ts_inicio || null, tsFim: r.ts_fim || null,
+                    previsaoEntregaSerralheria: r.previsao_entrega_serralheria || '',
+                    dataPrevistaEntregaOpl: r.data_prevista_entrega_opl || '',
+                    status: r.status || 'Aguardando Início',
+                    dataFinalizacao: r.data_finalizacao || '', log: r.log || []
+                }))
+            },
+            'ACN_CRM_V1': {
+                table: 'crm_clientes',
+                toRows: arr => arr.map(c => ({
+                    id: c.id, nome: c.nome || '', empresa: c.empresa || '',
+                    telefone: c.telefone || '', email: c.email || '',
+                    data_proximo_contato: c.dataProximoContato || '',
+                    obs: c.obs || '', status: c.status || 'Ativo',
+                    historico: c.historico || [], data_cadastro: c.dataCadastro || ''
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, nome: r.nome || '', empresa: r.empresa || '',
+                    telefone: r.telefone || '', email: r.email || '',
+                    dataProximoContato: r.data_proximo_contato || '',
+                    obs: r.obs || '', status: r.status || 'Ativo',
+                    historico: r.historico || [], dataCadastro: r.data_cadastro || ''
+                }))
+            },
+            'ACN_USUARIOS_V1': {
+                table: 'usuarios_acn',
+                toRows: arr => arr.map(u => ({
+                    login: u.login, senha: u.senha, nome: u.nome || u.login,
+                    perfil: u.perfil || 'Producao', abas_custom: u.abasCustom || []
+                })),
+                fromRows: rows => rows.map(r => ({
+                    login: r.login, senha: r.senha, nome: r.nome || r.login,
+                    perfil: r.perfil || 'Producao', abasCustom: r.abas_custom || []
+                })),
+                pkField: 'login'   // usa login como PK em vez de id
+            },
+            'ACN_DEMANDAS_DIRETAS_V1': {
+                table: 'demandas_diretas',
+                toRows: arr => arr.map(d => ({
+                    id: d.id, setor: d.setor || '', opl: d.opl || '',
+                    chassi: d.chassi || '', descricao: d.descricao || '',
+                    prioridade: d.prioridade || '', data_abertura: d.dataAbertura || '',
+                    criado_por: d.criadoPor || '', origem_setor: d.origemSetor || '',
+                    prazo: d.prazo || '', responsavel: d.responsavel || '',
+                    status: d.status || '', ts_inicio: d.tsInicio || null,
+                    ts_fim: d.tsFim || null, data_finalizacao: d.dataFinalizacao || '',
+                    notas: d.notas || [], logs: d.logs || [],
+                    num_chicote: d.numChicote || '', qtd: d.qtd || '',
+                    emissortipo: d.emissortipo || '', data_envio: d.dataEnvio || '',
+                    previsao_conclusao: d.previsaoConclusao || '',
+                    data_prevista_entrega_opl: d.dataPrevistaEntregaOpl || '',
+                    devolucao: d.devolucao || null
+                })),
+                fromRows: rows => rows.map(r => ({
+                    id: r.id, setor: r.setor || '', opl: r.opl || '',
+                    chassi: r.chassi || '', descricao: r.descricao || '',
+                    prioridade: r.prioridade || '', dataAbertura: r.data_abertura || '',
+                    criadoPor: r.criado_por || '', origemSetor: r.origem_setor || '',
+                    prazo: r.prazo || '', responsavel: r.responsavel || '',
+                    status: r.status || '', tsInicio: r.ts_inicio || null,
+                    tsFim: r.ts_fim || null, dataFinalizacao: r.data_finalizacao || '',
+                    notas: r.notas || [], logs: r.logs || [],
+                    numChicote: r.num_chicote || '', qtd: r.qtd || '',
+                    emissortipo: r.emissortipo || '', dataEnvio: r.data_envio || '',
+                    previsaoConclusao: r.previsao_conclusao || '',
+                    dataPrevistaEntregaOpl: r.data_prevista_entrega_opl || '',
+                    devolucao: r.devolucao || null
+                }))
+            },
+            'ACN_PE_COUNT_V5': {
+                table: 'dados_acn',
+                isKV: true   // armazenado como key-value na tabela dados_acn
+            }
+        };
+
+        // ─── Supabase helpers ───
+        async function _sbUpsertAll(table, rows, pkField) {
+            if (!rows || rows.length === 0) return;
+            const pk = pkField || 'id';
+            try {
+                await _sb.from(table).upsert(rows, { onConflict: pk });
+            } catch(e) { console.warn('[Supabase sync] upsert', table, e); }
+        }
+        async function _sbGetAll(table) {
+            try {
+                const { data, error } = await _sb.from(table).select('*');
+                if (error) throw error;
+                return data || [];
+            } catch(e) { console.warn('[Supabase sync] getAll', table, e); return []; }
+        }
+        async function _sbKVSet(key, value) {
+            try {
+                await _sb.from('dados_acn').upsert(
+                    { id: key, conteudo: value, updated_at: new Date().toISOString() },
+                    { onConflict: 'id' }
+                );
+            } catch(e) { console.warn('[Supabase sync] kvSet', key, e); }
+        }
+        async function _sbKVGet(key) {
+            try {
+                const { data } = await _sb.from('dados_acn').select('conteudo').eq('id', key).maybeSingle();
+                return data ? data.conteudo : null;
+            } catch(_) { return null; }
+        }
+
+        // ─── Sincronização assíncrona em background ao setItem ───
+        function _syncToSupabase(lsKey, jsonValue) {
+            const cfg = SYNC_MAP[lsKey];
+            if (!cfg) return;
+            if (cfg.isKV) {
+                // peContador: valor primitivo
+                const val = (() => { try { return JSON.parse(jsonValue); } catch(_) { return jsonValue; } })();
+                _sbKVSet(lsKey, val);
+                return;
+            }
+            const arr = (() => { try { return JSON.parse(jsonValue) || []; } catch(_) { return []; } })();
+            const rows = cfg.toRows(Array.isArray(arr) ? arr : [arr]);
+            const pk = cfg.pkField || 'id';
+            _sbUpsertAll(cfg.table, rows, pk);
+        }
+
+        // ─── Intercepta localStorage globalmente via Proxy ───
+        const _realLS = window.localStorage;
+        const _lsProxy = new Proxy(_realLS, {
+            get(target, prop) {
+                if (prop === 'setItem') {
+                    return function(key, value) {
+                        target.setItem(key, value);          // salva normalmente
+                        _syncToSupabase(key, value);         // espelha para Supabase (async, não bloqueia)
+                    };
+                }
+                if (typeof target[prop] === 'function') {
+                    return target[prop].bind(target);
+                }
+                return target[prop];
+            }
+        });
+        // Substitui o objeto global
+        try {
+            Object.defineProperty(window, 'localStorage', {
+                get() { return _lsProxy; },
+                configurable: true
+            });
+        } catch(e) {
+            // fallback: sobrescreve métodos diretamente
+            const _origSet = Storage.prototype.setItem;
+            Storage.prototype.setItem = function(key, value) {
+                _origSet.call(this, key, value);
+                if (this === _realLS) _syncToSupabase(key, value);
+            };
+        }
+
+        // ─── Boot: carrega do Supabase → popula localStorage → app inicia ───
+        window.__acnSupabaseReady = false;
+        window.__acnBootSupabase = async function() {
+            const loadEl = document.getElementById('acn-supa-loading');
+
+            try {
+                // Carrega todas as tabelas em paralelo
+                const [
+                    opls, logist, chic, lab, comp, cq,
+                    vist, aj, serr, crm, usuarios, dd
+                ] = await Promise.all([
+                    _sbGetAll('oples'),
+                    _sbGetAll('logistica_manifestos'),
+                    _sbGetAll('chicotes_fabricacao'),
+                    _sbGetAll('laboratorio_equipamentos'),
+                    _sbGetAll('compras_requisicoes'),
+                    _sbGetAll('qualidade_historico'),
+                    _sbGetAll('vistorias_patio'),
+                    _sbGetAll('ajustes_projeto'),
+                    _sbGetAll('serralheria_tarefas'),
+                    _sbGetAll('crm_clientes'),
+                    _sbGetAll('usuarios_acn'),
+                    _sbGetAll('demandas_diretas')
+                ]);
+                const peRaw = await _sbKVGet('ACN_PE_COUNT_V5');
+
+                // Popula localStorage (o app vai ler daqui normalmente)
+                const SM = SYNC_MAP;
+                if (opls.length)    _realLS.setItem('ACN_MASTER_HORAS_V5',     JSON.stringify(SM['ACN_MASTER_HORAS_V5'].fromRows(opls)));
+                if (logist.length)  _realLS.setItem('ACN_LOGISTICA_V5',        JSON.stringify(SM['ACN_LOGISTICA_V5'].fromRows(logist)));
+                if (chic.length)    _realLS.setItem('ACN_CHICOTES_V5',         JSON.stringify(SM['ACN_CHICOTES_V5'].fromRows(chic)));
+                if (lab.length)     _realLS.setItem('ACN_LAB_V5',              JSON.stringify(SM['ACN_LAB_V5'].fromRows(lab)));
+                if (comp.length)    _realLS.setItem('ACN_REQ_COMPRAS_V5',      JSON.stringify(SM['ACN_REQ_COMPRAS_V5'].fromRows(comp)));
+                if (cq.length)      _realLS.setItem('ACN_CQ_HIST_V5',          JSON.stringify(SM['ACN_CQ_HIST_V5'].fromRows(cq)));
+                if (vist.length)    _realLS.setItem('ACN_VIS_PATIO_V5',        JSON.stringify(SM['ACN_VIS_PATIO_V5'].fromRows(vist)));
+                if (aj.length)      _realLS.setItem('ACN_AJUSTES_V5',          JSON.stringify(SM['ACN_AJUSTES_V5'].fromRows(aj)));
+                if (serr.length)    _realLS.setItem('ACN_SERRALHERIA_V5',      JSON.stringify(SM['ACN_SERRALHERIA_V5'].fromRows(serr)));
+                if (crm.length)     _realLS.setItem('ACN_CRM_V1',              JSON.stringify(SM['ACN_CRM_V1'].fromRows(crm)));
+                if (dd.length)      _realLS.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(SM['ACN_DEMANDAS_DIRETAS_V1'].fromRows(dd)));
+                if (peRaw !== null) _realLS.setItem('ACN_PE_COUNT_V5',         JSON.stringify(peRaw));
+
+                // Usuários: se Supabase tem dados, usa; senão deixa o app criar o admin padrão
+                if (usuarios.length) {
+                    _realLS.setItem('ACN_USUARIOS_V1', JSON.stringify(SM['ACN_USUARIOS_V1'].fromRows(usuarios)));
+                }
+
+            } catch(e) {
+                console.warn('[ACN Supabase Boot] Falha ao carregar — continuando com localStorage local:', e);
+            }
+
+            window.__acnSupabaseReady = true;
+            if (loadEl) loadEl.remove();
+        };
+
+    })();
+    </script>
+    <!-- Tela de loading Supabase (removida após boot) -->
+    <div id="acn-supa-loading" style="position:fixed;inset:0;background:#0f172a;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:monospace;">
+        <div style="color:#4ade80;font-size:20px;font-weight:bold;letter-spacing:2px;">ACN SINAL VERDE</div>
+        <div style="color:#94a3b8;font-size:13px;">Conectando ao banco de dados...</div>
+        <div style="width:40px;height:40px;border:3px solid #1e293b;border-top-color:#4ade80;border-radius:50%;animation:acn-spin 0.7s linear infinite;"></div>
+        <style>@keyframes acn-spin{to{transform:rotate(360deg)}}</style>
+    </div>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ACN SINAL VERDE - Sistema Operacional Unificado V23</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-        // ══════════════════════════════════════════════════════════
-        // SUPABASE CONFIG — ACN SINAL VERDE CONTROL SYSTEM
-        // ══════════════════════════════════════════════════════════
-        const SUPA_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
-        const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
-        const _supa = supabase.createClient(SUPA_URL, SUPA_KEY);
-
-        // Helper: upsert por id
-        async function sbUpsert(table, data) {
-            try { await _supa.from(table).upsert(data, { onConflict: 'id' }); }
-            catch(e) { console.error('sbUpsert', table, e); }
-        }
-        // Helper: insert
-        async function sbInsert(table, data) {
-            try { const r = await _supa.from(table).insert(data); return r; }
-            catch(e) { console.error('sbInsert', table, e); return null; }
-        }
-        // Helper: update
-        async function sbUpdate(table, id, data) {
-            try { await _supa.from(table).update(data).eq('id', id); }
-            catch(e) { console.error('sbUpdate', table, e); }
-        }
-        // Helper: delete
-        async function sbDelete(table, id) {
-            try { await _supa.from(table).delete().eq('id', id); }
-            catch(e) { console.error('sbDelete', table, e); }
-        }
-        // Helper: getAll
-        async function sbGetAll(table) {
-            try {
-                const { data, error } = await _supa.from(table).select('*');
-                if (error) throw error;
-                return data || [];
-            } catch(e) { console.error('sbGetAll', table, e); return []; }
-        }
-        // Helper: key-value store via dados_acn
-        async function sbGetKV(key, fallback) {
-            try {
-                const { data } = await _supa.from('dados_acn').select('conteudo').eq('id', key).single();
-                return data ? data.conteudo : fallback;
-            } catch(_) { return fallback; }
-        }
-        async function sbSetKV(key, value) {
-            try {
-                await _supa.from('dados_acn').upsert({ id: key, conteudo: value, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-            } catch(e) { console.error('sbSetKV', key, e); }
-        }
-    </script>
     <style>
         @keyframes pulse-red {
             0%, 100% { background-color: #fee2e2; border-color: #ef4444; }
@@ -831,338 +1239,49 @@
             if (typeof processarDashboard === 'function') processarDashboard();
         }
 
-        // ══════════════════════════════════════════════════════════
-        // INICIALIZAÇÃO ASSÍNCRONA — DADOS DO SUPABASE
-        // ══════════════════════════════════════════════════════════
-        // Compatibilidade: mantém carregarLS como no-op para código legado isolado
-        function carregarLS(chave, fallback) { return fallback; }
+        // MÓDULO AUXILIAR: MATA ERROS EM PARSE CASO O LOCAL STORAGE VENHA CORROMPIDO OU ANTIGO
+        try {
+            let dadosIniciaisParaConferir = localStorage.getItem('ACN_MASTER_HORAS_V5');
+            if (dadosIniciaisParaConferir) {
+                let parsed = JSON.parse(dadosIniciaisParaConferir);
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(v => {
+                        if (!v.logsOperacionaisTracking || !Array.isArray(v.logsOperacionaisTracking)) {
+                            v.logsOperacionaisTracking = ["Inicializado por corretor automático síncrono."];
+                        }
+                    });
+                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(parsed));
+                }
+            }
+        } catch(e) {
+            console.warn("Limpando cache inconsistente anterior.");
+            localStorage.removeItem('ACN_MASTER_HORAS_V5');
+        }
 
-        // Variáveis globais de dados (preenchidas assincronamente)
-        let ACN_DATA             = [];
-        let TERCEIROS_DATA       = [];
-        let CHICOTES_DATA        = [];
-        let LABORATORIO_DATA     = [];
-        let COMPRAS_REQ          = [];
-        let CHECKLISTS_HISTORICO = [];
-        let VISTORIAS_DATA       = [];
-        let AJUSTES_DATA         = [];
-        let SERRALHERIA_DATA     = [];
+        function carregarLS(chave, fallback) {
+            try {
+                const raw = localStorage.getItem(chave);
+                if (!raw) return fallback;
+                const v = JSON.parse(raw);
+                return v == null ? fallback : v;
+            } catch (e) {
+                console.warn("Falha ao carregar " + chave + ", resetando.", e);
+                try { localStorage.removeItem(chave); } catch(_) {}
+                return fallback;
+            }
+        }
+        let ACN_DATA          = carregarLS('ACN_MASTER_HORAS_V5', []);
+        let TERCEIROS_DATA    = carregarLS('ACN_LOGISTICA_V5', []);
+        let CHICOTES_DATA     = carregarLS('ACN_CHICOTES_V5', []);
+        let LABORATORIO_DATA  = carregarLS('ACN_LAB_V5', []);
+        let COMPRAS_REQ       = carregarLS('ACN_REQ_COMPRAS_V5', []);
+        let CHECKLISTS_HISTORICO = carregarLS('ACN_CQ_HIST_V5', []);
+        let VISTORIAS_DATA    = carregarLS('ACN_VIS_PATIO_V5', []);
+        let AJUSTES_DATA      = carregarLS('ACN_AJUSTES_V5', []);
+        let SERRALHERIA_DATA   = carregarLS('ACN_SERRALHERIA_V5', []);
 
         let chartInstancia = null;
-        let peContador     = 1;
-        let _dbCarregado   = false;
-
-        // Mapeia objetos JS (camelCase) → colunas Supabase (snake_case) para OPLs
-        function _oplToRow(v) {
-            return {
-                id: v.id, data_entrada: v.dataEntrada, ts_entrada: v.tsEntrada,
-                opl: v.opl, chassi: v.chassi, modelo: v.modelo, tipo_projeto: v.tipoProjeto,
-                data_prevista_entrega: v.dataPrevistaEntrega, responsavel_comercial: v.responsavelComercial,
-                item_envio: v.itemEnvio||false, envio_obs: v.envioObs||'',
-                is_demanda_direta_engenharia: v.isDemandaDiretaEngenharia||false,
-                bom: v.bom||'', status_geral: v.statusGeral||'', status_producao: v.statusProducao||'',
-                status_almoxarifado: v.statusAlmoxarifado||'', tecnico: v.tecnico||'', nfe: v.nfe||'',
-                retrabalho: v.retrabalho||false, pendencia_almoxarifado: v.pendenciaAlmoxarifado||false,
-                detalhes_pendencia: v.detalhesPendencia||'',
-                ts_inicio_prod: v.tsInicioProd||null, ts_fim_prod: v.tsFimProd||null,
-                ts_sol_checklist: v.tsSolChecklist||null, ts_fim_checklist: v.tsFimChecklist||null,
-                ts_bom: v.tsBOM||null, ts_faturamento_lib: v.tsFaturamentoLib||null, ts_nf: v.tsNF||null,
-                ts_sol_kiting: v.tsSolKiting||null, ts_kiting_fim: v.tsKitingFim||null,
-                logs_operacionais_tracking: v.logsOperacionaisTracking||[],
-                pendencias_setores: v.pendenciasSetores||{},
-                liberado_com_pendencia: v.liberadoComPendencia||false,
-                retornado_da_producao: v.retornadoDaProducao||false,
-                devolucao_pcp: v.devolucaoPcp||null, devolucao_comercial: v.devolucaoComercial||null
-            };
-        }
-        function _rowToOpl(r) {
-            return {
-                id: r.id, dataEntrada: r.data_entrada, tsEntrada: r.ts_entrada,
-                opl: r.opl, chassi: r.chassi, modelo: r.modelo, tipoProjeto: r.tipo_projeto,
-                dataPrevistaEntrega: r.data_prevista_entrega, responsavelComercial: r.responsavel_comercial,
-                itemEnvio: r.item_envio||false, envioObs: r.envio_obs||'',
-                isDemandaDiretaEngenharia: r.is_demanda_direta_engenharia||false,
-                bom: r.bom||'', statusGeral: r.status_geral||'', statusProducao: r.status_producao||'',
-                statusAlmoxarifado: r.status_almoxarifado||'', tecnico: r.tecnico||'', nfe: r.nfe||'',
-                retrabalho: r.retrabalho||false, pendenciaAlmoxarifado: r.pendencia_almoxarifado||false,
-                detalhesPendencia: r.detalhes_pendencia||'',
-                tsInicioProd: r.ts_inicio_prod||null, tsFimProd: r.ts_fim_prod||null,
-                tsSolChecklist: r.ts_sol_checklist||null, tsFimChecklist: r.ts_fim_checklist||null,
-                tsBOM: r.ts_bom||null, tsFaturamentoLib: r.ts_faturamento_lib||null, tsNF: r.ts_nf||null,
-                tsSolKiting: r.ts_sol_kiting||null, tsKitingFim: r.ts_kiting_fim||null,
-                logsOperacionaisTracking: r.logs_operacionais_tracking||[],
-                pendenciasSetores: r.pendencias_setores||{},
-                liberadoComPendencia: r.liberado_com_pendencia||false,
-                retornadoDaProducao: r.retornado_da_producao||false,
-                demandasPcp: { compras:"N/A", serralheria:"N/A", engenharia:"N/A", chicotes:"N/A", producao:"N/A" },
-                devolucaoPcp: r.devolucao_pcp||null, devolucaoComercial: r.devolucao_comercial||null
-            };
-        }
-
-        // Mapa logistica_manifestos
-        function _logToRow(t) {
-            return {
-                id: t.id, chassi: t.chassi, material: t.material, nf_remessa: t.nfRemessa||'',
-                data_envio: t.dataEnvio||'', previsao_retorno: t.previsaoRetorno||'',
-                fluxo: t.fluxo||'', responsavel_saida: t.responsavelSaida||'',
-                status: t.status||'Em Trânsito', foto_cam: t.fotoCam||'', foto_gal: t.fotoGal||''
-            };
-        }
-        function _rowToLog(r) {
-            return {
-                id: r.id, chassi: r.chassi, material: r.material, nfRemessa: r.nf_remessa||'',
-                dataEnvio: r.data_envio||'', previsaoRetorno: r.previsao_retorno||'',
-                fluxo: r.fluxo||'', responsavelSaida: r.responsavel_saida||'',
-                status: r.status||'Em Trânsito', fotoCam: r.foto_cam||'', fotoGal: r.foto_gal||''
-            };
-        }
-
-        // Mapa compras_requisicoes
-        function _compraToRow(c) {
-            return {
-                id: c.id, chassi: c.chassi, opl: c.opl, solicitante: c.solicitante||'',
-                data_emissao: c.dataEmissao||'', ts_solicitacao: c.tsSolicitacao||null,
-                itens: c.itens||'', data_compra: c.dataCompra||'', data_recebimento: c.dataRecebimento||'',
-                status: c.status||'', recebedor: c.recebedor||''
-            };
-        }
-        function _rowToCompra(r) {
-            return {
-                id: r.id, chassi: r.chassi, opl: r.opl, solicitante: r.solicitante||'',
-                dataEmissao: r.data_emissao||'', tsSolicitacao: r.ts_solicitacao||null,
-                itens: r.itens||'', dataCompra: r.data_compra||'', dataRecebimento: r.data_recebimento||'',
-                status: r.status||'', recebedor: r.recebedor||''
-            };
-        }
-
-        // Mapa qualidade_historico
-        function _cqToRow(c) {
-            return {
-                id: c.id, data_hora: c.dataHora||'', chassi: c.chassi, opl: c.opl||'',
-                resultado: c.resultado||'', tipo: c.tipo||'', obs: c.obs||'',
-                tecnico: c.tecnico||'', assinatura: c.assinatura||''
-            };
-        }
-        function _rowToCq(r) {
-            return {
-                id: r.id, dataHora: r.data_hora||'', chassi: r.chassi, opl: r.opl||'',
-                resultado: r.resultado||'', tipo: r.tipo||'', obs: r.obs||'',
-                tecnico: r.tecnico||'', assinatura: r.assinatura||''
-            };
-        }
-
-        // Mapa vistorias_patio
-        function _vistToRow(v) {
-            return {
-                id: v.id, data_hora: v.dataHora||'', chassi: v.chassi||'',
-                finalidade: v.finalidade||'', material: v.material||'',
-                responsavel: v.responsavel||'', status: v.status||'',
-                sign_env: v.signEnv||'', sign_rec: v.signRec||''
-            };
-        }
-        function _rowToVist(r) {
-            return {
-                id: r.id, dataHora: r.data_hora||'', chassi: r.chassi||'',
-                finalidade: r.finalidade||'', material: r.material||'',
-                responsavel: r.responsavel||'', status: r.status||'',
-                signEnv: r.sign_env||'', signRec: r.sign_rec||''
-            };
-        }
-
-        // Mapa ajustes_projeto
-        function _ajToRow(a) {
-            return {
-                id: a.id, data_abertura: a.dataAbertura||'', opl: a.opl||'',
-                requerente: a.requerente||'', prioridade: a.prioridade||'Normal',
-                descricao: a.descricao||'', data_limite: a.dataLimite||'',
-                data_resolucao: a.dataResolucao||'', solucao: a.solucao||'',
-                responsavel: a.responsavel||'', status: a.status||'Aberta',
-                ts_ultimo_log: a.tsUltimoLog||null, logs: a.logs||[]
-            };
-        }
-        function _rowToAj(r) {
-            return {
-                id: r.id, dataAbertura: r.data_abertura||'', opl: r.opl||'',
-                requerente: r.requerente||'', prioridade: r.prioridade||'Normal',
-                descricao: r.descricao||'', dataLimite: r.data_limite||'',
-                dataResolucao: r.data_resolucao||'', solucao: r.solucao||'',
-                responsavel: r.responsavel||'', status: r.status||'Aberta',
-                tsUltimoLog: r.ts_ultimo_log||null, logs: r.logs||[]
-            };
-        }
-
-        // Mapa chicotes_fabricacao
-        function _chicToRow(c) {
-            return {
-                id: c.id, chassi: c.chassi, opl: c.opl||'',
-                num_chicote: c.numChicote||'', qtd: c.qtd||'',
-                data_envio: c.dataEnvio||'', resp: c.resp||'',
-                status: c.status||'Em Fabricação', ts_fim: c.tsFim||null,
-                data_finalizacao: c.dataFinalizacao||''
-            };
-        }
-        function _rowToChic(r) {
-            return {
-                id: r.id, chassi: r.chassi, opl: r.opl||'',
-                numChicote: r.num_chicote||'', qtd: r.qtd||'',
-                dataEnvio: r.data_envio||'', resp: r.resp||'',
-                status: r.status||'Em Fabricação', tsFim: r.ts_fim||null,
-                dataFinalizacao: r.data_finalizacao||''
-            };
-        }
-
-        // Mapa laboratorio_equipamentos
-        function _labToRow(l) {
-            return {
-                id: l.id, chassi: l.chassi, opl: l.opl||'',
-                equipamento: l.equipamento||'', propriedade: l.propriedade||'',
-                data_solicitacao: l.dataSolicitacao||'', ts_solic: l.tsSolic||null,
-                ts_fim: l.tsFim||null, status: l.status||'Em Análise/Teste',
-                data_devolucao: l.dataDevolucao||''
-            };
-        }
-        function _rowToLab(r) {
-            return {
-                id: r.id, chassi: r.chassi, opl: r.opl||'',
-                equipamento: r.equipamento||'', propriedade: r.propriedade||'',
-                dataSolicitacao: r.data_solicitacao||'', tsSolic: r.ts_solic||null,
-                tsFim: r.ts_fim||null, status: r.status||'Em Análise/Teste',
-                dataDevolucao: r.data_devolucao||''
-            };
-        }
-
-        // Mapa serralheria_tarefas
-        function _serrToRow(t) {
-            return {
-                id: t.id, chassi: t.chassi, opl: t.opl||'',
-                descricao: t.descricao||'', qtd: t.qtd||'', resp: t.resp||'',
-                data_envio: t.dataEnvio||'', ts_recebimento: t.tsRecebimento||null,
-                ts_inicio: t.tsInicio||null, ts_fim: t.tsFim||null,
-                previsao_entrega_serralheria: t.previsaoEntregaSerralheria||'',
-                data_prevista_entrega_opl: t.dataPrevistaEntregaOpl||'',
-                status: t.status||'Aguardando Início',
-                data_finalizacao: t.dataFinalizacao||'', log: t.log||[]
-            };
-        }
-        function _rowToSerr(r) {
-            return {
-                id: r.id, chassi: r.chassi, opl: r.opl||'',
-                descricao: r.descricao||'', qtd: r.qtd||'', resp: r.resp||'',
-                dataEnvio: r.data_envio||'', tsRecebimento: r.ts_recebimento||null,
-                tsInicio: r.ts_inicio||null, tsFim: r.ts_fim||null,
-                previsaoEntregaSerralheria: r.previsao_entrega_serralheria||'',
-                dataPrevistaEntregaOpl: r.data_prevista_entrega_opl||'',
-                status: r.status||'Aguardando Início',
-                dataFinalizacao: r.data_finalizacao||'', log: r.log||[]
-            };
-        }
-
-        // Mapa crm_clientes
-        function _crmToRow(c) {
-            return {
-                id: c.id, nome: c.nome||'', empresa: c.empresa||'',
-                telefone: c.telefone||'', email: c.email||'',
-                data_proximo_contato: c.dataProximoContato||'',
-                obs: c.obs||'', status: c.status||'Ativo',
-                historico: c.historico||[], data_cadastro: c.dataCadastro||''
-            };
-        }
-        function _rowToCrm(r) {
-            return {
-                id: r.id, nome: r.nome||'', empresa: r.empresa||'',
-                telefone: r.telefone||'', email: r.email||'',
-                dataProximoContato: r.data_proximo_contato||'',
-                obs: r.obs||'', status: r.status||'Ativo',
-                historico: r.historico||[], dataCadastro: r.data_cadastro||''
-            };
-        }
-
-        // Mapa demandas_diretas
-        function _ddToRow(d) {
-            return {
-                id: d.id, setor: d.setor||'', opl: d.opl||'', chassi: d.chassi||'',
-                descricao: d.descricao||'', prioridade: d.prioridade||'',
-                data_abertura: d.dataAbertura||'', criado_por: d.criadoPor||'',
-                origem_setor: d.origemSetor||'', prazo: d.prazo||'',
-                responsavel: d.responsavel||'', status: d.status||'',
-                ts_inicio: d.tsInicio||null, ts_fim: d.tsFim||null,
-                data_finalizacao: d.dataFinalizacao||'', notas: d.notas||[], logs: d.logs||[],
-                num_chicote: d.numChicote||'', qtd: d.qtd||'',
-                emissortipo: d.emissortipo||'', data_envio: d.dataEnvio||'',
-                previsao_conclusao: d.previsaoConclusao||'',
-                data_prevista_entrega_opl: d.dataPrevistaEntregaOpl||'',
-                devolucao: d.devolucao||null
-            };
-        }
-        function _rowToDD(r) {
-            return {
-                id: r.id, setor: r.setor||'', opl: r.opl||'', chassi: r.chassi||'',
-                descricao: r.descricao||'', prioridade: r.prioridade||'',
-                dataAbertura: r.data_abertura||'', criadoPor: r.criado_por||'',
-                origemSetor: r.origem_setor||'', prazo: r.prazo||'',
-                responsavel: r.responsavel||'', status: r.status||'',
-                tsInicio: r.ts_inicio||null, tsFim: r.ts_fim||null,
-                dataFinalizacao: r.data_finalizacao||'', notas: r.notas||[], logs: r.logs||[],
-                numChicote: r.num_chicote||'', qtd: r.qtd||'',
-                emissortipo: r.emissortipo||'', dataEnvio: r.data_envio||'',
-                previsaoConclusao: r.previsao_conclusao||'',
-                dataPrevistaEntregaOpl: r.data_prevista_entrega_opl||'',
-                devolucao: r.devolucao||null
-            };
-        }
-
-        // Mapa usuarios_acn
-        function _usrToRow(u) {
-            return {
-                login: u.login, senha: u.senha, nome: u.nome||u.login,
-                perfil: u.perfil||'Producao', abas_custom: u.abasCustom||[]
-            };
-        }
-        function _rowToUsr(r) {
-            return {
-                login: r.login, senha: r.senha, nome: r.nome||r.login,
-                perfil: r.perfil||'Producao', abasCustom: r.abas_custom||[]
-            };
-        }
-
-        // ── Carrega todos os dados do Supabase no início ──
-        async function _carregarTodosDoSupabase() {
-            const [opls, logManif, chic, lab, comp, cqH, vist, ajst, serr, crmD, ddD, usuarios, pcKv] = await Promise.all([
-                sbGetAll('oples'),
-                sbGetAll('logistica_manifestos'),
-                sbGetAll('chicotes_fabricacao'),
-                sbGetAll('laboratorio_equipamentos'),
-                sbGetAll('compras_requisicoes'),
-                sbGetAll('qualidade_historico'),
-                sbGetAll('vistorias_patio'),
-                sbGetAll('ajustes_projeto'),
-                sbGetAll('serralheria_tarefas'),
-                sbGetAll('crm_clientes'),
-                sbGetAll('demandas_diretas'),
-                sbGetAll('usuarios_acn'),
-                sbGetKV('ACN_PE_COUNT_V5', 1)
-            ]);
-            ACN_DATA             = opls.map(_rowToOpl);
-            TERCEIROS_DATA       = logManif.map(_rowToLog);
-            CHICOTES_DATA        = chic.map(_rowToChic);
-            LABORATORIO_DATA     = lab.map(_rowToLab);
-            COMPRAS_REQ          = comp.map(_rowToCompra);
-            CHECKLISTS_HISTORICO = cqH.map(_rowToCq);
-            VISTORIAS_DATA       = vist.map(_rowToVist);
-            AJUSTES_DATA         = ajst.map(_rowToAj);
-            SERRALHERIA_DATA     = serr.map(_rowToSerr);
-            ACN_CLIENTES_CRM     = crmD.map(_rowToCrm);
-            DEMANDAS_DIRETAS     = ddD.map(_rowToDD);
-            if (usuarios.length > 0) {
-                ACN_USUARIOS = usuarios.map(_rowToUsr);
-            } else {
-                // primeiro uso: cria admin padrão
-                ACN_USUARIOS = [{ login:"admin", senha:"admin", nome:"Administrador", perfil:"Admin", abasCustom:[] }];
-                await sbInsert('usuarios_acn', _usrToRow(ACN_USUARIOS[0]));
-            }
-            peContador = typeof pcKv === 'number' ? pcKv : 1;
-            _dbCarregado = true;
-        }
+        let peContador = JSON.parse(localStorage.getItem('ACN_PE_COUNT_V5')) || 1;
         let filtroStatus = "TODOS";
         let fDataInicio = "";
         let fDataFim = "";
@@ -1219,8 +1338,8 @@
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [COMERCIAL] Demanda cadastrada e enviada para Engenharia.${itemEnvio ? ' 🚚 ITEM DE ENVIO — atenção brevidade.' : ''}${isDemandaDireta ? ' 🎯 DEMANDA DIRETA ENGENHARIA.' : ''}`]
             };
             ACN_DATA.push(novo);
-            /* Supabase: salvo em salvarEAtualizar() */
-            (async()=>{ for(const t of SERRALHERIA_DATA) await sbUpsert('serralheria_tarefas',_serrToRow(t)); })()
+            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             document.getElementById('form-comercial').reset();
             if(document.getElementById('com-item-envio')) document.getElementById('com-item-envio').checked = false;
             if(document.getElementById('com-envio-extra')) document.getElementById('com-envio-extra').classList.add('hidden');
@@ -1239,8 +1358,8 @@
         });
 
         // ===== CRM — CONTROLE DE CONTATOS COMERCIAIS =====
-        let ACN_CLIENTES_CRM = []; // carregado do Supabase em _carregarTodosDoSupabase
-        async function salvarCRM(){ for(const c of ACN_CLIENTES_CRM){ await sbUpsert('crm_clientes',_crmToRow(c)); } }
+        let ACN_CLIENTES_CRM = (function(){ try{ return JSON.parse(localStorage.getItem('ACN_CRM_V1')||'[]'); }catch(_){return [];} })();
+        function salvarCRM(){ localStorage.setItem('ACN_CRM_V1', JSON.stringify(ACN_CLIENTES_CRM)); }
 
         function registrarContatoCRM(event) {
             event.preventDefault();
@@ -1352,7 +1471,7 @@
                 logs: [`[${obterDataHoraLog()}] [ENGENHARIA→${setor.toUpperCase()}] Prototipagem direcionada. OPL ${v.opl}. Desc: ${descricao}`]
             };
             DEMANDAS_DIRETAS.push(item);
-            (async()=>{ for(const d of DEMANDAS_DIRETAS) await sbUpsert('demandas_diretas',_ddToRow(d)); })()
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ENGENHARIA] Prototipagem direcionada para ${setor}: ${descricao}`);
             salvarEAtualizar();
             alert(`✔ Prototipagem direcionada para ${setor}!`);
@@ -1407,7 +1526,7 @@
                 demandasPcp: { compras: "N/A", serralheria: "N/A", engenharia: "N/A", chicotes: "N/A", producao: "N/A" },
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [ENGENHARIA] Projeto Especial ${peCodigo} gerado diretamente na Engenharia.`]
             };
-            peContador++; sbSetKV('ACN_PE_COUNT_V5', peContador);
+            peContador++; localStorage.setItem('ACN_PE_COUNT_V5', peContador);
             ACN_DATA.push(novoPE); document.getElementById('form-engenharia-pe').reset(); salvarEAtualizar();
         }
 
@@ -1478,7 +1597,7 @@
                 itens: itens, dataCompra: "", dataRecebimento: "", status: "Pendente", recebedor: ""
             };
             COMPRAS_REQ.push(req);
-            (async()=>{ for(const c of COMPRAS_REQ) await sbUpsert('compras_requisicoes',_compraToRow(c)); })()
+            localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Emitida requisição de compras: ${itens}`);
             salvarEAtualizar();
@@ -1495,7 +1614,7 @@
                 qtd: qtd, dataEnvio: new Date().toLocaleDateString('pt-BR'), resp: resp, status: "Em Fabricação"
             };
             CHICOTES_DATA.push(chicote);
-            (async()=>{ for(const c of CHICOTES_DATA) await sbUpsert('chicotes_fabricacao',_chicToRow(c)); })()
+            localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Despachada OP de Chicote Nº ${numChicote} para fabricação.`);
             renderizarTabelas();
@@ -1512,7 +1631,7 @@
                 tsSolic: obterTimestamp(), status: "Em Análise/Teste"
             };
             LABORATORIO_DATA.push(lab);
-            (async()=>{ for(const l of LABORATORIO_DATA) await sbUpsert('laboratorio_equipamentos',_labToRow(l)); })()
+            localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Equipamento [${equipamento}] enviado para ensaio no Laboratório.`);
             renderizarTabelas();
@@ -1589,7 +1708,7 @@
                 ACN_DATA[idx].logsOperacionaisTracking.push(
                     "[" + obterDataHoraLog() + "] [ALMOXARIFADO] ⚠ LIBERADO COM PENDÊNCIA por " + usuarioAtualNome() + ". Just.: " + motivo.trim()
                 );
-                /* Supabase: salvo em salvarEAtualizar() */
+                localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
                 renderizarTabelas();
                 alert("✔ OPL liberada com pendência.\nO PCP já pode liberar para produção.");
             } catch(e) { alert("Erro: " + e.message); console.error(e); }
@@ -1618,7 +1737,7 @@
                 log: [`[${obterDataHoraLog()}] [PCP→SERRALHERIA] Tarefa despachada pelo PCP. Desc: ${descricao}. Qtd: ${qtd}. Resp: ${resp}.`]
             };
             SERRALHERIA_DATA.push(tarefa);
-            (async()=>{ for(const t of SERRALHERIA_DATA) await sbUpsert('serralheria_tarefas',_serrToRow(t)); })()
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Ordem de serralheria despachada: ${descricao} (${qtd} peças) → ${resp}.`);
             salvarEAtualizar();
             alert(`✔ Tarefa enviada para Serralheria!
@@ -1632,7 +1751,7 @@ OPL ${opl} | ${descricao}`);
             if(!prev) return;
             t.previsaoEntregaSerralheria = prev;
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de conclusão definida: ${formatarDataBR(prev)}.`);
-            (async()=>{ for(const t of SERRALHERIA_DATA) await sbUpsert('serralheria_tarefas',_serrToRow(t)); })()
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de entrega definida: ${formatarDataBR(prev)}.`);
             salvarEAtualizar();
@@ -1648,7 +1767,7 @@ OPL ${opl} | ${descricao}`);
             t.tsInicio = obterTimestamp();
             t.status = "Em Execução";
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa iniciada.`);
-            (async()=>{ for(const t of SERRALHERIA_DATA) await sbUpsert('serralheria_tarefas',_serrToRow(t)); })()
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Execução iniciada por ${t.resp}.`);
             salvarEAtualizar();
@@ -1663,7 +1782,7 @@ OPL ${opl} | ${descricao}`);
             t.status = "Concluído";
             t.dataFinalizacao = obterDataHoraLog();
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa FINALIZADA por ${t.resp}. ${obs ? "Obs: " + obs : ""}`);
-            (async()=>{ for(const t of SERRALHERIA_DATA) await sbUpsert('serralheria_tarefas',_serrToRow(t)); })()
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa concluída e entregue ao almoxarifado.`);
             salvarEAtualizar();
@@ -1695,7 +1814,7 @@ OPL ${opl} | ${descricao}`);
         function finalizarFabricacaoChicote(id) {
             const c = CHICOTES_DATA.find(x => x.id === id);
             if(c) {
-                c.status = "Concluído"; (async()=>{ for(const c of CHICOTES_DATA) await sbUpsert('chicotes_fabricacao',_chicToRow(c)); })()
+                c.status = "Concluído"; localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
                 let v = ACN_DATA.find(x => x.chassi === c.chassi);
                 if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [CHICOTE] Fabricação do chicote concluída e disponibilizada.`);
                 renderizarTabelas();
@@ -1705,7 +1824,7 @@ OPL ${opl} | ${descricao}`);
         function devolverLaboratorioAoPcp(id) {
             const l = LABORATORIO_DATA.find(x => x.id === id);
             if(l) {
-                l.status = "Concluído & Devolvido"; (async()=>{ for(const l of LABORATORIO_DATA) await sbUpsert('laboratorio_equipamentos',_labToRow(l)); })()
+                l.status = "Concluído & Devolvido"; localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
                 let v = ACN_DATA.find(x => x.chassi === l.chassi);
                 if(v) { v.statusGeral = "BOM Lançado - Análise PCP"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LABORATÓRIO] Reparo concluído e devolvido ao PCP.`); }
                 salvarEAtualizar();
@@ -1720,7 +1839,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.dataCompra = dCompra; req.dataRecebimento = dRec; req.status = "Entrega Futura (Pedido Efetivado)";
-                (async()=>{ for(const c of COMPRAS_REQ) await sbUpsert('compras_requisicoes',_compraToRow(c)); })()
+                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Comprado - Aguardando Chegada"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [COMPRAS] Pedido efetivado. Previsão: ${dRec}`); }
                 salvarEAtualizar();
@@ -1734,7 +1853,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.recebedor = nomeFirma; req.status = `Recebido por ${nomeFirma} em ${new Date().toLocaleDateString('pt-BR')}`;
-                (async()=>{ for(const c of COMPRAS_REQ) await sbUpsert('compras_requisicoes',_compraToRow(c)); })()
+                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Recebido (Aguardando Triagem de Kiting)"; v.pendenciaAlmoxarifado = false; v.detalhesPendencia = ""; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ALMOXARIFADO] Materiais recebidos por ${nomeFirma}.`); }
                 salvarEAtualizar();
@@ -1768,7 +1887,7 @@ OPL ${opl} | ${descricao}`);
                     ACN_DATA[idx].logsOperacionaisTracking.push(
                         "[" + obterDataHoraLog() + "] [ALMOXARIFADO] ✅ Kiting 100% OK liberado por " + usuarioAtualNome() + "."
                     );
-                    /* Supabase: salvo em salvarEAtualizar() */
+                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
                     renderizarTabelas();
                     processarDashboard();
                     alert("✅ Kiting marcado como 100% OK!\n\nOPL: " + ACN_DATA[idx].opl + "\nO PCP já pode liberar para a produção.");
@@ -1776,7 +1895,7 @@ OPL ${opl} | ${descricao}`);
                     // Outros status (apontar pendência etc.)
                     ACN_DATA[idx].statusAlmoxarifado    = status;
                     ACN_DATA[idx].pendenciaAlmoxarifado = true;
-                    /* Supabase: salvo em salvarEAtualizar() */
+                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
                     renderizarTabelas();
                 }
             } catch(e) {
@@ -1929,7 +2048,7 @@ OPL ${opl} | ${descricao}`);
                 resultado: aprovado ? "APROVADO" : "REPROVADO", tipo: tipo, obs: obs || "Conforme.", tecnico: v.tecnico, assinatura: canvasData
             };
             CHECKLISTS_HISTORICO.push(log);
-            (async()=>{ for(const c of CHECKLISTS_HISTORICO) await sbUpsert('qualidade_historico',_cqToRow(c)); })()
+            localStorage.setItem('ACN_CQ_HIST_V5', JSON.stringify(CHECKLISTS_HISTORICO));
 
             v.tsFimChecklist = obterTimestamp();
 
@@ -1970,7 +2089,7 @@ OPL ${opl} | ${descricao}`);
                 fotoGal: fotoGal
             };
             TERCEIROS_DATA.push(item);
-            (async()=>{ for(const t of TERCEIROS_DATA) await sbUpsert('logistica_manifestos',_logToRow(t)); })()
+            localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassiL);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Despachado material [${item.material}] via manifesto logístico.${(fotoCam||fotoGal) ? " 📷 Foto anexada." : ""}`);
             // Reset form e variáveis de foto
@@ -2028,7 +2147,7 @@ OPL ${opl} | ${descricao}`);
 
         function darBaixaRetiradaEstoqueLogistica(id) {
             let t = TERCEIROS_DATA.find(x => x.id == id);
-            if(t) { t.status = "Retornado ao Estoque"; (async()=>{ for(const t of TERCEIROS_DATA) await sbUpsert('logistica_manifestos',_logToRow(t)); })() let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
+            if(t) { t.status = "Retornado ao Estoque"; localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA)); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
         }
 
         function registrarVistoriaPatio(event) {
@@ -2043,7 +2162,7 @@ OPL ${opl} | ${descricao}`);
                 signEnv: document.getElementById('canvas-envia').toDataURL(), signRec: document.getElementById('canvas-recebe').toDataURL()
             };
             VISTORIAS_DATA.push(vis);
-            (async()=>{ for(const v of VISTORIAS_DATA) await sbUpsert('vistorias_patio',_vistToRow(v)); })()
+            localStorage.setItem('ACN_VIS_PATIO_V5', JSON.stringify(VISTORIAS_DATA));
             document.getElementById('form-vistoria').reset();
             limparCanvasPatio('envia'); limparCanvasPatio('recebe');
             salvarEAtualizar();
@@ -2844,20 +2963,15 @@ OPL ${opl} | ${descricao}`);
         function limparCanvas() { if(ctxCanvas) { let c = document.getElementById('signature-canvas'); ctxCanvas.clearRect(0,0,c.width,c.height); ctxCanvas.beginPath(); } }
         function fecharChecklistModal() { document.getElementById('modal-checklist').classList.add('hidden'); }
 
-        async function salvarEAtualizar() {
-            // Persiste ACN_DATA (OPLs) no Supabase
-            for (const v of ACN_DATA) {
-                await sbUpsert('oples', _oplToRow(v));
-            }
+        function salvarEAtualizar() {
+            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
             renderizarTabelas();
             processarDashboard();
         }
 
         // ===== MÓDULO: SOLICITAÇÕES DE AJUSTE DE PROJETO =====
-        async function salvarAjustes() {
-            for (const a of AJUSTES_DATA) {
-                await sbUpsert('ajustes_projeto', _ajToRow(a));
-            }
+        function salvarAjustes() {
+            try { localStorage.setItem('ACN_AJUSTES_V5', JSON.stringify(AJUSTES_DATA)); } catch(e){}
         }
         function diasEntre(dataIsoA, dataIsoB) {
             const a = new Date(dataIsoA + "T00:00:00");
@@ -3282,7 +3396,11 @@ OPL ${opl} | ${descricao}`);
             Logistica:    ["dashboard","logistica","vistorias","ajustes"],
             Vistorias:    ["dashboard","vistorias","ajustes"]
         };
-        let ACN_USUARIOS = []; // carregado do Supabase em _carregarTodosDoSupabase
+        let ACN_USUARIOS = carregarLS('ACN_USUARIOS_V1', null);
+        if (!ACN_USUARIOS) {
+            ACN_USUARIOS = [{ login:"admin", senha:"admin", nome:"Administrador", perfil:"Admin" }];
+            localStorage.setItem('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
+        }
         let ACN_USER = null;
         try { ACN_USER = JSON.parse(sessionStorage.getItem('ACN_USER_ATIVO') || "null"); } catch(_) { ACN_USER = null; }
 
@@ -3409,7 +3527,7 @@ OPL ${opl} | ${descricao}`);
                 if(ACN_USUARIOS.some(x=>x.login.toLowerCase()===login.toLowerCase())) { alert("Login já existe."); return; }
                 ACN_USUARIOS.push({ login, senha: senhaInput, nome: nome||login, perfil, abasCustom: abasSelecionadas });
             }
-            (async()=>{ for(const u of ACN_USUARIOS) await sbUpsert('usuarios_acn',_usrToRow(u)); })()
+            localStorage.setItem('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
             document.getElementById('acn-user-mgmt-modal').remove();
             alert(`✔ Usuário ${login} ${editarLogin?'atualizado':'cadastrado'} com sucesso!`);
         }
@@ -3491,7 +3609,7 @@ OPL ${opl} | ${descricao}`);
                 pendenciasSetores: {},
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [ENGENHARIA] ${_logUsuario()} abriu Projeto Especial ${peCodigo} (${tipo}, prio ${prior}, resp ${resp||'—'}, prev ${prev||'—'}).`]
             };
-            peContador++; sbSetKV('ACN_PE_COUNT_V5', peContador);
+            peContador++; localStorage.setItem('ACN_PE_COUNT_V5', peContador);
             ACN_DATA.push(novoPE);
             document.getElementById('form-engenharia-pe').reset();
             alert("✔ Projeto Especial "+peCodigo+" criado!");
@@ -3653,7 +3771,7 @@ OPL ${opl} | ${descricao}`);
                 logs: [`[${obterDataHoraLog()}] [PCP→${setor.toUpperCase()}] Demanda aberta por ${_logUsuario()} (prio ${prior}). ${desc}`]
             };
             DEMANDAS_DIRETAS.push(item);
-            (async()=>{ for(const d of DEMANDAS_DIRETAS) await sbUpsert('demandas_diretas',_ddToRow(d)); })()
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             document.getElementById('pcp-direta-form').reset();
             alert("✔ Demanda direta enviada ao setor "+setor+".");
             _renderizarDemandasDiretas();
@@ -3665,7 +3783,7 @@ OPL ${opl} | ${descricao}`);
             d.prazo = p;
             if (d.status === "Pendente Prazo") d.status = "Em Execução";
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] Prazo definido por ${_logUsuario()}: ${formatarDataBR(p)}.`);
-            (async()=>{ for(const d of DEMANDAS_DIRETAS) await sbUpsert('demandas_diretas',_ddToRow(d)); })()
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             _renderizarDemandasDiretas();
         }
         function ddAnotar(id) {
@@ -3674,7 +3792,7 @@ OPL ${opl} | ${descricao}`);
             if (!nota) return;
             d.notas.push(`[${obterDataHoraLog()}] ${_logUsuario()}: ${nota}`);
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] ${_logUsuario()}: ${nota}`);
-            (async()=>{ for(const d of DEMANDAS_DIRETAS) await sbUpsert('demandas_diretas',_ddToRow(d)); })()
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             _renderizarDemandasDiretas();
         }
         function ddFinalizar(id) {
@@ -3684,7 +3802,7 @@ OPL ${opl} | ${descricao}`);
             d.dataFinalizacao = obterDataHoraLog();
             d.finalizadoPor = _logUsuario();
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] 🏁 FINALIZADA por ${_logUsuario()}. ${obs?'Obs: '+obs:''}`);
-            (async()=>{ for(const d of DEMANDAS_DIRETAS) await sbUpsert('demandas_diretas',_ddToRow(d)); })()
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             _renderizarDemandasDiretas();
             alert("✔ Demanda finalizada.");
         }
@@ -3828,23 +3946,43 @@ OPL ${opl} | ${descricao}`);
             w.document.write(html); w.document.close();
         };
 
-        /* ---------- 6) BOOTSTRAP SUPABASE + OVERLAY ---------- */
+        /* ---------- 6) BOOTSTRAP DO OVERLAY + SUPABASE ---------- */
         (function _bootOverlay(){
             const prevOnLoad = window.onload;
             window.onload = async function() {
-                // Mostra loading enquanto carrega do Supabase
-                const loadDiv = document.createElement('div');
-                loadDiv.id = 'acn-loading';
-                loadDiv.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
-                loadDiv.innerHTML = '<div style="color:#4ade80;font-size:22px;font-weight:bold;">ACN SINAL VERDE</div><div style="color:#94a3b8;font-size:13px;">Conectando ao banco de dados...</div><div style="border:3px solid #334155;border-top-color:#4ade80;border-radius:50%;width:36px;height:36px;animation:spin 0.8s linear infinite;"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
-                document.body.appendChild(loadDiv);
-                try {
-                    await _carregarTodosDoSupabase();
-                } catch(e) {
-                    console.error('Erro ao carregar Supabase:', e);
+                // 1) Carrega dados do Supabase no localStorage
+                if (typeof window.__acnBootSupabase === 'function') {
+                    await window.__acnBootSupabase();
                 }
-                document.body.removeChild(loadDiv);
+                // 2) Reinicializa variáveis in-memory a partir do localStorage já populado
+                (function _recarregarMemoria() {
+                    try {
+                        function _ls(k, fb) { try { const r = localStorage.getItem(k); return r ? (JSON.parse(r) || fb) : fb; } catch(_) { return fb; } }
+                        ACN_DATA             = _ls('ACN_MASTER_HORAS_V5', []);
+                        TERCEIROS_DATA       = _ls('ACN_LOGISTICA_V5', []);
+                        CHICOTES_DATA        = _ls('ACN_CHICOTES_V5', []);
+                        LABORATORIO_DATA     = _ls('ACN_LAB_V5', []);
+                        COMPRAS_REQ          = _ls('ACN_REQ_COMPRAS_V5', []);
+                        CHECKLISTS_HISTORICO = _ls('ACN_CQ_HIST_V5', []);
+                        VISTORIAS_DATA       = _ls('ACN_VIS_PATIO_V5', []);
+                        AJUSTES_DATA         = _ls('ACN_AJUSTES_V5', []);
+                        SERRALHERIA_DATA     = _ls('ACN_SERRALHERIA_V5', []);
+                        ACN_CLIENTES_CRM     = _ls('ACN_CRM_V1', []);
+                        peContador           = _ls('ACN_PE_COUNT_V5', 1);
+                        if (!Array.isArray(ACN_DATA)) ACN_DATA = [];
+                        ACN_DATA.forEach(v => {
+                            if (!v.logsOperacionaisTracking || !Array.isArray(v.logsOperacionaisTracking))
+                                v.logsOperacionaisTracking = [];
+                        });
+                        const usrRaw = _ls('ACN_USUARIOS_V1', null);
+                        if (usrRaw && Array.isArray(usrRaw)) ACN_USUARIOS = usrRaw;
+                        DEMANDAS_DIRETAS = _ls('ACN_DEMANDAS_DIRETAS_V1', []);
+                        if (!Array.isArray(DEMANDAS_DIRETAS)) DEMANDAS_DIRETAS = [];
+                    } catch(e) { console.warn('_recarregarMemoria:', e); }
+                })();
+                // 3) Executa o window.onload original (renderiza tudo)
                 if (typeof prevOnLoad === 'function') prevOnLoad();
+                // 4) Inicia overlays
                 _enriquecerFormPE();
                 _injetarFormDemandaDireta();
                 if (!ACN_USER) _injetarLoginUI();
