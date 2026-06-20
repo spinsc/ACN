@@ -2570,6 +2570,27 @@ OPL ${opl} | ${descricao}`);
                         <button type="button" onclick="devolverAoPcp('${v.chassi}')" class="bg-red-600 text-white font-bold p-1 rounded text-[10px] block w-full text-center">↩ DEVOLVER AO PCP</button>
                     </td>`;
                 tProd.appendChild(tr);
+                // Injetar aviso + botões SANAR pendência diretamente na aba Produção
+                (function _pendProd(vRef, trEl) {
+                    const ps = vRef.pendenciasSetores || {};
+                    const abertos = Object.entries(ps).filter(function(e){ return e[1] && !e[1].liberada; });
+                    const tdAcoes = trEl.querySelector('td:last-child');
+                    if (!tdAcoes || abertos.length === 0) return;
+                    const badge = document.createElement('div');
+                    badge.className = 'mt-1 bg-amber-100 border border-amber-400 text-amber-900 text-[9px] font-bold rounded px-1 py-0.5 text-center';
+                    badge.textContent = '\u26a0 ' + abertos.length + ' pend\u00eancia(s) em aberto';
+                    tdAcoes.appendChild(badge);
+                    abertos.forEach(function(entry) {
+                        var setor = entry[0]; var pend = entry[1];
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'bg-orange-500 hover:bg-orange-600 text-white font-bold text-[9px] p-1 rounded block w-full mt-0.5';
+                        btn.textContent = '\u2714 SANAR: ' + setor;
+                        btn.title = pend.motivo || '';
+                        btn.addEventListener('click', function(){ liberarPendenciaSetor(vRef.chassi, setor); });
+                        tdAcoes.appendChild(btn);
+                    });
+                })(v, tr);
             });
 
             // Histórico Produção Fixo
@@ -3621,9 +3642,13 @@ OPL ${opl} | ${descricao}`);
             const v = ACN_DATA.find(x=>x.chassi===chassi);
             if (!v) return [];
             const pend = [];
+            // Se liberadoComPendencia=true, o Almoxarifado autorizou o bypass — não bloquear checklist
             if (v.pendenciaAlmoxarifado && !v.liberadoComPendencia) pend.push("Almoxarifado");
-            const ps = v.pendenciasSetores || {};
-            Object.keys(ps).forEach(s => { if (ps[s] && !ps[s].liberada) pend.push(s); });
+            // Pendências de setor só bloqueiam se NÃO houve bypass do Almoxarifado
+            if (!v.liberadoComPendencia) {
+                const ps = v.pendenciasSetores || {};
+                Object.keys(ps).forEach(s => { if (ps[s] && !ps[s].liberada) pend.push(s); });
+            }
             return pend;
         }
         function apontarPendenciaSetor(chassi, setor) {
