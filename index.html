@@ -4019,7 +4019,11 @@ function zerarSistema() {
         /* ---------- 6) BOOTSTRAP DO OVERLAY + SUPABASE ---------- */
         (function _bootOverlay(){
             const prevOnLoad = window.onload;
-            window.onload = async function() {               
+            window.onload = async function() {
+                // 1) Carrega dados do Supabase no localStorage
+                if (typeof window.__acnBootSupabase === 'function') {
+                    await window.__acnBootSupabase();
+                }
                 // 2) Reinicializa variáveis in-memory a partir do localStorage já populado
                 (function _recarregarMemoria() {
                     try {
