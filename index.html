@@ -3552,6 +3552,47 @@ OPL ${opl} | ${descricao}`);
             document.getElementById('acn-user-mgmt-modal').remove();
             alert(`✔ Usuário ${login} ${editarLogin?'atualizado':'cadastrado'} com sucesso!`);
         }
+
+function zerarSistema() {
+    // Segurança extra: Verifica se é admin novamente
+    if (!ACN_USER || ACN_USER.perfil !== 'Admin') {
+        alert("Acesso negado.");
+        return;
+    }
+
+    const confirmar = confirm("🚨 ATENÇÃO: Esta ação apagará permanentemente todos os registros de OPLs, Tarefas, Históricos, CRM e Projetos.\n\nAPENAS OS USUÁRIOS serão mantidos.\n\nDeseja continuar?");
+    
+    if (confirmar) {
+        const confirmarFinal = confirm("Tem certeza absoluta? Esta ação não pode ser desfeita.");
+        if (confirmarFinal) {
+            // Lista de chaves do LocalStorage que serão removidas
+            const chavesParaLimpar = [
+                'ACN_MASTER_HORAS_V5',
+                'ACN_LOGISTICA_V5',
+                'ACN_CHICOTES_V5',
+                'ACN_LAB_V5',
+                'ACN_REQ_COMPRAS_V5',
+                'ACN_CQ_HIST_V5',
+                'ACN_VIS_PATIO_V5',
+                'ACN_AJUSTES_V5',
+                'ACN_SERRALHERIA_V5',
+                'ACN_DEMANDAS_DIRETAS_V1',
+                'ACN_CRM_V1',
+                'ACN_PE_COUNT_V5',
+                'ACN_CRM_V1'
+            ];
+
+            // Remove cada item da lista
+            chavesParaLimpar.forEach(chave => {
+                localStorage.removeItem(chave);
+            });
+
+            alert("✅ O sistema foi zerado com sucesso! A página será reiniciada.");
+            location.reload(); // Recarrega para limpar as variáveis em memória
+        }
+    }
+}
+
         function _injetarBarraUsuario() {
             if (!ACN_USER || document.getElementById('acn-user-bar')) return;
             const bar = document.createElement('div');
@@ -3559,9 +3600,13 @@ OPL ${opl} | ${descricao}`);
             bar.className = 'no-print';
             bar.style.cssText = 'background:#0f172a;color:#fff;padding:4px 14px;font-size:11px;display:flex;justify-content:flex-end;align-items:center;gap:10px;';
             const isAdmin = ACN_USER.perfil === 'Admin';
+    
             bar.innerHTML = `<span>👤 <b>${ACN_USER.nome}</b> · ${ACN_USER.perfil} · <span style="opacity:.6">${ACN_USER.login}</span></span>
-                ${isAdmin ? `<button onclick="acnAbrirCadastroUsuario(null)" style="background:#334155;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;border:0;cursor:pointer;">👥 Gerenciar Usuários</button>` : ''}
-                <button onclick="acnLogout()" style="background:#dc2626;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;border:0;cursor:pointer;">Sair</button>`;
+                ${isAdmin ? `
+            <button onclick="acnAbrirCadastroUsuario(null)" style="background:#334155;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;border:0;cursor:pointer;">👥 Gerenciar Usuários</button>
+            <button onclick="zerarSistema()" style="background:#b91c1c;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;border:0;cursor:pointer;font-weight:bold;">⚠️ Zerar Registros</button>
+                ` : ''}
+            <button onclick="acnLogout()" style="background:#dc2626;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;border:0;cursor:pointer;">Sair</button>`;
             document.body.insertBefore(bar, document.body.firstChild);
         }
         function _aplicarPermissoesAbas() {
@@ -3974,11 +4019,7 @@ OPL ${opl} | ${descricao}`);
         /* ---------- 6) BOOTSTRAP DO OVERLAY + SUPABASE ---------- */
         (function _bootOverlay(){
             const prevOnLoad = window.onload;
-            window.onload = async function() {
-                // 1) Carrega dados do Supabase no localStorage
-                if (typeof window.__acnBootSupabase === 'function') {
-                    await window.__acnBootSupabase();
-                }
+            window.onload = async function() {               
                 // 2) Reinicializa variáveis in-memory a partir do localStorage já populado
                 (function _recarregarMemoria() {
                     try {
