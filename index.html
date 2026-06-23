@@ -1339,8 +1339,8 @@
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [COMERCIAL] Demanda cadastrada e enviada para Engenharia.${itemEnvio ? ' 🚚 ITEM DE ENVIO — atenção brevidade.' : ''}${isDemandaDireta ? ' 🎯 DEMANDA DIRETA ENGENHARIA.' : ''}`]
             };
             ACN_DATA.push(novo);
-            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
-            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            await _salvarNoSupabase(ACN_DATA, 'oples');
+            await _salvarNoSupabase(SERRALHERIA_DATA, 'serralheria');
             document.getElementById('form-comercial').reset();
             if(document.getElementById('com-item-envio')) document.getElementById('com-item-envio').checked = false;
             if(document.getElementById('com-envio-extra')) document.getElementById('com-envio-extra').classList.add('hidden');
@@ -1360,7 +1360,7 @@
 
         // ===== CRM — CONTROLE DE CONTATOS COMERCIAIS =====
         let ACN_CLIENTES_CRM = (function(){ try{ return JSON.parse(localStorage.getItem('ACN_CRM_V1')||'[]'); }catch(_){return [];} })();
-        function salvarCRM(){ localStorage.setItem('ACN_CRM_V1', JSON.stringify(ACN_CLIENTES_CRM)); }
+        function salvarCRM(){ await _salvarNoSupabase(ACN_CLIENTES_CRM, 'clientes_crm'); }
 
         function registrarContatoCRM(event) {
             event.preventDefault();
@@ -1472,7 +1472,7 @@
                 logs: [`[${obterDataHoraLog()}] [ENGENHARIA→${setor.toUpperCase()}] Prototipagem direcionada. OPL ${v.opl}. Desc: ${descricao}`]
             };
             DEMANDAS_DIRETAS.push(item);
-            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
+            await _salvarNoSupabase(DEMANDAS_DIRETAS, 'demandas_diretas');
             v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ENGENHARIA] Prototipagem direcionada para ${setor}: ${descricao}`);
             salvarEAtualizar();
             alert(`✔ Prototipagem direcionada para ${setor}!`);
@@ -1527,7 +1527,7 @@
                 demandasPcp: { compras: "N/A", serralheria: "N/A", engenharia: "N/A", chicotes: "N/A", producao: "N/A" },
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [ENGENHARIA] Projeto Especial ${peCodigo} gerado diretamente na Engenharia.`]
             };
-            peContador++; localStorage.setItem('ACN_PE_COUNT_V5', peContador);
+            peContador++; // PE Counter salvo em memória
             ACN_DATA.push(novoPE); document.getElementById('form-engenharia-pe').reset(); salvarEAtualizar();
         }
 
@@ -1598,7 +1598,7 @@
                 itens: itens, dataCompra: "", dataRecebimento: "", status: "Pendente", recebedor: ""
             };
             COMPRAS_REQ.push(req);
-            localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
+            await _salvarNoSupabase(COMPRAS_REQ, 'compras');
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Emitida requisição de compras: ${itens}`);
             salvarEAtualizar();
@@ -1615,7 +1615,7 @@
                 qtd: qtd, dataEnvio: new Date().toLocaleDateString('pt-BR'), resp: resp, status: "Em Fabricação"
             };
             CHICOTES_DATA.push(chicote);
-            localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
+            await _salvarNoSupabase(CHICOTES_DATA, 'chicotes');
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Despachada OP de Chicote Nº ${numChicote} para fabricação.`);
             renderizarTabelas();
@@ -1632,7 +1632,7 @@
                 tsSolic: obterTimestamp(), status: "Em Análise/Teste"
             };
             LABORATORIO_DATA.push(lab);
-            localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
+            await _salvarNoSupabase(LABORATORIO_DATA, 'laboratorio');
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Equipamento [${equipamento}] enviado para ensaio no Laboratório.`);
             renderizarTabelas();
@@ -1737,7 +1737,7 @@
             `[${obterDataHoraLog()}] [ALMOXARIFADO] ⚠️ LIBERADO COM PENDÊNCIA por ${usuarioAtualNome()}. Pendência: ${descricaoPendencia.trim()}. Setor: ${setorResponsavel.trim()}`
         );
         
-        localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+        await _salvarNoSupabase(ACN_DATA, 'oples');
         renderizarTabelas();
         
         alert(
@@ -1775,7 +1775,7 @@
                 log: [`[${obterDataHoraLog()}] [PCP→SERRALHERIA] Tarefa despachada pelo PCP. Desc: ${descricao}. Qtd: ${qtd}. Resp: ${resp}.`]
             };
             SERRALHERIA_DATA.push(tarefa);
-            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            await _salvarNoSupabase(SERRALHERIA_DATA, 'serralheria');
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Ordem de serralheria despachada: ${descricao} (${qtd} peças) → ${resp}.`);
             salvarEAtualizar();
             alert(`✔ Tarefa enviada para Serralheria!
@@ -1789,7 +1789,7 @@ OPL ${opl} | ${descricao}`);
             if(!prev) return;
             t.previsaoEntregaSerralheria = prev;
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de conclusão definida: ${formatarDataBR(prev)}.`);
-            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            await _salvarNoSupabase(SERRALHERIA_DATA, 'serralheria');
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de entrega definida: ${formatarDataBR(prev)}.`);
             salvarEAtualizar();
@@ -1805,7 +1805,7 @@ OPL ${opl} | ${descricao}`);
             t.tsInicio = obterTimestamp();
             t.status = "Em Execução";
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa iniciada.`);
-            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            await _salvarNoSupabase(SERRALHERIA_DATA, 'serralheria');
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Execução iniciada por ${t.resp}.`);
             salvarEAtualizar();
@@ -1820,7 +1820,7 @@ OPL ${opl} | ${descricao}`);
             t.status = "Concluído";
             t.dataFinalizacao = obterDataHoraLog();
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa FINALIZADA por ${t.resp}. ${obs ? "Obs: " + obs : ""}`);
-            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
+            await _salvarNoSupabase(SERRALHERIA_DATA, 'serralheria');
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa concluída e entregue ao almoxarifado.`);
             salvarEAtualizar();
@@ -1852,7 +1852,7 @@ OPL ${opl} | ${descricao}`);
         function finalizarFabricacaoChicote(id) {
             const c = CHICOTES_DATA.find(x => x.id === id);
             if(c) {
-                c.status = "Concluído"; localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
+                c.status = "Concluído"; await _salvarNoSupabase(CHICOTES_DATA, 'chicotes');
                 let v = ACN_DATA.find(x => x.chassi === c.chassi);
                 if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [CHICOTE] Fabricação do chicote concluída e disponibilizada.`);
                 renderizarTabelas();
@@ -1862,7 +1862,7 @@ OPL ${opl} | ${descricao}`);
         function devolverLaboratorioAoPcp(id) {
             const l = LABORATORIO_DATA.find(x => x.id === id);
             if(l) {
-                l.status = "Concluído & Devolvido"; localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
+                l.status = "Concluído & Devolvido"; await _salvarNoSupabase(LABORATORIO_DATA, 'laboratorio');
                 let v = ACN_DATA.find(x => x.chassi === l.chassi);
                 if(v) { v.statusGeral = "BOM Lançado - Análise PCP"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LABORATÓRIO] Reparo concluído e devolvido ao PCP.`); }
                 salvarEAtualizar();
@@ -1877,7 +1877,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.dataCompra = dCompra; req.dataRecebimento = dRec; req.status = "Entrega Futura (Pedido Efetivado)";
-                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
+                await _salvarNoSupabase(COMPRAS_REQ, 'compras');
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Comprado - Aguardando Chegada"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [COMPRAS] Pedido efetivado. Previsão: ${dRec}`); }
                 salvarEAtualizar();
@@ -1891,7 +1891,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.recebedor = nomeFirma; req.status = `Recebido por ${nomeFirma} em ${new Date().toLocaleDateString('pt-BR')}`;
-                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
+                await _salvarNoSupabase(COMPRAS_REQ, 'compras');
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Recebido (Aguardando Triagem de Kiting)"; v.pendenciaAlmoxarifado = false; v.detalhesPendencia = ""; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ALMOXARIFADO] Materiais recebidos por ${nomeFirma}.`); }
                 salvarEAtualizar();
@@ -1925,7 +1925,7 @@ OPL ${opl} | ${descricao}`);
                     ACN_DATA[idx].logsOperacionaisTracking.push(
                         "[" + obterDataHoraLog() + "] [ALMOXARIFADO] ✅ Kiting 100% OK liberado por " + usuarioAtualNome() + "."
                     );
-                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+                    await _salvarNoSupabase(ACN_DATA, 'oples');
                     renderizarTabelas();
                     processarDashboard();
                     alert("✅ Kiting marcado como 100% OK!\n\nOPL: " + ACN_DATA[idx].opl + "\nO PCP já pode liberar para a produção.");
@@ -1933,7 +1933,7 @@ OPL ${opl} | ${descricao}`);
                     // Outros status (apontar pendência etc.)
                     ACN_DATA[idx].statusAlmoxarifado    = status;
                     ACN_DATA[idx].pendenciaAlmoxarifado = true;
-                    localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+                    await _salvarNoSupabase(ACN_DATA, 'oples');
                     renderizarTabelas();
                 }
             } catch(e) {
@@ -2086,7 +2086,7 @@ OPL ${opl} | ${descricao}`);
                 resultado: aprovado ? "APROVADO" : "REPROVADO", tipo: tipo, obs: obs || "Conforme.", tecnico: v.tecnico, assinatura: canvasData
             };
             CHECKLISTS_HISTORICO.push(log);
-            localStorage.setItem('ACN_CQ_HIST_V5', JSON.stringify(CHECKLISTS_HISTORICO));
+            await _salvarNoSupabase(CHECKLISTS_HISTORICO, 'checklists');
 
             v.tsFimChecklist = obterTimestamp();
 
@@ -2127,7 +2127,7 @@ OPL ${opl} | ${descricao}`);
                 fotoGal: fotoGal
             };
             TERCEIROS_DATA.push(item);
-            localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA));
+            await _salvarNoSupabase(TERCEIROS_DATA, 'logistica_manifestos');
             let v = ACN_DATA.find(x => x.chassi === chassiL);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Despachado material [${item.material}] via manifesto logístico.${(fotoCam||fotoGal) ? " 📷 Foto anexada." : ""}`);
             // Reset form e variáveis de foto
@@ -2185,7 +2185,7 @@ OPL ${opl} | ${descricao}`);
 
         function darBaixaRetiradaEstoqueLogistica(id) {
             let t = TERCEIROS_DATA.find(x => x.id == id);
-            if(t) { t.status = "Retornado ao Estoque"; localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA)); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
+            if(t) { t.status = "Retornado ao Estoque"; await _salvarNoSupabase(TERCEIROS_DATA, 'logistica_manifestos'); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
         }
 
         function registrarVistoriaPatio(event) {
@@ -2200,7 +2200,7 @@ OPL ${opl} | ${descricao}`);
                 signEnv: document.getElementById('canvas-envia').toDataURL(), signRec: document.getElementById('canvas-recebe').toDataURL()
             };
             VISTORIAS_DATA.push(vis);
-            localStorage.setItem('ACN_VIS_PATIO_V5', JSON.stringify(VISTORIAS_DATA));
+            await _salvarNoSupabase(VISTORIAS_DATA, 'vistorias');
             document.getElementById('form-vistoria').reset();
             limparCanvasPatio('envia'); limparCanvasPatio('recebe');
             salvarEAtualizar();
@@ -3091,7 +3091,35 @@ OPL ${opl} | ${descricao}`);
         function fecharChecklistModal() { document.getElementById('modal-checklist').classList.add('hidden'); }
 
         
-        function salvarEAtualizar() {
+        
+        // ✅ FUNÇÃO: Salvar array no Supabase
+        async function _salvarNoSupabase(dados, tabela) {
+            try {
+                if (!dados || !Array.isArray(dados) || dados.length === 0) {
+                    return true;
+                }
+                
+                for (const item of dados) {
+                    if (item && item.id) {
+                        const { error } = await _sb
+                            .from(tabela)
+                            .upsert(item, { onConflict: 'id' });
+                        
+                        if (error) {
+                            console.error(`❌ Erro ao salvar em ${tabela}:`, error);
+                        }
+                    }
+                }
+                
+                console.log(`✅ ${dados.length} registros salvos em ${tabela}`);
+                return true;
+            } catch (err) {
+                console.error('❌ Erro ao salvar no Supabase:', err.message);
+                return false;
+            }
+        }
+
+function salvarEAtualizar() {
             // ✅ SALVAR NO SUPABASE AUTOMATICAMENTE
             _salvarTodosOsDadosNoSupabase();
             renderizarTabelas();
@@ -3209,7 +3237,7 @@ OPL ${opl} | ${descricao}`);
 
         // ===== MÓDULO: SOLICITAÇÕES DE AJUSTE DE PROJETO =====
         function salvarAjustes() {
-            try { localStorage.setItem('ACN_AJUSTES_V5', JSON.stringify(AJUSTES_DATA)); } catch(e){}
+            try { await _salvarNoSupabase(AJUSTES_DATA, 'ajustes'); } catch(e){}
         }
         function diasEntre(dataIsoA, dataIsoB) {
             const a = new Date(dataIsoA + "T00:00:00");
@@ -3637,7 +3665,7 @@ OPL ${opl} | ${descricao}`);
         let ACN_USUARIOS = carregarLS('ACN_USUARIOS_V1', null);
         if (!ACN_USUARIOS) {
             ACN_USUARIOS = [{ login:"admin", senha:"admin", nome:"Administrador", perfil:"Admin" }];
-            localStorage.setItem('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
+            await _salvarNoSupabase(ACN_USUARIOS, 'usuarios');
         }
         let ACN_USER = null;
         try { ACN_USER = JSON.parse(sessionStorage.getItem('ACN_USER_ATIVO') || "null"); } catch(_) { ACN_USER = null; }
@@ -3765,7 +3793,7 @@ OPL ${opl} | ${descricao}`);
                 if(ACN_USUARIOS.some(x=>x.login.toLowerCase()===login.toLowerCase())) { alert("Login já existe."); return; }
                 ACN_USUARIOS.push({ login, senha: senhaInput, nome: nome||login, perfil, abasCustom: abasSelecionadas });
             }
-            localStorage.setItem('ACN_USUARIOS_V1', JSON.stringify(ACN_USUARIOS));
+            await _salvarNoSupabase(ACN_USUARIOS, 'usuarios');
             document.getElementById('acn-user-mgmt-modal').remove();
             alert(`✔ Usuário ${login} ${editarLogin?'atualizado':'cadastrado'} com sucesso!`);
         }
@@ -3893,7 +3921,7 @@ function zerarSistema() {
                 pendenciasSetores: {},
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [ENGENHARIA] ${_logUsuario()} abriu Projeto Especial ${peCodigo} (${tipo}, prio ${prior}, resp ${resp||'—'}, prev ${prev||'—'}).`]
             };
-            peContador++; localStorage.setItem('ACN_PE_COUNT_V5', peContador);
+            peContador++; // PE Counter salvo em memória
             ACN_DATA.push(novoPE);
             document.getElementById('form-engenharia-pe').reset();
             alert("✔ Projeto Especial "+peCodigo+" criado!");
@@ -4059,7 +4087,7 @@ function zerarSistema() {
                 logs: [`[${obterDataHoraLog()}] [PCP→${setor.toUpperCase()}] Demanda aberta por ${_logUsuario()} (prio ${prior}). ${desc}`]
             };
             DEMANDAS_DIRETAS.push(item);
-            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
+            await _salvarNoSupabase(DEMANDAS_DIRETAS, 'demandas_diretas');
             document.getElementById('pcp-direta-form').reset();
             alert("✔ Demanda direta enviada ao setor "+setor+".");
             _renderizarDemandasDiretas();
@@ -4071,7 +4099,7 @@ function zerarSistema() {
             d.prazo = p;
             if (d.status === "Pendente Prazo") d.status = "Em Execução";
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] Prazo definido por ${_logUsuario()}: ${formatarDataBR(p)}.`);
-            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
+            await _salvarNoSupabase(DEMANDAS_DIRETAS, 'demandas_diretas');
             _renderizarDemandasDiretas();
         }
         function ddAnotar(id) {
@@ -4080,7 +4108,7 @@ function zerarSistema() {
             if (!nota) return;
             d.notas.push(`[${obterDataHoraLog()}] ${_logUsuario()}: ${nota}`);
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] ${_logUsuario()}: ${nota}`);
-            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
+            await _salvarNoSupabase(DEMANDAS_DIRETAS, 'demandas_diretas');
             _renderizarDemandasDiretas();
         }
         function ddFinalizar(id) {
@@ -4090,7 +4118,7 @@ function zerarSistema() {
             d.dataFinalizacao = obterDataHoraLog();
             d.finalizadoPor = _logUsuario();
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] 🏁 FINALIZADA por ${_logUsuario()}. ${obs?'Obs: '+obs:''}`);
-            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
+            await _salvarNoSupabase(DEMANDAS_DIRETAS, 'demandas_diretas');
             _renderizarDemandasDiretas();
             alert("✔ Demanda finalizada.");
         }
