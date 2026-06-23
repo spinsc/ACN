@@ -4,8 +4,110 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ACN SINAL VERDE - Sistema Operacional Unificado V23</title>
+    
+    <!-- 🔗 SUPABASE SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 🔄 SINCRONIZAÇÃO COM SUPABASE -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // ═══ CONFIGURAÇÃO SUPABASE ═══
+        const SUPA_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
+        const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
+        
+        // Criar cliente Supabase global
+        window._supabaseClient = supabase.createClient(SUPA_URL, SUPA_KEY);
+        
+        // ═══ MAPA DE TABELAS (localStorage → Supabase) ═══
+        window._SYNC_MAP = {
+            'ACN_MASTER_HORAS_V5': { table: 'oples', field: 'opl' },
+            'ACN_SERRALHERIA_V5': { table: 'serralheria_tarefas', field: 'id' },
+            'ACN_CRM_V1': { table: 'crm_clientes', field: 'id' },
+            'ACN_DEMANDAS_DIRETAS_V1': { table: 'demandas_diretas', field: 'id' },
+            'ACN_REQ_COMPRAS_V5': { table: 'compras_requisicoes', field: 'id' },
+            'ACN_CHICOTES_V5': { table: 'chicotes_fabricacao', field: 'id' },
+            'ACN_LAB_V5': { table: 'laboratorio_equipamentos', field: 'id' },
+            'ACN_CQ_HIST_V5': { table: 'qualidade_historico', field: 'id' },
+            'ACN_VIS_PATIO_V5': { table: 'vistorias_patio', field: 'id' },
+            'ACN_AJUSTES_V5': { table: 'ajustes_projeto', field: 'id' }
+        };
+        
+        // ═══ SINCRONIZA DADOS PARA SUPABASE (em background) ═══
+        async function sincronizarComSupabase(lsKey, jsonValue) {
+            const config = window._SYNC_MAP[lsKey];
+            if (!config) return; // Chave não mapeada, ignora
+            
+            try {
+                const dados = JSON.parse(jsonValue);
+                if (!Array.isArray(dados) || dados.length === 0) return;
+                
+                // Upsert de todos os registros
+                const { error } = await window._supabaseClient
+                    .from(config.table)
+                    .upsert(dados, { onConflict: config.field });
+                
+                if (error) {
+                    console.warn(`❌ Erro ao sincronizar ${lsKey}:`, error.message);
+                } else {
+                    console.log(`✅ Sincronizado: ${lsKey} → ${config.table}`);
+                }
+            } catch (e) {
+                console.warn(`⚠️ Erro ao processar ${lsKey}:`, e.message);
+            }
+        }
+        
+        // ═══ INTERCEPTA localStorage.setItem ═══
+        const _originalSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(key, value) {
+            // Salva localmente PRIMEIRO
+            _originalSetItem.call(this, key, value);
+            
+            // Depois sincroniza com Supabase (async, não bloqueia)
+            if (window._SYNC_MAP[key]) {
+                sincronizarComSupabase(key, value);
+            }
+        };
+        
+        // ═══ CARREGA DADOS DO SUPABASE NO BOOT ═══
+        window._carregarDoSupabase = async function() {
+            console.log('⏳ Carregando dados do Supabase...');
+            
+            for (const [lsKey, config] of Object.entries(window._SYNC_MAP)) {
+                try {
+                    const { data, error } = await window._supabaseClient
+                        .from(config.table)
+                        .select('*');
+                    
+                    if (error) {
+                        console.warn(`⚠️ Erro ao carregar ${config.table}:`, error.message);
+                        continue;
+                    }
+                    
+                    if (data && data.length > 0) {
+                        // Salva no localStorage
+                        localStorage.setItem(lsKey, JSON.stringify(data));
+                        console.log(`✅ Carregado: ${config.table} (${data.length} registros)`);
+                    }
+                } catch (e) {
+                    console.warn(`⚠️ Erro ao carregar ${config.table}:`, e.message);
+                }
+            }
+            
+            console.log('✅ Sincronização inicial concluída!');
+        };
+        
+        // ═══ EXECUTA CARREGAMENTO NO BOOT ═══
+        window.addEventListener('DOMContentLoaded', async function() {
+            await window._carregarDoSupabase();
+        });
+        
+    })();
+    </script>
     <style>
         @keyframes pulse-red {
             0%, 100% { background-color: #fee2e2; border-color: #ef4444; }
