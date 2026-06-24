@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ACN SINAL VERDE - Sistema Operacional Unificado V23</title>
-    <!-- 🔗 SUPABASE SDK -->
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -736,45 +736,12 @@
     <div id="print-view" class="hidden print-view"></div>
 
     <script>
-        // ═══════════════════════════════════════════════════════════════════════
-        // 🔗 MÓDULO DE INTEGRAÇÃO ACN + SUPABASE (DB_BRIDGE)
-        // ═══════════════════════════════════════════════════════════════════════
-        const SUPA_URL = "https://pwourvwtigkuyeiwlggr.supabase.co";
-        const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s";
-        const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
-
-        const DB_BRIDGE = {
-            // Salva local e na nuvem
-            async save(tabela, id, payload) {
-                localStorage.setItem(tabela + '_' + id, JSON.stringify(payload));
-                const { error } = await supa.from(tabela).upsert({ id: id, dados: payload });
-                if (error) console.error("❌ Erro Supabase:", error);
-                else console.log(`✅ Sincronizado: ${tabela}`);
-            },
-
-            // Carrega da nuvem (se falhar, usa local)
-            async get(tabela, id, fallback) {
-                try {
-                    const { data, error } = await supa.from(tabela).select('dados').eq('id', id).single();
-                    if (data && data.dados) {
-                        localStorage.setItem(tabela + '_' + id, JSON.stringify(data.dados));
-                        return data.dados;
-                    }
-                } catch (e) {
-                    console.warn(`⚠️ Usando cache local para ${tabela}`);
-                }
-                const local = localStorage.getItem(tabela + '_' + id);
-                return local ? JSON.parse(local) : fallback;
-            },
-
-            // Remove registro
-            async delete(tabela, id) {
-                localStorage.removeItem(tabela + '_' + id);
-                await supa.from(tabela).delete().eq('id', id);
-                console.log(`✅ Deletado: ${tabela}`);
-            }
-        };
-        // ═══════════════════════════════════════════════════════════════════════
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
 
         // ===== CORREÇÃO: funções de navegação de abas e filtro de status que estavam ausentes =====
         // ===== CORREÇÃO: helpers de data/hora ausentes (usados em ~33 ações) =====
@@ -894,7 +861,7 @@
         }
 
         // COMERCIAL
-        async function cadastrarVeiculo(event) {
+        function cadastrarVeiculo(event) {
             event.preventDefault();
             const chassiVal = document.getElementById('com-chassi').value.trim().toUpperCase();
             if(ACN_DATA.some(v => v.chassi === chassiVal)) { alert("Chassi já cadastrado!"); return; }
@@ -922,15 +889,15 @@
                 logsOperacionaisTracking: [`[${obterDataHoraLog()}] [COMERCIAL] Demanda cadastrada e enviada para Engenharia.${itemEnvio ? ' 🚚 ITEM DE ENVIO — atenção brevidade.' : ''}${isDemandaDireta ? ' 🎯 DEMANDA DIRETA ENGENHARIA.' : ''}`]
             };
             ACN_DATA.push(novo);
-            await DB_BRIDGE.save('oples', 'lista_geral', ACN_DATA);
-            await DB_BRIDGE.save('serralheria_tarefas', 'lista_geral', SERRALHERIA_DATA);
+            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             document.getElementById('form-comercial').reset();
             if(document.getElementById('com-item-envio')) document.getElementById('com-item-envio').checked = false;
             if(document.getElementById('com-envio-extra')) document.getElementById('com-envio-extra').classList.add('hidden');
             alert(isDemandaDireta
                 ? "✔ Demanda Direta para Engenharia criada! A Engenharia pode agora direcionar a prototipagem para os departamentos."
                 : "✔ OPL comercial aberta com sucesso!");
-            await salvarEAtualizar();
+            salvarEAtualizar();
         }
 
         // Toggle Item de Envio
@@ -943,9 +910,9 @@
 
         // ===== CRM — CONTROLE DE CONTATOS COMERCIAIS =====
         let ACN_CLIENTES_CRM = (function(){ try{ return JSON.parse(localStorage.getItem('ACN_CRM_V1')||'[]'); }catch(_){return [];} })();
-        async function salvarCRM(){ await DB_BRIDGE.save('crm_clientes', 'lista_geral', ACN_CLIENTES_CRM); }
+        function salvarCRM(){ localStorage.setItem('ACN_CRM_V1', JSON.stringify(ACN_CLIENTES_CRM)); }
 
-        async function registrarContatoCRM(event) {
+        function registrarContatoCRM(event) {
             event.preventDefault();
             const nome = document.getElementById('crm-nome').value.trim();
             const empresa = document.getElementById('crm-empresa').value.trim();
@@ -1055,7 +1022,7 @@
                 logs: [`[${obterDataHoraLog()}] [ENGENHARIA→${setor.toUpperCase()}] Prototipagem direcionada. OPL ${v.opl}. Desc: ${descricao}`]
             };
             DEMANDAS_DIRETAS.push(item);
-            await DB_BRIDGE.save('demandas_diretas', 'lista_geral', DEMANDAS_DIRETAS);
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ENGENHARIA] Prototipagem direcionada para ${setor}: ${descricao}`);
             salvarEAtualizar();
             alert(`✔ Prototipagem direcionada para ${setor}!`);
@@ -1181,7 +1148,7 @@
                 itens: itens, dataCompra: "", dataRecebimento: "", status: "Pendente", recebedor: ""
             };
             COMPRAS_REQ.push(req);
-            await DB_BRIDGE.save('compras_requisicoes', 'lista_geral', COMPRAS_REQ);
+            localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Emitida requisição de compras: ${itens}`);
             salvarEAtualizar();
@@ -1198,7 +1165,7 @@
                 qtd: qtd, dataEnvio: new Date().toLocaleDateString('pt-BR'), resp: resp, status: "Em Fabricação"
             };
             CHICOTES_DATA.push(chicote);
-            await DB_BRIDGE.save('chicotes_fabricacao', 'lista_geral', CHICOTES_DATA);
+            localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Despachada OP de Chicote Nº ${numChicote} para fabricação.`);
             renderizarTabelas();
@@ -1215,7 +1182,7 @@
                 tsSolic: obterTimestamp(), status: "Em Análise/Teste"
             };
             LABORATORIO_DATA.push(lab);
-            await DB_BRIDGE.save('laboratorio_equipamentos', 'lista_geral', LABORATORIO_DATA);
+            localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Equipamento [${equipamento}] enviado para ensaio no Laboratório.`);
             renderizarTabelas();
@@ -1321,7 +1288,7 @@
                 log: [`[${obterDataHoraLog()}] [PCP→SERRALHERIA] Tarefa despachada pelo PCP. Desc: ${descricao}. Qtd: ${qtd}. Resp: ${resp}.`]
             };
             SERRALHERIA_DATA.push(tarefa);
-            await DB_BRIDGE.save('serralheria_tarefas', 'lista_geral', SERRALHERIA_DATA);
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [PCP] Ordem de serralheria despachada: ${descricao} (${qtd} peças) → ${resp}.`);
             salvarEAtualizar();
             alert(`✔ Tarefa enviada para Serralheria!
@@ -1335,7 +1302,7 @@ OPL ${opl} | ${descricao}`);
             if(!prev) return;
             t.previsaoEntregaSerralheria = prev;
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de conclusão definida: ${formatarDataBR(prev)}.`);
-            await DB_BRIDGE.save('serralheria_tarefas', 'lista_geral', SERRALHERIA_DATA);
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Previsão de entrega definida: ${formatarDataBR(prev)}.`);
             salvarEAtualizar();
@@ -1351,7 +1318,7 @@ OPL ${opl} | ${descricao}`);
             t.tsInicio = obterTimestamp();
             t.status = "Em Execução";
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa iniciada.`);
-            await DB_BRIDGE.save('serralheria_tarefas', 'lista_geral', SERRALHERIA_DATA);
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Execução iniciada por ${t.resp}.`);
             salvarEAtualizar();
@@ -1366,7 +1333,7 @@ OPL ${opl} | ${descricao}`);
             t.status = "Concluído";
             t.dataFinalizacao = obterDataHoraLog();
             t.log.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa FINALIZADA por ${t.resp}. ${obs ? "Obs: " + obs : ""}`);
-            await DB_BRIDGE.save('serralheria_tarefas', 'lista_geral', SERRALHERIA_DATA);
+            localStorage.setItem('ACN_SERRALHERIA_V5', JSON.stringify(SERRALHERIA_DATA));
             const v = ACN_DATA.find(x => x.chassi === t.chassi);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [SERRALHERIA] Tarefa concluída e entregue ao almoxarifado.`);
             salvarEAtualizar();
@@ -1395,20 +1362,20 @@ OPL ${opl} | ${descricao}`);
             return `<span class="bg-green-600 text-white font-bold px-2 py-0.5 rounded text-[9px]">${label}</span>`;
         }
 
-        async function finalizarFabricacaoChicote(id) {
+        function finalizarFabricacaoChicote(id) {
             const c = CHICOTES_DATA.find(x => x.id === id);
             if(c) {
-                c.status = "Concluído"; await DB_BRIDGE.save('chicotes_fabricacao', 'lista_geral', CHICOTES_DATA);
+                c.status = "Concluído"; localStorage.setItem('ACN_CHICOTES_V5', JSON.stringify(CHICOTES_DATA));
                 let v = ACN_DATA.find(x => x.chassi === c.chassi);
                 if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [CHICOTE] Fabricação do chicote concluída e disponibilizada.`);
                 renderizarTabelas();
             }
         }
 
-        async function devolverLaboratorioAoPcp(id) {
+        function devolverLaboratorioAoPcp(id) {
             const l = LABORATORIO_DATA.find(x => x.id === id);
             if(l) {
-                l.status = "Concluído & Devolvido"; await DB_BRIDGE.save('laboratorio_equipamentos', 'lista_geral', LABORATORIO_DATA);
+                l.status = "Concluído & Devolvido"; localStorage.setItem('ACN_LAB_V5', JSON.stringify(LABORATORIO_DATA));
                 let v = ACN_DATA.find(x => x.chassi === l.chassi);
                 if(v) { v.statusGeral = "BOM Lançado - Análise PCP"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LABORATÓRIO] Reparo concluído e devolvido ao PCP.`); }
                 salvarEAtualizar();
@@ -1423,7 +1390,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.dataCompra = dCompra; req.dataRecebimento = dRec; req.status = "Entrega Futura (Pedido Efetivado)";
-                await DB_BRIDGE.save('compras_requisicoes', 'lista_geral', COMPRAS_REQ);
+                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Comprado - Aguardando Chegada"; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [COMPRAS] Pedido efetivado. Previsão: ${dRec}`); }
                 salvarEAtualizar();
@@ -1437,7 +1404,7 @@ OPL ${opl} | ${descricao}`);
             const req = COMPRAS_REQ.find(x => x.id === id);
             if(req) {
                 req.recebedor = nomeFirma; req.status = `Recebido por ${nomeFirma} em ${new Date().toLocaleDateString('pt-BR')}`;
-                await DB_BRIDGE.save('compras_requisicoes', 'lista_geral', COMPRAS_REQ);
+                localStorage.setItem('ACN_REQ_COMPRAS_V5', JSON.stringify(COMPRAS_REQ));
                 let v = ACN_DATA.find(x => x.chassi === req.chassi);
                 if(v) { v.statusAlmoxarifado = "Material Recebido (Aguardando Triagem de Kiting)"; v.pendenciaAlmoxarifado = false; v.detalhesPendencia = ""; v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [ALMOXARIFADO] Materiais recebidos por ${nomeFirma}.`); }
                 salvarEAtualizar();
@@ -1632,7 +1599,7 @@ OPL ${opl} | ${descricao}`);
                 resultado: aprovado ? "APROVADO" : "REPROVADO", tipo: tipo, obs: obs || "Conforme.", tecnico: v.tecnico, assinatura: canvasData
             };
             CHECKLISTS_HISTORICO.push(log);
-            await DB_BRIDGE.save('qualidade_historico', 'lista_geral', CHECKLISTS_HISTORICO);
+            localStorage.setItem('ACN_CQ_HIST_V5', JSON.stringify(CHECKLISTS_HISTORICO));
 
             v.tsFimChecklist = obterTimestamp();
 
@@ -1647,6 +1614,13 @@ OPL ${opl} | ${descricao}`);
             const h = CHECKLISTS_HISTORICO.find(x => x.id === id);
             const win = window.open("", "_blank");
             win.document.write(`<html><body style="font-family:monospace; padding:30px;"><h2>ACN - CHECKLIST DE AUDITORIA</h2><hr><p><b>Data:</b> ${h.dataHora}</p><p><b>Chassi:</b> ${h.chassi}</p><p><b>Resultado:</b> ${h.resultado}</p><p><b>Notas CQ:</b><br>${h.obs}</p><br><img src="${h.assinatura}"><script>window.print();<\/script></body></html>`);
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
+
             win.document.close();
         }
 
@@ -1673,7 +1647,7 @@ OPL ${opl} | ${descricao}`);
                 fotoGal: fotoGal
             };
             TERCEIROS_DATA.push(item);
-            await DB_BRIDGE.save('logistica_manifestos', 'lista_geral', TERCEIROS_DATA);
+            localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA));
             let v = ACN_DATA.find(x => x.chassi === chassiL);
             if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Despachado material [${item.material}] via manifesto logístico.${(fotoCam||fotoGal) ? " 📷 Foto anexada." : ""}`);
             // Reset form e variáveis de foto
@@ -1725,13 +1699,20 @@ OPL ${opl} | ${descricao}`);
             win.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;">
                 <img src="${src}" style="max-width:100%;max-height:100vh;object-fit:contain;">
                 <script>document.title='Foto Manifesto - ${t.chassi}';<\/script>
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
+
                 </body></html>`);
             win.document.close();
         }
 
-        async function darBaixaRetiradaEstoqueLogistica(id) {
+        function darBaixaRetiradaEstoqueLogistica(id) {
             let t = TERCEIROS_DATA.find(x => x.id == id);
-            if(t) { t.status = "Retornado ao Estoque"; await DB_BRIDGE.save('logistica_manifestos', 'lista_geral', TERCEIROS_DATA); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
+            if(t) { t.status = "Retornado ao Estoque"; localStorage.setItem('ACN_LOGISTICA_V5', JSON.stringify(TERCEIROS_DATA)); let v = ACN_DATA.find(x => x.chassi === t.chassi); if(v) v.logsOperacionaisTracking.push(`[${obterDataHoraLog()}] [LOGÍSTICA] Recebimento e baixa de retorno de material dado no Estoque.`); salvarEAtualizar(); }
         }
 
         function registrarVistoriaPatio(event) {
@@ -1762,6 +1743,13 @@ OPL ${opl} | ${descricao}`);
             const v = VISTORIAS_DATA.find(x => x.id == id);
             const win = window.open("", "_blank");
             win.document.write(`<html><body style="font-family:monospace; padding:30px;"><h2>ACN LAUDO DE PÁTIO</h2><hr><p><b>Data:</b> ${v.dataHora}</p><p><b>OPL:</b> ${v.chassi}</p><p><b>Material:</b> ${v.material}</p><br><img src="${v.signEnv}"><br><img src="${v.signRec}"><script>window.print();<\/script></body></html>`);
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
+
             win.document.close();
         }
 
@@ -2530,6 +2518,13 @@ OPL ${opl} | ${descricao}`);
               <h2>🛠️ Produção - Aprovados x Reprovados</h2>
               <div class="cards">${cards}</div>
               <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script></body></html>`);
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
+
             w.document.close();
         }
 
@@ -2547,15 +2542,15 @@ OPL ${opl} | ${descricao}`);
         function limparCanvas() { if(ctxCanvas) { let c = document.getElementById('signature-canvas'); ctxCanvas.clearRect(0,0,c.width,c.height); ctxCanvas.beginPath(); } }
         function fecharChecklistModal() { document.getElementById('modal-checklist').classList.add('hidden'); }
 
-        async function salvarEAtualizar() {
-            await DB_BRIDGE.save('oples', 'lista_geral', ACN_DATA);
+        function salvarEAtualizar() {
+            localStorage.setItem('ACN_MASTER_HORAS_V5', JSON.stringify(ACN_DATA));
             renderizarTabelas();
             processarDashboard();
         }
 
         // ===== MÓDULO: SOLICITAÇÕES DE AJUSTE DE PROJETO =====
-        async function salvarAjustes() {
-            try { await DB_BRIDGE.save('ajustes_projeto', 'lista_geral', AJUSTES_DATA); } catch(e){}
+        function salvarAjustes() {
+            try { localStorage.setItem('ACN_AJUSTES_V5', JSON.stringify(AJUSTES_DATA)); } catch(e){}
         }
         function diasEntre(dataIsoA, dataIsoB) {
             const a = new Date(dataIsoA + "T00:00:00");
@@ -2858,6 +2853,13 @@ OPL ${opl} | ${descricao}`);
                 </table>
                 <div class="footer">ACN SINAL VERDE — Sistema ERP Industrial | Documento gerado automaticamente</div>
                 <script>window.onload = function(){ window.print(); }<\/script>
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
+
             </body></html>`;
 
             const win = window.open("", "_blank");
@@ -3355,7 +3357,7 @@ OPL ${opl} | ${descricao}`);
                 logs: [`[${obterDataHoraLog()}] [PCP→${setor.toUpperCase()}] Demanda aberta por ${_logUsuario()} (prio ${prior}). ${desc}`]
             };
             DEMANDAS_DIRETAS.push(item);
-            await DB_BRIDGE.save('demandas_diretas', 'lista_geral', DEMANDAS_DIRETAS);
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             document.getElementById('pcp-direta-form').reset();
             alert("✔ Demanda direta enviada ao setor "+setor+".");
             _renderizarDemandasDiretas();
@@ -3367,7 +3369,7 @@ OPL ${opl} | ${descricao}`);
             d.prazo = p;
             if (d.status === "Pendente Prazo") d.status = "Em Execução";
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] Prazo definido por ${_logUsuario()}: ${formatarDataBR(p)}.`);
-            await DB_BRIDGE.save('demandas_diretas', 'lista_geral', DEMANDAS_DIRETAS);
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             _renderizarDemandasDiretas();
         }
         function ddAnotar(id) {
@@ -3376,7 +3378,7 @@ OPL ${opl} | ${descricao}`);
             if (!nota) return;
             d.notas.push(`[${obterDataHoraLog()}] ${_logUsuario()}: ${nota}`);
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] ${_logUsuario()}: ${nota}`);
-            await DB_BRIDGE.save('demandas_diretas', 'lista_geral', DEMANDAS_DIRETAS);
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             _renderizarDemandasDiretas();
         }
         function ddFinalizar(id) {
@@ -3386,7 +3388,7 @@ OPL ${opl} | ${descricao}`);
             d.dataFinalizacao = obterDataHoraLog();
             d.finalizadoPor = _logUsuario();
             d.logs.push(`[${obterDataHoraLog()}] [${d.setor.toUpperCase()}] 🏁 FINALIZADA por ${_logUsuario()}. ${obs?'Obs: '+obs:''}`);
-            await DB_BRIDGE.save('demandas_diretas', 'lista_geral', DEMANDAS_DIRETAS);
+            localStorage.setItem('ACN_DEMANDAS_DIRETAS_V1', JSON.stringify(DEMANDAS_DIRETAS));
             _renderizarDemandasDiretas();
             alert("✔ Demanda finalizada.");
         }
@@ -3525,6 +3527,13 @@ OPL ${opl} | ${descricao}`);
 
             <div class="footer">ACN SINAL VERDE — Documento gerado automaticamente para avaliação do gestor.</div>
             <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>
+        // SUPABASE SYNC
+        const SUPA = { url: "https://pwourvwtigkuyeiwlggr.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3b3Vydnd0aWdrdXllaXdsZ2dyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Njc4OTgsImV4cCI6MjA5NzI0Mzg5OH0.OwHMyUO-AuAShKVV3d1bH1NLVxzjo3TIPmWqiIqF36s" };
+        let sb = null;
+        window.addEventListener("load", () => { if (typeof supabase !== "undefined") { sb = supabase.createClient(SUPA.url, SUPA.key); console.log("✅ Supabase pronto"); } });
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(k, v) { orig.call(this, k, v); if (sb && ["ACN_MASTER_HORAS_V5","ACN_SERRALHERIA_V5","ACN_CRM_V1","ACN_DEMANDAS_DIRETAS_V1","ACN_REQ_COMPRAS_V5","ACN_CHICOTES_V5","ACN_LAB_V5","ACN_CQ_HIST_V5","ACN_LOGISTICA_V5"].includes(k)) { try { const map = {"ACN_MASTER_HORAS_V5":"oples","ACN_SERRALHERIA_V5":"serralheria_tarefas","ACN_CRM_V1":"crm_clientes","ACN_DEMANDAS_DIRETAS_V1":"demandas_diretas","ACN_REQ_COMPRAS_V5":"compras_requisicoes","ACN_CHICOTES_V5":"chicotes_fabricacao","ACN_LAB_V5":"laboratorio_equipamentos","ACN_CQ_HIST_V5":"qualidade_historico","ACN_LOGISTICA_V5":"logistica_manifestos"}; sb.from(map[k]).upsert({id:Date.now().toString(),dados:JSON.parse(v)}).then(()=>console.log("✅ Sync: "+map[k])).catch(e=>console.warn("Sync failed: "+e.message)); } catch(e) {} } };
+
             </body></html>`;
             const w = window.open("", "_blank");
             w.document.write(html); w.document.close();
