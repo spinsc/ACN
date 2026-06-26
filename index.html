@@ -180,7 +180,7 @@
                 }))
             },
             'ACN_CQ_HIST_V5': {
-                table: 'qualidade_historico',
+                table: 'qualidade_checklists',
                 toRows: arr => arr.map(c => ({
                     id: c.id, data_hora: c.dataHora || '', chassi: c.chassi || '',
                     opl: c.opl || '', resultado: c.resultado || '',
@@ -210,7 +210,7 @@
                 }))
             },
             'ACN_AJUSTES_V5': {
-                table: 'ajustes_projeto',
+                table: 'ajustes_trabalhos',
                 toRows: arr => arr.map(a => ({
                     id: a.id, data_abertura: a.dataAbertura || '', opl: a.opl || '',
                     requerente: a.requerente || '', prioridade: a.prioridade || 'Normal',
@@ -229,7 +229,7 @@
                 }))
             },
             'ACN_SERRALHERIA_V5': {
-                table: 'serralheria_tarefas',
+                table: 'serralheria_trabalhos',
                 toRows: arr => arr.map(t => ({
                     id: t.id, chassi: t.chassi, opl: t.opl || '',
                     descricao: t.descricao || '', qtd: t.qtd || '', resp: t.resp || '',
@@ -269,7 +269,7 @@
                 }))
             },
             'ACN_USUARIOS_V1': {
-                table: 'usuarios_acn',
+                table: 'auth_usuarios',
                 toRows: arr => arr.map(u => ({
                     login: u.login, senha: u.senha, nome: u.nome || u.login,
                     perfil: u.perfil || 'Producao', abas_custom: u.abasCustom || []
@@ -412,12 +412,12 @@
                     _sbGetAll('chicotes_fabricacao'),
                     _sbGetAll('laboratorio_equipamentos'),
                     _sbGetAll('compras_requisicoes'),
-                    _sbGetAll('qualidade_historico'),
+                    _sbGetAll('qualidade_checklists'),
                     _sbGetAll('vistorias_patio'),
-                    _sbGetAll('ajustes_projeto'),
-                    _sbGetAll('serralheria_tarefas'),
+                    _sbGetAll('ajustes_trabalhos'),
+                    _sbGetAll('serralheria_trabalhos'),
                     _sbGetAll('crm_clientes'),
-                    _sbGetAll('usuarios_acn'),
+                    _sbGetAll('auth_usuarios'),
                     _sbGetAll('demandas_diretas')
                 ]);
                 const peRaw = await _sbKVGet('ACN_PE_COUNT_V5');
