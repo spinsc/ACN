@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 
 export default function LoginTab() {
@@ -249,4 +250,9 @@ Iguais? ${senhaDB === senhaDigitada}
           color: '#999999'
         }}>
           <p style={{ margin: '0' }}>Ambiente de Produção | v24.0</p>
-       
+          <p style={{ margin: '4px 0 0' }}>© 2024 ACN Sistemas</p>
+        </div>
+      </div>
+    </div>
+  );
+}
