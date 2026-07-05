@@ -41,7 +41,7 @@ function ModalPermissoes({ usuario, onClose, onSalvo }) {
 
   const salvar = async () => {
     setSalvando(true);
-    const { error } = await supabase.from('usuarios')
+    const { error } = await supabase.from('auth_usuarios')
       .update({ abas_permitidas: selecionadas }).eq('id', usuario.id);
     if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
     onSalvo();
@@ -99,7 +99,7 @@ function PainelUsuarios() {
 
   const fetchUsuarios = async () => {
     setLoading(true);
-    const { data } = await supabase.from('usuarios').select('*').order('nome');
+    const { data } = await supabase.from('auth_usuarios').select('*').order('nome');
     setUsuarios(data || []);
     setLoading(false);
   };
@@ -113,26 +113,26 @@ function PainelUsuarios() {
 
   const salvar = async () => {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
-    const { error } = await supabase.from('usuarios').insert([{ ...form, ativo: true }]);
+    const { error } = await supabase.from('auth_usuarios').insert([{ ...form, ativo: true }]);
     if (error) { alert('Erro: ' + error.message); return; }
     setForm({ nome:'', email:'', senha:'', perfil:'Operador', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
     setShowForm(false); fetchUsuarios();
   };
 
   const toggleAtivo = async (u) => {
-    await supabase.from('usuarios').update({ ativo: !u.ativo }).eq('id', u.id);
+    await supabase.from('auth_usuarios').update({ ativo: !u.ativo }).eq('id', u.id);
     fetchUsuarios();
   };
 
   const alterarPerfil = async (u, perfil) => {
-    await supabase.from('usuarios').update({ perfil }).eq('id', u.id);
+    await supabase.from('auth_usuarios').update({ perfil }).eq('id', u.id);
     fetchUsuarios();
   };
 
   const resetarSenha = async (u) => {
     const nova = prompt(`Nova senha para ${u.nome}:`);
     if (!nova || nova.length < 4) { alert('Senha muito curta!'); return; }
-    await supabase.from('usuarios').update({ senha: nova }).eq('id', u.id);
+    await supabase.from('auth_usuarios').update({ senha: nova }).eq('id', u.id);
     alert('Senha alterada com sucesso!');
   };
 
