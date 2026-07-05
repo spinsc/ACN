@@ -18,10 +18,12 @@ export default function LoginTab() {
 
       const url = `https://qgemelnuqdilnggxmrdw.supabase.co/rest/v1/auth_usuarios?email=eq.${encodeURIComponent(email.toLowerCase())}`;
       
+      const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k',
+          'apikey': ANON_KEY,
+          'Authorization': `Bearer ${ANON_KEY}`,
           'Content-Type': 'application/json'
         }
       });
@@ -83,7 +85,7 @@ Iguais? ${senhaDB === senhaDigitada}
           perfil: usuario.perfil
         }));
 
-        window.location.href = '/';
+        window.location.href = window.location.origin + '/ACN/';
       } else {
         setError('Senha incorreta');
         setLoading(false);
@@ -247,9 +249,4 @@ Iguais? ${senhaDB === senhaDigitada}
           color: '#999999'
         }}>
           <p style={{ margin: '0' }}>Ambiente de Produção | v24.0</p>
-          <p style={{ margin: '4px 0 0' }}>© 2024 ACN Sistemas</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+       
