@@ -554,8 +554,28 @@ export default function ComercialTab({ currentUser }) {
     if (!formData.opl || !formData.modelo) { alert('Preencha numero da OP e Modelo!'); return; }
     const payload = { ...formData, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: editId ? formData.status_geral : 'Em Espera Engenharia' };
     if (editId) {
+      // Buscar dados anteriores para log
+      const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
       const { error } = await supabase.from('oples').update(payload).eq('id', editId);
       if (error) { alert('Erro ao atualizar: ' + error.message); return; }
+      // Registrar log da alteração
+      const alteracoes = [];
+      if (anterior?.modelo !== formData.modelo) alteracoes.push(`Modelo: "${anterior?.modelo}" → "${formData.modelo}"`);
+      if (anterior?.chassi !== formData.chassi) alteracoes.push(`Chassi: "${anterior?.chassi}" → "${formData.chassi}"`);
+      if (anterior?.cliente_nome !== formData.cliente_nome) alteracoes.push(`Cliente: "${anterior?.cliente_nome}" → "${formData.cliente_nome}"`);
+      if (anterior?.data_prevista_entrega?.slice(0,10) !== formData.data_prevista_entrega) alteracoes.push(`Prev. Entrega: "${anterior?.data_prevista_entrega?.slice(0,10)||'—'}" → "${formData.data_prevista_entrega}"`);
+      if (anterior?.quantidade !== formData.quantidade) alteracoes.push(`Quantidade: ${anterior?.quantidade} → ${formData.quantidade}`);
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: editId,
+        numero_opl: anterior?.opl || formData.opl,
+        setor: 'Comercial',
+        evento: `OP alterada pelo Comercial.${alteracoes.length ? ' Alterações: ' + alteracoes.join('; ') : ''}`,
+        status_anterior: anterior?.status_geral,
+        status_novo: anterior?.status_geral,
+        usuario_nome: currentUser?.nome,
+        usuario_email: currentUser?.email,
+        data_hora: new Date().toISOString(),
+      }]);
     } else {
       const { data: existente } = await supabase.from('oples').select('id').eq('opl', formData.opl).maybeSingle();
       if (existente) { alert(`OP "${formData.opl}" ja esta cadastrada. Clique no numero da OP no historico para editar.`); return; }
@@ -572,6 +592,18 @@ export default function ComercialTab({ currentUser }) {
       }
     }
     setFormData(FORM_VAZIO); setShowForm(false); setEditId(null); fetchOpls();
+  };
+
+  const enviarParaEngenharia = async (opl) => {
+    const agora = new Date().toISOString();
+    await supabase.from('oples').update({ status_geral: 'Em Espera Engenharia' }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial',
+      evento: 'OP reenviada para Engenharia após revisão Comercial.',
+      status_anterior: 'Devolvida Comercial', status_novo: 'Em Espera Engenharia',
+      usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: agora,
+    }]);
+    fetchOpls();
   };
 
   const liberarFaturamento = async (opl) => {
@@ -602,7 +634,7 @@ export default function ComercialTab({ currentUser }) {
       {/* ENTRADA */}
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef9c3',borderBottom:'2px solid #fde047'}}>
-          <span style={{color:'#713f12'}}>Entrada de Demanda Comercial</span>
+          <span style={{color:'#713f12'}}>{editId ? '✏️ Editando OP' : 'Entrada de Demanda Comercial'}</span>
           {!showForm && <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setFormData(FORM_VAZIO);setEditId(null);setShowForm(true);}}>+ Nova OP</button>}
         </div>
         {showForm && (
@@ -621,7 +653,7 @@ export default function ComercialTab({ currentUser }) {
               </div>
               <div className="form-group"><label className="acn-label">Tipo OP</label>
                 <select className="acn-input" style={{width:'100%'}} value={formData.tipo_op} onChange={e=>setFormData({...formData,tipo_op:e.target.value})}>
-                  <option value="OPL">OPL - LEDFLEX</option><option value="OPD">OPD - DETEC</option>
+                  <option value="OPL">OPL - LEDFLEX</option><option value="OPD">OPD - DETECH</option>
                 </select>
               </div>
               <div className="form-group"><label className="acn-label">Cliente</label><input className="acn-input" style={{width:'100%'}} value={formData.cliente_nome} onChange={e=>setFormData({...formData,cliente_nome:e.target.value})} /></div>
@@ -705,7 +737,7 @@ export default function ComercialTab({ currentUser }) {
                   const podeFaturar = o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial';
                   const podeEntregue = o.status_geral === 'Faturado e Disponivel para Entrega';
                   return (
-                    <tr key={o.id}>
+                    <tr key={o.id} style={{background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : ''}}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><strong style={{color:'#2563eb',cursor:'pointer'}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);}}>{o.opl}</strong></td>
                       <td>{o.chassi||'—'}</td>
@@ -718,9 +750,19 @@ export default function ComercialTab({ currentUser }) {
                         {o.liberado_divulgacao && <div style={{marginTop:2}}><span style={{fontSize:9,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>📸 MKT</span></div>}
                       </td>
                       <td>
-                        {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button>}
-                        {podeEntregue && <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
-                        {!podeFaturar && !podeEntregue && <span style={{fontSize:10,color:'#94a3b8'}}>Em processo</span>}
+                        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                          <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{
+                            setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});
+                            setEditId(o.id); setShowForm(true); window.scrollTo({top:0,behavior:'smooth'});
+                          }}>✏️ EDITAR</button>
+                          {o.status_geral === 'Devolvida Comercial' && (
+                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}} onClick={()=>enviarParaEngenharia(o)}>
+                              ↩ ENVIAR ENGENHARIA
+                            </button>
+                          )}
+                          {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button>}
+                          {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
+                        </div>
                       </td>
                     </tr>
                   );
