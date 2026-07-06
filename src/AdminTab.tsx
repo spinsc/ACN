@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 
 
-const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Visualizador'];
+const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Visualizador'];
 
 // ---- USUARIOS ----
 const TODAS_ABAS = [
@@ -619,9 +619,12 @@ function PainelDados() {
 
   const fetchRegistros = async () => {
     setLoading(true);
-    const orderCol = tabelaAtiva === 'logs_movimentacao_opl' ? 'data_hora'
+    const orderCol = tabelaAtiva === 'oples' ? 'data_entrada'
+      : tabelaAtiva === 'logs_movimentacao_opl' ? 'data_hora'
       : tabelaAtiva === 'demandas_setoriais' ? 'data_abertura'
       : tabelaAtiva === 'crm_historico_contatos' ? 'data_contato'
+      : tabelaAtiva === 'crm_clientes' ? 'created_at'
+      : tabelaAtiva === 'cq_auditorias' ? 'created_at'
       : 'created_at';
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);

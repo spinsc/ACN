@@ -66,9 +66,10 @@ export default function QualidadeTab({ currentUser }) {
     setLoading(false);
   };
 
+  // checkStates: null=PENDENTE, true=OK, false=NOK, 'na'=N/A
   const abrirAuditoria = (opl) => {
     const states = {};
-    checklist.forEach(it => states[it.id] = false);
+    checklist.forEach(it => states[it.id] = null);
     setCheckStates(states);
     setObsAudit('');
     setSignData(null);
@@ -96,10 +97,10 @@ export default function QualidadeTab({ currentUser }) {
     await supabase.from('cq_auditorias').insert([{
       opl_id: opl.id, numero_opl: opl.opl,
       resultado: 'Aprovado',
-      itens_checklist: Object.entries(checkStates).map(([id,ok]) => ({
+      itens_checklist: Object.entries(checkStates).map(([id,val]) => ({
         item_id: id,
         item_descricao: checklist.find(c=>c.id==id)?.item_texto || id,
-        ok,
+        resultado: val === true ? 'OK' : val === false ? 'NOK' : val === 'na' ? 'NA' : 'PENDENTE',
       })),
       observacoes: obsAudit,
       assinatura_url: sigUrl,
@@ -133,8 +134,9 @@ export default function QualidadeTab({ currentUser }) {
     const agora = new Date().toISOString();
     await supabase.from('cq_auditorias').insert([{
       opl_id: opl.id, numero_opl: opl.opl, resultado: 'Reprovado',
-      itens_checklist: Object.entries(checkStates).map(([id,ok]) => ({
-        item_id: id, item_descricao: checklist.find(c=>c.id==id)?.item_texto || id, ok,
+      itens_checklist: Object.entries(checkStates).map(([id,val]) => ({
+        item_id: id, item_descricao: checklist.find(c=>c.id==id)?.item_texto || id,
+        resultado: val === true ? 'OK' : val === false ? 'NOK' : val === 'na' ? 'NA' : 'PENDENTE',
       })),
       observacoes: obsAudit, auditor_nome: currentUser?.nome, data_auditoria: agora,
     }]);
@@ -154,7 +156,9 @@ export default function QualidadeTab({ currentUser }) {
     setModalAudit(null); fetchAll();
   };
 
-  const allChecked = checklist.length > 0 && checklist.every(it => checkStates[it.id]);
+  // Todos respondidos quando cada item é OK, NOK ou N/A (não null)
+  const allChecked = checklist.length > 0 && checklist.every(it => checkStates[it.id] !== null && checkStates[it.id] !== undefined);
+  const hasNok = checklist.some(it => checkStates[it.id] === false);
 
   return (
     <div>
@@ -207,17 +211,31 @@ export default function QualidadeTab({ currentUser }) {
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:8,marginBottom:12,maxHeight:220,overflowY:'auto'}}>
               {checklist.length === 0 ? (
                 <div style={{fontSize:11,color:'#94a3b8'}}>Nenhum item de checklist configurado. Configure no Admin.</div>
-              ) : checklist.map(it => (
-                <label key={it.id} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'5px 0',borderBottom:'1px solid #e2e8f0',cursor:'pointer',fontSize:11}}>
-                  <input type="checkbox" style={{marginTop:2,accentColor:'#22c55e'}}
-                    checked={!!checkStates[it.id]}
-                    onChange={e=>setCheckStates(s=>({...s,[it.id]:e.target.checked}))} />
-                  <span style={{flex:1}}>{it.item_texto}</span>
-                  {checkStates[it.id]
-                    ? <span style={{color:'#22c55e',fontSize:10,fontWeight:700}}>OK</span>
-                    : <span style={{color:'#ef4444',fontSize:10}}>PENDENTE</span>}
-                </label>
-              ))}
+              ) : checklist.map(it => {
+                const val = checkStates[it.id];
+                return (
+                  <div key={it.id} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 0',borderBottom:'1px solid #e2e8f0',fontSize:11}}>
+                    <span style={{flex:1,color: val===null?'#94a3b8':val===false?'#ef4444':val===true?'#15803d':'#6b7280'}}>{it.item_texto}</span>
+                    <div style={{display:'flex',gap:3,flexShrink:0}}>
+                      <button onClick={()=>setCheckStates(s=>({...s,[it.id]:val===true?null:true}))}
+                        style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',fontWeight:700,
+                          background:val===true?'#22c55e':'transparent',
+                          borderColor:val===true?'#22c55e':'#d1d5db',
+                          color:val===true?'white':'#6b7280'}}>✓ OK</button>
+                      <button onClick={()=>setCheckStates(s=>({...s,[it.id]:val===false?null:false}))}
+                        style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',fontWeight:700,
+                          background:val===false?'#ef4444':'transparent',
+                          borderColor:val===false?'#ef4444':'#d1d5db',
+                          color:val===false?'white':'#6b7280'}}>✗ NOK</button>
+                      <button onClick={()=>setCheckStates(s=>({...s,[it.id]:val==='na'?null:'na'}))}
+                        style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',fontWeight:700,
+                          background:val==='na'?'#94a3b8':'transparent',
+                          borderColor:val==='na'?'#94a3b8':'#d1d5db',
+                          color:val==='na'?'white':'#6b7280'}}>N/A</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* OBSERVACOES */}
@@ -239,7 +257,12 @@ export default function QualidadeTab({ currentUser }) {
 
             {!allChecked && checklist.length > 0 && (
               <div style={{fontSize:10,color:'#f59e0b',background:'#fef3c7',padding:'6px 8px',borderRadius:4,marginTop:8,marginBottom:4}}>
-                Atencao: ha itens do checklist nao marcados como OK.
+                Atencao: ha itens pendentes (sem OK, NOK ou N/A).
+              </div>
+            )}
+            {hasNok && (
+              <div style={{fontSize:10,color:'#dc2626',background:'#fef2f2',padding:'6px 8px',borderRadius:4,marginBottom:4,fontWeight:700}}>
+                ✗ {checklist.filter(it=>checkStates[it.id]===false).length} item(s) NOK — descreva nas observacoes.
               </div>
             )}
 

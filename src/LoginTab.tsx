@@ -6,17 +6,13 @@ export default function LoginTab() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [debug, setDebug] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setDebug('');
 
     try {
-      console.log('=== BUSCANDO USUÁRIO ===');
-
       const url = `https://qgemelnuqdilnggxmrdw.supabase.co/rest/v1/auth_usuarios?email=ilike.${encodeURIComponent(email.trim())}`;
       
       const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
@@ -38,7 +34,6 @@ export default function LoginTab() {
       }
 
       const usuario = data[0];
-      console.log('✅ Usuário encontrado');
 
       if (!usuario.ativo) {
         setError('Usuário inativo');
@@ -46,44 +41,15 @@ export default function LoginTab() {
         return;
       }
 
-      // 🔍 DEBUG - MOSTRAR EXATAMENTE O QUE ESTAMOS COMPARANDO
-      const senhaDB = usuario.senha;
-      const senhaDigitada = password;
-      
-      console.log('=== DEBUG DE SENHA ===');
-      console.log('Senha no BD:', senhaDB);
-      console.log('Tipo:', typeof senhaDB);
-      console.log('Comprimento:', senhaDB?.length);
-      console.log('Código caracteres:', senhaDB?.split('').map((c: string) => c.charCodeAt(0)));
-      console.log('---');
-      console.log('Senha digitada:', senhaDigitada);
-      console.log('Tipo:', typeof senhaDigitada);
-      console.log('Comprimento:', senhaDigitada?.length);
-      console.log('Código caracteres:', senhaDigitada?.split('').map((c: string) => c.charCodeAt(0)));
-      console.log('---');
-      console.log('Comparação direta (===):', senhaDB === senhaDigitada);
-      console.log('Comparação trim:', senhaDB?.trim() === senhaDigitada?.trim());
-      console.log('Comparação toLowerCase:', senhaDB?.toLowerCase() === senhaDigitada?.toLowerCase());
-
-      // Mostrar no console e na tela
-      const debugMsg = `
-BD: "${senhaDB}" (${senhaDB?.length} chars)
-Digitada: "${senhaDigitada}" (${senhaDigitada?.length} chars)
-Iguais? ${senhaDB === senhaDigitada}
-      `.trim();
-
-      setDebug(debugMsg);
-      console.log(debugMsg);
-
-      // ✅ Se chegou aqui sem erro, logar
-      if (senhaDB === senhaDigitada) {
-        console.log('✅✅✅ LOGIN SUCESSO ✅✅✅');
+      // Verificar senha
+      if (usuario.senha === password) {
 
         localStorage.setItem('user', JSON.stringify({
           id: usuario.id,
           email: usuario.email,
           nome: usuario.nome,
-          perfil: usuario.perfil
+          perfil: usuario.perfil,
+          abas_permitidas: usuario.abas_permitidas || []
         }));
 
         window.location.href = window.location.origin + '/ACN/';
@@ -149,22 +115,7 @@ Iguais? ${senhaDB === senhaDigitada}
           </div>
         )}
 
-        {debug && (
-          <div style={{
-            backgroundColor: '#fef3c7',
-            border: '1px solid #fcd34d',
-            borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '20px',
-            fontSize: '12px',
-            color: '#92400e',
-            fontFamily: 'monospace',
-            whiteSpace: 'pre-wrap'
-          }}>
-            🔍 DEBUG:
-            {debug}
-          </div>
-        )}
+
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '20px' }}>
