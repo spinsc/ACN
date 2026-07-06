@@ -3,6 +3,101 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 
 
+// ─── Botão de Pendências por OPL ─────────────────────────────────────────────
+export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) {
+  const [open, setOpen] = useState(false);
+  const [pendencias, setPendencias] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const buscar = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('demandas_setoriais')
+      .select('*')
+      .eq('numero_opl', opl)
+      .in('status', ['Pendente', 'Em Andamento'])
+      .order('data_abertura', { ascending: false });
+    setPendencias(data || []);
+    setLoading(false);
+  };
+
+  const abrir = () => { setOpen(true); buscar(); };
+
+  const corStatus = (s: string) => s === 'Em Andamento' ? '#3b82f6' : '#f59e0b';
+
+  return (
+    <>
+      <button
+        onClick={abrir}
+        title="Ver pendências desta OPL"
+        style={{
+          fontSize: 10, padding: '2px 7px', border: '1px solid #e2e8f0',
+          borderRadius: 3, cursor: 'pointer', background: '#f1f5f9',
+          color: '#475569', fontWeight: 700, whiteSpace: 'nowrap',
+        }}>
+        📋 Pendências
+      </button>
+
+      {open && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ maxWidth: 600, width: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="modal-title">Pendências — OPL {opl}</div>
+            {loading ? (
+              <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Carregando...</div>
+            ) : pendencias.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#22c55e', padding: 20, fontWeight: 700 }}>
+                ✓ Nenhuma pendência aberta para esta OPL.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+                  {pendencias.length} pendência(s) em aberto em {[...new Set(pendencias.map(p => p.setor_destino))].join(', ')}
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Setor</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Descrição</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Status</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Responsável</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Abertura</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendencias.map(p => {
+                      const isAjuste = p.descricao?.startsWith('[AJUSTE]');
+                      const desc = isAjuste ? p.descricao.replace('[AJUSTE] ', '') : (p.descricao || '—');
+                      return (
+                        <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9', background: isAjuste ? '#fffbeb' : undefined }}>
+                          <td style={{ padding: '5px 8px', fontWeight: 700, color: '#1e293b' }}>{p.setor_destino || '—'}</td>
+                          <td style={{ padding: '5px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={desc}>
+                            {isAjuste && <span style={{ background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 3px', borderRadius: 2, marginRight: 3 }}>AJUSTE</span>}
+                            {desc}
+                          </td>
+                          <td style={{ padding: '5px 8px' }}>
+                            <span style={{ background: corStatus(p.status), color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 3 }}>{p.status}</span>
+                          </td>
+                          <td style={{ padding: '5px 8px', color: '#64748b' }}>{p.responsavel_nome || '—'}</td>
+                          <td style={{ padding: '5px 8px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                            {p.data_abertura ? new Date(p.data_abertura).toLocaleDateString('pt-BR') : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </>
+            )}
+            <div style={{ textAlign: 'right', marginTop: 14 }}>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setOpen(false)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function OplMovimentadas({ setor }: { setor: string }) {
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
@@ -37,12 +132,12 @@ export function OplMovimentadas({ setor }: { setor: string }) {
           <table className="acn-tbl">
             <thead>
               <tr>
-                <th>OPL</th><th>Cliente</th><th>Tipo</th><th>Status Atual</th><th>Ultimo Log</th><th>Log Completo</th>
+                <th>OPL</th><th>Cliente</th><th>Tipo</th><th>Status Atual</th><th>Ultimo Log</th><th>Log Completo</th><th>Pendências</th>
               </tr>
             </thead>
             <tbody>
               {opls.length === 0 ? (
-                <tr><td colSpan={6} className="acn-empty">Sem OPLs em processo no periodo.</td></tr>
+                <tr><td colSpan={7} className="acn-empty">Sem OPLs em processo no periodo.</td></tr>
               ) : opls.map(o => {
                 const log = logs.find(l => l.opl_id === o.id);
                 return (
@@ -53,6 +148,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                     <td><span className="acn-badge" style={{ background: '#3b82f6' }}>{o.status_geral}</span></td>
                     <td style={{ fontSize: 10, color: '#64748b' }}>{log ? log.evento + ' — ' + fmtDt(log.data_hora) : '—'}</td>
                     <td style={{ fontSize: 10 }}>{logs.filter(l => l.opl_id === o.id).length} eventos</td>
+                    <td><BotaoPendencias opl={o.opl} opl_id={o.id} /></td>
                   </tr>
                 );
               })}

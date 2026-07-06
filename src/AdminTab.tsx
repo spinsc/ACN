@@ -90,7 +90,7 @@ function ModalPermissoes({ usuario, onClose, onSalvo }) {
 
 function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Operador', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Operador', whatsapp:'', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
@@ -115,7 +115,7 @@ function PainelUsuarios() {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
     const { error } = await supabase.from('auth_usuarios').insert([{ ...form, ativo: true }]);
     if (error) { alert('Erro: ' + error.message); return; }
-    setForm({ nome:'', email:'', senha:'', perfil:'Operador', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
+    setForm({ nome:'', email:'', senha:'', perfil:'Operador', whatsapp:'', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
     setShowForm(false); fetchUsuarios();
   };
 
@@ -169,6 +169,11 @@ function PainelUsuarios() {
                   onChange={e=>setForm({...form,perfil:e.target.value})}>
                   {PERFIS.map(p=><option key={p}>{p}</option>)}
                 </select>
+              </div>
+              <div className="form-group"><label className="acn-label">WhatsApp (55DDD+número)</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.whatsapp}
+                  placeholder="Ex: 5511987654321"
+                  onChange={e=>setForm({...form,whatsapp:e.target.value.replace(/\D/g,'')})} />
               </div>
             </div>
             {/* Seleção de abas */}

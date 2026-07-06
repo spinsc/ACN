@@ -151,6 +151,7 @@ export default function AjustesProjetoTab({ currentUser }) {
                 <select className="acn-input" style={{ width: '100%' }}
                   value={form.setor}
                   onChange={e => setForm({ ...form, setor: e.target.value })}>
+                  <option>Comercial</option>
                   <option>Serralheria</option>
                   <option>Chicotes</option>
                   <option>Laboratorio</option>
