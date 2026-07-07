@@ -188,18 +188,19 @@ export default function SacTab({ currentUser }) {
     if (!form.cliente_nome.trim()) { alert('Nome do cliente obrigatório!'); return; }
     if (!form.equipamento_nome.trim()) { alert('Informe o equipamento!'); return; }
     setSalvando(true);
-    const numero = await gerarNumeroOS();
     const agora = new Date().toISOString();
     const isGarantia = form.tipo_servico === 'Garantia';
 
+    // Gera primeiro número e faz upload de fotos (uma única vez)
+    let numero = await gerarNumeroOS();
     const urlsFotos: string[] = [];
     for (const f of fotosEntradaFiles) {
       const url = await uploadFoto(f, `os_${numero.replace('/','_')}/entrada`);
       if (url) urlsFotos.push(url);
     }
 
-    const payload = {
-      numero_os: numero,
+    // Payload base sem numero_os (será preenchido em cada tentativa)
+    const payloadBase = {
       tipo_servico: form.tipo_servico,
       tipo_projeto: form.tipo_projeto || null,
       equipamento_nome: form.equipamento_nome,
@@ -218,7 +219,6 @@ export default function SacTab({ currentUser }) {
       email: form.email || null,
       prazo_orcamento: !isGarantia ? (form.prazo_orcamento || null) : null,
       data_prevista_entrega: isGarantia ? (form.data_prevista_entrega || null) : null,
-      // Garantia entra direto como Aprovado; outros como Diagnóstico
       status: isGarantia ? 'Aprovado' : 'Diagnóstico',
       aprovado: isGarantia ? true : null,
       acessorios: form.acessorios,
@@ -227,7 +227,6 @@ export default function SacTab({ currentUser }) {
       criado_por_nome: currentUser?.nome,
       criado_por_email: currentUser?.email,
       atualizado_em: agora,
-      // Despesas (Serviço Externo)
       despesa_deslocamento: hasDespesas && form.despesa_deslocamento ? parseFloat(form.despesa_deslocamento.replace(',','.')) : null,
       despesa_hospedagem:   hasDespesas && form.despesa_hospedagem   ? parseFloat(form.despesa_hospedagem.replace(',','.'))   : null,
       despesa_alimentacao:  hasDespesas && form.despesa_alimentacao  ? parseFloat(form.despesa_alimentacao.replace(',','.'))  : null,
@@ -238,8 +237,19 @@ export default function SacTab({ currentUser }) {
       ) : null,
     };
 
-    const { data: osData, error } = await supabase.from('sac_ordens_servico').insert([payload]).select('id').single();
-    if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
+    // INSERT com retry automático: se número já existe (23505), gera o próximo e tenta de novo
+    let osData = null;
+    for (let tentativa = 0; tentativa < 5; tentativa++) {
+      if (tentativa > 0) numero = await gerarNumeroOS();
+      const { data, error } = await supabase
+        .from('sac_ordens_servico')
+        .insert([{ ...payloadBase, numero_os: numero }])
+        .select('id').single();
+      if (!error) { osData = data; break; }
+      if (error.code !== '23505') { alert('Erro: ' + error.message); setSalvando(false); return; }
+    }
+
+    if (!osData) { alert('Não foi possível gerar número único. Tente novamente.'); setSalvando(false); return; }
 
     // Auto-criar demanda para Laboratório
     const sac_fase = isGarantia ? 'execucao' : 'diagnostico';
