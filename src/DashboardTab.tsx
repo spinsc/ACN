@@ -16,6 +16,7 @@ import MarketingTab from './MarketingTab';
 import SetorDemandaTab from './SetorDemandaTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
+import SacTab from './SacTab';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -73,6 +74,12 @@ const SIDEBAR_GROUPS = [
     section: 'Marketing',
     items: [
       { id: 'marketing', label: 'Marketing' },
+    ],
+  },
+  {
+    section: 'SAC',
+    items: [
+      { id: 'sac', label: 'SAC' },
     ],
   },
   {
@@ -417,6 +424,7 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
       case 'logistica':    return <LogisticaTab currentUser={currentUser} />;
       case 'vistorias':    return <VistoriasPatio currentUser={currentUser} />;
       case 'marketing':    return <MarketingTab currentUser={currentUser} />;
+      case 'sac':          return <SacTab currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':   return <RelatoriosTab currentUser={currentUser} />;
       case 'admin':        return <AdminTab />;

@@ -24,6 +24,7 @@ const TODAS_ABAS = [
   { id:'vistorias',    label:'11. Vistorias Patio' },
   { id:'fiscal',       label:'12. Fiscal' },
   { id:'marketing',    label:'Marketing' },
+  { id:'sac',          label:'SAC' },
   { id:'relatorios',   label:'Relatorios' },
   { id:'admin',        label:'Admin' },
 ];
