@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 
 const CANAL_COR: Record<string, string> = {
@@ -15,7 +15,6 @@ const CANAL_COR: Record<string, string> = {
   'SAC':          '#9333ea',
 };
 
-// Canal de broadcast compartilhado — puro WebSocket, funciona com anon key
 const BROADCAST_CH = 'acn-chat-v1';
 
 function Avatar({ nome, size = 26, bg = '#e2e8f0', color = '#475569' }: any) {
@@ -44,38 +43,92 @@ export default function ChatWidget({ currentUser }: any) {
   const [enviando, setEnviando]   = useState(false);
   const [toast, setToast]         = useState<any>(null);
 
-  const endRef          = useRef<HTMLDivElement>(null);
-  const inputRef        = useRef<HTMLInputElement>(null);
-  const salaAtivaRef    = useRef<any>(null);
-  const canaisRef       = useRef<any[]>([]);
-  const diretosRef      = useRef<any[]>([]);
-  const broadcastRef    = useRef<any>(null);
-  const prevNaoLidasRef = useRef(0);
+  const endRef       = useRef<HTMLDivElement>(null);
+  const inputRef     = useRef<HTMLInputElement>(null);
+  const salaAtivaRef = useRef<any>(null);
+  const canaisRef    = useRef<any[]>([]);
+  const diretosRef   = useRef<any[]>([]);
+  const broadcastRef = useRef<any>(null);
+  // Guarda o número de não-lidas no ultimo check — para detectar novidades
+  const prevCountRef = useRef(-1); // -1 = ainda não inicializado
 
-  // uid sempre como string — evita mismatch integer vs string
-  const uid   = String(currentUser?.id ?? currentUser?.email ?? 'anon');
+  const uid   = String(currentUser?.id   ?? currentUser?.email ?? 'anon');
   const unome = currentUser?.nome || currentUser?.email || 'Usuário';
 
-  // Manter refs em sincronia
+  // ── localStorage: rastrear último horário de leitura por sala ────────────
+  // Não depende de DB — badge some imediatamente ao abrir a conversa
+  const lrKey   = (salaId: string) => `acn_lr_${uid}_${salaId}`;
+  const getLastRead = (salaId: string) =>
+    localStorage.getItem(lrKey(salaId)) || '1970-01-01T00:00:00Z';
+  const markRead = (salaId: string) =>
+    localStorage.setItem(lrKey(salaId), new Date().toISOString());
+
+  // Manter refs em sincronia com state
   useEffect(() => { canaisRef.current  = canais;  }, [canais]);
   useEffect(() => { diretosRef.current = diretos; }, [diretos]);
 
-  // Auto-dismiss toast após 6s
+  // Auto-dismiss toast após 5s
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 6000);
+    const t = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(t);
-  }, [toast]);
+  }, [toast?.sala?.id, toast?.texto]); // depende do conteúdo, não do objeto
 
   // Auto-scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [mensagens]);
 
-  // Focus input ao entrar na sala
+  // Focus ao entrar na sala
   useEffect(() => {
     if (view === 'sala') setTimeout(() => inputRef.current?.focus(), 80);
   }, [view, salaAtiva]);
+
+  // ── Contar não-lidas (localStorage — zero latência) ──────────────────────
+  const contarNaoLidas = useCallback(async (lista?: any[]) => {
+    let data = lista;
+    if (!data) {
+      const res = await supabase.from('chat_mensagens')
+        .select('id,sala_id,remetente_id,criado_em')
+        .order('criado_em', { ascending: false })
+        .limit(500);
+      data = res.data || [];
+    }
+    const count = data.filter((m: any) =>
+      String(m.remetente_id) !== uid &&
+      m.criado_em > getLastRead(m.sala_id)
+    ).length;
+    setNaoLidas(count);
+    return count;
+  }, [uid]);
+
+  // ── Verificar e notificar mensagens novas (polling) ───────────────────────
+  const verificarNovas = useCallback(async () => {
+    const { data } = await supabase.from('chat_mensagens')
+      .select('id,sala_id,remetente_id,remetente_nome,texto,criado_em')
+      .order('criado_em', { ascending: false })
+      .limit(500);
+
+    const todas = data || [];
+    const naoLidasList = todas.filter((m: any) =>
+      String(m.remetente_id) !== uid &&
+      m.criado_em > getLastRead(m.sala_id)
+    );
+
+    const count = naoLidasList.length;
+    setNaoLidas(count);
+
+    // Toast apenas se contagem AUMENTOU e ainda não inicializado ou nova msg chegou
+    if (prevCountRef.current >= 0 && count > prevCountRef.current && naoLidasList.length > 0) {
+      const latest = naoLidasList[0];
+      // Não notificar se estamos nessa sala agora
+      if (!salaAtivaRef.current || salaAtivaRef.current.id !== latest.sala_id) {
+        const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === latest.sala_id);
+        if (sala) setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto });
+      }
+    }
+    prevCountRef.current = count;
+  }, [uid]);
 
   // ── Inicialização ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -83,47 +136,47 @@ export default function ChatWidget({ currentUser }: any) {
     fetchCanais();
     fetchUsuarios();
     fetchDiretos();
-    contarENotificar();
+    // Inicializa prevCountRef sem disparar toast para msgs antigas
+    contarNaoLidas().then(n => { prevCountRef.current = n; });
 
-    // Broadcast: canal compartilhado para notificações instantâneas
-    // Funciona com anon key (puro WebSocket, sem postgres_changes)
+    // Broadcast: notificação instantânea quando outro usuário enviar msg
     broadcastRef.current = supabase.channel(BROADCAST_CH)
       .on('broadcast', { event: 'nova_msg' }, ({ payload }: any) => {
-        if (String(payload.sender_id) === uid) return; // ignorar próprias msgs
+        if (String(payload.sender_id) === uid) return;
 
-        // DMs: verificar se sou membro
+        // Verificar permissão para DMs
         if (payload.sala_tipo === 'direto') {
           const membro = (payload.membros || []).some((m: any) => String(m.id) === uid);
           if (!membro) return;
           fetchDiretos();
         }
 
-        // Se a sala está aberta, adiciona mensagem diretamente
-        if (salaAtivaRef.current && salaAtivaRef.current.id === payload.sala_id) {
+        // Se sala está aberta, adiciona mensagem diretamente
+        if (salaAtivaRef.current?.id === payload.sala_id) {
           setMensagens(prev => {
-            if (prev.find(m => m.id === payload.msg_id)) return prev;
+            if (prev.find((m: any) => m.id === payload.msg_id)) return prev;
             return [...prev, {
-              id: payload.msg_id,
-              sala_id: payload.sala_id,
-              remetente_id: payload.sender_id,
-              remetente_nome: payload.remetente_nome,
-              texto: payload.texto,
-              lida_por: [payload.sender_id],
-              criado_em: payload.criado_em,
+              id: payload.msg_id, sala_id: payload.sala_id,
+              remetente_id: payload.sender_id, remetente_nome: payload.remetente_nome,
+              texto: payload.texto, lida_por: [], criado_em: payload.criado_em,
             }];
           });
-          // Marcar como lida
-          supabase.from('chat_mensagens')
-            .update({ lida_por: [String(payload.sender_id), uid] })
-            .eq('id', payload.msg_id).then(() => contarENotificar());
+          markRead(payload.sala_id); // Lida automaticamente
+          contarNaoLidas();
           return;
         }
 
-        // Sala não ativa: mostrar toast
+        // Sala não ativa: toast + atualizar badge
         const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === payload.sala_id)
           || { id: payload.sala_id, nome: payload.sala_nome, tipo: payload.sala_tipo, membros: payload.membros || [] };
+
         setToast({ sala, remetente_nome: payload.remetente_nome, texto: payload.texto });
-        contarENotificar();
+        // Incrementa badge sem requery
+        setNaoLidas(prev => {
+          const newCount = prev + 1;
+          prevCountRef.current = newCount;
+          return newCount;
+        });
       })
       .subscribe();
 
@@ -133,9 +186,9 @@ export default function ChatWidget({ currentUser }: any) {
   // ── Polling badge a cada 5s ───────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
-    const t = setInterval(() => contarENotificar(), 5000);
+    const t = setInterval(verificarNovas, 5000);
     return () => clearInterval(t);
-  }, [currentUser]);
+  }, [currentUser, verificarNovas]);
 
   // ── Polling mensagens a cada 2s quando sala aberta ───────────────────────
   useEffect(() => {
@@ -146,9 +199,8 @@ export default function ChatWidget({ currentUser }: any) {
         .select('*').eq('sala_id', salaId).order('criado_em');
       if (!data) return;
       setMensagens(prev => {
-        // Só atualiza se vieram mensagens novas (evita flicker)
-        const realPrev = prev.filter(m => !m._temp);
-        if (data.length <= realPrev.length) return prev;
+        const real = prev.filter((m: any) => !m._temp);
+        if (data.length <= real.length) return prev;
         return data;
       });
     }, 2000);
@@ -172,68 +224,12 @@ export default function ChatWidget({ currentUser }: any) {
     setUsuarios((data || []).filter(u => String(u.id || u.email) !== uid));
   };
 
-  // Conta não-lidas E dispara toast se contagem aumentou
-  const contarENotificar = async () => {
-    const { data } = await supabase.from('chat_mensagens')
-      .select('id,lida_por,remetente_id,remetente_nome,texto,sala_id,criado_em')
-      .order('criado_em', { ascending: false })
-      .limit(300);
-
-    const naoLidasList = (data || []).filter(m =>
-      String(m.remetente_id) !== uid &&
-      !(m.lida_por || []).map(String).includes(uid)
-    );
-
-    const count = naoLidasList.length;
-    setNaoLidas(count);
-
-    // Toast automático quando chega mensagem nova (contagem aumentou)
-    if (count > prevNaoLidasRef.current && naoLidasList.length > 0) {
-      const latest = naoLidasList[0];
-      // Não mostrar toast se já estamos nessa sala
-      if (!salaAtivaRef.current || salaAtivaRef.current.id !== latest.sala_id) {
-        const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === latest.sala_id);
-        if (sala) {
-          setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto });
-        } else {
-          supabase.from('chat_salas').select('*').eq('id', latest.sala_id).single()
-            .then(({ data: sDb }) => {
-              if (!sDb) return;
-              if (sDb.tipo === 'canal') {
-                setToast({ sala: sDb, remetente_nome: latest.remetente_nome, texto: latest.texto });
-              } else if (sDb.tipo === 'direto') {
-                const membro = (sDb.membros || []).some((m: any) => String(m.id) === uid);
-                if (membro) setToast({ sala: sDb, remetente_nome: latest.remetente_nome, texto: latest.texto });
-              }
-            });
-        }
-      }
-    }
-    prevNaoLidasRef.current = count;
-  };
-
   const fetchMensagens = async (salaId: string) => {
     const { data } = await supabase.from('chat_mensagens')
       .select('*').eq('sala_id', salaId).order('criado_em');
     setMensagens(data || []);
-
-    // Marcar como lidas imediatamente no estado
-    const naoLidas = (data || []).filter(m =>
-      String(m.remetente_id) !== uid &&
-      !(m.lida_por || []).map(String).includes(uid)
-    );
-    if (naoLidas.length > 0) {
-      setNaoLidas(prev => Math.max(0, prev - naoLidas.length));
-      prevNaoLidasRef.current = Math.max(0, prevNaoLidasRef.current - naoLidas.length);
-      // Atualizar no DB
-      await Promise.all(naoLidas.map(m =>
-        supabase.from('chat_mensagens')
-          .update({ lida_por: [...(m.lida_por || []).map(String), uid] })
-          .eq('id', m.id)
-      ));
-      // Recontagem confirmatória
-      setTimeout(() => contarENotificar(), 1000);
-    }
+    markRead(salaId);           // Badge some imediatamente (localStorage)
+    contarNaoLidas();            // Recount após marcar como lida
   };
 
   // ── Abrir sala ─────────────────────────────────────────────────────────
@@ -243,6 +239,8 @@ export default function ChatWidget({ currentUser }: any) {
     setMensagens([]);
     setView('sala');
     setToast(null);
+    markRead(sala.id);           // Imediato — badge zera para esta sala
+    contarNaoLidas();
     await fetchMensagens(sala.id);
   };
 
@@ -271,60 +269,53 @@ export default function ChatWidget({ currentUser }: any) {
 
   const abrirViaToast = (t: any) => {
     setAberto(true);
-    if (t.sala.tipo === 'direto') setAba('diretos'); else setAba('canais');
+    setAba(t.sala?.tipo === 'direto' ? 'diretos' : 'canais');
     abrirSala(t.sala);
   };
 
-  // ── Enviar ─────────────────────────────────────────────────────────────
+  // ── Enviar mensagem ────────────────────────────────────────────────────
   const enviar = async () => {
     if (!texto.trim() || !salaAtiva || enviando) return;
     setEnviando(true);
     const txt = texto.trim();
     setTexto('');
 
-    // Optimistic
     const tempId = 'temp-' + Date.now();
     setMensagens(prev => [...prev, {
-      id: tempId, _temp: true,
-      sala_id: salaAtiva.id, remetente_id: uid, remetente_nome: unome,
-      texto: txt, lida_por: [uid], criado_em: new Date().toISOString(),
+      id: tempId, _temp: true, sala_id: salaAtiva.id,
+      remetente_id: uid, remetente_nome: unome,
+      texto: txt, lida_por: [], criado_em: new Date().toISOString(),
     }]);
 
     const { data: inserido } = await supabase.from('chat_mensagens').insert([{
       sala_id: salaAtiva.id, remetente_id: uid,
-      remetente_nome: unome, texto: txt, lida_por: [uid],
+      remetente_nome: unome, texto: txt, lida_por: [],
     }]).select().single();
 
     if (inserido) {
       setMensagens(prev => prev.map(m => m.id === tempId ? inserido : m));
+      markRead(salaAtiva.id); // Própria mensagem já é "lida"
 
-      // Broadcast para notificar os outros em tempo real
+      // Broadcast para notificar outros usuários instantaneamente
       broadcastRef.current?.send({
         type: 'broadcast', event: 'nova_msg',
         payload: {
-          msg_id:         inserido.id,
-          sala_id:        salaAtiva.id,
-          sala_nome:      salaAtiva.nome || null,
-          sala_tipo:      salaAtiva.tipo,
-          membros:        salaAtiva.membros || [],
-          sender_id:      uid,
-          remetente_nome: unome,
-          texto:          txt,
-          criado_em:      inserido.criado_em,
+          msg_id: inserido.id, sala_id: salaAtiva.id,
+          sala_nome: salaAtiva.nome || null, sala_tipo: salaAtiva.tipo,
+          membros: salaAtiva.membros || [], sender_id: uid,
+          remetente_nome: unome, texto: txt, criado_em: inserido.criado_em,
         },
       });
     }
-
     setEnviando(false);
     inputRef.current?.focus();
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────
   const nomeDireto = (sala: any) => {
-    const outro = (sala.membros || []).find((m: any) => String(m.id) !== uid);
+    const outro = (sala?.membros || []).find((m: any) => String(m.id) !== uid);
     return outro?.nome || 'Conversa';
   };
-
   const nomeSala = (sala: any) =>
     sala?.tipo === 'canal' ? `# ${sala.nome}` : nomeDireto(sala);
 
@@ -333,8 +324,7 @@ export default function ChatWidget({ currentUser }: any) {
 
   const fmtData = (d: any) => {
     if (!d) return '';
-    const dt   = new Date(d);
-    const hoje = new Date();
+    const dt = new Date(d), hoje = new Date();
     if (dt.toDateString() === hoje.toDateString()) return 'Hoje';
     const ontem = new Date(hoje); ontem.setDate(hoje.getDate() - 1);
     if (dt.toDateString() === ontem.toDateString()) return 'Ontem';
@@ -360,7 +350,7 @@ export default function ChatWidget({ currentUser }: any) {
   return (
     <div style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 9500, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
 
-      <style>{`@keyframes chatPop { from { opacity:0; transform:translateY(10px) scale(.96); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+      <style>{`@keyframes chatPop{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
 
       {/* ── Toast ── */}
       {toast && (
@@ -369,7 +359,7 @@ export default function ChatWidget({ currentUser }: any) {
           padding: '10px 14px', cursor: 'pointer', width: 270,
           boxShadow: '0 6px 24px rgba(0,0,0,.35)',
           display: 'flex', flexDirection: 'column', gap: 3,
-          animation: 'chatPop .2s ease',
+          animation: 'chatPop .18s ease',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
@@ -566,8 +556,7 @@ export default function ChatWidget({ currentUser }: any) {
                   background: texto.trim() ? '#0f766e' : '#e2e8f0',
                   color: texto.trim() ? 'white' : '#94a3b8',
                   border: 'none', cursor: texto.trim() ? 'pointer' : 'default',
-                  fontSize: 14, flexShrink: 0, display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background .15s',
                 }}>➤</button>
               </div>
