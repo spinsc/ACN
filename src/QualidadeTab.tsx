@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 function SignatureCanvas({ onSave }) {
@@ -125,6 +126,7 @@ export default function QualidadeTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
 
+    notificarEvento('cq_aprovado', msg.cqAprovado(opl.opl, currentUser?.nome));
     setUploading(false); setModalAudit(null); fetchAll();
   };
 
@@ -153,6 +155,7 @@ export default function QualidadeTab({ currentUser }) {
       status_anterior: 'Aguardando CQ', status_novo: 'Retrabalho',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('cq_reprovado', msg.cqReprovado(opl.opl, obsAudit, currentUser?.nome));
     setModalAudit(null); fetchAll();
   };
 

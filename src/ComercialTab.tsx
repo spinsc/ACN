@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 const TIPOS_PROJETO = [
@@ -592,6 +593,7 @@ export default function ComercialTab({ currentUser }) {
       }
     }
     setFormData(FORM_VAZIO); setShowForm(false); setEditId(null); fetchOpls();
+    if (!editId) notificarEvento('op_enviada_engenharia', msg.oplEnviada(formData.opl,'Engenharia',currentUser?.nome));
   };
 
   const enviarParaEngenharia = async (opl) => {
@@ -603,6 +605,7 @@ export default function ComercialTab({ currentUser }) {
       status_anterior: 'Devolvida Comercial', status_novo: 'Em Espera Engenharia',
       usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: agora,
     }]);
+    notificarEvento('op_enviada_engenharia', msg.oplEnviada(opl.opl,'Engenharia',currentUser?.nome));
     fetchOpls();
   };
 
@@ -610,6 +613,7 @@ export default function ComercialTab({ currentUser }) {
     const agora = new Date().toISOString();
     await supabase.from('oples').update({ status_geral: 'Aguarda Emissao NF', status_fiscal: 'Aguardando', data_liberacao_comercial: agora }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{ opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial', evento: 'OPL liberada para faturamento Fiscal.', status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF', usuario_nome: currentUser?.nome, data_hora: agora }]);
+    notificarEvento('fiscal_nf_emitida', msg.oplEnviada(opl.opl,'Fiscal (Emissão NF)',currentUser?.nome));
     fetchOpls();
   };
 
@@ -619,6 +623,7 @@ export default function ComercialTab({ currentUser }) {
     const agora = new Date().toISOString();
     await supabase.from('oples').update({ status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu, data_entrega: agora }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{ opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial', evento: `Equipamento entregue. Recebeu: ${nomeRecebeu}`, status_anterior: opl.status_geral, status_novo: 'Faturado', usuario_nome: currentUser?.nome, data_hora: agora }]);
+    notificarEvento('comercial_entregue', msg.entregue(opl.opl, opl.cliente_nome||'—', nomeRecebeu));
     setModalEntregue(null); setNomeRecebeu(''); fetchOpls();
   };
 

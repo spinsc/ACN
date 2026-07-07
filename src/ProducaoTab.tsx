@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 function useTimer(start) {
@@ -162,6 +163,7 @@ export default function ProducaoTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Aguardando CQ',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('producao_finaliza', msg.producaoFinalizada(opl.opl, currentUser?.nome));
     fetchAll();
   };
 

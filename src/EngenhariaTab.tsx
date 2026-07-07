@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 export default function EngenhariaTab({ currentUser }) {
@@ -78,6 +79,7 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('engenharia_libera_pcp', msg.oplEnviada(opl.opl,'PCP',currentUser?.nome));
     setModalBom(null); setObsBom(''); fetchAll();
   };
 
@@ -94,6 +96,7 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('engenharia_devolve_comerc', msg.oplDevolvida(opl.opl,'Comercial',obsDevolver,currentUser?.nome));
     setModalDevolver(null); setObsDevolver(''); fetchAll();
   };
 

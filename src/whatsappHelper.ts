@@ -1,14 +1,31 @@
 // @ts-nocheck
-// Helper para enviar notificações WhatsApp via Supabase Edge Function send-whatsapp
-// Use em qualquer tab ao mover status de OPL, criar demanda, etc.
+// Helper de notificações WhatsApp via Supabase Edge Function send-whatsapp
+// Usa tabela notificacoes_config para ligar/desligar eventos e definir destinatários.
 
 import { supabase } from './supabaseClient';
 
-/**
- * Envia notificação WhatsApp.
- * @param destino  { setor: 'Engenharia' } | { perfis: ['PCP','Almoxarifado'] } | { numero: '5511999999999' } | { grupo: '120363...@g.us' }
- * @param mensagem Texto da mensagem
- */
+// ─── Cache de configuração ────────────────────────────────────────────────────
+let _cache: Record<string, { ativo: boolean; destinatarios_perfis: string[] }> | null = null;
+
+async function getConfig() {
+  if (_cache) return _cache;
+  const { data } = await supabase.from('notificacoes_config').select('*');
+  _cache = {};
+  (data || []).forEach((row: any) => {
+    _cache![row.evento] = {
+      ativo: row.ativo,
+      destinatarios_perfis: row.destinatarios_perfis || [],
+    };
+  });
+  return _cache;
+}
+
+/** Chame após salvar config no Admin para forçar recarregamento */
+export function invalidarCacheNotif() {
+  _cache = null;
+}
+
+// ─── Envio base ───────────────────────────────────────────────────────────────
 export async function notificarWhatsApp(
   destino: { setor?: string; perfis?: string[]; numero?: string; grupo?: string },
   mensagem: string
@@ -18,36 +35,76 @@ export async function notificarWhatsApp(
       body: { ...destino, mensagem },
     });
   } catch (e) {
-    console.warn('[WhatsApp] Falha ao enviar notificação:', e);
+    console.warn('[WhatsApp] Falha ao enviar:', e);
   }
 }
 
-// ─── Mensagens padronizadas ───────────────────────────────────────────────────
+// ─── Disparo por evento (consulta config) ────────────────────────────────────
+/**
+ * Envia notificação somente se o evento estiver ativo na config.
+ * @param evento  Chave do evento (ex: 'op_enviada_engenharia')
+ * @param mensagem Texto da mensagem
+ * @param setorOverride Sobrescreve destinatários da config (ex: setor dinâmico de demanda)
+ */
+export async function notificarEvento(
+  evento: string,
+  mensagem: string,
+  setorOverride?: string | string[]
+): Promise<void> {
+  try {
+    const cfg = await getConfig();
+    const ev = cfg[evento];
+    if (!ev || !ev.ativo) return;
 
-export function msgOplEnviada(opl: string, de: string, para: string, usuario: string) {
-  return `🟢 *OPL ${opl}* enviada de *${de}* para *${para}*.\nPor: ${usuario}`;
+    let perfis: string[];
+    if (setorOverride) {
+      perfis = Array.isArray(setorOverride) ? setorOverride : [setorOverride];
+    } else {
+      perfis = ev.destinatarios_perfis;
+    }
+    if (!perfis || perfis.length === 0) return;
+
+    await notificarWhatsApp({ perfis }, mensagem);
+  } catch (e) {
+    console.warn('[WhatsApp] notificarEvento falhou:', e);
+  }
 }
 
-export function msgOplDevolvida(opl: string, de: string, para: string, motivo: string, usuario: string) {
-  return `🔴 *OPL ${opl}* devolvida de *${de}* para *${para}*.\nMotivo: ${motivo}\nPor: ${usuario}`;
-}
+// ─── Templates de mensagem ────────────────────────────────────────────────────
+export const msg = {
+  oplEnviada: (opl: string, para: string, usuario: string) =>
+    `🟢 *OPL ${opl}* enviada para *${para}*.\nPor: ${usuario}`,
 
-export function msgDemandaCriada(opl: string, setor: string, descricao: string, usuario: string) {
-  return `📋 Nova demanda para *${setor}*${opl ? ` — OPL ${opl}` : ''}.\nDescrição: ${descricao}\nAbertura: ${usuario}`;
-}
+  oplDevolvida: (opl: string, para: string, motivo: string, usuario: string) =>
+    `🔴 *OPL ${opl}* devolvida para *${para}*.\nMotivo: ${motivo || '—'}\nPor: ${usuario}`,
 
-export function msgKitLiberado(opl: string, usuario: string) {
-  return `📦 *Kit liberado* para OPL ${opl}. Aguardando início de produção.\nPor: ${usuario}`;
-}
+  kitOk: (opl: string, usuario: string) =>
+    `📦 *Kit completo* — OPL ${opl} aguardando liberação PCP.\nAlmox: ${usuario}`,
 
-export function msgCqAprovado(opl: string, usuario: string) {
-  return `✅ *OPL ${opl}* aprovada no CQ. Aguardando liberação Comercial.\nAuditor: ${usuario}`;
-}
+  kitPendencia: (opl: string, obs: string, usuario: string) =>
+    `⚠️ *Kit com pendência* — OPL ${opl}.\nObs: ${obs || '—'}\nAlmox: ${usuario}`,
 
-export function msgCqReprovado(opl: string, motivo: string, usuario: string) {
-  return `❌ *OPL ${opl}* REPROVADA no CQ.\nMotivo: ${motivo}\nAuditor: ${usuario}`;
-}
+  kitFaltaMaterial: (opl: string, obs: string, usuario: string) =>
+    `🚨 *FALTA DE MATERIAL* — OPL ${opl} bloqueada.\nItens: ${obs || '—'}\nAlmox: ${usuario}`,
 
-export function msgAtrasoEntrega(opl: string, cliente: string, dataPrevisao: string) {
-  return `⚠️ *ATRASO* — OPL ${opl} | Cliente: ${cliente}\nEntrega prevista: ${dataPrevisao} já passou. Verificar urgência.`;
-}
+  producaoFinalizada: (opl: string, usuario: string) =>
+    `🏭 *Produção finalizada* — OPL ${opl} aguardando CQ.\nPor: ${usuario}`,
+
+  cqAprovado: (opl: string, auditor: string) =>
+    `✅ *CQ APROVADO* — OPL ${opl}.\nAuditor: ${auditor}`,
+
+  cqReprovado: (opl: string, motivo: string, auditor: string) =>
+    `❌ *CQ REPROVADO* — OPL ${opl}.\nMotivo: ${motivo}\nAuditor: ${auditor}`,
+
+  nfEmitida: (opl: string, nf: string, usuario: string) =>
+    `🧾 *NF Emitida* — OPL ${opl}. NF: ${nf || '—'}.\nFiscal: ${usuario}`,
+
+  entregue: (opl: string, cliente: string, recebeu: string) =>
+    `🚚 *Entregue* — OPL ${opl}.\nCliente: ${cliente}\nRecebeu: ${recebeu}`,
+
+  demandaCriada: (setor: string, opl: string, desc: string, usuario: string) =>
+    `📋 Nova demanda para *${setor}*${opl ? ` | OPL ${opl}` : ''}.\n${desc}\nAbertura: ${usuario}`,
+
+  atrasoEntrega: (opl: string, cliente: string, data: string) =>
+    `⚠️ *ATRASO* — OPL ${opl} | ${cliente}.\nEntrega prevista: ${data} já passou!`,
+};

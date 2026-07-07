@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 export default function FiscalTab({ currentUser }) {
@@ -39,6 +40,7 @@ export default function FiscalTab({ currentUser }) {
       status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, nf.trim(), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
     fetchAll();
   };

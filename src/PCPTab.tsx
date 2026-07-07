@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -48,6 +49,7 @@ export default function PCPTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('pcp_libera_producao', msg.oplEnviada(opl.opl,'Produção',currentUser?.nome));
     fetchAll();
   };
 
@@ -64,6 +66,7 @@ export default function PCPTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Devolvida para Engenharia',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('pcp_devolve_engenharia', msg.oplDevolvida(opl.opl,'Engenharia',obsDevolver,currentUser?.nome));
     setModalDevolver(null); setObsDevolver(''); fetchAll();
   };
 
@@ -112,6 +115,7 @@ export default function PCPTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
   };
 

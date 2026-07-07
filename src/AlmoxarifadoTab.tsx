@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 export default function AlmoxarifadoTab({ currentUser }) {
@@ -42,16 +43,19 @@ export default function AlmoxarifadoTab({ currentUser }) {
 
   const kitOk = async (opl) => {
     await setAlmox(opl, 'Kit OK', 'Kit OK - Aguardando PCP');
+    notificarEvento('kit_ok', msg.kitOk(opl.opl, currentUser?.nome));
     fetchAll();
   };
 
   const faltaMaterial = async () => {
     await setAlmox(modalFalta, 'Falta de Material', 'Aguardando Almox', obsFalta);
+    notificarEvento('kit_falta_material', msg.kitFaltaMaterial(modalFalta.opl, obsFalta, currentUser?.nome));
     setModalFalta(null); setObsFalta(''); fetchAll();
   };
 
   const liberarPendencia = async () => {
     await setAlmox(modalPend, 'Liberado com Pendencia', 'Aguardando Almox', obsPend);
+    notificarEvento('kit_pendencia', msg.kitPendencia(modalPend.opl, obsPend, currentUser?.nome));
     setModalPend(null); setObsPend(''); fetchAll();
   };
 
@@ -68,6 +72,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
       status_anterior: 'Aguardando Almox', status_novo: 'Kit OK - Aguardando PCP',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    notificarEvento('kit_ok', msg.kitOk(opl.opl, currentUser?.nome));
     fetchAll();
   };
 

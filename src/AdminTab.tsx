@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import { invalidarCacheNotif } from './whatsappHelper';
 
 
 const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Visualizador'];
@@ -810,13 +811,113 @@ function PainelDados() {
   );
 }
 
+// ---- PAINEL NOTIFICAÇÕES ----
+const PERFIS_WA = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing'];
+
+function PainelNotificacoes() {
+  const [eventos, setEventos] = useState([]);
+  const [salvando, setSalvando] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { fetchEventos(); }, []);
+
+  const fetchEventos = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('notificacoes_config').select('*').order('evento');
+    setEventos(data || []);
+    setLoading(false);
+  };
+
+  const toggleAtivo = async (ev) => {
+    await supabase.from('notificacoes_config').update({ ativo: !ev.ativo }).eq('evento', ev.evento);
+    invalidarCacheNotif();
+    fetchEventos();
+  };
+
+  const togglePerfil = async (ev, perfil) => {
+    const atual = ev.destinatarios_perfis || [];
+    const novo = atual.includes(perfil) ? atual.filter(p=>p!==perfil) : [...atual, perfil];
+    setSalvando(ev.evento);
+    await supabase.from('notificacoes_config').update({ destinatarios_perfis: novo }).eq('evento', ev.evento);
+    invalidarCacheNotif();
+    setSalvando(null);
+    fetchEventos();
+  };
+
+  if (loading) return <div className="acn-empty">Carregando configurações...</div>;
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>Configuração de Notificações WhatsApp ({eventos.length} eventos)</span>
+          <button className="acn-btn" style={{background:'#475569'}} onClick={fetchEventos}>Atualizar</button>
+        </div>
+        <div className="sec-body" style={{padding:'8px 10px',fontSize:10,color:'#64748b',background:'#f0fdf4',borderBottom:'1px solid #e2e8f0'}}>
+          ✅ Marque os perfis que receberão a notificação em cada evento. Desative o toggle para silenciar completamente.
+        </div>
+        <div style={{overflowX:'auto'}}>
+          <table>
+            <thead><tr>
+              <th style={{minWidth:40}}>Ativo</th>
+              <th style={{minWidth:180}}>Evento</th>
+              <th style={{minWidth:200}}>Descrição</th>
+              <th>Destinatários</th>
+            </tr></thead>
+            <tbody>
+              {eventos.map(ev => (
+                <tr key={ev.evento} style={{opacity: ev.ativo ? 1 : 0.5}}>
+                  <td style={{textAlign:'center'}}>
+                    <button onClick={()=>toggleAtivo(ev)}
+                      style={{fontSize:16,background:'none',border:'none',cursor:'pointer',lineHeight:1}}>
+                      {ev.ativo ? '🔔' : '🔕'}
+                    </button>
+                  </td>
+                  <td>
+                    <strong style={{fontSize:10}}>{ev.label}</strong>
+                    <div style={{fontSize:9,color:'#94a3b8',fontFamily:'monospace'}}>{ev.evento}</div>
+                  </td>
+                  <td style={{fontSize:10,color:'#64748b',maxWidth:220}}>{ev.descricao}</td>
+                  <td>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                      {PERFIS_WA.map(p => {
+                        const selecionado = (ev.destinatarios_perfis||[]).includes(p);
+                        const carregando = salvando === ev.evento;
+                        return (
+                          <button key={p} onClick={()=>!carregando && togglePerfil(ev,p)}
+                            style={{
+                              fontSize:9, padding:'2px 6px', border:'1px solid',
+                              borderRadius:3, cursor: carregando ? 'default' : 'pointer',
+                              background: selecionado ? '#0f766e' : 'transparent',
+                              borderColor: selecionado ? '#0f766e' : '#d1d5db',
+                              color: selecionado ? '#fff' : '#6b7280',
+                              fontWeight: selecionado ? 700 : 400,
+                              opacity: carregando ? 0.6 : 1,
+                            }}>
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- ADMINTAB PRINCIPAL ----
 const ABAS_ADMIN = [
-  { id:'usuarios',  label:'Usuários' },
-  { id:'checklist', label:'Checklist CQ' },
-  { id:'kpis',      label:'Metas KPI' },
-  { id:'logs',      label:'Logs do Sistema' },
-  { id:'dados',     label:'🗑 Dados / Limpeza' },
+  { id:'usuarios',       label:'Usuários' },
+  { id:'notificacoes',   label:'🔔 Notificações WA' },
+  { id:'checklist',      label:'Checklist CQ' },
+  { id:'kpis',           label:'Metas KPI' },
+  { id:'logs',           label:'Logs do Sistema' },
+  { id:'dados',          label:'🗑 Dados / Limpeza' },
 ];
 
 export default function AdminTab() {
@@ -842,11 +943,12 @@ export default function AdminTab() {
         </div>
       </div>
 
-      {abaAtiva === 'usuarios'  && <PainelUsuarios />}
-      {abaAtiva === 'checklist' && <PainelChecklist />}
-      {abaAtiva === 'kpis'      && <PainelKPI />}
-      {abaAtiva === 'logs'      && <PainelLogs />}
-      {abaAtiva === 'dados'     && <PainelDados />}
+      {abaAtiva === 'usuarios'     && <PainelUsuarios />}
+      {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
+      {abaAtiva === 'checklist'    && <PainelChecklist />}
+      {abaAtiva === 'kpis'         && <PainelKPI />}
+      {abaAtiva === 'logs'         && <PainelLogs />}
+      {abaAtiva === 'dados'        && <PainelDados />}
     </div>
   );
 }
