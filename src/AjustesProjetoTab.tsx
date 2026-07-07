@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { notificarEvento, msg } from './whatsappHelper';
 
 
 // Todos os ajustes vivem em demandas_setoriais com descricao prefixada [AJUSTE]
@@ -70,6 +71,10 @@ export default function AjustesProjetoTab({ currentUser }) {
       console.error('salvar ajuste error:', error);
       return;
     }
+    // Notifica o setor destino — evento específico para Compras, genérico para outros
+    const eventoNotif = form.setor === 'Compras' ? 'demanda_criada_compras' : 'demanda_criada_setor';
+    const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
+    notificarEvento(eventoNotif, mensagemNotif, form.setor);
     setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria' });
     setShowForm(false);
     fetchAll();

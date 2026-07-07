@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 
 
-const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Visualizador'];
+const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Visualizador'];
 
 // ---- USUARIOS ----
 const TODAS_ABAS = [
@@ -891,7 +891,7 @@ function PainelDados() {
 }
 
 // ---- PAINEL NOTIFICAÇÕES ----
-const PERFIS_WA = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing'];
+const PERFIS_WA = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras'];
 
 function PainelNotificacoes() {
   const [eventos, setEventos] = useState([]);
