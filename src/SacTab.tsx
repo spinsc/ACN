@@ -406,8 +406,174 @@ export default function SacTab({ currentUser }) {
         <button key="saida" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>🚚 Entrega</button>
       );
 
-    btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalPrint(os)}>🖨️ PDF</button>);
+    btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>gerarPdfOS(os)}>🖨️ PDF</button>);
     return btns;
+  };
+
+  // ── GERAR PDF DA OS ───────────────────────────────────────────────────────
+  const gerarPdfOS = (os: any) => {
+    const fmtDt  = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+    const fmtVal = (v: any) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+    const cor = (STATUS_COR as any)[os.status] || '#94a3b8';
+
+    const equipLista: any[] = Array.isArray(os.equipamentos_lista) && os.equipamentos_lista.length > 0
+      ? os.equipamentos_lista
+      : [{ marca: os.marca||'', modelo: os.modelo||'', numero_serie: os.numero_serie||'', defeito: os.defeito_reclamado||'' }];
+
+    const equipRows = equipLista.map((eq: any, idx: number) => `
+      <tr style="background:${idx%2===0?'#f8fafc':'white'}">
+        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${equipLista.length>1?`#${idx+1} — `:''}<strong>${os.equipamento_nome||'—'}</strong></td>
+        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.marca||'—'}</td>
+        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.modelo||'—'}</td>
+        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.numero_serie||'—'}</td>
+        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.defeito||'—'}</td>
+      </tr>`).join('');
+
+    const acessoriosHtml = Array.isArray(os.acessorios) && os.acessorios.length > 0
+      ? `<div style="margin-bottom:12px;border:1px solid #e2e8f0;border-radius:4px;overflow:hidden">
+          <div style="background:#f8fafc;padding:6px 10px;font-weight:700;font-size:11px;color:#0f766e;border-bottom:1px solid #e2e8f0">ACESSÓRIOS</div>
+          <div style="padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px">
+            ${os.acessorios.map((a: any)=>`<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${a.presente?'#dcfce7':'#fee2e2'};color:${a.presente?'#166534':'#991b1b'};border:1px solid ${a.presente?'#86efac':'#fca5a5'}">${a.presente?'✓':'✗'} ${a.descricao}</span>`).join('')}
+          </div>
+        </div>` : '';
+
+    const orcamentoHtml = os.valor_orcamento ? `
+      <div style="margin-bottom:12px;border:1px solid #e2e8f0;border-radius:4px;overflow:hidden">
+        <div style="background:#f8fafc;padding:6px 10px;font-weight:700;font-size:11px;color:#0f766e;border-bottom:1px solid #e2e8f0">ORÇAMENTO</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="font-weight:600;color:#64748b;width:160px;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">Valor</td><td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${fmtVal(os.valor_orcamento)}</td></tr>
+          <tr><td style="font-weight:600;color:#64748b;width:160px;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">Condições</td><td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${os.condicoes_pagamento||'—'}</td></tr>
+          <tr><td style="font-weight:600;color:#64748b;width:160px;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">Enviado em</td><td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${fmtDt(os.data_envio_orcamento)}</td></tr>
+          <tr><td style="font-weight:600;color:#64748b;width:160px;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">KPI Elaboração</td><td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${os.kpi_orcamento_horas?`${Number(os.kpi_orcamento_horas).toFixed(1)}h úteis`:'—'}</td></tr>
+          <tr><td style="font-weight:600;color:#64748b;width:160px;padding:4px 8px;font-size:11px">Situação</td><td style="padding:4px 8px;font-size:11px">${os.aprovado===true?'✅ APROVADO':os.aprovado===false?'❌ REPROVADO':'Aguardando'}</td></tr>
+        </table>
+      </div>` : '';
+
+    const aprovacaoHtml = os.aprovado ? `
+      <div style="margin-bottom:12px;border:1px solid #86efac;border-radius:4px;overflow:hidden">
+        <div style="background:#f0fdf4;padding:6px 10px;font-weight:700;font-size:11px;color:#166534;border-bottom:1px solid #86efac">APROVAÇÃO</div>
+        <div style="padding:10px;display:flex;align-items:center;gap:16px">
+          <div style="flex:1;font-size:11px">
+            <div><strong>Aprovado por:</strong> ${os.aprovador_nome||'—'}</div>
+            <div><strong>Data:</strong> ${fmtDt(os.data_aprovacao)}</div>
+            ${os.data_prevista_pos_aprovacao?`<div><strong>Entrega prevista:</strong> ${fmtDt(os.data_prevista_pos_aprovacao)}</div>`:''}
+            ${os.kpi_execucao_horas?`<div><strong>KPI Execução:</strong> ${Number(os.kpi_execucao_horas).toFixed(1)}h úteis</div>`:''}
+          </div>
+          ${os.assinatura_aprovacao_url?`<img src="${os.assinatura_aprovacao_url}" style="height:60px;border:1px solid #e2e8f0;border-radius:4px;background:white" />`:''}
+        </div>
+      </div>` : '';
+
+    const retiradaHtml = os.data_saida ? `
+      <div style="margin-bottom:12px;border:1px solid #86efac;border-radius:4px;overflow:hidden">
+        <div style="background:#f0fdf4;padding:6px 10px;font-weight:700;font-size:11px;color:#166534;border-bottom:1px solid #86efac">RETIRADA</div>
+        <div style="padding:10px;display:flex;align-items:center;gap:16px">
+          <div style="flex:1;font-size:11px">
+            <div><strong>Retirado por:</strong> ${os.nome_retirada_saida||'—'}</div>
+            <div><strong>Data:</strong> ${fmtDt(os.data_saida)}</div>
+          </div>
+          ${os.assinatura_saida_url?`<img src="${os.assinatura_saida_url}" style="height:60px;border:1px solid #e2e8f0;border-radius:4px;background:white" />`:''}
+        </div>
+      </div>` : '';
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+      <meta charset="UTF-8"/>
+      <title>OS ${os.numero_os}</title>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,sans-serif;color:#1e293b;background:white;padding:20px}
+        @page{size:A4;margin:15mm}
+        @media print{body{padding:0}}
+      </style>
+    </head><body>
+
+      <!-- Cabeçalho -->
+      <div style="background:#0f766e;color:white;padding:14px 16px;border-radius:4px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;font-size:18px">ACN SINAL VERDE</div>
+          <div style="font-size:11px;opacity:.85">Ordem de Serviço</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;font-size:20px">${os.numero_os}</div>
+          <div style="font-size:10px">Abertura: ${fmtDt(os.data_abertura)}</div>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <span style="background:${cor};color:white;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700">${os.status}</span>
+        <span style="background:#e2e8f0;padding:3px 12px;border-radius:20px;font-size:11px">${os.tipo_servico}</span>
+        ${os.tipo_projeto?`<span style="background:#e2e8f0;padding:3px 12px;border-radius:20px;font-size:11px">${os.tipo_projeto}</span>`:''}
+      </div>
+
+      <!-- Cliente -->
+      <div style="margin-bottom:12px;border:1px solid #e2e8f0;border-radius:4px;overflow:hidden">
+        <div style="background:#f8fafc;padding:6px 10px;font-weight:700;font-size:11px;color:#0f766e;border-bottom:1px solid #e2e8f0">CLIENTE</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="font-weight:600;color:#64748b;width:130px;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">Nome</td>
+            <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${os.cliente_nome||'—'}</td>
+            <td style="font-weight:600;color:#64748b;width:130px;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">Empresa / Órgão</td>
+            <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${os.empresa_orgao||'—'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;color:#64748b;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">CPF/CNPJ</td>
+            <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${os.cpf_cnpj||'—'}</td>
+            <td style="font-weight:600;color:#64748b;padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">Telefone</td>
+            <td style="padding:4px 8px;font-size:11px;border-bottom:1px solid #f1f5f9">${os.telefone||'—'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;color:#64748b;padding:4px 8px;font-size:11px">E-mail</td>
+            <td style="padding:4px 8px;font-size:11px">${os.email||'—'}</td>
+            <td style="font-weight:600;color:#64748b;padding:4px 8px;font-size:11px">Endereço</td>
+            <td style="padding:4px 8px;font-size:11px">${os.endereco||'—'}</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Equipamentos -->
+      <div style="margin-bottom:12px;border:1px solid #e2e8f0;border-radius:4px;overflow:hidden">
+        <div style="background:#f8fafc;padding:6px 10px;font-weight:700;font-size:11px;color:#0f766e;border-bottom:1px solid #e2e8f0">EQUIPAMENTO(S) — Qtd: ${os.quantidade||1}</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f1f5f9">
+              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Tipo</th>
+              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Marca</th>
+              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Modelo</th>
+              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Nº Série</th>
+              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Defeito Reclamado</th>
+            </tr>
+          </thead>
+          <tbody>${equipRows}</tbody>
+        </table>
+      </div>
+
+      <!-- Observações -->
+      ${os.observacoes||os.observacoes_lab ? `
+      <div style="margin-bottom:12px;border:1px solid #e2e8f0;border-radius:4px;overflow:hidden">
+        <div style="background:#f8fafc;padding:6px 10px;font-weight:700;font-size:11px;color:#0f766e;border-bottom:1px solid #e2e8f0">OBSERVAÇÕES</div>
+        <div style="padding:8px 10px;font-size:11px">
+          ${os.observacoes?`<div>${os.observacoes}</div>`:''}
+          ${os.observacoes_lab?`<div style="margin-top:6px;color:#0891b2"><strong>Diagnóstico Lab:</strong> ${os.observacoes_lab}</div>`:''}
+        </div>
+      </div>` : ''}
+
+      ${acessoriosHtml}
+      ${orcamentoHtml}
+      ${aprovacaoHtml}
+      ${retiradaHtml}
+
+      <!-- Rodapé -->
+      <div style="border-top:1px solid #e2e8f0;padding-top:8px;margin-top:8px;font-size:10px;color:#94a3b8;text-align:center">
+        ACN Sinal Verde — Documento gerado em ${new Date().toLocaleString('pt-BR')}
+      </div>
+
+      <script>window.onload=function(){window.print()}</script>
+    </body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('Permita pop-ups neste site para gerar o PDF.'); return; }
+    w.document.write(html);
+    w.document.close();
   };
 
   // ── CADASTROS: salvar equipamento ─────────────────────────────────────────
