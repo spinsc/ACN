@@ -76,13 +76,16 @@ async function uploadAssinatura(dataUrl: string, pasta: string): Promise<string 
 }
 
 async function gerarNumeroOS(): Promise<string> {
+  // Usa função RPC atômica no Postgres — imune a race condition
+  const { data: rpcData, error: rpcErr } = await supabase.rpc('proximo_numero_os');
+  if (!rpcErr && rpcData) return rpcData as string;
+
+  // Fallback (caso acn_fix_numero_os.sql ainda não tenha sido rodado)
   const ano = new Date().getFullYear();
-  // MAX em vez de COUNT — evita colisão quando registros são deletados
   const { data } = await supabase
     .from('sac_ordens_servico')
     .select('numero_os')
     .like('numero_os', `OS-%-${ano}`);
-
   let max = 0;
   for (const row of (data || [])) {
     const match = row.numero_os?.match(/^OS-(\d+)\//);
