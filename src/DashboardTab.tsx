@@ -268,6 +268,39 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
   const [filtroFim, setFiltroFim]       = useState('');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
 
+  // Trocar senha
+  const [modalSenha, setModalSenha] = useState(!!currentUser?.primeiro_acesso);
+  const [senhaForm, setSenhaForm]   = useState({ atual:'', nova:'', confirmar:'' });
+  const [senhaMsg, setSenhaMsg]     = useState('');
+  const [senhaLoading, setSenhaLoading] = useState(false);
+
+  const salvarSenha = async () => {
+    setSenhaMsg('');
+    if (!senhaForm.nova || senhaForm.nova.length < 4) { setSenhaMsg('error:Mínimo 4 caracteres.'); return; }
+    if (senhaForm.nova !== senhaForm.confirmar) { setSenhaMsg('error:As senhas não coincidem.'); return; }
+    setSenhaLoading(true);
+    try {
+      // Verifica senha atual no banco (exceto primeiro acesso)
+      if (!currentUser?.primeiro_acesso) {
+        const { data } = await supabase.from('auth_usuarios').select('senha').eq('id', currentUser.id).single();
+        if (data?.senha !== senhaForm.atual) { setSenhaMsg('error:Senha atual incorreta.'); setSenhaLoading(false); return; }
+      }
+      const { error } = await supabase.from('auth_usuarios')
+        .update({ senha: senhaForm.nova, primeiro_acesso: false, senha_temp: null, senha_temp_expiry: null })
+        .eq('id', currentUser.id);
+      if (error) throw error;
+      // Atualiza localStorage
+      const stored = JSON.parse(localStorage.getItem('user') || '{}');
+      localStorage.setItem('user', JSON.stringify({ ...stored, primeiro_acesso: false }));
+      setSenhaMsg('ok:Senha alterada com sucesso!');
+      setTimeout(() => { setModalSenha(false); setSenhaForm({ atual:'', nova:'', confirmar:'' }); setSenhaMsg(''); }, 1500);
+    } catch (e: any) {
+      setSenhaMsg('error:Erro: ' + e.message);
+    } finally {
+      setSenhaLoading(false);
+    }
+  };
+
   useEffect(() => {
     document.body.classList.toggle('dark', dark);
     localStorage.setItem('acn-dark', dark ? '1' : '0');
@@ -419,6 +452,10 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
             <div className="acn-user">
               <strong>{currentUser?.nome || 'Usuário'}</strong>
               <span>{currentUser?.perfil || ''}</span>
+              <button className="acn-logout" style={{background:'#0d9488',marginRight:4}}
+                onClick={()=>{setSenhaForm({atual:'',nova:'',confirmar:''});setSenhaMsg('');setModalSenha(true);}}>
+                🔑 Senha
+              </button>
               <button className="acn-logout" onClick={onLogout}>Sair</button>
             </div>
           </div>
@@ -502,6 +539,60 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
           </main>
         </div>
       </div>
+
+      {/* MODAL TROCAR SENHA */}
+      {modalSenha && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:380}}>
+            <div className="modal-title">
+              🔑 {currentUser?.primeiro_acesso ? 'Defina sua Nova Senha' : 'Alterar Senha'}
+            </div>
+            {currentUser?.primeiro_acesso && (
+              <div style={{fontSize:12,color:'#92400e',background:'#fef3c7',padding:'8px 10px',borderRadius:6,marginBottom:12,lineHeight:1.5}}>
+                ⚠️ Por segurança, defina uma senha pessoal antes de continuar.
+              </div>
+            )}
+            {senhaMsg && (
+              <div style={{fontSize:12,padding:'8px 10px',borderRadius:6,marginBottom:10,
+                background: senhaMsg.startsWith('ok:') ? '#f0fdf4' : '#fef2f2',
+                color: senhaMsg.startsWith('ok:') ? '#166534' : '#991b1b',
+                border: `1px solid ${senhaMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`}}>
+                {senhaMsg.startsWith('ok:') ? '✅ ' : '❌ '}{senhaMsg.slice(3)}
+              </div>
+            )}
+            {!currentUser?.primeiro_acesso && (
+              <div style={{marginBottom:10}}>
+                <label className="acn-label">Senha Atual</label>
+                <input className="acn-input" type="password" style={{width:'100%'}}
+                  value={senhaForm.atual} onChange={e=>setSenhaForm(f=>({...f,atual:e.target.value}))} />
+              </div>
+            )}
+            <div style={{marginBottom:10}}>
+              <label className="acn-label">Nova Senha (mín. 4 caracteres)</label>
+              <input className="acn-input" type="password" style={{width:'100%'}}
+                value={senhaForm.nova} onChange={e=>setSenhaForm(f=>({...f,nova:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:14}}>
+              <label className="acn-label">Confirmar Nova Senha</label>
+              <input className="acn-input" type="password" style={{width:'100%'}}
+                value={senhaForm.confirmar} onChange={e=>setSenhaForm(f=>({...f,confirmar:e.target.value}))}
+                onKeyDown={e=>e.key==='Enter'&&salvarSenha()} />
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px'}}
+                onClick={salvarSenha} disabled={senhaLoading}>
+                {senhaLoading ? 'Salvando...' : 'SALVAR SENHA'}
+              </button>
+              {!currentUser?.primeiro_acesso && (
+                <button className="acn-btn" style={{background:'#94a3b8',padding:'9px'}}
+                  onClick={()=>{setModalSenha(false);setSenhaMsg('');}}>
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
