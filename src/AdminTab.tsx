@@ -97,7 +97,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'' });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
 
   useEffect(() => { fetchUsuarios(); }, []);
 
@@ -109,9 +109,19 @@ function PainelUsuarios() {
   };
 
   const abrirEditar = (u) => {
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'' });
+    const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
+      ? u.abas_permitidas
+      : TODAS_ABAS.map(a=>a.id);
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas });
     setModalEditar(u);
   };
+
+  const toggleAbaEdit = (id) => setEditForm(f => ({
+    ...f,
+    abas_permitidas: f.abas_permitidas.includes(id)
+      ? f.abas_permitidas.filter(a => a !== id)
+      : [...f.abas_permitidas, id]
+  }));
 
   const salvarEdicao = async () => {
     if (!editForm.nome || !editForm.email) { alert('Nome e e-mail são obrigatórios!'); return; }
@@ -120,6 +130,7 @@ function PainelUsuarios() {
       email: editForm.email,
       perfil: editForm.perfil,
       whatsapp: editForm.whatsapp.replace(/\D/g,'') || null,
+      abas_permitidas: editForm.abas_permitidas,
     };
     if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
@@ -171,7 +182,7 @@ function PainelUsuarios() {
       {/* MODAL EDITAR USUÁRIO */}
       {modalEditar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420}}>
+          <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">✏️ Editar Usuário — {modalEditar.nome}</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
               <div style={{gridColumn:'1/-1'}}>
@@ -207,6 +218,37 @@ function PainelUsuarios() {
                   placeholder="Mínimo 4 caracteres"
                   value={editForm.novaSenha}
                   onChange={e=>setEditForm(f=>({...f,novaSenha:e.target.value}))} />
+              </div>
+            </div>
+            {/* ABAS */}
+            <div style={{marginBottom:10}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+                <label className="acn-label" style={{margin:0}}>Abas com Acesso</label>
+                <div style={{display:'flex',gap:4}}>
+                  <button className="acn-btn" style={{background:'#1e293b',fontSize:9,padding:'2px 8px'}}
+                    onClick={()=>setEditForm(f=>({...f,abas_permitidas:TODAS_ABAS.map(a=>a.id)}))}>Marcar Todas</button>
+                  <button className="acn-btn" style={{background:'#94a3b8',fontSize:9,padding:'2px 8px'}}
+                    onClick={()=>setEditForm(f=>({...f,abas_permitidas:['dashboard']}))}>Desmarcar</button>
+                </div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:4}}>
+                {TODAS_ABAS.map(aba => {
+                  const sel = editForm.abas_permitidas.includes(aba.id);
+                  return (
+                    <label key={aba.id} style={{
+                      display:'flex',alignItems:'center',gap:5,padding:'4px 7px',
+                      border:'1px solid',borderRadius:3,cursor: aba.id==='dashboard'?'default':'pointer',fontSize:10,
+                      borderColor: sel?'#1e293b':'#e5e7eb',
+                      background: sel?'#f0f9ff':'transparent',
+                      fontWeight: sel?700:400,
+                    }}>
+                      <input type="checkbox" checked={sel}
+                        onChange={()=>aba.id!=='dashboard'&&toggleAbaEdit(aba.id)}
+                        style={{accentColor:'#1e293b'}} disabled={aba.id==='dashboard'} />
+                      {aba.label}
+                    </label>
+                  );
+                })}
               </div>
             </div>
             <div style={{display:'flex',gap:8,marginTop:4}}>
