@@ -3,15 +3,17 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
 
-// ─── Tipos de projeto (mesmo do OPL) ─────────────────────────────────────────
-const TIPOS_PROJETO = [
+// Fallback enquanto categorias não carregam do banco
+const TIPOS_PROJETO_FALLBACK = [
   'Transformacao Veicular Ostensiva','Transformacao Veicular Administrativa',
   'Instalacao Equipamento','Manutencao Preventiva','Manutencao Corretiva',
-  'Calibracao','Reforma','Projeto Especial',
+  'Calibracao','Reforma','Projeto Especial','Servico Externo',
 ];
 
 const STATUS_COR: Record<string, string> = {
+  'Diagnóstico':      '#0891b2',
   'Aberta':           '#3b82f6',
+  'Orçamento Pronto': '#7c3aed',
   'Orç. Enviado':     '#f59e0b',
   'Aprovado':         '#22c55e',
   'Reprovado':        '#ef4444',
@@ -19,8 +21,6 @@ const STATUS_COR: Record<string, string> = {
   'Concluído':        '#0d9488',
   'Entregue':         '#166534',
 };
-
-const SETORES_EXEC = ['Serralheria','Chicotes','Laboratorio','Almoxarifado','Producao','Engenharia','PCP','Compras'];
 
 // ─── Canvas de Assinatura ────────────────────────────────────────────────────
 function SignCanvas({ onSave }) {
@@ -58,7 +58,6 @@ function SignCanvas({ onSave }) {
   );
 }
 
-// ─── Upload de foto ───────────────────────────────────────────────────────────
 async function uploadFoto(file: File, pasta: string): Promise<string | null> {
   const path = `sac/${pasta}/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
@@ -76,7 +75,6 @@ async function uploadAssinatura(dataUrl: string, pasta: string): Promise<string 
   return pub?.publicUrl || null;
 }
 
-// ─── Numeração automática ─────────────────────────────────────────────────────
 async function gerarNumeroOS(): Promise<string> {
   const ano = new Date().getFullYear();
   const { count } = await supabase.from('sac_ordens_servico').select('*', { count: 'exact', head: true })
@@ -84,7 +82,6 @@ async function gerarNumeroOS(): Promise<string> {
   return `OS-${String((count || 0) + 1).padStart(4, '0')}/${ano}`;
 }
 
-// ─── Formulário em branco ─────────────────────────────────────────────────────
 const FORM_VAZIO = {
   tipo_servico:'Orçamento', tipo_projeto:'', equipamento_nome:'',
   marca:'', modelo:'', numero_serie:'', quantidade:1,
@@ -92,53 +89,51 @@ const FORM_VAZIO = {
   cliente_nome:'', empresa_orgao:'', endereco:'', cpf_cnpj:'', telefone:'', email:'',
   prazo_orcamento:'', data_prevista_entrega:'',
   acessorios: [] as {descricao:string; presente:boolean}[],
+  despesa_deslocamento:'', despesa_hospedagem:'', despesa_alimentacao:'',
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
 export default function SacTab({ currentUser }) {
-  const [ordens, setOrdens]           = useState([]);
+  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'>('os');
+  const [ordens, setOrdens]             = useState([]);
   const [equipamentos, setEquipamentos] = useState([]);
-  const [loading, setLoading]         = useState(false);
+  const [categorias, setCategorias]     = useState<any[]>([]);
+  const [loading, setLoading]           = useState(false);
   const [filtroStatus, setFiltroStatus] = useState('');
-  const [filtroTipo, setFiltroTipo]   = useState('');
-  const [busca, setBusca]             = useState('');
+  const [filtroTipo, setFiltroTipo]     = useState('');
+  const [busca, setBusca]               = useState('');
 
-  // Modais
-  const [modalNova, setModalNova]         = useState(false);
-  const [modalDetalhe, setModalDetalhe]   = useState(null);
-  const [modalOrc, setModalOrc]           = useState(null);
-  const [modalAprov, setModalAprov]       = useState(null);
-  const [modalRepr, setModalRepr]         = useState(null);
-  const [modalSaida, setModalSaida]       = useState(null);
-  const [modalPrint, setModalPrint]       = useState(null);
+  // Cadastros estados
+  const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'>('equipamentos');
+  const [novoEquipCad, setNovoEquipCad] = useState('');
+  const [novaCat, setNovaCat]           = useState({ nome:'', tem_despesas: false });
+  const [editCat, setEditCat]           = useState<any>(null);
+
+  const [modalNova, setModalNova]       = useState(false);
+  const [modalOrc, setModalOrc]         = useState(null);
+  const [modalAprov, setModalAprov]     = useState(null);
+  const [modalRepr, setModalRepr]       = useState(null);
+  const [modalSaida, setModalSaida]     = useState(null);
+  const [modalPrint, setModalPrint]     = useState(null);
   const [modalNovoEquip, setModalNovoEquip] = useState(false);
 
-  // Formulário nova OS
-  const [form, setForm] = useState({ ...FORM_VAZIO });
-  const [acessInput, setAcessInput] = useState('');
+  const [form, setForm]                 = useState<typeof FORM_VAZIO>({ ...FORM_VAZIO });
+  const [acessInput, setAcessInput]     = useState('');
   const [fotosEntradaFiles, setFotosEntradaFiles] = useState([]);
-  const [salvando, setSalvando] = useState(false);
+  const [salvando, setSalvando]         = useState(false);
 
-  // Orçamento
-  const [orcForm, setOrcForm] = useState({ valor:'', condicoes:'' });
-
-  // Aprovação
-  const [aprovForm, setAprovForm] = useState({ nome:'', sig: null as string|null, data_entrega:'' });
-
-  // Reprovação
-  const [reprForm, setReprForm] = useState({ motivo:'', data_retirada:'', nome_retirada:'' });
-
-  // Saída
-  const [saidaForm, setSaidaForm] = useState({ nome:'', sig: null as string|null });
+  const [orcForm, setOrcForm]           = useState({ valor:'', condicoes:'' });
+  const [aprovForm, setAprovForm]       = useState({ nome:'', sig: null as string|null, data_entrega:'' });
+  const [reprForm, setReprForm]         = useState({ motivo:'', data_retirada:'', nome_retirada:'' });
+  const [saidaForm, setSaidaForm]       = useState({ nome:'', sig: null as string|null });
   const [fotosSaidaFiles, setFotosSaidaFiles] = useState([]);
+  const [novoEquip, setNovoEquip]       = useState('');
 
-  // Novo equipamento
-  const [novoEquip, setNovoEquip] = useState('');
+  useEffect(() => { fetchOrdens(); fetchEquipamentos(); fetchCategorias(); }, []);
 
-  // Setor execução (após aprovação)
-  const [setorExec, setSetorExec] = useState('Serralheria');
-
-  useEffect(() => { fetchOrdens(); fetchEquipamentos(); }, []);
+  const fetchCategorias = async () => {
+    const { data } = await supabase.from('sac_categorias').select('*').order('nome');
+    setCategorias(data || []);
+  };
 
   const fetchOrdens = async () => {
     setLoading(true);
@@ -152,6 +147,12 @@ export default function SacTab({ currentUser }) {
     setEquipamentos(data || []);
   };
 
+  // ── Computados ────────────────────────────────────────────────────────────
+  const categoriasAtivas = categorias.filter(c => c.ativo);
+  const tiposProjeto = categoriasAtivas.length > 0 ? categoriasAtivas.map(c => c.nome) : TIPOS_PROJETO_FALLBACK;
+  const catSelecionada = categorias.find(c => c.nome === form.tipo_projeto);
+  const hasDespesas = catSelecionada?.tem_despesas || form.tipo_projeto?.toLowerCase().includes('externo');
+
   // ── CRIAR OS ──────────────────────────────────────────────────────────────
   const criarOS = async () => {
     if (!form.cliente_nome.trim()) { alert('Nome do cliente obrigatório!'); return; }
@@ -159,8 +160,8 @@ export default function SacTab({ currentUser }) {
     setSalvando(true);
     const numero = await gerarNumeroOS();
     const agora = new Date().toISOString();
+    const isGarantia = form.tipo_servico === 'Garantia';
 
-    // Upload fotos de entrada
     const urlsFotos: string[] = [];
     for (const f of fotosEntradaFiles) {
       const url = await uploadFoto(f, `os_${numero.replace('/','_')}/entrada`);
@@ -183,19 +184,53 @@ export default function SacTab({ currentUser }) {
       cpf_cnpj: form.cpf_cnpj || null,
       telefone: form.telefone || null,
       email: form.email || null,
-      prazo_orcamento: form.prazo_orcamento || null,
-      data_prevista_entrega: form.tipo_servico === 'Garantia' ? (form.data_prevista_entrega || null) : null,
-      status: 'Aberta',
+      prazo_orcamento: !isGarantia ? (form.prazo_orcamento || null) : null,
+      data_prevista_entrega: isGarantia ? (form.data_prevista_entrega || null) : null,
+      // Garantia entra direto como Aprovado; outros como Diagnóstico
+      status: isGarantia ? 'Aprovado' : 'Diagnóstico',
+      aprovado: isGarantia ? true : null,
       acessorios: form.acessorios,
       fotos_entrada: urlsFotos,
       data_abertura: agora,
       criado_por_nome: currentUser?.nome,
       criado_por_email: currentUser?.email,
       atualizado_em: agora,
+      // Despesas (Serviço Externo)
+      despesa_deslocamento: hasDespesas && form.despesa_deslocamento ? parseFloat(form.despesa_deslocamento.replace(',','.')) : null,
+      despesa_hospedagem:   hasDespesas && form.despesa_hospedagem   ? parseFloat(form.despesa_hospedagem.replace(',','.'))   : null,
+      despesa_alimentacao:  hasDespesas && form.despesa_alimentacao  ? parseFloat(form.despesa_alimentacao.replace(',','.'))  : null,
+      total_despesas: hasDespesas ? (
+        (parseFloat(form.despesa_deslocamento.replace(',','.')) || 0) +
+        (parseFloat(form.despesa_hospedagem.replace(',','.'))   || 0) +
+        (parseFloat(form.despesa_alimentacao.replace(',','.'))  || 0)
+      ) : null,
     };
 
-    const { error } = await supabase.from('sac_ordens_servico').insert([payload]);
+    const { data: osData, error } = await supabase.from('sac_ordens_servico').insert([payload]).select('id').single();
     if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
+
+    // Auto-criar demanda para Laboratório
+    const sac_fase = isGarantia ? 'execucao' : 'diagnostico';
+    const descDemanda = isGarantia
+      ? `[SAC-EXEC] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`
+      : `[SAC-DIAG] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`;
+    await supabase.from('demandas_setoriais').insert([{
+      setor_destino: 'Laboratorio',
+      descricao: descDemanda,
+      numero_opl: numero,
+      status: 'Pendente',
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+      data_abertura: agora,
+      sac_os_id: osData?.id,
+      sac_fase,
+      logs_demanda: [{
+        texto: isGarantia
+          ? `OS Garantia — aprovada automaticamente. Encaminhada para execução.`
+          : `OS aberta para diagnóstico e elaboração de orçamento.`,
+        usuario: currentUser?.nome, hora: agora,
+      }],
+    }]);
 
     notificarEvento('sac_os_aberta', `📋 *Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
@@ -219,26 +254,41 @@ export default function SacTab({ currentUser }) {
   };
 
   // ── APROVAÇÃO ─────────────────────────────────────────────────────────────
-  const aprovar = async (sigUrl: string) => {
+  const salvarAprovacao = async () => {
+    if (!aprovForm.nome.trim()) { alert('Informe o nome do aprovador!'); return; }
+    if (!aprovForm.sig) { alert('Assinatura obrigatória!'); return; }
+    const url = await uploadAssinatura(aprovForm.sig, `os_${modalAprov.numero_os.replace('/','_')}`);
     const agora = new Date().toISOString();
+
     await supabase.from('sac_ordens_servico').update({
       status: 'Aprovado',
       aprovado: true,
       aprovador_nome: aprovForm.nome,
       data_aprovacao: agora,
-      assinatura_aprovacao_url: sigUrl,
+      assinatura_aprovacao_url: url || '',
       data_prevista_pos_aprovacao: aprovForm.data_entrega || null,
       atualizado_em: agora,
     }).eq('id', modalAprov.id);
+
+    // Auto-criar demanda de EXECUÇÃO para Laboratório
+    await supabase.from('demandas_setoriais').insert([{
+      setor_destino: 'Laboratorio',
+      descricao: `[SAC-EXEC] ${modalAprov.numero_os} — ${modalAprov.equipamento_nome} | Aguarda execução do reparo`,
+      numero_opl: modalAprov.numero_os,
+      status: 'Pendente',
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+      data_abertura: agora,
+      sac_os_id: modalAprov.id,
+      sac_fase: 'execucao',
+      logs_demanda: [{
+        texto: `Cliente aprovou orçamento ${fmtVal(modalAprov.valor_orcamento)}. Aprovador: ${aprovForm.nome}. Data prevista: ${aprovForm.data_entrega || 'não definida'}.`,
+        usuario: currentUser?.nome, hora: agora,
+      }],
+    }]);
+
     notificarEvento('sac_os_aprovada', `✅ *OS ${modalAprov.numero_os} APROVADA*\nCliente: ${modalAprov.cliente_nome}\nAprovador: ${aprovForm.nome}\nPor: ${currentUser?.nome}`);
     setModalAprov(null); setAprovForm({ nome:'', sig:null, data_entrega:'' }); fetchOrdens();
-  };
-
-  const salvarAprovacao = async () => {
-    if (!aprovForm.nome.trim()) { alert('Informe o nome do aprovador!'); return; }
-    if (!aprovForm.sig) { alert('Assinatura obrigatória!'); return; }
-    const url = await uploadAssinatura(aprovForm.sig, `os_${modalAprov.numero_os.replace('/','_')}`);
-    await aprovar(url || '');
   };
 
   // ── REPROVAÇÃO ────────────────────────────────────────────────────────────
@@ -256,61 +306,27 @@ export default function SacTab({ currentUser }) {
     setModalRepr(null); setReprForm({ motivo:'', data_retirada:'', nome_retirada:'' }); fetchOrdens();
   };
 
-  // ── GERAR DEMANDA (após aprovação) ────────────────────────────────────────
-  const gerarDemanda = async (os) => {
-    const agora = new Date().toISOString();
-    const { data: dem } = await supabase.from('demandas_setoriais').insert([{
-      setor_destino: setorExec,
-      descricao: `[SAC] ${os.numero_os} — ${os.equipamento_nome} | ${os.defeito_reclamado || 'Ver OS'}`,
-      numero_opl: os.numero_os,
-      status: 'Pendente',
-      criado_por: currentUser?.email,
-      criado_por_nome: currentUser?.nome,
-      data_abertura: agora,
-      logs_demanda: [{ texto: `OS SAC aprovada. Encaminhado para ${setorExec}.`, usuario: currentUser?.nome, hora: agora }],
-    }]).select('id').single();
-    await supabase.from('sac_ordens_servico').update({
-      status: 'Em Execução',
-      setor_execucao: setorExec,
-      demanda_id: dem?.id || null,
-      atualizado_em: agora,
-    }).eq('id', os.id);
-    alert(`Demanda criada para ${setorExec}!`);
-    setModalDetalhe(null); fetchOrdens();
-  };
-
-  // ── CONCLUIR ──────────────────────────────────────────────────────────────
-  const concluir = async (os) => {
-    if (!window.confirm(`Marcar OS ${os.numero_os} como Concluída?`)) return;
-    await supabase.from('sac_ordens_servico').update({ status: 'Concluído', atualizado_em: new Date().toISOString() }).eq('id', os.id);
-    setModalDetalhe(null); fetchOrdens();
-  };
-
   // ── SAÍDA / ENTREGA ───────────────────────────────────────────────────────
-  const registrarSaida = async (sigUrl: string) => {
+  const salvarSaida = async () => {
+    if (!saidaForm.nome.trim()) { alert('Informe o nome de quem retirou!'); return; }
+    if (!saidaForm.sig) { alert('Assinatura obrigatória!'); return; }
+    const url = await uploadAssinatura(saidaForm.sig, `os_${modalSaida.numero_os.replace('/','_')}_saida`);
     const agora = new Date().toISOString();
     const urlsFotos: string[] = [];
     for (const f of fotosSaidaFiles) {
-      const url = await uploadFoto(f, `os_${modalSaida.numero_os.replace('/','_')}/saida`);
-      if (url) urlsFotos.push(url);
+      const u = await uploadFoto(f, `os_${modalSaida.numero_os.replace('/','_')}/saida`);
+      if (u) urlsFotos.push(u);
     }
     await supabase.from('sac_ordens_servico').update({
       status: 'Entregue',
       nome_retirada_saida: saidaForm.nome,
-      assinatura_saida_url: sigUrl,
+      assinatura_saida_url: url || '',
       data_saida: agora,
       fotos_saida: urlsFotos,
       atualizado_em: agora,
     }).eq('id', modalSaida.id);
     notificarEvento('sac_os_entregue', `🚚 *OS ${modalSaida.numero_os} ENTREGUE*\nCliente: ${modalSaida.cliente_nome}\nRetirado por: ${saidaForm.nome}`);
     setModalSaida(null); setSaidaForm({ nome:'', sig:null }); setFotosSaidaFiles([]); fetchOrdens();
-  };
-
-  const salvarSaida = async () => {
-    if (!saidaForm.nome.trim()) { alert('Informe o nome de quem retirou!'); return; }
-    if (!saidaForm.sig) { alert('Assinatura obrigatória!'); return; }
-    const url = await uploadAssinatura(saidaForm.sig, `os_${modalSaida.numero_os.replace('/','_')}_saida`);
-    await registrarSaida(url || '');
   };
 
   // ── NOVO EQUIPAMENTO ──────────────────────────────────────────────────────
@@ -340,26 +356,203 @@ export default function SacTab({ currentUser }) {
   // ── AÇÕES POR STATUS ──────────────────────────────────────────────────────
   const renderAcoes = (os) => {
     const btns = [];
-    if (['Orçamento','Conserto','Troca'].includes(os.tipo_servico) && os.status === 'Aberta')
-      btns.push(<button key="orc" className="acn-btn" style={{background:'#f59e0b',fontSize:9}} onClick={()=>{setModalOrc(os);setOrcForm({valor:'',condicoes:''});}}>💰 Orçamento</button>);
-    if (os.tipo_servico === 'Garantia' && os.status === 'Aberta')
-      btns.push(<button key="exec" className="acn-btn" style={{background:'#8b5cf6',fontSize:9}} onClick={()=>{setModalDetalhe(os);}}>⚙️ Executar</button>);
+
+    // Orçamento finalizado pelo Lab → SAC envia ao cliente
+    if (os.status === 'Orçamento Pronto')
+      btns.push(
+        <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+          onClick={()=>{ setModalOrc(os); setOrcForm({ valor: os.valor_orcamento ? String(os.valor_orcamento) : '', condicoes: os.condicoes_pagamento || '' }); }}>
+          📤 Enviar
+        </button>
+      );
+
+    // Cliente respondendo o orçamento enviado
     if (os.status === 'Orç. Enviado')
-      btns.push(<button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalAprov(os);setAprovForm({nome:'',sig:null,data_entrega:''});}}>✅ Aprovação</button>,
-                <button key="repr" className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalRepr(os);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});}}>❌ Reprovar</button>);
-    if (os.status === 'Aprovado')
-      btns.push(<button key="dem" className="acn-btn" style={{background:'#8b5cf6',fontSize:9}} onClick={()=>setModalDetalhe(os)}>⚙️ Exec./Demanda</button>);
-    if (['Em Execução'].includes(os.status))
-      btns.push(<button key="conc" className="acn-btn" style={{background:'#0d9488',fontSize:9}} onClick={()=>concluir(os)}>✔ Concluir</button>);
+      btns.push(
+        <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalAprov(os);setAprovForm({nome:'',sig:null,data_entrega:''});}}>✅ Aprovar</button>,
+        <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalRepr(os);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});}}>❌ Reprovar</button>
+      );
+
+    // Reprovado — reagendar / reavaliar
+    if (os.status === 'Reprovado')
+      btns.push(
+        <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+          onClick={()=>{ if(window.confirm(`Reabrir OS ${os.numero_os} para novo orçamento?`)) supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+          🔄 Reavaliar
+        </button>
+      );
+
+    // Lab concluiu o reparo → SAC faz a entrega
     if (os.status === 'Concluído')
-      btns.push(<button key="saida" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>🚚 Entrega</button>);
+      btns.push(
+        <button key="saida" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>🚚 Entrega</button>
+      );
+
     btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalPrint(os)}>🖨️ PDF</button>);
     return btns;
+  };
+
+  // ── CADASTROS: salvar equipamento ─────────────────────────────────────────
+  const salvarEquipamentoCad = async () => {
+    if (!novoEquipCad.trim()) return;
+    const { error } = await supabase.from('sac_equipamentos').insert([{ nome: novoEquipCad.trim() }]);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setNovoEquipCad('');
+    fetchEquipamentos();
+  };
+
+  const toggleEquipamento = async (e) => {
+    await supabase.from('sac_equipamentos').update({ ativo: !e.ativo }).eq('id', e.id);
+    fetchEquipamentos();
+  };
+
+  const salvarCategoria = async () => {
+    if (!novaCat.nome.trim()) return;
+    const { error } = await supabase.from('sac_categorias').insert([{ nome: novaCat.nome.trim(), tem_despesas: novaCat.tem_despesas }]);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setNovaCat({ nome:'', tem_despesas:false });
+    fetchCategorias();
+  };
+
+  const salvarEdicaoCategoria = async () => {
+    if (!editCat?.nome?.trim()) return;
+    await supabase.from('sac_categorias').update({ nome: editCat.nome.trim(), tem_despesas: editCat.tem_despesas }).eq('id', editCat.id);
+    setEditCat(null);
+    fetchCategorias();
+  };
+
+  const toggleCategoria = async (c) => {
+    await supabase.from('sac_categorias').update({ ativo: !c.ativo }).eq('id', c.id);
+    fetchCategorias();
   };
 
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div>
+      {/* ── SELETOR DE ABA ── */}
+      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #0f766e'}}>
+        <button style={{flex:1,padding:'8px',background:abaAtiva==='os'?'#0f766e':'white',color:abaAtiva==='os'?'white':'#0f766e',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaAtiva('os')}>Ordens de Serviço</button>
+        <button style={{flex:1,padding:'8px',background:abaAtiva==='cadastros'?'#0f766e':'white',color:abaAtiva==='cadastros'?'white':'#0f766e',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaAtiva('cadastros')}>⚙️ Cadastros</button>
+      </div>
+
+      {/* ── ABA CADASTROS ── */}
+      {abaAtiva === 'cadastros' && (
+        <div>
+          {/* Sub-abas */}
+          <div style={{display:'flex',gap:6,marginBottom:10}}>
+            {[{id:'equipamentos',label:'Equipamentos'},{id:'categorias',label:'Categorias (Tipo Projeto)'}].map(a=>(
+              <button key={a.id} className="acn-btn"
+                style={{background:abaCad===a.id?'#0f766e':'#94a3b8'}}
+                onClick={()=>setAbaCad(a.id as any)}>{a.label}</button>
+            ))}
+          </div>
+
+          {/* ── Equipamentos ── */}
+          {abaCad === 'equipamentos' && (
+            <div className="sec-card">
+              <div className="sec-hdr"><span>Tipos de Equipamento</span></div>
+              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input className="acn-input" style={{flex:1}} placeholder="Nome do equipamento..."
+                    value={novoEquipCad} onChange={e=>setNovoEquipCad(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&salvarEquipamentoCad()} />
+                  <button className="acn-btn" style={{background:'#0f766e'}} onClick={salvarEquipamentoCad}>+ Adicionar</button>
+                </div>
+              </div>
+              <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+                <table>
+                  <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
+                  <tbody>
+                    {equipamentos.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum equipamento cadastrado.</div></td></tr>}
+                    {[...equipamentos, ...supabase && []].map ? equipamentos.map((e: any) => (
+                      <tr key={e.id} style={{opacity:e.ativo?1:0.5}}>
+                        <td><strong>{e.nome}</strong></td>
+                        <td><span className="acn-badge" style={{background:e.ativo?'#22c55e':'#94a3b8'}}>{e.ativo?'Ativo':'Inativo'}</span></td>
+                        <td>
+                          <button className="acn-btn" style={{background:e.ativo?'#ef4444':'#22c55e',fontSize:9}}
+                            onClick={()=>toggleEquipamento(e)}>{e.ativo?'Desativar':'Ativar'}</button>
+                        </td>
+                      </tr>
+                    )) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Categorias ── */}
+          {abaCad === 'categorias' && (
+            <div className="sec-card">
+              <div className="sec-hdr"><span>Categorias (Tipos de Projeto)</span></div>
+              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
+                <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+                  <div>
+                    <label className="acn-label">Nome da Categoria</label>
+                    <input className="acn-input" style={{width:250}} placeholder="Ex: Serviço de Emergência..."
+                      value={novaCat.nome} onChange={e=>setNovaCat(f=>({...f,nome:e.target.value}))} />
+                  </div>
+                  <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,cursor:'pointer',padding:'4px 0'}}>
+                    <input type="checkbox" checked={novaCat.tem_despesas}
+                      onChange={e=>setNovaCat(f=>({...f,tem_despesas:e.target.checked}))} />
+                    <span>Exibe despesas de campo (Serviço Externo)</span>
+                  </label>
+                  <button className="acn-btn" style={{background:'#0f766e'}} onClick={salvarCategoria}>+ Adicionar</button>
+                </div>
+              </div>
+              <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+                <table>
+                  <thead><tr><th>Nome</th><th>Despesas de Campo</th><th>Status</th><th>Ações</th></tr></thead>
+                  <tbody>
+                    {categorias.length === 0 && <tr><td colSpan={4}><div className="acn-empty">Nenhuma categoria.</div></td></tr>}
+                    {categorias.map((c: any) => (
+                      <tr key={c.id} style={{opacity:c.ativo?1:0.5}}>
+                        <td>
+                          {editCat?.id === c.id ? (
+                            <input className="acn-input" value={editCat.nome} onChange={e=>setEditCat(f=>({...f,nome:e.target.value}))} />
+                          ) : <strong>{c.nome}</strong>}
+                        </td>
+                        <td>
+                          {editCat?.id === c.id ? (
+                            <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,cursor:'pointer'}}>
+                              <input type="checkbox" checked={editCat.tem_despesas} onChange={e=>setEditCat(f=>({...f,tem_despesas:e.target.checked}))} />
+                              Sim
+                            </label>
+                          ) : (
+                            c.tem_despesas
+                              ? <span className="acn-badge" style={{background:'#f59e0b',fontSize:8}}>🚗 SIM</span>
+                              : <span style={{fontSize:10,color:'#94a3b8'}}>—</span>
+                          )}
+                        </td>
+                        <td><span className="acn-badge" style={{background:c.ativo?'#22c55e':'#94a3b8'}}>{c.ativo?'Ativa':'Inativa'}</span></td>
+                        <td>
+                          <div style={{display:'flex',gap:4}}>
+                            {editCat?.id === c.id ? (
+                              <>
+                                <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={salvarEdicaoCategoria}>Salvar</button>
+                                <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setEditCat(null)}>Cancel</button>
+                              </>
+                            ) : (
+                              <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setEditCat({...c})}>✏️ Editar</button>
+                            )}
+                            <button className="acn-btn" style={{background:c.ativo?'#ef4444':'#22c55e',fontSize:9}}
+                              onClick={()=>toggleCategoria(c)}>{c.ativo?'Desativar':'Ativar'}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ABA OS (condicional) ── */}
+      {abaAtiva === 'os' && <div>
+
       {/* ── HEADER ── */}
       <div className="sec-card">
         <div className="sec-hdr">
@@ -368,11 +561,24 @@ export default function SacTab({ currentUser }) {
             + Nova OS
           </button>
         </div>
+
+        {/* Legenda de fluxo */}
+        <div className="sec-body" style={{padding:'6px 12px',borderBottom:'1px solid #e2e8f0',background:'#f8fafc',display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+          <span style={{fontSize:9,color:'#64748b',marginRight:4}}>Fluxo:</span>
+          {['Diagnóstico','Orçamento Pronto','Orç. Enviado','Aprovado','Em Execução','Concluído','Entregue'].map((s,i,arr) => (
+            <React.Fragment key={s}>
+              <span className="acn-badge" style={{background:STATUS_COR[s]||'#94a3b8',fontSize:8}}>{s}</span>
+              {i < arr.length-1 && <span style={{color:'#94a3b8',fontSize:9}}>→</span>}
+            </React.Fragment>
+          ))}
+          <span style={{marginLeft:8,fontSize:9,color:'#94a3b8'}}>(Lab executa diagnóstico e reparo)</span>
+        </div>
+
         {/* Filtros */}
         <div className="sec-body" style={{display:'flex',gap:8,flexWrap:'wrap',padding:'8px 12px',borderBottom:'1px solid #e2e8f0'}}>
           <input className="acn-input" style={{width:200}} placeholder="Buscar OS / cliente / equip."
             value={busca} onChange={e=>setBusca(e.target.value)} />
-          <select className="acn-input" style={{width:140}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+          <select className="acn-input" style={{width:150}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
             <option value="">Todos os status</option>
             {Object.keys(STATUS_COR).map(s=><option key={s}>{s}</option>)}
           </select>
@@ -391,20 +597,32 @@ export default function SacTab({ currentUser }) {
             <table>
               <thead><tr>
                 <th>Nº OS</th><th>Tipo</th><th>Equipamento</th><th>Cliente</th>
-                <th>Abertura</th><th>Prazo Orç.</th><th>Valor</th><th>Status</th><th>Ações</th>
+                <th>Abertura</th><th>Prazo Orç.</th><th>Valor</th>
+                <th>KPI Orç.</th><th>KPI Exec.</th><th>Status</th><th>Ações</th>
               </tr></thead>
               <tbody>
                 {ordensFiltradas.map(o => (
-                  <tr key={o.id}>
+                  <tr key={o.id} style={{
+                    background: o.status==='Reprovado' ? '#fef2f2'
+                              : o.status==='Aprovado'  ? '#eff6ff'
+                              : o.status==='Entregue'  ? '#f0fdf4'
+                              : undefined
+                  }}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
-                    <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.equipamento_nome}</td>
-                    <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.cliente_nome}</td>
+                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.equipamento_nome}</td>
+                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.cliente_nome}</td>
                     <td style={{fontSize:10}}>{fmtDt(o.data_abertura)}</td>
-                    <td style={{fontSize:10,color: o.prazo_orcamento && new Date(o.prazo_orcamento)<new Date() && o.status==='Aberta' ? '#ef4444':'inherit'}}>
+                    <td style={{fontSize:10,color: o.prazo_orcamento && new Date(o.prazo_orcamento)<new Date() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
                       {fmtDt(o.prazo_orcamento)}
                     </td>
                     <td style={{fontSize:10}}>{fmtVal(o.valor_orcamento)}</td>
+                    <td style={{fontSize:10,color:'#0891b2',fontWeight:o.kpi_orcamento_horas?700:400}}>
+                      {o.kpi_orcamento_horas ? `${Number(o.kpi_orcamento_horas).toFixed(1)}h` : '—'}
+                    </td>
+                    <td style={{fontSize:10,color:'#8b5cf6',fontWeight:o.kpi_execucao_horas?700:400}}>
+                      {o.kpi_execucao_horas ? `${Number(o.kpi_execucao_horas).toFixed(1)}h` : '—'}
+                    </td>
                     <td><span className="acn-badge" style={{background: STATUS_COR[o.status]||'#94a3b8'}}>{o.status}</span></td>
                     <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{renderAcoes(o)}</div></td>
                   </tr>
@@ -415,15 +633,12 @@ export default function SacTab({ currentUser }) {
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          MODAL NOVA OS
-      ════════════════════════════════════════════════════════════════════ */}
+      {/* ════════ MODAL NOVA OS ════════ */}
       {modalNova && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'92vh',overflowY:'auto'}}>
             <div className="modal-title">📋 Nova Ordem de Serviço</div>
 
-            {/* Seção 1 — Tipo */}
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
               <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>CLASSIFICAÇÃO</div>
               <div className="form-row">
@@ -435,9 +650,11 @@ export default function SacTab({ currentUser }) {
                 </div>
                 <div className="form-group">
                   <label className="acn-label">Categoria (Tipo Projeto)</label>
-                  <input list="tipos-proj-sac" className="acn-input" style={{width:'100%'}} value={form.tipo_projeto}
-                    onChange={e=>setForm(f=>({...f,tipo_projeto:e.target.value}))} placeholder="Selecione ou digite..." />
-                  <datalist id="tipos-proj-sac">{TIPOS_PROJETO.map(t=><option key={t} value={t}/>)}</datalist>
+                  <select className="acn-input" style={{width:'100%'}} value={form.tipo_projeto}
+                    onChange={e=>setForm(f=>({...f,tipo_projeto:e.target.value}))}>
+                    <option value="">Selecione...</option>
+                    {tiposProjeto.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label className="acn-label">Tipo de Equipamento *
@@ -458,7 +675,6 @@ export default function SacTab({ currentUser }) {
               </div>
             </div>
 
-            {/* Seção 2 — Equipamento */}
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
               <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>DADOS DO EQUIPAMENTO</div>
               <div className="form-row">
@@ -479,7 +695,6 @@ export default function SacTab({ currentUser }) {
               </div>
             </div>
 
-            {/* Seção 3 — Cliente */}
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
               <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>DADOS DO CLIENTE</div>
               <div className="form-row">
@@ -500,7 +715,6 @@ export default function SacTab({ currentUser }) {
               </div>
             </div>
 
-            {/* Seção 4 — Prazos */}
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
               <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>PRAZOS</div>
               <div className="form-row">
@@ -517,7 +731,34 @@ export default function SacTab({ currentUser }) {
               </div>
             </div>
 
-            {/* Seção 5 — Acessórios */}
+            {/* Despesas — Serviço Externo */}
+            {hasDespesas && (
+              <div style={{background:'#fefce8',border:'1px solid #fde68a',borderRadius:4,padding:10,marginBottom:10}}>
+                <div style={{fontWeight:700,fontSize:10,color:'#92400e',marginBottom:8}}>🚗 DESPESAS DE CAMPO (Serviço Externo)</div>
+                <div className="form-row">
+                  <div className="form-group"><label className="acn-label">Deslocamento (R$)</label>
+                    <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                      value={form.despesa_deslocamento} onChange={e=>setForm(f=>({...f,despesa_deslocamento:e.target.value}))} /></div>
+                  <div className="form-group"><label className="acn-label">Hospedagem (R$)</label>
+                    <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                      value={form.despesa_hospedagem} onChange={e=>setForm(f=>({...f,despesa_hospedagem:e.target.value}))} /></div>
+                  <div className="form-group"><label className="acn-label">Alimentação (R$)</label>
+                    <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                      value={form.despesa_alimentacao} onChange={e=>setForm(f=>({...f,despesa_alimentacao:e.target.value}))} /></div>
+                  <div className="form-group" style={{alignSelf:'flex-end'}}>
+                    <div style={{fontSize:10,fontWeight:700,color:'#92400e',padding:'4px 8px',background:'#fde68a',borderRadius:4}}>
+                      Total: R$ {(
+                        (parseFloat(form.despesa_deslocamento.replace(',','.')||'0')||0) +
+                        (parseFloat(form.despesa_hospedagem.replace(',','.')||'0')||0) +
+                        (parseFloat(form.despesa_alimentacao.replace(',','.')||'0')||0)
+                      ).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Acessórios */}
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
               <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>CHECKLIST DE ACESSÓRIOS</div>
               <div style={{display:'flex',gap:6,marginBottom:8}}>
@@ -543,7 +784,7 @@ export default function SacTab({ currentUser }) {
               )}
             </div>
 
-            {/* Seção 6 — Fotos entrada */}
+            {/* Fotos entrada */}
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>FOTOS DE ENTRADA</div>
               <input type="file" accept="image/*" multiple
@@ -552,6 +793,17 @@ export default function SacTab({ currentUser }) {
                 <div style={{fontSize:10,color:'#22c55e',marginTop:4}}>{fotosEntradaFiles.length} foto(s) selecionada(s)</div>
               )}
             </div>
+
+            {form.tipo_servico !== 'Garantia' && (
+              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+                ℹ️ Após abrir, a OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.
+              </div>
+            )}
+            {form.tipo_servico === 'Garantia' && (
+              <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+                ✅ Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.
+              </div>
+            )}
 
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#0f766e',flex:1,padding:'9px',opacity:salvando?0.6:1}}
@@ -562,12 +814,17 @@ export default function SacTab({ currentUser }) {
         </div>
       )}
 
-      {/* ════════════ MODAL ORÇAMENTO ════════════ */}
+      {/* ════════ MODAL ORÇAMENTO (confirmar/editar antes de enviar) ════════ */}
       {modalOrc && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:400}}>
-            <div className="modal-title">💰 Registrar Orçamento — {modalOrc.numero_os}</div>
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">📤 Enviar Orçamento ao Cliente — {modalOrc.numero_os}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>Cliente: {modalOrc.cliente_nome} | {modalOrc.equipamento_nome}</div>
+            {modalOrc.observacoes_lab && (
+              <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+                <strong>Diagnóstico do Lab:</strong> {modalOrc.observacoes_lab}
+              </div>
+            )}
             <label className="acn-label">Valor do Orçamento (R$) *</label>
             <input className="acn-input" style={{width:'100%',marginBottom:10}} placeholder="Ex: 1.500,00"
               value={orcForm.valor} onChange={e=>setOrcForm(f=>({...f,valor:e.target.value}))} />
@@ -576,14 +833,14 @@ export default function SacTab({ currentUser }) {
               placeholder="Ex: 50% entrada + 50% na retirada"
               value={orcForm.condicoes} onChange={e=>setOrcForm(f=>({...f,condicoes:e.target.value}))} />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={enviarOrcamento}>ENVIAR ORÇAMENTO</button>
+              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={enviarOrcamento}>ENVIAR AO CLIENTE</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalOrc(null)}>Cancelar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ════════════ MODAL APROVAÇÃO ════════════ */}
+      {/* ════════ MODAL APROVAÇÃO ════════ */}
       {modalAprov && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
@@ -614,7 +871,7 @@ export default function SacTab({ currentUser }) {
         </div>
       )}
 
-      {/* ════════════ MODAL REPROVAÇÃO ════════════ */}
+      {/* ════════ MODAL REPROVAÇÃO ════════ */}
       {modalRepr && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:400}}>
@@ -636,37 +893,7 @@ export default function SacTab({ currentUser }) {
         </div>
       )}
 
-      {/* ════════════ MODAL EXECUÇÃO / DEMANDA ════════════ */}
-      {modalDetalhe && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">⚙️ Execução — {modalDetalhe.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
-              {modalDetalhe.cliente_nome} | {modalDetalhe.equipamento_nome} | {modalDetalhe.tipo_servico}
-              {modalDetalhe.aprovado && <div style={{color:'#22c55e',fontWeight:700,marginTop:4}}>✅ Aprovado por {modalDetalhe.aprovador_nome}</div>}
-            </div>
-            {modalDetalhe.status !== 'Em Execução' && (
-              <>
-                <label className="acn-label">Encaminhar execução para o setor:</label>
-                <select className="acn-input" style={{width:'100%',marginBottom:12}} value={setorExec} onChange={e=>setSetorExec(e.target.value)}>
-                  {SETORES_EXEC.map(s=><option key={s}>{s}</option>)}
-                </select>
-                <button className="acn-btn" style={{background:'#8b5cf6',width:'100%',marginBottom:8}} onClick={()=>gerarDemanda(modalDetalhe)}>
-                  ⚙️ GERAR DEMANDA E INICIAR EXECUÇÃO
-                </button>
-              </>
-            )}
-            {modalDetalhe.status === 'Em Execução' && (
-              <button className="acn-btn" style={{background:'#0d9488',width:'100%',marginBottom:8}} onClick={()=>concluir(modalDetalhe)}>
-                ✔ MARCAR COMO CONCLUÍDO
-              </button>
-            )}
-            <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalDetalhe(null)}>Fechar</button>
-          </div>
-        </div>
-      )}
-
-      {/* ════════════ MODAL SAÍDA / ENTREGA ════════════ */}
+      {/* ════════ MODAL SAÍDA / ENTREGA ════════ */}
       {modalSaida && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
@@ -692,7 +919,7 @@ export default function SacTab({ currentUser }) {
         </div>
       )}
 
-      {/* ════════════ MODAL NOVO EQUIPAMENTO ════════════ */}
+      {/* ════════ MODAL NOVO EQUIPAMENTO ════════ */}
       {modalNovoEquip && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:360}}>
@@ -709,7 +936,7 @@ export default function SacTab({ currentUser }) {
         </div>
       )}
 
-      {/* ════════════ MODAL IMPRESSÃO / PDF ════════════ */}
+      {/* ════════ MODAL PDF ════════ */}
       {modalPrint && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:700,width:'95vw',maxHeight:'92vh',overflowY:'auto'}}>
@@ -724,6 +951,8 @@ export default function SacTab({ currentUser }) {
           </div>
         </div>
       )}
+    </div>
+      </div>}  {/* fim abaAtiva === 'os' */}
     </div>
   );
 }
@@ -742,7 +971,6 @@ function PrintOS({ os }) {
 
   return (
     <div style={{fontFamily:'Arial,sans-serif',color:'#1e293b'}}>
-      {/* Cabeçalho */}
       <div style={{background:'#0f766e',color:'white',padding:'12px 16px',borderRadius:4,marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div>
           <div style={{fontWeight:700,fontSize:16}}>ACN SINAL VERDE</div>
@@ -754,14 +982,12 @@ function PrintOS({ os }) {
         </div>
       </div>
 
-      {/* Status */}
       <div style={{display:'flex',gap:8,marginBottom:12}}>
         <span style={{background: STATUS_COR[os.status]||'#94a3b8',color:'white',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700}}>{os.status}</span>
         <span style={{background:'#e2e8f0',padding:'3px 10px',borderRadius:20,fontSize:11}}>{os.tipo_servico}</span>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-        {/* Equipamento */}
         <div style={{border:'1px solid #e2e8f0',borderRadius:4}}>
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>EQUIPAMENTO</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
@@ -775,8 +1001,6 @@ function PrintOS({ os }) {
             </tbody>
           </table>
         </div>
-
-        {/* Cliente */}
         <div style={{border:'1px solid #e2e8f0',borderRadius:4}}>
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>CLIENTE</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
@@ -792,19 +1016,18 @@ function PrintOS({ os }) {
         </div>
       </div>
 
-      {/* Defeito */}
       <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
         <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>DEFEITO / OBSERVAÇÕES</div>
         <div style={{padding:'8px 10px',fontSize:11}}>
           <div><strong>Defeito:</strong> {os.defeito_reclamado || '—'}</div>
           {os.observacoes && <div style={{marginTop:4}}><strong>Obs:</strong> {os.observacoes}</div>}
+          {os.observacoes_lab && <div style={{marginTop:4,color:'#0891b2'}}><strong>Diagnóstico Lab:</strong> {os.observacoes_lab}</div>}
         </div>
       </div>
 
-      {/* Acessórios */}
       {Array.isArray(os.acessorios) && os.acessorios.length > 0 && (
         <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
-          <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>ACESSÓRIOS RECEBIDOS</div>
+          <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>ACESSÓRIOS</div>
           <div style={{padding:'8px 10px',display:'flex',flexWrap:'wrap',gap:6}}>
             {os.acessorios.map((a,i) => (
               <span key={i} style={{fontSize:10,padding:'2px 8px',borderRadius:20,
@@ -818,7 +1041,6 @@ function PrintOS({ os }) {
         </div>
       )}
 
-      {/* Orçamento */}
       {os.valor_orcamento && (
         <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>ORÇAMENTO</div>
@@ -827,21 +1049,22 @@ function PrintOS({ os }) {
               {row('Valor', fmtVal(os.valor_orcamento))}
               {row('Condições', os.condicoes_pagamento)}
               {row('Enviado em', fmtDt(os.data_envio_orcamento))}
+              {row('KPI Elaboração', os.kpi_orcamento_horas ? `${Number(os.kpi_orcamento_horas).toFixed(1)}h úteis` : '—')}
               {row('Situação', os.aprovado===true?'✅ APROVADO':os.aprovado===false?'❌ REPROVADO':'Aguardando')}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Aprovação */}
       {os.aprovado && (
         <div style={{border:'1px solid #86efac',borderRadius:4,marginBottom:10}}>
-          <div style={{background:'#f0fdf4',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#166534',borderBottom:'1px solid #86efac'}}>APROVAÇÃO DO CLIENTE</div>
+          <div style={{background:'#f0fdf4',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#166534',borderBottom:'1px solid #86efac'}}>APROVAÇÃO</div>
           <div style={{padding:'10px',display:'flex',alignItems:'center',gap:16}}>
             <div style={{flex:1,fontSize:11}}>
               <div><strong>Aprovado por:</strong> {os.aprovador_nome}</div>
               <div><strong>Data:</strong> {fmtDt(os.data_aprovacao)}</div>
               {os.data_prevista_pos_aprovacao && <div><strong>Entrega prevista:</strong> {fmtDt(os.data_prevista_pos_aprovacao)}</div>}
+              {os.kpi_execucao_horas && <div><strong>KPI Execução:</strong> {Number(os.kpi_execucao_horas).toFixed(1)}h úteis</div>}
             </div>
             {os.assinatura_aprovacao_url && (
               <img src={os.assinatura_aprovacao_url} alt="Assinatura" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
@@ -850,10 +1073,9 @@ function PrintOS({ os }) {
         </div>
       )}
 
-      {/* Saída */}
       {os.data_saida && (
         <div style={{border:'1px solid #86efac',borderRadius:4,marginBottom:10}}>
-          <div style={{background:'#f0fdf4',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#166534',borderBottom:'1px solid #86efac'}}>RETIRADA / ENTREGA</div>
+          <div style={{background:'#f0fdf4',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#166534',borderBottom:'1px solid #86efac'}}>RETIRADA</div>
           <div style={{padding:'10px',display:'flex',alignItems:'center',gap:16}}>
             <div style={{flex:1,fontSize:11}}>
               <div><strong>Retirado por:</strong> {os.nome_retirada_saida}</div>
@@ -866,7 +1088,6 @@ function PrintOS({ os }) {
         </div>
       )}
 
-      {/* Fotos entrada */}
       {Array.isArray(os.fotos_entrada) && os.fotos_entrada.length > 0 && (
         <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>FOTOS DE ENTRADA</div>
@@ -876,7 +1097,6 @@ function PrintOS({ os }) {
         </div>
       )}
 
-      {/* Fotos saída */}
       {Array.isArray(os.fotos_saida) && os.fotos_saida.length > 0 && (
         <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>FOTOS DE SAÍDA</div>
@@ -886,10 +1106,5 @@ function PrintOS({ os }) {
         </div>
       )}
 
-      {/* Rodapé */}
       <div style={{borderTop:'1px solid #e2e8f0',paddingTop:8,marginTop:8,fontSize:10,color:'#94a3b8',textAlign:'center'}}>
-        ACN Sinal Verde — Documento gerado em {new Date().toLocaleString('pt-BR')}
-      </div>
-    </div>
-  );
-}
+        ACN Sinal Verde — Documento gerado em {new Date().

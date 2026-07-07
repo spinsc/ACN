@@ -169,14 +169,4 @@ export default function AlmoxarifadoTab({ currentUser }) {
             <label className="acn-label">Descreva a pendencia existente *</label>
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="ex: Aguardando apenas parafuso M10, demais itens completos"
-              value={obsPend} onChange={e=>setObsPend(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#f97316',flex:1}} onClick={liberarPendencia}>LIBERAR COM PENDENCIA</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPend(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+              value={obsPend} onChange={e=>setObsPend(e.t
