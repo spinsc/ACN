@@ -1011,8 +1011,7 @@ export default function SacTab({ currentUser }) {
           </div>
         </div>
       )}
-    </div>
-      </div>}  {/* fim abaAtiva === 'os' */}
+    </div>}  {/* fim abaAtiva === 'os' */}
     </div>
   );
 }
