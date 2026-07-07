@@ -17,6 +17,7 @@ import SetorDemandaTab from './SetorDemandaTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import SacTab from './SacTab';
+import ChatWidget from './ChatWidget';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -601,6 +602,8 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
           </div>
         </div>
       )}
+
+      <ChatWidget currentUser={currentUser} />
     </>
   );
 }
