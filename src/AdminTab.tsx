@@ -23,6 +23,7 @@ const TODAS_ABAS = [
   { id:'logistica',    label:'10. Logistica In/Out' },
   { id:'vistorias',    label:'11. Vistorias Patio' },
   { id:'fiscal',       label:'12. Fiscal' },
+  { id:'marketing',    label:'Marketing' },
   { id:'relatorios',   label:'Relatorios' },
   { id:'admin',        label:'Admin' },
 ];
