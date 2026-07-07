@@ -77,9 +77,21 @@ async function uploadAssinatura(dataUrl: string, pasta: string): Promise<string 
 
 async function gerarNumeroOS(): Promise<string> {
   const ano = new Date().getFullYear();
-  const { count } = await supabase.from('sac_ordens_servico').select('*', { count: 'exact', head: true })
-    .like('numero_os', `%-${ano}`);
-  return `OS-${String((count || 0) + 1).padStart(4, '0')}/${ano}`;
+  // MAX em vez de COUNT — evita colisão quando registros são deletados
+  const { data } = await supabase
+    .from('sac_ordens_servico')
+    .select('numero_os')
+    .like('numero_os', `OS-%-${ano}`);
+
+  let max = 0;
+  for (const row of (data || [])) {
+    const match = row.numero_os?.match(/^OS-(\d+)\//);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n > max) max = n;
+    }
+  }
+  return `OS-${String(max + 1).padStart(4, '0')}/${ano}`;
 }
 
 const FORM_VAZIO = {
