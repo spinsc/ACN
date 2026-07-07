@@ -95,6 +95,8 @@ function PainelUsuarios() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
+  const [modalWA, setModalWA] = useState(null);
+  const [waInput, setWaInput] = useState('');
 
   useEffect(() => { fetchUsuarios(); }, []);
 
@@ -137,6 +139,12 @@ function PainelUsuarios() {
     alert('Senha alterada com sucesso!');
   };
 
+  const salvarWA = async () => {
+    const numero = waInput.replace(/\D/g,'');
+    await supabase.from('auth_usuarios').update({ whatsapp: numero || null }).eq('id', modalWA.id);
+    setModalWA(null); setWaInput(''); fetchUsuarios();
+  };
+
   return (
     <div>
       {modalPerm && (
@@ -146,6 +154,48 @@ function PainelUsuarios() {
           onSalvo={fetchUsuarios}
         />
       )}
+
+      {/* MODAL WHATSAPP */}
+      {modalWA && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:360}}>
+            <div className="modal-title">📱 WhatsApp — {modalWA.nome}</div>
+            <p style={{fontSize:11,color:'#64748b',marginBottom:12}}>
+              Informe o número com DDI (ex: 5511999990000). Apenas dígitos serão salvos.
+            </p>
+            <label className="acn-label">Número WhatsApp</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:8}}
+              placeholder="5511999990000"
+              value={waInput}
+              onChange={e=>setWaInput(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&salvarWA()}
+            />
+            {modalWA.whatsapp && (
+              <div style={{fontSize:10,color:'#22c55e',marginBottom:10}}>
+                ✓ Número atual: {modalWA.whatsapp}
+              </div>
+            )}
+            <div style={{display:'flex',gap:8,marginTop:4}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarWA}>
+                SALVAR
+              </button>
+              {modalWA.whatsapp && (
+                <button className="acn-btn" style={{background:'#ef4444'}}
+                  onClick={async()=>{
+                    await supabase.from('auth_usuarios').update({whatsapp:null}).eq('id',modalWA.id);
+                    setModalWA(null); setWaInput(''); fetchUsuarios();
+                  }}>
+                  REMOVER
+                </button>
+              )}
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalWA(null);setWaInput('');}}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Usuarios do Sistema ({usuarios.length})</span>
@@ -205,10 +255,10 @@ function PainelUsuarios() {
         <div className="sec-body" style={{overflowX:'auto',padding:0}}>
           {loading ? <div className="acn-empty">Carregando...</div> : (
             <table>
-              <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Abas</th><th>Status</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>📱 WhatsApp</th><th>Abas</th><th>Status</th><th>Ações</th></tr></thead>
               <tbody>
                 {usuarios.length === 0
-                  ? <tr><td colSpan={6} className="acn-empty">Nenhum usuario cadastrado.</td></tr>
+                  ? <tr><td colSpan={7} className="acn-empty">Nenhum usuario cadastrado.</td></tr>
                   : usuarios.map(u => {
                     const abas = Array.isArray(u.abas_permitidas) ? u.abas_permitidas : TODAS_ABAS.map(a=>a.id);
                     return (
@@ -220,6 +270,15 @@ function PainelUsuarios() {
                             onChange={e=>alterarPerfil(u,e.target.value)}>
                             {PERFIS.map(p=><option key={p}>{p}</option>)}
                           </select>
+                        </td>
+                        <td>
+                          <button onClick={()=>{setModalWA(u);setWaInput(u.whatsapp||'');}}
+                            style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',
+                              background: u.whatsapp ? '#dcfce7':'#fef9c3',
+                              borderColor: u.whatsapp ? '#86efac':'#fde047',
+                              color: u.whatsapp ? '#166534':'#854d0e',fontWeight:700}}>
+                            {u.whatsapp ? `✓ ${u.whatsapp}` : '+ Cadastrar'}
+                          </button>
                         </td>
                         <td>
                           <span style={{fontSize:9,color:'#64748b'}}>
