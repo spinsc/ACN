@@ -74,13 +74,14 @@ export default function ChatWidget({ currentUser }: any) {
     contarNaoLidas();
 
     // Subscription global única — recebe TODOS inserts e filtra client-side
+    // IMPORTANTE: callback SÍNCRONO — async causa descarte de eventos no Supabase Realtime
     subRef.current = supabase
       .channel('chat-global-' + uid)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_mensagens' },
-        async (payload: any) => {
+        (payload: any) => {
           const msg = payload.new;
 
-          // Ignorar próprias mensagens para badge/toast
+          // Ignorar próprias mensagens
           if (msg.remetente_id === uid) return;
 
           contarNaoLidas();
@@ -92,7 +93,6 @@ export default function ChatWidget({ currentUser }: any) {
               if (prev.find(m => m.id === msg.id)) return prev;
               return [...prev, msg];
             });
-            // Marcar como lida imediatamente
             supabase.from('chat_mensagens')
               .update({ lida_por: [...(msg.lida_por || []), uid] })
               .eq('id', msg.id)
@@ -100,24 +100,22 @@ export default function ChatWidget({ currentUser }: any) {
             return;
           }
 
-          // Caso contrário: mostrar toast de notificação
+          // Mostrar toast — busca sala nos refs (síncrono)
           const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === msg.sala_id);
-          if (!sala) {
-            // Tenta buscar a sala do banco (pode ser DM recém criada)
-            const { data } = await supabase.from('chat_salas').select('*').eq('id', msg.sala_id).single();
-            if (data) {
-              // Verifica se é DM do usuário atual
-              if (data.tipo === 'direto') {
-                const membro = (data.membros||[]).some((m:any) => m.id === uid);
+          if (sala) {
+            setToast({ sala, remetente_nome: msg.remetente_nome, texto: msg.texto });
+          } else {
+            // DM recém-criada não está no cache ainda — busca async via .then()
+            supabase.from('chat_salas').select('*').eq('id', msg.sala_id).single()
+              .then(({ data }) => {
+                if (!data || data.tipo !== 'direto') return;
+                const membro = (data.membros || []).some((m: any) => m.id === uid);
                 if (membro) {
-                  await fetchDiretos();
+                  fetchDiretos();
                   setToast({ sala: data, remetente_nome: msg.remetente_nome, texto: msg.texto });
                 }
-              }
-            }
-            return;
+              });
           }
-          setToast({ sala, remetente_nome: msg.remetente_nome, texto: msg.texto });
         })
       .subscribe();
 
