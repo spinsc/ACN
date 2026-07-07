@@ -95,8 +95,8 @@ function PainelUsuarios() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
-  const [modalWA, setModalWA] = useState(null);
-  const [waInput, setWaInput] = useState('');
+  const [modalEditar, setModalEditar] = useState(null);
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'' });
 
   useEffect(() => { fetchUsuarios(); }, []);
 
@@ -105,6 +105,31 @@ function PainelUsuarios() {
     const { data } = await supabase.from('auth_usuarios').select('*').order('nome');
     setUsuarios(data || []);
     setLoading(false);
+  };
+
+  const abrirEditar = (u) => {
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'' });
+    setModalEditar(u);
+  };
+
+  const salvarEdicao = async () => {
+    if (!editForm.nome || !editForm.email) { alert('Nome e e-mail são obrigatórios!'); return; }
+    const updates = {
+      nome: editForm.nome.toUpperCase(),
+      email: editForm.email,
+      perfil: editForm.perfil,
+      whatsapp: editForm.whatsapp.replace(/\D/g,'') || null,
+    };
+    if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
+    const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalEditar(null); fetchUsuarios();
+  };
+
+  const excluirUsuario = async (u) => {
+    if (!window.confirm(`Excluir permanentemente "${u.nome}"? Esta ação não pode ser desfeita.`)) return;
+    await supabase.from('auth_usuarios').delete().eq('id', u.id);
+    fetchUsuarios();
   };
 
   const toggleAba = (id) => setForm(f => ({
@@ -132,19 +157,6 @@ function PainelUsuarios() {
     fetchUsuarios();
   };
 
-  const resetarSenha = async (u) => {
-    const nova = prompt(`Nova senha para ${u.nome}:`);
-    if (!nova || nova.length < 4) { alert('Senha muito curta!'); return; }
-    await supabase.from('auth_usuarios').update({ senha: nova }).eq('id', u.id);
-    alert('Senha alterada com sucesso!');
-  };
-
-  const salvarWA = async () => {
-    const numero = waInput.replace(/\D/g,'');
-    await supabase.from('auth_usuarios').update({ whatsapp: numero || null }).eq('id', modalWA.id);
-    setModalWA(null); setWaInput(''); fetchUsuarios();
-  };
-
   return (
     <div>
       {modalPerm && (
@@ -155,42 +167,50 @@ function PainelUsuarios() {
         />
       )}
 
-      {/* MODAL WHATSAPP */}
-      {modalWA && (
+      {/* MODAL EDITAR USUÁRIO */}
+      {modalEditar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:360}}>
-            <div className="modal-title">📱 WhatsApp — {modalWA.nome}</div>
-            <p style={{fontSize:11,color:'#64748b',marginBottom:12}}>
-              Informe o número com DDI (ex: 5511999990000). Apenas dígitos serão salvos.
-            </p>
-            <label className="acn-label">Número WhatsApp</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:8}}
-              placeholder="5511999990000"
-              value={waInput}
-              onChange={e=>setWaInput(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&salvarWA()}
-            />
-            {modalWA.whatsapp && (
-              <div style={{fontSize:10,color:'#22c55e',marginBottom:10}}>
-                ✓ Número atual: {modalWA.whatsapp}
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">✏️ Editar Usuário — {modalEditar.nome}</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="acn-label">Nome *</label>
+                <input className="acn-input" style={{width:'100%'}}
+                  value={editForm.nome}
+                  onChange={e=>setEditForm(f=>({...f,nome:e.target.value.toUpperCase()}))} />
               </div>
-            )}
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="acn-label">E-mail *</label>
+                <input className="acn-input" style={{width:'100%'}} type="email"
+                  value={editForm.email}
+                  onChange={e=>setEditForm(f=>({...f,email:e.target.value}))} />
+              </div>
+              <div>
+                <label className="acn-label">📱 WhatsApp (DDI+DDD+nº)</label>
+                <input className="acn-input" style={{width:'100%'}}
+                  placeholder="5511987654321"
+                  value={editForm.whatsapp}
+                  onChange={e=>setEditForm(f=>({...f,whatsapp:e.target.value.replace(/\D/g,'')}))} />
+              </div>
+              <div>
+                <label className="acn-label">Perfil</label>
+                <select className="acn-input" style={{width:'100%'}}
+                  value={editForm.perfil}
+                  onChange={e=>setEditForm(f=>({...f,perfil:e.target.value}))}>
+                  {PERFIS.map(p=><option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="acn-label">Nova Senha (deixe em branco para manter)</label>
+                <input className="acn-input" style={{width:'100%'}} type="password"
+                  placeholder="Mínimo 4 caracteres"
+                  value={editForm.novaSenha}
+                  onChange={e=>setEditForm(f=>({...f,novaSenha:e.target.value}))} />
+              </div>
+            </div>
             <div style={{display:'flex',gap:8,marginTop:4}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarWA}>
-                SALVAR
-              </button>
-              {modalWA.whatsapp && (
-                <button className="acn-btn" style={{background:'#ef4444'}}
-                  onClick={async()=>{
-                    await supabase.from('auth_usuarios').update({whatsapp:null}).eq('id',modalWA.id);
-                    setModalWA(null); setWaInput(''); fetchUsuarios();
-                  }}>
-                  REMOVER
-                </button>
-              )}
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalWA(null);setWaInput('');}}>
-                Cancelar
-              </button>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarEdicao}>SALVAR</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditar(null)}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -272,13 +292,9 @@ function PainelUsuarios() {
                           </select>
                         </td>
                         <td>
-                          <button onClick={()=>{setModalWA(u);setWaInput(u.whatsapp||'');}}
-                            style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',
-                              background: u.whatsapp ? '#dcfce7':'#fef9c3',
-                              borderColor: u.whatsapp ? '#86efac':'#fde047',
-                              color: u.whatsapp ? '#166534':'#854d0e',fontWeight:700}}>
-                            {u.whatsapp ? `✓ ${u.whatsapp}` : '+ Cadastrar'}
-                          </button>
+                          <span style={{fontSize:9, color: u.whatsapp ? '#166534' : '#94a3b8', fontWeight: u.whatsapp ? 700 : 400}}>
+                            {u.whatsapp ? `✓ ${u.whatsapp}` : '—'}
+                          </span>
                         </td>
                         <td>
                           <span style={{fontSize:9,color:'#64748b'}}>
@@ -295,15 +311,19 @@ function PainelUsuarios() {
                         </td>
                         <td>
                           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                            <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+                              onClick={()=>abrirEditar(u)}>✏️ Editar</button>
                             <button className="acn-btn" style={{background:'#6366f1',fontSize:9}}
                               onClick={()=>setModalPerm(u)}>Permissões</button>
-                            <button className="acn-btn" style={{background:'#475569',fontSize:9}}
-                              onClick={()=>resetarSenha(u)}>Reset Senha</button>
                             <button className="acn-btn"
                               style={{background: u.ativo?'#ef4444':'#22c55e',fontSize:9}}
                               onClick={()=>toggleAtivo(u)}>
                               {u.ativo ? 'Desativar' : 'Reativar'}
                             </button>
+                            {!u.ativo && (
+                              <button className="acn-btn" style={{background:'#7f1d1d',fontSize:9}}
+                                onClick={()=>excluirUsuario(u)}>🗑️ Excluir</button>
+                            )}
                           </div>
                         </td>
                       </tr>
