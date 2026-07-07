@@ -226,6 +226,40 @@ body.dark .row-alerta td  { background:#1c1505 !important; }
 body.dark ::-webkit-scrollbar { width:6px; height:6px; }
 body.dark ::-webkit-scrollbar-track { background:#0f172a; }
 body.dark ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+
+/* ── DARK MODE: cascata de cor para filhos de containers escuros ── */
+/* Tabelas: força herança nos filhos diretos, preserva badges/btns */
+body.dark .acn-main table td strong,
+body.dark .acn-main table td span:not(.acn-badge),
+body.dark .acn-main table td p,
+body.dark .acn-main table td div { color:inherit !important; }
+/* Sec-body genérico */
+body.dark .sec-body { color:#cbd5e1 !important; }
+body.dark .sec-body p,
+body.dark .sec-body span:not(.acn-badge),
+body.dark .sec-body strong,
+body.dark .sec-body div:not(.modal-overlay) { color:inherit !important; }
+/* Modal */
+body.dark .modal-box p,
+body.dark .modal-box span:not(.acn-badge),
+body.dark .modal-box strong,
+body.dark .modal-box label { color:inherit !important; }
+/* Override cores hardcoded escuras que ficam invisíveis no dark */
+body.dark [style*="color:#374151"],  body.dark [style*="color: #374151"],
+body.dark [style*="color:#1e293b"],  body.dark [style*="color: #1e293b"],
+body.dark [style*="color:#0f172a"],  body.dark [style*="color: #0f172a"],
+body.dark [style*="color:#334155"],  body.dark [style*="color: #334155"],
+body.dark [style*="color:#475569"],  body.dark [style*="color: #475569"] { color:#94a3b8 !important; }
+/* Cores cinza médio ficam muito escuras no dark */
+body.dark [style*="color:#64748b"],  body.dark [style*="color: #64748b"],
+body.dark [style*="color:#6b7280"],  body.dark [style*="color: #6b7280"],
+body.dark [style*="color:#9ca3af"],  body.dark [style*="color: #9ca3af"] { color:#64748b !important; }
+/* Garante que acn-badge sempre mantém cor branca independente do contexto */
+body.dark .acn-badge { color:white !important; }
+/* Cores funcionais (verde, vermelho, amarelo) preservadas — não sobrescrever */
+/* Fix light mode: impede tema escuro do SO afetar inputs nativos */
+.acn-main input, .acn-main select, .acn-main textarea { color-scheme:light; }
+body.dark .acn-main input, body.dark .acn-main select, body.dark .acn-main textarea { color-scheme:dark; }
 `;
 
 export default function DashboardTab({ currentUser, onLogout }: Props) {

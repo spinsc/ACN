@@ -169,6 +169,61 @@ export function DemandaFooter({ setor }: { setor: string }) {
   );
 }
 
+// ─── Utilitários de horário comercial ────────────────────────────────────────
+// Seg-Sex 08:00–17:30. Retorna segundos úteis decorridos desde `startISO`.
+// Se `pausadoSince` informado, para de contar naquele instante.
+// Subtrai `segundosPausados` acumulados.
+function bhElapsed(
+  startISO: string,
+  segundosPausados: number = 0,
+  pausadoSince: string | null = null,
+): number {
+  const start = new Date(startISO);
+  const end   = pausadoSince ? new Date(pausadoSince) : new Date();
+  if (end <= start) return 0;
+
+  let total = 0;
+  let cur   = new Date(start.getTime());
+
+  while (cur < end) {
+    const dow = cur.getDay(); // 0=Dom, 6=Sab
+    // Fim-de-semana: pula para segunda 08:00
+    if (dow === 0 || dow === 6) {
+      const daysAhead = dow === 0 ? 1 : 2;
+      cur.setDate(cur.getDate() + daysAhead);
+      cur.setHours(8, 0, 0, 0);
+      continue;
+    }
+    const bhStart = new Date(cur); bhStart.setHours(8,  0, 0, 0);
+    const bhEnd   = new Date(cur); bhEnd.setHours(17, 30, 0, 0);
+
+    if (cur < bhStart) { cur.setHours(8, 0, 0, 0); continue; }
+    if (cur >= bhEnd)  { cur.setDate(cur.getDate() + 1); cur.setHours(8, 0, 0, 0); continue; }
+
+    const segEnd = new Date(Math.min(end.getTime(), bhEnd.getTime()));
+    total += (segEnd.getTime() - cur.getTime()) / 1000;
+    cur    = new Date(segEnd.getTime());
+    if (cur >= bhEnd && cur < end) { cur.setDate(cur.getDate() + 1); cur.setHours(8, 0, 0, 0); }
+  }
+  return Math.max(0, Math.floor(total) - segundosPausados);
+}
+
+function fmtHMS(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function dentroHorarioComercial(): boolean {
+  const now = new Date();
+  const dow = now.getDay();
+  if (dow === 0 || dow === 6) return false;
+  const h = now.getHours(), mn = now.getMinutes();
+  const mins = h * 60 + mn;
+  return mins >= 8 * 60 && mins < 17 * 60 + 30;
+}
+
 export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string; cor?: string; currentUser: any }) {
   const [demandas, setDemandas] = useState<any[]>([]);
   const [modalIniciar, setModalIniciar] = useState<any>(null);
@@ -207,17 +262,42 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
     await supabase.from('demandas_setoriais').update({
       status: 'Em Andamento', data_inicio: agora,
       responsavel_nome: responsavel, logs_demanda: logs,
+      pausado: false, segundos_pausados: 0,
     }).eq('id', d.id);
     setModalIniciar(null); setResponsavel('');
     fetchDemandas();
   };
 
+  const pausar = async (d: any) => {
+    const agora = new Date().toISOString();
+    const logs = d.logs_demanda || [];
+    logs.push({ texto: 'Atividade PAUSADA manualmente.', usuario: currentUser?.nome, hora: agora });
+    await supabase.from('demandas_setoriais').update({
+      pausado: true, data_pausa: agora, logs_demanda: logs,
+    }).eq('id', d.id);
+    fetchDemandas();
+  };
+
+  const retomar = async (d: any) => {
+    const agora = new Date().toISOString();
+    const tempoPausadoAgora = d.data_pausa
+      ? Math.floor((new Date(agora).getTime() - new Date(d.data_pausa).getTime()) / 1000)
+      : 0;
+    const totalPausado = (d.segundos_pausados || 0) + tempoPausadoAgora;
+    const logs = d.logs_demanda || [];
+    logs.push({ texto: `Atividade RETOMADA. Pausa: ${fmtHMS(tempoPausadoAgora)}`, usuario: currentUser?.nome, hora: agora });
+    await supabase.from('demandas_setoriais').update({
+      pausado: false, data_pausa: null, segundos_pausados: totalPausado, logs_demanda: logs,
+    }).eq('id', d.id);
+    fetchDemandas();
+  };
+
   const concluir = async (d: any) => {
     const agora = new Date().toISOString();
-    const inicio = d.data_inicio ? new Date(d.data_inicio) : new Date(d.data_abertura || agora);
-    const tempo = (new Date(agora).getTime() - inicio.getTime()) / 3600000;
+    const seg = d.data_inicio ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, null) : 0;
+    const tempo = seg / 3600;
     const logs = d.logs_demanda || [];
-    logs.push({ texto: `Concluido. Tempo: ${tempo.toFixed(1)}h`, usuario: currentUser?.nome, hora: agora });
+    logs.push({ texto: `Concluido. Tempo util: ${fmtHMS(seg)}`, usuario: currentUser?.nome, hora: agora });
     await supabase.from('demandas_setoriais').update({
       status: 'Concluido', data_conclusao: agora,
       tempo_execucao_horas: tempo, logs_demanda: logs,
@@ -235,13 +315,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
     fetchDemandas();
   };
 
-  const tempoDecorrido = (inicio: string) => {
-    const seg = Math.floor((Date.now() - new Date(inicio).getTime()) / 1000);
-    const h = Math.floor(seg / 3600);
-    const m = Math.floor((seg % 3600) / 60);
-    const s = seg % 60;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  };
+  const fora = !dentroHorarioComercial();
 
   if (demandas.length === 0) return null;
 
@@ -249,17 +323,27 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
     <div className="sec-card" style={{ marginTop: 10 }}>
       <div className="sec-hdr" style={{ background: cor || '#1e293b', color: 'white' }}>
         <span>Demandas / Ajustes para {setor} ({demandas.length})</span>
+        {fora && (
+          <span style={{ fontSize: 9, background: 'rgba(0,0,0,.3)', padding: '2px 7px', borderRadius: 3 }}>
+            ⏸ Fora do horário comercial — timers pausados
+          </span>
+        )}
       </div>
       <div className="sec-body" style={{ overflowX: 'auto' }}>
         <table>
           <thead><tr>
             <th>Data</th><th>OPL</th><th>Descricao</th><th>Status</th>
-            <th>Responsavel</th><th>Tempo</th><th>Acoes</th>
+            <th>Responsavel</th><th>Tempo Útil</th><th>Acoes</th>
           </tr></thead>
           <tbody>
             {demandas.map(d => {
               const isAjuste = d.descricao?.startsWith('[AJUSTE]');
               const desc = isAjuste ? d.descricao.replace('[AJUSTE] ', '') : (d.descricao || '—');
+              const emAndamento = d.status === 'Em Andamento';
+              const pausado = !!d.pausado || fora; // auto-pausa fora do horário
+              const seg = emAndamento && d.data_inicio
+                ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, (d.pausado || fora) ? (d.data_pausa || new Date().toISOString()) : null)
+                : 0;
               return (
                 <tr key={d.id} style={{ background: isAjuste ? '#fffbeb' : undefined }}>
                   <td>{d.data_abertura ? new Date(d.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
@@ -268,23 +352,39 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                     {isAjuste && <span style={{ background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 2, marginRight: 4 }}>AJUSTE</span>}
                     {desc}
                   </td>
-                  <td><span className="acn-badge" style={{ background: d.status === 'Em Andamento' ? '#3b82f6' : '#f59e0b' }}>{d.status}</span></td>
+                  <td><span className="acn-badge" style={{ background: emAndamento ? (pausado ? '#f59e0b' : '#3b82f6') : '#f59e0b' }}>
+                    {emAndamento && pausado ? 'PAUSADO' : d.status}
+                  </span></td>
                   <td>{d.responsavel_nome || '—'}</td>
                   <td>
-                    {d.status === 'Em Andamento' && d.data_inicio
-                      ? <span style={{ fontFamily: 'monospace', color: '#2563eb', fontWeight: 700 }}>{tempoDecorrido(d.data_inicio)}</span>
-                      : '—'}
+                    {emAndamento && d.data_inicio ? (
+                      <span style={{ fontFamily: 'monospace', color: pausado ? '#f59e0b' : '#2563eb', fontWeight: 700 }}>
+                        {pausado ? '⏸ ' : ''}{fmtHMS(seg)}
+                      </span>
+                    ) : '—'}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {d.status === 'Pendente' && (
-                        <button className="acn-btn" style={{ background: cor || '#1e293b' }} onClick={() => { setModalIniciar(d); setResponsavel(currentUser?.nome || ''); }}>INICIAR</button>
+                        <button className="acn-btn" style={{ background: cor || '#1e293b' }}
+                          onClick={() => { setModalIniciar(d); setResponsavel(currentUser?.nome || ''); }}>INICIAR</button>
                       )}
-                      {d.status === 'Em Andamento' && (
+                      {emAndamento && !fora && (
                         <>
-                          <button className="acn-btn" style={{ background: '#475569', fontSize: 10 }} onClick={() => { setModalObs(d); setObsTexto(''); }}>OBS</button>
-                          <button className="acn-btn" style={{ background: '#22c55e' }} onClick={() => concluir(d)}>CONCLUIR</button>
+                          {!d.pausado ? (
+                            <button className="acn-btn" style={{ background: '#f59e0b', fontSize: 9 }} onClick={() => pausar(d)}>⏸ PAUSAR</button>
+                          ) : (
+                            <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={() => retomar(d)}>▶ RETOMAR</button>
+                          )}
+                          <button className="acn-btn" style={{ background: '#475569', fontSize: 10 }}
+                            onClick={() => { setModalObs(d); setObsTexto(''); }}>OBS</button>
+                          {!d.pausado && (
+                            <button className="acn-btn" style={{ background: '#22c55e' }} onClick={() => concluir(d)}>CONCLUIR</button>
+                          )}
                         </>
+                      )}
+                      {emAndamento && fora && (
+                        <span style={{ fontSize: 9, color: '#f59e0b', fontStyle: 'italic' }}>Aguard. horário</span>
                       )}
                     </div>
                   </td>
