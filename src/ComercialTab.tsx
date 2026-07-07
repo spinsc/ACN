@@ -658,7 +658,7 @@ export default function ComercialTab({ currentUser }) {
               </div>
               <div className="form-group"><label className="acn-label">Tipo OP</label>
                 <select className="acn-input" style={{width:'100%'}} value={formData.tipo_op} onChange={e=>setFormData({...formData,tipo_op:e.target.value})}>
-                  <option value="OPL">OPL - LEDFLEX</option><option value="OPD">OPD - DETECH</option>
+                  <option value="OPL">OP - ACN</option><option value="OPD">OP - DETECH</option>
                 </select>
               </div>
               <div className="form-group"><label className="acn-label">Cliente</label><input className="acn-input" style={{width:'100%'}} value={formData.cliente_nome} onChange={e=>setFormData({...formData,cliente_nome:e.target.value})} /></div>
