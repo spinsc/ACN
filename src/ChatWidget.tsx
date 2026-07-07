@@ -50,7 +50,8 @@ export default function ChatWidget({ currentUser }: any) {
   const canaisRef    = useRef<any[]>([]);
   const diretosRef   = useRef<any[]>([]);
 
-  const uid   = currentUser?.id   || currentUser?.email || 'anon';
+  // Sempre string — evita mismatch integer vs string nas comparações de lida_por
+  const uid   = String(currentUser?.id   ?? currentUser?.email ?? 'anon');
   const unome = currentUser?.nome || currentUser?.email || 'Usuário';
 
   // Manter refs sincronizados com state
@@ -81,41 +82,48 @@ export default function ChatWidget({ currentUser }: any) {
         (payload: any) => {
           const msg = payload.new;
 
-          // Ignorar próprias mensagens
-          if (msg.remetente_id === uid) return;
+          // Ignorar próprias mensagens — usa String() para evitar mismatch de tipo
+          if (String(msg.remetente_id) === uid) return;
 
           contarNaoLidas();
           fetchDiretos();
 
-          // Se a sala ativa está aberta, adiciona a mensagem
+          // Se a sala ativa está aberta e mensagem pertence a ela — exibe direto
           if (salaAtivaRef.current && msg.sala_id === salaAtivaRef.current.id) {
             setMensagens(prev => {
               if (prev.find(m => m.id === msg.id)) return prev;
               return [...prev, msg];
             });
             supabase.from('chat_mensagens')
-              .update({ lida_por: [...(msg.lida_por || []), uid] })
+              .update({ lida_por: [...(msg.lida_por || []).map(String), uid] })
               .eq('id', msg.id)
               .then(() => contarNaoLidas());
             return;
           }
 
-          // Mostrar toast — busca sala nos refs (síncrono)
+          // Mostrar toast — tenta nos refs primeiro (síncrono e rápido)
           const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === msg.sala_id);
           if (sala) {
             setToast({ sala, remetente_nome: msg.remetente_nome, texto: msg.texto });
-          } else {
-            // DM recém-criada não está no cache ainda — busca async via .then()
-            supabase.from('chat_salas').select('*').eq('id', msg.sala_id).single()
-              .then(({ data }) => {
-                if (!data || data.tipo !== 'direto') return;
-                const membro = (data.membros || []).some((m: any) => m.id === uid);
+            return;
+          }
+
+          // Sala não está no cache ainda (DM nova ou canais não carregados) — busca no DB
+          supabase.from('chat_salas').select('*').eq('id', msg.sala_id).single()
+            .then(({ data: salaDb }) => {
+              if (!salaDb) return;
+              if (salaDb.tipo === 'canal') {
+                // Canal: notifica todos os usuários
+                setToast({ sala: salaDb, remetente_nome: msg.remetente_nome, texto: msg.texto });
+              } else if (salaDb.tipo === 'direto') {
+                // DM: notifica apenas membros
+                const membro = (salaDb.membros || []).some((m: any) => String(m.id) === uid);
                 if (membro) {
                   fetchDiretos();
-                  setToast({ sala: data, remetente_nome: msg.remetente_nome, texto: msg.texto });
+                  setToast({ sala: salaDb, remetente_nome: msg.remetente_nome, texto: msg.texto });
                 }
-              });
-          }
+              }
+            });
         })
       .subscribe();
 
@@ -151,7 +159,10 @@ export default function ChatWidget({ currentUser }: any) {
 
   const contarNaoLidas = async () => {
     const { data } = await supabase.from('chat_mensagens').select('id,lida_por,remetente_id');
-    const n = (data || []).filter(m => m.remetente_id !== uid && !(m.lida_por || []).includes(uid)).length;
+    const n = (data || []).filter(m =>
+      String(m.remetente_id) !== uid &&
+      !(m.lida_por || []).map(String).includes(uid)
+    ).length;
     setNaoLidas(n);
   };
 
@@ -159,14 +170,26 @@ export default function ChatWidget({ currentUser }: any) {
     const { data } = await supabase.from('chat_mensagens')
       .select('*').eq('sala_id', salaId).order('criado_em');
     setMensagens(data || []);
-    for (const m of (data || [])) {
-      if (m.remetente_id !== uid && !(m.lida_por || []).includes(uid)) {
-        supabase.from('chat_mensagens')
-          .update({ lida_por: [...(m.lida_por || []), uid] })
-          .eq('id', m.id).then(() => {});
-      }
+
+    const naoLidas = (data || []).filter(m =>
+      String(m.remetente_id) !== uid &&
+      !(m.lida_por || []).map(String).includes(uid)
+    );
+
+    // Atualiza badge imediatamente sem esperar DB
+    if (naoLidas.length > 0) {
+      setNaoLidas(prev => Math.max(0, prev - naoLidas.length));
     }
-    setTimeout(() => contarNaoLidas(), 400);
+
+    // Marca como lidas no DB (fire-and-forget)
+    for (const m of naoLidas) {
+      supabase.from('chat_mensagens')
+        .update({ lida_por: [...(m.lida_por || []).map(String), uid] })
+        .eq('id', m.id).then(() => {});
+    }
+
+    // Recontagem do DB após tempo suficiente para os updates chegarem
+    setTimeout(() => contarNaoLidas(), 2000);
   };
 
   // ── Abrir sala ─────────────────────────────────────────────────────────
@@ -284,6 +307,8 @@ export default function ChatWidget({ currentUser }: any) {
     <div style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 9500, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
 
       {/* ── Toast de nova mensagem ── */}
+      <style>{`@keyframes chatSlideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }`}</style>
+
       {toast && (
         <div
           onClick={() => abrirViaToast(toast)}
@@ -292,9 +317,8 @@ export default function ChatWidget({ currentUser }: any) {
             padding: '10px 14px', cursor: 'pointer', width: 270,
             boxShadow: '0 6px 24px rgba(0,0,0,.35)',
             display: 'flex', flexDirection: 'column', gap: 3,
-            animation: 'slideUp .2s ease',
+            animation: 'chatSlideUp .2s ease',
           }}>
-          <style>{`@keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }`}</style>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
               💬 {nomeSala(toast.sala)}
