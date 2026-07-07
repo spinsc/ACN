@@ -118,4 +118,13 @@ export default function FiscalTab({ currentUser }) {
                   </tr>
                 ))}
               </tbody>
-        
+            </table>
+          </div>
+        </div>
+      )}
+
+      <OplMovimentadas setor="Fiscal" />
+      <DemandaFooter setor="Fiscal" />
+    </div>
+  );
+}

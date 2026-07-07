@@ -500,4 +500,107 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
                     <span>KPIs por Setor — Lead Times Médios</span>
                     <button className="acn-btn" style={{background:'#0f766e'}} onClick={buscarRealizados}>↺ Atualizar</button>
                   </div>
-                  
+                  <div className="sec-body" style={{overflowX:'auto'}}>
+                    <table className="metrics-tbl">
+                      <thead><tr>
+                        <th>Setor</th>
+                        <th>Indicador</th>
+                        <th style={{textAlign:'center'}}>Meta (h)</th>
+                        <th style={{textAlign:'center'}}>Tolerância (h)</th>
+                        <th style={{textAlign:'center'}}>Realizado (h)</th>
+                        <th>Status</th>
+                        <th>Diretriz</th>
+                      </tr></thead>
+                      <tbody>
+                        {METRICAS_CONFIG.map(m => {
+                          const real = realizados[m.key] ?? null;
+                          const st = getStatus(real, m.meta, m.tol);
+                          return (
+                            <tr key={m.key}>
+                              <td><strong>{m.nome}</strong></td>
+                              <td style={{maxWidth:200,fontSize:9,color:'#64748b'}}>{m.desc}</td>
+                              <td className="num-meta">{m.meta}h</td>
+                              <td className="num-tol">{m.tol}h</td>
+                              <td className="num-real">{real != null ? real.toFixed(1)+'h' : '—'}</td>
+                              <td><span className={st.cls}>{st.label}</span></td>
+                              <td style={{fontSize:9,color:'#64748b'}}>{m.diretriz}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="sec-card">
+                  <div className="sec-hdr"><span>Gráfico de Lead Times por Setor</span></div>
+                  <div className="sec-body">
+                    <div className="chart-wrap">
+                      <canvas ref={canvasRef} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              renderContent()
+            )}
+          </main>
+        </div>
+      </div>
+
+      {/* MODAL TROCAR SENHA */}
+      {modalSenha && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:380}}>
+            <div className="modal-title">
+              🔑 {currentUser?.primeiro_acesso ? 'Defina sua Nova Senha' : 'Alterar Senha'}
+            </div>
+            {currentUser?.primeiro_acesso && (
+              <div style={{fontSize:12,color:'#92400e',background:'#fef3c7',padding:'8px 10px',borderRadius:6,marginBottom:12,lineHeight:1.5}}>
+                ⚠️ Por segurança, defina uma senha pessoal antes de continuar.
+              </div>
+            )}
+            {senhaMsg && (
+              <div style={{fontSize:12,padding:'8px 10px',borderRadius:6,marginBottom:10,
+                background: senhaMsg.startsWith('ok:') ? '#f0fdf4' : '#fef2f2',
+                color: senhaMsg.startsWith('ok:') ? '#166534' : '#991b1b',
+                border: `1px solid ${senhaMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`}}>
+                {senhaMsg.startsWith('ok:') ? '✅ ' : '❌ '}{senhaMsg.slice(3)}
+              </div>
+            )}
+            {!currentUser?.primeiro_acesso && (
+              <div style={{marginBottom:10}}>
+                <label className="acn-label">Senha Atual</label>
+                <input className="acn-input" type="password" style={{width:'100%'}}
+                  value={senhaForm.atual} onChange={e=>setSenhaForm(f=>({...f,atual:e.target.value}))} />
+              </div>
+            )}
+            <div style={{marginBottom:10}}>
+              <label className="acn-label">Nova Senha (mín. 4 caracteres)</label>
+              <input className="acn-input" type="password" style={{width:'100%'}}
+                value={senhaForm.nova} onChange={e=>setSenhaForm(f=>({...f,nova:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:14}}>
+              <label className="acn-label">Confirmar Nova Senha</label>
+              <input className="acn-input" type="password" style={{width:'100%'}}
+                value={senhaForm.confirmar} onChange={e=>setSenhaForm(f=>({...f,confirmar:e.target.value}))}
+                onKeyDown={e=>e.key==='Enter'&&salvarSenha()} />
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px'}}
+                onClick={salvarSenha} disabled={senhaLoading}>
+                {senhaLoading ? 'Salvando...' : 'SALVAR SENHA'}
+              </button>
+              {!currentUser?.primeiro_acesso && (
+                <button className="acn-btn" style={{background:'#94a3b8',padding:'9px'}}
+                  onClick={()=>{setModalSenha(false);setSenhaMsg('');}}>
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

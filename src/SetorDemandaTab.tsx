@@ -475,4 +475,184 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
         <button key="conc" className="acn-btn" style={{background:'#22c55e'}} onClick={()=>concluir(d)}>CONCLUIR</button>,
         d.pausado
           ? <button key="ret" className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>retomar(d)}>▶ RETOMAR</button>
-          : <butto
+          : <button key="pau" className="acn-btn" style={{background:'#64748b',fontSize:10}} onClick={()=>pausar(d)}>⏸ PAUSAR</button>,
+      ];
+    if (d.status === 'Concluido')
+      return [<button key="log" className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>VER LOG</button>];
+    return [];
+  };
+
+  // ════════════════════════════════════════════════════════════════════════════
+  return (
+    <div>
+      {/* SELECTOR ABAS */}
+      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:`2px solid ${cor||'#1e293b'}`}}>
+        <button style={{flex:1,padding:'8px',background:abaAtiva==='demandas'?(cor||'#1e293b'):'white',color:abaAtiva==='demandas'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaAtiva('demandas')}>Demandas Ativas</button>
+        <button style={{flex:1,padding:'8px',background:abaAtiva==='relatorios'?(cor||'#1e293b'):'white',color:abaAtiva==='relatorios'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaAtiva('relatorios')}>Relatórios</button>
+      </div>
+
+      {abaAtiva === 'relatorios' ? <RelatoriosSetor setor={setor} cor={cor} /> : (
+        <>
+          <div className="sec-card">
+            <div className="sec-hdr" style={{background:cor||'#1e293b',color:'white'}}>
+              <span>{setor} — Demandas</span>
+              <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+                <span style={{fontSize:10,opacity:.8}}>
+                  {pendentes} pend. | {andamento} em and. {mediaT?`| média: ${fmtH(mediaT)}`:''}
+                </span>
+                {['Pendente','Em Andamento','Concluido','Todos'].map(s=>(
+                  <button key={s} className="acn-btn"
+                    style={{background:filtro===s?'white':'rgba(255,255,255,0.2)',color:filtro===s?(cor||'#1e293b'):'white',fontSize:10,padding:'3px 8px'}}
+                    onClick={()=>setFiltro(s)}>{s}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Legenda horas úteis */}
+            <div style={{background:'#f0fdf4',borderBottom:'1px solid #bbf7d0',padding:'4px 12px',fontSize:9,color:'#166534',display:'flex',alignItems:'center',gap:8}}>
+              <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:30) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
+            </div>
+
+            <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+              {loading ? <div className="acn-empty">Carregando...</div> : demandas.length===0 ? (
+                <div className="acn-empty">Nenhuma demanda {filtro!=='Todos'?`com status "${filtro}"`:''}.</div>
+              ) : (
+                <table>
+                  <thead><tr>
+                    <th>Data</th><th>OPL Ref.</th><th>Descrição</th><th>Status</th>
+                    <th>Responsável</th><th>Timer (h úteis)</th><th>KPI</th><th>Ações</th>
+                  </tr></thead>
+                  <tbody>
+                    {demandas.map(d => {
+                      const isAjuste = d.descricao?.startsWith('[AJUSTE]');
+                      const descExibida = isAjuste
+                        ? d.descricao.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','')
+                        : d.descricao?.replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—';
+                      const timer = timerUteis(d);
+                      const os = sacOs(d);
+                      return (
+                        <tr key={d.id} style={{background:sacRowBg(d,isAjuste)}}>
+                          <td style={{fontSize:10}}>{fmtDt(d.data_abertura)}</td>
+                          <td>{d.numero_opl||'—'}</td>
+                          <td style={{maxWidth:200}}>
+                            {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
+                            {sacBadge(d)}
+                            {sacFlagBadge(d)}
+                            {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
+                            <span style={{overflow:'hidden',textOverflow:'ellipsis',display:'block',whiteSpace:'nowrap',maxWidth:180}} title={descExibida}>{descExibida}</span>
+                          </td>
+                          <td><span className="acn-badge" style={{background:statusCor[d.status]||'#94a3b8'}}>{d.status}</span></td>
+                          <td>{d.responsavel_nome||'—'}</td>
+                          <td>
+                            {timer
+                              ? <span style={{fontFamily:'monospace',color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
+                              : <span style={{fontSize:10,color:'#94a3b8'}}>{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
+                            }
+                          </td>
+                          <td style={{fontSize:10,color:'#0d9488'}}>{d.status==='Concluido'?fmtH(d.tempo_execucao_horas):''}</td>
+                          <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{renderAcoes(d)}</div></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <OplMovimentadas setor={setor} />
+          <DemandaFooter setor={setor} />
+        </>
+      )}
+
+      {/* ════════ MODAL INICIAR ════════ */}
+      {modalIniciar && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">
+              {modalIniciar.sac_fase==='diagnostico' ? '🔬 Iniciar Diagnóstico SAC' : modalIniciar.sac_fase==='execucao' ? '🔧 Iniciar Reparo SAC' : `Iniciar — ${setor}`}
+            </div>
+            {modalIniciar.sac_os_id && sacOrdensMap[modalIniciar.sac_os_id] && (
+              <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:11}}>
+                <strong>OS:</strong> {sacOrdensMap[modalIniciar.sac_os_id].numero_os} &nbsp;|&nbsp;
+                {modalIniciar.sac_fase==='execucao'?<span style={{color:'#22c55e',fontWeight:700}}>✅ Aprovado — KPI execução inicia agora</span>:<span style={{color:'#0891b2'}}>KPI orçamento em andamento</span>}
+              </div>
+            )}
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10,background:'#f8fafc',padding:'8px 10px',borderRadius:4}}>
+              <strong>Demanda:</strong> {modalIniciar.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'}
+            </div>
+            <label className="acn-label">Responsável pela Execução *</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:12}}
+              value={responsavelIniciar} onChange={e=>setResponsavelIniciar(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&confirmarIniciar()} autoFocus />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:cor||'#1e293b',flex:1}} onClick={confirmarIniciar}>INICIAR</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL OBSERVAÇÃO / LOG ════════ */}
+      {modalObs && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:500}}>
+            <div className="modal-title">Observações / Log</div>
+            {(modalObs.logs_demanda||[]).length>0 && (
+              <div style={{maxHeight:180,overflowY:'auto',marginBottom:12,background:'#f8fafc',borderRadius:4,padding:'8px 10px',border:'1px solid #e2e8f0'}}>
+                {(modalObs.logs_demanda||[]).map((l,i)=>(
+                  <div key={i} style={{marginBottom:6,fontSize:10,borderBottom:i<(modalObs.logs_demanda||[]).length-1?'1px solid #e2e8f0':'none',paddingBottom:4}}>
+                    <span style={{color:'#94a3b8',fontSize:9}}>{l.hora?new Date(l.hora).toLocaleString('pt-BR'):''} · {l.usuario||''}</span>
+                    <div style={{color:'#374151',marginTop:2}}>{l.texto}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {modalObs.status !== 'Concluido' && (
+              <>
+                <label className="acn-label">Nova Observação {modalObs.sac_os_id?'(vai para o corpo da OS)':''}</label>
+                <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
+                  value={obsTexto} onChange={e=>setObsTexto(e.target.value)} />
+                <div style={{display:'flex',gap:8}}>
+                  <button className="acn-btn" style={{background:cor||'#1e293b',flex:1}} onClick={addObservacao}>SALVAR OBS.</button>
+                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObs(null)}>Fechar</button>
+                </div>
+              </>
+            )}
+            {modalObs.status === 'Concluido' && (
+              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalObs(null)}>Fechar</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL FINALIZAR ORÇAMENTO (Lab SAC) ════════ */}
+      {modalFinalizarOrc && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:480}}>
+            <div className="modal-title">🧾 Finalizar Orçamento — {sacOrdensMap[modalFinalizarOrc.sac_os_id]?.numero_os}</div>
+            <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+              Este orçamento será enviado ao SAC para aprovação do cliente. O KPI de elaboração será calculado agora.
+            </div>
+            <label className="acn-label">Laudo / Observações do Diagnóstico</label>
+            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
+              placeholder="Descreva o diagnóstico, componentes a substituir, procedimentos..."
+              value={finalizarOrcForm.observacoes} onChange={e=>setFinalizarOrcForm(f=>({...f,observacoes:e.target.value}))} />
+            <label className="acn-label">Valor do Orçamento (R$) *</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:10}} placeholder="Ex: 1.500,00"
+              value={finalizarOrcForm.valor} onChange={e=>setFinalizarOrcForm(f=>({...f,valor:e.target.value}))} />
+            <label className="acn-label">Condições de Pagamento</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:12}} placeholder="Ex: À vista ou 50%+50%"
+              value={finalizarOrcForm.condicoes} onChange={e=>setFinalizarOrcForm(f=>({...f,condicoes:e.target.value}))} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={finalizarOrcamento}>FINALIZAR E ENVIAR AO SAC</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFinalizarOrc(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

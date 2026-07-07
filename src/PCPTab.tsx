@@ -386,4 +386,13 @@ export default function PCPTab({ currentUser }) {
             <label className="acn-label">Motivo / Problema identificado *</label>
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
-           
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverEngenharia}>CONFIRMAR DEVOLUCAO</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

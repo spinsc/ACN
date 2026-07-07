@@ -305,4 +305,16 @@ export default function AjustesProjetoTab({ currentUser }) {
           <label className="acn-label">Nova Observacao</label>
           <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
             placeholder="Adicione uma observacao..." value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
-         
+          <div style={{display:'flex',gap:8}}>
+            <button className="acn-btn" style={{background:'#1e293b',flex:1}} onClick={addObs}>SALVAR</button>
+            <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObs(null)}>Fechar</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <OplMovimentadas setor="Ajustes" />
+    <DemandaFooter setor="Ajustes de Projeto" />
+  </div>
+);
+}

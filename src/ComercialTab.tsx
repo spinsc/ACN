@@ -789,4 +789,14 @@ export default function ComercialTab({ currentUser }) {
             <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>NF: <strong>#{modalEntregue.numero_nf}</strong></div>
             <label className="acn-label">Nome completo de quem recebeu o equipamento</label>
             <input className="acn-input" style={{width:'100%',marginBottom:14,fontSize:13,padding:'8px'}}
-              autoFocus placeholder="Nome do receptor" value={nomeRecebeu} onChange={e=>setN
+              autoFocus placeholder="Nome do receptor" value={nomeRecebeu} onChange={e=>setNomeRecebeu(e.target.value)} onKeyDown={e=>e.key==='Enter'&&confirmarEntrega()} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'8px'}} onClick={confirmarEntrega}>CONFIRMAR ENTREGA</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEntregue(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

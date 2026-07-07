@@ -290,4 +290,12 @@ export default function EngenhariaTab({ currentUser }) {
               placeholder="Descreva o motivo da devolucao..."
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',f
+              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverComercial}>CONFIRMAR DEVOLUCAO</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

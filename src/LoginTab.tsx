@@ -144,4 +144,79 @@ export default function LoginTab() {
         {/* ── TELA ESQUECI SENHA ── */}
         {telaEsqueci ? (
           <>
-            <div style={{ fontSize:13, color:'#1e293b', fontWeight:600, marginBottom:12 }}>🔑 Recuperar Senha</di
+            <div style={{ fontSize:13, color:'#1e293b', fontWeight:600, marginBottom:12 }}>🔑 Recuperar Senha</div>
+            <p style={{ fontSize:12, color:'#64748b', marginBottom:16, lineHeight:1.5 }}>
+              Informe seu e-mail de login. Enviaremos uma senha temporária pelo WhatsApp cadastrado.
+            </p>
+
+            {resetMsg && (
+              <div style={{
+                padding:'10px 12px', borderRadius:8, marginBottom:14, fontSize:12,
+                background: resetMsg.startsWith('ok:') ? '#f0fdf4' : '#fef2f2',
+                color: resetMsg.startsWith('ok:') ? '#166534' : '#991b1b',
+                border: `1px solid ${resetMsg.startsWith('ok:') ? '#86efac' : '#fca5a5'}`,
+              }}>
+                {resetMsg.startsWith('ok:') ? '✅ ' : '❌ '}{resetMsg.slice(3)}
+              </div>
+            )}
+
+            {!resetMsg.startsWith('ok:') && (
+              <form onSubmit={handleEsqueci}>
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ display:'block', fontSize:12, fontWeight:500, color:'#1a3a52', marginBottom:6 }}>E-mail de login</label>
+                  <input type="email" style={inputStyle} value={emailReset}
+                    onChange={e=>setEmailReset(e.target.value)} required disabled={resetLoading} />
+                </div>
+                <button type="submit" disabled={resetLoading} style={btnStyle(resetLoading?'#94a3b8':'#0f766e')}>
+                  {resetLoading ? '⏳ Enviando...' : '📱 Enviar senha temporária'}
+                </button>
+              </form>
+            )}
+
+            <button onClick={()=>{setTelaEsqueci(false);setResetMsg('');setEmailReset('');}}
+              style={{ width:'100%', marginTop:10, padding:'10px', fontSize:13, background:'none', border:'1px solid #e2e8f0', borderRadius:8, cursor:'pointer', color:'#64748b' }}>
+              ← Voltar ao login
+            </button>
+          </>
+        ) : (
+          /* ── TELA LOGIN ── */
+          <>
+            {error && (
+              <div style={{ background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:8, padding:12, marginBottom:16, fontSize:13, color:'#991b1b' }}>
+                ❌ {error}
+              </div>
+            )}
+
+            <form onSubmit={handleLogin}>
+              <div style={{ marginBottom:18 }}>
+                <label style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>E-mail</label>
+                <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                  disabled={loading} style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <label style={{ display:'block', fontSize:13, fontWeight:500, color:'#1a3a52', marginBottom:7 }}>Senha</label>
+                <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
+                  disabled={loading} placeholder="••••••" style={inputStyle} />
+              </div>
+              <button type="submit" disabled={loading} style={btnStyle(loading?'#94a3b8':'#22c55e')}>
+                {loading ? '⏳ Entrando...' : '✓ Entrar'}
+              </button>
+            </form>
+
+            <div style={{ textAlign:'center', marginTop:14 }}>
+              <button onClick={()=>setTelaEsqueci(true)}
+                style={{ background:'none', border:'none', fontSize:12, color:'#0f766e', cursor:'pointer', textDecoration:'underline' }}>
+                Esqueci minha senha
+              </button>
+            </div>
+          </>
+        )}
+
+        <div style={{ marginTop:28, paddingTop:16, borderTop:'1px solid #e0e0e0', textAlign:'center', fontSize:11, color:'#999' }}>
+          <p style={{margin:0}}>Ambiente de Produção | v24.0</p>
+          <p style={{margin:'3px 0 0'}}>© 2025 ACN Sistemas</p>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -128,6 +128,10 @@ export default function SacTab({ currentUser }) {
   const [fotosSaidaFiles, setFotosSaidaFiles] = useState([]);
   const [novoEquip, setNovoEquip]       = useState('');
 
+  // Lista de equipamentos por item (cresce/diminui conforme quantidade)
+  const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', defeito:'' };
+  const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
+
   useEffect(() => { fetchOrdens(); fetchEquipamentos(); fetchCategorias(); }, []);
 
   const fetchCategorias = async () => {
@@ -153,6 +157,17 @@ export default function SacTab({ currentUser }) {
   const catSelecionada = categorias.find(c => c.nome === form.tipo_projeto);
   const hasDespesas = catSelecionada?.tem_despesas || form.tipo_projeto?.toLowerCase().includes('externo');
 
+  // Redimensiona equipLista conforme quantidade
+  const handleQtdChange = (n: number) => {
+    const newN = Math.max(1, n || 1);
+    setForm(f => ({ ...f, quantidade: newN }));
+    setEquipLista(prev => {
+      const cur = [...prev];
+      while (cur.length < newN) cur.push({ ...EQUIP_VAZIO });
+      return cur.slice(0, newN);
+    });
+  };
+
   // ── CRIAR OS ──────────────────────────────────────────────────────────────
   const criarOS = async () => {
     if (!form.cliente_nome.trim()) { alert('Nome do cliente obrigatório!'); return; }
@@ -173,10 +188,12 @@ export default function SacTab({ currentUser }) {
       tipo_servico: form.tipo_servico,
       tipo_projeto: form.tipo_projeto || null,
       equipamento_nome: form.equipamento_nome,
-      marca: form.marca || null, modelo: form.modelo || null,
-      numero_serie: form.numero_serie || null,
+      marca: equipLista[0]?.marca || null,
+      modelo: equipLista[0]?.modelo || null,
+      numero_serie: equipLista[0]?.numero_serie || null,
       quantidade: form.quantidade || 1,
-      defeito_reclamado: form.defeito_reclamado || null,
+      defeito_reclamado: equipLista[0]?.defeito || null,
+      equipamentos_lista: equipLista,
       observacoes: form.observacoes || null,
       cliente_nome: form.cliente_nome,
       empresa_orgao: form.empresa_orgao || null,
@@ -235,6 +252,7 @@ export default function SacTab({ currentUser }) {
     notificarEvento('sac_os_aberta', `📋 *Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setAcessInput('');
+    setEquipLista([{ ...EQUIP_VAZIO }]);
     setModalNova(false); setSalvando(false); fetchOrdens();
   };
 
@@ -557,7 +575,7 @@ export default function SacTab({ currentUser }) {
       <div className="sec-card">
         <div className="sec-hdr">
           <span>SAC — Ordens de Serviço ({ordensFiltradas.length})</span>
-          <button className="acn-btn" style={{background:'#0f766e'}} onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setAcessInput('');setModalNova(true);}}>
+          <button className="acn-btn" style={{background:'#0f766e'}} onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
             + Nova OS
           </button>
         </div>
@@ -636,11 +654,22 @@ export default function SacTab({ currentUser }) {
       {/* ════════ MODAL NOVA OS ════════ */}
       {modalNova && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'92vh',overflowY:'auto'}}>
-            <div className="modal-title">📋 Nova Ordem de Serviço</div>
+          <div className="modal-box" style={{maxWidth:700,width:'95vw',maxHeight:'92vh',overflowY:'auto',padding:0}}>
 
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>CLASSIFICAÇÃO</div>
+            {/* Header */}
+            <div style={{background:'#0f766e',padding:'14px 20px',borderRadius:'8px 8px 0 0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:14,color:'white',letterSpacing:.3}}>📋 Nova Ordem de Serviço</div>
+                <div style={{fontSize:10,color:'rgba(255,255,255,.7)',marginTop:2}}>Preencha os dados para abertura da OS</div>
+              </div>
+              <button style={{background:'rgba(255,255,255,.15)',border:'none',color:'white',borderRadius:4,cursor:'pointer',padding:'4px 10px',fontSize:12}} onClick={()=>setModalNova(false)}>✕</button>
+            </div>
+
+            <div style={{padding:'16px 20px 20px'}}>
+
+            {/* CLASSIFICAÇÃO */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Classificação</div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="acn-label">Tipo de Serviço *</label>
@@ -667,36 +696,63 @@ export default function SacTab({ currentUser }) {
                     {equipamentos.map(e=><option key={e.id} value={e.nome}>{e.nome}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="acn-label">Quantidade</label>
-                  <input type="number" min={1} className="acn-input" style={{width:'100%'}} value={form.quantidade}
-                    onChange={e=>setForm(f=>({...f,quantidade:Number(e.target.value)}))} />
+                <div className="form-group" style={{maxWidth:90}}>
+                  <label className="acn-label">Qtd</label>
+                  <input type="number" min={1} max={20} className="acn-input" style={{width:'100%'}} value={form.quantidade}
+                    onChange={e=>handleQtdChange(Number(e.target.value))} />
                 </div>
               </div>
             </div>
 
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>DADOS DO EQUIPAMENTO</div>
-              <div className="form-row">
-                <div className="form-group"><label className="acn-label">Marca</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.marca} onChange={e=>setForm(f=>({...f,marca:e.target.value}))} /></div>
-                <div className="form-group"><label className="acn-label">Modelo</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.modelo} onChange={e=>setForm(f=>({...f,modelo:e.target.value}))} /></div>
-                <div className="form-group"><label className="acn-label">Número de Série</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.numero_serie} onChange={e=>setForm(f=>({...f,numero_serie:e.target.value}))} /></div>
+            {/* EQUIPAMENTOS — um card por unidade */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>
+                Dados do{equipLista.length > 1 ? 's' : ''} Equipamento{equipLista.length > 1 ? 's' : ''} ({equipLista.length})
               </div>
-              <div className="form-row">
-                <div className="form-group" style={{flex:2}}><label className="acn-label">Defeito Reclamado *</label>
-                  <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}} value={form.defeito_reclamado}
-                    onChange={e=>setForm(f=>({...f,defeito_reclamado:e.target.value}))} /></div>
-                <div className="form-group" style={{flex:1}}><label className="acn-label">Observações</label>
-                  <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}} value={form.observacoes}
-                    onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} /></div>
-              </div>
+              {equipLista.map((eq, idx) => (
+                <div key={idx} style={{border:'1px solid var(--border)',borderRadius:6,padding:'10px 12px',marginBottom:8}}>
+                  {equipLista.length > 1 && (
+                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                      <span style={{background:'#0f766e',color:'white',fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:10}}>#{idx+1}</span>
+                      <span style={{fontSize:10,opacity:.6}}>Equipamento {idx+1} de {equipLista.length}</span>
+                    </div>
+                  )}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="acn-label">Marca</label>
+                      <input className="acn-input" style={{width:'100%'}} value={eq.marca}
+                        onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,marca:e.target.value}:x))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="acn-label">Modelo</label>
+                      <input className="acn-input" style={{width:'100%'}} value={eq.modelo}
+                        onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,modelo:e.target.value}:x))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="acn-label">Nº de Série</label>
+                      <input className="acn-input" style={{width:'100%'}} value={eq.numero_serie}
+                        onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
+                    </div>
+                  </div>
+                  <div className="form-group" style={{marginTop:4}}>
+                    <label className="acn-label">Defeito Reclamado *</label>
+                    <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}} value={eq.defeito}
+                      onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,defeito:e.target.value}:x))} />
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>DADOS DO CLIENTE</div>
+            {/* OBSERVAÇÕES GERAIS */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Observações Gerais</div>
+              <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}} placeholder="Observações adicionais..."
+                value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} />
+            </div>
+
+            {/* DADOS DO CLIENTE */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Dados do Cliente</div>
               <div className="form-row">
                 <div className="form-group"><label className="acn-label">Nome do Cliente *</label>
                   <input className="acn-input" style={{width:'100%'}} value={form.cliente_nome} onChange={e=>setForm(f=>({...f,cliente_nome:e.target.value.toUpperCase()}))} /></div>
@@ -715,8 +771,9 @@ export default function SacTab({ currentUser }) {
               </div>
             </div>
 
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>PRAZOS</div>
+            {/* PRAZOS */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Prazos</div>
               <div className="form-row">
                 {form.tipo_servico !== 'Garantia' && (
                   <div className="form-group"><label className="acn-label">Prazo para Orçamento</label>
@@ -733,8 +790,8 @@ export default function SacTab({ currentUser }) {
 
             {/* Despesas — Serviço Externo */}
             {hasDespesas && (
-              <div style={{background:'#fefce8',border:'1px solid #fde68a',borderRadius:4,padding:10,marginBottom:10}}>
-                <div style={{fontWeight:700,fontSize:10,color:'#92400e',marginBottom:8}}>🚗 DESPESAS DE CAMPO (Serviço Externo)</div>
+              <div style={{border:'1px solid rgba(245,158,11,.35)',borderRadius:6,padding:'10px 12px',marginBottom:12,background:'rgba(245,158,11,.06)'}}>
+                <div style={{fontWeight:700,fontSize:9,color:'#b45309',letterSpacing:1,textTransform:'uppercase',marginBottom:8}}>🚗 Despesas de Campo</div>
                 <div className="form-row">
                   <div className="form-group"><label className="acn-label">Deslocamento (R$)</label>
                     <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
@@ -746,7 +803,7 @@ export default function SacTab({ currentUser }) {
                     <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
                       value={form.despesa_alimentacao} onChange={e=>setForm(f=>({...f,despesa_alimentacao:e.target.value}))} /></div>
                   <div className="form-group" style={{alignSelf:'flex-end'}}>
-                    <div style={{fontSize:10,fontWeight:700,color:'#92400e',padding:'4px 8px',background:'#fde68a',borderRadius:4}}>
+                    <div style={{fontSize:10,fontWeight:700,color:'#b45309',padding:'4px 8px',background:'rgba(245,158,11,.15)',borderRadius:4,border:'1px solid rgba(245,158,11,.3)'}}>
                       Total: R$ {(
                         (parseFloat(form.despesa_deslocamento.replace(',','.')||'0')||0) +
                         (parseFloat(form.despesa_hospedagem.replace(',','.')||'0')||0) +
@@ -759,8 +816,8 @@ export default function SacTab({ currentUser }) {
             )}
 
             {/* Acessórios */}
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:10}}>
-              <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>CHECKLIST DE ACESSÓRIOS</div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Checklist de Acessórios</div>
               <div style={{display:'flex',gap:6,marginBottom:8}}>
                 <input className="acn-input" style={{flex:1}} placeholder="Ex: Carregador, Manual, Cabo USB..."
                   value={acessInput} onChange={e=>setAcessInput(e.target.value)}
@@ -768,11 +825,11 @@ export default function SacTab({ currentUser }) {
                 <button className="acn-btn" style={{background:'#0f766e',fontSize:10}} onClick={()=>{ if(acessInput.trim()){ setForm(f=>({...f,acessorios:[...f.acessorios,{descricao:acessInput.trim(),presente:true}]})); setAcessInput(''); }}}>+ Add</button>
               </div>
               {form.acessorios.length === 0 ? (
-                <div style={{fontSize:10,color:'#94a3b8'}}>Nenhum acessório adicionado.</div>
+                <div style={{fontSize:10,opacity:.5}}>Nenhum acessório adicionado.</div>
               ) : (
                 <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
                   {form.acessorios.map((a,i) => (
-                    <label key={i} style={{display:'flex',alignItems:'center',gap:4,background:'white',border:'1px solid #e2e8f0',borderRadius:4,padding:'3px 8px',fontSize:10,cursor:'pointer'}}>
+                    <label key={i} style={{display:'flex',alignItems:'center',gap:4,border:'1px solid var(--border)',borderRadius:4,padding:'3px 8px',fontSize:10,cursor:'pointer'}}>
                       <input type="checkbox" checked={a.presente}
                         onChange={()=>setForm(f=>({...f,acessorios:f.acessorios.map((x,j)=>j===i?{...x,presente:!x.presente}:x)}))} />
                       {a.descricao}
@@ -785,8 +842,8 @@ export default function SacTab({ currentUser }) {
             </div>
 
             {/* Fotos entrada */}
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:10,marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:10,color:'#0f766e',marginBottom:8}}>FOTOS DE ENTRADA</div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Fotos de Entrada</div>
               <input type="file" accept="image/*" multiple
                 onChange={e=>setFotosEntradaFiles(Array.from(e.target.files||[]))} />
               {fotosEntradaFiles.length > 0 && (
@@ -794,22 +851,25 @@ export default function SacTab({ currentUser }) {
               )}
             </div>
 
+            {/* Info */}
             {form.tipo_servico !== 'Garantia' && (
-              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-                ℹ️ Após abrir, a OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.
+              <div style={{border:'1px solid rgba(59,130,246,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(59,130,246,.06)'}}>
+                ℹ️ A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.
               </div>
             )}
             {form.tipo_servico === 'Garantia' && (
-              <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+              <div style={{border:'1px solid rgba(34,197,94,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(34,197,94,.06)'}}>
                 ✅ Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.
               </div>
             )}
 
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0f766e',flex:1,padding:'9px',opacity:salvando?0.6:1}}
+            <div style={{display:'flex',gap:8,marginTop:4}}>
+              <button className="acn-btn" style={{background:'#0f766e',flex:1,padding:'10px',fontSize:11,opacity:salvando?0.6:1}}
                 onClick={criarOS} disabled={salvando}>{salvando?'Salvando...':'ABRIR OS'}</button>
-              <button className="acn-btn" style={{background:'#94a3b8',padding:'9px'}} onClick={()=>setModalNova(false)}>Cancelar</button>
+              <button className="acn-btn" style={{background:'#64748b',padding:'10px'}} onClick={()=>setModalNova(false)}>Cancelar</button>
             </div>
+
+            </div>{/* fim padding wrapper */}
           </div>
         </div>
       )}
@@ -1107,4 +1167,8 @@ function PrintOS({ os }) {
       )}
 
       <div style={{borderTop:'1px solid #e2e8f0',paddingTop:8,marginTop:8,fontSize:10,color:'#94a3b8',textAlign:'center'}}>
-        ACN Sinal Verde — Documento gerado em {new Date().
+        ACN Sinal Verde — Documento gerado em {new Date().toLocaleString('pt-BR')}
+      </div>
+    </div>
+  );
+}

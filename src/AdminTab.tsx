@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 
 
-const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Visualizador'];
+const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Laboratorio','Visualizador'];
 
 // ---- USUARIOS ----
 const TODAS_ABAS = [
@@ -935,7 +935,7 @@ function PainelDados() {
 }
 
 // ---- PAINEL NOTIFICAÇÕES ----
-const PERFIS_WA = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras'];
+const PERFIS_WA = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Laboratorio'];
 
 function PainelNotificacoes() {
   const [eventos, setEventos] = useState([]);
@@ -1005,4 +1005,73 @@ function PainelNotificacoes() {
                     <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
                       {PERFIS_WA.map(p => {
                         const selecionado = (ev.destinatarios_perfis||[]).includes(p);
-                        const carregando
+                        const carregando = salvando === ev.evento;
+                        return (
+                          <button key={p} onClick={()=>!carregando && togglePerfil(ev,p)}
+                            style={{
+                              fontSize:9, padding:'2px 6px', border:'1px solid',
+                              borderRadius:3, cursor: carregando ? 'default' : 'pointer',
+                              background: selecionado ? '#0f766e' : 'transparent',
+                              borderColor: selecionado ? '#0f766e' : '#d1d5db',
+                              color: selecionado ? '#fff' : '#6b7280',
+                              fontWeight: selecionado ? 700 : 400,
+                              opacity: carregando ? 0.6 : 1,
+                            }}>
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- ADMINTAB PRINCIPAL ----
+const ABAS_ADMIN = [
+  { id:'usuarios',       label:'Usuários' },
+  { id:'notificacoes',   label:'🔔 Notificações WA' },
+  { id:'checklist',      label:'Checklist CQ' },
+  { id:'kpis',           label:'Metas KPI' },
+  { id:'logs',           label:'Logs do Sistema' },
+  { id:'dados',          label:'🗑 Dados / Limpeza' },
+];
+
+export default function AdminTab() {
+  const [abaAtiva, setAbaAtiva] = useState('usuarios');
+
+  return (
+    <div>
+      <div className="sec-card" style={{marginBottom:10}}>
+        <div className="sec-body" style={{padding:'6px 10px',display:'flex',gap:4}}>
+          {ABAS_ADMIN.map(a => (
+            <button
+              key={a.id}
+              className="acn-btn"
+              style={{
+                background: abaAtiva === a.id ? '#1e293b' : '#f1f5f9',
+                color: abaAtiva === a.id ? '#fff' : '#475569',
+              }}
+              onClick={() => setAbaAtiva(a.id)}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {abaAtiva === 'usuarios'     && <PainelUsuarios />}
+      {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
+      {abaAtiva === 'checklist'    && <PainelChecklist />}
+      {abaAtiva === 'kpis'         && <PainelKPI />}
+      {abaAtiva === 'logs'         && <PainelLogs />}
+      {abaAtiva === 'dados'        && <PainelDados />}
+    </div>
+  );
+}
