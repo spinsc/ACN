@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 
 
-const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Laboratorio','Analista de Licitações','Coordenador de Propostas','Visualizador'];
+const PERFIS = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Laboratorio','Analista de Licitações','Analista Técnico','Visualizador'];
 
 // ---- USUARIOS ----
 const TODAS_ABAS = [

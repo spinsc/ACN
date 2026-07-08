@@ -110,7 +110,7 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh }) {
 
   const isAdmin = currentUser?.perfil === 'Admin';
   const isAnalista = currentUser?.perfil === 'Analista de Licitações' || isAdmin;
-  const isCoordenador = currentUser?.perfil === 'Coordenador de Propostas' || isAdmin;
+  const isCoordenador = currentUser?.perfil === 'Analista Técnico' || isAdmin;
 
   const fetchAnexos = useCallback(async () => {
     const { data } = await supabase.from('licitacao_anexos')
@@ -265,7 +265,7 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh }) {
                 <InfoRow label="Limite Análise Técnica" value={fmtDT(licit.data_limite_analise_tecnica)} alert={isVencido(licit.data_limite_analise_tecnica)} />
               </div>
               {licit.analista_nome && <InfoRow label="Analista" value={`${licit.analista_nome} (${licit.analista_email||''})`} />}
-              {licit.coordenador_nome && <InfoRow label="Coordenador" value={`${licit.coordenador_nome} (${licit.coordenador_email||''})`} />}
+              {licit.coordenador_nome && <InfoRow label="Analista Técnico" value={`${licit.coordenador_nome} (${licit.coordenador_email||''})`} />}
               {licit.obs_encerramento && <InfoRow label="Obs. Encerramento" value={licit.obs_encerramento} />}
             </div>
           )}
@@ -532,8 +532,8 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               <Input label="Analista de Licitações" field="analista_nome" />
               <Input label="E-mail do Analista" field="analista_email" type="email" />
-              <Input label="Coordenador de Propostas" field="coordenador_nome" />
-              <Input label="E-mail do Coordenador" field="coordenador_email" type="email" />
+              <Input label="Analista Técnico" field="coordenador_nome" />
+              <Input label="E-mail do Analista Técnico" field="coordenador_email" type="email" />
             </div>
           </div>
         </div>
