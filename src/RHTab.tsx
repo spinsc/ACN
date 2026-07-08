@@ -697,7 +697,7 @@ export default function RHTab({ currentUser }) {
   const [modalLanc, setModalLanc]         = useState(false);
   const [modalAut, setModalAut]           = useState(false);
 
-  const isAdmin = currentUser?.perfil === 'Admin' || currentUser?.perfil === 'RH' || currentUser?.perfil === 'Gerente';
+  const isAdmin = true; // acesso já controlado pelo dashboard (abas_permitidas)
 
   const fetch = useCallback(async () => {
     setLoading(true);

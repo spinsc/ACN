@@ -108,9 +108,9 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh }) {
   const [confirmStatus, setConfirmStatus] = useState<string|null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = currentUser?.perfil === 'Admin';
-  const isAnalista = currentUser?.perfil === 'Analista de Licitações' || isAdmin;
-  const isCoordenador = currentUser?.perfil === 'Analista Técnico' || isAdmin;
+  const isAdmin = true; // acesso já controlado pelo dashboard
+  const isAnalista = true;
+  const isCoordenador = true;
 
   const fetchAnexos = useCallback(async () => {
     const { data } = await supabase.from('licitacao_anexos')
@@ -620,8 +620,8 @@ export default function LicitacoesTab({ currentUser }) {
   const [modalNova, setModalNova] = useState(false);
   const [selected, setSelected] = useState<any|null>(null);
 
-  const isAdmin = currentUser?.perfil === 'Admin';
-  const isAnalista = currentUser?.perfil === 'Analista de Licitações' || isAdmin;
+  const isAdmin = true; // acesso já controlado pelo dashboard
+  const isAnalista = true;
 
   const fetch = useCallback(async () => {
     setLoading(true);

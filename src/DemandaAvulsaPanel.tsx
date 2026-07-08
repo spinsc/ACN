@@ -47,6 +47,145 @@ async function uploadAnexo(file: File, demandaId: string): Promise<string | null
   return pub?.publicUrl || null;
 }
 
+// Status geral calculado pelas etapas
+function calcStatusEtapas(etapas: any[]): string {
+  if (!etapas || etapas.length === 0) return 'Pendente';
+  if (etapas.every(e => e.status === 'Concluída')) return 'Concluída';
+  if (etapas.some(e => e.status === 'Em Andamento')) return 'Em Andamento';
+  return 'Pendente';
+}
+
+function etapaVencida(e: any) {
+  return alertClass(e.prazo, e.status);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARD DE ETAPA (dentro do ModalDetalhe)
+// ─────────────────────────────────────────────────────────────────────────────
+function EtapaCard({ etapa, idx, total, onUpdate, currentUser }) {
+  const [obsExec, setObsExec] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const al = etapaVencida(etapa);
+  const diasV = diasParaVencer(etapa.prazo);
+  const corBorda = al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : STATUS_COR[etapa.status] || '#e2e8f0';
+
+  const iniciar = async () => {
+    if (!confirm(`Iniciar Etapa ${idx + 1}?`)) return;
+    setSalvando(true);
+    await onUpdate(idx, { status: 'Em Andamento', data_inicio: new Date().toISOString() });
+    setSalvando(false);
+  };
+  const concluir = async () => {
+    if (!confirm(`Concluir Etapa ${idx + 1}?`)) return;
+    setSalvando(true);
+    await onUpdate(idx, { status: 'Concluída', data_fim: new Date().toISOString() });
+    setSalvando(false);
+  };
+  const addObs = async () => {
+    if (!obsExec.trim()) return;
+    setSalvando(true);
+    const obs_lista = [...(etapa.obs_execucao || []), { texto: obsExec, usuario: currentUser?.nome, data: new Date().toISOString() }];
+    await onUpdate(idx, { obs_execucao: obs_lista });
+    setObsExec('');
+    setSalvando(false);
+  };
+
+  const inicio = etapa.data_inicio ? new Date(etapa.data_inicio) : null;
+  const fim = etapa.data_fim ? new Date(etapa.data_fim) : null;
+  const tempoH = inicio ? ((fim || new Date()).getTime() - inicio.getTime()) / 3600000 : null;
+
+  return (
+    <div style={{ border:`1.5px solid ${corBorda}`, borderRadius:8, marginBottom:10, overflow:'hidden' }}>
+      {/* Header da etapa */}
+      <div style={{ background: corBorda + '15', borderBottom:`1px solid ${corBorda}30`, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:6 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ background: corBorda, color:'#fff', borderRadius:12, padding:'1px 8px', fontSize:9, fontWeight:800 }}>
+            ETAPA {idx + 1}/{total}
+          </span>
+          <span style={{ background: STATUS_COR[etapa.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>
+            {etapa.status}
+          </span>
+          {al && (
+            <span style={{ fontSize:9, fontWeight:700, color: al === 'vencida' ? '#dc2626' : '#d97706' }}>
+              {al === 'vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d`}
+            </span>
+          )}
+        </div>
+        <div style={{ display:'flex', gap:5 }}>
+          {etapa.status === 'Pendente' && (
+            <button onClick={iniciar} disabled={salvando}
+              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+              ▶ Iniciar
+            </button>
+          )}
+          {etapa.status === 'Em Andamento' && (
+            <button onClick={concluir} disabled={salvando}
+              style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+              ✓ Concluir
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Body da etapa */}
+      <div style={{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:6 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+          <div>
+            <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>Responsável</div>
+            <div style={{ fontSize:11, fontWeight:600 }}>{etapa.responsavel_nome || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>Prazo</div>
+            <div style={{ fontSize:11, fontWeight: al ? 700 : 400, color: al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : '#1f2937' }}>
+              {fmtDT(etapa.prazo)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>
+              {etapa.data_fim ? 'Tempo Total' : etapa.data_inicio ? 'Em andamento' : 'KPI'}
+            </div>
+            <div style={{ fontSize:11, color:'#2563eb', fontWeight:700 }}>
+              {tempoH !== null ? fmtH(tempoH) : '—'}
+            </div>
+          </div>
+        </div>
+
+        {etapa.obs_criacao && (
+          <div style={{ fontSize:10, color:'#6b7280', background:'#f8fafc', borderRadius:4, padding:'4px 8px' }}>
+            {etapa.obs_criacao}
+          </div>
+        )}
+
+        {/* Histórico de obs de execução */}
+        {(etapa.obs_execucao || []).length > 0 && (
+          <div style={{ borderLeft:'2px solid #2563eb', paddingLeft:8 }}>
+            {[...(etapa.obs_execucao || [])].reverse().map((o: any, i: number) => (
+              <div key={i} style={{ marginBottom:4 }}>
+                <span style={{ fontSize:8, color:'#9ca3af' }}>{o.usuario} · {fmtDT(o.data)}</span>
+                <div style={{ fontSize:10, color:'#1f2937' }}>{o.texto}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Adicionar obs de execução */}
+        {etapa.status !== 'Concluída' && (
+          <div style={{ display:'flex', gap:6 }}>
+            <input value={obsExec} onChange={e => setObsExec(e.target.value)}
+              placeholder="Observação durante execução..."
+              style={{ flex:1, padding:'4px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+              onKeyDown={e => e.key === 'Enter' && addObs()} />
+            <button onClick={addObs} disabled={salvando || !obsExec.trim()}
+              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'4px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+              +
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE DETALHE / EDIÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
@@ -61,7 +200,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [mostrarDesignar, setMostrarDesignar] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = currentUser?.perfil === 'Admin' || currentUser?.perfil === 'Engenharia' || currentUser?.perfil === 'Gerente';
+  const temEtapas = (d.etapas || []).length > 0;
 
   const reload = useCallback(async () => {
     const [{ data: dem }, { data: anx }] = await Promise.all([
@@ -84,7 +223,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     onRefresh();
   };
 
-  // ── Designar responsável ─────────────────────────────────────────────────
+  // ── Designar responsável (somente demandas simples) ──────────────────────
   const salvarDesignar = async () => {
     if (!designarForm.responsavel_nome.trim()) { alert('Informe o responsável!'); return; }
     if (!designarForm.prazo) { alert('Informe o prazo!'); return; }
@@ -101,22 +240,35 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     onRefresh();
   };
 
-  // ── Marcar início ────────────────────────────────────────────────────────
+  // ── Ações da demanda simples ─────────────────────────────────────────────
   const iniciar = async () => {
     if (!confirm('Marcar início da execução agora?')) return;
     const agora = new Date().toISOString();
     await supabase.from('demandas_avulsas').update({ status: 'Em Andamento', data_inicio: agora, atualizado_em: agora }).eq('id', d.id);
-    await reload();
-    onRefresh();
+    await reload(); onRefresh();
   };
-
-  // ── Marcar fim ───────────────────────────────────────────────────────────
   const concluir = async () => {
     if (!confirm('Marcar como concluída?')) return;
     const agora = new Date().toISOString();
     await supabase.from('demandas_avulsas').update({ status: 'Concluída', data_fim: agora, atualizado_em: agora }).eq('id', d.id);
-    await reload();
-    onRefresh();
+    await reload(); onRefresh();
+  };
+
+  // ── Atualizar etapa individual ───────────────────────────────────────────
+  const updateEtapa = async (idx: number, patch: any) => {
+    const etapas = [...(d.etapas || [])];
+    etapas[idx] = { ...etapas[idx], ...patch };
+    // Recalcula status geral
+    const novoStatus = calcStatusEtapas(etapas);
+    const agora = new Date().toISOString();
+    const upd: any = { etapas, atualizado_em: agora };
+    if (novoStatus !== d.status) {
+      upd.status = novoStatus;
+      if (novoStatus === 'Em Andamento' && !d.data_inicio) upd.data_inicio = agora;
+      if (novoStatus === 'Concluída') upd.data_fim = agora;
+    }
+    await supabase.from('demandas_avulsas').update(upd).eq('id', d.id);
+    await reload(); onRefresh();
   };
 
   // ── Nova informação ──────────────────────────────────────────────────────
@@ -155,56 +307,70 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     await reload();
   };
 
-  // KPI
-  const inicio = d.data_inicio ? new Date(d.data_inicio) : null;
-  const fim = d.data_fim ? new Date(d.data_fim) : null;
-  const tempoH = inicio ? ((fim || new Date()).getTime() - inicio.getTime()) / 3600000 : null;
   const alerta = alertClass(d.prazo, d.status);
   const diasV = diasParaVencer(d.prazo);
   const corStatus = STATUS_COR[d.status] || '#6b7280';
 
+  // Progresso de etapas
+  const etapas: any[] = d.etapas || [];
+  const etapasConcluidas = etapas.filter(e => e.status === 'Concluída').length;
+  const pct = etapas.length > 0 ? Math.round((etapasConcluidas / etapas.length) * 100) : 0;
+
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'flex-start', justifyContent:'flex-end' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:'min(580px,96vw)', height:'100vh', background:'#fff', display:'flex', flexDirection:'column', boxShadow:'-4px 0 24px #0003' }}>
+      <div style={{ width:'min(620px,96vw)', height:'100vh', background:'#fff', display:'flex', flexDirection:'column', boxShadow:'-4px 0 24px #0003' }}>
 
         {/* Header */}
         <div style={{ background: corStatus, color:'#fff', padding:'12px 16px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexShrink:0 }}>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:9, opacity:.8, fontWeight:600 }}>{d.status.toUpperCase()} · {d.prioridade}</div>
             <div style={{ fontSize:14, fontWeight:700, lineHeight:1.3 }}>{d.titulo}</div>
-            {d.responsavel_nome && <div style={{ fontSize:10, opacity:.85 }}>👤 {d.responsavel_nome}</div>}
+            {temEtapas ? (
+              <div style={{ fontSize:10, opacity:.9, marginTop:2 }}>
+                {etapasConcluidas}/{etapas.length} etapas concluídas
+              </div>
+            ) : (
+              d.responsavel_nome && <div style={{ fontSize:10, opacity:.85 }}>👤 {d.responsavel_nome}</div>
+            )}
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', flexShrink:0 }}>✕</button>
         </div>
+
+        {/* Barra de progresso (etapas múltiplas) */}
+        {temEtapas && (
+          <div style={{ height:5, background:'#e2e8f0', flexShrink:0 }}>
+            <div style={{ height:'100%', width:`${pct}%`, background:'#16a34a', transition:'width .4s' }} />
+          </div>
+        )}
 
         {/* Alertas de prazo */}
         {alerta && (
           <div style={{ padding:'6px 16px', background: alerta === 'vencida' ? '#fef2f2' : '#fffbeb',
             borderBottom:`1px solid ${alerta === 'vencida' ? '#fca5a5' : '#fcd34d'}`,
-            color: alerta === 'vencida' ? '#dc2626' : '#d97706', fontWeight:700, fontSize:11 }}>
-            {alerta === 'vencida' ? '🔴 TAREFA VENCIDA' : `🟡 Vence em ${diasV} dia${diasV === 1 ? '' : 's'}`} — prazo: {fmtDT(d.prazo)}
+            color: alerta === 'vencida' ? '#dc2626' : '#d97706', fontWeight:700, fontSize:11, flexShrink:0 }}>
+            {alerta === 'vencida' ? '🔴 TAREFA VENCIDA' : `🟡 Vence em ${diasV} dia${diasV === 1 ? '' : 's'}`} — {fmtDT(d.prazo)}
           </div>
         )}
 
         {/* Barra de ações */}
         <div style={{ padding:'8px 16px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6, flexWrap:'wrap', flexShrink:0 }}>
-          {d.status === 'Pendente' && (
-            <button onClick={iniciar}
-              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+          {!temEtapas && d.status === 'Pendente' && (
+            <button onClick={iniciar} style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
               ▶ Iniciar Execução
             </button>
           )}
-          {d.status === 'Em Andamento' && (
-            <button onClick={concluir}
-              style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+          {!temEtapas && d.status === 'Em Andamento' && (
+            <button onClick={concluir} style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
               ✓ Concluir
             </button>
           )}
-          <button onClick={() => setMostrarDesignar(v => !v)}
-            style={{ background: mostrarDesignar ? '#6b7280' : '#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-            👤 {d.responsavel_nome ? 'Reatribuir' : 'Designar'}
-          </button>
+          {!temEtapas && (
+            <button onClick={() => setMostrarDesignar(v => !v)}
+              style={{ background: mostrarDesignar ? '#6b7280' : '#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              👤 {d.responsavel_nome ? 'Reatribuir' : 'Designar'}
+            </button>
+          )}
           <button onClick={() => setEditando(v => !v)}
             style={{ background: editando ? '#6b7280' : '#475569', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
             ✏️ Editar
@@ -213,8 +379,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
 
-          {/* ── Designar responsável ── */}
-          {mostrarDesignar && (
+          {/* ── Designar responsável (demanda simples) ── */}
+          {mostrarDesignar && !temEtapas && (
             <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:12 }}>
               <div style={{ fontWeight:700, fontSize:10, color:'#5b21b6', marginBottom:8 }}>👤 DESIGNAR RESPONSÁVEL</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
@@ -230,7 +396,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                 </div>
               </div>
               <div style={{ marginBottom:8 }}>
-                <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>PRAZO DE EXECUÇÃO *</label>
+                <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>PRAZO *</label>
                 <input type="datetime-local" value={designarForm.prazo} onChange={e=>setDesignarForm(f=>({...f,prazo:e.target.value}))}
                   style={{ width:'100%', padding:'5px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
               </div>
@@ -295,15 +461,17 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* ── Info principal ── */}
-          {!editando && (
+          {/* ── Info principal (demanda simples) ── */}
+          {!editando && !temEtapas && (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
               <InfoBlock label="Prazo" value={fmtDT(d.prazo)} alert={alerta} />
               <InfoBlock label="Prioridade" value={d.prioridade} color={PRIO_COR[d.prioridade]} />
               <InfoBlock label="Início Execução" value={fmtDT(d.data_inicio)} />
               <InfoBlock label="Conclusão" value={fmtDT(d.data_fim)} />
-              {tempoH !== null && (
-                <InfoBlock label={d.data_fim ? 'Tempo Total' : 'Tempo em Andamento'} value={fmtH(tempoH)} color="#2563eb" />
+              {d.data_inicio && (
+                <InfoBlock label={d.data_fim ? 'Tempo Total' : 'Tempo em Andamento'}
+                  value={fmtH(((d.data_fim ? new Date(d.data_fim) : new Date()).getTime() - new Date(d.data_inicio).getTime()) / 3600000)}
+                  color="#2563eb" />
               )}
               <InfoBlock label="Criado por" value={`${d.criado_por_nome} · ${fmtDT(d.criado_em)}`} />
               {d.descricao && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Descrição" value={d.descricao} /></div>}
@@ -311,11 +479,25 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             </div>
           )}
 
+          {/* ── ETAPAS MÚLTIPLAS ── */}
+          {temEtapas && !editando && (
+            <div>
+              <div style={{ fontWeight:700, fontSize:10, color:'#374151', textTransform:'uppercase', marginBottom:10,
+                display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <span>📋 Etapas ({etapasConcluidas}/{etapas.length} concluídas)</span>
+                <span style={{ fontSize:11, fontWeight:700, color: pct === 100 ? '#16a34a' : '#2563eb' }}>{pct}%</span>
+              </div>
+              {etapas.map((e, i) => (
+                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} />
+              ))}
+            </div>
+          )}
+
           {/* ── Nova Informação ── */}
           <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:12 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>📝 NOVA INFORMAÇÃO</div>
+            <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>📝 NOVA INFORMAÇÃO GERAL</div>
             <textarea value={novaInfo} onChange={e=>setNovaInfo(e.target.value)}
-              placeholder="Descreva uma atualização, observação ou ocorrência..." rows={3}
+              placeholder="Atualização geral, ocorrência, decisão..." rows={3}
               style={{ width:'100%', padding:'6px 8px', border:'1px solid #bfdbfe', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box', marginBottom:6 }} />
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               <button onClick={adicionarInfo} disabled={salvando || !novaInfo.trim()}
@@ -336,7 +518,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {(d.informacoes || []).length > 0 && (
             <div>
               <div style={{ fontWeight:700, fontSize:9, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>
-                Histórico de Informações ({d.informacoes.length})
+                Histórico ({d.informacoes.length})
               </div>
               {[...(d.informacoes || [])].reverse().map((info: any, i: number) => (
                 <div key={i} style={{ borderLeft:'3px solid #2563eb', paddingLeft:10, marginBottom:8 }}>
@@ -375,7 +557,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   );
 }
 
-function InfoBlock({ label, value, alert = null, color = null }: { label:string; value:string; alert?:string|null; color?:string|null }) {
+function InfoBlock({ label, value, alert = null, color = null }) {
   return (
     <div style={{ borderBottom:'1px solid #f1f5f9', paddingBottom:5 }}>
       <div style={{ fontSize:8, fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.4px' }}>{label}</div>
@@ -388,27 +570,73 @@ function InfoBlock({ label, value, alert = null, color = null }: { label:string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODAL NOVA DEMANDA
+// MODAL NOVA DEMANDA (com suporte a múltiplas etapas)
 // ─────────────────────────────────────────────────────────────────────────────
+const etapaVazia = (num: number) => ({
+  num,
+  responsavel_nome: '',
+  responsavel_email: '',
+  prazo: '',
+  obs_criacao: '',
+  obs_execucao: [],
+  status: 'Pendente',
+  data_inicio: null,
+  data_fim: null,
+});
+
 function ModalNova({ currentUser, onClose, onSaved }) {
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
+  const [qtdEtapas, setQtdEtapas] = useState(1);
+  const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
   const [salvando, setSalvando] = useState(false);
   const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}));
 
+  // Ajusta array de etapas quando qtd muda
+  const mudarQtd = (n: number) => {
+    const q = Math.max(1, Math.min(10, n));
+    setQtdEtapas(q);
+    setEtapas(prev => {
+      const novo = [...prev];
+      while (novo.length < q) novo.push(etapaVazia(novo.length + 1));
+      return novo.slice(0, q);
+    });
+  };
+
+  const setEtapa = (idx: number, k: string, v: string) => {
+    setEtapas(prev => prev.map((e, i) => i === idx ? { ...e, [k]: v } : e));
+  };
+
   const salvar = async () => {
     if (!form.titulo.trim()) { alert('Informe o título!'); return; }
+    if (qtdEtapas > 1) {
+      for (let i = 0; i < etapas.length; i++) {
+        if (!etapas[i].responsavel_nome.trim()) { alert(`Informe o responsável da Etapa ${i+1}!`); return; }
+        if (!etapas[i].prazo) { alert(`Informe o prazo da Etapa ${i+1}!`); return; }
+      }
+    }
     setSalvando(true);
     const agora = new Date().toISOString();
-    await supabase.from('demandas_avulsas').insert([{
+    const payload: any = {
       ...form,
       setor: 'Engenharia',
       status: 'Pendente',
       informacoes: [],
+      etapas: qtdEtapas > 1 ? etapas.map(e => ({
+        ...e,
+        prazo: e.prazo ? new Date(e.prazo).toISOString() : null,
+      })) : [],
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
       criado_em: agora,
       atualizado_em: agora,
-    }]);
+    };
+    // Para demanda simples, deixa campos no nível raiz vazios
+    if (qtdEtapas === 1) {
+      payload.responsavel_nome = etapas[0].responsavel_nome || null;
+      payload.responsavel_email = etapas[0].responsavel_email || null;
+      payload.prazo = etapas[0].prazo ? new Date(etapas[0].prazo).toISOString() : null;
+    }
+    await supabase.from('demandas_avulsas').insert([payload]);
     setSalvando(false);
     onSaved();
     onClose();
@@ -417,49 +645,105 @@ function ModalNova({ currentUser, onClose, onSaved }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(480px,95vw)', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between' }}>
+      <div style={{ background:'#fff', borderRadius:8, width:'min(560px,97vw)', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
+        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between', flexShrink:0 }}>
           <span>+ Nova Demanda Avulsa</span>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
-        <div style={{ padding:16, display:'flex', flexDirection:'column', gap:10 }}>
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Título *</label>
-            <input value={form.titulo} onChange={e=>set('titulo',e.target.value)} autoFocus
-              placeholder="Ex: Revisar BOM do projeto X"
-              style={{ width:'100%', padding:'6px 8px', border: form.titulo ? '1px solid #d1d5db' : '1px solid #fca5a5', borderRadius:4, fontSize:12, boxSizing:'border-box' }} />
-          </div>
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Descrição</label>
-            <textarea value={form.descricao} onChange={e=>set('descricao',e.target.value)} rows={3}
-              placeholder="Detalhes da demanda..."
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
-          </div>
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>
-            <div style={{ display:'flex', gap:6 }}>
-              {['Alta','Média','Baixa'].map(p => (
-                <button key={p} onClick={() => set('prioridade',p)}
-                  style={{ flex:1, padding:'6px', border:`1.5px solid ${form.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
-                    background: form.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
-                    color: form.prioridade===p ? PRIO_COR[p] : '#374151',
-                    borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                  {p}
-                </button>
-              ))}
+
+        <div style={{ overflowY:'auto', flex:1, padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+          {/* Dados principais */}
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            <div>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Título *</label>
+              <input value={form.titulo} onChange={e=>set('titulo',e.target.value)} autoFocus
+                placeholder="Ex: Revisar BOM do projeto X"
+                style={{ width:'100%', padding:'6px 8px', border: form.titulo ? '1px solid #d1d5db' : '1px solid #fca5a5', borderRadius:4, fontSize:12, boxSizing:'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Descrição</label>
+              <textarea value={form.descricao} onChange={e=>set('descricao',e.target.value)} rows={2}
+                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>
+              <div style={{ display:'flex', gap:6 }}>
+                {['Alta','Média','Baixa'].map(p => (
+                  <button key={p} onClick={() => set('prioridade',p)}
+                    style={{ flex:1, padding:'6px', border:`1.5px solid ${form.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
+                      background: form.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
+                      color: form.prioridade===p ? PRIO_COR[p] : '#374151',
+                      borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observações</label>
-            <textarea value={form.observacoes} onChange={e=>set('observacoes',e.target.value)} rows={2}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+
+          {/* Seletor de quantidade de etapas */}
+          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:12 }}>
+            <label style={{ fontSize:9, fontWeight:700, color:'#166534', display:'block', marginBottom:8, textTransform:'uppercase' }}>
+              Quantidade de Etapas
+            </label>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <button onClick={() => mudarQtd(qtdEtapas - 1)} disabled={qtdEtapas <= 1}
+                style={{ width:32, height:32, border:'1.5px solid #16a34a', borderRadius:6, background:'#fff', color:'#16a34a', fontSize:18, fontWeight:700, cursor:'pointer', lineHeight:1 }}>−</button>
+              <span style={{ fontSize:22, fontWeight:800, color:'#16a34a', minWidth:32, textAlign:'center' }}>{qtdEtapas}</span>
+              <button onClick={() => mudarQtd(qtdEtapas + 1)} disabled={qtdEtapas >= 10}
+                style={{ width:32, height:32, border:'1.5px solid #16a34a', borderRadius:6, background:'#fff', color:'#16a34a', fontSize:18, fontWeight:700, cursor:'pointer', lineHeight:1 }}>+</button>
+              <span style={{ fontSize:10, color:'#6b7280' }}>
+                {qtdEtapas === 1 ? 'Demanda simples' : `${qtdEtapas} etapas independentes`}
+              </span>
+            </div>
+          </div>
+
+          {/* Formulários por etapa */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {etapas.map((e, i) => (
+              <div key={i} style={{ border:`1.5px solid ${qtdEtapas > 1 ? '#2563eb' : '#e2e8f0'}`, borderRadius:8, padding:12, background: qtdEtapas > 1 ? '#eff6ff' : '#f8fafc' }}>
+                {qtdEtapas > 1 && (
+                  <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>
+                    ETAPA {i + 1} de {qtdEtapas}
+                  </div>
+                )}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                  <div>
+                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                      Responsável{qtdEtapas > 1 ? ' *' : ''}
+                    </label>
+                    <input value={e.responsavel_nome} onChange={ev=>setEtapa(i,'responsavel_nome',ev.target.value)}
+                      placeholder="Nome do responsável"
+                      style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.responsavel_nome?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>E-mail</label>
+                    <input type="email" value={e.responsavel_email} onChange={ev=>setEtapa(i,'responsavel_email',ev.target.value)}
+                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  </div>
+                </div>
+                <div style={{ marginBottom:8 }}>
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                    Prazo{qtdEtapas > 1 ? ' *' : ''}
+                  </label>
+                  <input type="datetime-local" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
+                    style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.prazo?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observações</label>
+                  <textarea value={e.obs_criacao} onChange={ev=>setEtapa(i,'obs_criacao',ev.target.value)} rows={2}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
+
+        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end', flexShrink:0 }}>
           <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
           <button onClick={salvar} disabled={salvando}
             style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? 'Salvando...' : '+ Criar'}
+            {salvando ? 'Salvando...' : `+ Criar${qtdEtapas > 1 ? ` (${qtdEtapas} etapas)` : ''}`}
           </button>
         </div>
       </div>
@@ -475,6 +759,14 @@ function DemandaCard({ d, onClick }) {
   const diasV = diasParaVencer(d.prazo);
   const corBorda = alerta === 'vencida' ? '#dc2626' : alerta === 'urgente' ? '#d97706' : STATUS_COR[d.status] || '#e2e8f0';
   const bgCard = alerta === 'vencida' ? '#fff5f5' : alerta === 'urgente' ? '#fffbeb' : '#fff';
+  const etapas: any[] = d.etapas || [];
+  const temEtapas = etapas.length > 0;
+  const etapasConcluidas = etapas.filter(e => e.status === 'Concluída').length;
+  const pct = temEtapas ? Math.round((etapasConcluidas / etapas.length) * 100) : 0;
+
+  // Alertas nas etapas
+  const etapasVencidas = etapas.filter(e => alertClass(e.prazo, e.status) === 'vencida').length;
+  const etapasUrgentes = etapas.filter(e => alertClass(e.prazo, e.status) === 'urgente').length;
 
   return (
     <div onClick={onClick}
@@ -487,28 +779,38 @@ function DemandaCard({ d, onClick }) {
           <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:3, flexWrap:'wrap' }}>
             <span style={{ background:STATUS_COR[d.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{d.status}</span>
             <span style={{ background:PRIO_COR[d.prioridade]+'18', color:PRIO_COR[d.prioridade], border:`1px solid ${PRIO_COR[d.prioridade]}40`, borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>{d.prioridade}</span>
-            {alerta && (
+            {temEtapas && (
+              <span style={{ background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+                📋 {etapasConcluidas}/{etapas.length} etapas
+              </span>
+            )}
+            {etapasVencidas > 0 && <span style={{ fontSize:9, fontWeight:700, color:'#dc2626' }}>🔴 {etapasVencidas} etapa(s) vencida(s)</span>}
+            {etapasUrgentes > 0 && etapasVencidas === 0 && <span style={{ fontSize:9, fontWeight:700, color:'#d97706' }}>🟡 {etapasUrgentes} urgente(s)</span>}
+            {!temEtapas && alerta && (
               <span style={{ fontSize:9, fontWeight:700, color: alerta==='vencida'?'#dc2626':'#d97706' }}>
-                {alerta==='vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d para vencer`}
+                {alerta==='vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d`}
               </span>
             )}
           </div>
           <div style={{ fontSize:12, fontWeight:700, color:'#1f2937' }}>{d.titulo}</div>
-          {d.descricao && <div style={{ fontSize:10, color:'#6b7280', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:340 }}>{d.descricao}</div>}
-          <div style={{ marginTop:5, display:'flex', gap:10, flexWrap:'wrap' }}>
-            {d.responsavel_nome && <span style={{ fontSize:9, color:'#374151' }}>👤 {d.responsavel_nome}</span>}
-            {d.prazo && <span style={{ fontSize:9, color: alerta?corBorda:'#6b7280' }}>⏰ {fmtDT(d.prazo)}</span>}
-            {d.data_inicio && !d.data_fim && (
-              <span style={{ fontSize:9, color:'#2563eb' }}>
-                ▶ {fmtH((Date.now() - new Date(d.data_inicio).getTime()) / 3600000)} em andamento
-              </span>
-            )}
-            {d.data_fim && d.data_inicio && (
-              <span style={{ fontSize:9, color:'#16a34a' }}>
-                ✓ {fmtH((new Date(d.data_fim).getTime() - new Date(d.data_inicio).getTime()) / 3600000)}
-              </span>
-            )}
-          </div>
+          {d.descricao && <div style={{ fontSize:10, color:'#6b7280', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:380 }}>{d.descricao}</div>}
+
+          {/* Barra de progresso (multi-etapa) */}
+          {temEtapas && (
+            <div style={{ marginTop:6, background:'#e2e8f0', borderRadius:3, height:4, overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${pct}%`, background: pct===100?'#16a34a':'#2563eb', transition:'width .3s' }} />
+            </div>
+          )}
+
+          {!temEtapas && (
+            <div style={{ marginTop:5, display:'flex', gap:10, flexWrap:'wrap' }}>
+              {d.responsavel_nome && <span style={{ fontSize:9, color:'#374151' }}>👤 {d.responsavel_nome}</span>}
+              {d.prazo && <span style={{ fontSize:9, color: alerta?corBorda:'#6b7280' }}>⏰ {fmtDT(d.prazo)}</span>}
+              {d.data_inicio && !d.data_fim && (
+                <span style={{ fontSize:9, color:'#2563eb' }}>▶ {fmtH((Date.now() - new Date(d.data_inicio).getTime()) / 3600000)}</span>
+              )}
+            </div>
+          )}
         </div>
         {(d.informacoes?.length > 0) && (
           <span style={{ fontSize:9, color:'#9ca3af', flexShrink:0 }}>💬 {d.informacoes.length}</span>
@@ -519,7 +821,7 @@ function DemandaCard({ d, onClick }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAINEL PRINCIPAL (exportado para EngenhariaTab)
+// PAINEL PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DemandaAvulsaPanel({ currentUser }) {
   const [demandas, setDemandas] = useState<any[]>([]);
@@ -545,12 +847,21 @@ export default function DemandaAvulsaPanel({ currentUser }) {
     return true;
   });
 
-  const vencidas = demandas.filter(d => alertClass(d.prazo, d.status) === 'vencida').length;
-  const urgentes = demandas.filter(d => alertClass(d.prazo, d.status) === 'urgente').length;
+  const vencidas = demandas.filter(d => {
+    if (d.status === 'Concluída') return false;
+    const etapas = d.etapas || [];
+    if (etapas.length > 0) return etapas.some(e => alertClass(e.prazo, e.status) === 'vencida');
+    return alertClass(d.prazo, d.status) === 'vencida';
+  }).length;
+  const urgentes = demandas.filter(d => {
+    if (d.status === 'Concluída') return false;
+    const etapas = d.etapas || [];
+    if (etapas.length > 0) return etapas.some(e => alertClass(e.prazo, e.status) === 'urgente') && !etapas.some(e => alertClass(e.prazo, e.status) === 'vencida');
+    return alertClass(d.prazo, d.status) === 'urgente';
+  }).length;
 
   return (
     <div className="sec-card" style={{ marginTop:12 }}>
-      {/* Header */}
       <div className="sec-hdr">
         <span style={{ display:'flex', alignItems:'center', gap:8 }}>
           ⚡ Demandas Avulsas — Engenharia
@@ -571,7 +882,6 @@ export default function DemandaAvulsaPanel({ currentUser }) {
         </button>
       </div>
 
-      {/* Filtros */}
       <div style={{ padding:'6px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6 }}>
         {[['ativas','Ativas'],['concluidas','Concluídas'],['todas','Todas']].map(([v,l]) => (
           <button key={v} onClick={() => setFiltroStatus(v)}
@@ -583,7 +893,6 @@ export default function DemandaAvulsaPanel({ currentUser }) {
         <span style={{ marginLeft:'auto', fontSize:9, color:'#9ca3af', lineHeight:'22px' }}>{lista.length} demandas</span>
       </div>
 
-      {/* Lista */}
       <div className="sec-body" style={{ padding:'10px 12px' }}>
         {loading ? (
           <div className="acn-empty">Carregando...</div>
@@ -598,7 +907,6 @@ export default function DemandaAvulsaPanel({ currentUser }) {
         )}
       </div>
 
-      {/* Modais */}
       {modalNova && (
         <ModalNova currentUser={currentUser} onClose={() => setModalNova(false)} onSaved={fetch} />
       )}
