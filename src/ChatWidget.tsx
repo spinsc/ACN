@@ -42,6 +42,7 @@ export default function ChatWidget({ currentUser }: any) {
   const [naoLidas, setNaoLidas]   = useState(0);
   const [enviando, setEnviando]   = useState(false);
   const [toast, setToast]         = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const endRef       = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
@@ -215,8 +216,12 @@ export default function ChatWidget({ currentUser }: any) {
 
   const fetchDiretos = async () => {
     const { data } = await supabase.from('chat_salas').select('*').eq('tipo', 'direto');
-    const minhas = (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
-    setDiretos(minhas);
+    const isAdmin = currentUser?.perfil === 'Admin';
+    // Admin vê TODOS os DMs do sistema; demais veem apenas os seus
+    const lista = isAdmin
+      ? (data || [])
+      : (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
+    setDiretos(lista);
   };
 
   const fetchUsuarios = async () => {
@@ -311,10 +316,24 @@ export default function ChatWidget({ currentUser }: any) {
     inputRef.current?.focus();
   };
 
+  // ── Excluir DM ─────────────────────────────────────────────────────────
+  const deletarSala = async (salaId: string) => {
+    await supabase.from('chat_salas').delete().eq('id', salaId);
+    // Limpar localStorage de leitura para esta sala
+    localStorage.removeItem(lrKey(salaId));
+    setDiretos(prev => prev.filter(d => d.id !== salaId));
+    if (salaAtivaRef.current?.id === salaId) voltarLista();
+    setConfirmDelete(null);
+    contarNaoLidas();
+  };
+
   // ── Helpers ────────────────────────────────────────────────────────────
   const nomeDireto = (sala: any) => {
-    const outro = (sala?.membros || []).find((m: any) => String(m.id) !== uid);
-    return outro?.nome || 'Conversa';
+    const membros = sala?.membros || [];
+    const outros = membros.filter((m: any) => String(m.id) !== uid);
+    if (outros.length > 0) return outros[0].nome || 'Conversa';
+    // Admin vendo DM do qual não faz parte — exibe os dois membros
+    return membros.map((m: any) => m.nome).join(' ↔ ') || 'Conversa';
   };
   const nomeSala = (sala: any) =>
     sala?.tipo === 'canal' ? `# ${sala.nome}` : nomeDireto(sala);
@@ -464,17 +483,60 @@ export default function ChatWidget({ currentUser }: any) {
                     {diretos.length > 0 && (
                       <>
                         <div style={{ padding: '10px 14px 3px', fontSize: 8, fontWeight: 700, color: '#b0bac5', textTransform: 'uppercase', letterSpacing: .5 }}>
-                          Recentes
+                          {currentUser?.perfil === 'Admin' ? 'Todos os DMs' : 'Recentes'}
                         </div>
                         {diretos.map(d => (
-                          <div key={d.id} onClick={() => abrirSala(d)} style={{
-                            padding: '6px 14px', cursor: 'pointer', display: 'flex',
-                            alignItems: 'center', gap: 8, borderBottom: '1px solid #f8fafc',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#f0fdfa')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                            <Avatar nome={nomeDireto(d)} size={28} bg='#dbeafe' color='#1d4ed8' />
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b' }}>{nomeDireto(d)}</div>
+                          <div key={d.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                            {/* Linha principal */}
+                            <div style={{
+                              padding: '6px 14px', cursor: 'pointer', display: 'flex',
+                              alignItems: 'center', gap: 8,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = '#f0fdfa')}
+                            onMouseLeave={e => (e.currentTarget.style.background = confirmDelete === d.id ? '#fff7ed' : 'transparent')}>
+                              <div onClick={() => abrirSala(d)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                <Avatar nome={nomeDireto(d)} size={28} bg='#dbeafe' color='#1d4ed8' />
+                                <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {nomeDireto(d)}
+                                </div>
+                              </div>
+                              {/* Botão lixeira */}
+                              <button
+                                onClick={e => { e.stopPropagation(); setConfirmDelete(confirmDelete === d.id ? null : d.id); }}
+                                title="Apagar conversa"
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  color: confirmDelete === d.id ? '#ef4444' : '#cbd5e1',
+                                  fontSize: 13, padding: '2px 4px', borderRadius: 4, flexShrink: 0,
+                                  transition: 'color .15s',
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                                onMouseLeave={e => (e.currentTarget.style.color = confirmDelete === d.id ? '#ef4444' : '#cbd5e1')}>
+                                🗑️
+                              </button>
+                            </div>
+
+                            {/* Confirmação inline */}
+                            {confirmDelete === d.id && (
+                              <div style={{
+                                padding: '6px 14px 8px', background: '#fef2f2',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                              }}>
+                                <span style={{ fontSize: 10, color: '#b91c1c', flex: 1 }}>
+                                  Apagar esta conversa e todas as mensagens?
+                                </span>
+                                <button onClick={() => deletarSala(d.id)} style={{
+                                  background: '#ef4444', color: 'white', border: 'none',
+                                  borderRadius: 4, padding: '3px 10px', fontSize: 10,
+                                  fontWeight: 700, cursor: 'pointer',
+                                }}>Sim</button>
+                                <button onClick={() => setConfirmDelete(null)} style={{
+                                  background: '#e2e8f0', color: '#475569', border: 'none',
+                                  borderRadius: 4, padding: '3px 10px', fontSize: 10,
+                                  fontWeight: 700, cursor: 'pointer',
+                                }}>Não</button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </>
