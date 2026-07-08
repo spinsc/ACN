@@ -31,10 +31,9 @@ const FORM_VAZIO = {
   quantidade: 1,
 };
 
-const CRM_VAZIO = { nome_cliente:'', empresa:'', telefone:'', email:'', data_proximo_contato:'', observacoes:'', operador_responsavel:'' };
-
-// ---- CRM Sub-componente ----
-function CRMSection({ currentUser }) {
+// ---- CRM removido — use a aba CRM independente ----
+function CRMSection({ currentUser }) { return null; }
+function _UNUSED_CRMSection({ currentUser }) {
   const [clientes, setClientes] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [showFormCliente, setShowFormCliente] = useState(false);
@@ -716,8 +715,7 @@ export default function ComercialTab({ currentUser }) {
         </div>
       )}
 
-      {/* CRM */}
-      <CRMSection currentUser={currentUser} />
+      {/* CRM movido para aba CRM independente */}
 
       {/* ONENOTE */}
       <div className="sec-card">

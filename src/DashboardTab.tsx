@@ -19,6 +19,7 @@ import RelatoriosTab from './RelatoriosTab';
 import SacTab from './SacTab';
 import LicitacoesTab from './LicitacoesTab';
 import CrmTab from './CrmTab';
+import RHTab from './RHTab';
 import ChatWidget from './ChatWidget';
 
 
@@ -90,6 +91,12 @@ const SIDEBAR_GROUPS = [
     items: [
       { id: 'crm',        label: 'CRM' },
       { id: 'licitacoes', label: 'Licitações' },
+    ],
+  },
+  {
+    section: 'RH',
+    items: [
+      { id: 'rh', label: 'RH' },
     ],
   },
   {
@@ -437,6 +444,7 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
       case 'sac':          return <SacTab currentUser={currentUser} />;
       case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} />;
       case 'crm':          return <CrmTab currentUser={currentUser} />;
+      case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':   return <RelatoriosTab currentUser={currentUser} />;
       case 'admin':        return <AdminTab />;
