@@ -216,17 +216,30 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 
 @media print { .acn-sidebar, .acn-header { display:none; } .acn-main { padding:0; } }
 
-/* ── DARK MODE ── */
-body.dark { background:#0f172a !important; color:#cbd5e1 !important; overflow:hidden; }
+/* ══════════════════════════════════════════════════════════════════
+   LIGHT MODE — força modo claro independente do tema do SO
+   ══════════════════════════════════════════════════════════════════ */
+.acn-app { color-scheme: light; background:#f4f6f9; color:#374151; }
+.acn-main  { color:#374151; }
+.sec-card  { color:#374151; }
+.modal-box { color:#374151; }
+/* Inputs sempre claros no modo light */
+.acn-main input, .acn-main select, .acn-main textarea { color-scheme:light; color:#374151 !important; background:#fff !important; }
+
+/* ══════════════════════════════════════════════════════════════════
+   DARK MODE — estrutura
+   ══════════════════════════════════════════════════════════════════ */
+body.dark { background:#0f172a !important; color:#cbd5e1 !important; overflow:hidden; color-scheme:dark; }
+body.dark .acn-app   { color-scheme:dark; background:#0f172a; color:#cbd5e1; }
 body.dark .acn-sidebar { background:#161d2e !important; border-color:#263045 !important; }
 body.dark .sidebar-section { color:#3d4f63 !important; }
 body.dark .sidebar-item { color:#7c8fa0 !important; }
 body.dark .sidebar-item:hover  { background:#0d2924 !important; color:#2dd4bf !important; }
 body.dark .sidebar-item.active { background:#0d2924 !important; color:#2dd4bf !important; border-left-color:#0d9488 !important; }
-body.dark .acn-main { background:#0c1121 !important; }
-body.dark .sec-card { background:#1e293b !important; border-color:#334155 !important; }
+body.dark .acn-main { background:#0c1121 !important; color:#cbd5e1 !important; }
+body.dark .sec-card { background:#1e293b !important; border-color:#334155 !important; color:#cbd5e1 !important; }
 body.dark .sec-hdr  { background:#0f172a !important; border-color:#334155 !important; color:#94a3b8 !important; }
-body.dark .sec-body { background:#1e293b !important; }
+body.dark .sec-body { background:#1e293b !important; color:#cbd5e1 !important; }
 body.dark .acn-main table td   { background:#1e293b !important; color:#cbd5e1 !important; border-color:#334155 !important; }
 body.dark .acn-main table th   { background:#0f172a !important; color:#94a3b8 !important; }
 body.dark .acn-main table tr:hover td { background:#334155 !important; }
@@ -234,14 +247,13 @@ body.dark .acn-input  { background:#0f172a !important; border-color:#334155 !imp
 body.dark .acn-input:focus { border-color:#0d9488 !important; box-shadow:0 0 0 2px rgba(13,148,136,.2) !important; }
 body.dark .acn-label  { color:#64748b !important; }
 body.dark .acn-empty  { color:#64748b !important; }
-body.dark .modal-box  { background:#1e293b !important; color:#cbd5e1 !important; border:1px solid #334155; }
+body.dark .modal-box  { background:#1e293b !important; color:#cbd5e1 !important; border:1px solid #334155 !important; }
 body.dark .modal-title { color:#e2e8f0 !important; }
 body.dark .opl-mov-hdr  { background:#1c1a09 !important; border-color:#713f12 !important; color:#fbbf24 !important; }
 body.dark .opl-mov-body { border-color:#713f12 !important; }
 body.dark .metrics-tbl th { background:#0f172a !important; color:#64748b !important; border-color:#334155 !important; }
 body.dark .metrics-tbl td { color:#cbd5e1 !important; border-color:#1e293b !important; }
 body.dark .metrics-tbl tr:hover td { background:#334155 !important; }
-body.dark select, body.dark textarea { background:#0f172a !important; color:#cbd5e1 !important; border-color:#334155 !important; }
 body.dark h2, body.dark h3 { color:#e2e8f0 !important; }
 body.dark .form-group label { color:#64748b !important; }
 body.dark .crm-overdue td { background:#2d0a0a !important; }
@@ -250,40 +262,81 @@ body.dark .row-alerta td  { background:#1c1505 !important; }
 body.dark ::-webkit-scrollbar { width:6px; height:6px; }
 body.dark ::-webkit-scrollbar-track { background:#0f172a; }
 body.dark ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+/* Inputs no dark */
+body.dark input, body.dark select, body.dark textarea { background:#0f172a !important; color:#cbd5e1 !important; border-color:#334155 !important; color-scheme:dark; }
 
-/* ── DARK MODE: cascata de cor para filhos de containers escuros ── */
-/* Tabelas: força herança nos filhos diretos, preserva badges/btns */
+/* ──────────────────────────────────────────────────────────────────
+   DARK MODE: inline style overrides — textos escuros → claros
+   ────────────────────────────────────────────────────────────────── */
+/* Textos quase-pretos que ficam invisíveis em dark */
+body.dark [style*="color:#1f2937"], body.dark [style*="color: #1f2937"],
+body.dark [style*="color:#374151"], body.dark [style*="color: #374151"],
+body.dark [style*="color:#1e293b"], body.dark [style*="color: #1e293b"],
+body.dark [style*="color:#0f172a"], body.dark [style*="color: #0f172a"],
+body.dark [style*="color:#334155"], body.dark [style*="color: #334155"],
+body.dark [style*="color:#111827"], body.dark [style*="color: #111827"],
+body.dark [style*="color:#166534"], body.dark [style*="color: #166534"],
+body.dark [style*="color:#5b21b6"], body.dark [style*="color: #5b21b6"],
+body.dark [style*="color:#475569"], body.dark [style*="color: #475569"] { color:#94a3b8 !important; }
+
+/* Cinzas médios — ajustar para não ficarem pesados */
+body.dark [style*="color:#64748b"], body.dark [style*="color: #64748b"],
+body.dark [style*="color:#6b7280"], body.dark [style*="color: #6b7280"],
+body.dark [style*="color:#9ca3af"], body.dark [style*="color: #9ca3af"] { color:#64748b !important; }
+
+/* ──────────────────────────────────────────────────────────────────
+   DARK MODE: inline style overrides — fundos claros → escuros
+   ────────────────────────────────────────────────────────────────── */
+body.dark [style*="background:#fff"],     body.dark [style*="background: #fff"],
+body.dark [style*="background:white"],    body.dark [style*="background: white"],
+body.dark [style*="background:#ffffff"],  body.dark [style*="background: #ffffff"],
+body.dark [style*="background:#f8fafc"],  body.dark [style*="background: #f8fafc"],
+body.dark [style*="background:#f9fafb"],  body.dark [style*="background: #f9fafb"] { background:#1e293b !important; color:#cbd5e1 !important; }
+
+body.dark [style*="background:#f1f5f9"],  body.dark [style*="background: #f1f5f9"],
+body.dark [style*="background:#f0f9ff"],  body.dark [style*="background: #f0f9ff"],
+body.dark [style*="background:#fafbfc"],  body.dark [style*="background: #fafbfc"],
+body.dark [style*="background:#f4f6f9"],  body.dark [style*="background: #f4f6f9"] { background:#162032 !important; }
+
+/* Fundos coloridos claros (eff6ff=azul, f5f3ff=roxo, f0fdf4=verde, fffbeb=amarelo, fef2f2=vermelho) */
+body.dark [style*="background:#eff6ff"],  body.dark [style*="background: #eff6ff"] { background:#1e3a5f !important; }
+body.dark [style*="background:#f5f3ff"],  body.dark [style*="background: #f5f3ff"] { background:#2d1b5c !important; }
+body.dark [style*="background:#f0fdf4"],  body.dark [style*="background: #f0fdf4"] { background:#0d2818 !important; }
+body.dark [style*="background:#fffbeb"],  body.dark [style*="background: #fffbeb"] { background:#1c1505 !important; }
+body.dark [style*="background:#fef2f2"],  body.dark [style*="background: #fef2f2"] { background:#2d0a0a !important; }
+body.dark [style*="background:#fff5f5"],  body.dark [style*="background: #fff5f5"] { background:#2d0a0a !important; }
+body.dark [style*="background:#fef3c7"],  body.dark [style*="background: #fef3c7"] { background:#1c1505 !important; }
+
+/* ──────────────────────────────────────────────────────────────────
+   DARK MODE: bordas claras → escuras
+   ────────────────────────────────────────────────────────────────── */
+body.dark [style*="border:1px solid #e2e8f0"], body.dark [style*="border: 1px solid #e2e8f0"],
+body.dark [style*="border:1px solid #d1d5db"], body.dark [style*="border: 1px solid #d1d5db"],
+body.dark [style*="border:1px solid #e8ecf0"], body.dark [style*="border: 1px solid #e8ecf0"],
+body.dark [style*="border:1.5px solid #e2e8f0"], body.dark [style*="border: 1.5px solid #e2e8f0"] { border-color:#334155 !important; }
+
+/* ──────────────────────────────────────────────────────────────────
+   DARK MODE: herança de cor em elementos filhos
+   ────────────────────────────────────────────────────────────────── */
 body.dark .acn-main table td strong,
 body.dark .acn-main table td span:not(.acn-badge),
 body.dark .acn-main table td p,
 body.dark .acn-main table td div { color:inherit !important; }
-/* Sec-body genérico */
-body.dark .sec-body { color:#cbd5e1 !important; }
 body.dark .sec-body p,
 body.dark .sec-body span:not(.acn-badge),
 body.dark .sec-body strong,
-body.dark .sec-body div:not(.modal-overlay) { color:inherit !important; }
-/* Modal */
+body.dark .sec-body div:not([style*="background:#dc2626"]):not([style*="background:#16a34a"]):not([style*="background:#2563eb"]) { color:inherit !important; }
 body.dark .modal-box p,
 body.dark .modal-box span:not(.acn-badge),
 body.dark .modal-box strong,
 body.dark .modal-box label { color:inherit !important; }
-/* Override cores hardcoded escuras que ficam invisíveis no dark */
-body.dark [style*="color:#374151"],  body.dark [style*="color: #374151"],
-body.dark [style*="color:#1e293b"],  body.dark [style*="color: #1e293b"],
-body.dark [style*="color:#0f172a"],  body.dark [style*="color: #0f172a"],
-body.dark [style*="color:#334155"],  body.dark [style*="color: #334155"],
-body.dark [style*="color:#475569"],  body.dark [style*="color: #475569"] { color:#94a3b8 !important; }
-/* Cores cinza médio ficam muito escuras no dark */
-body.dark [style*="color:#64748b"],  body.dark [style*="color: #64748b"],
-body.dark [style*="color:#6b7280"],  body.dark [style*="color: #6b7280"],
-body.dark [style*="color:#9ca3af"],  body.dark [style*="color: #9ca3af"] { color:#64748b !important; }
-/* Garante que acn-badge sempre mantém cor branca independente do contexto */
+
+/* Garante badges sempre com texto branco */
 body.dark .acn-badge { color:white !important; }
-/* Cores funcionais (verde, vermelho, amarelo) preservadas — não sobrescrever */
-/* Fix light mode: impede tema escuro do SO afetar inputs nativos */
-.acn-main input, .acn-main select, .acn-main textarea { color-scheme:light; }
-body.dark .acn-main input, body.dark .acn-main select, body.dark .acn-main textarea { color-scheme:dark; }
+/* Botões sempre com texto branco (já têm background colorido) */
+body.dark .acn-btn { color:white !important; }
+/* Links de anexo */
+body.dark a[style*="color:#2563eb"] { color:#60a5fa !important; }
 `;
 
 export default function DashboardTab({ currentUser, onLogout }: Props) {
