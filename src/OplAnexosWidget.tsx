@@ -9,14 +9,25 @@ const fmtDT = (v: string) =>
   v ? new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
 
 const TIPO_LABEL: Record<string, string> = {
+  'proposta':          '📋 Proposta',
+  'orcamento':         '💰 Orçamento',
   'documento':         '📄 Documento',
   'foto':              '🖼️ Foto',
   'checklist_entrega': '✅ Checklist Entrega',
 };
 const TIPO_COR: Record<string, string> = {
+  'proposta':          '#0891b2',
+  'orcamento':         '#059669',
   'documento':         '#2563eb',
   'foto':              '#7c3aed',
   'checklist_entrega': '#16a34a',
+};
+const TIPO_ICONE: Record<string, string> = {
+  'proposta':          '📋',
+  'orcamento':         '💰',
+  'documento':         '📄',
+  'foto':              '🖼️',
+  'checklist_entrega': '✅',
 };
 
 async function uploadOplAnexo(file: File, oplNumero: string): Promise<string | null> {
@@ -88,7 +99,7 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
         <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
           <div>
             <div style={{ fontWeight:700, fontSize:13 }}>
-              {isChecklistMode ? '✅ Checklist de Entrega' : '📎 Arquivos'} — {opl.opl}
+              {isChecklistMode ? '✅ Checklist de Entrega' : tipoFixo === 'proposta' ? '📋 Propostas' : tipoFixo === 'orcamento' ? '💰 Orçamentos' : '📎 Arquivos'} — {opl.opl}
             </div>
             <div style={{ fontSize:10, color:'#6b7280' }}>
               {opl.chassi ? `Chassi: ${opl.chassi}` : ''} {opl.tipo_projeto ? `· ${opl.tipo_projeto}` : ''}
@@ -100,16 +111,23 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
         {/* Upload */}
         <div style={{ padding:'10px 16px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc', flexShrink:0 }}>
           <label style={{ display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
-            background: isChecklistMode ? '#16a34a' : '#2563eb', color:'#fff',
+            background: TIPO_COR[tipo || 'documento'] ?? '#2563eb', color:'#fff',
             border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700 }}>
-            {uploading ? 'Enviando...' : isChecklistMode ? '📎 Anexar Checklist (PDF)' : '📎 Anexar Arquivo'}
+            {uploading ? 'Enviando...'
+              : isChecklistMode ? '📎 Anexar Checklist (PDF)'
+              : tipo === 'proposta' ? '📋 Anexar Proposta (.docx / .xlsx)'
+              : tipo === 'orcamento' ? '💰 Anexar Orçamento (.docx / .xlsx)'
+              : '📎 Anexar Arquivo'}
             <input ref={fileRef} type="file" multiple
-              accept={isChecklistMode ? '.pdf' : '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.txt'}
+              accept={isChecklistMode ? '.pdf' : (tipo === 'proposta' || tipo === 'orcamento') ? '.doc,.docx,.xls,.xlsx,.pdf,.txt' : '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.txt'}
               onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
               style={{ display:'none' }} disabled={uploading} />
           </label>
           {isChecklistMode && (
             <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Aceita apenas PDF</span>
+          )}
+          {(tipo === 'proposta' || tipo === 'orcamento') && (
+            <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Word (.docx) e Excel (.xlsx)</span>
           )}
         </div>
 
@@ -139,7 +157,7 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
                 <div key={a.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px',
                   background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6 }}>
                   <span style={{ fontSize:16, flexShrink:0 }}>
-                    {a.tipo === 'foto' ? '🖼️' : a.tipo === 'checklist_entrega' ? '✅' : '📄'}
+                    {TIPO_ICONE[a.tipo] || '📄'}
                   </span>
                   <div style={{ flex:1, minWidth:0 }}>
                     <a href={a.url} target="_blank" rel="noreferrer"
@@ -222,33 +240,45 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
   };
 
   const isChecklist = tipoFixo === 'checklist_entrega';
+  const isProposta  = tipoFixo === 'proposta';
+  const isOrcamento = tipoFixo === 'orcamento';
+
+  const btnLabel   = uploading ? '...'
+    : isChecklist  ? '✅ PDF'
+    : isProposta   ? '📋 Prop.'
+    : isOrcamento  ? '💰 Orc.'
+    : '📎';
+  const btnBg      = TIPO_COR[tipoFixo || 'documento'] ?? '#475569';
+  const acceptAttr = isChecklist ? '.pdf'
+    : (isProposta || isOrcamento) ? '.doc,.docx,.xls,.xlsx,.pdf,.txt'
+    : '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx,.txt';
 
   return (
     <>
       <div style={{ display:'flex', gap:3, alignItems:'center' }}>
         {/* Botão Anexar */}
-        <label title={isChecklist ? 'Anexar Checklist PDF' : 'Anexar arquivo'}
+        <label title={TIPO_LABEL[tipoFixo || 'documento'] || 'Anexar arquivo'}
           style={{ display:'inline-flex', alignItems:'center', gap:3, cursor: uploading ? 'wait' : 'pointer',
-            background: isChecklist ? '#16a34a' : '#475569',
+            background: btnBg,
             color:'#fff', border:'none', borderRadius:4,
             padding: compact ? '3px 7px' : '5px 10px',
             fontSize: compact ? 9 : 10, fontWeight:700, opacity: uploading ? .6 : 1 }}>
-          {uploading ? '...' : isChecklist ? '✅ PDF' : '📎'}
+          {btnLabel}
           <input ref={fileRef} type="file" multiple
-            accept={isChecklist ? '.pdf' : '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx,.txt'}
+            accept={acceptAttr}
             onChange={e => { if (e.target.files?.length) uploadDireto(e.target.files); }}
             style={{ display:'none' }} disabled={uploading} />
         </label>
 
         {/* Botão Ver arquivos */}
         <button onClick={() => setModal(true)} title="Ver arquivos"
-          style={{ background: count && count > 0 ? '#2563eb' : '#e2e8f0',
+          style={{ background: count && count > 0 ? (TIPO_COR[tipoFixo || ''] || '#2563eb') : '#e2e8f0',
             color: count && count > 0 ? '#fff' : '#6b7280',
             border:'none', borderRadius:4,
             padding: compact ? '3px 7px' : '5px 10px',
             fontSize: compact ? 9 : 10, fontWeight:700, cursor:'pointer',
             display:'flex', alignItems:'center', gap:3 }}>
-          📂 {count !== null ? count : '…'}
+          {TIPO_ICONE[tipoFixo || ''] || '📂'} {count !== null ? count : '…'}
         </button>
       </div>
 

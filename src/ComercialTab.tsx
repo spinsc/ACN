@@ -739,7 +739,7 @@ export default function ComercialTab({ currentUser }) {
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : (
             <table>
-              <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Acao</th></tr></thead>
+              <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Proposta</th><th>Acao</th></tr></thead>
               <tbody>
                 {opls.length === 0 ? <tr><td colSpan={8} className="acn-empty">Nenhuma OP cadastrada.</td></tr>
                 : opls.map(o => {
@@ -758,6 +758,9 @@ export default function ComercialTab({ currentUser }) {
                       <td>
                         <span className="acn-badge" style={{background:statusCor(o.status_geral)}}>{o.status_geral}</span>
                         {o.liberado_divulgacao && <div style={{marginTop:2}}><span style={{fontSize:9,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>📸 MKT</span></div>}
+                      </td>
+                      <td>
+                        <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} tipoFixo="proposta" compact={true} />
                       </td>
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>

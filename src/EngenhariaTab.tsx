@@ -160,7 +160,10 @@ export default function EngenhariaTab({ currentUser }) {
                       <td>{fmtDt(o.data_inicio_engenharia)}</td>
                       <td>{emAndamento && tempo ? fmtH(tempo) : '—'}</td>
                       <td>
-                        <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} />
+                        <div style={{display:'flex',gap:4}}>
+                          <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} tipoFixo="proposta" compact={true} />
+                          <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} compact={true} />
+                        </div>
                       </td>
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
