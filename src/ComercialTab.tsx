@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -705,10 +706,16 @@ export default function ComercialTab({ currentUser }) {
         <div className="sec-card">
           <div className="sec-hdr" style={{background:'#eff6ff',borderBottom:'2px solid #3b82f6'}}><span style={{color:'#1e40af'}}>Faturado — Disponivel para Entrega ({oplsEntrega.length})</span></div>
           <div className="sec-body" style={{overflowX:'auto'}}>
-            <table><thead><tr><th>OPL</th><th>Chassi</th><th>NF</th><th>Cliente</th><th>Acao</th></tr></thead>
+            <table><thead><tr><th>OPL</th><th>Chassi</th><th>NF</th><th>Cliente</th><th>Checklist/Arquivos</th><th>Acao</th></tr></thead>
             <tbody>{oplsEntrega.map(o=>(
               <tr key={o.id}><td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td><td>{o.chassi||'—'}</td>
               <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td><td>{o.cliente_nome||'—'}</td>
+              <td>
+                <div style={{display:'flex',gap:4}}>
+                  <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} tipoFixo="checklist_entrega" compact={true} />
+                  <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} compact={true} />
+                </div>
+              </td>
               <td><button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button></td></tr>
             ))}</tbody></table>
           </div>

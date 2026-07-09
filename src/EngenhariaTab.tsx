@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -127,7 +128,7 @@ export default function EngenhariaTab({ currentUser }) {
             <table>
               <thead><tr>
                 <th>Data Entrada</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Status</th>
-                <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Acoes</th>
+                <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Arquivos</th><th>Acoes</th>
               </tr></thead>
               <tbody>
                 {opls.map(o => {
@@ -158,6 +159,9 @@ export default function EngenhariaTab({ currentUser }) {
                       <td>{o.responsavel_engenharia || '—'}</td>
                       <td>{fmtDt(o.data_inicio_engenharia)}</td>
                       <td>{emAndamento && tempo ? fmtH(tempo) : '—'}</td>
+                      <td>
+                        <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} />
+                      </td>
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                           {!emAndamento && (
