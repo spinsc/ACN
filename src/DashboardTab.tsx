@@ -165,6 +165,11 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 /* ── BOTÕES ── */
 .acn-btn { font-size:9px; font-weight:600; padding:3px 8px; border:none; border-radius:4px; cursor:pointer; color:white; white-space:nowrap; line-height:1.5; }
 .acn-btn:disabled { opacity:.4; cursor:not-allowed; }
+/* Tab-style navigation buttons (usados em AdminTab, DashboardTab, etc.) */
+.acn-tab-btn         { background:#f1f5f9; color:#475569 !important; }
+.acn-tab-btn.ativo   { background:#1e293b; color:#ffffff !important; }
+body.dark .acn-tab-btn       { background:#334155 !important; color:#94a3b8 !important; }
+body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !important; }
 
 /* ── BADGES ── */
 .acn-badge { display:inline-block; padding:2px 6px; border-radius:3px; font-size:8px; font-weight:700; color:white; white-space:nowrap; letter-spacing:.2px; }
@@ -365,9 +370,9 @@ body.dark .modal-box span:not(.acn-badge),
 body.dark .modal-box strong,
 body.dark .modal-box label { color:inherit !important; }
 
-/* Badges e botões coloridos: texto sempre branco */
+/* Badges e botões coloridos: texto sempre branco (exceto acn-tab-btn que tem cor própria) */
 body.dark .acn-badge { color:white !important; }
-body.dark .acn-btn   { color:white !important; }
+body.dark .acn-btn:not(.acn-tab-btn) { color:white !important; }
 /* Links de anexo */
 body.dark a[style*="color:#2563eb"] { color:#60a5fa !important; }
 `;

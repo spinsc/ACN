@@ -1064,11 +1064,7 @@ export default function AdminTab() {
           {ABAS_ADMIN.map(a => (
             <button
               key={a.id}
-              className="acn-btn"
-              style={{
-                background: abaAtiva === a.id ? '#1e293b' : '#f1f5f9',
-                color: abaAtiva === a.id ? '#fff' : '#475569',
-              }}
+              className={`acn-btn acn-tab-btn${abaAtiva === a.id ? ' ativo' : ''}`}
               onClick={() => setAbaAtiva(a.id)}
             >
               {a.label}
