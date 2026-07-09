@@ -685,6 +685,330 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// UTILITÁRIO DE IMPRESSÃO DE RELATÓRIO DE HORAS
+// ─────────────────────────────────────────────────────────────────────────────
+function gerarHtmlRelatorio(titulo: string, periodoLabel: string, linhas: any[], totais: any) {
+  const badge = (txt: string, cor: string) =>
+    `<span style="background:${cor};color:white;border-radius:3px;padding:1px 7px;font-size:10px;font-weight:700;">${txt}</span>`;
+
+  const rows = linhas.map(l => `
+    <tr>
+      <td>${l.nome}</td>
+      <td style="text-align:center;color:#16a34a;font-weight:700">${fmtMin(l.credito)}</td>
+      <td style="text-align:center;color:#dc2626;font-weight:700">${fmtMin(-l.debito)}</td>
+      <td style="text-align:center;font-weight:800;color:${l.saldo>=0?'#16a34a':'#dc2626'}">${fmtMin(l.saldo)}</td>
+      <td style="text-align:center">${l.faltas > 0 ? badge(String(l.faltas),'#dc2626') : '—'}</td>
+      <td style="text-align:center">${l.atestados > 0 ? badge(String(l.atestados),'#6b7280') : '—'}</td>
+      <td style="text-align:center">${l.declaracoes > 0 ? badge(String(l.declaracoes),'#d97706') : '—'}</td>
+      <td style="text-align:center">${l.saidasAnt > 0 ? badge(String(l.saidasAnt),'#ef4444') : '—'}</td>
+      <td style="text-align:center">${l.entradasAnt > 0 ? badge(String(l.entradasAnt),'#22c55e') : '—'}</td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>${titulo}</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;margin:25px;color:#111;}
+    h2{font-size:14px;text-align:center;margin:0 0 2px;}
+    .sub{text-align:center;font-size:10px;color:#555;margin-bottom:18px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+    th{background:#1e293b;color:#cbd5e1;padding:6px 8px;text-align:left;font-size:10px;}
+    td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:10px;vertical-align:middle;}
+    tr:nth-child(even) td{background:#f9fafb;}
+    .totais td{background:#f1f5f9!important;font-weight:700;border-top:2px solid #334155;}
+    .destaques{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:12px;margin-top:12px;font-size:10px;}
+    .destaques h3{margin:0 0 8px;font-size:11px;color:#92400e;}
+    .chip{display:inline-block;margin:2px 4px;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;}
+    @media print{body{margin:12mm;}}
+  </style></head><body>
+  <h2>ACN SINAL VERDE — ${titulo.toUpperCase()}</h2>
+  <div class="sub">Período: ${periodoLabel} · Emitido em ${new Date().toLocaleString('pt-BR')}</div>
+  <table>
+    <thead><tr>
+      <th>Funcionário</th><th style="text-align:center">Créditos</th><th style="text-align:center">Débitos</th>
+      <th style="text-align:center">Saldo</th>
+      <th style="text-align:center">Faltas</th><th style="text-align:center">Atestados</th>
+      <th style="text-align:center">Declarações</th><th style="text-align:center">Saídas Ant.</th><th style="text-align:center">Entradas Ant.</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      <tr class="totais">
+        <td>TOTAL GERAL</td>
+        <td style="text-align:center;color:#16a34a">${fmtMin(totais.credito)}</td>
+        <td style="text-align:center;color:#dc2626">${fmtMin(-totais.debito)}</td>
+        <td style="text-align:center;color:${totais.saldo>=0?'#16a34a':'#dc2626'}">${fmtMin(totais.saldo)}</td>
+        <td style="text-align:center">${totais.faltas||0}</td>
+        <td style="text-align:center">${totais.atestados||0}</td>
+        <td style="text-align:center">${totais.declaracoes||0}</td>
+        <td style="text-align:center">${totais.saidasAnt||0}</td>
+        <td style="text-align:center">${totais.entradasAnt||0}</td>
+      </tr>
+    </tbody>
+  </table>
+  ${(totais.faltas||totais.atestados||totais.declaracoes||totais.saidasAnt||totais.entradasAnt) ? `
+  <div class="destaques">
+    <h3>📌 Destaques do Período</h3>
+    ${totais.faltas ? `<span class="chip" style="background:#fde8e8;color:#dc2626">🔴 ${totais.faltas} falta(s)</span>` : ''}
+    ${totais.atestados ? `<span class="chip" style="background:#f1f5f9;color:#6b7280">📋 ${totais.atestados} atestado(s)</span>` : ''}
+    ${totais.declaracoes ? `<span class="chip" style="background:#fffbeb;color:#d97706">📝 ${totais.declaracoes} declaração(ões)</span>` : ''}
+    ${totais.saidasAnt ? `<span class="chip" style="background:#fef2f2;color:#ef4444">↩ ${totais.saidasAnt} saída(s) antecipada(s)</span>` : ''}
+    ${totais.entradasAnt ? `<span class="chip" style="background:#f0fdf4;color:#16a34a">↪ ${totais.entradasAnt} entrada(s) antecipada(s)</span>` : ''}
+  </div>` : ''}
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+}
+
+function calcLinhas(funcs: any[], lancs: any[]) {
+  return funcs.filter(f=>f.ativo).map(f => {
+    const ls = lancs.filter(l => l.funcionario_id === f.id);
+    const credito  = ls.filter(l=>sinalDoTipo(l.tipo)>0).reduce((a,l)=>a+l.minutos,0);
+    const debito   = ls.filter(l=>sinalDoTipo(l.tipo)<0).reduce((a,l)=>a+l.minutos,0);
+    return {
+      nome:         f.nome,
+      credito,
+      debito,
+      saldo:        credito - debito,
+      faltas:       ls.filter(l=>l.tipo==='Falta').length,
+      atestados:    ls.filter(l=>l.tipo==='Atestado').length,
+      declaracoes:  ls.filter(l=>l.tipo==='Declaração').length,
+      saidasAnt:    ls.filter(l=>l.tipo==='Saída Antecipada').length,
+      entradasAnt:  ls.filter(l=>l.tipo==='Entrada Antecipada').length,
+    };
+  });
+}
+
+function somarTotais(linhas: any[]) {
+  return linhas.reduce((acc, l) => ({
+    credito:     (acc.credito||0)    + l.credito,
+    debito:      (acc.debito||0)     + l.debito,
+    saldo:       (acc.saldo||0)      + l.saldo,
+    faltas:      (acc.faltas||0)     + l.faltas,
+    atestados:   (acc.atestados||0)  + l.atestados,
+    declaracoes: (acc.declaracoes||0)+ l.declaracoes,
+    saidasAnt:   (acc.saidasAnt||0)  + l.saidasAnt,
+    entradasAnt: (acc.entradasAnt||0)+ l.entradasAnt,
+  }), {});
+}
+
+function imprimirRelatorio(titulo: string, periodoLabel: string, linhas: any[]) {
+  const totais = somarTotais(linhas);
+  const html = gerarHtmlRelatorio(titulo, periodoLabel, linhas, totais);
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO — RELATÓRIOS DE HORAS
+// ─────────────────────────────────────────────────────────────────────────────
+function RelatoriosRH({ funcionarios, lancamentos }) {
+  const hoje = new Date();
+  const [aba, setAba]           = useState<'individual'|'parcial'|'consolidado'>('individual');
+  const [mes, setMes]           = useState(hoje.getMonth()+1);
+  const [ano, setAno]           = useState(hoje.getFullYear());
+  const [funcId, setFuncId]     = useState('');
+  const [dtInicio, setDtInicio] = useState('');
+  const [dtFim, setDtFim]       = useState('');
+
+  const meses = Array.from({length:12},(_,i)=>i+1);
+  const anos  = [2024,2025,2026,2027];
+
+  // ── Filtros por aba ──────────────────────────────────────────────────────
+  const lancsMenoAno = lancamentos.filter(l => l.mes===mes && l.ano===ano);
+
+  const lancsPeriodo = (inicio: string, fim: string) => {
+    if (!inicio || !fim) return lancamentos;
+    return lancamentos.filter(l => l.data >= inicio && l.data <= fim);
+  };
+
+  // ── Preview em tela ──────────────────────────────────────────────────────
+  const linhasIndividual = (() => {
+    if (!funcId) return [];
+    const f = funcionarios.find(f=>f.id===funcId);
+    if (!f) return [];
+    const ls = lancsMenoAno.filter(l=>l.funcionario_id===funcId);
+    return calcLinhas([f], ls);
+  })();
+
+  const linhasParcial = (() => {
+    const ls = funcId
+      ? lancsPeriodo(dtInicio,dtFim).filter(l=>l.funcionario_id===funcId)
+      : lancsPeriodo(dtInicio,dtFim);
+    const funcs = funcId ? funcionarios.filter(f=>f.id===funcId) : funcionarios;
+    return calcLinhas(funcs, ls);
+  })();
+
+  const linhasConsolidado = calcLinhas(funcionarios, lancsMenoAno);
+
+  const btnAba = (id: string, label: string) => (
+    <button key={id} onClick={()=>setAba(id as any)}
+      className={`acn-btn acn-tab-btn${aba===id?' ativo':''}`}
+      style={{fontSize:10,padding:'5px 14px'}}>
+      {label}
+    </button>
+  );
+
+  const selectMesAno = () => (
+    <div style={{display:'flex',gap:6,alignItems:'center'}}>
+      <select value={mes} onChange={e=>setMes(Number(e.target.value))}
+        style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+        {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
+      </select>
+      <select value={ano} onChange={e=>setAno(Number(e.target.value))}
+        style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+        {anos.map(y=><option key={y} value={y}>{y}</option>)}
+      </select>
+    </div>
+  );
+
+  const selectFuncionario = (label='Funcionário') => (
+    <select value={funcId} onChange={e=>setFuncId(e.target.value)}
+      style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+      <option value="">{label}</option>
+      {funcionarios.filter(f=>f.ativo).map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+    </select>
+  );
+
+  const TabelaPreview = ({ linhas }: { linhas: any[] }) => {
+    if (linhas.length === 0) return <div className="acn-empty">Selecione os filtros acima.</div>;
+    const totais = somarTotais(linhas);
+    return (
+      <div style={{overflowX:'auto'}}>
+        <table>
+          <thead><tr>
+            <th>Funcionário</th>
+            <th style={{textAlign:'center'}}>Créditos</th>
+            <th style={{textAlign:'center'}}>Débitos</th>
+            <th style={{textAlign:'center'}}>Saldo</th>
+            <th style={{textAlign:'center',color:'#fca5a5'}}>Faltas</th>
+            <th style={{textAlign:'center'}}>Atestados</th>
+            <th style={{textAlign:'center',color:'#fde68a'}}>Declarações</th>
+            <th style={{textAlign:'center'}}>Saídas Ant.</th>
+            <th style={{textAlign:'center'}}>Entradas Ant.</th>
+          </tr></thead>
+          <tbody>
+            {linhas.map((l,i) => (
+              <tr key={i}>
+                <td><strong>{l.nome}</strong></td>
+                <td style={{textAlign:'center',color:'#16a34a',fontWeight:700}}>{fmtMin(l.credito)}</td>
+                <td style={{textAlign:'center',color:'#dc2626',fontWeight:700}}>{l.debito>0?fmtMin(-l.debito):'—'}</td>
+                <td style={{textAlign:'center',fontWeight:800,color:l.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(l.saldo)}</td>
+                <td style={{textAlign:'center'}}>{l.faltas>0?<span style={{background:'#fde8e8',color:'#dc2626',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.faltas}</span>:'—'}</td>
+                <td style={{textAlign:'center'}}>{l.atestados>0?<span style={{background:'#f1f5f9',color:'#6b7280',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.atestados}</span>:'—'}</td>
+                <td style={{textAlign:'center'}}>{l.declaracoes>0?<span style={{background:'#fffbeb',color:'#d97706',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.declaracoes}</span>:'—'}</td>
+                <td style={{textAlign:'center'}}>{l.saidasAnt>0?<span style={{background:'#fef2f2',color:'#ef4444',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.saidasAnt}</span>:'—'}</td>
+                <td style={{textAlign:'center'}}>{l.entradasAnt>0?<span style={{background:'#f0fdf4',color:'#16a34a',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.entradasAnt}</span>:'—'}</td>
+              </tr>
+            ))}
+            {linhas.length > 1 && (
+              <tr style={{background:'#f1f5f9',fontWeight:700}}>
+                <td>TOTAL</td>
+                <td style={{textAlign:'center',color:'#16a34a'}}>{fmtMin(totais.credito)}</td>
+                <td style={{textAlign:'center',color:'#dc2626'}}>{totais.debito>0?fmtMin(-totais.debito):'—'}</td>
+                <td style={{textAlign:'center',color:totais.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(totais.saldo)}</td>
+                <td style={{textAlign:'center'}}>{totais.faltas||'—'}</td>
+                <td style={{textAlign:'center'}}>{totais.atestados||'—'}</td>
+                <td style={{textAlign:'center'}}>{totais.declaracoes||'—'}</td>
+                <td style={{textAlign:'center'}}>{totais.saidasAnt||'—'}</td>
+                <td style={{textAlign:'center'}}>{totais.entradasAnt||'—'}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-hdr">
+        <span>📄 Relatórios de Horas</span>
+      </div>
+      <div className="sec-body">
+        {/* Abas */}
+        <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
+          {btnAba('individual','👤 Individual')}
+          {btnAba('parcial','📅 Parcial por Período')}
+          {btnAba('consolidado','📊 Consolidado')}
+        </div>
+
+        {/* ── INDIVIDUAL ── */}
+        {aba === 'individual' && (
+          <div>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+              {selectFuncionario('Selecione o funcionário...')}
+              {selectMesAno()}
+              <button
+                onClick={() => {
+                  if (!funcId) { alert('Selecione um funcionário!'); return; }
+                  const f = funcionarios.find(f=>f.id===funcId);
+                  imprimirRelatorio(
+                    `Fechamento Individual — ${f?.nome}`,
+                    `${mesNome(mes)}/${ano}`,
+                    linhasIndividual
+                  );
+                }}
+                style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
+                🖨️ Imprimir
+              </button>
+            </div>
+            <TabelaPreview linhas={linhasIndividual} />
+          </div>
+        )}
+
+        {/* ── PARCIAL POR PERÍODO ── */}
+        {aba === 'parcial' && (
+          <div>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+              {selectFuncionario('Todos os funcionários')}
+              <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                <span style={{fontSize:10,color:'#6b7280'}}>De</span>
+                <input type="date" value={dtInicio} onChange={e=>setDtInicio(e.target.value)}
+                  style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
+                <span style={{fontSize:10,color:'#6b7280'}}>até</span>
+                <input type="date" value={dtFim} onChange={e=>setDtFim(e.target.value)}
+                  style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
+              </div>
+              <button
+                onClick={() => {
+                  if (!dtInicio || !dtFim) { alert('Selecione o período!'); return; }
+                  const f = funcId ? funcionarios.find(f=>f.id===funcId) : null;
+                  imprimirRelatorio(
+                    `Fechamento Parcial${f?` — ${f.nome}`:''}`,
+                    `${fmtDate(dtInicio)} a ${fmtDate(dtFim)}`,
+                    linhasParcial
+                  );
+                }}
+                style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
+                🖨️ Imprimir
+              </button>
+            </div>
+            <TabelaPreview linhas={linhasParcial} />
+          </div>
+        )}
+
+        {/* ── CONSOLIDADO ── */}
+        {aba === 'consolidado' && (
+          <div>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+              {selectMesAno()}
+              <button
+                onClick={() => imprimirRelatorio(
+                  'Fechamento Consolidado — Todos os Funcionários',
+                  `${mesNome(mes)}/${ano}`,
+                  linhasConsolidado
+                )}
+                style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
+                🖨️ Imprimir
+              </button>
+            </div>
+            <TabelaPreview linhas={linhasConsolidado} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RHTab({ currentUser }) {
@@ -765,6 +1089,7 @@ export default function RHTab({ currentUser }) {
         <>
           <PainelStatus funcionarios={funcionarios} onRefresh={fetch} />
           <BancoHoras funcionarios={funcionarios} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
+          <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <ListaAutorizacoes
             funcionarios={funcionarios}

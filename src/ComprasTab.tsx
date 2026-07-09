@@ -3,6 +3,57 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 
 
+// ─── MODAL DE OBSERVAÇÕES ────────────────────────────────────────────────────
+function ModalObservacao({ item, tabela, currentUser, onClose, onSaved }) {
+  const [novaObs, setNovaObs]   = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const obsExistentes = item.observacoes || '';
+
+  const salvar = async () => {
+    if (!novaObs.trim()) { alert('Digite uma observação!'); return; }
+    setSalvando(true);
+    const agora = new Date().toLocaleString('pt-BR');
+    const linha = `[${agora} — ${currentUser?.nome || 'Sistema'}]: ${novaObs.trim()}`;
+    const novoTexto = obsExistentes ? `${obsExistentes}\n${linha}` : linha;
+    const { error } = await supabase.from(tabela).update({ observacoes: novoTexto }).eq('id', item.id);
+    if (error) alert('Erro: ' + error.message);
+    setSalvando(false);
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{maxWidth:500}}>
+        <div className="modal-title">💬 Observações — {item.numero_pedido || item.numero_requisicao}</div>
+        {obsExistentes ? (
+          <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:'10px',
+            marginBottom:12,fontSize:10,color:'#374151',whiteSpace:'pre-wrap',maxHeight:200,overflowY:'auto',lineHeight:1.8}}>
+            {obsExistentes}
+          </div>
+        ) : (
+          <div style={{fontSize:10,color:'#9ca3af',marginBottom:12,fontStyle:'italic'}}>Sem observações anteriores.</div>
+        )}
+        <label className="acn-label">Nova observação</label>
+        <textarea value={novaObs} onChange={e=>setNovaObs(e.target.value)} rows={4}
+          placeholder="Ex: Fornecedor adiou prazo para 15/08. Aguardando confirmação..."
+          style={{width:'100%',padding:'8px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11,
+            resize:'vertical',boxSizing:'border-box',marginBottom:12}} />
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button onClick={onClose}
+            style={{padding:'7px 16px',border:'1px solid #d1d5db',borderRadius:6,background:'#fff',fontSize:11,cursor:'pointer'}}>
+            Cancelar
+          </button>
+          <button onClick={salvar} disabled={salvando}
+            style={{padding:'7px 20px',background:'#0891b2',color:'#fff',border:'none',borderRadius:6,fontWeight:700,fontSize:11,cursor:'pointer'}}>
+            {salvando ? '...' : '💾 Salvar observação'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ComprasTab({ currentUser }) {
   const [tab, setTab] = useState('vinculadas');
   const [pedidosVinculados, setPedidosVinculados] = useState([]);
@@ -10,12 +61,14 @@ export default function ComprasTab({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [modalObs, setModalObs] = useState<{item:any,tabela:string}|null>(null);
   const [formData, setFormData] = useState({
     tipoPedido: 'Projeto Especial',
     descricao: '',
     quantidade: 1,
     valor: 0,
     fornecedor: '',
+    prazoEntrega: '',
     observacoes: '',
   });
 
@@ -101,7 +154,10 @@ export default function ComprasTab({ currentUser }) {
           quantidade: formData.quantidade,
           valor_unitario: formData.valor || null,
           fornecedor: formData.fornecedor || null,
-          observacoes: formData.observacoes,
+          prazo_entrega: formData.prazoEntrega || null,
+          observacoes: formData.observacoes
+            ? `[${new Date().toLocaleString('pt-BR')} — ${currentUser?.nome || 'Sistema'}]: ${formData.observacoes}`
+            : '',
           criado_por: currentUser?.nome || 'Desconhecido',
           data_prevista: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         },
@@ -111,7 +167,7 @@ export default function ComprasTab({ currentUser }) {
         alert('❌ Erro: ' + error.message);
       } else {
         alert('✅ Pedido criado!');
-        setFormData({ tipoPedido: 'Projeto Especial', descricao: '', quantidade: 1, valor: 0, fornecedor: '', observacoes: '' });
+        setFormData({ tipoPedido: 'Projeto Especial', descricao: '', quantidade: 1, valor: 0, fornecedor: '', prazoEntrega: '', observacoes: '' });
         setShowForm(false);
         fetchData();
       }
@@ -142,11 +198,24 @@ export default function ComprasTab({ currentUser }) {
 
   const getStatusColor = (status) => {
     const colors = {
-      'Pendente': '#fbbf24',
-      'Em Andamento': '#3b82f6',
-      'Concluído': '#22c55e',
+      'Pendente':    '#fbbf24',
+      'Em Andamento':'#3b82f6',
+      'Comprado':    '#7c3aed',
+      'Concluído':   '#22c55e',
     };
     return colors[status] || '#9ca3af';
+  };
+
+  const fmtPrazo = (d) => {
+    if (!d) return '—';
+    const dt = new Date(d + 'T00:00:00');
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const diff = Math.ceil((dt.getTime() - hoje.getTime()) / 86400000);
+    const str = dt.toLocaleDateString('pt-BR');
+    if (diff < 0) return <span style={{color:'#dc2626',fontWeight:700}}>{str} ⚠️</span>;
+    if (diff === 0) return <span style={{color:'#f59e0b',fontWeight:700}}>Hoje!</span>;
+    if (diff <= 3) return <span style={{color:'#f59e0b',fontWeight:700}}>{str}</span>;
+    return str;
   };
 
   const formatValor = (valor) => {
@@ -163,6 +232,7 @@ export default function ComprasTab({ currentUser }) {
             <option value="">Todos os Status</option>
             <option value="Pendente">Pendente</option>
             <option value="Em Andamento">Em Andamento</option>
+            <option value="Comprado">Comprado</option>
             <option value="Concluído">Concluído</option>
           </select>
         </div>
@@ -206,9 +276,10 @@ export default function ComprasTab({ currentUser }) {
                     <th>Número</th>
                     <th>OP</th>
                     <th>Descrição</th>
-                    <th>Quantidade</th>
+                    <th>Qtd</th>
                     <th>Valor Unit.</th>
                     <th>Fornecedor</th>
+                    <th>Prazo Entrega</th>
                     <th>Status</th>
                     <th>Ações</th>
                   </tr>
@@ -218,30 +289,31 @@ export default function ComprasTab({ currentUser }) {
                     <tr key={pedido.id} style={styles.tableRow}>
                       <td style={styles.tableCell}><strong>{pedido.numero_pedido}</strong></td>
                       <td style={styles.tableCell}>{pedido.opl}</td>
-                      <td style={styles.tableCell}>{pedido.descricao_material?.substring(0, 30)}</td>
+                      <td style={styles.tableCell}>{pedido.descricao_material?.substring(0, 35)}</td>
                       <td style={styles.tableCell}>{pedido.quantidade}</td>
                       <td style={styles.tableCell}>{formatValor(pedido.valor_unitario)}</td>
                       <td style={styles.tableCell}>{pedido.fornecedor?.substring(0, 20) || '—'}</td>
+                      <td style={styles.tableCell}>{fmtPrazo(pedido.prazo_entrega)}</td>
                       <td style={styles.tableCell}>
-                        <span style={{ padding: '6px 12px', borderRadius: '4px', color: 'white', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(pedido.status_solicitacao) }}>
+                        <span style={{ padding: '4px 10px', borderRadius: '4px', color: 'white', fontSize: '11px', fontWeight: 'bold', backgroundColor: getStatusColor(pedido.status_solicitacao) }}>
                           {pedido.status_solicitacao}
                         </span>
                       </td>
-                      <td style={styles.tableCell}>
-                        {pedido.status_solicitacao !== 'Concluído' && (
-                          <>
-                            {pedido.status_solicitacao === 'Pendente' && (
-                              <button onClick={() => updateStatus(pedido.id, 'pcp_pedidos_compra', 'Em Andamento')} style={{ ...styles.buttonSmall, backgroundColor: '#3b82f6', marginRight: '5px' }}>
-                                ▶️
-                              </button>
-                            )}
-                            {pedido.status_solicitacao === 'Em Andamento' && (
-                              <button onClick={() => updateStatus(pedido.id, 'pcp_pedidos_compra', 'Concluído')} style={{ ...styles.buttonSmall, backgroundColor: '#22c55e' }}>
-                                ✅
-                              </button>
-                            )}
-                          </>
+                      <td style={{ ...styles.tableCell, whiteSpace:'nowrap' }}>
+                        {pedido.status_solicitacao === 'Pendente' && (
+                          <button onClick={() => updateStatus(pedido.id, 'pcp_pedidos_compra', 'Em Andamento')}
+                            style={{ ...styles.buttonSmall, backgroundColor: '#3b82f6', marginRight: '4px' }} title="Iniciar">▶️</button>
                         )}
+                        {pedido.status_solicitacao === 'Em Andamento' && (
+                          <button onClick={() => updateStatus(pedido.id, 'pcp_pedidos_compra', 'Comprado')}
+                            style={{ ...styles.buttonSmall, backgroundColor: '#7c3aed', marginRight: '4px' }} title="Marcar como Comprado">🛒</button>
+                        )}
+                        {pedido.status_solicitacao === 'Comprado' && (
+                          <button onClick={() => updateStatus(pedido.id, 'pcp_pedidos_compra', 'Concluído')}
+                            style={{ ...styles.buttonSmall, backgroundColor: '#22c55e', marginRight: '4px' }} title="Concluir">✅</button>
+                        )}
+                        <button onClick={() => setModalObs({ item: pedido, tabela: 'pcp_pedidos_compra' })}
+                          style={{ ...styles.buttonSmall, backgroundColor: '#0891b2' }} title="Observações">💬</button>
                       </td>
                     </tr>
                   ))}
@@ -302,18 +374,28 @@ export default function ComprasTab({ currentUser }) {
                 style={styles.input}
               />
 
+              <div>
+                <label style={{fontSize:11,color:'#6b7280',display:'block',marginBottom:4}}>Prazo de Entrega</label>
+                <input
+                  type="date"
+                  value={formData.prazoEntrega}
+                  onChange={(e) => setFormData({ ...formData, prazoEntrega: e.target.value })}
+                  style={styles.input}
+                />
+              </div>
+
               <textarea
-                placeholder="Observações detalhadas"
+                placeholder="Observação inicial"
                 value={formData.observacoes}
                 onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                style={{ ...styles.input, minHeight: '80px' }}
+                style={{ ...styles.input, minHeight: '60px' }}
               />
 
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={() => salvarPedidoEspecial()} style={{ ...styles.buttonSmall, backgroundColor: '#22c55e', flex: 1 }}>
                   💾 Salvar
                 </button>
-                <button onClick={() => { setShowForm(false); setFormData({ tipoPedido: 'Projeto Especial', descricao: '', quantidade: 1, valor: 0, fornecedor: '', observacoes: '' }); }} style={{ ...styles.buttonSmall, backgroundColor: '#9ca3af', flex: 1 }}>
+                <button onClick={() => { setShowForm(false); setFormData({ tipoPedido: 'Projeto Especial', descricao: '', quantidade: 1, valor: 0, fornecedor: '', prazoEntrega: '', observacoes: '' }); }} style={{ ...styles.buttonSmall, backgroundColor: '#9ca3af', flex: 1 }}>
                   ✖️ Cancelar
                 </button>
               </div>
@@ -330,9 +412,10 @@ export default function ComprasTab({ currentUser }) {
                     <th>Número</th>
                     <th>Tipo</th>
                     <th>Descrição</th>
-                    <th>Quantidade</th>
+                    <th>Qtd</th>
                     <th>Valor Unit.</th>
                     <th>Fornecedor</th>
+                    <th>Prazo Entrega</th>
                     <th>Observações</th>
                     <th>Status</th>
                     <th>Ações</th>
@@ -343,35 +426,42 @@ export default function ComprasTab({ currentUser }) {
                     <tr key={pedido.id} style={styles.tableRow}>
                       <td style={styles.tableCell}><strong>{pedido.numero_requisicao}</strong></td>
                       <td style={styles.tableCell}>
-                        <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: pedido.tipo_pedido === 'Projeto Especial' ? '#f59e0b' : '#3b82f6', color: 'white', fontSize: '11px', fontWeight: 'bold' }}>
+                        <span style={{ padding: '3px 7px', borderRadius: '4px', backgroundColor: pedido.tipo_pedido === 'Projeto Especial' ? '#f59e0b' : '#3b82f6', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>
                           {pedido.tipo_pedido}
                         </span>
                       </td>
-                      <td style={styles.tableCell}>{pedido.descricao_material?.substring(0, 30)}</td>
+                      <td style={styles.tableCell}>{pedido.descricao_material?.substring(0, 35)}</td>
                       <td style={styles.tableCell}>{pedido.quantidade}</td>
                       <td style={styles.tableCell}>{formatValor(pedido.valor_unitario)}</td>
                       <td style={styles.tableCell}>{pedido.fornecedor?.substring(0, 20) || '—'}</td>
-                      <td style={styles.tableCell}><small>{pedido.observacoes?.substring(0, 40) || '—'}</small></td>
+                      <td style={styles.tableCell}>{fmtPrazo(pedido.prazo_entrega)}</td>
+                      <td style={{ ...styles.tableCell, maxWidth:160 }}>
+                        <small style={{color:'#6b7280',whiteSpace:'pre-wrap',display:'block',maxHeight:48,overflow:'hidden'}}>
+                          {pedido.observacoes
+                            ? pedido.observacoes.split('\n').slice(-1)[0]?.substring(0,60) + (pedido.observacoes.length > 60 ? '…' : '')
+                            : '—'}
+                        </small>
+                      </td>
                       <td style={styles.tableCell}>
-                        <span style={{ padding: '6px 12px', borderRadius: '4px', color: 'white', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusColor(pedido.status_solicitacao) }}>
+                        <span style={{ padding: '4px 10px', borderRadius: '4px', color: 'white', fontSize: '11px', fontWeight: 'bold', backgroundColor: getStatusColor(pedido.status_solicitacao) }}>
                           {pedido.status_solicitacao}
                         </span>
                       </td>
-                      <td style={styles.tableCell}>
-                        {pedido.status_solicitacao !== 'Concluído' && (
-                          <>
-                            {pedido.status_solicitacao === 'Pendente' && (
-                              <button onClick={() => updateStatus(pedido.id, 'compras_especiais', 'Em Andamento')} style={{ ...styles.buttonSmall, backgroundColor: '#3b82f6', marginRight: '5px' }}>
-                                ▶️
-                              </button>
-                            )}
-                            {pedido.status_solicitacao === 'Em Andamento' && (
-                              <button onClick={() => updateStatus(pedido.id, 'compras_especiais', 'Concluído')} style={{ ...styles.buttonSmall, backgroundColor: '#22c55e' }}>
-                                ✅
-                              </button>
-                            )}
-                          </>
+                      <td style={{ ...styles.tableCell, whiteSpace:'nowrap' }}>
+                        {pedido.status_solicitacao === 'Pendente' && (
+                          <button onClick={() => updateStatus(pedido.id, 'compras_especiais', 'Em Andamento')}
+                            style={{ ...styles.buttonSmall, backgroundColor: '#3b82f6', marginRight: '4px' }} title="Iniciar">▶️</button>
                         )}
+                        {pedido.status_solicitacao === 'Em Andamento' && (
+                          <button onClick={() => updateStatus(pedido.id, 'compras_especiais', 'Comprado')}
+                            style={{ ...styles.buttonSmall, backgroundColor: '#7c3aed', marginRight: '4px' }} title="Marcar como Comprado">🛒</button>
+                        )}
+                        {pedido.status_solicitacao === 'Comprado' && (
+                          <button onClick={() => updateStatus(pedido.id, 'compras_especiais', 'Concluído')}
+                            style={{ ...styles.buttonSmall, backgroundColor: '#22c55e', marginRight: '4px' }} title="Concluir">✅</button>
+                        )}
+                        <button onClick={() => setModalObs({ item: pedido, tabela: 'compras_especiais' })}
+                          style={{ ...styles.buttonSmall, backgroundColor: '#0891b2' }} title="Observações">💬</button>
                       </td>
                     </tr>
                   ))}
@@ -380,6 +470,17 @@ export default function ComprasTab({ currentUser }) {
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal de Observações */}
+      {modalObs && (
+        <ModalObservacao
+          item={modalObs.item}
+          tabela={modalObs.tabela}
+          currentUser={currentUser}
+          onClose={() => setModalObs(null)}
+          onSaved={fetchData}
+        />
       )}
 
       {/* KPIs */}
