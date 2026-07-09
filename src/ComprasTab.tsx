@@ -62,6 +62,7 @@ export default function ComprasTab({ currentUser }) {
   const [filterStatus, setFilterStatus] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [modalObs, setModalObs] = useState<{item:any,tabela:string}|null>(null);
+  const [editandoPrazo, setEditandoPrazo] = useState<{id:string,tabela:string,valor:string}|null>(null);
   const [formData, setFormData] = useState({
     tipoPedido: 'Projeto Especial',
     descricao: '',
@@ -174,6 +175,15 @@ export default function ComprasTab({ currentUser }) {
     } catch (err) {
       alert('❌ ' + err.message);
     }
+  };
+
+  const salvarPrazo = async () => {
+    if (!editandoPrazo) return;
+    const { error } = await supabase.from(editandoPrazo.tabela)
+      .update({ prazo_entrega: editandoPrazo.valor || null }).eq('id', editandoPrazo.id);
+    if (error) alert('Erro: ' + error.message);
+    setEditandoPrazo(null);
+    fetchData();
   };
 
   const updateStatus = async (id, tabela, novoStatus) => {
@@ -293,7 +303,22 @@ export default function ComprasTab({ currentUser }) {
                       <td style={styles.tableCell}>{pedido.quantidade}</td>
                       <td style={styles.tableCell}>{formatValor(pedido.valor_unitario)}</td>
                       <td style={styles.tableCell}>{pedido.fornecedor?.substring(0, 20) || '—'}</td>
-                      <td style={styles.tableCell}>{fmtPrazo(pedido.prazo_entrega)}</td>
+                      <td style={styles.tableCell}>
+                        {editandoPrazo?.id === pedido.id ? (
+                          <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                            <input type="date" value={editandoPrazo.valor}
+                              onChange={e => setEditandoPrazo({...editandoPrazo, valor: e.target.value})}
+                              style={{fontSize:10,padding:'2px 4px',border:'1px solid #d1d5db',borderRadius:4}} />
+                            <button onClick={salvarPrazo} style={{...styles.buttonSmall,backgroundColor:'#22c55e',padding:'2px 6px'}}>✓</button>
+                            <button onClick={() => setEditandoPrazo(null)} style={{...styles.buttonSmall,backgroundColor:'#9ca3af',padding:'2px 6px'}}>✕</button>
+                          </div>
+                        ) : (
+                          <span onClick={() => setEditandoPrazo({id:pedido.id,tabela:'pcp_pedidos_compra',valor:pedido.prazo_entrega||''})}
+                            style={{cursor:'pointer'}} title="Clique para editar">
+                            {fmtPrazo(pedido.prazo_entrega)} <span style={{fontSize:9,color:'#94a3b8'}}>✏️</span>
+                          </span>
+                        )}
+                      </td>
                       <td style={styles.tableCell}>
                         <span style={{ padding: '4px 10px', borderRadius: '4px', color: 'white', fontSize: '11px', fontWeight: 'bold', backgroundColor: getStatusColor(pedido.status_solicitacao) }}>
                           {pedido.status_solicitacao}
