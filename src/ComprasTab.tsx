@@ -128,6 +128,7 @@ export default function ComprasTab({ currentUser }) {
   const [modalIniciar, setModalIniciar] = useState<any>(null);
   const [modalObs, setModalObs]     = useState<any>(null);
   const [editPrazo, setEditPrazo]   = useState<{id:string,valor:string}|null>(null);
+  const [editValor, setEditValor]   = useState<{id:string,valor:string}|null>(null);
 
   // Quem pode ver valor da compra
   const canVerValor = ['Admin', 'Gerente', 'Compras'].includes(currentUser?.perfil);
@@ -168,14 +169,28 @@ export default function ComprasTab({ currentUser }) {
     const updates: any = { status_solicitacao: novoStatus };
     if (novoStatus === 'Concluído') updates.data_conclusao = new Date().toISOString();
     const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', id);
-    if (error) alert('Erro: ' + error.message);
-    else load();
+    if (error) { alert('Erro: ' + error.message); return; }
+    // Limpa filtro para o item não sumir da tela após mudança de status
+    setFilter('');
+    load();
   };
 
   const salvarPrazo = async () => {
     if (!editPrazo) return;
-    await supabase.from('pcp_pedidos_compra').update({ prazo_entrega: editPrazo.valor || null }).eq('id', editPrazo.id);
+    const { error } = await supabase.from('pcp_pedidos_compra')
+      .update({ prazo_entrega: editPrazo.valor || null }).eq('id', editPrazo.id);
+    if (error) alert('Erro ao salvar prazo: ' + error.message);
     setEditPrazo(null);
+    load();
+  };
+
+  const salvarValor = async () => {
+    if (!editValor) return;
+    const v = parseFloat(editValor.valor.replace(',', '.'));
+    const { error } = await supabase.from('pcp_pedidos_compra')
+      .update({ valor_compra: isNaN(v) ? null : v }).eq('id', editValor.id);
+    if (error) alert('Erro ao salvar valor: ' + error.message);
+    setEditValor(null);
     load();
   };
 
@@ -234,13 +249,33 @@ export default function ComprasTab({ currentUser }) {
                   <td style={{ ...td, maxWidth:180 }}>{p.descricao_material}</td>
                   <td style={td}>{p.quantidade}</td>
 
+                  {/* Valor Compra — editável inline (só para Compras/Gerente/Admin) */}
                   {canVerValor && (
-                    <td style={td}>{fmtBRL(p.valor_compra)}</td>
+                    <td style={td}>
+                      {editValor?.id === p.id ? (
+                        <div style={{ display:'flex', gap:3, alignItems:'center' }}>
+                          <input type="number" step="0.01" value={editValor.valor}
+                            onChange={e => setEditValor({ id: p.id, valor: e.target.value })}
+                            style={{ width:90, fontSize:10, padding:'2px 4px', border:'1px solid #d1d5db', borderRadius:4 }} />
+                          <button onClick={salvarValor}
+                            style={{ ...btnSmall, background:'#22c55e', padding:'2px 6px' }}>✓</button>
+                          <button onClick={() => setEditValor(null)}
+                            style={{ ...btnSmall, background:'#9ca3af', padding:'2px 6px' }}>✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setEditValor({ id: p.id, valor: p.valor_compra ? String(p.valor_compra) : '' })}
+                          style={{ background:'none', border:'1px dashed #cbd5e1', borderRadius:4, padding:'3px 8px',
+                            fontSize:11, cursor:'pointer', color: p.valor_compra ? '#1e293b' : '#94a3b8' }}
+                          title="Clique para editar o valor">
+                          {p.valor_compra ? fmtBRL(p.valor_compra) : '+ Valor'}
+                        </button>
+                      )}
+                    </td>
                   )}
 
                   <td style={td}>{p.fornecedor || '—'}</td>
 
-                  {/* Prazo com edição inline */}
+                  {/* Prazo Entrega — editável inline */}
                   <td style={td}>
                     {editPrazo?.id === p.id ? (
                       <div style={{ display:'flex', gap:3, alignItems:'center' }}>
@@ -253,10 +288,12 @@ export default function ComprasTab({ currentUser }) {
                           style={{ ...btnSmall, background:'#9ca3af', padding:'2px 6px' }}>✕</button>
                       </div>
                     ) : (
-                      <span onClick={() => setEditPrazo({ id: p.id, valor: p.prazo_entrega || '' })}
-                        style={{ cursor:'pointer' }} title="Clique para editar o prazo">
-                        {fmtPrazo(p.prazo_entrega)} <span style={{ fontSize:9, color:'#cbd5e1' }}>✏️</span>
-                      </span>
+                      <button onClick={() => setEditPrazo({ id: p.id, valor: p.prazo_entrega || '' })}
+                        style={{ background:'none', border:'1px dashed #cbd5e1', borderRadius:4, padding:'3px 8px',
+                          fontSize:11, cursor:'pointer', color: p.prazo_entrega ? '#1e293b' : '#94a3b8' }}
+                        title="Clique para editar o prazo de entrega">
+                        {p.prazo_entrega ? fmtPrazo(p.prazo_entrega) : '+ Prazo'}
+                      </button>
                     )}
                   </td>
 
@@ -281,11 +318,11 @@ export default function ComprasTab({ currentUser }) {
                       <button onClick={() => updateStatus(p.id, 'Concluído')}
                         style={{ ...btnSmall, background:'#22c55e', marginRight:3 }} title="Concluir">✅</button>
                     )}
-                    {/* 💬 sempre disponível */}
+                    {/* 💬 sempre disponível em qualquer status */}
                     <button onClick={() => setModalObs(p)}
-                      style={{ ...btnSmall, background: p.observacoes ? '#0891b2' : '#94a3b8' }}
+                      style={{ ...btnSmall, background: p.observacoes ? '#0891b2' : '#64748b' }}
                       title={p.observacoes ? 'Ver/adicionar observações' : 'Adicionar observação'}>
-                      💬
+                      💬 Obs
                     </button>
                   </td>
                 </tr>
