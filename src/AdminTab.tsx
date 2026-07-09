@@ -722,10 +722,12 @@ function PainelKPI() {
 const TABELAS_CONFIG = [
   { id:'oples',                 label:'OPLs',               desc:'Ordens de Produção',         cor:'#2563eb' },
   { id:'demandas_setoriais',    label:'Demandas Setoriais',  desc:'Demandas e Ajustes',         cor:'#f59e0b' },
+  { id:'demandas_avulsas',      label:'Demandas Avulsas',    desc:'Engenharia — tarefas livres', cor:'#7c3aed' },
+  { id:'logistica_manifestos',  label:'Logística In/Out',    desc:'Manifestos de envio/recebimento', cor:'#0891b2' },
   { id:'crm_clientes',          label:'CRM — Clientes',      desc:'Prospects e clientes',       cor:'#16a34a' },
-  { id:'crm_historico_contatos',label:'CRM — Histórico',     desc:'Contatos e interações',      cor:'#0891b2' },
+  { id:'crm_historico_contatos',label:'CRM — Histórico',     desc:'Contatos e interações',      cor:'#0d9488' },
   { id:'logs_movimentacao_opl', label:'Logs de OPL',         desc:'Histórico de movimentações', cor:'#475569' },
-  { id:'cq_auditorias',         label:'Auditorias CQ',       desc:'Registros de qualidade',     cor:'#7c3aed' },
+  { id:'cq_auditorias',         label:'Auditorias CQ',       desc:'Registros de qualidade',     cor:'#dc2626' },
 ];
 
 function PainelDados() {
@@ -757,6 +759,8 @@ function PainelDados() {
       : tabelaAtiva === 'crm_historico_contatos' ? 'data_contato'
       : tabelaAtiva === 'crm_clientes' ? 'created_at'
       : tabelaAtiva === 'cq_auditorias' ? 'created_at'
+      : tabelaAtiva === 'demandas_avulsas' ? 'criado_em'
+      : tabelaAtiva === 'logistica_manifestos' ? 'data'
       : 'created_at';
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);
@@ -817,6 +821,10 @@ function PainelDados() {
       return `OPL ${r.opl || r.numero_opl || r.id} — ${r.cliente_nome || r.cliente || '?'} — ${r.status_geral || '?'}`;
     if (tabelaAtiva === 'demandas_setoriais')
       return `[${r.setor_destino}] ${r.descricao?.substring(0,60) || '?'} — ${r.status}`;
+    if (tabelaAtiva === 'demandas_avulsas')
+      return `[${r.status || '?'}] ${r.titulo?.substring(0,70) || '?'} — ${r.criado_por_nome || r.criado_por || '?'} · Prioridade: ${r.prioridade || '?'}`;
+    if (tabelaAtiva === 'logistica_manifestos')
+      return `${r.tipo || '?'} — ${r.descricao?.substring(0,60) || r.transportadora || '?'} — ${r.criado_por_nome || r.criado_por || '?'}`;
     if (tabelaAtiva === 'crm_clientes')
       return `${r.nome_empresa || r.nome || '?'} — ${r.contato_nome || '?'} — ${r.status_crm || r.estagio || '?'}`;
     if (tabelaAtiva === 'crm_historico_contatos')
@@ -828,7 +836,7 @@ function PainelDados() {
     return r.id;
   };
 
-  const getDataCol = (r) => r.created_at || r.data_abertura || r.data_hora || r.data_contato;
+  const getDataCol = (r) => r.criado_em || r.data || r.created_at || r.data_abertura || r.data_hora || r.data_contato;
   const todosSelecionados = registros.length > 0 && selecionados.size === registros.length;
   const algumSelecionado = selecionados.size > 0;
 
