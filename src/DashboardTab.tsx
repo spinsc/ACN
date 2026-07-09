@@ -288,26 +288,56 @@ body.dark [style*="color:#9ca3af"], body.dark [style*="color: #9ca3af"] { color:
 
 /* ──────────────────────────────────────────────────────────────────
    DARK MODE: inline style overrides — fundos claros → escuros
+   Cobertos: background (shorthand) e background-color (React camelCase)
    ────────────────────────────────────────────────────────────────── */
-body.dark [style*="background:#fff"],     body.dark [style*="background: #fff"],
-body.dark [style*="background:white"],    body.dark [style*="background: white"],
-body.dark [style*="background:#ffffff"],  body.dark [style*="background: #ffffff"],
-body.dark [style*="background:#f8fafc"],  body.dark [style*="background: #f8fafc"],
-body.dark [style*="background:#f9fafb"],  body.dark [style*="background: #f9fafb"] { background:#1e293b !important; color:#cbd5e1 !important; }
 
-body.dark [style*="background:#f1f5f9"],  body.dark [style*="background: #f1f5f9"],
-body.dark [style*="background:#f0f9ff"],  body.dark [style*="background: #f0f9ff"],
-body.dark [style*="background:#fafbfc"],  body.dark [style*="background: #fafbfc"],
-body.dark [style*="background:#f4f6f9"],  body.dark [style*="background: #f4f6f9"] { background:#162032 !important; }
+/* ① Brancos/quase-brancos → fundo escuro com texto claro */
+body.dark [style*="background:#fff"],            body.dark [style*="background: #fff"],
+body.dark [style*="background-color:#fff"],      body.dark [style*="background-color: #fff"],
+body.dark [style*="background:white"],           body.dark [style*="background: white"],
+body.dark [style*="background-color:white"],     body.dark [style*="background-color: white"],
+body.dark [style*="background:#ffffff"],         body.dark [style*="background: #ffffff"],
+body.dark [style*="background-color:#ffffff"],   body.dark [style*="background-color: #ffffff"],
+body.dark [style*="background:#f8fafc"],         body.dark [style*="background: #f8fafc"],
+body.dark [style*="background-color:#f8fafc"],   body.dark [style*="background-color: #f8fafc"],
+body.dark [style*="background:#f9fafb"],         body.dark [style*="background: #f9fafb"],
+body.dark [style*="background-color:#f9fafb"],   body.dark [style*="background-color: #f9fafb"] { background:#1e293b !important; color:#cbd5e1 !important; }
 
-/* Fundos coloridos claros (eff6ff=azul, f5f3ff=roxo, f0fdf4=verde, fffbeb=amarelo, fef2f2=vermelho) */
-body.dark [style*="background:#eff6ff"],  body.dark [style*="background: #eff6ff"] { background:#1e3a5f !important; }
-body.dark [style*="background:#f5f3ff"],  body.dark [style*="background: #f5f3ff"] { background:#2d1b5c !important; }
-body.dark [style*="background:#f0fdf4"],  body.dark [style*="background: #f0fdf4"] { background:#0d2818 !important; }
-body.dark [style*="background:#fffbeb"],  body.dark [style*="background: #fffbeb"] { background:#1c1505 !important; }
-body.dark [style*="background:#fef2f2"],  body.dark [style*="background: #fef2f2"] { background:#2d0a0a !important; }
-body.dark [style*="background:#fff5f5"],  body.dark [style*="background: #fff5f5"] { background:#2d0a0a !important; }
-body.dark [style*="background:#fef3c7"],  body.dark [style*="background: #fef3c7"] { background:#1c1505 !important; }
+/* ② Cinzas claros → fundo escuro médio */
+body.dark [style*="background:#f1f5f9"],         body.dark [style*="background: #f1f5f9"],
+body.dark [style*="background-color:#f1f5f9"],   body.dark [style*="background-color: #f1f5f9"],
+body.dark [style*="background:#f0f9ff"],         body.dark [style*="background: #f0f9ff"],
+body.dark [style*="background:#fafbfc"],         body.dark [style*="background: #fafbfc"],
+body.dark [style*="background:#f4f6f9"],         body.dark [style*="background: #f4f6f9"],
+body.dark [style*="background-color:#f4f6f9"],   body.dark [style*="background-color: #f4f6f9"],
+body.dark [style*="background:#f0fdfa"],         body.dark [style*="background: #f0fdfa"],
+body.dark [style*="background-color:#f0fdfa"],   body.dark [style*="background-color: #f0fdfa"] { background:#162032 !important; color:#cbd5e1 !important; }
+
+/* ③ Cinza-borda (#e2e8f0) — comum em botões desabilitados e cards → slate escuro */
+body.dark [style*="background:#e2e8f0"],         body.dark [style*="background: #e2e8f0"],
+body.dark [style*="background-color:#e2e8f0"],   body.dark [style*="background-color: #e2e8f0"],
+body.dark [style*="background:#e8ecf0"],         body.dark [style*="background: #e8ecf0"],
+body.dark [style*="background:#eef2f6"],         body.dark [style*="background: #eef2f6"] { background:#334155 !important; color:#94a3b8 !important; }
+
+/* ④ Fundos coloridos claros */
+body.dark [style*="background:#eff6ff"],  body.dark [style*="background: #eff6ff"],
+body.dark [style*="background-color:#eff6ff"] { background:#1e3a5f !important; color:#93c5fd !important; }
+body.dark [style*="background:#dbeafe"],  body.dark [style*="background: #dbeafe"],
+body.dark [style*="background-color:#dbeafe"] { background:#1e3a5f !important; color:#93c5fd !important; }
+body.dark [style*="background:#f5f3ff"],  body.dark [style*="background: #f5f3ff"],
+body.dark [style*="background-color:#f5f3ff"] { background:#2d1b5c !important; color:#c4b5fd !important; }
+body.dark [style*="background:#f0fdf4"],  body.dark [style*="background: #f0fdf4"],
+body.dark [style*="background-color:#f0fdf4"] { background:#0d2818 !important; color:#86efac !important; }
+body.dark [style*="background:#fffbeb"],  body.dark [style*="background: #fffbeb"],
+body.dark [style*="background-color:#fffbeb"] { background:#1c1505 !important; color:#fde68a !important; }
+body.dark [style*="background:#fef3c7"],  body.dark [style*="background: #fef3c7"],
+body.dark [style*="background-color:#fef3c7"] { background:#1c1505 !important; color:#fde68a !important; }
+body.dark [style*="background:#fef2f2"],  body.dark [style*="background: #fef2f2"],
+body.dark [style*="background:#fff5f5"],  body.dark [style*="background: #fff5f5"],
+body.dark [style*="background:#fee2e2"],  body.dark [style*="background: #fee2e2"],
+body.dark [style*="background-color:#fee2e2"] { background:#2d0a0a !important; color:#fca5a5 !important; }
+body.dark [style*="background:#fff7ed"],  body.dark [style*="background: #fff7ed"],
+body.dark [style*="background-color:#fff7ed"] { background:#1c1505 !important; color:#fdba74 !important; }
 
 /* ──────────────────────────────────────────────────────────────────
    DARK MODE: bordas claras → escuras
@@ -315,7 +345,10 @@ body.dark [style*="background:#fef3c7"],  body.dark [style*="background: #fef3c7
 body.dark [style*="border:1px solid #e2e8f0"], body.dark [style*="border: 1px solid #e2e8f0"],
 body.dark [style*="border:1px solid #d1d5db"], body.dark [style*="border: 1px solid #d1d5db"],
 body.dark [style*="border:1px solid #e8ecf0"], body.dark [style*="border: 1px solid #e8ecf0"],
-body.dark [style*="border:1.5px solid #e2e8f0"], body.dark [style*="border: 1.5px solid #e2e8f0"] { border-color:#334155 !important; }
+body.dark [style*="border:1px solid #e0e0e0"], body.dark [style*="border: 1px solid #e0e0e0"],
+body.dark [style*="border:1.5px solid #e2e8f0"], body.dark [style*="border: 1.5px solid #e2e8f0"],
+body.dark [style*="borderBottom:1px solid #e2e8f0"], body.dark [style*="border-bottom:1px solid #e2e8f0"],
+body.dark [style*="borderTop:1px solid #e2e8f0"], body.dark [style*="border-top:1px solid #e2e8f0"] { border-color:#334155 !important; }
 
 /* ──────────────────────────────────────────────────────────────────
    DARK MODE: herança de cor em elementos filhos
@@ -326,17 +359,15 @@ body.dark .acn-main table td p,
 body.dark .acn-main table td div { color:inherit !important; }
 body.dark .sec-body p,
 body.dark .sec-body span:not(.acn-badge),
-body.dark .sec-body strong,
-body.dark .sec-body div:not([style*="background:#dc2626"]):not([style*="background:#16a34a"]):not([style*="background:#2563eb"]) { color:inherit !important; }
+body.dark .sec-body strong { color:inherit !important; }
 body.dark .modal-box p,
 body.dark .modal-box span:not(.acn-badge),
 body.dark .modal-box strong,
 body.dark .modal-box label { color:inherit !important; }
 
-/* Garante badges sempre com texto branco */
+/* Badges e botões coloridos: texto sempre branco */
 body.dark .acn-badge { color:white !important; }
-/* Botões sempre com texto branco (já têm background colorido) */
-body.dark .acn-btn { color:white !important; }
+body.dark .acn-btn   { color:white !important; }
 /* Links de anexo */
 body.dark a[style*="color:#2563eb"] { color:#60a5fa !important; }
 `;
