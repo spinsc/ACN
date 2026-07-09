@@ -65,10 +65,19 @@ const diasRestantes = (v: string) => {
   return diff;
 };
 
+function sanitizeFileName(name: string): string {
+  const dotIdx = name.lastIndexOf('.');
+  const ext  = dotIdx >= 0 ? name.slice(dotIdx).toLowerCase() : '';
+  const base = dotIdx >= 0 ? name.slice(0, dotIdx) : name;
+  const safeBase = base.replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').slice(0, 80);
+  return safeBase + ext;
+}
+
 async function uploadAnexo(file: File, licitacaoId: string, tipo: string): Promise<string|null> {
-  const path = `licitacoes/${licitacaoId}/${tipo}/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
+  const safeName = sanitizeFileName(file.name);
+  const path = `licitacoes/${licitacaoId}/${tipo}/${Date.now()}_${safeName}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return null;
+  if (error || !data) { console.error('Upload erro Supabase:', error?.message); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
