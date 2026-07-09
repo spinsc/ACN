@@ -40,9 +40,11 @@ export default function ChatWidget({ currentUser }: any) {
   const [mensagens, setMensagens] = useState<any[]>([]);
   const [texto, setTexto]         = useState('');
   const [naoLidas, setNaoLidas]   = useState(0);
+  const [naoLidasPorSala, setNaoLidasPorSala] = useState<Record<string, number>>({});
   const [enviando, setEnviando]   = useState(false);
   const [toast, setToast]         = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [mutado, setMutado]       = useState(() => localStorage.getItem('acn_chat_muted') === '1');
 
   const endRef       = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
@@ -50,30 +52,60 @@ export default function ChatWidget({ currentUser }: any) {
   const canaisRef    = useRef<any[]>([]);
   const diretosRef   = useRef<any[]>([]);
   const broadcastRef = useRef<any>(null);
-  // Guarda o número de não-lidas no ultimo check — para detectar novidades
-  const prevCountRef = useRef(-1); // -1 = ainda não inicializado
+  const prevCountRef = useRef(-1);
+  const mutadoRef    = useRef(mutado);
 
   const uid   = String(currentUser?.id   ?? currentUser?.email ?? 'anon');
   const unome = currentUser?.nome || currentUser?.email || 'Usuário';
 
-  // ── localStorage: rastrear último horário de leitura por sala ────────────
-  // Não depende de DB — badge some imediatamente ao abrir a conversa
-  const lrKey   = (salaId: string) => `acn_lr_${uid}_${salaId}`;
-  const getLastRead = (salaId: string) =>
-    localStorage.getItem(lrKey(salaId)) || '1970-01-01T00:00:00Z';
-  const markRead = (salaId: string) =>
-    localStorage.setItem(lrKey(salaId), new Date().toISOString());
+  // ── localStorage: último timestamp lido por sala ──────────────────────────
+  const lrKey      = (salaId: string) => `acn_lr_${uid}_${salaId}`;
+  const getLastRead = (salaId: string) => localStorage.getItem(lrKey(salaId)) || '1970-01-01T00:00:00Z';
 
-  // Manter refs em sincronia com state
+  // Grava timestamp da última msg lida + 1s de buffer (compensa drift de relógio servidor/cliente)
+  const markRead = (salaId: string, msgTs?: string) => {
+    const ts = msgTs
+      ? new Date(new Date(msgTs).getTime() + 1000).toISOString()
+      : new Date(Date.now() + 2000).toISOString();
+    localStorage.setItem(lrKey(salaId), ts);
+  };
+
+  // Sync refs
   useEffect(() => { canaisRef.current  = canais;  }, [canais]);
   useEffect(() => { diretosRef.current = diretos; }, [diretos]);
+  useEffect(() => { mutadoRef.current  = mutado;  }, [mutado]);
 
-  // Auto-dismiss toast após 5s
+  // ── Sirene via Web Audio API ──────────────────────────────────────────────
+  const playAlerta = useCallback(() => {
+    if (mutadoRef.current) return;
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sawtooth';
+      const t = ctx.currentTime;
+      // Sirene industrial: varre 400 → 900 → 400 Hz em 0.75s
+      osc.frequency.setValueAtTime(400, t);
+      osc.frequency.linearRampToValueAtTime(900, t + 0.35);
+      osc.frequency.linearRampToValueAtTime(400, t + 0.75);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.05);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.68);
+      gain.gain.linearRampToValueAtTime(0, t + 0.78);
+      osc.start(t);
+      osc.stop(t + 0.78);
+      osc.onended = () => ctx.close();
+    } catch {}
+  }, []);
+
+  // Auto-dismiss toast após 8s
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
+    const t = setTimeout(() => setToast(null), 8000);
     return () => clearTimeout(t);
-  }, [toast?.sala?.id, toast?.texto]); // depende do conteúdo, não do objeto
+  }, [toast?.sala?.id, toast?.texto]);
 
   // Auto-scroll
   useEffect(() => {
@@ -85,7 +117,7 @@ export default function ChatWidget({ currentUser }: any) {
     if (view === 'sala') setTimeout(() => inputRef.current?.focus(), 80);
   }, [view, salaAtiva]);
 
-  // ── Contar não-lidas (localStorage — zero latência) ──────────────────────
+  // ── Contar não-lidas (total + por sala) ───────────────────────────────────
   const contarNaoLidas = useCallback(async (lista?: any[]) => {
     let data = lista;
     if (!data) {
@@ -95,15 +127,21 @@ export default function ChatWidget({ currentUser }: any) {
         .limit(500);
       data = res.data || [];
     }
-    const count = data.filter((m: any) =>
-      String(m.remetente_id) !== uid &&
-      m.criado_em > getLastRead(m.sala_id)
-    ).length;
-    setNaoLidas(count);
-    return count;
+    const porSala: Record<string, number> = {};
+    let total = 0;
+    for (const m of data as any[]) {
+      if (String(m.remetente_id) === uid) continue;
+      if (m.criado_em > getLastRead(m.sala_id)) {
+        porSala[m.sala_id] = (porSala[m.sala_id] || 0) + 1;
+        total++;
+      }
+    }
+    setNaoLidas(total);
+    setNaoLidasPorSala(porSala);
+    return total;
   }, [uid]);
 
-  // ── Verificar e notificar mensagens novas (polling) ───────────────────────
+  // ── Polling badge / verificação de novas mensagens ────────────────────────
   const verificarNovas = useCallback(async () => {
     const { data } = await supabase.from('chat_mensagens')
       .select('id,sala_id,remetente_id,remetente_nome,texto,criado_em')
@@ -115,83 +153,82 @@ export default function ChatWidget({ currentUser }: any) {
       String(m.remetente_id) !== uid &&
       m.criado_em > getLastRead(m.sala_id)
     );
-
     const count = naoLidasList.length;
-    setNaoLidas(count);
 
-    // Toast apenas se contagem AUMENTOU e ainda não inicializado ou nova msg chegou
+    const porSala: Record<string, number> = {};
+    for (const m of naoLidasList) porSala[m.sala_id] = (porSala[m.sala_id] || 0) + 1;
+    setNaoLidas(count);
+    setNaoLidasPorSala(porSala);
+
+    // Toast + som apenas se chegou mensagem nova
     if (prevCountRef.current >= 0 && count > prevCountRef.current && naoLidasList.length > 0) {
       const latest = naoLidasList[0];
-      // Não notificar se estamos nessa sala agora
       if (!salaAtivaRef.current || salaAtivaRef.current.id !== latest.sala_id) {
         const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === latest.sala_id);
-        if (sala) setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto });
+        if (sala) {
+          setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto });
+          playAlerta();
+        }
       }
     }
     prevCountRef.current = count;
-  }, [uid]);
+  }, [uid, playAlerta]);
 
-  // ── Inicialização ────────────────────────────────────────────────────────
+  // ── Inicialização ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
     fetchCanais();
     fetchUsuarios();
     fetchDiretos();
-    // Inicializa prevCountRef sem disparar toast para msgs antigas
     contarNaoLidas().then(n => { prevCountRef.current = n; });
 
-    // Broadcast: notificação instantânea quando outro usuário enviar msg
     broadcastRef.current = supabase.channel(BROADCAST_CH)
       .on('broadcast', { event: 'nova_msg' }, ({ payload }: any) => {
         if (String(payload.sender_id) === uid) return;
 
-        // Verificar permissão para DMs
         if (payload.sala_tipo === 'direto') {
           const membro = (payload.membros || []).some((m: any) => String(m.id) === uid);
           if (!membro) return;
           fetchDiretos();
         }
 
-        // Se sala está aberta, adiciona mensagem diretamente
+        // Sala aberta: adiciona mensagem e marca lida com timestamp real
         if (salaAtivaRef.current?.id === payload.sala_id) {
           setMensagens(prev => {
             if (prev.find((m: any) => m.id === payload.msg_id)) return prev;
+            markRead(payload.sala_id, payload.criado_em);
+            contarNaoLidas();
             return [...prev, {
               id: payload.msg_id, sala_id: payload.sala_id,
               remetente_id: payload.sender_id, remetente_nome: payload.remetente_nome,
               texto: payload.texto, lida_por: [], criado_em: payload.criado_em,
             }];
           });
-          markRead(payload.sala_id); // Lida automaticamente
-          contarNaoLidas();
           return;
         }
 
-        // Sala não ativa: toast + atualizar badge
+        // Sala não ativa: toast + som + badge
         const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === payload.sala_id)
           || { id: payload.sala_id, nome: payload.sala_nome, tipo: payload.sala_tipo, membros: payload.membros || [] };
 
         setToast({ sala, remetente_nome: payload.remetente_nome, texto: payload.texto });
-        // Incrementa badge sem requery
-        setNaoLidas(prev => {
-          const newCount = prev + 1;
-          prevCountRef.current = newCount;
-          return newCount;
-        });
+        playAlerta();
+        setNaoLidas(prev => { const n = prev + 1; prevCountRef.current = n; return n; });
+        setNaoLidasPorSala(prev => ({ ...prev, [payload.sala_id]: (prev[payload.sala_id] || 0) + 1 }));
       })
       .subscribe();
 
     return () => { broadcastRef.current?.unsubscribe(); };
   }, [currentUser]);
 
-  // ── Polling badge a cada 5s ───────────────────────────────────────────────
+  // Polling badge a cada 5s
   useEffect(() => {
     if (!currentUser) return;
     const t = setInterval(verificarNovas, 5000);
     return () => clearInterval(t);
   }, [currentUser, verificarNovas]);
 
-  // ── Polling mensagens a cada 2s quando sala aberta ───────────────────────
+  // Polling mensagens na sala aberta a cada 2s — marca lida automaticamente
   useEffect(() => {
     if (!salaAtiva || !aberto) return;
     const salaId = salaAtiva.id;
@@ -202,6 +239,9 @@ export default function ChatWidget({ currentUser }: any) {
       setMensagens(prev => {
         const real = prev.filter((m: any) => !m._temp);
         if (data.length <= real.length) return prev;
+        const ultima = data.at(-1);
+        markRead(salaId, ultima?.criado_em);
+        contarNaoLidas();
         return data;
       });
     }, 2000);
@@ -217,7 +257,6 @@ export default function ChatWidget({ currentUser }: any) {
   const fetchDiretos = async () => {
     const { data } = await supabase.from('chat_salas').select('*').eq('tipo', 'direto');
     const isAdmin = currentUser?.perfil === 'Admin';
-    // Admin vê TODOS os DMs do sistema; demais veem apenas os seus
     const lista = isAdmin
       ? (data || [])
       : (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
@@ -233,18 +272,19 @@ export default function ChatWidget({ currentUser }: any) {
     const { data } = await supabase.from('chat_mensagens')
       .select('*').eq('sala_id', salaId).order('criado_em');
     setMensagens(data || []);
-    markRead(salaId);           // Badge some imediatamente (localStorage)
-    contarNaoLidas();            // Recount após marcar como lida
+    const ultima = (data || []).at(-1);
+    markRead(salaId, ultima?.criado_em); // Timestamp real da última msg + 1s
+    contarNaoLidas();
   };
 
-  // ── Abrir sala ─────────────────────────────────────────────────────────
+  // ── Abrir sala ────────────────────────────────────────────────────────────
   const abrirSala = async (sala: any) => {
     setSalaAtiva(sala);
     salaAtivaRef.current = sala;
     setMensagens([]);
     setView('sala');
     setToast(null);
-    markRead(sala.id);           // Imediato — badge zera para esta sala
+    markRead(sala.id);
     contarNaoLidas();
     await fetchMensagens(sala.id);
   };
@@ -278,7 +318,7 @@ export default function ChatWidget({ currentUser }: any) {
     abrirSala(t.sala);
   };
 
-  // ── Enviar mensagem ────────────────────────────────────────────────────
+  // ── Enviar mensagem ───────────────────────────────────────────────────────
   const enviar = async () => {
     if (!texto.trim() || !salaAtiva || enviando) return;
     setEnviando(true);
@@ -299,9 +339,7 @@ export default function ChatWidget({ currentUser }: any) {
 
     if (inserido) {
       setMensagens(prev => prev.map(m => m.id === tempId ? inserido : m));
-      markRead(salaAtiva.id); // Própria mensagem já é "lida"
-
-      // Broadcast para notificar outros usuários instantaneamente
+      markRead(salaAtiva.id, inserido.criado_em);
       broadcastRef.current?.send({
         type: 'broadcast', event: 'nova_msg',
         payload: {
@@ -316,10 +354,9 @@ export default function ChatWidget({ currentUser }: any) {
     inputRef.current?.focus();
   };
 
-  // ── Excluir DM ─────────────────────────────────────────────────────────
+  // ── Excluir DM ────────────────────────────────────────────────────────────
   const deletarSala = async (salaId: string) => {
     await supabase.from('chat_salas').delete().eq('id', salaId);
-    // Limpar localStorage de leitura para esta sala
     localStorage.removeItem(lrKey(salaId));
     setDiretos(prev => prev.filter(d => d.id !== salaId));
     if (salaAtivaRef.current?.id === salaId) voltarLista();
@@ -327,16 +364,23 @@ export default function ChatWidget({ currentUser }: any) {
     contarNaoLidas();
   };
 
-  // ── Helpers ────────────────────────────────────────────────────────────
+  // ── Toggle mudo ───────────────────────────────────────────────────────────
+  const toggleMudo = () => {
+    const novo = !mutado;
+    setMutado(novo);
+    mutadoRef.current = novo;
+    localStorage.setItem('acn_chat_muted', novo ? '1' : '0');
+    if (!novo) playAlerta(); // Toca um preview ao ativar o som
+  };
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const nomeDireto = (sala: any) => {
     const membros = sala?.membros || [];
     const outros = membros.filter((m: any) => String(m.id) !== uid);
     if (outros.length > 0) return outros[0].nome || 'Conversa';
-    // Admin vendo DM do qual não faz parte — exibe os dois membros
     return membros.map((m: any) => m.nome).join(' ↔ ') || 'Conversa';
   };
-  const nomeSala = (sala: any) =>
-    sala?.tipo === 'canal' ? `# ${sala.nome}` : nomeDireto(sala);
+  const nomeSala = (sala: any) => sala?.tipo === 'canal' ? `# ${sala.nome}` : nomeDireto(sala);
 
   const fmtHora = (d: any) =>
     d ? new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -363,38 +407,53 @@ export default function ChatWidget({ currentUser }: any) {
 
   if (!currentUser) return null;
 
-  /* ══════════════════════════════════════════════════════════════════
+  const temNaoLidas = naoLidas > 0;
+
+  /* ══════════════════════════════════════════════════════════════════════════
      RENDER
-  ══════════════════════════════════════════════════════════════════ */
+  ══════════════════════════════════════════════════════════════════════════ */
   return (
     <div style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 9500, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
 
-      <style>{`@keyframes chatPop{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
+      <style>{`
+        @keyframes chatPop    { from{opacity:0;transform:translateY(10px) scale(.95)} to{opacity:1;transform:translateY(0) scale(1)} }
+        @keyframes chatPulse  { 0%,100%{box-shadow:0 4px 18px rgba(239,68,68,.55),0 0 0 0 rgba(239,68,68,.45)} 60%{box-shadow:0 4px 18px rgba(239,68,68,.55),0 0 0 10px rgba(239,68,68,0)} }
+        @keyframes badgePop   { 0%{transform:scale(0)} 60%{transform:scale(1.25)} 100%{transform:scale(1)} }
+      `}</style>
 
-      {/* ── Toast ── */}
+      {/* ── Toast de nova mensagem ── */}
       {toast && (
         <div onClick={() => abrirViaToast(toast)} style={{
           background: '#1e293b', color: 'white', borderRadius: 10,
-          padding: '10px 14px', cursor: 'pointer', width: 270,
-          boxShadow: '0 6px 24px rgba(0,0,0,.35)',
-          display: 'flex', flexDirection: 'column', gap: 3,
+          padding: '10px 14px', cursor: 'pointer', width: 284,
+          boxShadow: '0 6px 28px rgba(0,0,0,.5)',
+          display: 'flex', flexDirection: 'column', gap: 4,
           animation: 'chatPop .18s ease',
+          border: '1px solid rgba(239,68,68,.6)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
-              💬 {nomeSala(toast.sala)}
+            <span style={{ fontSize: 9, color: '#fca5a5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>
+              🔔 {nomeSala(toast.sala)}
             </span>
-            <button onClick={e => { e.stopPropagation(); setToast(null); }}
-              style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button onClick={e => { e.stopPropagation(); toggleMudo(); }}
+                title={mutado ? 'Ativar som' : 'Silenciar'}
+                style={{ background: 'none', border: 'none', color: mutado ? '#475569' : '#fbbf24', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>
+                {mutado ? '🔕' : '🔔'}
+              </button>
+              <button onClick={e => { e.stopPropagation(); setToast(null); }}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+            </div>
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700 }}>{toast.remetente_nome}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#f1f5f9' }}>{toast.remetente_nome}</div>
           <div style={{ fontSize: 10, color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {toast.texto}
           </div>
+          <div style={{ fontSize: 8, color: '#475569', marginTop: 1 }}>Clique para abrir a conversa</div>
         </div>
       )}
 
-      {/* ── Painel ── */}
+      {/* ── Painel de chat ── */}
       {aberto && (
         <div style={{
           width: 360, height: 530, background: '#ffffff', borderRadius: 12,
@@ -421,13 +480,20 @@ export default function ChatWidget({ currentUser }: any) {
             ) : (
               <span style={{ color: 'white', fontWeight: 700, fontSize: 13, flex: 1 }}>💬 Chat</span>
             )}
+            {/* Botão mudo/som */}
+            <button onClick={toggleMudo} title={mutado ? 'Ativar som de notificação' : 'Silenciar notificações'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: '0 4px', lineHeight: 1,
+                color: mutado ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.8)' }}>
+              {mutado ? '🔕' : '🔔'}
+            </button>
             <button onClick={() => setAberto(false)}
-              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.7)', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1, marginLeft: 'auto' }}>✕</button>
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.7)', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
           </div>
 
-          {/* ── LISTA ── */}
+          {/* ── LISTA DE CANAIS/DIRETOS ── */}
           {view === 'lista' && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+              {/* Abas */}
               <div style={{ display: 'flex', borderBottom: '1px solid #e8ecf0', flexShrink: 0 }}>
                 {(['canais', 'diretos'] as const).map(a => (
                   <button key={a} onClick={() => setAba(a)} style={{
@@ -443,23 +509,38 @@ export default function ChatWidget({ currentUser }: any) {
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto' }}>
-                {aba === 'canais' && canais.map(c => (
-                  <div key={c.id} onClick={() => abrirSala(c)} style={{
-                    padding: '8px 14px', cursor: 'pointer', display: 'flex',
-                    alignItems: 'center', gap: 10, borderBottom: '1px solid #f8fafc',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f0fdfa')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <span style={{
-                      width: 30, height: 30, borderRadius: '50%',
-                      background: CANAL_COR[c.nome] || '#0f766e',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0,
-                    }}>{(c.nome || '?')[0]}</span>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b' }}># {c.nome}</div>
-                  </div>
-                ))}
+                {/* Canais */}
+                {aba === 'canais' && canais.map(c => {
+                  const unread = naoLidasPorSala[c.id] || 0;
+                  return (
+                    <div key={c.id} onClick={() => abrirSala(c)} style={{
+                      padding: '8px 14px', cursor: 'pointer', display: 'flex',
+                      alignItems: 'center', gap: 10, borderBottom: '1px solid #f8fafc',
+                      background: unread > 0 ? '#f0fdf4' : 'transparent',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f0fdfa')}
+                    onMouseLeave={e => (e.currentTarget.style.background = unread > 0 ? '#f0fdf4' : 'transparent')}>
+                      <span style={{
+                        width: 30, height: 30, borderRadius: '50%',
+                        background: CANAL_COR[c.nome] || '#0f766e',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0,
+                      }}>{(c.nome || '?')[0]}</span>
+                      <div style={{ fontSize: 11, fontWeight: unread > 0 ? 700 : 600, color: '#1e293b', flex: 1 }}>
+                        # {c.nome}
+                      </div>
+                      {unread > 0 && (
+                        <span style={{
+                          background: '#ef4444', color: 'white', borderRadius: 10,
+                          padding: '1px 7px', fontSize: 9, fontWeight: 700, flexShrink: 0,
+                          animation: 'badgePop .3s ease',
+                        }}>{unread}</span>
+                      )}
+                    </div>
+                  );
+                })}
 
+                {/* Diretos */}
                 {aba === 'diretos' && (
                   <>
                     <div style={{ padding: '8px 14px 3px', fontSize: 8, fontWeight: 700, color: '#b0bac5', textTransform: 'uppercase', letterSpacing: .5 }}>
@@ -485,60 +566,63 @@ export default function ChatWidget({ currentUser }: any) {
                         <div style={{ padding: '10px 14px 3px', fontSize: 8, fontWeight: 700, color: '#b0bac5', textTransform: 'uppercase', letterSpacing: .5 }}>
                           {currentUser?.perfil === 'Admin' ? 'Todos os DMs' : 'Recentes'}
                         </div>
-                        {diretos.map(d => (
-                          <div key={d.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                            {/* Linha principal */}
-                            <div style={{
-                              padding: '6px 14px', cursor: 'pointer', display: 'flex',
-                              alignItems: 'center', gap: 8,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#f0fdfa')}
-                            onMouseLeave={e => (e.currentTarget.style.background = confirmDelete === d.id ? '#fff7ed' : 'transparent')}>
-                              <div onClick={() => abrirSala(d)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                <Avatar nome={nomeDireto(d)} size={28} bg='#dbeafe' color='#1d4ed8' />
-                                <div style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {nomeDireto(d)}
-                                </div>
-                              </div>
-                              {/* Botão lixeira */}
-                              <button
-                                onClick={e => { e.stopPropagation(); setConfirmDelete(confirmDelete === d.id ? null : d.id); }}
-                                title="Apagar conversa"
-                                style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  color: confirmDelete === d.id ? '#ef4444' : '#cbd5e1',
-                                  fontSize: 13, padding: '2px 4px', borderRadius: 4, flexShrink: 0,
-                                  transition: 'color .15s',
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-                                onMouseLeave={e => (e.currentTarget.style.color = confirmDelete === d.id ? '#ef4444' : '#cbd5e1')}>
-                                🗑️
-                              </button>
-                            </div>
-
-                            {/* Confirmação inline */}
-                            {confirmDelete === d.id && (
+                        {diretos.map(d => {
+                          const unread = naoLidasPorSala[d.id] || 0;
+                          return (
+                            <div key={d.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                               <div style={{
-                                padding: '6px 14px 8px', background: '#fef2f2',
-                                display: 'flex', alignItems: 'center', gap: 8,
-                              }}>
-                                <span style={{ fontSize: 10, color: '#b91c1c', flex: 1 }}>
-                                  Apagar esta conversa e todas as mensagens?
-                                </span>
-                                <button onClick={() => deletarSala(d.id)} style={{
-                                  background: '#ef4444', color: 'white', border: 'none',
-                                  borderRadius: 4, padding: '3px 10px', fontSize: 10,
-                                  fontWeight: 700, cursor: 'pointer',
-                                }}>Sim</button>
-                                <button onClick={() => setConfirmDelete(null)} style={{
-                                  background: '#e2e8f0', color: '#475569', border: 'none',
-                                  borderRadius: 4, padding: '3px 10px', fontSize: 10,
-                                  fontWeight: 700, cursor: 'pointer',
-                                }}>Não</button>
+                                padding: '6px 14px', cursor: 'pointer', display: 'flex',
+                                alignItems: 'center', gap: 8,
+                                background: unread > 0 ? '#eff6ff' : 'transparent',
+                              }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#f0fdfa')}
+                              onMouseLeave={e => (e.currentTarget.style.background = confirmDelete === d.id ? '#fff7ed' : unread > 0 ? '#eff6ff' : 'transparent')}>
+                                <div onClick={() => abrirSala(d)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                  <Avatar nome={nomeDireto(d)} size={28} bg='#dbeafe' color='#1d4ed8' />
+                                  <div style={{ fontSize: 11, fontWeight: unread > 0 ? 700 : 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                    {nomeDireto(d)}
+                                  </div>
+                                  {unread > 0 && (
+                                    <span style={{
+                                      background: '#ef4444', color: 'white', borderRadius: 10,
+                                      padding: '1px 7px', fontSize: 9, fontWeight: 700, flexShrink: 0,
+                                      animation: 'badgePop .3s ease',
+                                    }}>{unread}</span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={e => { e.stopPropagation(); setConfirmDelete(confirmDelete === d.id ? null : d.id); }}
+                                  title="Apagar conversa"
+                                  style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    color: confirmDelete === d.id ? '#ef4444' : '#cbd5e1',
+                                    fontSize: 13, padding: '2px 4px', borderRadius: 4, flexShrink: 0,
+                                    transition: 'color .15s',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = confirmDelete === d.id ? '#ef4444' : '#cbd5e1')}>
+                                  🗑️
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        ))}
+
+                              {confirmDelete === d.id && (
+                                <div style={{ padding: '6px 14px 8px', background: '#fef2f2', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: 10, color: '#b91c1c', flex: 1 }}>
+                                    Apagar esta conversa e todas as mensagens?
+                                  </span>
+                                  <button onClick={() => deletarSala(d.id)} style={{
+                                    background: '#ef4444', color: 'white', border: 'none',
+                                    borderRadius: 4, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                                  }}>Sim</button>
+                                  <button onClick={() => setConfirmDelete(null)} style={{
+                                    background: '#e2e8f0', color: '#475569', border: 'none',
+                                    borderRadius: 4, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                                  }}>Não</button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </>
                     )}
                   </>
@@ -547,7 +631,7 @@ export default function ChatWidget({ currentUser }: any) {
             </div>
           )}
 
-          {/* ── SALA ── */}
+          {/* ── SALA DE MENSAGENS ── */}
           {view === 'sala' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
               <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
@@ -607,6 +691,7 @@ export default function ChatWidget({ currentUser }: any) {
                     flex: 1, padding: '7px 12px', fontSize: 11,
                     border: '1px solid #d1d5db', borderRadius: 20,
                     outline: 'none', color: '#1e293b', background: 'white',
+                    colorScheme: 'light',
                   }}
                   placeholder="Mensagem... (Enter para enviar)"
                   value={texto}
@@ -632,20 +717,26 @@ export default function ChatWidget({ currentUser }: any) {
         width: 50, height: 50, borderRadius: '50%',
         background: aberto ? '#0c5d58' : '#0f766e',
         border: 'none', cursor: 'pointer', color: 'white', fontSize: 20,
-        boxShadow: '0 4px 18px rgba(15,118,110,.45)',
         position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'background .15s, transform .1s',
+        // Pulsa vermelho quando há mensagens não lidas e o painel está fechado
+        animation: temNaoLidas && !aberto ? 'chatPulse 1.8s ease-in-out infinite' : 'none',
+        boxShadow: temNaoLidas && !aberto
+          ? '0 4px 18px rgba(239,68,68,.55)'
+          : '0 4px 18px rgba(15,118,110,.45)',
       }}
       onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.07)')}
       onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}>
         {aberto ? '✕' : '💬'}
-        {!aberto && naoLidas > 0 && (
+        {/* Badge sempre visível quando há não-lidas (inclusive com chat aberto) */}
+        {naoLidas > 0 && (
           <span style={{
-            position: 'absolute', top: -2, right: -2,
+            position: 'absolute', top: -3, right: -3,
             background: '#ef4444', color: 'white', borderRadius: '50%',
-            width: 18, height: 18, fontSize: 9, fontWeight: 700,
+            width: 19, height: 19, fontSize: 9, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid white', lineHeight: 1,
+            animation: 'badgePop .3s ease',
           }}>
             {naoLidas > 99 ? '99+' : naoLidas}
           </span>
