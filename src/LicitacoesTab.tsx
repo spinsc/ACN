@@ -76,7 +76,10 @@ function sanitizeFileName(name: string): string {
 async function uploadAnexo(file: File, licitacaoId: string, tipo: string): Promise<string|null> {
   const safeName = sanitizeFileName(file.name);
   const path = `licitacoes/${licitacaoId}/${tipo}/${Date.now()}_${safeName}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+  // Force octet-stream for Office files to bypass bucket MIME restrictions
+  const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
+  const contentType = officeExts.test(file.name) ? 'application/octet-stream' : file.type;
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
   if (error || !data) { console.error('Upload erro Supabase:', error?.message); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;

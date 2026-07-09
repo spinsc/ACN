@@ -14,6 +14,7 @@ import LogisticaTab from './LogisticaTab';
 import VistoriasPatio from './VistoriasPatio';
 import MarketingTab from './MarketingTab';
 import SetorDemandaTab from './SetorDemandaTab';
+import ComprasTab from './ComprasTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import SacTab from './SacTab';
@@ -525,7 +526,7 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
       case 'serralheria':  return <SetorDemandaTab currentUser={currentUser} setor="Serralheria" cor="#ea580c" />;
       case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" />;
       case 'laboratorio':  return <SetorDemandaTab currentUser={currentUser} setor="Laboratorio" cor="#0891b2" />;
-      case 'compras':      return <SetorDemandaTab currentUser={currentUser} setor="Compras" cor="#16a34a" />;
+      case 'compras':      return <><SetorDemandaTab currentUser={currentUser} setor="Compras" cor="#16a34a" /><ComprasTab currentUser={currentUser} /></>;
       case 'almoxarifado': return <AlmoxarifadoTab currentUser={currentUser} />;
       case 'producao':     return <ProducaoTab currentUser={currentUser} />;
       case 'qualidade':    return <QualidadeTab currentUser={currentUser} />;

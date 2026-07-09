@@ -42,7 +42,10 @@ async function uploadOplAnexo(file: File, oplNumero: string): Promise<string | n
   const safe = oplNumero.replace(/[^a-zA-Z0-9-]/g, '_');
   const safeName = sanitizeFileName(file.name);
   const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
-  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+  // Force octet-stream for Office files to bypass bucket MIME restrictions
+  const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
+  const contentType = officeExts.test(file.name) ? 'application/octet-stream' : file.type;
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
   if (error || !data) { console.error('Upload erro Supabase:', error?.message); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
   return pub?.publicUrl || null;
