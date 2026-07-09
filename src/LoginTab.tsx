@@ -125,7 +125,8 @@ export default function LoginTab() {
   const inputStyle = {
     width: '100%', padding: '12px', fontSize: '13px',
     border: '1px solid #e0e0e0', borderRadius: '8px',
-    boxSizing: 'border-box' as const, backgroundColor: '#ffffff',
+    boxSizing: 'border-box' as const, backgroundColor: '#ffffff', color: '#1e293b',
+    colorScheme: 'light' as const,
   };
   const btnStyle = (color = '#22c55e') => ({
     width: '100%', padding: '12px', fontSize: '14px', fontWeight: '500' as const,

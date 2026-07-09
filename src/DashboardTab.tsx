@@ -277,6 +277,8 @@ body.dark [style*="color:#334155"], body.dark [style*="color: #334155"],
 body.dark [style*="color:#111827"], body.dark [style*="color: #111827"],
 body.dark [style*="color:#166534"], body.dark [style*="color: #166534"],
 body.dark [style*="color:#5b21b6"], body.dark [style*="color: #5b21b6"],
+body.dark [style*="color:#1a3a52"], body.dark [style*="color: #1a3a52"],
+body.dark [style*="color:#991b1b"], body.dark [style*="color: #991b1b"],
 body.dark [style*="color:#475569"], body.dark [style*="color: #475569"] { color:#94a3b8 !important; }
 
 /* Cinzas médios — ajustar para não ficarem pesados */
