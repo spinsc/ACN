@@ -233,6 +233,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
   const [responsavelIniciar, setResponsavelIniciar] = useState('');
   const [modalObs, setModalObs]         = useState(null);
   const [obsTexto, setObsTexto]         = useState('');
+  const [modalVer, setModalVer]         = useState(null);
 
   // Modal Finalizar Orçamento (Lab SAC)
   const [modalFinalizarOrc, setModalFinalizarOrc]     = useState(null);
@@ -536,12 +537,17 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
                         <tr key={d.id} style={{background:sacRowBg(d,isAjuste)}}>
                           <td style={{fontSize:10}}>{fmtDt(d.data_abertura)}</td>
                           <td>{d.numero_opl||'—'}</td>
-                          <td style={{maxWidth:200}}>
+                          <td style={{maxWidth:220}}>
                             {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
                             {sacBadge(d)}
                             {sacFlagBadge(d)}
                             {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
                             <span style={{overflow:'hidden',textOverflow:'ellipsis',display:'block',whiteSpace:'nowrap',maxWidth:180}} title={descExibida}>{descExibida}</span>
+                            <button onClick={() => setModalVer(d)}
+                              style={{marginTop:2,padding:'1px 7px',fontSize:9,fontWeight:700,background:'#e2e8f0',
+                                color:'#475569',border:'none',borderRadius:3,cursor:'pointer'}}>
+                              VER
+                            </button>
                           </td>
                           <td><span className="acn-badge" style={{background:statusCor[d.status]||'#94a3b8'}}>{d.status}</span></td>
                           <td>{d.responsavel_nome||'—'}</td>
@@ -624,6 +630,35 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             {modalObs.status === 'Concluido' && (
               <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalObs(null)}>Fechar</button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL VER DESCRIÇÃO COMPLETA ════════ */}
+      {modalVer && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalVer(null);}}>
+          <div className="modal-box" style={{maxWidth:560}}>
+            <div className="modal-title">📋 Descrição — {modalVer.numero_opl||modalVer.id}</div>
+            <div style={{fontSize:11,color:'#6b7280',marginBottom:8}}>
+              {modalVer.setor_destino} · {modalVer.data_abertura ? new Date(modalVer.data_abertura).toLocaleString('pt-BR') : ''}
+              {modalVer.responsavel_nome ? ` · ${modalVer.responsavel_nome}` : ''}
+            </div>
+            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:'12px 14px',
+              whiteSpace:'pre-wrap',fontSize:12,lineHeight:1.7,color:'#1e293b',maxHeight:400,overflowY:'auto'}}>
+              {modalVer.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'}
+            </div>
+            {(modalVer.observacoes_execucao) && (
+              <>
+                <div style={{fontWeight:700,fontSize:11,color:'#475569',marginTop:14,marginBottom:4}}>Observações de execução:</div>
+                <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,padding:'10px 14px',
+                  whiteSpace:'pre-wrap',fontSize:11,lineHeight:1.7,color:'#166534'}}>
+                  {modalVer.observacoes_execucao}
+                </div>
+              </>
+            )}
+            <div style={{marginTop:16,textAlign:'right'}}>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVer(null)}>Fechar</button>
+            </div>
           </div>
         </div>
       )}
