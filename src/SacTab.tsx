@@ -169,7 +169,10 @@ export default function SacTab({ currentUser }) {
 
   // Manutenção Veicular — modais extras
   const [modalAceiteSAC, setModalAceiteSAC]       = useState<any>(null);
-  const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação
+  const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação (Em Cotação)
+  const [modalOrcProd, setModalOrcProd]           = useState<any>(null); // ver/editar orçamento vindo da Produção
+  const [orcProdModo, setOrcProdModo]             = useState<'ver'|'editar'>('ver');
+  const [orcProdItens, setOrcProdItens]           = useState<any[]>([]);
   const [anexosSendoUpload, setAnexosSendoUpload] = useState(false);
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
@@ -516,6 +519,21 @@ export default function SacTab({ currentUser }) {
     fetchOrdens();
   };
 
+  // SAC edita orçamento que veio da Produção (Presencial — Aguardando Aprovação Cliente)
+  const salvarEdicaoOrcProd = async () => {
+    if (!modalOrcProd) return;
+    if (!orcProdItens.length) { alert('Adicione ao menos um item!'); return; }
+    const total = orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      itens_cotacao: orcProdItens,
+      valor_orcamento: total,
+      atualizado_em: agora,
+    }).eq('id', modalOrcProd.id);
+    setModalOrcProd(null); setOrcProdItens([]);
+    fetchOrdens();
+  };
+
   const liberarEntregaVeicular = async (os: any) => {
     if (!window.confirm(`Confirmar entrega do veículo ${os.numero_os} ao cliente?`)) return;
     const agora = new Date().toISOString();
@@ -608,7 +626,15 @@ export default function SacTab({ currentUser }) {
         } else {
           // Presencial: orçamento de verificação aguardando → aprovação inicia manutenção
           btns.push(
-            <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarOrcamentoPresencial(os)}>✅ Cliente Aprovou</button>,
+            <button key="ver"   className="acn-btn" style={{background:'#0891b2',fontSize:9}}
+              onClick={()=>{ setOrcProdItens(Array.isArray(os.itens_cotacao)?os.itens_cotacao.map(i=>({...i})):[]); setOrcProdModo('ver'); setModalOrcProd(os); }}>
+              👁 Ver Orç.
+            </button>,
+            <button key="edit"  className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+              onClick={()=>{ setOrcProdItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setOrcProdModo('editar'); setModalOrcProd(os); }}>
+              ✏️ Editar
+            </button>,
+            <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarOrcamentoPresencial(os)}>✅ Aprovado</button>,
             <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
           );
         }
@@ -1570,6 +1596,130 @@ export default function SacTab({ currentUser }) {
                 </div>
               </>);
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Ver / Editar Orçamento da Produção (Presencial) */}
+      {modalOrcProd && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setModalOrcProd(null);setOrcProdItens([]);}}}>
+          <div className="modal-box" style={{maxWidth:700,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">
+              {orcProdModo==='ver' ? '👁 Orçamento da Produção' : '✏️ Editar Orçamento'} — {modalOrcProd.numero_os}
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              Cliente: <strong>{modalOrcProd.cliente_nome}</strong>
+              {modalOrcProd.valor_orcamento && (
+                <span style={{marginLeft:12,background:'#f0fdf4',border:'1px solid #86efac',padding:'2px 10px',borderRadius:20,fontWeight:700,color:'#166534'}}>
+                  Total atual: R$ {Number(modalOrcProd.valor_orcamento).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                </span>
+              )}
+            </div>
+
+            {/* Tabs Ver / Editar */}
+            <div style={{display:'flex',gap:0,marginBottom:12,borderRadius:6,overflow:'hidden',border:'1px solid #e2e8f0'}}>
+              <button style={{flex:1,padding:'7px',background:orcProdModo==='ver'?'#0891b2':'white',color:orcProdModo==='ver'?'white':'#64748b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+                onClick={()=>setOrcProdModo('ver')}>👁 Visualizar</button>
+              <button style={{flex:1,padding:'7px',background:orcProdModo==='editar'?'#7c3aed':'white',color:orcProdModo==='editar'?'white':'#64748b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+                onClick={()=>{ if(orcProdModo==='ver') setOrcProdItens(Array.isArray(modalOrcProd.itens_cotacao)&&modalOrcProd.itens_cotacao.length>0?modalOrcProd.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setOrcProdModo('editar'); }}>
+                ✏️ Editar
+              </button>
+            </div>
+
+            {orcProdModo === 'ver' ? (
+              /* MODO VER — somente leitura */
+              <div>
+                {(!orcProdItens || orcProdItens.length === 0) ? (
+                  <div style={{textAlign:'center',color:'#94a3b8',padding:24,fontSize:12}}>Nenhum item inserido pela Produção ainda.</div>
+                ) : (
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+                    <thead><tr style={{background:'#f1f5f9'}}>
+                      <th style={{padding:'6px 8px',textAlign:'left',fontSize:10}}>Código</th>
+                      <th style={{padding:'6px 8px',textAlign:'left',fontSize:10}}>Descrição</th>
+                      <th style={{padding:'6px 8px',textAlign:'center',fontSize:10,width:55}}>Qtd</th>
+                      <th style={{padding:'6px 8px',textAlign:'right',fontSize:10,width:100}}>Vl. Unit.</th>
+                      <th style={{padding:'6px 8px',textAlign:'right',fontSize:10,width:100}}>Total</th>
+                    </tr></thead>
+                    <tbody>
+                      {orcProdItens.map((item,i)=>(
+                        <tr key={i} style={{borderBottom:'1px solid #f1f5f9'}}>
+                          <td style={{padding:'6px 8px',color:'#64748b'}}>{item.codigo||'—'}</td>
+                          <td style={{padding:'6px 8px',fontWeight:600}}>{item.descricao||'—'}</td>
+                          <td style={{padding:'6px 8px',textAlign:'center'}}>{item.quantidade||1}</td>
+                          <td style={{padding:'6px 8px',textAlign:'right'}}>R$ {Number(item.valor_unitario||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                          <td style={{padding:'6px 8px',textAlign:'right',fontWeight:700,color:'#0f766e'}}>R$ {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot><tr style={{background:'#f0fdf4'}}>
+                      <td colSpan={4} style={{padding:'8px',fontWeight:700,textAlign:'right',color:'#166534'}}>TOTAL:</td>
+                      <td style={{padding:'8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
+                        R$ {orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                      </td>
+                    </tr></tfoot>
+                  </table>
+                )}
+                <div style={{display:'flex',gap:8,marginTop:14}}>
+                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalOrcProd(null);setOrcProdItens([])}}>Fechar</button>
+                </div>
+              </div>
+            ) : (
+              /* MODO EDITAR */
+              <div>
+                <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:10}}>
+                  ⚠️ Editar o orçamento não altera a aprovação — use para corrigir valores antes de comunicar o cliente.
+                </div>
+                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
+                  <thead><tr style={{background:'#f1f5f9'}}>
+                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',width:80}}>Código</th>
+                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'left'}}>Descrição</th>
+                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'center',width:55}}>Qtd</th>
+                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',width:95}}>Vl. Unit.</th>
+                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',width:95}}>Total</th>
+                    <th style={{width:28}}></th>
+                  </tr></thead>
+                  <tbody>
+                    {orcProdItens.map((item,idx)=>(
+                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'3px 5px'}}>
+                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo||''} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,codigo:e.target.value}:x))} />
+                        </td>
+                        <td style={{padding:'3px 5px'}}>
+                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao||''} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,descricao:e.target.value}:x))} placeholder="Peça / serviço..." />
+                        </td>
+                        <td style={{padding:'3px 5px'}}>
+                          <input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade||1} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
+                        </td>
+                        <td style={{padding:'3px 5px'}}>
+                          <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario||0} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
+                        </td>
+                        <td style={{padding:'3px 7px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>
+                          {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </td>
+                        <td>
+                          <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}} onClick={()=>setOrcProdItens(p=>p.filter((_,i)=>i!==idx))}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr style={{background:'#f0fdf4'}}>
+                    <td colSpan={4} style={{padding:'6px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
+                    <td style={{padding:'6px',fontWeight:800,fontSize:12,textAlign:'right',color:'#166534'}}>
+                      R$ {orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                    </td>
+                    <td></td>
+                  </tr></tfoot>
+                </table>
+                <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}}
+                  onClick={()=>setOrcProdItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>
+                  + Adicionar Item
+                </button>
+                <div style={{display:'flex',gap:8}}>
+                  <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={salvarEdicaoOrcProd}>💾 Salvar Alterações</button>
+                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalOrcProd(null);setOrcProdItens([])}}>Cancelar</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
