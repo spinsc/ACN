@@ -744,23 +744,111 @@ function PainelSacVeicular({ currentUser }) {
 // SQL necessário (rodar uma vez no Supabase):
 // CREATE TABLE IF NOT EXISTS vouchers_servico (
 //   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   tipo_servico text, numero_pvop text, modelo_carro text,
-//   chassi_placa text, valor_voucher numeric, data_servico date,
+//   tipo_servico text, numero_pvop text, data_servico date,
 //   prestador text, autorizado_por text, criado_por text,
+//   itens_voucher jsonb, valor_total numeric,
+//   criado_em timestamptz DEFAULT now()
+// );
+// ALTER TABLE vouchers_servico ADD COLUMN IF NOT EXISTS itens_voucher jsonb;
+// ALTER TABLE vouchers_servico ADD COLUMN IF NOT EXISTS valor_total numeric;
+//
+// CREATE TABLE IF NOT EXISTS tipos_servico_voucher (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   nome text NOT NULL UNIQUE,
 //   criado_em timestamptz DEFAULT now()
 // );
 // ─────────────────────────────────────────────────────────────────────────────
-const VOUCHER_VAZIO = { tipo_servico:'', numero_pvop:'', modelo_carro:'', chassi_placa:'', valor_voucher:'', data_servico:'', prestador:'', autorizado_por:'' };
+const ITEM_VOUCHER_VAZIO = { placa_chassi: '', modelo: '', valor: '' };
+const VOUCHER_VAZIO = { tipo_servico:'', numero_pvop:'', data_servico:'', prestador:'', autorizado_por:'', itens:[{ ...ITEM_VOUCHER_VAZIO }] };
+
+function VoucherItemTable({ itens, setItens }) {
+  const total = itens.reduce((s,i) => s + (Number(i.valor) || 0), 0);
+  const setField = (idx, k, v) => setItens(p => p.map((x,i) => i===idx ? {...x,[k]:v} : x));
+  const add = () => setItens(p => [...p, { ...ITEM_VOUCHER_VAZIO }]);
+  const rem = (idx) => setItens(p => p.filter((_,i) => i!==idx));
+  return (
+    <>
+      <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
+        <thead><tr style={{background:'#f1f5f9'}}>
+          <th style={{padding:'5px 8px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Placa / Chassi</th>
+          <th style={{padding:'5px 8px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Modelo</th>
+          <th style={{padding:'5px 8px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:140}}>Valor do Serviço (R$)</th>
+          <th style={{width:28,borderBottom:'1px solid #e2e8f0'}}></th>
+        </tr></thead>
+        <tbody>
+          {itens.map((item,idx) => (
+            <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+              <td style={{padding:'3px 5px'}}>
+                <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.placa_chassi}
+                  onChange={e=>setField(idx,'placa_chassi',e.target.value)} placeholder="Ex: ABC-1234" />
+              </td>
+              <td style={{padding:'3px 5px'}}>
+                <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.modelo}
+                  onChange={e=>setField(idx,'modelo',e.target.value)} placeholder="Ex: Fiat Strada 2023" />
+              </td>
+              <td style={{padding:'3px 5px'}}>
+                <input type="number" min={0} step="0.01" className="acn-input"
+                  style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor}
+                  onChange={e=>setField(idx,'valor',e.target.value)} placeholder="0,00" />
+              </td>
+              <td>
+                <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}}
+                  onClick={()=>rem(idx)} title="Remover linha">×</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{background:'#f0fdf4'}}>
+            <td colSpan={2} style={{padding:'7px 8px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>VALOR TOTAL:</td>
+            <td style={{padding:'7px 8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
+              R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:10}} onClick={add}>
+        + Adicionar Veículo
+      </button>
+    </>
+  );
+}
 
 function VoucherServicos({ currentUser }) {
   const [vouchers, setVouchers]         = useState([]);
   const [loading, setLoading]           = useState(false);
-  const [form, setForm]                 = useState({ ...VOUCHER_VAZIO });
+  const [form, setForm]                 = useState({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] });
   const [salvando, setSalvando]         = useState(false);
-  const [modalPrint, setModalPrint]     = useState(null);
+  const [tiposServico, setTiposServico] = useState([]);
+  const [novoTipo, setNovoTipo]         = useState('');
+  const [addingTipo, setAddingTipo]     = useState(false);
+  const [salvandoTipo, setSalvandoTipo] = useState(false);
   const base = import.meta.env.BASE_URL;
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setItens = (fn) => setForm(f => ({ ...f, itens: typeof fn === 'function' ? fn(f.itens) : fn }));
+
+  const loadTipos = async () => {
+    const { data } = await supabase.from('tipos_servico_voucher').select('*').order('nome');
+    setTiposServico(data || []);
+  };
+
+  const salvarTipo = async () => {
+    if (!novoTipo.trim()) return;
+    setSalvandoTipo(true);
+    const { error } = await supabase.from('tipos_servico_voucher').insert([{ nome: novoTipo.trim() }]);
+    if (error) { alert(error.code === '23505' ? 'Tipo já existe!' : error.message); setSalvandoTipo(false); return; }
+    setForm(f => ({ ...f, tipo_servico: novoTipo.trim() }));
+    setNovoTipo(''); setAddingTipo(false); setSalvandoTipo(false);
+    loadTipos();
+  };
+
+  const excluirTipo = async (id) => {
+    if (!window.confirm('Remover este tipo de serviço?')) return;
+    await supabase.from('tipos_servico_voucher').delete().eq('id', id);
+    loadTipos();
+  };
 
   const load = async () => {
     setLoading(true);
@@ -769,18 +857,25 @@ function VoucherServicos({ currentUser }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadTipos(); }, []);
 
   const salvar = async () => {
     if (!form.tipo_servico || !form.numero_pvop) { alert('Informe ao menos o Tipo de Serviço e Nº PV/OP!'); return; }
+    const itens = form.itens.filter(i => i.placa_chassi || i.modelo || Number(i.valor));
+    const valor_total = itens.reduce((s,i) => s + (Number(i.valor)||0), 0);
     setSalvando(true);
     const { error } = await supabase.from('vouchers_servico').insert([{
-      ...form,
-      valor_voucher: form.valor_voucher ? Number(form.valor_voucher) : null,
+      tipo_servico: form.tipo_servico,
+      numero_pvop: form.numero_pvop,
+      data_servico: form.data_servico || null,
+      prestador: form.prestador || null,
+      autorizado_por: form.autorizado_por || null,
+      itens_voucher: itens,
+      valor_total,
       criado_por: currentUser?.nome || 'Sistema',
     }]);
     if (error) { alert('Erro ao salvar: ' + error.message); setSalvando(false); return; }
-    setForm({ ...VOUCHER_VAZIO });
+    setForm({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] });
     setSalvando(false);
     load();
   };
@@ -792,24 +887,38 @@ function VoucherServicos({ currentUser }) {
   };
 
   const imprimirVoucher = (v) => {
-    const w = window.open('', '_blank', 'width=750,height=900,scrollbars=yes');
+    const w = window.open('', '_blank', 'width=800,height=950,scrollbars=yes');
     if (!w) return;
-    const fmtVal = (val) => val != null ? `R$ ${Number(val).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+    const fmtVal = (val) => val != null && val !== '' ? `R$ ${Number(val).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
     const fmtDt  = (d) => d ? new Date(d + 'T12:00').toLocaleDateString('pt-BR') : '—';
+    // Suporte a registros antigos (chassi_placa/modelo_carro) e novos (itens_voucher)
+    const itens = Array.isArray(v.itens_voucher) && v.itens_voucher.length > 0
+      ? v.itens_voucher
+      : (v.chassi_placa || v.modelo_carro ? [{ placa_chassi: v.chassi_placa, modelo: v.modelo_carro, valor: v.valor_voucher }] : []);
+    const total = v.valor_total != null ? v.valor_total
+      : itens.reduce((s,i) => s + (Number(i.valor)||0), 0);
+    const itensRows = itens.map((item, idx) => `<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:11px;text-align:center;width:36px;color:#64748b">${idx+1}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:11px;font-weight:600">${item.placa_chassi||'—'}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:11px">${item.modelo||'—'}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:11px;text-align:right;font-weight:700;color:#0f766e">${fmtVal(item.valor)}</td>
+    </tr>`).join('');
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Voucher ${v.numero_pvop}</title>
     <style>
       body { font-family: Arial, sans-serif; color: #1e293b; padding: 28px; font-size: 12px; }
-      h1 { font-size: 18px; margin: 0; color: #0f766e; }
       .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #0f766e; padding-bottom: 12px; margin-bottom: 18px; }
       .logo { height: 56px; object-fit: contain; }
       .title { text-align: center; flex: 1; padding: 0 16px; }
       .badge { background: #0f766e; color: white; padding: 4px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; }
-      .section { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 14px; }
+      .section { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 14px; overflow: hidden; }
       .sec-title { background: #f8fafc; padding: 7px 12px; font-weight: 700; font-size: 11px; color: #0f766e; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: .4px; }
-      table { width: 100%; border-collapse: collapse; }
-      td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
-      td:first-child { width: 170px; font-weight: 600; color: #64748b; }
-      .valor { font-size: 22px; font-weight: 800; color: #0f766e; text-align: center; padding: 14px; }
+      .info-table { width: 100%; border-collapse: collapse; }
+      .info-table td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+      .info-table td:first-child { width: 150px; font-weight: 600; color: #64748b; }
+      .itens-table { width: 100%; border-collapse: collapse; }
+      .itens-table thead th { background: #1e293b; color: #cbd5e1; padding: 7px 10px; font-size: 10px; text-align: left; }
+      .itens-table thead th:last-child { text-align: right; }
+      .total-row td { background: #f0fdf4; padding: 8px 10px; font-weight: 800; font-size: 13px; color: #166534; }
       .footer { border-top: 2px solid #0f766e; padding-top: 10px; margin-top: 16px; display: flex; align-items: center; justify-content: space-between; }
       .footer-text { font-size: 9.5px; color: #64748b; line-height: 1.7; }
       .footer-logo { height: 50px; object-fit: contain; }
@@ -826,11 +935,9 @@ function VoucherServicos({ currentUser }) {
 
     <div class="section">
       <div class="sec-title">Dados do Serviço</div>
-      <table><tbody>
+      <table class="info-table"><tbody>
         <tr><td>Tipo de Serviço</td><td>${v.tipo_servico || '—'}</td></tr>
         <tr><td>Nº PV / OP</td><td>${v.numero_pvop || '—'}</td></tr>
-        <tr><td>Modelo do Carro</td><td>${v.modelo_carro || '—'}</td></tr>
-        <tr><td>Chassi / Placa</td><td>${v.chassi_placa || '—'}</td></tr>
         <tr><td>Data do Serviço</td><td>${fmtDt(v.data_servico)}</td></tr>
         <tr><td>Prestador</td><td>${v.prestador || '—'}</td></tr>
         <tr><td>Autorizado por</td><td>${v.autorizado_por || '—'}</td></tr>
@@ -838,12 +945,26 @@ function VoucherServicos({ currentUser }) {
     </div>
 
     <div class="section">
-      <div class="sec-title">Valor do Voucher</div>
-      <div class="valor">${fmtVal(v.valor_voucher)}</div>
+      <div class="sec-title">Veículos / Itens do Serviço</div>
+      <table class="itens-table">
+        <thead><tr>
+          <th style="width:36px;text-align:center">#</th>
+          <th>Placa / Chassi</th>
+          <th>Modelo</th>
+          <th style="text-align:right">Valor do Serviço</th>
+        </tr></thead>
+        <tbody>${itensRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af;font-size:11px">Nenhum item</td></tr>'}</tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="3" style="text-align:right">VALOR TOTAL:</td>
+            <td style="text-align:right">${fmtVal(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
 
     <div style="border:1px dashed #94a3b8;border-radius:6px;padding:12px;text-align:center;margin-bottom:14px;font-size:10px;color:#64748b">
-      Este voucher é válido para o serviço especificado acima e deve ser apresentado ao prestador no ato da realização.
+      Este voucher é válido para o(s) serviço(s) especificado(s) acima e deve ser apresentado ao prestador no ato da realização.
     </div>
 
     <div class="footer">
@@ -866,56 +987,89 @@ function VoucherServicos({ currentUser }) {
       {/* FORMULÁRIO */}
       <div className="sec-card" style={{marginBottom:12}}>
         <div className="sec-hdr" style={{background:'#7c3aed'}}>
-          <span>🎟️ Novo Voucher de Serviço</span>
+          <span style={{color:'white'}}>🎟️ Novo Voucher de Serviço</span>
         </div>
         <div className="sec-body">
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10}}>
+          {/* Campos gerais */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10,marginBottom:14}}>
             <div>
               <label className="acn-label">Tipo de Serviço *</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.tipo_servico}
-                onChange={e=>set('tipo_servico',e.target.value)} placeholder="Ex: Manutenção, Instalação..." />
+              <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                <select className="acn-input" style={{flex:1}} value={form.tipo_servico}
+                  onChange={e=>setField('tipo_servico',e.target.value)}>
+                  <option value="">— Selecione —</option>
+                  {tiposServico.map(t => (
+                    <option key={t.id} value={t.nome}>{t.nome}</option>
+                  ))}
+                </select>
+                <button title="Gerenciar tipos de serviço"
+                  style={{background:'#7c3aed',border:'none',color:'white',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:13,flexShrink:0,fontWeight:700}}
+                  onClick={()=>setAddingTipo(a=>!a)}>+</button>
+              </div>
+              {/* Mini-painel para cadastrar novo tipo */}
+              {addingTipo && (
+                <div style={{marginTop:6,background:'#f5f3ff',border:'1px solid #c4b5fd',borderRadius:6,padding:'10px 12px'}}>
+                  <div style={{fontWeight:700,fontSize:9,color:'#6d28d9',marginBottom:6,textTransform:'uppercase'}}>
+                    Cadastro de Tipos de Serviço
+                  </div>
+                  {/* Lista dos existentes */}
+                  {tiposServico.length > 0 && (
+                    <div style={{marginBottom:8,display:'flex',flexWrap:'wrap',gap:4}}>
+                      {tiposServico.map(t => (
+                        <span key={t.id} style={{background:'white',border:'1px solid #c4b5fd',borderRadius:4,padding:'2px 7px',fontSize:10,display:'inline-flex',alignItems:'center',gap:4}}>
+                          {t.nome}
+                          <button onClick={()=>excluirTipo(t.id)}
+                            style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:12,padding:0,lineHeight:1}}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{display:'flex',gap:4}}>
+                    <input className="acn-input" style={{flex:1,fontSize:10}} value={novoTipo}
+                      onChange={e=>setNovoTipo(e.target.value)}
+                      onKeyDown={e=>e.key==='Enter'&&salvarTipo()}
+                      placeholder="Nome do novo tipo..." autoFocus />
+                    <button className="acn-btn" style={{background:'#7c3aed',flexShrink:0}} onClick={salvarTipo} disabled={salvandoTipo||!novoTipo.trim()}>
+                      {salvandoTipo?'...':'Salvar'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="acn-label">Nº PV / OP *</label>
               <input className="acn-input" style={{width:'100%'}} value={form.numero_pvop}
-                onChange={e=>set('numero_pvop',e.target.value)} placeholder="Ex: PV-2024-001" />
-            </div>
-            <div>
-              <label className="acn-label">Modelo do Carro</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.modelo_carro}
-                onChange={e=>set('modelo_carro',e.target.value)} placeholder="Ex: Fiat Strada 2023" />
-            </div>
-            <div>
-              <label className="acn-label">Chassi / Placa</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.chassi_placa}
-                onChange={e=>set('chassi_placa',e.target.value)} placeholder="Ex: ABC-1234" />
-            </div>
-            <div>
-              <label className="acn-label">Valor do Voucher (R$)</label>
-              <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} value={form.valor_voucher}
-                onChange={e=>set('valor_voucher',e.target.value)} placeholder="0,00" />
+                onChange={e=>setField('numero_pvop',e.target.value)} placeholder="Ex: PV-2024-001" />
             </div>
             <div>
               <label className="acn-label">Data do Serviço</label>
               <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_servico}
-                onChange={e=>set('data_servico',e.target.value)} />
+                onChange={e=>setField('data_servico',e.target.value)} />
             </div>
             <div>
               <label className="acn-label">Prestador do Serviço</label>
               <input className="acn-input" style={{width:'100%'}} value={form.prestador}
-                onChange={e=>set('prestador',e.target.value)} placeholder="Nome do prestador..." />
+                onChange={e=>setField('prestador',e.target.value)} placeholder="Nome do prestador..." />
             </div>
             <div>
               <label className="acn-label">Autorizado por</label>
               <input className="acn-input" style={{width:'100%'}} value={form.autorizado_por}
-                onChange={e=>set('autorizado_por',e.target.value)} placeholder="Nome do autorizador..." />
+                onChange={e=>setField('autorizado_por',e.target.value)} placeholder="Nome do autorizador..." />
             </div>
           </div>
-          <div style={{marginTop:12,display:'flex',gap:8}}>
+
+          {/* Tabela de itens */}
+          <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'.4px',marginBottom:6}}>
+            Veículos / Itens do Serviço
+          </div>
+          <VoucherItemTable itens={form.itens} setItens={setItens} />
+
+          <div style={{marginTop:4,display:'flex',gap:8}}>
             <button className="acn-btn" style={{background:'#7c3aed'}} onClick={salvar} disabled={salvando}>
               {salvando ? 'Salvando...' : '💾 Salvar Voucher'}
             </button>
-            <button className="acn-btn" style={{background:'#64748b'}} onClick={()=>setForm({...VOUCHER_VAZIO})}>
+            <button className="acn-btn" style={{background:'#64748b'}}
+              onClick={()=>setForm({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] })}>
               Limpar
             </button>
           </div>
@@ -925,7 +1079,7 @@ function VoucherServicos({ currentUser }) {
       {/* LISTA DE VOUCHERS */}
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#7c3aed'}}>
-          <span>🗂 Vouchers Emitidos ({vouchers.length})</span>
+          <span style={{color:'white'}}>🗂 Vouchers Emitidos ({vouchers.length})</span>
           <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:10}} onClick={load}>↻</button>
         </div>
         <div className="sec-body" style={{overflowX:'auto',padding:0}}>
@@ -934,30 +1088,39 @@ function VoucherServicos({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>Nº PV/OP</th><th>Tipo</th><th>Veículo</th><th>Chassi/Placa</th>
-                <th>Valor</th><th>Data</th><th>Prestador</th><th>Autorizado por</th><th>Ações</th>
+                <th>Nº PV/OP</th><th>Tipo</th><th>Veículos</th>
+                <th>Valor Total</th><th>Data</th><th>Prestador</th><th>Autorizado por</th><th>Ações</th>
               </tr></thead>
               <tbody>
-                {vouchers.map(v => (
-                  <tr key={v.id}>
-                    <td><strong style={{color:'#7c3aed'}}>{v.numero_pvop}</strong></td>
-                    <td>{v.tipo_servico}</td>
-                    <td>{v.modelo_carro || '—'}</td>
-                    <td>{v.chassi_placa || '—'}</td>
-                    <td style={{fontWeight:700,color:'#0f766e'}}>
-                      {v.valor_voucher != null ? `R$ ${Number(v.valor_voucher).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
-                    </td>
-                    <td>{v.data_servico ? new Date(v.data_servico + 'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
-                    <td>{v.prestador || '—'}</td>
-                    <td>{v.autorizado_por || '—'}</td>
-                    <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>imprimirVoucher(v)}>🖨 Imprimir</button>
-                        <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>excluir(v.id)}>🗑</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {vouchers.map(v => {
+                  const itens = Array.isArray(v.itens_voucher) ? v.itens_voucher : [];
+                  const total = v.valor_total != null ? v.valor_total
+                    : (v.valor_voucher != null ? v.valor_voucher
+                    : itens.reduce((s,i) => s+(Number(i.valor)||0), 0));
+                  return (
+                    <tr key={v.id}>
+                      <td><strong style={{color:'#7c3aed'}}>{v.numero_pvop}</strong></td>
+                      <td>{v.tipo_servico}</td>
+                      <td style={{fontSize:9,color:'#64748b'}}>
+                        {itens.length > 0
+                          ? itens.map(i => i.placa_chassi || i.modelo || '—').filter(Boolean).join(', ')
+                          : (v.chassi_placa || v.modelo_carro || '—')}
+                      </td>
+                      <td style={{fontWeight:700,color:'#0f766e'}}>
+                        {total != null ? `R$ ${Number(total).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
+                      </td>
+                      <td>{v.data_servico ? new Date(v.data_servico+'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
+                      <td>{v.prestador || '—'}</td>
+                      <td>{v.autorizado_por || '—'}</td>
+                      <td>
+                        <div style={{display:'flex',gap:4}}>
+                          <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>imprimirVoucher(v)}>🖨 Imprimir</button>
+                          <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>excluir(v.id)}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
