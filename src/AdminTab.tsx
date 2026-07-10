@@ -737,6 +737,7 @@ const TABELAS_CONFIG = [
   { id:'demandas_setoriais',    label:'Demandas Setoriais',  desc:'Demandas e Ajustes',         cor:'#f59e0b' },
   { id:'demandas_avulsas',      label:'Demandas Avulsas',    desc:'Engenharia — tarefas livres', cor:'#7c3aed' },
   { id:'logistica_manifestos',  label:'Logística In/Out',    desc:'Manifestos de envio/recebimento', cor:'#0891b2' },
+  { id:'vistorias_patio',       label:'Autorizações Saída',  desc:'Autorizações de saída/entrada',   cor:'#ea580c' },
   { id:'crm_clientes',          label:'CRM — Clientes',      desc:'Prospects e clientes',       cor:'#16a34a' },
   { id:'crm_historico_contatos',label:'CRM — Histórico',     desc:'Contatos e interações',      cor:'#0d9488' },
   { id:'logs_movimentacao_opl', label:'Logs de OPL',         desc:'Histórico de movimentações', cor:'#475569' },
@@ -775,6 +776,7 @@ function PainelDados() {
       : tabelaAtiva === 'cq_auditorias' ? 'created_at'
       : tabelaAtiva === 'demandas_avulsas' ? 'criado_em'
       : tabelaAtiva === 'logistica_manifestos' ? 'data'
+      : tabelaAtiva === 'vistorias_patio' ? 'data_saida'
       : 'created_at';
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);
@@ -801,9 +803,16 @@ function PainelDados() {
 
   const deletarSelecionados = async () => {
     if (selecionados.size === 0) return;
-    if (!window.confirm(`Deletar ${selecionados.size} registro(s) selecionado(s)?`)) return;
+    if (!window.confirm(`Deletar ${selecionados.size} registro(s) selecionado(s)?\n\nVocê poderá restaurar por até 24h na aba Lixeira.`)) return;
     setDeletando(true);
     const ids = Array.from(selecionados);
+    // Salvar cópia na lixeira antes de deletar
+    const registrosParaDeletar = registros.filter(r => ids.includes(r.id));
+    if (registrosParaDeletar.length > 0) {
+      await supabase.from('lixeira').insert(
+        registrosParaDeletar.map(r => ({ tabela: tabelaAtiva, registro_id: String(r.id), dados: r }))
+      );
+    }
     const { error } = await supabase.from(tabelaAtiva).delete().in('id', ids);
     if (error) {
       console.error('[PainelDados] deletarSelecionados error:', error);
@@ -816,6 +825,13 @@ function PainelDados() {
 
   const limparTabela = async (tabelaId) => {
     setDeletando(true);
+    // Salvar até 500 registros na lixeira antes de deletar
+    const { data: todos } = await supabase.from(tabelaId).select('*').limit(500);
+    if (todos && todos.length > 0) {
+      await supabase.from('lixeira').insert(
+        todos.map(r => ({ tabela: tabelaId, registro_id: String(r.id), dados: r }))
+      );
+    }
     // Para tabelas com id uuid usa neq com uuid nulo; para bigint usa gt(0)
     const { error } = await supabase.from(tabelaId).delete().gte('id', 0);
     if (error) {
@@ -849,10 +865,12 @@ function PainelDados() {
       return `OPL ${r.numero_opl} — ${r.resultado} — ${r.auditor_nome}`;
     if (tabelaAtiva === 'sac_ordens_servico')
       return `OS ${r.numero_os || r.id} — ${r.cliente_nome || '?'} — ${r.status || '?'} — ${r.tipo_servico || '?'}`;
+    if (tabelaAtiva === 'vistorias_patio')
+      return `[${r.tipo_servico || '?'}] ${r.veiculo_placa || '?'} ${r.veiculo_modelo || ''} — ${r.solicitante || '?'} → ${r.destino || '?'}`;
     return r.id;
   };
 
-  const getDataCol = (r) => r.criado_em || r.data || r.created_at || r.data_abertura || r.data_hora || r.data_contato;
+  const getDataCol = (r) => r.data_saida || r.criado_em || r.data || r.created_at || r.data_abertura || r.data_hora || r.data_contato;
   const todosSelecionados = registros.length > 0 && selecionados.size === registros.length;
   const algumSelecionado = selecionados.size > 0;
 
@@ -1060,6 +1078,175 @@ function PainelNotificacoes() {
   );
 }
 
+// ---- LIXEIRA ----
+const LABEL_TABELA = {
+  oples:'OPLs', sac_ordens_servico:'SAC — OS', demandas_setoriais:'Demandas Setoriais',
+  demandas_avulsas:'Demandas Avulsas', logistica_manifestos:'Logística In/Out',
+  vistorias_patio:'Autorizações Saída', crm_clientes:'CRM — Clientes',
+  crm_historico_contatos:'CRM — Histórico', logs_movimentacao_opl:'Logs de OPL',
+  cq_auditorias:'Auditorias CQ',
+};
+
+function PainelLixeira() {
+  const [itens, setItens] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [restaurando, setRestaurando] = useState(null);
+  const [filtroTabela, setFiltroTabela] = useState('');
+
+  const fetchLixeira = async () => {
+    setLoading(true);
+    const limite24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { data } = await supabase
+      .from('lixeira').select('*')
+      .eq('restaurado', false)
+      .gte('deletado_em', limite24h)
+      .order('deletado_em', { ascending: false }).limit(300);
+    setItens(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchLixeira(); }, []);
+
+  const restaurar = async (item) => {
+    if (!window.confirm(`Restaurar este registro para "${LABEL_TABELA[item.tabela] || item.tabela}"?`)) return;
+    setRestaurando(item.id);
+    try {
+      const dados = { ...item.dados };
+      const { error: insErr } = await supabase.from(item.tabela).upsert([dados]);
+      if (insErr) { alert(`Erro ao restaurar: ${insErr.message}`); setRestaurando(null); return; }
+      await supabase.from('lixeira').update({ restaurado: true, restaurado_em: new Date().toISOString() }).eq('id', item.id);
+      fetchLixeira();
+    } finally { setRestaurando(null); }
+  };
+
+  const removerDaLixeira = async (item) => {
+    if (!window.confirm('Remover permanentemente da lixeira? Esta ação não pode ser desfeita.')) return;
+    await supabase.from('lixeira').update({ restaurado: true }).eq('id', item.id);
+    fetchLixeira();
+  };
+
+  const fmtDtH = (d) => d
+    ? new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  const tempoRestante = (deletadoEm) => {
+    const expira = new Date(new Date(deletadoEm).getTime() + 24 * 3600 * 1000);
+    const diff = expira.getTime() - Date.now();
+    if (diff <= 0) return 'Expirado';
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return `${h}h ${m}m`;
+  };
+
+  const getResumoLixeira = (item) => {
+    const d = item.dados || {};
+    switch (item.tabela) {
+      case 'oples': return `OPL ${d.opl || '?'} — ${d.cliente_nome || '?'} — ${d.status_geral || '?'}`;
+      case 'sac_ordens_servico': return `OS ${d.numero_os || '?'} — ${d.cliente_nome || '?'} — ${d.status || '?'}`;
+      case 'demandas_setoriais': return `[${d.setor_destino || '?'}] ${(d.descricao || '').substring(0,60)}`;
+      case 'demandas_avulsas': return `${(d.titulo || '?').substring(0,60)} — ${d.status || '?'}`;
+      case 'logistica_manifestos': return `${d.tipo || '?'} — ${(d.descricao || d.transportadora || '').substring(0,60)}`;
+      case 'vistorias_patio': return `[${d.tipo_servico || '?'}] ${d.veiculo_placa || '?'} ${d.veiculo_modelo || ''} → ${d.destino || '?'}`;
+      case 'crm_clientes': return `${d.nome_empresa || d.nome || '?'} — ${d.contato_nome || '?'}`;
+      case 'crm_historico_contatos': return `${d.nome_empresa || '?'} — ${d.tipo_contato || '?'}: ${(d.descricao || '').substring(0,50)}`;
+      case 'logs_movimentacao_opl': return `OPL ${d.numero_opl || '?'} → ${d.setor || '?'}: ${(d.evento || '').substring(0,50)}`;
+      case 'cq_auditorias': return `OPL ${d.numero_opl || '?'} — ${d.resultado || '?'} — ${d.auditor_nome || '?'}`;
+      default: return item.registro_id;
+    }
+  };
+
+  const tabelas = [...new Set(itens.map(i => i.tabela))].sort();
+  const itensFiltrados = filtroTabela ? itens.filter(i => i.tabela === filtroTabela) : itens;
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#7f1d1d',color:'white'}}>
+          <span>♻️ Lixeira — Restaurar registros deletados (últimas 24h)</span>
+          <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:10}} onClick={fetchLixeira}>↺ Atualizar</button>
+        </div>
+        <div style={{padding:'8px 12px',background:'#fff7ed',borderBottom:'1px solid #fed7aa',fontSize:10,color:'#9a3412'}}>
+          ℹ️ Registros deletados ficam disponíveis para restauração por <strong>24 horas</strong>. Após esse prazo são removidos automaticamente.
+        </div>
+        {tabelas.length > 1 && (
+          <div style={{padding:'8px 12px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0',display:'flex',gap:6,flexWrap:'wrap'}}>
+            <button onClick={()=>setFiltroTabela('')}
+              style={{fontSize:10,padding:'3px 10px',borderRadius:4,border:'1px solid #d1d5db',cursor:'pointer',
+                background:!filtroTabela?'#1e293b':'white',color:!filtroTabela?'white':'#374151',fontWeight:700}}>
+              Todos ({itens.length})
+            </button>
+            {tabelas.map(t => (
+              <button key={t} onClick={()=>setFiltroTabela(t)}
+                style={{fontSize:10,padding:'3px 10px',borderRadius:4,border:'1px solid #d1d5db',cursor:'pointer',
+                  background:filtroTabela===t?'#1e293b':'white',color:filtroTabela===t?'white':'#374151'}}>
+                {LABEL_TABELA[t]||t} ({itens.filter(i=>i.tabela===t).length})
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+          {loading ? (
+            <div className="acn-empty">Carregando lixeira...</div>
+          ) : itensFiltrados.length === 0 ? (
+            <div className="acn-empty">✓ Lixeira vazia — nenhum registro deletado nas últimas 24h.</div>
+          ) : (
+            <table>
+              <thead><tr style={{background:'#7f1d1d'}}>
+                <th style={{color:'white',fontWeight:600,fontSize:9,padding:'6px 8px',textAlign:'left'}}>Tabela</th>
+                <th style={{color:'white',fontWeight:600,fontSize:9,padding:'6px 8px',textAlign:'left'}}>Deletado em</th>
+                <th style={{color:'white',fontWeight:600,fontSize:9,padding:'6px 8px',textAlign:'left'}}>Expira em</th>
+                <th style={{color:'white',fontWeight:600,fontSize:9,padding:'6px 8px',textAlign:'left'}}>Registro</th>
+                <th style={{color:'white',fontWeight:600,fontSize:9,padding:'6px 8px',textAlign:'left'}}>Ações</th>
+              </tr></thead>
+              <tbody>
+                {itensFiltrados.map((item, i) => {
+                  const tempo = tempoRestante(item.deletado_em);
+                  const expirado = tempo === 'Expirado';
+                  return (
+                    <tr key={item.id} style={{borderBottom:'1px solid #f1f5f9',background:i%2===0?'white':'#fafafa',opacity:expirado?0.5:1}}>
+                      <td style={{padding:'5px 8px'}}>
+                        <span style={{background:'#fef2f2',color:'#dc2626',padding:'2px 6px',borderRadius:4,fontSize:9,fontWeight:700}}>
+                          {LABEL_TABELA[item.tabela]||item.tabela}
+                        </span>
+                      </td>
+                      <td style={{padding:'5px 8px',fontSize:10,color:'#64748b',whiteSpace:'nowrap'}}>{fmtDtH(item.deletado_em)}</td>
+                      <td style={{padding:'5px 8px'}}>
+                        <span style={{fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:10,
+                          background:expirado?'#f1f5f9':tempo.startsWith('0h')?'#fef2f2':'#f0fdf4',
+                          color:expirado?'#94a3b8':tempo.startsWith('0h')?'#dc2626':'#16a34a'}}>
+                          ⏱ {tempo}
+                        </span>
+                      </td>
+                      <td style={{padding:'5px 8px',fontSize:10,maxWidth:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
+                        title={getResumoLixeira(item)}>
+                        {getResumoLixeira(item)}
+                      </td>
+                      <td style={{padding:'5px 8px'}}>
+                        <div style={{display:'flex',gap:4}}>
+                          {!expirado && (
+                            <button className="acn-btn" style={{background:'#16a34a',fontSize:9}}
+                              onClick={()=>restaurar(item)} disabled={restaurando===item.id}>
+                              {restaurando===item.id?'...':'↩ Restaurar'}
+                            </button>
+                          )}
+                          <button className="acn-btn" style={{background:'#ef4444',fontSize:9}}
+                            onClick={()=>removerDaLixeira(item)}>
+                            🗑 Remover
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- ADMINTAB PRINCIPAL ----
 const ABAS_ADMIN = [
   { id:'usuarios',       label:'Usuários' },
@@ -1068,6 +1255,7 @@ const ABAS_ADMIN = [
   { id:'kpis',           label:'Metas KPI' },
   { id:'logs',           label:'Logs do Sistema' },
   { id:'dados',          label:'🗑 Dados / Limpeza' },
+  { id:'lixeira',        label:'♻️ Lixeira (24h)' },
 ];
 
 export default function AdminTab() {
@@ -1095,6 +1283,7 @@ export default function AdminTab() {
       {abaAtiva === 'kpis'         && <PainelKPI />}
       {abaAtiva === 'logs'         && <PainelLogs />}
       {abaAtiva === 'dados'        && <PainelDados />}
+      {abaAtiva === 'lixeira'      && <PainelLixeira />}
     </div>
   );
 }
