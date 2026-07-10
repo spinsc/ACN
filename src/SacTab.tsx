@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
+import { ClienteAutocomplete, ClienteSalvarModal, clienteToForm } from './ClienteUtils';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -119,6 +120,7 @@ const FORM_VAZIO = {
   marca:'', modelo:'', numero_serie:'', quantidade:1,
   defeito_reclamado:'', observacoes:'',
   cliente_nome:'', empresa_orgao:'', endereco:'', cpf_cnpj:'', telefone:'', email:'',
+  _cliente_id: null as string|null, _cliente_obj: null as any,
   prazo_orcamento:'', data_prevista_entrega:'',
   acessorios: [] as {descricao:string; presente:boolean}[],
   despesa_deslocamento:'', despesa_hospedagem:'', despesa_alimentacao:'',
@@ -156,6 +158,7 @@ export default function SacTab({ currentUser }) {
   const [modalNovoEquip, setModalNovoEquip] = useState(false);
 
   const [form, setForm]                 = useState<typeof FORM_VAZIO>({ ...FORM_VAZIO });
+  const [clienteSalvarPendente, setClienteSalvarPendente] = useState<any>(null);
   const [acessInput, setAcessInput]     = useState('');
   const [fotosEntradaFiles, setFotosEntradaFiles] = useState([]);
   const [salvando, setSalvando]         = useState(false);
@@ -338,9 +341,11 @@ export default function SacTab({ currentUser }) {
 
     notificarEvento('sac_os_aberta', `📋 *Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
+    const _savedCliente = { formData: { ...form }, clienteId: form._cliente_id };
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
     setEquipLista([{ ...EQUIP_VAZIO }]);
     setModalNova(false); setSalvando(false); fetchOrdens();
+    if (_savedCliente.formData.cliente_nome?.trim()) setClienteSalvarPendente(_savedCliente);
   };
 
   // ── ENVIAR ORÇAMENTO ──────────────────────────────────────────────────────
@@ -465,7 +470,10 @@ export default function SacTab({ currentUser }) {
       data_aprovacao: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_aprovacao_remota', `✅ *Cotação APROVADA — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n⚙️ Produção: definir data de atendimento`);
+    notificarEvento('sac_aprovacao_remota', `✅ *Cotação APROVADA — ${os.numero_os}*
+Cliente: ${os.cliente_nome}
+Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+⚙️ Produção: definir data de atendimento`);
     fetchOrdens();
   };
 
@@ -1235,8 +1243,12 @@ export default function SacTab({ currentUser }) {
             <div style={{marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Dados do Cliente</div>
               <div className="form-row">
-                <div className="form-group"><label className="acn-label">Nome do Cliente *</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.cliente_nome} onChange={e=>setForm(f=>({...f,cliente_nome:e.target.value.toUpperCase()}))} /></div>
+                <div className="form-group" style={{flex:2}}><label className="acn-label">Nome do Cliente *</label>
+                  <ClienteAutocomplete
+                    value={form.cliente_nome}
+                    onChange={v=>setForm(f=>({...f,cliente_nome:v.toUpperCase(),_cliente_id:null,_cliente_obj:null}))}
+                    onSelect={c=>{ const d=clienteToForm(c); setForm(f=>({...f,cliente_nome:d.cliente_nome,empresa_orgao:d.empresa_orgao,cpf_cnpj:d.cpf_cnpj,telefone:d.telefone,email:d.email,endereco:d.endereco,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj})); }}
+                  /></div>
                 <div className="form-group"><label className="acn-label">Empresa / Órgão</label>
                   <input className="acn-input" style={{width:'100%'}} value={form.empresa_orgao} onChange={e=>setForm(f=>({...f,empresa_orgao:e.target.value}))} /></div>
                 <div className="form-group"><label className="acn-label">CPF / CNPJ</label>
@@ -2025,6 +2037,14 @@ function PrintOS({ os }) {
         </div>
         <img src={base + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" style={{height:52,objectFit:'contain',flexShrink:0}} />
       </div>
+
+      {clienteSalvarPendente && (
+        <ClienteSalvarModal
+          formData={clienteSalvarPendente.formData}
+          clienteId={clienteSalvarPendente.clienteId}
+          onClose={()=>setClienteSalvarPendente(null)}
+        />
+      )}
     </div>
   );
 }

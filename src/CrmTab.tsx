@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { ClienteAutocomplete, ClienteSalvarModal, clienteToForm } from './ClienteUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -15,6 +16,7 @@ const COR_COLUNA: Record<string,string> = {
 
 const LEAD_VAZIO = {
   nome_cliente:'', empresa:'', cargo:'', telefone:'', email:'',
+  _cliente_id: null as string|null, _cliente_obj: null as any,
   data_proximo_contato:'', observacoes:'', operador_responsavel:'',
   status_kanban:'Prospectado',
 };
@@ -352,6 +354,7 @@ function CalendarioContatos({ leads, filtroUser, onSelectLead }) {
 function ModalNovoLead({ currentUser, onClose, onSaved }) {
   const [form, setForm] = useState({ ...LEAD_VAZIO, operador_responsavel: currentUser?.nome || '' });
   const [salvando, setSalvando] = useState(false);
+  const [clienteSalvarPendente, setClienteSalvarPendente] = useState<any>(null);
   const set = (k:string, v:string) => setForm(f => ({...f,[k]:v}));
 
   const salvar = async () => {
@@ -366,9 +369,11 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
       created_at: agora,
       atualizado_em: agora,
     }]);
+    const _savedCliente = { formData: { ...form, cliente_nome: form.nome_cliente }, clienteId: form._cliente_id };
     setSalvando(false);
     onSaved();
     onClose();
+    if (_savedCliente.formData.nome_cliente?.trim()) setClienteSalvarPendente(_savedCliente);
   };
 
   const Inp = ({ label, field, type='text', required=false }) => (
@@ -388,15 +393,23 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
         <div style={{ overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:10 }}>
+          <div>
+            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Nome *</label>
+            <ClienteAutocomplete
+              value={form.nome_cliente}
+              onChange={v=>setForm(f=>({...f,nome_cliente:v,_cliente_id:null,_cliente_obj:null}))}
+              onSelect={c=>{ const d=clienteToForm(c); setForm(f=>({...f,nome_cliente:d.nome_cliente,empresa:d.empresa||f.empresa,cargo:d.cargo||f.cargo,telefone:d.telefone||f.telefone,email:d.email||f.email,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj})); }}
+              placeholder="Nome do contato / lead..."
+            />
+          </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Inp label="Nome" field="nome_cliente" required />
             <Inp label="Empresa" field="empresa" />
+            <Inp label="Cargo" field="cargo" />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Inp label="Cargo" field="cargo" />
             <Inp label="Telefone" field="telefone" />
+            <Inp label="E-mail" field="email" type="email" />
           </div>
-          <Inp label="E-mail" field="email" type="email" />
           <div>
             <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Estágio Inicial</label>
             <div style={{ display:'flex', gap:6 }}>
@@ -431,6 +444,13 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
           </button>
         </div>
       </div>
+      {clienteSalvarPendente && (
+        <ClienteSalvarModal
+          formData={clienteSalvarPendente.formData}
+          clienteId={clienteSalvarPendente.clienteId}
+          onClose={()=>setClienteSalvarPendente(null)}
+        />
+      )}
     </div>
   );
 }

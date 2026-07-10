@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
+import { ClienteAutocomplete, ClienteSalvarModal, clienteToForm } from './ClienteUtils';
 
 
 const TIPOS_PROJETO = [
@@ -27,6 +28,7 @@ const RESULTADOS_CONTATO = ['Contato Realizado','Nao Atendeu','Caixa Postal','Pr
 const FORM_VAZIO = {
   opl:'', chassi:'', modelo:'', tipo_projeto:'Transformacao Veicular Ostensiva',
   tipo_op:'OPL', cliente_nome:'', responsavel_comercial:'',
+  _cliente_id: null, _cliente_obj: null,
   data_entrada: new Date().toISOString().split('T')[0],
   data_prevista_entrega:'', item_envio:false, liberado_divulgacao:false, observacoes_comercial:'',
   quantidade: 1,
@@ -528,6 +530,7 @@ export default function ComercialTab({ currentUser }) {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(FORM_VAZIO);
   const [editId, setEditId] = useState(null);
+  const [clienteSalvarPendente, setClienteSalvarPendente] = useState(null);
   const [oneNoteUrl, setOneNoteUrl] = useState('');
   const [modalEntregue, setModalEntregue] = useState(null);
   const [modalVer, setModalVer] = useState(null);
@@ -617,8 +620,12 @@ export default function ComercialTab({ currentUser }) {
         }]);
       }
     }
+    const savedCliente = formData.cliente_nome;
+    const savedClienteId = formData._cliente_id;
+    const savedClienteObj = { ...formData };
     setFormData(FORM_VAZIO); setShowForm(false); setEditId(null); fetchOpls();
     if (!editId) notificarEvento('op_enviada_engenharia', msg.oplEnviada(formData.opl,'Engenharia',currentUser?.nome));
+    if (savedCliente) setClienteSalvarPendente({ formData: savedClienteObj, clienteId: savedClienteId });
   };
 
   const enviarParaEngenharia = async (opl) => {
@@ -747,7 +754,13 @@ export default function ComercialTab({ currentUser }) {
                   <option value="OPL">OP - ACN</option><option value="OPD">OP - DETECH</option>
                 </select>
               </div>
-              <div className="form-group"><label className="acn-label">Cliente</label><input className="acn-input" style={{width:'100%'}} value={formData.cliente_nome} onChange={e=>setFormData({...formData,cliente_nome:e.target.value})} /></div>
+              <div className="form-group"><label className="acn-label">Cliente</label>
+                <ClienteAutocomplete
+                  value={formData.cliente_nome}
+                  onChange={v=>setFormData({...formData,cliente_nome:v,_cliente_id:null,_cliente_obj:null})}
+                  onSelect={c=>{ const d=clienteToForm(c); setFormData({...formData,cliente_nome:d.cliente_nome,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj}); }}
+                />
+              </div>
               <div className="form-group"><label className="acn-label">Responsavel</label><input className="acn-input" style={{width:'100%'}} value={formData.responsavel_comercial||currentUser?.nome} onChange={e=>setFormData({...formData,responsavel_comercial:e.target.value})} /></div>
             </div>
             <div className="form-row">
@@ -993,6 +1006,14 @@ export default function ComercialTab({ currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {clienteSalvarPendente && (
+        <ClienteSalvarModal
+          formData={clienteSalvarPendente.formData}
+          clienteId={clienteSalvarPendente.clienteId}
+          onClose={()=>setClienteSalvarPendente(null)}
+        />
       )}
     </div>
   );
