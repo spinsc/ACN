@@ -24,45 +24,30 @@ function ModalConcluirCompra({ item, onClose, onSaved }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(440px,96vw)', padding:24, boxShadow:'0 8px 32px #0004' }}>
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:460 }}>
 
-        <div style={{ fontWeight:700, fontSize:15, marginBottom:4, color:'#1a3a52' }}>
-          ✅ Concluir Compra
-        </div>
-        <div style={{ fontSize:11, color:'#6b7280', marginBottom:6 }}>
-          Pedido: <strong>{item.numero_pedido}</strong>
-        </div>
-        <div style={{ background:'#f1f5f9', borderRadius:6, padding:'8px 12px', marginBottom:18, fontSize:11, color:'#374151' }}>
+        <div className="modal-title">✅ Concluir Compra — {item.numero_pedido}</div>
+        <div style={{ background:'#f1f5f9', borderRadius:6, padding:'8px 12px', marginBottom:16, fontSize:11, color:'#374151' }}>
           {item.descricao_material} · Qtd: {item.quantidade}
         </div>
 
-        <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:6 }}>
-          Valor total da compra (R$) *
-        </label>
-        <input type="number" step="0.01" min="0" value={valor}
+        <label className="acn-label">Valor total da compra (R$) *</label>
+        <input className="acn-input" type="number" step="0.01" min="0" value={valor}
           onChange={e => setValor(e.target.value)}
           placeholder="0,00"
-          style={{ width:'100%', padding:'10px 12px', border:'2px solid #d1d5db', borderRadius:6,
-            fontSize:14, boxSizing:'border-box', marginBottom:16 }} />
+          style={{ width:'100%', fontSize:13, padding:'7px 10px', marginBottom:12 }} />
 
-        <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:6 }}>
-          Previsão de recebimento da mercadoria *
-        </label>
-        <input type="date" value={prazo}
+        <label className="acn-label">Previsão de recebimento da mercadoria *</label>
+        <input className="acn-input" type="date" value={prazo}
           onChange={e => setPrazo(e.target.value)}
-          style={{ width:'100%', padding:'10px 12px', border:'2px solid #d1d5db', borderRadius:6,
-            fontSize:14, boxSizing:'border-box', marginBottom:22 }} />
+          style={{ width:'100%', fontSize:13, padding:'7px 10px', marginBottom:20 }} />
 
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose}
-            style={{ padding:'9px 20px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:12, cursor:'pointer' }}>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>
             Cancelar
           </button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'9px 24px', background:'#16a34a', color:'#fff', border:'none',
-              borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>
+          <button className="acn-btn" style={{ background:'#16a34a' }} onClick={salvar} disabled={salvando}>
             {salvando ? 'Salvando...' : '✅ Confirmar Compra'}
           </button>
         </div>
@@ -91,36 +76,28 @@ function ModalObservacao({ item, currentUser, onClose, onSaved }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(500px,96vw)', padding:24, boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ fontWeight:700, fontSize:14, marginBottom:4, color:'#1a3a52' }}>
-          💬 Observações — {item.numero_pedido}
-        </div>
-        <div style={{ fontSize:10, color:'#6b7280', marginBottom:14 }}>{item.descricao_material}</div>
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:500 }}>
+        <div className="modal-title">💬 Observações — {item.numero_pedido}</div>
+        <div style={{ fontSize:10, color:'#6b7280', marginBottom:10 }}>{item.descricao_material}</div>
 
         {obsExistentes ? (
           <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10,
-            marginBottom:14, fontSize:10, color:'#374151', whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto', lineHeight:1.8 }}>
+            marginBottom:12, fontSize:10, color:'#374151', whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto', lineHeight:1.8 }}>
             {obsExistentes}
           </div>
         ) : (
-          <div style={{ fontSize:10, color:'#9ca3af', marginBottom:14, fontStyle:'italic' }}>Sem observações anteriores.</div>
+          <div style={{ fontSize:10, color:'#9ca3af', marginBottom:12, fontStyle:'italic' }}>Sem observações anteriores.</div>
         )}
 
-        <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#374151', marginBottom:4 }}>Nova observação</label>
-        <textarea value={novaObs} onChange={e => setNovaObs(e.target.value)} rows={4}
+        <label className="acn-label">Nova observação</label>
+        <textarea className="acn-input" value={novaObs} onChange={e => setNovaObs(e.target.value)} rows={4}
           placeholder="Ex: Fornecedor adiou entrega para 15/08. Aguardando nova confirmação..."
-          style={{ width:'100%', padding:8, border:'1px solid #d1d5db', borderRadius:6, fontSize:11,
-            resize:'vertical', boxSizing:'border-box', marginBottom:14 }} />
+          style={{ width:'100%', resize:'vertical', marginBottom:12 }} />
 
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose}
-            style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
-            Cancelar
-          </button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#0891b2', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+          <button className="acn-btn" style={{ background:'#0891b2' }} onClick={salvar} disabled={salvando}>
             {salvando ? '...' : '💾 Salvar'}
           </button>
         </div>
