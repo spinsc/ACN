@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -49,6 +49,7 @@ export default function QualidadeTab({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [checklist, setChecklist] = useState([]);
   const [modalAudit, setModalAudit] = useState(null);
+  const [modalVer, setModalVer] = useState(null);
   const [checkStates, setCheckStates] = useState({});
   const [obsAudit, setObsAudit] = useState('');
   const [signData, setSignData] = useState(null);
@@ -185,9 +186,12 @@ export default function QualidadeTab({ currentUser }) {
                     <td>{o.responsavel_producao || '—'}</td>
                     <td>{o.tempo_producao_horas ? Number(o.tempo_producao_horas).toFixed(1)+'h' : '—'}</td>
                     <td>
-                      <button className="acn-btn" style={{background:'#7c3aed'}} onClick={()=>abrirAuditoria(o)}>
-                        EXECUTAR AUDITORIA
-                      </button>
+                      <div style={{display:'flex',gap:4}}>
+                        <button className="acn-btn" style={{background:'#7c3aed'}} onClick={()=>abrirAuditoria(o)}>
+                          EXECUTAR AUDITORIA
+                        </button>
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -199,6 +203,8 @@ export default function QualidadeTab({ currentUser }) {
 
       <OplMovimentadas setor="CQ" />
       <DemandaFooter setor="Controle de Qualidade" />
+
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
 
       {/* MODAL AUDITORIA */}
       {modalAudit && (

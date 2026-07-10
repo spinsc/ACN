@@ -306,6 +306,110 @@ export function OplMovimentadas({ setor }: { setor: string }) {
   );
 }
 
+
+// ─── Modal de Detalhes da OPL ────────────────────────────────────────────────
+export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => void }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!opl?.id) return;
+    setLoading(true);
+    supabase.from('logs_movimentacao_opl')
+      .select('*')
+      .eq('opl_id', opl.id)
+      .order('data_hora', { ascending: false })
+      .limit(50)
+      .then(({ data }) => { setLogs(data || []); setLoading(false); });
+  }, [opl?.id]);
+
+  const fmtDt  = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmtDtH = (d: any) => d
+    ? new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  const Campo = ({ label, value }: { label: string; value: any }) => value != null && value !== '' ? (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box" style={{ maxWidth: 680, width: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-title">👁 Detalhes — OPL {opl.opl}</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px', marginBottom: 14 }}>
+          <Campo label="Número OPL"       value={opl.opl} />
+          <Campo label="Status"           value={opl.status_geral} />
+          <Campo label="Cliente"          value={opl.cliente_nome} />
+          <Campo label="Tipo de Projeto"  value={opl.tipo_projeto} />
+          <Campo label="Chassi"           value={opl.chassi} />
+          <Campo label="Modelo"           value={opl.modelo} />
+          <Campo label="Quantidade"       value={opl.quantidade} />
+          <Campo label="NF-e"             value={opl.numero_nf} />
+          <Campo label="Data Entrada"     value={fmtDt(opl.data_entrada)} />
+          <Campo label="Prev. Entrega"    value={fmtDt(opl.data_prevista_entrega)} />
+          <Campo label="Resp. Comercial"  value={opl.responsavel_comercial || opl.criado_por_nome} />
+          <Campo label="Resp. Engenharia" value={opl.responsavel_engenharia} />
+          <Campo label="Resp. Almox"      value={opl.responsavel_almox} />
+          <Campo label="Resp. Producao"   value={opl.responsavel_producao} />
+          <Campo label="Resp. Fiscal"     value={opl.responsavel_fiscal} />
+          <Campo label="Cadastrado em"    value={fmtDtH(opl.criado_em)} />
+        </div>
+
+        {opl.observacoes && (
+          <div style={{ marginBottom: 14, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>Observações</div>
+            <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}>{opl.observacoes}</div>
+          </div>
+        )}
+
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+          📋 Histórico de Movimentações
+        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11 }}>Carregando...</div>
+        ) : logs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11 }}>Nenhum registro de movimentação.</div>
+        ) : (
+          <div style={{ maxHeight: 230, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+              <thead><tr style={{ background: '#1e293b', position: 'sticky', top: 0 }}>
+                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Data/Hora</th>
+                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Setor</th>
+                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Evento</th>
+                <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Operador</th>
+              </tr></thead>
+              <tbody>
+                {logs.map((l, i) => (
+                  <tr key={l.id || i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                    <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', color: '#64748b' }}>{fmtDtH(l.data_hora)}</td>
+                    <td style={{ padding: '4px 8px', color: '#475569' }}>{l.setor || '—'}</td>
+                    <td style={{ padding: '4px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.evento}>
+                      {l.evento || '—'}
+                    </td>
+                    <td style={{ padding: '4px 8px' }}>
+                      {l.usuario_nome
+                        ? <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>{l.usuario_nome}</span>
+                        : <span style={{ color: '#94a3b8' }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <button className="acn-btn" style={{ background: '#94a3b8', width: '100%', marginTop: 14 }} onClick={onClose}>
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function DemandaFooter({ setor }: { setor: string }) {
   return (
     <div className="acn-footer-setor">

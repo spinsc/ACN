@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 
@@ -530,6 +530,7 @@ export default function ComercialTab({ currentUser }) {
   const [editId, setEditId] = useState(null);
   const [oneNoteUrl, setOneNoteUrl] = useState('');
   const [modalEntregue, setModalEntregue] = useState(null);
+  const [modalVer, setModalVer] = useState(null);
   const [nomeRecebeu, setNomeRecebeu] = useState('');
 
   // Categorias de tipo de projeto (sac_categorias + hardcoded)
@@ -960,6 +961,7 @@ export default function ComercialTab({ currentUser }) {
                           )}
                           {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button>}
                           {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
+                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                         </div>
                       </td>
                     </tr>
@@ -973,6 +975,8 @@ export default function ComercialTab({ currentUser }) {
 
       <OplMovimentadas setor="Comercial" />
       <DemandaFooter setor="Comercial" />
+
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
 
       {/* MODAL ENTREGUE */}
       {modalEntregue && (

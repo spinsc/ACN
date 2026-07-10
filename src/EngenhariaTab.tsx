@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -22,6 +22,7 @@ export default function EngenhariaTab({ currentUser }) {
   // Acompanhamento SAC Veicular
   const [osAcomp, setOsAcomp] = useState([]);
   const [modalObsAcomp, setModalObsAcomp] = useState(null);
+  const [modalVer, setModalVer] = useState(null);
   const [novaObsAcomp, setNovaObsAcomp] = useState('');
 
   useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
@@ -207,6 +208,7 @@ export default function EngenhariaTab({ currentUser }) {
                               </button>
                             </>
                           )}
+                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                         </div>
                       </td>
                     </tr>
@@ -299,6 +301,8 @@ export default function EngenhariaTab({ currentUser }) {
       <DemandasSetorWidget setor="Engenharia" cor="#2563eb" currentUser={currentUser} />
       <OplMovimentadas setor="Engenharia" />
       <DemandaFooter setor="Engenharia" />
+
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
 
       {/* MODAL INICIAR ENGENHARIA */}
       {modalIniciar && (

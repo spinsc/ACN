@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -11,6 +11,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [modalPend, setModalPend] = useState(null);
   const [obsPend, setObsPend] = useState('');
   const [modalFalta, setModalFalta] = useState(null);
+  const [modalVer, setModalVer] = useState(null);
   const [obsFalta, setObsFalta] = useState('');
 
   useEffect(() => { fetchAll(); const t = setInterval(fetchAll,30000); return ()=>clearInterval(t); }, []);
@@ -130,6 +131,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                             SANAR PENDENCIA
                           </button>
                         )}
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                       </div>
                     </td>
                   </tr>
@@ -143,6 +145,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
       <DemandasSetorWidget setor="Almoxarifado" cor="#78716c" currentUser={currentUser} />
       <OplMovimentadas setor="Almoxarifado" />
       <DemandaFooter setor="Almoxarifado" />
+
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
 
       {/* MODAL FALTA */}
       {modalFalta && (

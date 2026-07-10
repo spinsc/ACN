@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -9,6 +9,7 @@ export default function FiscalTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [nfs, setNfs] = useState({});
+  const [modalVer, setModalVer] = useState(null);
 
   useEffect(() => { fetchAll(); const t = setInterval(fetchAll,30000); return ()=>clearInterval(t); }, []);
 
@@ -83,9 +84,12 @@ export default function FiscalTab({ currentUser }) {
                       />
                     </td>
                     <td>
-                      <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>faturar(o)}>
-                        FATURADO
-                      </button>
+                      <div style={{display:'flex',gap:4}}>
+                        <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>faturar(o)}>
+                          FATURADO
+                        </button>
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -104,7 +108,7 @@ export default function FiscalTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th>
+                <th>OPL</th><th>Chassi</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {faturados.map(o => (
@@ -115,6 +119,7 @@ export default function FiscalTab({ currentUser }) {
                     <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
                     <td>{fmtDt(o.data_emissao_nf)}</td>
                     <td>{o.responsavel_fiscal || '—'}</td>
+                    <td><button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -125,6 +130,8 @@ export default function FiscalTab({ currentUser }) {
 
       <OplMovimentadas setor="Fiscal" />
       <DemandaFooter setor="Fiscal" />
+
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
     </div>
   );
 }

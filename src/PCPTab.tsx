@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -12,6 +12,7 @@ export default function PCPTab({ currentUser }) {
   const [oplsFalta, setOplsFalta] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalDevolver, setModalDevolver] = useState(null);
+  const [modalVer, setModalVer] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalDemanda, setModalDemanda] = useState(null); // null=fechado, false=avulsa, obj=com opl
   const [descDemanda, setDescDemanda] = useState('');
@@ -184,10 +185,13 @@ export default function PCPTab({ currentUser }) {
                     <td>{o.responsavel_almox || '—'}</td>
                     <td>{fmtDtHr(o.data_kiting)}</td>
                     <td>
-                      <button className="acn-btn" style={{background:'#22c55e',fontSize:10}}
-                        onClick={()=>sanarPendenciaPCP(o)}>
-                        SANAR PENDENCIA
-                      </button>
+                      <div style={{display:'flex',gap:4}}>
+                        <button className="acn-btn" style={{background:'#22c55e',fontSize:10}}
+                          onClick={()=>sanarPendenciaPCP(o)}>
+                          SANAR PENDENCIA
+                        </button>
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -261,6 +265,7 @@ export default function PCPTab({ currentUser }) {
                             📤 LIBERAR ENVIO
                           </button>
                         )}
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                       </div>
                     </td>
                   </tr>
@@ -334,6 +339,7 @@ export default function PCPTab({ currentUser }) {
                         <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
                           DEVOLVER
                         </button>
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                       </div>
                     </td>
                   </tr>
@@ -346,6 +352,8 @@ export default function PCPTab({ currentUser }) {
 
       <OplMovimentadas setor="PCP" />
       <DemandaFooter setor="PCP" />
+
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
 
       {/* MODAL DEMANDA SETOR */}
       {modalDemanda !== null && (
