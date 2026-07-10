@@ -377,7 +377,7 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO — PAINEL DE STATUS
 // ─────────────────────────────────────────────────────────────────────────────
-function PainelStatus({ funcionarios, onRefresh }) {
+function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
   const alterarStatus = async (id: string, status: string) => {
     await supabase.from('rh_funcionarios').update({ status_presenca: status }).eq('id', id);
     onRefresh();
@@ -389,7 +389,7 @@ function PainelStatus({ funcionarios, onRefresh }) {
       <div style={{ padding:12, display:'flex', flexWrap:'wrap', gap:10 }}>
         {funcionarios.filter(f=>f.ativo).map(f=>(
           <div key={f.id} style={{ background:'#f8fafc', border:`1.5px solid ${STATUS_COR[f.status_presenca]||'#e2e8f0'}`,
-            borderRadius:8, padding:'10px 14px', minWidth:160 }}>
+            borderRadius:8, padding:'10px 14px', minWidth:160, position:'relative' }}>
             <div style={{ fontWeight:700, fontSize:12, color:'#1f2937' }}>{f.nome}</div>
             <div style={{ fontSize:10, color:'#6b7280', marginBottom:6 }}>{f.cargo || f.departamento || '—'}</div>
             <select value={f.status_presenca}
@@ -402,6 +402,18 @@ function PainelStatus({ funcionarios, onRefresh }) {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+            <div style={{ display:'flex', gap:4, marginTop:6 }}>
+              <button onClick={()=>onEdit(f)}
+                style={{ flex:1, padding:'3px 0', fontSize:10, border:'1px solid #d1d5db', borderRadius:4,
+                  background:'#f9fafb', cursor:'pointer', color:'#374151' }}>
+                ✏️ Editar
+              </button>
+              <button onClick={()=>onDelete(f)}
+                style={{ padding:'3px 8px', fontSize:10, border:'1px solid #fca5a5', borderRadius:4,
+                  background:'#fef2f2', cursor:'pointer', color:'#dc2626', fontWeight:700 }}>
+                🗑️
+              </button>
+            </div>
           </div>
         ))}
         {funcionarios.filter(f=>f.ativo).length === 0 && (
@@ -1087,7 +1099,16 @@ export default function RHTab({ currentUser }) {
         <div className="acn-empty">Carregando...</div>
       ) : (
         <>
-          <PainelStatus funcionarios={funcionarios} onRefresh={fetch} />
+          <PainelStatus
+            funcionarios={funcionarios}
+            onRefresh={fetch}
+            onEdit={(f)=>setModalFunc(f)}
+            onDelete={async (f)=>{
+              if (!confirm(`Excluir o funcionário "${f.nome}"?\n\nEsta ação irá desativá-lo do sistema.`)) return;
+              await supabase.from('rh_funcionarios').update({ ativo: false }).eq('id', f.id);
+              fetch();
+            }}
+          />
           <BancoHoras funcionarios={funcionarios} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
