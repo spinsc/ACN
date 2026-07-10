@@ -123,22 +123,22 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
         {/* Upload */}
         <div style={{ padding:'10px 16px', borderBottom:'1px solid #f1f5f9', background:'#f8fafc', flexShrink:0 }}>
           <label style={{ display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
-            background: TIPO_COR[tipo || 'documento'] ?? '#2563eb', color:'#fff',
+            background: TIPO_COR[tipoFixo || 'documento'] ?? '#2563eb', color:'#fff',
             border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700 }}>
             {uploading ? 'Enviando...'
               : isChecklistMode ? '📎 Anexar Checklist (PDF)'
-              : tipo === 'proposta' ? '📋 Anexar Proposta (.docx / .xlsx)'
-              : tipo === 'orcamento' ? '💰 Anexar Orçamento (.docx / .xlsx)'
+              : tipoFixo === 'proposta' ? '📋 Anexar Proposta (.docx / .xlsx)'
+              : tipoFixo === 'orcamento' ? '💰 Anexar Orçamento (.docx / .xlsx)'
               : '📎 Anexar Arquivo'}
             <input ref={fileRef} type="file" multiple
-              accept={isChecklistMode ? '.pdf' : (tipo === 'proposta' || tipo === 'orcamento') ? '.doc,.docx,.xls,.xlsx,.pdf,.txt' : '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.txt'}
+              accept={isChecklistMode ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? '.doc,.docx,.xls,.xlsx,.pdf,.txt' : '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.txt'}
               onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
               style={{ display:'none' }} disabled={uploading} />
           </label>
           {isChecklistMode && (
             <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Aceita apenas PDF</span>
           )}
-          {(tipo === 'proposta' || tipo === 'orcamento') && (
+          {(tipoFixo === 'proposta' || tipoFixo === 'orcamento') && (
             <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Word (.docx) e Excel (.xlsx)</span>
           )}
         </div>
