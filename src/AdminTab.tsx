@@ -733,6 +733,7 @@ function PainelKPI() {
 // ---- PAINEL DADOS / LIMPEZA ----
 const TABELAS_CONFIG = [
   { id:'oples',                 label:'OPLs',               desc:'Ordens de Produção',         cor:'#2563eb' },
+  { id:'sac_ordens_servico',    label:'SAC — OS',            desc:'Ordens de Serviço SAC',       cor:'#0f766e' },
   { id:'demandas_setoriais',    label:'Demandas Setoriais',  desc:'Demandas e Ajustes',         cor:'#f59e0b' },
   { id:'demandas_avulsas',      label:'Demandas Avulsas',    desc:'Engenharia — tarefas livres', cor:'#7c3aed' },
   { id:'logistica_manifestos',  label:'Logística In/Out',    desc:'Manifestos de envio/recebimento', cor:'#0891b2' },
@@ -768,6 +769,7 @@ function PainelDados() {
     const orderCol = tabelaAtiva === 'oples' ? 'data_entrada'
       : tabelaAtiva === 'logs_movimentacao_opl' ? 'data_hora'
       : tabelaAtiva === 'demandas_setoriais' ? 'data_abertura'
+      : tabelaAtiva === 'sac_ordens_servico' ? 'data_abertura'
       : tabelaAtiva === 'crm_historico_contatos' ? 'data_contato'
       : tabelaAtiva === 'crm_clientes' ? 'created_at'
       : tabelaAtiva === 'cq_auditorias' ? 'created_at'
@@ -845,6 +847,8 @@ function PainelDados() {
       return `OPL ${r.numero_opl} → ${r.setor}: ${r.evento?.substring(0,50)}`;
     if (tabelaAtiva === 'cq_auditorias')
       return `OPL ${r.numero_opl} — ${r.resultado} — ${r.auditor_nome}`;
+    if (tabelaAtiva === 'sac_ordens_servico')
+      return `OS ${r.numero_os || r.id} — ${r.cliente_nome || '?'} — ${r.status || '?'} — ${r.tipo_servico || '?'}`;
     return r.id;
   };
 

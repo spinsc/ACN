@@ -1792,22 +1792,22 @@ function PrintOS({ os }) {
     </tr>
   );
 
+  const base = import.meta.env.BASE_URL;
+
   return (
     <div style={{fontFamily:'Arial,sans-serif',color:'#1e293b'}}>
-      <div style={{background:'#0f766e',color:'white',padding:'12px 16px',borderRadius:4,marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div>
-          <div style={{fontWeight:700,fontSize:16}}>ACN SINAL VERDE</div>
-          <div style={{fontSize:11,opacity:.85}}>Ordem de Serviço</div>
+      {/* CABEÇALHO */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'3px solid #0f766e',paddingBottom:10,marginBottom:12}}>
+        <img src={base + 'logo.png'} alt="ACN Sinal Verde" style={{height:56,objectFit:'contain'}} />
+        <div style={{textAlign:'center',flex:1,padding:'0 16px'}}>
+          <div style={{fontWeight:700,fontSize:15,color:'#0f766e',letterSpacing:1}}>ORDEM DE SERVIÇO</div>
+          <div style={{fontWeight:800,fontSize:22,color:'#1e293b'}}>{os.numero_os}</div>
+          <div style={{fontSize:10,color:'#64748b'}}>Abertura: {fmtDt(os.data_abertura)}</div>
         </div>
         <div style={{textAlign:'right'}}>
-          <div style={{fontWeight:700,fontSize:18}}>{os.numero_os}</div>
-          <div style={{fontSize:10}}>Abertura: {fmtDt(os.data_abertura)}</div>
+          <span style={{background: STATUS_COR[os.status]||'#94a3b8',color:'white',padding:'4px 12px',borderRadius:20,fontSize:11,fontWeight:700,display:'inline-block',marginBottom:4}}>{os.status}</span>
+          <div style={{fontSize:10,color:'#64748b'}}>{os.tipo_servico}</div>
         </div>
-      </div>
-
-      <div style={{display:'flex',gap:8,marginBottom:12}}>
-        <span style={{background: STATUS_COR[os.status]||'#94a3b8',color:'white',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700}}>{os.status}</span>
-        <span style={{background:'#e2e8f0',padding:'3px 10px',borderRadius:20,fontSize:11}}>{os.tipo_servico}</span>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
@@ -1876,6 +1876,89 @@ function PrintOS({ os }) {
               {row('Situação', os.aprovado===true?'✅ APROVADO':os.aprovado===false?'❌ REPROVADO':'Aguardando')}
             </tbody>
           </table>
+          {/* Itens cotados */}
+          {Array.isArray(os.itens_cotacao) && os.itens_cotacao.length > 0 && (
+            <div style={{padding:'0 8px 8px'}}>
+              <div style={{fontWeight:700,fontSize:10,color:'#64748b',margin:'8px 0 4px',textTransform:'uppercase',letterSpacing:'.3px'}}>Itens do Orçamento</div>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
+                <thead><tr style={{background:'#f1f5f9'}}>
+                  <th style={{padding:'4px 6px',textAlign:'left',border:'1px solid #e2e8f0'}}>Código</th>
+                  <th style={{padding:'4px 6px',textAlign:'left',border:'1px solid #e2e8f0'}}>Descrição</th>
+                  <th style={{padding:'4px 6px',textAlign:'center',border:'1px solid #e2e8f0',width:45}}>Qtd</th>
+                  <th style={{padding:'4px 6px',textAlign:'right',border:'1px solid #e2e8f0',width:90}}>Vl. Unit.</th>
+                  <th style={{padding:'4px 6px',textAlign:'right',border:'1px solid #e2e8f0',width:90}}>Total</th>
+                </tr></thead>
+                <tbody>
+                  {os.itens_cotacao.map((item,i)=>(
+                    <tr key={i} style={{background:i%2===0?'white':'#f8fafc'}}>
+                      <td style={{padding:'3px 6px',border:'1px solid #e2e8f0'}}>{item.codigo||'—'}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #e2e8f0'}}>{item.descricao}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #e2e8f0',textAlign:'center'}}>{item.quantidade}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #e2e8f0',textAlign:'right'}}>{fmtVal(item.valor_unitario)}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #e2e8f0',textAlign:'right',fontWeight:700}}>{fmtVal((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot><tr style={{background:'#f0fdf4'}}>
+                  <td colSpan={4} style={{padding:'4px 6px',fontWeight:700,textAlign:'right',border:'1px solid #e2e8f0',color:'#166534'}}>TOTAL:</td>
+                  <td style={{padding:'4px 6px',fontWeight:800,textAlign:'right',border:'1px solid #e2e8f0',color:'#166534'}}>{fmtVal(os.valor_orcamento)}</td>
+                </tr></tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* REPROVAÇÃO */}
+      {os.aprovado === false && (os.motivo_reprovacao || os.data_reprovacao) && (
+        <div style={{border:'2px solid #fca5a5',borderRadius:4,marginBottom:10}}>
+          <div style={{background:'#fef2f2',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#dc2626',borderBottom:'1px solid #fca5a5'}}>❌ REPROVADO</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <tbody>
+              {row('Motivo', os.motivo_reprovacao)}
+              {os.data_reprovacao && row('Data', fmtDt(os.data_reprovacao))}
+              {os.data_prevista_retirada && row('Retirada prevista', fmtDt(os.data_prevista_retirada))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* MANUTENÇÃO VEICULAR */}
+      {os.is_manutencao_veicular && (
+        <div style={{border:'1px solid #fde68a',borderRadius:4,marginBottom:10}}>
+          <div style={{background:'#fffbeb',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#92400e',borderBottom:'1px solid #fde68a'}}>🔧 MANUTENÇÃO VEICULAR</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <tbody>
+              {row('Tipo de Avaliação', os.tipo_avaliacao)}
+              {row('Chegada do Veículo', os.data_chegada_veiculo ? new Date(os.data_chegada_veiculo).toLocaleString('pt-BR') : '—')}
+              {row('Início da Manutenção', os.data_inicio_manutencao ? new Date(os.data_inicio_manutencao).toLocaleString('pt-BR') : '—')}
+              {row('Conclusão', os.data_conclusao_manutencao ? new Date(os.data_conclusao_manutencao).toLocaleString('pt-BR') : '—')}
+              {row('Observações', os.observacoes_manutencao)}
+            </tbody>
+          </table>
+          {Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0 && (
+            <div style={{padding:'0 8px 8px'}}>
+              <div style={{fontWeight:700,fontSize:10,color:'#92400e',margin:'8px 0 4px',textTransform:'uppercase'}}>Materiais Utilizados</div>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
+                <thead><tr style={{background:'#fef3c7'}}>
+                  <th style={{padding:'3px 6px',textAlign:'left',border:'1px solid #fde68a'}}>Descrição</th>
+                  <th style={{padding:'3px 6px',textAlign:'center',border:'1px solid #fde68a',width:45}}>Qtd</th>
+                  <th style={{padding:'3px 6px',textAlign:'right',border:'1px solid #fde68a',width:90}}>Vl. Unit.</th>
+                  <th style={{padding:'3px 6px',textAlign:'right',border:'1px solid #fde68a',width:90}}>Total</th>
+                </tr></thead>
+                <tbody>
+                  {os.materiais_utilizados.map((m,i)=>(
+                    <tr key={i}>
+                      <td style={{padding:'3px 6px',border:'1px solid #fde68a'}}>{m.descricao}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #fde68a',textAlign:'center'}}>{m.quantidade}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #fde68a',textAlign:'right'}}>{fmtVal(m.valor_unitario)}</td>
+                      <td style={{padding:'3px 6px',border:'1px solid #fde68a',textAlign:'right',fontWeight:700}}>{fmtVal((Number(m.quantidade)||1)*(Number(m.valor_unitario)||0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1929,8 +2012,16 @@ function PrintOS({ os }) {
         </div>
       )}
 
-      <div style={{borderTop:'1px solid #e2e8f0',paddingTop:8,marginTop:8,fontSize:10,color:'#94a3b8',textAlign:'center'}}>
-        ACN Sinal Verde — Documento gerado em {new Date().toLocaleString('pt-BR')}
+      {/* RODAPÉ */}
+      <div style={{borderTop:'2px solid #0f766e',paddingTop:10,marginTop:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+        <div style={{fontSize:9.5,color:'#64748b',lineHeight:1.6}}>
+          <div style={{fontWeight:700,color:'#0f766e',fontSize:10,marginBottom:2}}>ACN Sinal Verde</div>
+          <div>📍 Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028</div>
+          <div>📞 (48) 3240-0336 &nbsp;|&nbsp; ✉️ acn@acn.com.br</div>
+          <div>📸 @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br</div>
+          <div style={{color:'#94a3b8',marginTop:2}}>Documento gerado em {new Date().toLocaleString('pt-BR')}</div>
+        </div>
+        <img src={base + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" style={{height:52,objectFit:'contain',flexShrink:0}} />
       </div>
     </div>
   );

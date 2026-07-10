@@ -739,6 +739,234 @@ function PainelSacVeicular({ currentUser }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VOUCHER DE SERVIÇOS
+// SQL necessário (rodar uma vez no Supabase):
+// CREATE TABLE IF NOT EXISTS vouchers_servico (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   tipo_servico text, numero_pvop text, modelo_carro text,
+//   chassi_placa text, valor_voucher numeric, data_servico date,
+//   prestador text, autorizado_por text, criado_por text,
+//   criado_em timestamptz DEFAULT now()
+// );
+// ─────────────────────────────────────────────────────────────────────────────
+const VOUCHER_VAZIO = { tipo_servico:'', numero_pvop:'', modelo_carro:'', chassi_placa:'', valor_voucher:'', data_servico:'', prestador:'', autorizado_por:'' };
+
+function VoucherServicos({ currentUser }) {
+  const [vouchers, setVouchers]         = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [form, setForm]                 = useState({ ...VOUCHER_VAZIO });
+  const [salvando, setSalvando]         = useState(false);
+  const [modalPrint, setModalPrint]     = useState(null);
+  const base = import.meta.env.BASE_URL;
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('vouchers_servico').select('*').order('criado_em', { ascending: false }).limit(100);
+    setVouchers(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const salvar = async () => {
+    if (!form.tipo_servico || !form.numero_pvop) { alert('Informe ao menos o Tipo de Serviço e Nº PV/OP!'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('vouchers_servico').insert([{
+      ...form,
+      valor_voucher: form.valor_voucher ? Number(form.valor_voucher) : null,
+      criado_por: currentUser?.nome || 'Sistema',
+    }]);
+    if (error) { alert('Erro ao salvar: ' + error.message); setSalvando(false); return; }
+    setForm({ ...VOUCHER_VAZIO });
+    setSalvando(false);
+    load();
+  };
+
+  const excluir = async (id) => {
+    if (!window.confirm('Excluir este voucher?')) return;
+    await supabase.from('vouchers_servico').delete().eq('id', id);
+    load();
+  };
+
+  const imprimirVoucher = (v) => {
+    const w = window.open('', '_blank', 'width=750,height=900,scrollbars=yes');
+    if (!w) return;
+    const fmtVal = (val) => val != null ? `R$ ${Number(val).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+    const fmtDt  = (d) => d ? new Date(d + 'T12:00').toLocaleDateString('pt-BR') : '—';
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Voucher ${v.numero_pvop}</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #1e293b; padding: 28px; font-size: 12px; }
+      h1 { font-size: 18px; margin: 0; color: #0f766e; }
+      .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #0f766e; padding-bottom: 12px; margin-bottom: 18px; }
+      .logo { height: 56px; object-fit: contain; }
+      .title { text-align: center; flex: 1; padding: 0 16px; }
+      .badge { background: #0f766e; color: white; padding: 4px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+      .section { border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 14px; }
+      .sec-title { background: #f8fafc; padding: 7px 12px; font-weight: 700; font-size: 11px; color: #0f766e; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: .4px; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+      td:first-child { width: 170px; font-weight: 600; color: #64748b; }
+      .valor { font-size: 22px; font-weight: 800; color: #0f766e; text-align: center; padding: 14px; }
+      .footer { border-top: 2px solid #0f766e; padding-top: 10px; margin-top: 16px; display: flex; align-items: center; justify-content: space-between; }
+      .footer-text { font-size: 9.5px; color: #64748b; line-height: 1.7; }
+      .footer-logo { height: 50px; object-fit: contain; }
+      @media print { body { padding: 16px; } }
+    </style></head><body>
+    <div class="header">
+      <img src="${window.location.origin}${base}logo.png" class="logo" alt="ACN" onerror="this.style.display='none'" />
+      <div class="title">
+        <div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">Voucher de Serviço</div>
+        <div style="font-size:20px;font-weight:800;color:#1e293b">${v.numero_pvop}</div>
+      </div>
+      <span class="badge">VOUCHER</span>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Dados do Serviço</div>
+      <table><tbody>
+        <tr><td>Tipo de Serviço</td><td>${v.tipo_servico || '—'}</td></tr>
+        <tr><td>Nº PV / OP</td><td>${v.numero_pvop || '—'}</td></tr>
+        <tr><td>Modelo do Carro</td><td>${v.modelo_carro || '—'}</td></tr>
+        <tr><td>Chassi / Placa</td><td>${v.chassi_placa || '—'}</td></tr>
+        <tr><td>Data do Serviço</td><td>${fmtDt(v.data_servico)}</td></tr>
+        <tr><td>Prestador</td><td>${v.prestador || '—'}</td></tr>
+        <tr><td>Autorizado por</td><td>${v.autorizado_por || '—'}</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Valor do Voucher</div>
+      <div class="valor">${fmtVal(v.valor_voucher)}</div>
+    </div>
+
+    <div style="border:1px dashed #94a3b8;border-radius:6px;padding:12px;text-align:center;margin-bottom:14px;font-size:10px;color:#64748b">
+      Este voucher é válido para o serviço especificado acima e deve ser apresentado ao prestador no ato da realização.
+    </div>
+
+    <div class="footer">
+      <div class="footer-text">
+        <strong style="color:#0f766e">ACN Sinal Verde</strong><br/>
+        📍 Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028<br/>
+        📞 (48) 3240-0336 &nbsp;|&nbsp; ✉️ acn@acn.com.br<br/>
+        📸 @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br<br/>
+        <span style="color:#94a3b8">Emitido em ${new Date().toLocaleString('pt-BR')} por ${v.criado_por || '—'}</span>
+      </div>
+      <img src="${window.location.origin}${base}motorola.png" class="footer-logo" alt="Motorola" onerror="this.style.display='none'" />
+    </div>
+    <script>window.onload=()=>window.print();</script>
+    </body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <div>
+      {/* FORMULÁRIO */}
+      <div className="sec-card" style={{marginBottom:12}}>
+        <div className="sec-hdr" style={{background:'#7c3aed'}}>
+          <span>🎟️ Novo Voucher de Serviço</span>
+        </div>
+        <div className="sec-body">
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10}}>
+            <div>
+              <label className="acn-label">Tipo de Serviço *</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.tipo_servico}
+                onChange={e=>set('tipo_servico',e.target.value)} placeholder="Ex: Manutenção, Instalação..." />
+            </div>
+            <div>
+              <label className="acn-label">Nº PV / OP *</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.numero_pvop}
+                onChange={e=>set('numero_pvop',e.target.value)} placeholder="Ex: PV-2024-001" />
+            </div>
+            <div>
+              <label className="acn-label">Modelo do Carro</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.modelo_carro}
+                onChange={e=>set('modelo_carro',e.target.value)} placeholder="Ex: Fiat Strada 2023" />
+            </div>
+            <div>
+              <label className="acn-label">Chassi / Placa</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.chassi_placa}
+                onChange={e=>set('chassi_placa',e.target.value)} placeholder="Ex: ABC-1234" />
+            </div>
+            <div>
+              <label className="acn-label">Valor do Voucher (R$)</label>
+              <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} value={form.valor_voucher}
+                onChange={e=>set('valor_voucher',e.target.value)} placeholder="0,00" />
+            </div>
+            <div>
+              <label className="acn-label">Data do Serviço</label>
+              <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_servico}
+                onChange={e=>set('data_servico',e.target.value)} />
+            </div>
+            <div>
+              <label className="acn-label">Prestador do Serviço</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.prestador}
+                onChange={e=>set('prestador',e.target.value)} placeholder="Nome do prestador..." />
+            </div>
+            <div>
+              <label className="acn-label">Autorizado por</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.autorizado_por}
+                onChange={e=>set('autorizado_por',e.target.value)} placeholder="Nome do autorizador..." />
+            </div>
+          </div>
+          <div style={{marginTop:12,display:'flex',gap:8}}>
+            <button className="acn-btn" style={{background:'#7c3aed'}} onClick={salvar} disabled={salvando}>
+              {salvando ? 'Salvando...' : '💾 Salvar Voucher'}
+            </button>
+            <button className="acn-btn" style={{background:'#64748b'}} onClick={()=>setForm({...VOUCHER_VAZIO})}>
+              Limpar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* LISTA DE VOUCHERS */}
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#7c3aed'}}>
+          <span>🗂 Vouchers Emitidos ({vouchers.length})</span>
+          <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:10}} onClick={load}>↻</button>
+        </div>
+        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+          {loading ? <div className="acn-empty">Carregando...</div> : vouchers.length === 0 ? (
+            <div className="acn-empty">Nenhum voucher emitido ainda.</div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th>Nº PV/OP</th><th>Tipo</th><th>Veículo</th><th>Chassi/Placa</th>
+                <th>Valor</th><th>Data</th><th>Prestador</th><th>Autorizado por</th><th>Ações</th>
+              </tr></thead>
+              <tbody>
+                {vouchers.map(v => (
+                  <tr key={v.id}>
+                    <td><strong style={{color:'#7c3aed'}}>{v.numero_pvop}</strong></td>
+                    <td>{v.tipo_servico}</td>
+                    <td>{v.modelo_carro || '—'}</td>
+                    <td>{v.chassi_placa || '—'}</td>
+                    <td style={{fontWeight:700,color:'#0f766e'}}>
+                      {v.valor_voucher != null ? `R$ ${Number(v.valor_voucher).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
+                    </td>
+                    <td>{v.data_servico ? new Date(v.data_servico + 'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
+                    <td>{v.prestador || '—'}</td>
+                    <td>{v.autorizado_por || '—'}</td>
+                    <td>
+                      <div style={{display:'flex',gap:4}}>
+                        <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>imprimirVoucher(v)}>🖨 Imprimir</button>
+                        <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>excluir(v.id)}>🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProducaoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -866,10 +1094,13 @@ export default function ProducaoTab({ currentUser }) {
           onClick={()=>setAbaProducao('veicular')}>🔧 SAC Veicular</button>
         <button style={{flex:1,padding:'8px',background:abaProducao==='agenda'?'#f97316':'white',color:abaProducao==='agenda'?'white':'#f97316',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaProducao('agenda')}>📅 Agendamentos</button>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='voucher'?'#7c3aed':'white',color:abaProducao==='voucher'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('voucher')}>🎟️ Voucher</button>
       </div>
 
       {abaProducao === 'veicular' && <PainelSacVeicular currentUser={currentUser} />}
       {abaProducao === 'agenda' && <CalendarioManutencao currentUser={currentUser} />}
+      {abaProducao === 'voucher' && <VoucherServicos currentUser={currentUser} />}
       {abaProducao === 'producao' && <div>
       {/* ALERTA RETRABALHO */}
       {emRetrabalho.length > 0 && (
