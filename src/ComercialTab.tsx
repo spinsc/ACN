@@ -659,6 +659,20 @@ export default function ComercialTab({ currentUser }) {
   const oplsEntrega  = opls.filter(o => o.status_geral === 'Faturado e Disponivel para Entrega');
   const oplsManutAgendada = opls.filter(o => o.status_geral === 'Manutenção Agendada');
 
+  // Filtros do histórico
+  const [filtroResp,       setFiltroResp]       = useState('');
+  const [filtroHistDataIni, setFiltroHistDataIni] = useState('');
+  const [filtroHistDataFim, setFiltroHistDataFim] = useState('');
+
+  const responsaveis = [...new Set(opls.map(o => o.responsavel_comercial || o.criado_por_nome).filter(Boolean))].sort();
+
+  const oplsFiltrados = opls.filter(o => {
+    if (filtroResp && (o.responsavel_comercial || o.criado_por_nome || '') !== filtroResp) return false;
+    if (filtroHistDataIni && (o.data_entrada || '') < filtroHistDataIni) return false;
+    if (filtroHistDataFim && (o.data_entrada || '') > filtroHistDataFim + 'T') return false;
+    return true;
+  });
+
   const liberarManutencaoEngenharia = async (opl) => {
     const agora = new Date().toISOString();
     await supabase.from('oples').update({ status_geral: 'Em Espera Engenharia' }).eq('id', opl.id);
@@ -820,13 +834,45 @@ export default function ComercialTab({ currentUser }) {
       {/* HISTORICO */}
       <div className="sec-card">
         <div className="sec-hdr"><span>Historico de Projetos & Expedicao Comercial</span></div>
+
+        {/* FILTROS */}
+        <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap',padding:'8px 12px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
+          <div>
+            <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Operador</div>
+            <select value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}
+              style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151',minWidth:150}}>
+              <option value="">Todos</option>
+              {responsaveis.map(r=><option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Data entrada de</div>
+            <input type="date" value={filtroHistDataIni} onChange={e=>setFiltroHistDataIni(e.target.value)}
+              style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
+          </div>
+          <div>
+            <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>até</div>
+            <input type="date" value={filtroHistDataFim} onChange={e=>setFiltroHistDataFim(e.target.value)}
+              style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
+          </div>
+          {(filtroResp||filtroHistDataIni||filtroHistDataFim) && (
+            <button onClick={()=>{setFiltroResp('');setFiltroHistDataIni('');setFiltroHistDataFim('');}}
+              style={{fontSize:10,padding:'4px 8px',background:'#f1f5f9',color:'#64748b',border:'1px solid #d1d5db',borderRadius:4,cursor:'pointer',alignSelf:'flex-end'}}>
+              ✕ Limpar
+            </button>
+          )}
+          <span style={{marginLeft:'auto',fontSize:9,color:'#94a3b8',alignSelf:'flex-end',paddingBottom:2}}>
+            {oplsFiltrados.length} de {opls.length} registro(s)
+          </span>
+        </div>
+
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : (
             <table>
-              <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Proposta</th><th>Acao</th></tr></thead>
+              <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Operador</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Proposta</th><th>Acao</th></tr></thead>
               <tbody>
-                {opls.length === 0 ? <tr><td colSpan={8} className="acn-empty">Nenhuma OP cadastrada.</td></tr>
-                : opls.map(o => {
+                {oplsFiltrados.length === 0 ? <tr><td colSpan={11} className="acn-empty">Nenhuma OP encontrada.</td></tr>
+                : oplsFiltrados.map(o => {
                   const atraso = diasAtraso(o.data_prevista_entrega);
                   const podeFaturar = o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial';
                   const podeEntregue = o.status_geral === 'Faturado e Disponivel para Entrega';
@@ -837,6 +883,7 @@ export default function ComercialTab({ currentUser }) {
                       <td>{o.chassi||'—'}</td>
                       <td><span style={{fontWeight:700,color: (o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                      <td style={{fontSize:10,color:'#475569'}}>{o.responsavel_comercial || o.criado_por_nome || '—'}</td>
                       <td>{fmtDt(o.data_prevista_entrega)}</td>
                       <td>{atraso?<span className="acn-badge" style={{background:'#f59e0b'}}>{atraso}d</span>:<span style={{color:'#22c55e',fontSize:10}}>No prazo</span>}</td>
                       <td>
