@@ -28,10 +28,10 @@ function imprimirSolicitacao(p: any) {
         <tr><td><b>Quantidade</b></td><td>${p.quantidade || '—'}</td></tr>
         <tr><td><b>Fornecedor</b></td><td>${p.fornecedor || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
-        <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.prazo_entrega)}</td></tr>
-        <tr><td><b>Status</b></td><td><span class="badge">${p.status_solicitacao || '—'}</span></td></tr>
-        <tr><td><b>Data da Solicitação</b></td><td>${p.data_prevista ? new Date(p.data_prevista).toLocaleDateString('pt-BR') : '—'}</td></tr>
-        ${p.observacoes ? `<tr><td><b>Observações</b></td><td style="white-space:pre-wrap">${p.observacoes}</td></tr>` : ''}
+        <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
+        <tr><td><b>Status</b></td><td><span class="badge">${p.status_compra || '—'}</span></td></tr>
+        <tr><td><b>Data da Solicitação</b></td><td>${p.data_criacao ? new Date(p.data_criacao).toLocaleDateString('pt-BR') : '—'}</td></tr>
+        ${p.observacoes_compra ? `<tr><td><b>Observações</b></td><td style="white-space:pre-wrap">${p.observacoes_compra}</td></tr>` : ''}
       </table>
       <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
       <script>window.onload=()=>window.print();</script>
@@ -83,17 +83,16 @@ export default function ComprasTab({ currentUser }) {
   const load = async () => {
     setLoading(true);
     setQueryError(null);
-    let q = supabase.from('pcp_pedidos_compra').select('*').order('created_at', {ascending:false});
-    if (filtro) q = q.eq('status_solicitacao', filtro);
+    let q = supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', {ascending:false});
+    if (filtro) q = q.eq('status_compra', filtro);
     const { data, error } = await q;
     if (error) { setQueryError(error.message); setLoading(false); setPedidos([]); return; }
     setPedidos(data || []);
-    // inicializa inline com valores existentes
     const init: any = {};
     (data||[]).forEach((p:any) => {
       init[p.id] = {
         valor:    p.valor_compra  ? String(p.valor_compra)  : '',
-        prazo:    p.prazo_entrega || '',
+        prazo:    p.data_prevista_recebimento || '',
         salvando: false,
       };
     });
@@ -108,10 +107,9 @@ export default function ComprasTab({ currentUser }) {
     const prox: Record<string,string> = {
       'Pendente':'Em Andamento', 'Comprado':'Concluído',
     };
-    const novoStatus = prox[p.status_solicitacao];
+    const novoStatus = prox[p.status_compra];
     if (!novoStatus) return;
-    const updates: any = { status_solicitacao: novoStatus };
-    if (novoStatus === 'Concluído') updates.data_conclusao = new Date().toISOString();
+    const updates: any = { status_compra: novoStatus };
     const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', p.id);
     if (error) alert('Erro: ' + error.message);
     else { setFiltro(''); load(); }
@@ -122,11 +120,13 @@ export default function ComprasTab({ currentUser }) {
     if (!row?.valor) { alert('Informe o valor total da compra.'); return; }
     if (!row?.prazo)  { alert('Informe a previsão de recebimento.'); return; }
     setInline(prev => ({...prev, [p.id]: {...prev[p.id], salvando:true}}));
-    const { error } = await supabase.from('pcp_pedidos_compra').update({
-      status_solicitacao: 'Comprado',
-      valor_compra:       parseFloat(row.valor.replace(',','.')),
-      prazo_entrega:      row.prazo,
-    }).eq('id', p.id);
+    const updates: any = {
+      status_compra:              'Comprado',
+      data_prevista_recebimento:  row.prazo,
+    };
+    // valor_compra pode não existir ainda — tentamos salvar, ignoramos erro de coluna
+    try { updates.valor_compra = parseFloat(row.valor.replace(',','.')); } catch(_) {}
+    const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', p.id);
     if (error) { alert('Erro: ' + error.message); setInline(prev => ({...prev, [p.id]:{...prev[p.id],salvando:false}})); return; }
     setFiltro('');
     load();
@@ -137,9 +137,9 @@ export default function ComprasTab({ currentUser }) {
     setSalvandoObs(true);
     const agora = new Date().toLocaleString('pt-BR');
     const linha = `[${agora} — ${currentUser?.nome||'Sistema'}]: ${obsTexto.trim()}`;
-    const atual = modalObs.observacoes || '';
+    const atual = modalObs.observacoes_compra || '';
     const { error } = await supabase.from('pcp_pedidos_compra')
-      .update({ observacoes: atual ? `${atual}\n${linha}` : linha }).eq('id', modalObs.id);
+      .update({ observacoes_compra: atual ? `${atual}\n${linha}` : linha }).eq('id', modalObs.id);
     if (!error) { setModalObs(null); setObsTexto(''); load(); }
     else alert('Erro: ' + error.message);
     setSalvandoObs(false);
@@ -147,7 +147,7 @@ export default function ComprasTab({ currentUser }) {
 
   const total = pedidos.length;
   const kpis = ['Pendente','Em Andamento','Comprado','Concluído'].map(s => ({
-    label: s, n: pedidos.filter(p=>p.status_solicitacao===s).length, cor: COR[s],
+    label: s, n: pedidos.filter(p=>p.status_compra===s).length, cor: COR[s],
   }));
 
   return (
@@ -190,7 +190,7 @@ export default function ComprasTab({ currentUser }) {
             <tbody>
               {pedidos.map((p:any) => {
                 const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
-                const isEM  = p.status_solicitacao === 'Em Andamento';
+                const isEM  = p.status_compra === 'Em Andamento';
                 return (
                   <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9', background: isEM ? '#f0fdf4' : undefined}}>
                     <td style={td}><strong>{p.numero_pedido}</strong></td>
@@ -230,20 +230,20 @@ export default function ComprasTab({ currentUser }) {
                           style={{width:130,padding:'5px 7px',border:'2px solid #16a34a',borderRadius:5,fontSize:12,outline:'none'}}
                         />
                       ) : (
-                        fmtData(p.prazo_entrega)
+                        fmtData(p.data_prevista_recebimento)
                       )}
                     </td>
 
                     <td style={td}>
                       <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,
-                        background:COR[p.status_solicitacao]||'#9ca3af'}}>
-                        {p.status_solicitacao}
+                        background:COR[p.status_compra]||'#9ca3af'}}>
+                        {p.status_compra||'—'}
                       </span>
                     </td>
 
                     <td style={{...td,whiteSpace:'nowrap'}}>
                       {/* ▶️ Pendente → Em Andamento */}
-                      {p.status_solicitacao==='Pendente' && (
+                      {p.status_compra==='Pendente' && (
                         <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',marginRight:3}}>▶️ Iniciar</button>
                       )}
 
@@ -256,13 +256,13 @@ export default function ComprasTab({ currentUser }) {
                       )}
 
                       {/* 📦 Comprado → Concluído */}
-                      {p.status_solicitacao==='Comprado' && (
+                      {p.status_compra==='Comprado' && (
                         <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#0891b2',marginRight:3}}>📦 Recebido</button>
                       )}
 
                       {/* 💬 Observações */}
                       <button onClick={()=>{setModalObs(p);setObsTexto('');}}
-                        style={{...btn,background:p.observacoes?'#0891b2':'#64748b',marginRight:3}}>
+                        style={{...btn,background:p.observacoes_compra?'#0891b2':'#64748b',marginRight:3}}>
                         💬
                       </button>
 
@@ -298,10 +298,10 @@ export default function ComprasTab({ currentUser }) {
           <div className="modal-box" style={{maxWidth:500}}>
             <div className="modal-title">💬 Observações — {modalObs.numero_pedido}</div>
             <div style={{fontSize:10,color:'#6b7280',marginBottom:10}}>{modalObs.descricao_material}</div>
-            {modalObs.observacoes ? (
+            {modalObs.observacoes_compra ? (
               <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:10,
                 marginBottom:12,fontSize:10,whiteSpace:'pre-wrap',maxHeight:180,overflowY:'auto',lineHeight:1.8}}>
-                {modalObs.observacoes}
+                {modalObs.observacoes_compra}
               </div>
             ) : (
               <div style={{fontSize:10,color:'#9ca3af',marginBottom:12,fontStyle:'italic'}}>Sem observações anteriores.</div>
