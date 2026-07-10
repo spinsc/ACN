@@ -341,6 +341,52 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
     fetchDemandas();
   };
 
+  // ── IMPRIMIR DEMANDA ─────────────────────────────────────────────────────
+  const imprimirDemanda = (d: any) => {
+    const fmtDtBR = (v: string) => v ? new Date(v).toLocaleString('pt-BR') : '—';
+    const fmtDataBR = (v: string) => v ? new Date(v+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+    const fmtVal = (v: any) => v ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) : null;
+    const descExibida = d.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—';
+    const logs: any[] = d.logs_demanda || [];
+    const corStatus: Record<string,string> = { Concluido:'#22c55e', 'Em Andamento':'#3b82f6', Pendente:'#94a3b8' };
+    const html = `<html><head><title>Demanda — ${setor}</title><style>
+      body{font-family:Arial,sans-serif;font-size:12px;padding:30px;color:#000}
+      h2{color:#1a3a52;border-bottom:2px solid #1a3a52;padding-bottom:6px;margin-bottom:16px}
+      table.info{width:100%;border-collapse:collapse;margin-bottom:16px}
+      table.info th{background:#1a3a52;color:#fff;padding:7px 10px;text-align:left;font-size:11px;width:35%}
+      table.info td{padding:7px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;white-space:pre-wrap}
+      .badge{display:inline-block;padding:3px 10px;border-radius:4px;color:#fff;font-weight:bold;font-size:11px}
+      .log-section h3{font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:8px}
+      .log-item{border-left:3px solid #3b82f6;padding:6px 10px;margin-bottom:6px;font-size:10px;background:#f8fafc}
+      .log-meta{color:#6b7280;font-size:9px;margin-top:2px}
+      .footer{margin-top:24px;font-size:9px;color:#9ca3af;border-top:1px solid #e2e8f0;padding-top:8px}
+      @media print{button{display:none}}
+    </style></head><body>
+      <h2>📋 Demanda — ${setor}</h2>
+      <table class="info">
+        <tr><th>Data de Abertura</th><td>${fmtDtBR(d.data_abertura)}</td></tr>
+        <tr><th>OPL / Referência</th><td>${d.numero_opl||'—'}</td></tr>
+        <tr><th>Setor</th><td>${d.setor_destino||setor}</td></tr>
+        <tr><th>Responsável</th><td>${d.responsavel_nome||'—'}</td></tr>
+        <tr><th>Descrição</th><td>${descExibida}</td></tr>
+        ${d.data_inicio?`<tr><th>Data de Início</th><td>${fmtDtBR(d.data_inicio)}</td></tr>`:''}
+        <tr><th>Status</th><td><span class="badge" style="background:${corStatus[d.status]||'#94a3b8'}">${d.status}</span></td></tr>
+        ${d.status==='Concluido'?`<tr><th>Data de Conclusão</th><td>${fmtDtBR(d.data_conclusao)}</td></tr>`:''}
+        ${d.status==='Concluido'&&d.tempo_execucao_horas?`<tr><th>Tempo de Execução</th><td>${Number(d.tempo_execucao_horas).toFixed(1)}h úteis</td></tr>`:''}
+        ${d.data_prevista_recebimento?`<tr><th>Previsão de Recebimento</th><td>${fmtDataBR(d.data_prevista_recebimento)}</td></tr>`:''}
+        ${fmtVal(d.valor_compra)?`<tr><th>Valor da Compra</th><td>${fmtVal(d.valor_compra)}</td></tr>`:''}
+        ${d.observacoes_execucao?`<tr><th>Observações</th><td>${d.observacoes_execucao}</td></tr>`:''}
+      </table>
+      ${logs.length>0?`<div class="log-section"><h3>📝 Histórico</h3>${logs.map(l=>`
+        <div class="log-item">${l.texto||'—'}<div class="log-meta">${l.usuario||''} · ${l.hora?new Date(l.hora).toLocaleString('pt-BR'):''}</div></div>`).join('')}
+      </div>`:''}
+      <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')} · Sistema ACN</div>
+      <script>window.onload=()=>window.print();</script>
+    </body></html>`;
+    const w = window.open('','_blank','width=820,height=700');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   // ── CONCLUIR COMPRA (modal com valor + prazo) ────────────────────────────
   const confirmarConcluirCompra = async () => {
     if (!compraForm.prazo) { alert('Informe a previsão de recebimento.'); return; }
@@ -589,7 +635,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
                             }
                           </td>
                           <td style={{fontSize:10,color:'#0d9488'}}>{d.status==='Concluido'?fmtH(d.tempo_execucao_horas):''}</td>
-                          <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{renderAcoes(d)}</div></td>
+                          <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                            {renderAcoes(d)}
+                            <button className="acn-btn" style={{background:'#475569',fontSize:10,padding:'3px 7px'}} onClick={()=>imprimirDemanda(d)} title="Imprimir demanda">🖨️</button>
+                          </div></td>
                         </tr>
                       );
                     })}
