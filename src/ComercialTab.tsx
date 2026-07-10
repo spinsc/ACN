@@ -660,16 +660,35 @@ export default function ComercialTab({ currentUser }) {
   const oplsManutAgendada = opls.filter(o => o.status_geral === 'Manutenção Agendada');
 
   // Filtros do histórico
-  const [filtroResp,       setFiltroResp]       = useState('');
-  const [filtroHistDataIni, setFiltroHistDataIni] = useState('');
-  const [filtroHistDataFim, setFiltroHistDataFim] = useState('');
+  const [filtroResp,        setFiltroResp]        = useState('');
+  const [filtroHistDataIni, setFiltroHistDataIni]  = useState('');
+  const [filtroHistDataFim, setFiltroHistDataFim]  = useState('');
+  const [filtroTipo,        setFiltroTipo]         = useState('');
+  const [filtroBusca,       setFiltroBusca]        = useState('');
+  const [buscaInput,        setBuscaInput]         = useState('');
 
   const responsaveis = [...new Set(opls.map(o => o.responsavel_comercial || o.criado_por_nome).filter(Boolean))].sort();
+  const tiposProjeto = [...new Set(opls.map(o => o.tipo_projeto).filter(Boolean))].sort();
+
+  const temFiltroAtivo = filtroResp || filtroHistDataIni || filtroHistDataFim || filtroTipo || filtroBusca;
+
+  const limparFiltros = () => {
+    setFiltroResp(''); setFiltroHistDataIni(''); setFiltroHistDataFim('');
+    setFiltroTipo(''); setFiltroBusca(''); setBuscaInput('');
+  };
 
   const oplsFiltrados = opls.filter(o => {
     if (filtroResp && (o.responsavel_comercial || o.criado_por_nome || '') !== filtroResp) return false;
     if (filtroHistDataIni && (o.data_entrada || '') < filtroHistDataIni) return false;
     if (filtroHistDataFim && (o.data_entrada || '') > filtroHistDataFim + 'T') return false;
+    if (filtroTipo && (o.tipo_projeto || '') !== filtroTipo) return false;
+    if (filtroBusca) {
+      const termo = filtroBusca.toLowerCase().trim();
+      const match = Object.values(o).some(v =>
+        v != null && typeof v !== 'object' && String(v).toLowerCase().includes(termo)
+      );
+      if (!match) return false;
+    }
     return true;
   });
 
@@ -836,34 +855,69 @@ export default function ComercialTab({ currentUser }) {
         <div className="sec-hdr"><span>Historico de Projetos & Expedicao Comercial</span></div>
 
         {/* FILTROS */}
-        <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap',padding:'8px 12px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
-          <div>
-            <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Operador</div>
-            <select value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}
-              style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151',minWidth:150}}>
-              <option value="">Todos</option>
-              {responsaveis.map(r=><option key={r} value={r}>{r}</option>)}
-            </select>
+        <div style={{padding:'10px 12px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
+          {/* Linha 1: busca livre */}
+          <div style={{display:'flex',gap:6,marginBottom:8}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>🔍 Busca livre (pesquisa em todos os campos)</div>
+              <div style={{display:'flex',gap:4}}>
+                <input
+                  value={buscaInput}
+                  onChange={e => setBuscaInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && setFiltroBusca(buscaInput.trim())}
+                  placeholder="Digite qualquer palavra — nº OP, chassi, cliente, modelo, status..."
+                  style={{flex:1,fontSize:10,padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
+                <button onClick={() => setFiltroBusca(buscaInput.trim())}
+                  style={{fontSize:10,fontWeight:700,padding:'4px 12px',background:'#1e293b',color:'white',border:'none',borderRadius:4,cursor:'pointer'}}>
+                  Buscar
+                </button>
+                {filtroBusca && (
+                  <button onClick={() => { setFiltroBusca(''); setBuscaInput(''); }}
+                    style={{fontSize:10,padding:'4px 8px',background:'#fee2e2',color:'#dc2626',border:'1px solid #fca5a5',borderRadius:4,cursor:'pointer',fontWeight:700}}>
+                    ✕ {filtroBusca}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
-          <div>
-            <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Data entrada de</div>
-            <input type="date" value={filtroHistDataIni} onChange={e=>setFiltroHistDataIni(e.target.value)}
-              style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
+          {/* Linha 2: filtros por campo */}
+          <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+            <div>
+              <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Tipo de Projeto</div>
+              <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}
+                style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151',minWidth:180}}>
+                <option value="">Todos</option>
+                {tiposProjeto.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Operador</div>
+              <select value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}
+                style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151',minWidth:150}}>
+                <option value="">Todos</option>
+                {responsaveis.map(r=><option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>Data entrada de</div>
+              <input type="date" value={filtroHistDataIni} onChange={e=>setFiltroHistDataIni(e.target.value)}
+                style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
+            </div>
+            <div>
+              <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>até</div>
+              <input type="date" value={filtroHistDataFim} onChange={e=>setFiltroHistDataFim(e.target.value)}
+                style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
+            </div>
+            {temFiltroAtivo && (
+              <button onClick={limparFiltros}
+                style={{fontSize:10,padding:'4px 10px',background:'#f1f5f9',color:'#64748b',border:'1px solid #d1d5db',borderRadius:4,cursor:'pointer'}}>
+                ✕ Limpar filtros
+              </button>
+            )}
+            <span style={{marginLeft:'auto',fontSize:9,color:'#94a3b8',paddingBottom:2}}>
+              {oplsFiltrados.length} de {opls.length} registro(s)
+            </span>
           </div>
-          <div>
-            <div style={{fontSize:8,fontWeight:700,color:'#475569',textTransform:'uppercase',marginBottom:2}}>até</div>
-            <input type="date" value={filtroHistDataFim} onChange={e=>setFiltroHistDataFim(e.target.value)}
-              style={{fontSize:10,padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,background:'white',color:'#374151'}} />
-          </div>
-          {(filtroResp||filtroHistDataIni||filtroHistDataFim) && (
-            <button onClick={()=>{setFiltroResp('');setFiltroHistDataIni('');setFiltroHistDataFim('');}}
-              style={{fontSize:10,padding:'4px 8px',background:'#f1f5f9',color:'#64748b',border:'1px solid #d1d5db',borderRadius:4,cursor:'pointer',alignSelf:'flex-end'}}>
-              ✕ Limpar
-            </button>
-          )}
-          <span style={{marginLeft:'auto',fontSize:9,color:'#94a3b8',alignSelf:'flex-end',paddingBottom:2}}>
-            {oplsFiltrados.length} de {opls.length} registro(s)
-          </span>
         </div>
 
         <div className="sec-body" style={{overflowX:'auto'}}>
