@@ -239,6 +239,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
   const [modalFinalizarOrc, setModalFinalizarOrc]     = useState(null);
   const [finalizarOrcForm, setFinalizarOrcForm] = useState({ observacoes:'', valor:'', condicoes:'' });
 
+  // Modal Concluir Compra (setor Compras)
+  const [modalConcluirCompra, setModalConcluirCompra] = useState(null);
+  const [compraForm, setCompraForm] = useState({ valor:'', prazo:'' });
+  const canVerValorCompra = ['Admin','Gerente','Compras'].includes(currentUser?.perfil);
+
   useEffect(() => {
     fetchDemandas();
     const t = setInterval(fetchDemandas, 30000);
@@ -333,6 +338,29 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       }).eq('id',d.sac_os_id);
     }
 
+    fetchDemandas();
+  };
+
+  // ── CONCLUIR COMPRA (modal com valor + prazo) ────────────────────────────
+  const confirmarConcluirCompra = async () => {
+    if (!compraForm.prazo) { alert('Informe a previsão de recebimento.'); return; }
+    const d = modalConcluirCompra;
+    const agora = new Date().toISOString();
+    const inicio = d.data_inicio ? new Date(d.data_inicio) : new Date(d.data_abertura||agora);
+    const tempo  = Math.max(0, horasUteis(inicio, new Date()) - (d.tempo_pausado_horas||0));
+    const updates: any = {
+      status: 'Concluido',
+      data_conclusao: agora,
+      tempo_execucao_horas: tempo,
+      data_prevista_recebimento: compraForm.prazo,
+      logs_demanda: [...(d.logs_demanda||[]), {
+        texto: `Compra concluída. Prev. recebimento: ${new Date(compraForm.prazo+'T00:00:00').toLocaleDateString('pt-BR')}${compraForm.valor ? `. Valor: R$ ${compraForm.valor}` : ''}. Tempo útil: ${tempo.toFixed(1)}h`,
+        usuario: currentUser?.nome, hora: agora,
+      }],
+    };
+    if (compraForm.valor) updates.valor_compra = parseFloat(compraForm.valor.replace(',','.'));
+    await supabase.from('demandas_setoriais').update(updates).eq('id', d.id);
+    setModalConcluirCompra(null); setCompraForm({ valor:'', prazo:'' });
     fetchDemandas();
   };
 
@@ -473,7 +501,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
     if (d.status === 'Em Andamento')
       return [
         <button key="obs"  className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>OBS</button>,
-        <button key="conc" className="acn-btn" style={{background:'#22c55e'}} onClick={()=>concluir(d)}>CONCLUIR</button>,
+        <button key="conc" className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{
+          if (setor === 'Compras') { setModalConcluirCompra(d); setCompraForm({ valor: d.valor_compra ? String(d.valor_compra) : '', prazo: d.data_prevista_recebimento || '' }); }
+          else concluir(d);
+        }}>CONCLUIR</button>,
         d.pausado
           ? <button key="ret" className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>retomar(d)}>▶ RETOMAR</button>
           : <button key="pau" className="acn-btn" style={{background:'#64748b',fontSize:10}} onClick={()=>pausar(d)}>⏸ PAUSAR</button>,
@@ -658,6 +689,42 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             )}
             <div style={{marginTop:16,textAlign:'right'}}>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVer(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL CONCLUIR COMPRA ════════ */}
+      {modalConcluirCompra && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setModalConcluirCompra(null);}}}>
+          <div className="modal-box" style={{maxWidth:440}}>
+            <div className="modal-title">🛒 Concluir Compra</div>
+            <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>
+              {modalConcluirCompra.descricao?.substring(0,80)}{modalConcluirCompra.descricao?.length>80?'...':''}
+            </div>
+
+            {canVerValorCompra && (
+              <div style={{marginBottom:12}}>
+                <label className="acn-label">💰 Valor total da compra (R$)</label>
+                <input className="acn-input" type="number" step="0.01" min="0"
+                  value={compraForm.valor}
+                  onChange={e=>setCompraForm(f=>({...f,valor:e.target.value}))}
+                  placeholder="Ex: 1500.00"
+                  style={{width:'100%'}} />
+              </div>
+            )}
+
+            <div style={{marginBottom:16}}>
+              <label className="acn-label">📅 Previsão de recebimento *</label>
+              <input className="acn-input" type="date"
+                value={compraForm.prazo}
+                onChange={e=>setCompraForm(f=>({...f,prazo:e.target.value}))}
+                style={{width:'100%'}} />
+            </div>
+
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirCompra(null)}>Cancelar</button>
+              <button className="acn-btn" style={{background:'#22c55e'}} onClick={confirmarConcluirCompra}>✅ Confirmar Conclusão</button>
             </div>
           </div>
         </div>
