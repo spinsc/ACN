@@ -181,7 +181,6 @@ function CalendarioManutencao({ currentUser }) {
   const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const DIAS  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
-  // Combina agendamentos OPL + OS SAC em lista unificada para o calendário
   const allEntries = [
     ...agendamentos.map(ag => ({ ...ag, _tipo: 'opl', _data: ag.data_agendamento, _periodo: ag.periodo, _label: ag.numero_opl })),
     ...sacOrdens.map(os => ({ id: os.id, _tipo: 'sac', _data: os.data_provisionamento, _periodo: os.periodo_provisionamento||'Manhã', _label: os.numero_os, numero_opl: os.numero_os, chassi: os.veiculo_placa||'—', cliente_nome: os.cliente_nome, modelo: os.veiculo_modelo, status: os.status })),
@@ -297,7 +296,7 @@ function CalendarioManutencao({ currentUser }) {
                       const bgM = isSac?'#d1fae5':'#dbeafe'; const bgT = isSac?'#fef3c7':'#fed7aa';
                       const clM = isSac?'#065f46':'#1e40af'; const clT = isSac?'#92400e':'#9a3412';
                       return (
-                        <div key={ag.id+(ag._tipo||'')} title={`${ag._label} · ${ag.chassi} · ${ag.cliente_nome}${isSac?' [SAC '+ag.status+']':''}`}
+                        <div key={ag.id+(ag._tipo||'')} title={ag._label+' · '+ag.chassi+' · '+ag.cliente_nome+(isSac?' [SAC '+ag.status+']':'')}
                           style={{background:ag._periodo==='Manhã'?bgM:bgT,borderRadius:3,padding:'1px 4px',fontSize:8,fontWeight:600,
                             color:ag._periodo==='Manhã'?clM:clT,marginBottom:1,
                             overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:isSac?'default':'pointer'}}
@@ -554,7 +553,7 @@ function PainelSacVeicular({ currentUser }) {
     setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
   };
 
-  // Produção salva itens conferidos durante execução (sem concluir OS)
+  // Produção salva itens conferidos durante execução (sem concluir)
   const salvarItensExecucao = async () => {
     const os = modalItensExecucao;
     const agora = new Date().toISOString();
@@ -729,7 +728,7 @@ function PainelSacVeicular({ currentUser }) {
               </div>
             )}
             <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11}}>
-              ✅ Próximo status: <strong>{modalConfirmarChegada.tipo_avaliacao === 'Remota' ? 'Em Manutenção' : 'Verificação e Orçamento'}</strong>
+              ✅ Próximo status: <strong>{modalConfirmarChegada.tipo_avaliacao === 'Remota' ? 'Em Execução' : 'Verificação e Orçamento'}</strong>
             </div>
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarChegada}>🚗 Confirmar Chegada</button>
@@ -788,7 +787,7 @@ function PainelSacVeicular({ currentUser }) {
             <div className="modal-title">📋 Conferência de Itens — {modalItensExecucao.numero_os}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:6}}>Cliente: {modalItensExecucao.cliente_nome}</div>
             <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-              ℹ️ Revise os itens do orçamento: remova os não executados (×) e adicione itens extras. O SAC visualizará as alterações.
+              ℹ️ Revise os itens do orçamento: remova os não executados (×) e adicione extras. O SAC visualizará as alterações.
             </div>
             <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Itens Executados</div>
             <ItemTable itens={itensExecucao} setItens={setItensExecucao} />
@@ -1005,4 +1004,432 @@ function VoucherServicos({ currentUser }) {
       <table class="info-table"><tbody>
         <tr><td>Tipo de Serviço</td><td>${v.tipo_servico || '—'}</td></tr>
         <tr><td>Nº PV / OP</td><td>${v.numero_pvop || '—'}</td></tr>
-        <tr><td>Data do Servi
+        <tr><td>Data do Serviço</td><td>${fmtDt(v.data_servico)}</td></tr>
+        <tr><td>Prestador</td><td>${v.prestador || '—'}</td></tr>
+        <tr><td>Autorizado por</td><td>${v.autorizado_por || '—'}</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="section">
+      <div class="sec-title">Veículos / Itens do Serviço</div>
+      <table class="itens-table">
+        <thead><tr>
+          <th style="width:36px;text-align:center">#</th>
+          <th>Placa / Chassi</th>
+          <th>Modelo</th>
+          <th style="text-align:right">Valor do Serviço</th>
+        </tr></thead>
+        <tbody>${itensRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af;font-size:11px">Nenhum item</td></tr>'}</tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="3" style="text-align:right">VALOR TOTAL:</td>
+            <td style="text-align:right">${fmtVal(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div style="border:1px dashed #94a3b8;border-radius:6px;padding:12px;text-align:center;margin-bottom:14px;font-size:10px;color:#64748b">
+      Este voucher é válido para o(s) serviço(s) especificado(s) acima e deve ser apresentado ao prestador no ato da realização.
+    </div>
+
+    <div class="footer">
+      <div class="footer-text">
+        <strong style="color:#0f766e">ACN Sinal Verde</strong><br/>
+        📍 Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028<br/>
+        📞 (48) 3240-0336 &nbsp;|&nbsp; ✉️ acn@acn.com.br<br/>
+        📸 @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br<br/>
+        <span style="color:#94a3b8">Emitido em ${new Date().toLocaleString('pt-BR')} por ${v.criado_por || '—'}</span>
+      </div>
+      <img src="${window.location.origin}${base}motorola.png" class="footer-logo" alt="Motorola" onerror="this.style.display='none'" />
+    </div>
+    <script>window.onload=()=>window.print();</script>
+    </body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <div>
+      {/* FORMULÁRIO */}
+      <div className="sec-card" style={{marginBottom:12}}>
+        <div className="sec-hdr" style={{background:'#7c3aed'}}>
+          <span style={{color:'white'}}>🎟️ Novo Voucher de Serviço</span>
+        </div>
+        <div className="sec-body">
+          {/* Campos gerais */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:10,marginBottom:14}}>
+            <div>
+              <label className="acn-label">Tipo de Serviço *</label>
+              <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                <select className="acn-input" style={{flex:1}} value={form.tipo_servico}
+                  onChange={e=>setField('tipo_servico',e.target.value)}>
+                  <option value="">— Selecione —</option>
+                  {tiposServico.map(t => (
+                    <option key={t.id} value={t.nome}>{t.nome}</option>
+                  ))}
+                </select>
+                <button title="Gerenciar tipos de serviço"
+                  style={{background:'#7c3aed',border:'none',color:'white',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:13,flexShrink:0,fontWeight:700}}
+                  onClick={()=>setAddingTipo(a=>!a)}>+</button>
+              </div>
+              {/* Mini-painel para cadastrar novo tipo */}
+              {addingTipo && (
+                <div style={{marginTop:6,background:'#f5f3ff',border:'1px solid #c4b5fd',borderRadius:6,padding:'10px 12px'}}>
+                  <div style={{fontWeight:700,fontSize:9,color:'#6d28d9',marginBottom:6,textTransform:'uppercase'}}>
+                    Cadastro de Tipos de Serviço
+                  </div>
+                  {/* Lista dos existentes */}
+                  {tiposServico.length > 0 && (
+                    <div style={{marginBottom:8,display:'flex',flexWrap:'wrap',gap:4}}>
+                      {tiposServico.map(t => (
+                        <span key={t.id} style={{background:'white',border:'1px solid #c4b5fd',borderRadius:4,padding:'2px 7px',fontSize:10,display:'inline-flex',alignItems:'center',gap:4}}>
+                          {t.nome}
+                          <button onClick={()=>excluirTipo(t.id)}
+                            style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:12,padding:0,lineHeight:1}}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{display:'flex',gap:4}}>
+                    <input className="acn-input" style={{flex:1,fontSize:10}} value={novoTipo}
+                      onChange={e=>setNovoTipo(e.target.value)}
+                      onKeyDown={e=>e.key==='Enter'&&salvarTipo()}
+                      placeholder="Nome do novo tipo..." autoFocus />
+                    <button className="acn-btn" style={{background:'#7c3aed',flexShrink:0}} onClick={salvarTipo} disabled={salvandoTipo||!novoTipo.trim()}>
+                      {salvandoTipo?'...':'Salvar'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="acn-label">Nº PV / OP *</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.numero_pvop}
+                onChange={e=>setField('numero_pvop',e.target.value)} placeholder="Ex: PV-2024-001" />
+            </div>
+            <div>
+              <label className="acn-label">Data do Serviço</label>
+              <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_servico}
+                onChange={e=>setField('data_servico',e.target.value)} />
+            </div>
+            <div>
+              <label className="acn-label">Prestador do Serviço</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.prestador}
+                onChange={e=>setField('prestador',e.target.value)} placeholder="Nome do prestador..." />
+            </div>
+            <div>
+              <label className="acn-label">Autorizado por</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.autorizado_por}
+                onChange={e=>setField('autorizado_por',e.target.value)} placeholder="Nome do autorizador..." />
+            </div>
+          </div>
+
+          {/* Tabela de itens */}
+          <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'.4px',marginBottom:6}}>
+            Veículos / Itens do Serviço
+          </div>
+          <VoucherItemTable itens={form.itens} setItens={setItens} />
+
+          <div style={{marginTop:4,display:'flex',gap:8}}>
+            <button className="acn-btn" style={{background:'#7c3aed'}} onClick={salvar} disabled={salvando}>
+              {salvando ? 'Salvando...' : '💾 Salvar Voucher'}
+            </button>
+            <button className="acn-btn" style={{background:'#64748b'}}
+              onClick={()=>setForm({ ...VOUCHER_VAZIO, itens:[{ ...ITEM_VOUCHER_VAZIO }] })}>
+              Limpar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* LISTA DE VOUCHERS */}
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#7c3aed'}}>
+          <span style={{color:'white'}}>🗂 Vouchers Emitidos ({vouchers.length})</span>
+          <button className="acn-btn" style={{background:'rgba(255,255,255,.2)',fontSize:10}} onClick={load}>↻</button>
+        </div>
+        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+          {loading ? <div className="acn-empty">Carregando...</div> : vouchers.length === 0 ? (
+            <div className="acn-empty">Nenhum voucher emitido ainda.</div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th>Nº PV/OP</th><th>Tipo</th><th>Veículos</th>
+                <th>Valor Total</th><th>Data</th><th>Prestador</th><th>Autorizado por</th><th>Ações</th>
+              </tr></thead>
+              <tbody>
+                {vouchers.map(v => {
+                  const itens = Array.isArray(v.itens_voucher) ? v.itens_voucher : [];
+                  const total = v.valor_total != null ? v.valor_total
+                    : (v.valor_voucher != null ? v.valor_voucher
+                    : itens.reduce((s,i) => s+(Number(i.valor)||0), 0));
+                  return (
+                    <tr key={v.id}>
+                      <td><strong style={{color:'#7c3aed'}}>{v.numero_pvop}</strong></td>
+                      <td>{v.tipo_servico}</td>
+                      <td style={{fontSize:9,color:'#64748b'}}>
+                        {itens.length > 0
+                          ? itens.map(i => i.placa_chassi || i.modelo || '—').filter(Boolean).join(', ')
+                          : (v.chassi_placa || v.modelo_carro || '—')}
+                      </td>
+                      <td style={{fontWeight:700,color:'#0f766e'}}>
+                        {total != null ? `R$ ${Number(total).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
+                      </td>
+                      <td>{v.data_servico ? new Date(v.data_servico+'T12:00').toLocaleDateString('pt-BR') : '—'}</td>
+                      <td>{v.prestador || '—'}</td>
+                      <td>{v.autorizado_por || '—'}</td>
+                      <td>
+                        <div style={{display:'flex',gap:4}}>
+                          <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>imprimirVoucher(v)}>🖨 Imprimir</button>
+                          <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>excluir(v.id)}>🗑</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ProducaoTab({ currentUser }) {
+  const [opls, setOpls] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [modalDevolver, setModalDevolver] = useState(null);
+  const [obsDevolver, setObsDevolver] = useState('');
+  const [modalIniciar, setModalIniciar] = useState(null);
+  const [respNome, setRespNome] = useState('');
+
+  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30000); return () => clearInterval(t); }, []);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('oples').select('*')
+      .in('status_geral', ['Aguardando Inicio Producao', 'Em Producao', 'Retrabalho', 'Em Retrabalho'])
+      .order('data_entrada', { ascending: false });
+    setOpls(data || []);
+    setLoading(false);
+  };
+
+  const iniciarProducao = async () => {
+    const opl = modalIniciar;
+    const agora = new Date().toISOString();
+    const resp = respNome || currentUser?.nome;
+    await supabase.from('oples').update({
+      status_geral: 'Em Producao',
+      data_inicio_producao: agora,
+      responsavel_producao: resp,
+    }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `Inicio da producao. Responsavel: ${resp}`,
+      status_anterior: opl.status_geral, status_novo: 'Em Producao',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    setModalIniciar(null); setRespNome(''); fetchAll();
+  };
+
+  const liberarChecklist = async (opl) => {
+    const agora = new Date().toISOString();
+    const inicio = opl.data_inicio_producao ? new Date(opl.data_inicio_producao) : null;
+    const tempo = inicio ? (new Date() - inicio) / 3600000 : null;
+    await supabase.from('oples').update({
+      status_geral: 'Aguardando CQ',
+      data_conclusao_producao: agora,
+      data_entrada_cq: agora,
+      tempo_producao_horas: tempo,
+    }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `Producao concluida. Liberado para CQ. Tempo: ${tempo ? tempo.toFixed(1) + 'h' : '—'}`,
+      status_anterior: opl.status_geral, status_novo: 'Aguardando CQ',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    notificarEvento('producao_finaliza', msg.producaoFinalizada(opl.opl, currentUser?.nome));
+    fetchAll();
+  };
+
+  const iniciarRetrabalho = async (opl) => {
+    const agora = new Date().toISOString();
+    await supabase.from('oples').update({
+      status_geral: 'Em Retrabalho',
+      data_inicio_retrabalho: agora,
+    }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `Retrabalho iniciado. Motivo CQ: ${opl.obs_reprovacao_cq || '—'}`,
+      status_anterior: 'Retrabalho', status_novo: 'Em Retrabalho',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    fetchAll();
+  };
+
+  const concluirRetrabalho = async (opl) => {
+    const agora = new Date().toISOString();
+    const inicio = opl.data_inicio_retrabalho ? new Date(opl.data_inicio_retrabalho) : null;
+    const tempo = inicio ? (new Date() - inicio) / 3600000 : null;
+    await supabase.from('oples').update({
+      status_geral: 'Aguardando CQ',
+      tempo_retrabalho_horas: tempo,
+      obs_reprovacao_cq: null,
+    }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `Retrabalho concluido. Liberado novamente para CQ. Tempo retrabalho: ${tempo ? tempo.toFixed(1) + 'h' : '—'}`,
+      status_anterior: 'Em Retrabalho', status_novo: 'Aguardando CQ',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    fetchAll();
+  };
+
+  const devolverPCP = async () => {
+    const opl = modalDevolver;
+    const agora = new Date().toISOString();
+    await supabase.from('oples').update({
+      status_geral: 'Devolvida PCP',
+      obs_devolucao_producao: obsDevolver,
+    }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `Devolvida para PCP. Motivo: ${obsDevolver}`,
+      status_anterior: opl.status_geral, status_novo: 'Devolvida PCP',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    setModalDevolver(null); setObsDevolver(''); fetchAll();
+  };
+
+  const handleAction = (tipo, opl) => {
+    if (tipo === 'iniciar')            { setModalIniciar(opl); setRespNome(currentUser?.nome || ''); }
+    if (tipo === 'checklist')          liberarChecklist(opl);
+    if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
+    if (tipo === 'iniciar_retrabalho') iniciarRetrabalho(opl);
+    if (tipo === 'concluir_retrabalho') concluirRetrabalho(opl);
+  };
+
+  const [abaProducao, setAbaProducao] = useState('producao');
+  const emRetrabalho = opls.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho');
+
+  return (
+    <div>
+      {/* TABS */}
+      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='producao'?'#1e293b':'white',color:abaProducao==='producao'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('producao')}>⚙️ Produção</button>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='veicular'?'#dc2626':'white',color:abaProducao==='veicular'?'white':'#dc2626',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('veicular')}>🔧 SAC Veicular</button>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='agenda'?'#f97316':'white',color:abaProducao==='agenda'?'white':'#f97316',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('agenda')}>📅 Agendamentos</button>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='voucher'?'#7c3aed':'white',color:abaProducao==='voucher'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('voucher')}>🎟️ Voucher</button>
+      </div>
+
+      {abaProducao === 'veicular' && <PainelSacVeicular currentUser={currentUser} />}
+      {abaProducao === 'agenda' && <CalendarioManutencao currentUser={currentUser} />}
+      {abaProducao === 'voucher' && <VoucherServicos currentUser={currentUser} />}
+      {abaProducao === 'producao' && <div>
+      {/* ALERTA RETRABALHO */}
+      {emRetrabalho.length > 0 && (
+        <div style={{background:'#fef2f2',border:'2px solid #ef4444',borderRadius:6,padding:'10px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:12}}>
+          <span style={{fontSize:22}}>🔁</span>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:11,color:'#dc2626'}}>
+              {emRetrabalho.length} OP(s) reprovada(s) pelo CQ — aguardando ou em retrabalho
+            </div>
+            <div style={{fontSize:10,color:'#991b1b',marginTop:2}}>
+              Verifique o motivo da reprovacao nas linhas destacadas em vermelho abaixo e inicie o retrabalho.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALERTA MKT */}
+      {opls.filter(o => o.liberado_divulgacao && (o.status_geral === 'Em Producao')).length > 0 && (
+        <div style={{background:'#faf5ff',border:'2px solid #7c3aed',borderRadius:6,padding:'10px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:12}}>
+          <span style={{fontSize:20}}>📸</span>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:11,color:'#7c3aed'}}>
+              {opls.filter(o=>o.liberado_divulgacao && o.status_geral==='Em Producao').length} OP(s) em producao COM AUTORIZACAO MKT — momento ideal para registro!
+            </div>
+            <div style={{fontSize:10,color:'#6d28d9',marginTop:2}}>Avise o Marketing para agendar foto/video.</div>
+          </div>
+        </div>
+      )}
+
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>OPLs em Producao / Retrabalho ({opls.length})</span>
+          {emRetrabalho.length > 0 && (
+            <span style={{fontSize:10,background:'#ef4444',color:'white',padding:'2px 8px',borderRadius:10,fontWeight:700}}>
+              🔁 {emRetrabalho.length} em retrabalho
+            </span>
+          )}
+        </div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
+            <div className="acn-empty">Nenhuma OPL em producao no momento.</div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
+              </tr></thead>
+              <tbody>
+                {opls.map(o => <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} />)}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <DemandasSetorWidget setor="Producao" cor="#7c3aed" currentUser={currentUser} />
+      <OplMovimentadas setor="Producao" />
+      <DemandaFooter setor="Producao" />
+
+      {/* MODAL INICIAR */}
+      {modalIniciar && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-title">Iniciar Producao — OPL {modalIniciar.opl}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              Tipo: {modalIniciar.tipo_projeto} | Chassi: {modalIniciar.chassi || '—'}
+            </div>
+            {modalIniciar.liberado_divulgacao && (
+              <div style={{background:'#faf5ff',border:'1px solid #c4b5fd',borderRadius:4,padding:'7px 10px',marginBottom:10,fontSize:10,color:'#5b21b6'}}>
+                📸 <strong>Esta OP esta liberada para divulgacao pelo Marketing.</strong><br/>
+                Avise o time de MKT para agendar os registros de foto/video.
+              </div>
+            )}
+            <label className="acn-label">Responsavel pela Producao</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:12}}
+              value={respNome} onChange={e=>setRespNome(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&iniciarProducao()} autoFocus />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={iniciarProducao}>INICIAR PRODUCAO</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DEVOLVER PCP */}
+      {modalDevolver && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-title">Devolver para PCP — OPL {modalDevolver.opl}</div>
+            <label className="acn-label">Motivo / Problema *</label>
+            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
+              value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverPCP}>CONFIRMAR</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>}
+    </div>
+  );
+}
