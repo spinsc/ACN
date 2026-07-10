@@ -52,7 +52,7 @@ const SIDEBAR_GROUPS = [
     items: [
       { id: 'comercial',  label: 'Comercial' },
       { id: 'engenharia', label: 'Engenharia' },
-      { id: 'ajustes',    label: 'Ajustes de Projeto' },
+      { id: 'ajustes',    label: 'Demandas Gerais' },
       { id: 'pcp',        label: 'PCP' },
     ],
   },

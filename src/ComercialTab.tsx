@@ -553,7 +553,9 @@ export default function ComercialTab({ currentUser }) {
 
   const salvarOPL = async () => {
     if (!formData.opl || !formData.modelo) { alert('Preencha numero da OP e Modelo!'); return; }
-    const payload = { ...formData, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: editId ? formData.status_geral : 'Em Espera Engenharia' };
+    const isManutencao = (formData.tipo_projeto||'').toLowerCase().includes('manutencao') || (formData.tipo_projeto||'').toLowerCase().includes('manutenção');
+    const statusInicial = editId ? formData.status_geral : (isManutencao ? 'Aguardando Agendamento Manutenção' : 'Em Espera Engenharia');
+    const payload = { ...formData, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: statusInicial };
     if (editId) {
       // Buscar dados anteriores para log
       const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
@@ -631,8 +633,21 @@ export default function ComercialTab({ currentUser }) {
   const diasAtraso = (prev) => { if (!prev) return null; const d = Math.ceil((new Date() - new Date(prev)) / 86400000); return d > 0 ? d : null; };
   const statusCor = (s) => ({ 'Em Espera PCP':'#f59e0b','Em Producao':'#3b82f6','Faturado':'#22c55e','Aguarda Emissao NF':'#ef4444' })[s] || '#94a3b8';
 
-  const oplsFaturar = opls.filter(o => o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial');
-  const oplsEntrega = opls.filter(o => o.status_geral === 'Faturado e Disponivel para Entrega');
+  const oplsFaturar  = opls.filter(o => o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial');
+  const oplsEntrega  = opls.filter(o => o.status_geral === 'Faturado e Disponivel para Entrega');
+  const oplsManutAgendada = opls.filter(o => o.status_geral === 'Manutenção Agendada');
+
+  const liberarManutencaoEngenharia = async (opl) => {
+    const agora = new Date().toISOString();
+    await supabase.from('oples').update({ status_geral: 'Em Espera Engenharia' }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial',
+      evento: `Manutenção agendada confirmada. Liberada para Engenharia por ${currentUser?.nome}.`,
+      status_anterior: 'Manutenção Agendada', status_novo: 'Em Espera Engenharia',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    fetchOpls();
+  };
 
   return (
     <div>
@@ -687,6 +702,38 @@ export default function ComercialTab({ currentUser }) {
       </div>
 
       {/* AGUARDANDO LIBERACAO */}
+      {/* MANUTENÇÕES AGENDADAS — aguardando liberação para Engenharia */}
+      {oplsManutAgendada.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#fff7ed',borderBottom:'2px solid #f97316'}}>
+            <span style={{color:'#c2410c'}}>🔧 Manutenções Agendadas — Aguardando Liberação para Engenharia ({oplsManutAgendada.length})</span>
+          </div>
+          <div className="sec-body" style={{overflowX:'auto'}}>
+            <table><thead><tr>
+              <th>OPL</th><th>Chassi</th><th>Cliente</th><th>Modelo</th>
+              <th>Data Agendamento</th><th>Período</th><th>Ação</th>
+            </tr></thead><tbody>
+              {oplsManutAgendada.map(o=>(
+                <tr key={o.id}>
+                  <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                  <td>{o.chassi||'—'}</td>
+                  <td>{o.cliente_nome||'—'}</td>
+                  <td>{o.modelo||'—'}</td>
+                  <td>{o.data_agendamento_manutencao ? new Date(o.data_agendamento_manutencao+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                  <td>{o.periodo_agendamento||'—'}</td>
+                  <td>
+                    <button className="acn-btn" style={{background:'#f97316',fontSize:10}}
+                      onClick={()=>liberarManutencaoEngenharia(o)}>
+                      ▶ LIBERAR PARA ENGENHARIA
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody></table>
+          </div>
+        </div>
+      )}
+
       {oplsFaturar.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr" style={{background:'#ecfdf5',borderBottom:'2px solid #22c55e'}}><span style={{color:'#166534'}}>Aprovado CQ — Aguardando Liberacao Comercial ({oplsFaturar.length})</span></div>

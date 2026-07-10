@@ -376,30 +376,499 @@ function RelOplsGeral() {
   );
 }
 
+// ── Relatório: OPLs Finalizadas ──
+function RelOplsFinalizadas() {
+  const [ini, setIni] = useState(iniPeriodo);
+  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [ops, setOps] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const STATUS_FINAL = ['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'];
+
+  const buscar = async () => {
+    setCarregando(true);
+    const { data } = await supabase.from('oples')
+      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,data_entrega,data_fim_producao,cliente_nome,responsavel_producao')
+      .in('status_geral', STATUS_FINAL)
+      .gte('data_entrada', ini+'T00:00:00')
+      .lte('data_entrada', fim+'T23:59:59')
+      .order('data_entrega', { ascending: false });
+    setOps(data || []);
+    setCarregando(false);
+  };
+  useEffect(()=>{ buscar(); },[]);
+
+  const faturadas  = ops.filter(o=>o.status_geral==='Faturado').length;
+  const dispEntrega = ops.filter(o=>o.status_geral==='Faturado e Disponivel para Entrega').length;
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">OPLs Finalizadas por Período</div>
+        <div className="sec-body">
+          <div className="form-row" style={{alignItems:'flex-end'}}>
+            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
+            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
+            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
+            <button className="acn-btn" style={{background:'#475569'}} onClick={()=>window.print()}>🖨️ Imprimir</button>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+            {[{l:'Total Finalizadas',v:ops.length,c:'#374151'},{l:'Faturadas/Entregues',v:faturadas,c:'#22c55e'},{l:'Disp. Entrega',v:dispEntrega,c:'#3b82f6'}]
+              .map(k=><div key={k.l} style={{flex:'1 1 120px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
+                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
+                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
+              </div>)}
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OPL finalizada no período.</div>:(
+            <table><thead><tr>
+              <th>OPL</th><th>Chassi</th><th>Cliente</th><th>Tipo</th><th>Status</th>
+              <th>Entrada</th><th>Prev. Entrega</th><th>Data Entrega</th><th>Responsável Prod.</th>
+            </tr></thead><tbody>
+              {ops.map(o=>(
+                <tr key={o.id}>
+                  <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                  <td>{o.chassi||'—'}</td>
+                  <td>{o.cliente_nome||'—'}</td>
+                  <td style={{fontSize:9}}>{o.tipo_projeto}</td>
+                  <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
+                  <td>{fmtData(o.data_entrada)}</td>
+                  <td>{fmtData(o.data_prevista_entrega)}</td>
+                  <td>{fmtData(o.data_entrega)||'—'}</td>
+                  <td>{o.responsavel_producao||'—'}</td>
+                </tr>
+              ))}
+            </tbody></table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Relatório: OPLs por Setor (onde estão agora) ──
+function RelOplsPorSetor() {
+  const [ops, setOps] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+  const [setor, setSetor] = useState('Todos');
+
+  const SETORES_STATUS = {
+    'Engenharia':     ['Em Espera Engenharia','Em Analise Engenharia','Devolvida para Engenharia'],
+    'PCP/Almox':      ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP'],
+    'Produção':       ['Aguardando Inicio Producao','Em Producao','Retrabalho'],
+    'Qualidade':      ['Aguardando CQ'],
+    'Comercial/Fiscal':['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Devolvida Comercial'],
+    'Manutenção':     ['Aguardando Agendamento Manutenção','Manutenção Agendada'],
+  };
+
+  const buscar = async () => {
+    setCarregando(true);
+    const { data } = await supabase.from('oples')
+      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome')
+      .not('status_geral','in','("Faturado","Cancelado")')
+      .order('data_entrada', { ascending: false });
+    setOps(data || []);
+    setCarregando(false);
+  };
+  useEffect(()=>{ buscar(); },[]);
+
+  const agora = new Date();
+  const lista = setor==='Todos' ? ops : ops.filter(o=>(SETORES_STATUS[setor]||[]).includes(o.status_geral));
+  const atrasadas = lista.filter(o=>o.data_prevista_entrega&&new Date(o.data_prevista_entrega)<agora).length;
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">OPLs em Andamento — Distribuição por Setor</div>
+        <div className="sec-body">
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+            {['Todos',...Object.keys(SETORES_STATUS)].map(s=>(
+              <button key={s} className="acn-btn" style={{background:setor===s?'#1e293b':'#94a3b8',fontSize:9}} onClick={()=>setSetor(s)}>{s}</button>
+            ))}
+            <button className="acn-btn" style={{background:'#475569',marginLeft:'auto'}} onClick={()=>window.print()}>🖨️</button>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {Object.entries(SETORES_STATUS).map(([s,statuses])=>{
+              const n = ops.filter(o=>statuses.includes(o.status_geral)).length;
+              return <div key={s} style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:'3px solid #3b82f6',borderRadius:4,padding:'6px 10px',cursor:'pointer',opacity:n>0?1:.4}}
+                onClick={()=>setSetor(s)}>
+                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
+                <div style={{fontSize:20,fontWeight:700,color:'#3b82f6'}}>{carregando?'...':n}</div>
+              </div>;
+            })}
+            <div style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:'3px solid #dc2626',borderRadius:4,padding:'6px 10px'}}>
+              <div style={{fontSize:8,color:'var(--text-muted)'}}>Atrasadas</div>
+              <div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{atrasadas}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
+        <div className="sec-hdr">{lista.length} OPLs — {setor}</div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando?<div className="acn-empty">Carregando...</div>:lista.length===0?<div className="acn-empty">Nenhuma OPL.</div>:(
+            <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
+            <tbody>{lista.map(o=>{
+              const atras = o.data_prevista_entrega && new Date(o.data_prevista_entrega)<agora;
+              return <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
+                <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                <td>{o.chassi||'—'}</td>
+                <td>{o.cliente_nome||'—'}</td>
+                <td style={{fontSize:9}}>{o.tipo_projeto}</td>
+                <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
+                <td>{fmtData(o.data_entrada)}</td>
+                <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(o.data_prevista_entrega)}</td>
+              </tr>;
+            })}</tbody></table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Relatório: OPLs Atrasadas por Setor ──
+function RelOplsAtrasadas() {
+  const [ops, setOps] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const STATUS_FINAL = ['Faturado','Cancelado'];
+
+  const buscar = async () => {
+    setCarregando(true);
+    const agora = new Date().toISOString();
+    const { data } = await supabase.from('oples')
+      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao')
+      .not('status_geral','in','("Faturado","Cancelado","Faturado e Disponivel para Entrega")')
+      .lt('data_prevista_entrega', agora)
+      .not('data_prevista_entrega','is',null)
+      .order('data_prevista_entrega', { ascending: true });
+    setOps(data || []);
+    setCarregando(false);
+  };
+  useEffect(()=>{ buscar(); },[]);
+
+  const agora = new Date();
+  const SETORES_STATUS = {
+    'Engenharia':['Em Espera Engenharia','Em Analise Engenharia','Devolvida para Engenharia'],
+    'PCP/Almox':['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP'],
+    'Produção':['Aguardando Inicio Producao','Em Producao','Retrabalho'],
+    'Qualidade':['Aguardando CQ'],
+    'Comercial':['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Devolvida Comercial'],
+  };
+  const porSetor = (o) => Object.entries(SETORES_STATUS).find(([,ss])=>ss.includes(o.status_geral))?.[0] || 'Outros';
+  const diasAtraso = (o) => Math.floor((agora.getTime()-new Date(o.data_prevista_entrega).getTime())/86400000);
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#fef2f2'}}>
+          <span style={{color:'#dc2626'}}>⚠️ OPLs Atrasadas ({ops.length})</span>
+          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>window.print()}>🖨️</button>
+        </div>
+        <div className="sec-body">
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {Object.keys(SETORES_STATUS).map(s=>{
+              const n = ops.filter(o=>porSetor(o)===s).length;
+              return <div key={s} style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${n>0?'#dc2626':'#e5e7eb'}`,borderRadius:4,padding:'6px 10px'}}>
+                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
+                <div style={{fontSize:20,fontWeight:700,color:n>0?'#dc2626':'#94a3b8'}}>{carregando?'...':n}</div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OPL atrasada!</div>:(
+            <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
+            <tbody>{ops.map(o=>(
+              <tr key={o.id} style={{background:'#fef2f2'}}>
+                <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                <td>{o.chassi||'—'}</td>
+                <td>{o.cliente_nome||'—'}</td>
+                <td><strong style={{color:'#dc2626'}}>{porSetor(o)}</strong></td>
+                <td><span className="acn-badge" style={{background:'#dc2626',fontSize:8}}>{o.status_geral}</span></td>
+                <td style={{color:'#dc2626',fontWeight:700}}>{fmtData(o.data_prevista_entrega)}</td>
+                <td style={{color:'#dc2626',fontWeight:700}}>{diasAtraso(o)}d</td>
+              </tr>
+            ))}</tbody></table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Relatório: Recebimentos e Envios ──
+function RelRecebimentosEnvios() {
+  const [ini, setIni] = useState(iniPeriodo);
+  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [recebimentos, setRecebimentos] = useState([]);
+  const [envios, setEnvios] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+  const [aba, setAba] = useState('rec');
+
+  const buscar = async () => {
+    setCarregando(true);
+    const [recRes, envRes] = await Promise.all([
+      supabase.from('pcp_pedidos_compra').select('*')
+        .gte('data_prevista_recebimento', ini)
+        .lte('data_prevista_recebimento', fim)
+        .order('data_prevista_recebimento', { ascending: true }),
+      supabase.from('oples').select('id,opl,chassi,tipo_projeto,status_geral,data_entrega,data_prevista_entrega,cliente_nome')
+        .in('status_geral',['Faturado e Disponivel para Entrega','Faturado'])
+        .gte('data_entrada', ini+'T00:00:00')
+        .lte('data_entrada', fim+'T23:59:59')
+        .order('data_entrega', { ascending: false }),
+    ]);
+    setRecebimentos(recRes.data || []);
+    setEnvios(envRes.data || []);
+    setCarregando(false);
+  };
+  useEffect(()=>{ buscar(); },[]);
+
+  const fmtVal = (v) => v ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) : '—';
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">Recebimentos e Envios</div>
+        <div className="sec-body">
+          <div className="form-row" style={{alignItems:'flex-end'}}>
+            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
+            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
+            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
+            <button className="acn-btn" style={{background:'#475569'}} onClick={()=>window.print()}>🖨️</button>
+          </div>
+          <div style={{display:'flex',gap:0,marginTop:10,borderRadius:5,overflow:'hidden',border:'1px solid #e5e7eb'}}>
+            <button style={{flex:1,padding:'7px 0',border:'none',borderBottom:aba==='rec'?'2px solid #0891b2':'2px solid transparent',background:'transparent',fontWeight:700,fontSize:10,cursor:'pointer',color:aba==='rec'?'#0891b2':'#94a3b8'}} onClick={()=>setAba('rec')}>📦 Recebimentos de Mercadoria ({recebimentos.length})</button>
+            <button style={{flex:1,padding:'7px 0',border:'none',borderBottom:aba==='env'?'2px solid #16a34a':'2px solid transparent',background:'transparent',fontWeight:700,fontSize:10,cursor:'pointer',color:aba==='env'?'#16a34a':'#94a3b8'}} onClick={()=>setAba('env')}>🚚 Envios/Entregas ({envios.length})</button>
+          </div>
+        </div>
+      </div>
+      {aba==='rec' && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#f0f9ff'}}>
+            <span style={{color:'#0891b2'}}>📦 Recebimentos Previstos ({recebimentos.length})</span>
+          </div>
+          <div className="sec-body" style={{overflowX:'auto'}}>
+            {carregando?<div className="acn-empty">Carregando...</div>:recebimentos.length===0?<div className="acn-empty">Nenhum recebimento no período.</div>:(
+              <table><thead><tr><th>Nº Pedido</th><th>Descrição</th><th>Fornecedor</th><th>Qtd</th><th>Prev. Recebimento</th><th>Valor</th><th>Status</th></tr></thead>
+              <tbody>{recebimentos.map(r=>{
+                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                const dt = r.data_prevista_recebimento ? new Date(r.data_prevista_recebimento+'T00:00:00') : null;
+                const atras = dt && dt < hoje && r.status_compra !== 'Concluído';
+                return <tr key={r.id} style={atras?{background:'#fef2f2'}:{}}>
+                  <td><strong>{r.numero_pedido||'—'}</strong></td>
+                  <td style={{maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.descricao_material||'—'}</td>
+                  <td>{r.fornecedor||'—'}</td>
+                  <td>{r.quantidade||'—'}</td>
+                  <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(r.data_prevista_recebimento)}</td>
+                  <td>{fmtVal(r.valor_compra)}</td>
+                  <td><span className="acn-badge" style={{background:r.status_compra==='Concluído'?'#22c55e':r.status_compra==='Em Andamento'?'#3b82f6':'#94a3b8',fontSize:8}}>{r.status_compra||'—'}</span></td>
+                </tr>;
+              })}</tbody></table>
+            )}
+          </div>
+        </div>
+      )}
+      {aba==='env' && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#f0fdf4'}}>
+            <span style={{color:'#16a34a'}}>🚚 Envios/Entregas ({envios.length})</span>
+          </div>
+          <div className="sec-body" style={{overflowX:'auto'}}>
+            {carregando?<div className="acn-empty">Carregando...</div>:envios.length===0?<div className="acn-empty">Nenhum envio no período.</div>:(
+              <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
+              <tbody>{envios.map(o=>(
+                <tr key={o.id}>
+                  <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                  <td>{o.chassi||'—'}</td>
+                  <td>{o.cliente_nome||'—'}</td>
+                  <td style={{fontSize:9}}>{o.tipo_projeto}</td>
+                  <td><span className="acn-badge" style={{background:'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
+                  <td>{fmtData(o.data_entrega)||'—'}</td>
+                </tr>
+              ))}</tbody></table>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Relatório: Demandas Avulsas ──
+function RelDemandasAvulsas() {
+  const [ini, setIni] = useState(iniPeriodo);
+  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [dados, setDados] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const buscar = async () => {
+    setCarregando(true);
+    const { data } = await supabase.from('demandas_setoriais')
+      .select('*')
+      .or('numero_opl.is.null,numero_opl.eq.')
+      .gte('data_abertura', ini+'T00:00:00')
+      .lte('data_abertura', fim+'T23:59:59')
+      .order('data_abertura', { ascending: false });
+    setDados(data || []);
+    setCarregando(false);
+  };
+  useEffect(()=>{ buscar(); },[]);
+
+  const porSetor = dados.reduce((acc,d)=>{
+    const s = d.setor_destino||'Sem setor';
+    acc[s] = (acc[s]||0)+1;
+    return acc;
+  },{});
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">Demandas Avulsas (sem OPL vinculada)</div>
+        <div className="sec-body">
+          <div className="form-row" style={{alignItems:'flex-end'}}>
+            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
+            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
+            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
+            <button className="acn-btn" style={{background:'#475569'}} onClick={()=>window.print()}>🖨️</button>
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
+            {Object.entries(porSetor).sort((a,b)=>b[1]-a[1]).map(([s,n])=>(
+              <div key={s} style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:'3px solid #6366f1',borderRadius:4,padding:'6px 10px'}}>
+                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
+                <div style={{fontSize:18,fontWeight:700,color:'#6366f1'}}>{n}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
+        <div className="sec-hdr">{dados.length} Demandas Avulsas no período</div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando?<div className="acn-empty">Carregando...</div>:dados.length===0?<div className="acn-empty">Nenhuma demanda avulsa no período.</div>:(
+            <table><thead><tr><th>Data</th><th>Setor</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Tempo</th></tr></thead>
+            <tbody>{dados.map(d=>(
+              <tr key={d.id}>
+                <td>{fmtData(d.data_abertura)}</td>
+                <td>{d.setor_destino||'—'}</td>
+                <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                <td><span className="acn-badge" style={{background:STATUS_CORES[d.status]||'#94a3b8'}}>{d.status}</span></td>
+                <td>{d.responsavel_nome||'—'}</td>
+                <td>{fmtH(d.tempo_execucao_horas)}</td>
+              </tr>
+            ))}</tbody></table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Relatório: OPLs Paradas ──
+function RelOplsParadas() {
+  const [ops, setOps] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const STATUS_PARADA = ['Devolvida para Engenharia','Devolvida PCP','Devolvida Comercial','Retrabalho','Aguardando Agendamento Manutenção'];
+
+  const buscar = async () => {
+    setCarregando(true);
+    const { data } = await supabase.from('oples')
+      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao')
+      .in('status_geral', STATUS_PARADA)
+      .order('data_entrada', { ascending: true });
+    setOps(data || []);
+    setCarregando(false);
+  };
+  useEffect(()=>{ buscar(); },[]);
+
+  const agora = new Date();
+  const diasParada = (o) => Math.floor((agora.getTime()-new Date(o.data_entrada).getTime())/86400000);
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#fff7ed'}}>
+          <span style={{color:'#c2410c'}}>🚧 OPLs Paradas / Devolvidas ({ops.length})</span>
+          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>window.print()}>🖨️</button>
+        </div>
+        <div className="sec-body">
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {STATUS_PARADA.map(s=>{
+              const n = ops.filter(o=>o.status_geral===s).length;
+              return <div key={s} style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${n>0?'#f97316':'#e5e7eb'}`,borderRadius:4,padding:'6px 10px'}}>
+                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
+                <div style={{fontSize:20,fontWeight:700,color:n>0?'#f97316':'#94a3b8'}}>{carregando?'...':n}</div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OPL parada!</div>:(
+            <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
+            <tbody>{ops.sort((a,b)=>diasParada(b)-diasParada(a)).map(o=>(
+              <tr key={o.id} style={{background:'#fff7ed'}}>
+                <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                <td>{o.chassi||'—'}</td>
+                <td>{o.cliente_nome||'—'}</td>
+                <td><span className="acn-badge" style={{background:'#f97316',fontSize:8}}>{o.status_geral}</span></td>
+                <td>{fmtData(o.data_entrada)}</td>
+                <td style={{color:'#dc2626'}}>{fmtData(o.data_prevista_entrega)}</td>
+                <td style={{color:'#dc2626',fontWeight:700}}>{diasParada(o)}d</td>
+              </tr>
+            ))}</tbody></table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── MAIN ──
 export default function RelatoriosTab({ currentUser }) {
   const [aba, setAba] = useState('opls');
   const ABAS = [
-    {id:'opls',    label:'OPLs Geral'},
-    {id:'area',    label:'Por Área (Demandas)'},
-    {id:'producao',label:'Produção por Executor'},
+    {id:'opls',       label:'OPLs Geral'},
+    {id:'finalizadas',label:'Finalizadas'},
+    {id:'porsetor',   label:'Por Setor'},
+    {id:'atrasadas',  label:'Atrasadas'},
+    {id:'paradas',    label:'Paradas'},
+    {id:'recebenv',   label:'Receb./Envios'},
+    {id:'avulsas',    label:'Dem. Avulsas'},
+    {id:'area',       label:'Por Área'},
+    {id:'producao',   label:'Produção'},
   ];
 
   return (
     <div>
-      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:5,overflow:'hidden',border:'1px solid #e5e7eb',background:'var(--bg-card)'}}>
+      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:5,overflow:'hidden',border:'1px solid #e5e7eb',background:'var(--bg-card)',flexWrap:'wrap'}}>
         {ABAS.map(a=>(
           <button key={a.id} onClick={()=>setAba(a.id)}
-            style={{flex:1,padding:'8px 0',border:'none',borderBottom: aba===a.id?'2px solid #1e293b':'2px solid transparent',
-              background:'transparent',fontWeight:700,fontSize:10,cursor:'pointer',
+            style={{flex:'1 1 80px',padding:'8px 4px',border:'none',borderBottom: aba===a.id?'2px solid #1e293b':'2px solid transparent',
+              background:'transparent',fontWeight:700,fontSize:9,cursor:'pointer',
               color: aba===a.id?'#1e293b':'#94a3b8',letterSpacing:'.3px',textTransform:'uppercase'}}>
             {a.label}
           </button>
         ))}
       </div>
-      {aba==='opls'     && <RelOplsGeral />}
-      {aba==='area'     && <RelAreaDemandas />}
-      {aba==='producao' && <RelProducao />}
+      {aba==='opls'        && <RelOplsGeral />}
+      {aba==='finalizadas' && <RelOplsFinalizadas />}
+      {aba==='porsetor'    && <RelOplsPorSetor />}
+      {aba==='atrasadas'   && <RelOplsAtrasadas />}
+      {aba==='paradas'     && <RelOplsParadas />}
+      {aba==='recebenv'    && <RelRecebimentosEnvios />}
+      {aba==='avulsas'     && <RelDemandasAvulsas />}
+      {aba==='area'        && <RelAreaDemandas />}
+      {aba==='producao'    && <RelProducao />}
     </div>
   );
 }
