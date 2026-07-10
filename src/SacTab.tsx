@@ -121,6 +121,7 @@ const FORM_VAZIO = {
   acessorios: [] as {descricao:string; presente:boolean}[],
   despesa_deslocamento:'', despesa_hospedagem:'', despesa_alimentacao:'',
   // Manutenção Veicular
+  is_veiculo: false,
   tipo_avaliacao: 'Presencial' as 'Presencial'|'Remota',
   acompanhamento_engenharia: false,
   itens_cotacao: [] as {codigo:string;descricao:string;quantidade:number;valor_unitario:number}[],
@@ -221,7 +222,7 @@ export default function SacTab({ currentUser }) {
     setSalvando(true);
     const agora = new Date().toISOString();
     const isGarantia = form.tipo_servico === 'Garantia';
-    const ehVeicular = isVeicular(form.tipo_projeto);
+    const ehVeicular = form.is_veiculo || isVeicular(form.tipo_projeto);
 
     // Gera primeiro número e faz upload de fotos (uma única vez)
     let numero = await gerarNumeroOS();
@@ -1120,6 +1121,27 @@ export default function SacTab({ currentUser }) {
             {/* CLASSIFICAÇÃO */}
             <div style={{marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Classificação</div>
+
+              {/* Toggle: OS de Veículo */}
+              <div style={{marginBottom:10}}>
+                <label style={{display:'inline-flex',alignItems:'center',gap:8,cursor:'pointer',
+                  padding:'8px 14px',border:`2px solid ${form.is_veiculo?'#dc2626':'#e2e8f0'}`,
+                  borderRadius:6,background:form.is_veiculo?'#fff5f5':'#f8fafc',userSelect:'none',
+                  transition:'all .15s'}}>
+                  <input type="checkbox" checked={form.is_veiculo}
+                    onChange={e=>setForm(f=>({...f,is_veiculo:e.target.checked}))}
+                    style={{accentColor:'#dc2626',width:14,height:14}} />
+                  <span style={{fontWeight:700,fontSize:11,color:form.is_veiculo?'#dc2626':'#64748b'}}>
+                    🚗 OS de Veículo / Manutenção Veicular
+                  </span>
+                  <span style={{fontSize:9,color:'#94a3b8'}}>
+                    {form.is_veiculo
+                      ? '→ Fluxo de manutenção veicular habilitado'
+                      : '(marque se for manutenção de veículo)'}
+                  </span>
+                </label>
+              </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label className="acn-label">Tipo de Serviço *</label>
@@ -1311,7 +1333,7 @@ export default function SacTab({ currentUser }) {
             </div>
 
             {/* Manutenção Veicular — campos específicos */}
-            {isVeicular(form.tipo_projeto) && (
+            {form.is_veiculo && (
               <div style={{border:'2px solid #dc2626',borderRadius:6,padding:'12px',marginBottom:12,background:'#fff5f5'}}>
                 <div style={{fontWeight:700,fontSize:9,color:'#dc2626',letterSpacing:1,textTransform:'uppercase',marginBottom:10}}>🚗 Manutenção Veicular</div>
                 <div className="form-row" style={{marginBottom:8}}>
@@ -1365,12 +1387,12 @@ export default function SacTab({ currentUser }) {
             </div>
 
             {/* Info */}
-            {!isVeicular(form.tipo_projeto) && form.tipo_servico !== 'Garantia' && (
+            {!form.is_veiculo && form.tipo_servico !== 'Garantia' && (
               <div style={{border:'1px solid rgba(59,130,246,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(59,130,246,.06)'}}>
                 ℹ️ A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.
               </div>
             )}
-            {!isVeicular(form.tipo_projeto) && form.tipo_servico === 'Garantia' && (
+            {!form.is_veiculo && form.tipo_servico === 'Garantia' && (
               <div style={{border:'1px solid rgba(34,197,94,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(34,197,94,.06)'}}>
                 ✅ Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.
               </div>
