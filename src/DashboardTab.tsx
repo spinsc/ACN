@@ -726,4 +726,3 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
     </>
   );
 }
-               
