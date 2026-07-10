@@ -458,12 +458,14 @@ export default function SacTab({ currentUser }) {
   const aprovarCotacao = async (os: any) => {
     if (!window.confirm(`Confirmar aprovação do cliente para ${os.numero_os}?`)) return;
     const agora = new Date().toISOString();
+    const total = (os.itens_cotacao||[]).reduce((s,i)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
     await supabase.from('sac_ordens_servico').update({
       status: 'Em Provisionamento',
       aprovado: true,
       data_aprovacao: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
+    notificarEvento('sac_aprovacao_remota', `✅ *Cotação APROVADA — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n⚙️ Produção: definir data de atendimento`);
     fetchOrdens();
   };
 
