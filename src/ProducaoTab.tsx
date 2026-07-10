@@ -386,6 +386,355 @@ function CalendarioManutencao({ currentUser }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL SAC VEICULAR — ações exclusivas da Produção no fluxo de manutenção
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelSacVeicular({ currentUser }) {
+  const [ordens, setOrdens] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const [modalProvisionar, setModalProvisionar]             = useState(null);
+  const [provisionarForm, setProvisionarForm]               = useState({ data_provisao:'', periodo:'Manhã' });
+  const [modalConfirmarChegada, setModalConfirmarChegada]   = useState(null);
+  const [modalVerificacao, setModalVerificacao]             = useState(null);
+  const [verificacaoItens, setVerificacaoItens]             = useState([]);
+  const [modalConcluirManu, setModalConcluirManu]           = useState(null);
+  const [concluirManuForm, setConcluirManuForm]             = useState({ observacoes:'', itens_usados:[] });
+
+  const STATUSES_PROD = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção'];
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('sac_ordens_servico').select('*')
+      .eq('is_manutencao_veicular', true)
+      .in('status', STATUSES_PROD)
+      .order('data_abertura', { ascending: false });
+    setOrdens(data || []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, []);
+
+  const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+
+  const STATUS_COR_VEI = {
+    'Em Provisionamento':           '#7c3aed',
+    'Aguardando Aceite SAC':        '#f59e0b',
+    'Provisionada':                 '#16a34a',
+    'Verificação e Orçamento':      '#8b5cf6',
+    'Aguardando Aprovação Cliente': '#f59e0b',
+    'Em Manutenção':                '#dc2626',
+  };
+
+  // Produção define data → status: Aguardando Aceite SAC
+  const salvarProvisionamento = async () => {
+    if (!provisionarForm.data_provisao) { alert('Informe a data!'); return; }
+    const os = modalProvisionar;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Aguardando Aceite SAC',
+      data_provisionamento: provisionarForm.data_provisao,
+      periodo_provisionamento: provisionarForm.periodo,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_data_definida', `Producao definiu data — ${os.numero_os} — Cliente: ${os.cliente_nome} — Data: ${new Date(provisionarForm.data_provisao+'T12:00').toLocaleDateString('pt-BR')} (${provisionarForm.periodo})`);
+    setModalProvisionar(null); setProvisionarForm({ data_provisao:'', periodo:'Manhã' }); load();
+  };
+
+  // Produção confirma chegada → Presencial: Verificação e Orçamento / Remota: Em Manutenção
+  const confirmarChegada = async () => {
+    const os = modalConfirmarChegada;
+    const agora = new Date().toISOString();
+    const novoStatus = os.tipo_avaliacao === 'Remota' ? 'Em Manutenção' : 'Verificação e Orçamento';
+    await supabase.from('sac_ordens_servico').update({
+      status: novoStatus,
+      data_chegada_veiculo: agora,
+      ...(os.tipo_avaliacao === 'Remota' ? { data_inicio_manutencao: agora } : {}),
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_veiculo_chegou', `Veiculo chegou — ${os.numero_os} — ${os.cliente_nome} — Status: ${novoStatus}`);
+    setModalConfirmarChegada(null); load();
+  };
+
+  // Produção insere materiais e envia ao SAC → Aguardando Aprovação Cliente
+  const enviarVerificacao = async () => {
+    const os = modalVerificacao;
+    if (!verificacaoItens.length) { alert('Adicione pelo menos um item!'); return; }
+    const total = verificacaoItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Aguardando Aprovação Cliente',
+      itens_cotacao: verificacaoItens,
+      valor_orcamento: total,
+      data_envio_orcamento: agora,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_verificacao_enviada', `Orcamento de verificacao — ${os.numero_os} — ${os.cliente_nome} — Total: ${fmtVal(total)}`);
+    setModalVerificacao(null); setVerificacaoItens([]); load();
+  };
+
+  // Produção conclui manutenção → Manutenção Concluída
+  const salvarConclusao = async () => {
+    const os = modalConcluirManu;
+    const agora = new Date().toISOString();
+    const kpi = os.data_inicio_manutencao
+      ? Number(((new Date().getTime()-new Date(os.data_inicio_manutencao).getTime())/3600000).toFixed(2))
+      : null;
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Manutenção Concluída',
+      data_conclusao_manutencao: agora,
+      materiais_utilizados: concluirManuForm.itens_usados,
+      observacoes_manutencao: concluirManuForm.observacoes || null,
+      kpi_execucao_horas: kpi,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
+  };
+
+  const isAtrasada = (os) => {
+    if (os.status !== 'Provisionada' || !os.data_provisionamento) return false;
+    const limite = new Date(new Date(os.data_provisionamento+'T23:59:59').getTime() + 2*24*60*60*1000);
+    return new Date() > limite;
+  };
+
+  const ItemTable = ({ itens, setItens }) => {
+    const total = itens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
+    const set = (idx, k, v) => setItens(p=>p.map((x,i)=>i===idx?{...x,[k]:v}:x));
+    const add = () => setItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]);
+    const rem = (idx) => setItens(p=>p.filter((_,i)=>i!==idx));
+    return (
+      <>
+        <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
+          <thead><tr style={{background:'#f1f5f9'}}>
+            <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0',width:80}}>Código</th>
+            <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Descrição</th>
+            <th style={{padding:'5px 7px',fontSize:10,textAlign:'center',borderBottom:'1px solid #e2e8f0',width:55}}>Qtd</th>
+            <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Vl. Unit.</th>
+            <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Total</th>
+            <th style={{width:28,borderBottom:'1px solid #e2e8f0'}}></th>
+          </tr></thead>
+          <tbody>
+            {itens.map((item,idx)=>(
+              <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo} onChange={e=>set(idx,'codigo',e.target.value)} /></td>
+                <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao} onChange={e=>set(idx,'descricao',e.target.value)} placeholder="Peça / serviço..." /></td>
+                <td style={{padding:'3px 5px'}}><input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade} onChange={e=>set(idx,'quantidade',Number(e.target.value)||1)} /></td>
+                <td style={{padding:'3px 5px'}}><input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario} onChange={e=>set(idx,'valor_unitario',Number(e.target.value)||0)} /></td>
+                <td style={{padding:'3px 7px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>{((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                <td><button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}} onClick={()=>rem(idx)}>×</button></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr style={{background:'#f0fdf4'}}>
+            <td colSpan={4} style={{padding:'6px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
+            <td style={{padding:'6px',fontWeight:800,fontSize:12,textAlign:'right',color:'#166534'}}>R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+        <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:10}} onClick={add}>+ Adicionar Item</button>
+      </>
+    );
+  };
+
+  return (
+    <div>
+      {ordens.filter(isAtrasada).length > 0 && (
+        <div style={{background:'#fef2f2',border:'2px solid #ef4444',borderRadius:6,padding:'10px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:12}}>
+          <span style={{fontSize:20}}>⚠️</span>
+          <div>
+            <div style={{fontWeight:700,fontSize:11,color:'#dc2626'}}>
+              {ordens.filter(isAtrasada).length} OS(s) — veículo não chegou há mais de 2 dias após data agendada!
+            </div>
+            <div style={{fontSize:10,color:'#991b1b',marginTop:2}}>Use o botão "Remarcar" para reagendar.</div>
+          </div>
+        </div>
+      )}
+
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
+          <span style={{color:'#991b1b'}}>🔧 SAC Veicular — Ações da Produção ({ordens.length})</span>
+          <button className="acn-btn" style={{background:'#dc2626',fontSize:10}} onClick={load}>↻ Atualizar</button>
+        </div>
+        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+          {loading ? <div className="acn-empty">Carregando...</div> : ordens.length === 0 ? (
+            <div className="acn-empty">Nenhuma OS veicular aguardando ação da Produção.</div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th>Nº OS</th><th>Cliente</th><th>Equip.</th><th>Tipo</th><th>Data Prov.</th><th>Status</th><th>Ação Produção</th>
+              </tr></thead>
+              <tbody>
+                {ordens.map(os => {
+                  const atrasada = isAtrasada(os);
+                  return (
+                    <tr key={os.id} style={{background:atrasada?'#fef2f2':undefined,borderLeft:atrasada?'4px solid #ef4444':undefined}}>
+                      <td>
+                        <strong style={{color:'#0f766e'}}>{os.numero_os}</strong>
+                        {os.tipo_avaliacao && <div><span style={{fontSize:8,background:'#e2e8f0',padding:'1px 5px',borderRadius:10}}>{os.tipo_avaliacao}</span></div>}
+                      </td>
+                      <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.cliente_nome}</td>
+                      <td style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.equipamento_nome}</td>
+                      <td><span style={{fontSize:9,background:'#e2e8f0',padding:'2px 6px',borderRadius:10}}>{os.tipo_avaliacao||'—'}</span></td>
+                      <td style={{fontSize:10}}>
+                        {os.data_provisionamento
+                          ? <span style={{color:atrasada?'#dc2626':'inherit',fontWeight:atrasada?700:400}}>
+                              {new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}
+                              {atrasada ? ' ⚠️' : ''}
+                            </span>
+                          : '—'}
+                      </td>
+                      <td><span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span></td>
+                      <td>
+                        <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                          {os.status === 'Em Provisionamento' && (
+                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+                              onClick={()=>{ setProvisionarForm({data_provisao:'',periodo:'Manhã'}); setModalProvisionar(os); }}>
+                              📅 Definir Data
+                            </button>
+                          )}
+                          {os.status === 'Provisionada' && (
+                            <>
+                              <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>setModalConfirmarChegada(os)}>
+                                🚗 Chegou
+                              </button>
+                              {atrasada && (
+                                <button className="acn-btn" style={{background:'#ef4444',fontSize:9}}
+                                  onClick={()=>{ setProvisionarForm({data_provisao:os.data_provisionamento||'',periodo:os.periodo_provisionamento||'Manhã'}); setModalProvisionar(os); }}>
+                                  📅 Remarcar
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {os.status === 'Verificação e Orçamento' && (
+                            <button className="acn-btn" style={{background:'#8b5cf6',fontSize:9}}
+                              onClick={()=>{ setVerificacaoItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalVerificacao(os); }}>
+                              🔧 Inserir Materiais
+                            </button>
+                          )}
+                          {os.status === 'Em Manutenção' && (
+                            <button className="acn-btn" style={{background:'#0d9488',fontSize:9}}
+                              onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)?os.materiais_utilizados.map(i=>({...i})):[]}); }}>
+                              ✅ Concluir
+                            </button>
+                          )}
+                          {(os.status === 'Aguardando Aprovação Cliente' || os.status === 'Aguardando Aceite SAC') && (
+                            <span style={{fontSize:9,color:'#94a3b8',fontStyle:'italic'}}>Aguardando SAC</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL: Definir / Remarcar Data */}
+      {modalProvisionar && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:400}}>
+            <div className="modal-title">
+              📅 {modalProvisionar.data_provisionamento ? 'Remarcar' : 'Definir'} Data — {modalProvisionar.numero_os}
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>Cliente: {modalProvisionar.cliente_nome}</div>
+            {modalProvisionar.data_provisionamento && (
+              <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:11}}>
+                Data anterior: <strong>{new Date(modalProvisionar.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
+                {' '}({modalProvisionar.periodo_provisionamento||''})
+              </div>
+            )}
+            <label className="acn-label">Nova Data de Recebimento *</label>
+            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
+              value={provisionarForm.data_provisao}
+              onChange={e=>setProvisionarForm(f=>({...f,data_provisao:e.target.value}))} />
+            <label className="acn-label">Período</label>
+            <div style={{display:'flex',gap:8,marginBottom:14}}>
+              {['Manhã','Tarde'].map(p=>(
+                <button key={p} className="acn-btn"
+                  style={{flex:1,background:provisionarForm.periodo===p?'#7c3aed':'#e2e8f0',color:provisionarForm.periodo===p?'white':'#1e293b'}}
+                  onClick={()=>setProvisionarForm(f=>({...f,periodo:p}))}>
+                  {p==='Manhã'?'🌅':'🌇'} {p}
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={salvarProvisionamento}>✓ Confirmar</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalProvisionar(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Confirmar Chegada */}
+      {modalConfirmarChegada && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:400}}>
+            <div className="modal-title">🚗 Confirmar Chegada — {modalConfirmarChegada.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Cliente: {modalConfirmarChegada.cliente_nome}</div>
+            {modalConfirmarChegada.data_provisionamento && (
+              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:11}}>
+                📅 Data prevista: <strong>{new Date(modalConfirmarChegada.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
+                {' '}({modalConfirmarChegada.periodo_provisionamento||''})
+              </div>
+            )}
+            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11}}>
+              ✅ Próximo status: <strong>{modalConfirmarChegada.tipo_avaliacao === 'Remota' ? 'Em Manutenção' : 'Verificação e Orçamento'}</strong>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarChegada}>🚗 Confirmar Chegada</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConfirmarChegada(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Verificação e Orçamento */}
+      {modalVerificacao && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">🔧 Verificação e Orçamento — {modalVerificacao.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalVerificacao.cliente_nome}</div>
+            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:8}}>Materiais / Itens do Orçamento</div>
+            <ItemTable itens={verificacaoItens} setItens={setVerificacaoItens} />
+            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+              ⚠️ Ao enviar, a OS aguardará aprovação do SAC/Cliente antes de iniciar manutenção.
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#8b5cf6',flex:1}} onClick={enviarVerificacao}>📤 Enviar para Aprovação</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVerificacao(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Concluir Manutenção */}
+      {modalConcluirManu && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">✅ Concluir Manutenção — {modalConcluirManu.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalConcluirManu.cliente_nome}</div>
+            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Materiais Utilizados</div>
+            <ItemTable
+              itens={concluirManuForm.itens_usados}
+              setItens={(fn) => setConcluirManuForm(f=>({...f, itens_usados: typeof fn === 'function' ? fn(f.itens_usados) : fn}))}
+            />
+            <label className="acn-label">Observações</label>
+            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:14}}
+              value={concluirManuForm.observacoes}
+              onChange={e=>setConcluirManuForm(f=>({...f,observacoes:e.target.value}))} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#0d9488',flex:1}} onClick={salvarConclusao}>✓ CONCLUIR MANUTENÇÃO</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirManu(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProducaoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -509,10 +858,13 @@ export default function ProducaoTab({ currentUser }) {
       <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
         <button style={{flex:1,padding:'8px',background:abaProducao==='producao'?'#1e293b':'white',color:abaProducao==='producao'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaProducao('producao')}>⚙️ Produção</button>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='veicular'?'#dc2626':'white',color:abaProducao==='veicular'?'white':'#dc2626',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('veicular')}>🔧 SAC Veicular</button>
         <button style={{flex:1,padding:'8px',background:abaProducao==='agenda'?'#f97316':'white',color:abaProducao==='agenda'?'white':'#f97316',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaProducao('agenda')}>📅 Agendamentos Manutenção</button>
+          onClick={()=>setAbaProducao('agenda')}>📅 Agendamentos</button>
       </div>
 
+      {abaProducao === 'veicular' && <PainelSacVeicular currentUser={currentUser} />}
       {abaProducao === 'agenda' && <CalendarioManutencao currentUser={currentUser} />}
       {abaProducao === 'producao' && <div>
       {/* ALERTA RETRABALHO */}

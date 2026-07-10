@@ -12,22 +12,24 @@ const TIPOS_PROJETO_FALLBACK = [
 
 const STATUS_COR: Record<string, string> = {
   // Fluxo LAB (OS padrão)
-  'Diagnóstico':           '#0891b2',
-  'Aberta':                '#3b82f6',
-  'Orçamento Pronto':      '#7c3aed',
-  'Orç. Enviado':          '#f59e0b',
-  'Aprovado':              '#22c55e',
-  'Reprovado':             '#ef4444',
-  'Em Execução':           '#8b5cf6',
-  'Concluído':             '#0d9488',
-  'Entregue':              '#166534',
+  'Diagnóstico':                   '#0891b2',
+  'Aberta':                        '#3b82f6',
+  'Orçamento Pronto':              '#7c3aed',
+  'Orç. Enviado':                  '#f59e0b',
+  'Aprovado':                      '#22c55e',
+  'Reprovado':                     '#ef4444',
+  'Em Execução':                   '#8b5cf6',
+  'Concluído':                     '#0d9488',
+  'Entregue':                      '#166534',
   // Fluxo MANUTENÇÃO VEICULAR
-  'Em Cotação':            '#0891b2',
-  'Aguardando Aprovação':  '#f59e0b',
-  'Em Provisionamento':    '#7c3aed',
-  'Data Confirmada':       '#16a34a',
-  'Em Manutenção':         '#dc2626',
-  'Manutenção Concluída':  '#0d9488',
+  'Em Cotação':                    '#0891b2',
+  'Aguardando Aprovação Cliente':  '#f59e0b',
+  'Em Provisionamento':            '#7c3aed',
+  'Aguardando Aceite SAC':         '#f59e0b',
+  'Provisionada':                  '#16a34a',
+  'Verificação e Orçamento':       '#8b5cf6',
+  'Em Manutenção':                 '#dc2626',
+  'Manutenção Concluída':          '#0d9488',
 };
 
 // Detecta OS de manutenção veicular
@@ -166,11 +168,7 @@ export default function SacTab({ currentUser }) {
   const [novoEquip, setNovoEquip]       = useState('');
 
   // Manutenção Veicular — modais extras
-  const [modalProvisionar, setModalProvisionar]   = useState<any>(null);
-  const [provisionarForm, setProvisionarForm]     = useState({ data_provisao:'', periodo:'Manhã' });
-  const [modalConfirmarChegada, setModalConfirmarChegada] = useState<any>(null);
-  const [modalConcluirManu, setModalConcluirManu] = useState<any>(null);
-  const [concluirManuForm, setConcluirManuForm]   = useState({ observacoes:'', itens_usados: [] as any[] });
+  const [modalAceiteSAC, setModalAceiteSAC]       = useState<any>(null);
   const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação
   const [anexosSendoUpload, setAnexosSendoUpload] = useState(false);
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
@@ -444,7 +442,7 @@ export default function SacTab({ currentUser }) {
     const agora = new Date().toISOString();
     const total = (os.itens_cotacao||[]).reduce((s,i)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
     await supabase.from('sac_ordens_servico').update({
-      status: 'Aguardando Aprovação',
+      status: 'Aguardando Aprovação Cliente',
       valor_orcamento: total,
       data_envio_orcamento: agora,
       atualizado_em: agora,
@@ -467,7 +465,7 @@ export default function SacTab({ currentUser }) {
 
   const recusarCotacao = async (os: any) => {
     const motivo = window.prompt('Motivo da recusa (opcional):');
-    if (motivo === null) return; // cancelou
+    if (motivo === null) return;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
       status: 'Reprovado',
@@ -478,54 +476,43 @@ export default function SacTab({ currentUser }) {
     fetchOrdens();
   };
 
-  const salvarProvisionamento = async () => {
-    if (!provisionarForm.data_provisao) { alert('Informe a data de provisionamento!'); return; }
-    const os = modalProvisionar;
+  // SAC recebe OS de volta depois que Produção definiu data → confirma com cliente
+  const confirmarAceiteSAC = async (os: any) => {
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
-      status: 'Data Confirmada',
-      data_provisionamento: provisionarForm.data_provisao,
-      periodo_provisionamento: provisionarForm.periodo,
+      status: 'Provisionada',
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_data_definida', `📅 *Data definida — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${new Date(provisionarForm.data_provisao+'T12:00').toLocaleDateString('pt-BR')} (${provisionarForm.periodo})`);
-    setModalProvisionar(null); setProvisionarForm({ data_provisao:'', periodo:'Manhã' });
+    notificarEvento('sac_aceite_data', `✅ *SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
+    setModalAceiteSAC(null);
     fetchOrdens();
   };
 
-  const alterarData = (os: any) => {
-    setProvisionarForm({ data_provisao: os.data_provisionamento||'', periodo: os.periodo_provisionamento||'Manhã' });
-    setModalProvisionar(os);
+  // SAC: cliente não confirmou a data → volta para Produção redefinir
+  const rejeitarAceiteSAC = async (os: any) => {
+    if (!window.confirm('Confirmar: cliente não aceitou a data e OS voltará para Produção redefinir?')) return;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Em Provisionamento',
+      data_provisionamento: null,
+      periodo_provisionamento: null,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    setModalAceiteSAC(null);
+    fetchOrdens();
   };
 
-  const confirmarChegadaVeiculo = async () => {
-    const os = modalConfirmarChegada;
+  // SAC aprova orçamento de verificação presencial → Produção inicia manutenção
+  const aprovarOrcamentoPresencial = async (os: any) => {
+    if (!window.confirm(`Confirmar aprovação do orçamento de manutenção pelo cliente — ${os.numero_os}?`)) return;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
       status: 'Em Manutenção',
-      data_chegada_veiculo: agora,
+      aprovado: true,
+      data_aprovacao: agora,
       data_inicio_manutencao: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_veiculo_chegou', `🚗 *Veículo chegou — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
-    setModalConfirmarChegada(null); fetchOrdens();
-  };
-
-  const salvarConclusaoManu = async () => {
-    const os = modalConcluirManu;
-    const agora = new Date().toISOString();
-    const kpi = os.data_inicio_manutencao
-      ? Number(((new Date().getTime()-new Date(os.data_inicio_manutencao).getTime())/3600000).toFixed(2))
-      : null;
-    await supabase.from('sac_ordens_servico').update({
-      status: 'Manutenção Concluída',
-      data_conclusao_manutencao: agora,
-      materiais_utilizados: concluirManuForm.itens_usados,
-      observacoes_manutencao: concluirManuForm.observacoes || null,
-      kpi_execucao_horas: kpi,
-      atualizado_em: agora,
-    }).eq('id', os.id);
-    setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] });
     fetchOrdens();
   };
 
@@ -597,7 +584,7 @@ export default function SacTab({ currentUser }) {
 
     // ── FLUXO VEICULAR ──────────────────────────────────────────────────────
     if (eh) {
-      // Remoto: Em Cotação → inserir itens e enviar
+      // Remota: Em Cotação → SAC insere itens e envia cotação
       if (os.status === 'Em Cotação') {
         btns.push(
           <button key="itens" className="acn-btn" style={{background:'#0891b2',fontSize:9}}
@@ -610,39 +597,32 @@ export default function SacTab({ currentUser }) {
           </button>
         );
       }
-      // Aguardando Aprovação → aprovar/recusar
-      if (os.status === 'Aguardando Aprovação') {
-        btns.push(
-          <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarCotacao(os)}>✅ Aprovado</button>,
-          <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
-        );
+      // Aguardando Aprovação Cliente → SAC registra resposta do cliente
+      if (os.status === 'Aguardando Aprovação Cliente') {
+        if (os.tipo_avaliacao === 'Remota' && !os.data_chegada_veiculo) {
+          // Remota: cotação aguardando → aprovação envia para Produção provisionar
+          btns.push(
+            <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarCotacao(os)}>✅ Aprovado</button>,
+            <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
+          );
+        } else {
+          // Presencial: orçamento de verificação aguardando → aprovação inicia manutenção
+          btns.push(
+            <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarOrcamentoPresencial(os)}>✅ Cliente Aprovou</button>,
+            <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
+          );
+        }
       }
-      // Em Provisionamento → definir data
-      if (os.status === 'Em Provisionamento') {
+      // Aguardando Aceite SAC → SAC confirma ou rejeita data definida pela Produção
+      if (os.status === 'Aguardando Aceite SAC') {
         btns.push(
-          <button key="prov" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
-            onClick={()=>{ setProvisionarForm({ data_provisao:'', periodo:'Manhã' }); setModalProvisionar(os); }}>
-            📅 Definir Data
+          <button key="aceite" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+            onClick={()=>setModalAceiteSAC(os)}>
+            📋 Aceite SAC
           </button>
         );
       }
-      // Data Confirmada → alterar data ou registrar chegada
-      if (os.status === 'Data Confirmada') {
-        btns.push(
-          <button key="altdata" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>alterarData(os)}>📅 Alterar Data</button>,
-          <button key="chegada" className="acn-btn" style={{background:'#dc2626',fontSize:9}} onClick={()=>setModalConfirmarChegada(os)}>🚗 Chegou</button>
-        );
-      }
-      // Em Manutenção → concluir
-      if (os.status === 'Em Manutenção') {
-        btns.push(
-          <button key="conc" className="acn-btn" style={{background:'#0d9488',fontSize:9}}
-            onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({ observacoes:'', itens_usados: Array.isArray(os.itens_cotacao)?os.itens_cotacao.map(i=>({...i})):[] }); }}>
-            🔧 Concluir Manutenção
-          </button>
-        );
-      }
-      // Manutenção Concluída → SAC entrega
+      // Manutenção Concluída → SAC faz entrega
       if (os.status === 'Manutenção Concluída') {
         btns.push(
           <button key="entrega" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
@@ -1594,112 +1574,28 @@ export default function SacTab({ currentUser }) {
         </div>
       )}
 
-      {/* Modal: Provisionar Data */}
-      {modalProvisionar && (
+      {/* Modal: Aceite SAC — confirma data definida pela Produção com o cliente */}
+      {modalAceiteSAC && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:400}}>
-            <div className="modal-title">📅 {modalProvisionar.data_provisionamento ? 'Alterar' : 'Definir'} Data de Provisionamento — {modalProvisionar.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>Cliente: {modalProvisionar.cliente_nome}</div>
-            <label className="acn-label">Data de Recebimento do Veículo *</label>
-            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={provisionarForm.data_provisao}
-              onChange={e=>setProvisionarForm(f=>({...f,data_provisao:e.target.value}))} />
-            <label className="acn-label">Período</label>
-            <div style={{display:'flex',gap:8,marginBottom:14}}>
-              {['Manhã','Tarde'].map(p=>(
-                <button key={p} className="acn-btn"
-                  style={{flex:1,background:provisionarForm.periodo===p?'#dc2626':'#e2e8f0',color:provisionarForm.periodo===p?'white':'#1e293b'}}
-                  onClick={()=>setProvisionarForm(f=>({...f,periodo:p}))}>
-                  {p==='Manhã'?'🌅':'🌇'} {p}
-                </button>
-              ))}
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={salvarProvisionamento}>✓ Confirmar Data</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalProvisionar(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Confirmar Chegada do Veículo */}
-      {modalConfirmarChegada && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:380}}>
-            <div className="modal-title">🚗 Confirmar Chegada — {modalConfirmarChegada.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Cliente: {modalConfirmarChegada.cliente_nome}</div>
-            {modalConfirmarChegada.data_provisionamento && (
-              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-                📅 Data prevista: <strong>{new Date(modalConfirmarChegada.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
-                {' '}({modalConfirmarChegada.periodo_provisionamento||''})
+          <div className="modal-box" style={{maxWidth:440}}>
+            <div className="modal-title">📋 Aceite SAC — {modalAceiteSAC.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalAceiteSAC.cliente_nome}</div>
+            <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,padding:'10px 12px',marginBottom:14,fontSize:11}}>
+              <div style={{fontWeight:700,color:'#0369a1',marginBottom:4}}>📅 Data definida pela Produção:</div>
+              <div style={{fontSize:13,fontWeight:700,color:'#1e293b'}}>
+                {modalAceiteSAC.data_provisionamento
+                  ? new Date(modalAceiteSAC.data_provisionamento+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
+                  : '—'}
+                {modalAceiteSAC.periodo_provisionamento ? ` — ${modalAceiteSAC.periodo_provisionamento}` : ''}
               </div>
-            )}
-            <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11,textAlign:'center'}}>
-              ⚠️ Ao confirmar, o <strong>KPI de manutenção</strong> será iniciado automaticamente.
+            </div>
+            <div style={{fontSize:11,color:'#374151',marginBottom:14,background:'#fefce8',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px'}}>
+              ℹ️ Confirme se o cliente aceitou esta data para entrega/chegada do veículo.
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#dc2626',flex:1}} onClick={confirmarChegadaVeiculo}>🚗 Veículo Chegou — Iniciar Manutenção</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConfirmarChegada(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Concluir Manutenção */}
-      {modalConcluirManu && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">🔧 Concluir Manutenção — {modalConcluirManu.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalConcluirManu.cliente_nome}</div>
-            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Materiais Utilizados</div>
-            {(() => {
-              const itens = concluirManuForm.itens_usados;
-              const total = itens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
-              const setIt = (idx, k, v) => setConcluirManuForm(f=>({...f, itens_usados: f.itens_usados.map((x,i)=>i===idx?{...x,[k]:v}:x)}));
-              const addIt = () => setConcluirManuForm(f=>({...f, itens_usados:[...f.itens_usados,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]}));
-              const remIt = (idx) => setConcluirManuForm(f=>({...f, itens_usados:f.itens_usados.filter((_,i)=>i!==idx)}));
-              return (<>
-                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
-                  <thead>
-                    <tr style={{background:'#f1f5f9'}}>
-                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0',width:80}}>Código</th>
-                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Descrição</th>
-                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'center',borderBottom:'1px solid #e2e8f0',width:55}}>Qtd</th>
-                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Vl. Unit.</th>
-                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Total</th>
-                      <th style={{width:28,borderBottom:'1px solid #e2e8f0'}}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {itens.map((item,idx)=>(
-                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-                        <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo} onChange={e=>setIt(idx,'codigo',e.target.value)} /></td>
-                        <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao} onChange={e=>setIt(idx,'descricao',e.target.value)} /></td>
-                        <td style={{padding:'3px 5px'}}><input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade} onChange={e=>setIt(idx,'quantidade',Number(e.target.value)||1)} /></td>
-                        <td style={{padding:'3px 5px'}}><input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario} onChange={e=>setIt(idx,'valor_unitario',Number(e.target.value)||0)} /></td>
-                        <td style={{padding:'3px 7px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>{((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-                        <td><button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}} onClick={()=>remIt(idx)}>×</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{background:'#f0fdf4'}}>
-                      <td colSpan={4} style={{padding:'6px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
-                      <td style={{padding:'6px',fontWeight:800,fontSize:12,textAlign:'right',color:'#166534'}}>R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-                <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:10}} onClick={addIt}>+ Adicionar Material</button>
-              </>);
-            })()}
-            <label className="acn-label">Observações da Manutenção</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:14}}
-              value={concluirManuForm.observacoes}
-              onChange={e=>setConcluirManuForm(f=>({...f,observacoes:e.target.value}))} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0d9488',flex:1}} onClick={salvarConclusaoManu}>✓ CONCLUIR MANUTENÇÃO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirManu(null)}>Cancelar</button>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={()=>confirmarAceiteSAC(modalAceiteSAC)}>✅ Cliente Confirmou</button>
+              <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>rejeitarAceiteSAC(modalAceiteSAC)}>❌ Não Confirmou</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAceiteSAC(null)}>Fechar</button>
             </div>
           </div>
         </div>

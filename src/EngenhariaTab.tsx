@@ -19,7 +19,12 @@ export default function EngenhariaTab({ currentUser }) {
   const [modalIniciar, setModalIniciar] = useState(null);
   const [responsavelEng, setResponsavelEng] = useState('');
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30000); return () => clearInterval(t); }, []);
+  // Acompanhamento SAC Veicular
+  const [osAcomp, setOsAcomp] = useState([]);
+  const [modalObsAcomp, setModalObsAcomp] = useState(null);
+  const [novaObsAcomp, setNovaObsAcomp] = useState('');
+
+  useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -28,6 +33,23 @@ export default function EngenhariaTab({ currentUser }) {
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
     setLoading(false);
+  };
+
+  const fetchOsAcomp = async () => {
+    const { data } = await supabase.from('sac_ordens_servico').select('*')
+      .eq('acompanhamento_engenharia', true)
+      .not('status', 'in', '("Entregue","Reprovado")')
+      .order('data_abertura', { ascending: false });
+    setOsAcomp(data || []);
+  };
+
+  const addObsAcompanhamento = async () => {
+    if (!novaObsAcomp.trim()) return;
+    const os = modalObsAcomp;
+    const logs = Array.isArray(os.logs_acompanhamento_eng) ? [...os.logs_acompanhamento_eng] : [];
+    logs.push({ texto: novaObsAcomp, usuario: currentUser?.nome || currentUser?.email, hora: new Date().toISOString() });
+    await supabase.from('sac_ordens_servico').update({ logs_acompanhamento_eng: logs }).eq('id', os.id);
+    setNovaObsAcomp(''); setModalObsAcomp(null); fetchOsAcomp();
   };
 
   const abrirIniciarEng = (opl) => {
@@ -197,6 +219,83 @@ export default function EngenhariaTab({ currentUser }) {
       </div>
 
       <DemandaAvulsaPanel currentUser={currentUser} />
+
+      {/* ── ACOMPANHAMENTO SAC VEICULAR ── */}
+      {osAcomp.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
+            <span style={{color:'#991b1b'}}>🚗 Acompanhamento de OS Veiculares ({osAcomp.length})</span>
+            <span style={{fontSize:9,color:'#dc2626',fontStyle:'italic'}}>Somente observações — agendamento é exclusivo da Produção</span>
+          </div>
+          <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+            <table>
+              <thead><tr>
+                <th>Nº OS</th><th>Cliente</th><th>Equipamento</th><th>Tipo</th><th>Status</th><th>Abertura</th><th>Ação</th>
+              </tr></thead>
+              <tbody>
+                {osAcomp.map(os => {
+                  const STATUS_COR_VEI: Record<string,string> = {
+                    'Em Cotação':'#0891b2','Aguardando Aprovação Cliente':'#f59e0b',
+                    'Em Provisionamento':'#7c3aed','Aguardando Aceite SAC':'#f59e0b',
+                    'Provisionada':'#16a34a','Verificação e Orçamento':'#8b5cf6',
+                    'Em Manutenção':'#dc2626','Manutenção Concluída':'#0d9488',
+                  };
+                  return (
+                    <tr key={os.id}>
+                      <td><strong style={{color:'#0f766e'}}>{os.numero_os}</strong></td>
+                      <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.cliente_nome}</td>
+                      <td style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.equipamento_nome}</td>
+                      <td><span style={{fontSize:9,background:'#e2e8f0',padding:'2px 6px',borderRadius:10}}>{os.tipo_avaliacao||'—'}</span></td>
+                      <td><span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span></td>
+                      <td style={{fontSize:10}}>{os.data_abertura ? new Date(os.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td>
+                        <button className="acn-btn" style={{background:'#2563eb',fontSize:9}}
+                          onClick={()=>{ setModalObsAcomp(os); setNovaObsAcomp(''); }}>
+                          📝 Obs.
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Observação de Acompanhamento */}
+      {modalObsAcomp && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:480}}>
+            <div className="modal-title">📝 Acompanhamento — {modalObsAcomp.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>
+              Cliente: {modalObsAcomp.cliente_nome} · Status: <strong>{modalObsAcomp.status}</strong>
+            </div>
+            {Array.isArray(modalObsAcomp.logs_acompanhamento_eng) && modalObsAcomp.logs_acompanhamento_eng.length > 0 && (
+              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:'8px 10px',marginBottom:10,maxHeight:160,overflowY:'auto'}}>
+                {modalObsAcomp.logs_acompanhamento_eng.map((l,i) => (
+                  <div key={i} style={{fontSize:10,borderBottom:'1px solid #e2e8f0',paddingBottom:4,marginBottom:4}}>
+                    <span style={{color:'#94a3b8',fontSize:9}}>{l.hora ? new Date(l.hora).toLocaleString('pt-BR') : ''} · {l.usuario||''}</span>
+                    <div style={{color:'#374151',marginTop:2}}>{l.texto}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'6px 10px',marginBottom:10,fontSize:10,color:'#92400e'}}>
+              ⚙️ Engenharia pode adicionar observações técnicas. Agendamento é exclusivo da Produção.
+            </div>
+            <label className="acn-label">Nova Observação</label>
+            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
+              placeholder="Observação técnica, pontos de atenção..."
+              value={novaObsAcomp} onChange={e=>setNovaObsAcomp(e.target.value)} autoFocus />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={addObsAcompanhamento}>SALVAR OBS.</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObsAcomp(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <DemandasSetorWidget setor="Engenharia" cor="#2563eb" currentUser={currentUser} />
       <OplMovimentadas setor="Engenharia" />
       <DemandaFooter setor="Engenharia" />
