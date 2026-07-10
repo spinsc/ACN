@@ -99,61 +99,207 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
 }
 
 export function OplMovimentadas({ setor }: { setor: string }) {
-  const [open, setOpen] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [opls, setOpls] = useState<any[]>([]);
+  const [open, setOpen]     = useState(false);
+  const [aba, setAba]       = useState<'logs'|'processo'>('logs');
+  const [logs, setLogs]     = useState<any[]>([]);
+  const [opls, setOpls]     = useState<any[]>([]);
+  const [operadores, setOperadores] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Filtros
+  const [fOperador, setFOperador]       = useState('');
+  const [fDataInicio, setFDataInicio]   = useState('');
+  const [fDataFim, setFDataFim]         = useState('');
 
   useEffect(() => {
     if (open) fetchData();
   }, [open]);
 
   const fetchData = async () => {
-    const [logsRes, oplsRes] = await Promise.all([
-      supabase.from('logs_movimentacao_opl').select('*').order('data_hora', { ascending: false }).limit(10),
-      supabase.from('oples').select('id,opl,cliente_nome,tipo_projeto,status_geral').not('status_geral', 'in', '("Faturado","Cancelado")').order('data_entrada', { ascending: false }).limit(30),
-    ]);
-    setLogs(logsRes.data || []);
-    setOpls(oplsRes.data || []);
+    setLoading(true);
+    try {
+      // Logs com filtros
+      let q = supabase
+        .from('logs_movimentacao_opl')
+        .select('*')
+        .order('data_hora', { ascending: false })
+        .limit(200);
+
+      if (fOperador)    q = q.ilike('usuario_nome', `%${fOperador}%`);
+      if (fDataInicio)  q = q.gte('data_hora', fDataInicio + 'T00:00:00');
+      if (fDataFim)     q = q.lte('data_hora', fDataFim + 'T23:59:59');
+
+      const [logsRes, oplsRes, opersRes] = await Promise.all([
+        q,
+        supabase.from('oples')
+          .select('id,opl,cliente_nome,tipo_projeto,status_geral')
+          .not('status_geral', 'in', '("Faturado","Cancelado")')
+          .order('data_entrada', { ascending: false })
+          .limit(50),
+        supabase.from('logs_movimentacao_opl')
+          .select('usuario_nome')
+          .not('usuario_nome', 'is', null)
+          .limit(500),
+      ]);
+
+      setLogs(logsRes.data || []);
+      setOpls(oplsRes.data || []);
+
+      const uniq = [...new Set((opersRes.data || []).map((r: any) => r.usuario_nome).filter(Boolean))].sort() as string[];
+      setOperadores(uniq);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const fmtDt = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+  const limparFiltros = () => {
+    setFOperador(''); setFDataInicio(''); setFDataFim('');
+  };
+
+  const fmtDt = (d: any) => d
+    ? new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  const temFiltro = fOperador || fDataInicio || fDataFim;
 
   return (
     <div style={{ marginTop: 10 }}>
-      <div
-        className="opl-mov-hdr"
-        onClick={() => setOpen(o => !o)}
-      >
-        <span>OPL Movimentadas — Ultimas 10 Finalizadas + Todos em Processo</span>
+      <div className="opl-mov-hdr" onClick={() => setOpen(o => !o)}>
+        <span>📋 Histórico de Movimentações OPL</span>
         <span>{open ? '▲' : '▼'}</span>
       </div>
+
       {open && (
         <div className="opl-mov-body">
-          <table className="acn-tbl">
-            <thead>
-              <tr>
-                <th>OPL</th><th>Cliente</th><th>Tipo</th><th>Status Atual</th><th>Ultimo Log</th><th>Log Completo</th><th>Pendências</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opls.length === 0 ? (
-                <tr><td colSpan={7} className="acn-empty">Sem OPLs em processo no periodo.</td></tr>
-              ) : opls.map(o => {
-                const log = logs.find(l => l.opl_id === o.id);
-                return (
-                  <tr key={o.id}>
-                    <td><strong>{o.opl}</strong></td>
-                    <td>{(o.cliente_nome || '—').substring(0, 20)}</td>
-                    <td>{o.tipo_projeto || '—'}</td>
-                    <td><span className="acn-badge" style={{ background: '#3b82f6' }}>{o.status_geral}</span></td>
-                    <td style={{ fontSize: 10, color: '#64748b' }}>{log ? log.evento + ' — ' + fmtDt(log.data_hora) : '—'}</td>
-                    <td style={{ fontSize: 10 }}>{logs.filter(l => l.opl_id === o.id).length} eventos</td>
-                    <td><BotaoPendencias opl={o.opl} opl_id={o.id} /></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {/* ── FILTROS ── */}
+          <div style={{ display:'flex', gap:6, alignItems:'flex-end', flexWrap:'wrap', padding:'10px 12px', background:'#f8fafc', borderBottom:'1px solid #fde68a' }}>
+            <div>
+              <div style={{ fontSize:8, fontWeight:700, color:'#92400e', textTransform:'uppercase', marginBottom:2 }}>Operador</div>
+              <select
+                value={fOperador} onChange={e => setFOperador(e.target.value)}
+                style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151', minWidth:140 }}>
+                <option value="">Todos</option>
+                {operadores.map(op => <option key={op} value={op}>{op}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:8, fontWeight:700, color:'#92400e', textTransform:'uppercase', marginBottom:2 }}>Data início</div>
+              <input type="date" value={fDataInicio} onChange={e => setFDataInicio(e.target.value)}
+                style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151' }} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, fontWeight:700, color:'#92400e', textTransform:'uppercase', marginBottom:2 }}>Data fim</div>
+              <input type="date" value={fDataFim} onChange={e => setFDataFim(e.target.value)}
+                style={{ fontSize:10, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, background:'white', color:'#374151' }} />
+            </div>
+            <button onClick={fetchData}
+              style={{ fontSize:10, fontWeight:700, padding:'4px 12px', background:'#92400e', color:'white', border:'none', borderRadius:4, cursor:'pointer' }}>
+              🔍 Buscar
+            </button>
+            {temFiltro && (
+              <button onClick={() => { limparFiltros(); setTimeout(fetchData, 50); }}
+                style={{ fontSize:10, padding:'4px 8px', background:'#f1f5f9', color:'#64748b', border:'1px solid #d1d5db', borderRadius:4, cursor:'pointer' }}>
+                ✕ Limpar
+              </button>
+            )}
+            <span style={{ marginLeft:'auto', fontSize:9, color:'#92400e', fontStyle:'italic' }}>
+              {loading ? 'Carregando...' : `${logs.length} registro(s)`}
+            </span>
+          </div>
+
+          {/* ── ABAS ── */}
+          <div style={{ display:'flex', borderBottom:'1px solid #fde68a' }}>
+            {(['logs','processo'] as const).map(a => (
+              <button key={a} onClick={() => setAba(a)}
+                style={{ flex:1, padding:'6px', fontSize:10, fontWeight:700, cursor:'pointer', border:'none',
+                  background: aba===a ? '#92400e' : '#fffbeb',
+                  color: aba===a ? 'white' : '#92400e',
+                  borderBottom: aba===a ? '2px solid #92400e' : '2px solid transparent' }}>
+                {a === 'logs' ? '📝 Logs de Movimentação' : '⚙️ Em Processo'}
+              </button>
+            ))}
+          </div>
+
+          {/* ── ABA LOGS ── */}
+          {aba === 'logs' && (
+            <div style={{ overflowX:'auto' }}>
+              {loading ? (
+                <div style={{ textAlign:'center', padding:20, color:'#94a3b8', fontSize:11 }}>Carregando...</div>
+              ) : logs.length === 0 ? (
+                <div style={{ textAlign:'center', padding:20, color:'#94a3b8', fontSize:11 }}>Nenhum registro encontrado.</div>
+              ) : (
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+                  <thead><tr style={{ background:'#1e293b' }}>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Data/Hora</th>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OPL</th>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Setor</th>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Evento</th>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Operador</th>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Status anterior → novo</th>
+                  </tr></thead>
+                  <tbody>
+                    {logs.map((l, i) => (
+                      <tr key={l.id || i} style={{ borderBottom:'1px solid #f1f5f9', background: i%2===0 ? 'white' : '#fafafa' }}>
+                        <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>{fmtDt(l.data_hora)}</td>
+                        <td style={{ padding:'5px 8px' }}><strong style={{ color:'#2563eb' }}>{l.numero_opl || '—'}</strong></td>
+                        <td style={{ padding:'5px 8px', color:'#475569' }}>{l.setor || '—'}</td>
+                        <td style={{ padding:'5px 8px', maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={l.evento}>
+                          {l.evento || '—'}
+                        </td>
+                        <td style={{ padding:'5px 8px' }}>
+                          {l.usuario_nome
+                            ? <span style={{ background:'#eff6ff', color:'#1d4ed8', padding:'1px 6px', borderRadius:10, fontSize:9, fontWeight:700 }}>{l.usuario_nome}</span>
+                            : <span style={{ color:'#94a3b8', fontSize:9 }}>—</span>}
+                        </td>
+                        <td style={{ padding:'5px 8px', fontSize:9, color:'#64748b' }}>
+                          {l.status_anterior && l.status_novo
+                            ? <>{l.status_anterior} <span style={{ color:'#0f766e', fontWeight:700 }}>→</span> {l.status_novo}</>
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* ── ABA EM PROCESSO ── */}
+          {aba === 'processo' && (
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+                <thead><tr style={{ background:'#1e293b' }}>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OPL</th>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Cliente</th>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Tipo</th>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Status</th>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Último Registro</th>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Pendências</th>
+                </tr></thead>
+                <tbody>
+                  {opls.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign:'center', padding:16, color:'#94a3b8', fontSize:11 }}>Nenhuma OPL em processo.</td></tr>
+                  ) : opls.map((o, i) => {
+                    const ultimoLog = logs.find(l => l.opl_id === o.id);
+                    return (
+                      <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9', background: i%2===0 ? 'white' : '#fafafa' }}>
+                        <td style={{ padding:'5px 8px' }}><strong style={{ color:'#2563eb' }}>{o.opl}</strong></td>
+                        <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome || '—'}</td>
+                        <td style={{ padding:'5px 8px', color:'#64748b' }}>{o.tipo_projeto || '—'}</td>
+                        <td style={{ padding:'5px 8px' }}>
+                          <span style={{ background:'#3b82f6', color:'white', fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:10 }}>{o.status_geral}</span>
+                        </td>
+                        <td style={{ padding:'5px 8px', fontSize:9, color:'#64748b', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {ultimoLog ? `${ultimoLog.evento} — ${fmtDt(ultimoLog.data_hora)}` : '—'}
+                        </td>
+                        <td style={{ padding:'5px 8px' }}><BotaoPendencias opl={o.opl} opl_id={o.id} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

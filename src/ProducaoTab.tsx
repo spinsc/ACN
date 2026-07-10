@@ -830,8 +830,11 @@ function VoucherServicos({ currentUser }) {
   const setItens = (fn) => setForm(f => ({ ...f, itens: typeof fn === 'function' ? fn(f.itens) : fn }));
 
   const loadTipos = async () => {
-    const { data } = await supabase.from('tipos_servico_voucher').select('*').order('nome');
-    setTiposServico(data || []);
+    try {
+      const { data, error } = await supabase.from('tipos_servico_voucher').select('*').order('nome');
+      if (!error) setTiposServico(data || []);
+      // se tabela não existe ainda, ignora silenciosamente
+    } catch { /* tabela ainda não criada */ }
   };
 
   const salvarTipo = async () => {
