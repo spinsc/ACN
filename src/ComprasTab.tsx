@@ -78,11 +78,15 @@ export default function ComprasTab({ currentUser }) {
     return () => clearInterval(t);
   }, [filtro]);
 
+  const [queryError, setQueryError] = useState<string|null>(null);
+
   const load = async () => {
     setLoading(true);
+    setQueryError(null);
     let q = supabase.from('pcp_pedidos_compra').select('*').order('created_at', {ascending:false});
     if (filtro) q = q.eq('status_solicitacao', filtro);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) { setQueryError(error.message); setLoading(false); setPedidos([]); return; }
     setPedidos(data || []);
     // inicializa inline com valores existentes
     const init: any = {};
@@ -159,8 +163,14 @@ export default function ComprasTab({ currentUser }) {
         </select>
       </div>
 
+      {queryError && (
+        <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,padding:'10px 14px',marginBottom:12,fontSize:11,color:'#dc2626'}}>
+          ⚠️ Erro ao carregar dados: <strong>{queryError}</strong>
+        </div>
+      )}
+
       {loading ? <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
-        : pedidos.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhuma requisição encontrada.</div>
+        : pedidos.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhuma requisição encontrada. {queryError ? '' : '(tabela vazia ou sem permissão)'}</div>
         : (
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
