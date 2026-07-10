@@ -121,10 +121,13 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-body { display:flex; flex:1; overflow:hidden; width:100%; }
 
 /* ── TOPBAR ── */
-.acn-header { background:#0f766e; color:#fff; padding:0 14px; display:flex; align-items:center; gap:10px; height:42px; flex-shrink:0; }
+.acn-header { background:#0f766e; color:#fff; padding:0 14px; display:flex; align-items:center; gap:10px; height:52px; flex-shrink:0; }
+.acn-logo { display:flex; align-items:center; gap:8px; }
+.acn-logo img { height:40px; object-fit:contain; }
 .acn-logo h1 { margin:0; font-size:13px; font-weight:700; color:#fff; letter-spacing:.4px; }
 .acn-logo h1 span { color:#99f6e4; }
 .acn-logo p  { margin:0; font-size:8px; color:#99f6e4; opacity:.75; }
+.acn-motorola img { height:36px; object-fit:contain; opacity:.92; }
 .acn-period  { display:flex; align-items:center; gap:4px; background:rgba(0,0,0,.18); padding:3px 8px; border-radius:4px; }
 .acn-period span  { font-size:9px; color:#ccfbf1; }
 .acn-period input { font-size:9px; padding:2px 4px; border-radius:3px; border:none; color:#0f172a; background:#f0fdfa; }
@@ -380,8 +383,6 @@ body.dark a[style*="color:#2563eb"] { color:#60a5fa !important; }
 
 export default function DashboardTab({ currentUser, onLogout }: Props) {
   const [activeTab, setActiveTab]       = useState('dashboard');
-  const [filtroInicio, setFiltroInicio] = useState('');
-  const [filtroFim, setFiltroFim]       = useState('');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
 
   // Trocar senha
@@ -552,17 +553,16 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
         {/* ── TOPBAR ── */}
         <header className="acn-header">
           <div className="acn-logo">
-            <h1>ACN <span>SINAL VERDE</span></h1>
-            <p>Workflow Industrial · KPIs em Horas</p>
-          </div>
-          <div className="acn-period">
-            <span>Período:</span>
-            <input type="date" value={filtroInicio} onChange={e => setFiltroInicio(e.target.value)} />
-            <span>a</span>
-            <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} />
-            <button onClick={buscarRealizados}>Atualizar</button>
+            <img src={import.meta.env.BASE_URL + 'logo.png'} alt="ACN Sinal Verde" />
+            <div>
+              <h1>ACN <span>SINAL VERDE</span></h1>
+              <p>Workflow Industrial · KPIs em Horas</p>
+            </div>
           </div>
           <div className="acn-right">
+            <div className="acn-motorola">
+              <img src={import.meta.env.BASE_URL + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" />
+            </div>
             <button
               style={{ background:'rgba(0,0,0,.2)', border:'1px solid rgba(255,255,255,.2)', color:'white', fontSize:14, cursor:'pointer', borderRadius:4, padding:'2px 7px' }}
               onClick={() => setDark(d => !d)}

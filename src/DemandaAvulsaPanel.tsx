@@ -21,6 +21,21 @@ const fmtDT = (v: string) => {
   if (!v) return '—';
   return new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
 };
+// Formata apenas a data (sem hora) — para prazos
+const fmtDate = (v: string) => {
+  if (!v) return '—';
+  // Se vier YYYY-MM-DD, usa T12:00 para evitar shift de fuso
+  const d = v.length === 10 ? new Date(v + 'T12:00') : new Date(v);
+  return d.toLocaleDateString('pt-BR');
+};
+// Converte string "YYYY-MM-DD" para ISO evitando UTC shift
+const dateToISO = (v: string) => v ? new Date(v + 'T12:00:00').toISOString() : null;
+// Converte ISO/timestamp para "YYYY-MM-DD" (para popular input date)
+const isoToDate = (v: string) => {
+  if (!v) return '';
+  const d = new Date(v);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 const fmtH = (h: number) => {
   if (h < 1) return `${Math.round(h * 60)}min`;
   if (h < 24) return `${h.toFixed(1)}h`;
@@ -137,7 +152,7 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser }) {
           <div>
             <div style={{ fontSize:8, color:'#9ca3af', fontWeight:700, textTransform:'uppercase' }}>Prazo</div>
             <div style={{ fontSize:11, fontWeight: al ? 700 : 400, color: al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : '#1f2937' }}>
-              {fmtDT(etapa.prazo)}
+              {fmtDate(etapa.prazo)}
             </div>
           </div>
           <div>
@@ -196,7 +211,9 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [novaInfo, setNovaInfo] = useState('');
   const [editando, setEditando] = useState(false);
   const [editForm, setEditForm] = useState({ titulo: initial.titulo, descricao: initial.descricao || '', observacoes: initial.observacoes || '', prioridade: initial.prioridade });
-  const [designarForm, setDesignarForm] = useState({ responsavel_nome: initial.responsavel_nome || '', responsavel_email: initial.responsavel_email || '', prazo: initial.prazo ? initial.prazo.substring(0, 16) : '' });
+  const [designarForm, setDesignarForm] = useState({ responsavel_nome: initial.responsavel_nome || '', responsavel_email: initial.responsavel_email || '', prazo: initial.prazo ? isoToDate(initial.prazo) : '' });
+  const [reprogramarForm, setReprogramarForm] = useState({ nova_data: '', motivo: '' });
+  const [mostrarReprogramar, setMostrarReprogramar] = useState(false);
   const [mostrarDesignar, setMostrarDesignar] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -231,10 +248,37 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     await supabase.from('demandas_avulsas').update({
       responsavel_nome: designarForm.responsavel_nome,
       responsavel_email: designarForm.responsavel_email,
-      prazo: new Date(designarForm.prazo).toISOString(),
+      prazo: dateToISO(designarForm.prazo),
       atualizado_em: new Date().toISOString(),
     }).eq('id', d.id);
     setMostrarDesignar(false);
+    await reload();
+    setSalvando(false);
+    onRefresh();
+  };
+
+  // ── Reprogramar prazo ────────────────────────────────────────────────────
+  const salvarReprogramar = async () => {
+    if (!reprogramarForm.nova_data) { alert('Informe a nova data!'); return; }
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const entrada = {
+      tipo: 'reprogramacao',
+      prazo_anterior: d.prazo,
+      novo_prazo: dateToISO(reprogramarForm.nova_data),
+      motivo: reprogramarForm.motivo || '',
+      usuario: currentUser?.nome || '',
+      data: agora,
+      texto: `📅 Prazo reprogramado de ${fmtDate(d.prazo)} → ${fmtDate(reprogramarForm.nova_data)}${reprogramarForm.motivo ? ` — Motivo: ${reprogramarForm.motivo}` : ''}`,
+    };
+    const infoAtual = [...(d.informacoes || []), entrada];
+    await supabase.from('demandas_avulsas').update({
+      prazo: dateToISO(reprogramarForm.nova_data),
+      informacoes: infoAtual,
+      atualizado_em: agora,
+    }).eq('id', d.id);
+    setReprogramarForm({ nova_data: '', motivo: '' });
+    setMostrarReprogramar(false);
     await reload();
     setSalvando(false);
     onRefresh();
@@ -349,7 +393,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           <div style={{ padding:'6px 16px', background: alerta === 'vencida' ? '#fef2f2' : '#fffbeb',
             borderBottom:`1px solid ${alerta === 'vencida' ? '#fca5a5' : '#fcd34d'}`,
             color: alerta === 'vencida' ? '#dc2626' : '#d97706', fontWeight:700, fontSize:11, flexShrink:0 }}>
-            {alerta === 'vencida' ? '🔴 TAREFA VENCIDA' : `🟡 Vence em ${diasV} dia${diasV === 1 ? '' : 's'}`} — {fmtDT(d.prazo)}
+            {alerta === 'vencida' ? '🔴 TAREFA VENCIDA' : `🟡 Vence em ${diasV} dia${diasV === 1 ? '' : 's'}`} — {fmtDate(d.prazo)}
           </div>
         )}
 
@@ -371,7 +415,13 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               👤 {d.responsavel_nome ? 'Reatribuir' : 'Designar'}
             </button>
           )}
-          <button onClick={() => setEditando(v => !v)}
+          {d.status !== 'Concluída' && (
+            <button onClick={() => { setMostrarReprogramar(v => !v); setMostrarDesignar(false); setEditando(false); }}
+              style={{ background: mostrarReprogramar ? '#6b7280' : '#f97316', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              📅 Reprogramar
+            </button>
+          )}
+          <button onClick={() => { setEditando(v => !v); setMostrarDesignar(false); setMostrarReprogramar(false); }}
             style={{ background: editando ? '#6b7280' : '#475569', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
             ✏️ Editar
           </button>
@@ -397,7 +447,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               </div>
               <div style={{ marginBottom:8 }}>
                 <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>PRAZO *</label>
-                <input type="datetime-local" value={designarForm.prazo} onChange={e=>setDesignarForm(f=>({...f,prazo:e.target.value}))}
+                <input type="date" value={designarForm.prazo} onChange={e=>setDesignarForm(f=>({...f,prazo:e.target.value}))}
                   style={{ width:'100%', padding:'5px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
               </div>
               <div style={{ display:'flex', gap:8 }}>
@@ -406,6 +456,40 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                   {salvando ? '...' : '✓ Salvar'}
                 </button>
                 <button onClick={() => setMostrarDesignar(false)}
+                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Reprogramar prazo ── */}
+          {mostrarReprogramar && (
+            <div style={{ background:'#fff7ed', border:'1px solid #fdba74', borderRadius:6, padding:12 }}>
+              <div style={{ fontWeight:700, fontSize:10, color:'#c2410c', marginBottom:8 }}>📅 REPROGRAMAR PRAZO</div>
+              <div style={{ fontSize:10, color:'#64748b', marginBottom:8 }}>
+                Prazo atual: <strong style={{ color: alerta==='vencida'?'#dc2626':'#1e293b' }}>{fmtDate(d.prazo)}</strong>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                <div>
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>NOVA DATA *</label>
+                  <input type="date" value={reprogramarForm.nova_data} onChange={e=>setReprogramarForm(f=>({...f,nova_data:e.target.value}))}
+                    min={new Date().toISOString().substring(0,10)}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #fdba74', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>MOTIVO</label>
+                  <input value={reprogramarForm.motivo} onChange={e=>setReprogramarForm(f=>({...f,motivo:e.target.value}))}
+                    placeholder="Ex: cliente solicitou, aguardando peça..."
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #fdba74', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                </div>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={salvarReprogramar} disabled={salvando}
+                  style={{ background:'#f97316', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                  {salvando ? '...' : '✓ Confirmar'}
+                </button>
+                <button onClick={() => setMostrarReprogramar(false)}
                   style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
                   Cancelar
                 </button>
@@ -464,7 +548,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {/* ── Info principal (demanda simples) ── */}
           {!editando && !temEtapas && (
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              <InfoBlock label="Prazo" value={fmtDT(d.prazo)} alert={alerta} />
+              <InfoBlock label="Prazo" value={fmtDate(d.prazo)} alert={alerta} />
               <InfoBlock label="Prioridade" value={d.prioridade} color={PRIO_COR[d.prioridade]} />
               <InfoBlock label="Início Execução" value={fmtDT(d.data_inicio)} />
               <InfoBlock label="Conclusão" value={fmtDT(d.data_fim)} />
@@ -520,12 +604,19 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               <div style={{ fontWeight:700, fontSize:9, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>
                 Histórico ({d.informacoes.length})
               </div>
-              {[...(d.informacoes || [])].reverse().map((info: any, i: number) => (
-                <div key={i} style={{ borderLeft:'3px solid #2563eb', paddingLeft:10, marginBottom:8 }}>
-                  <div style={{ fontSize:9, color:'#9ca3af' }}>{info.usuario} · {fmtDT(info.data)}</div>
-                  <div style={{ fontSize:11, color:'#1f2937', marginTop:2 }}>{info.texto}</div>
-                </div>
-              ))}
+              {[...(d.informacoes || [])].reverse().map((info: any, i: number) => {
+                const isReprog = info.tipo === 'reprogramacao';
+                return (
+                  <div key={i} style={{ borderLeft:`3px solid ${isReprog?'#f97316':'#2563eb'}`, paddingLeft:10, marginBottom:8,
+                    background: isReprog?'#fff7ed':'transparent', borderRadius: isReprog?'0 4px 4px 0':'0', padding: isReprog?'6px 10px':'0 10px' }}>
+                    <div style={{ fontSize:9, color:'#9ca3af' }}>
+                      {isReprog && <span style={{ fontWeight:700, color:'#f97316', marginRight:4 }}>📅 REPROGRAMAÇÃO</span>}
+                      {info.usuario} · {fmtDT(info.data)}
+                    </div>
+                    <div style={{ fontSize:11, color: isReprog?'#9a3412':'#1f2937', marginTop:2, fontWeight: isReprog?600:400 }}>{info.texto}</div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -623,7 +714,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       informacoes: [],
       etapas: qtdEtapas > 1 ? etapas.map(e => ({
         ...e,
-        prazo: e.prazo ? new Date(e.prazo).toISOString() : null,
+        prazo: e.prazo ? dateToISO(e.prazo) : null,
       })) : [],
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
@@ -634,7 +725,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
     if (qtdEtapas === 1) {
       payload.responsavel_nome = etapas[0].responsavel_nome || null;
       payload.responsavel_email = etapas[0].responsavel_email || null;
-      payload.prazo = etapas[0].prazo ? new Date(etapas[0].prazo).toISOString() : null;
+      payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
     }
     await supabase.from('demandas_avulsas').insert([payload]);
     setSalvando(false);
@@ -726,7 +817,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
                     Prazo{qtdEtapas > 1 ? ' *' : ''}
                   </label>
-                  <input type="datetime-local" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
+                  <input type="date" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
                     style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.prazo?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                 </div>
                 <div>
@@ -805,7 +896,7 @@ function DemandaCard({ d, onClick }) {
           {!temEtapas && (
             <div style={{ marginTop:5, display:'flex', gap:10, flexWrap:'wrap' }}>
               {d.responsavel_nome && <span style={{ fontSize:9, color:'#374151' }}>👤 {d.responsavel_nome}</span>}
-              {d.prazo && <span style={{ fontSize:9, color: alerta?corBorda:'#6b7280' }}>⏰ {fmtDT(d.prazo)}</span>}
+              {d.prazo && <span style={{ fontSize:9, color: alerta?corBorda:'#6b7280' }}>⏰ {fmtDate(d.prazo)}</span>}
               {d.data_inicio && !d.data_fim && (
                 <span style={{ fontSize:9, color:'#2563eb' }}>▶ {fmtH((Date.now() - new Date(d.data_inicio).getTime()) / 3600000)}</span>
               )}
@@ -827,6 +918,8 @@ export default function DemandaAvulsaPanel({ currentUser }) {
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('ativas');
+  const [filtroResp, setFiltroResp] = useState<string>('');
+  const [filtroStatusSpec, setFiltroStatusSpec] = useState<string>('');
   const [modalNova, setModalNova] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
 
@@ -841,22 +934,38 @@ export default function DemandaAvulsaPanel({ currentUser }) {
 
   useEffect(() => { fetch(); const t = setInterval(fetch, 30000); return () => clearInterval(t); }, [fetch]);
 
+  const isVencida = (d: any) => {
+    if (d.status === 'Concluída') return false;
+    const etapas = d.etapas || [];
+    if (etapas.length > 0) return etapas.some((e: any) => alertClass(e.prazo, e.status) === 'vencida');
+    return alertClass(d.prazo, d.status) === 'vencida';
+  };
+
   const lista = demandas.filter(d => {
-    if (filtroStatus === 'ativas') return d.status !== 'Concluída';
-    if (filtroStatus === 'concluidas') return d.status === 'Concluída';
+    // Filtro principal de aba
+    if (filtroStatus === 'ativas' && d.status === 'Concluída') return false;
+    if (filtroStatus === 'concluidas' && d.status !== 'Concluída') return false;
+    if (filtroStatus === 'vencidas' && !isVencida(d)) return false;
+    // Filtro por status específico
+    if (filtroStatusSpec && d.status !== filtroStatusSpec) return false;
+    // Filtro por responsável
+    if (filtroResp) {
+      const resp = d.responsavel_nome || '';
+      if (!resp.toLowerCase().includes(filtroResp.toLowerCase())) return false;
+    }
     return true;
   });
 
-  const vencidas = demandas.filter(d => {
-    if (d.status === 'Concluída') return false;
-    const etapas = d.etapas || [];
-    if (etapas.length > 0) return etapas.some(e => alertClass(e.prazo, e.status) === 'vencida');
-    return alertClass(d.prazo, d.status) === 'vencida';
-  }).length;
+  // Lista de responsáveis únicos para o dropdown
+  const responsaveis = Array.from(new Set(
+    demandas.map(d => d.responsavel_nome).filter(Boolean)
+  )).sort() as string[];
+
+  const vencidas = demandas.filter(isVencida).length;
   const urgentes = demandas.filter(d => {
     if (d.status === 'Concluída') return false;
     const etapas = d.etapas || [];
-    if (etapas.length > 0) return etapas.some(e => alertClass(e.prazo, e.status) === 'urgente') && !etapas.some(e => alertClass(e.prazo, e.status) === 'vencida');
+    if (etapas.length > 0) return etapas.some((e: any) => alertClass(e.prazo, e.status) === 'urgente') && !etapas.some((e: any) => alertClass(e.prazo, e.status) === 'vencida');
     return alertClass(d.prazo, d.status) === 'urgente';
   }).length;
 
@@ -866,11 +975,13 @@ export default function DemandaAvulsaPanel({ currentUser }) {
         <span style={{ display:'flex', alignItems:'center', gap:8 }}>
           ⚡ Demandas Avulsas — Engenharia
           {vencidas > 0 && (
-            <span style={{ background:'#dc2626', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>
+            <span onClick={() => setFiltroStatus(filtroStatus==='vencidas'?'ativas':'vencidas')}
+              style={{ background:'#dc2626', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, cursor:'pointer',
+                outline: filtroStatus==='vencidas'?'2px solid white':'none' }}>
               🔴 {vencidas} vencida{vencidas>1?'s':''}
             </span>
           )}
-          {urgentes > 0 && (
+          {urgentes > 0 && filtroStatus!=='vencidas' && (
             <span style={{ background:'#d97706', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>
               🟡 {urgentes} urgente{urgentes>1?'s':''}
             </span>
@@ -882,14 +993,38 @@ export default function DemandaAvulsaPanel({ currentUser }) {
         </button>
       </div>
 
-      <div style={{ padding:'6px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6 }}>
-        {[['ativas','Ativas'],['concluidas','Concluídas'],['todas','Todas']].map(([v,l]) => (
+      <div style={{ padding:'6px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+        {[['ativas','Ativas'],['concluidas','Concluídas'],['vencidas','Vencidas'],['todas','Todas']].map(([v,l]) => (
           <button key={v} onClick={() => setFiltroStatus(v)}
-            style={{ border:'none', borderRadius:12, padding:'2px 10px', fontSize:9, fontWeight:700,
-              background: filtroStatus===v?'#2563eb':'#f1f5f9', color: filtroStatus===v?'#fff':'#374151', cursor:'pointer' }}>
-            {l}
+            style={{ border:'none', borderRadius:12, padding:'2px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
+              background: filtroStatus===v?(v==='vencidas'?'#dc2626':'#2563eb'):'#f1f5f9',
+              color: filtroStatus===v?'#fff':'#374151' }}>
+            {v==='vencidas'?'🔴 ':''}{ l}
           </button>
         ))}
+        <div style={{ width:1, background:'#e2e8f0', height:18, margin:'0 2px' }} />
+        {/* Filtro por status específico */}
+        <select value={filtroStatusSpec} onChange={e=>{setFiltroStatusSpec(e.target.value);if(filtroStatus==='concluidas'&&e.target.value&&e.target.value!=='Concluída')setFiltroStatus('ativas');}}
+          style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
+          <option value="">Status: Todos</option>
+          <option value="Pendente">Pendente</option>
+          <option value="Em Andamento">Em Andamento</option>
+          <option value="Concluída">Concluída</option>
+        </select>
+        {/* Filtro por responsável */}
+        {responsaveis.length > 0 && (
+          <select value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}
+            style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
+            <option value="">Responsável: Todos</option>
+            {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
+        {(filtroResp || filtroStatusSpec) && (
+          <button onClick={() => { setFiltroResp(''); setFiltroStatusSpec(''); }}
+            style={{ fontSize:9, padding:'2px 8px', border:'1px solid #fca5a5', borderRadius:8, background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontWeight:700 }}>
+            ✕ Limpar filtros
+          </button>
+        )}
         <span style={{ marginLeft:'auto', fontSize:9, color:'#9ca3af', lineHeight:'22px' }}>{lista.length} demandas</span>
       </div>
 
