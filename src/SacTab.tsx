@@ -170,6 +170,7 @@ export default function SacTab({ currentUser }) {
   // Manutenção Veicular — modais extras
   const [modalAceiteSAC, setModalAceiteSAC]       = useState<any>(null);
   const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação (Em Cotação)
+  const [localItens, setLocalItens]               = useState<any[]>([]); // itens editáveis do modal de cotação
   const [modalOrcProd, setModalOrcProd]           = useState<any>(null); // ver/editar orçamento vindo da Produção
   const [orcProdModo, setOrcProdModo]             = useState<'ver'|'editar'>('ver');
   const [orcProdItens, setOrcProdItens]           = useState<any[]>([]);
@@ -606,7 +607,7 @@ export default function SacTab({ currentUser }) {
       if (os.status === 'Em Cotação') {
         btns.push(
           <button key="itens" className="acn-btn" style={{background:'#0891b2',fontSize:9}}
-            onClick={()=>setModalItens(os)}>
+            onClick={()=>{ setLocalItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalItens(os); }}>
             📋 Itens
           </button>,
           <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
@@ -1529,73 +1530,64 @@ export default function SacTab({ currentUser }) {
             <div className="modal-title">📋 Itens da Cotação — {modalItens.numero_os}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalItens.cliente_nome}</div>
             {/* Tabela de itens */}
-            {(() => {
-              const [localItens, setLocalItens] = React.useState<any[]>(
-                Array.isArray(modalItens.itens_cotacao) && modalItens.itens_cotacao.length > 0
-                  ? modalItens.itens_cotacao.map(i=>({...i}))
-                  : [{ codigo:'', descricao:'', quantidade:1, valor_unitario:0 }]
-              );
-              const total = localItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
-              const addLinha = () => setLocalItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]);
-              const remLinha = (idx) => setLocalItens(p=>p.filter((_,i)=>i!==idx));
-              const setItem = (idx, campo, val) => setLocalItens(p=>p.map((item,i)=>i===idx?{...item,[campo]:val}:item));
-              return (<>
-                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:8}}>
-                  <thead>
-                    <tr style={{background:'#f1f5f9'}}>
-                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0',width:90}}>Código</th>
-                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0'}}>Descrição</th>
-                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'center',borderBottom:'2px solid #e2e8f0',width:60}}>Qtd</th>
-                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Vl. Unit. (R$)</th>
-                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Total</th>
-                      <th style={{width:30,borderBottom:'2px solid #e2e8f0'}}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {localItens.map((item, idx) => (
-                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-                        <td style={{padding:'4px 6px'}}>
-                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo}
-                            onChange={e=>setItem(idx,'codigo',e.target.value)} placeholder="Cód." />
-                        </td>
-                        <td style={{padding:'4px 6px'}}>
-                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao}
-                            onChange={e=>setItem(idx,'descricao',e.target.value)} placeholder="Descrição do item..." />
-                        </td>
-                        <td style={{padding:'4px 6px'}}>
-                          <input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade}
-                            onChange={e=>setItem(idx,'quantidade',Number(e.target.value)||1)} />
-                        </td>
-                        <td style={{padding:'4px 6px'}}>
-                          <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario}
-                            onChange={e=>setItem(idx,'valor_unitario',Number(e.target.value)||0)} />
-                        </td>
-                        <td style={{padding:'4px 8px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>
-                          {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                        </td>
-                        <td style={{padding:'4px'}}>
-                          <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14,lineHeight:1}} onClick={()=>remLinha(idx)}>×</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{background:'#f0fdf4'}}>
-                      <td colSpan={4} style={{padding:'8px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
-                      <td style={{padding:'8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
-                        R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+            <>
+              <table style={{width:'100%',borderCollapse:'collapse',marginBottom:8}}>
+                <thead>
+                  <tr style={{background:'#f1f5f9'}}>
+                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0',width:90}}>Código</th>
+                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0'}}>Descrição</th>
+                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'center',borderBottom:'2px solid #e2e8f0',width:60}}>Qtd</th>
+                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Vl. Unit. (R$)</th>
+                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Total</th>
+                    <th style={{width:30,borderBottom:'2px solid #e2e8f0'}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {localItens.map((item, idx) => (
+                    <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                      <td style={{padding:'4px 6px'}}>
+                        <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo}
+                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,codigo:e.target.value}:x))} placeholder="Cód." />
                       </td>
-                      <td></td>
+                      <td style={{padding:'4px 6px'}}>
+                        <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao}
+                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,descricao:e.target.value}:x))} placeholder="Descrição do item..." />
+                      </td>
+                      <td style={{padding:'4px 6px'}}>
+                        <input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade}
+                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
+                      </td>
+                      <td style={{padding:'4px 6px'}}>
+                        <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario}
+                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
+                      </td>
+                      <td style={{padding:'4px 8px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>
+                        {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                      </td>
+                      <td style={{padding:'4px'}}>
+                        <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14,lineHeight:1}}
+                          onClick={()=>setLocalItens(p=>p.filter((_,i)=>i!==idx))}>×</button>
+                      </td>
                     </tr>
-                  </tfoot>
-                </table>
-                <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}} onClick={addLinha}>+ Adicionar Linha</button>
-                <div style={{display:'flex',gap:8}}>
-                  <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={()=>{ salvarItensOS(modalItens.id, localItens); setModalItens(null); }}>✓ Salvar Itens</button>
-                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
-                </div>
-              </>);
-            })()}
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{background:'#f0fdf4'}}>
+                    <td colSpan={4} style={{padding:'8px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
+                    <td style={{padding:'8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
+                      R$ {localItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+              <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}}
+                onClick={()=>setLocalItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>+ Adicionar Linha</button>
+              <div style={{display:'flex',gap:8}}>
+                <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={()=>{ salvarItensOS(modalItens.id, localItens); setModalItens(null); }}>✓ Salvar Itens</button>
+                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
+              </div>
+            </>
           </div>
         </div>
       )}
