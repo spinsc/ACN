@@ -121,10 +121,10 @@ export default function AjustesProjetoTab({ currentUser }) {
     <div>
       <div className="sec-card">
         <div className="sec-hdr" style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b' }}>
-          <span style={{ color: '#92400e' }}>Registro de Ajustes de Projeto</span>
+          <span style={{ color: '#92400e' }}>Demandas Gerais</span>
           {!showForm && (
             <button className="acn-btn" style={{ background: '#1e293b' }} onClick={() => setShowForm(true)}>
-              + Novo Ajuste
+              + Nova Demanda
             </button>
           )}
         </div>

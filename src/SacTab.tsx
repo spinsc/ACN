@@ -11,15 +11,30 @@ const TIPOS_PROJETO_FALLBACK = [
 ];
 
 const STATUS_COR: Record<string, string> = {
-  'Diagnóstico':      '#0891b2',
-  'Aberta':           '#3b82f6',
-  'Orçamento Pronto': '#7c3aed',
-  'Orç. Enviado':     '#f59e0b',
-  'Aprovado':         '#22c55e',
-  'Reprovado':        '#ef4444',
-  'Em Execução':      '#8b5cf6',
-  'Concluído':        '#0d9488',
-  'Entregue':         '#166534',
+  // Fluxo LAB (OS padrão)
+  'Diagnóstico':           '#0891b2',
+  'Aberta':                '#3b82f6',
+  'Orçamento Pronto':      '#7c3aed',
+  'Orç. Enviado':          '#f59e0b',
+  'Aprovado':              '#22c55e',
+  'Reprovado':             '#ef4444',
+  'Em Execução':           '#8b5cf6',
+  'Concluído':             '#0d9488',
+  'Entregue':              '#166534',
+  // Fluxo MANUTENÇÃO VEICULAR
+  'Em Cotação':            '#0891b2',
+  'Aguardando Aprovação':  '#f59e0b',
+  'Em Provisionamento':    '#7c3aed',
+  'Data Confirmada':       '#16a34a',
+  'Em Manutenção':         '#dc2626',
+  'Manutenção Concluída':  '#0d9488',
+};
+
+// Detecta OS de manutenção veicular
+const isVeicular = (tp: string) => {
+  const t = (tp||'').toLowerCase().replace(/[çc]/g,'c').replace(/[ãa]/g,'a').replace(/[êe]/g,'e');
+  return (t.includes('manutencao') || t.includes('garantia')) &&
+         (t.includes('veicular') || t.includes('veiculo'));
 };
 
 // ─── Canvas de Assinatura ────────────────────────────────────────────────────
@@ -105,6 +120,12 @@ const FORM_VAZIO = {
   prazo_orcamento:'', data_prevista_entrega:'',
   acessorios: [] as {descricao:string; presente:boolean}[],
   despesa_deslocamento:'', despesa_hospedagem:'', despesa_alimentacao:'',
+  // Manutenção Veicular
+  tipo_avaliacao: 'Presencial' as 'Presencial'|'Remota',
+  acompanhamento_engenharia: false,
+  itens_cotacao: [] as {codigo:string;descricao:string;quantidade:number;valor_unitario:number}[],
+  // Faturamento
+  cnpj_faturamento:'', razao_social_faturamento:'', endereco_faturamento:'',
 };
 
 export default function SacTab({ currentUser }) {
@@ -142,6 +163,16 @@ export default function SacTab({ currentUser }) {
   const [saidaForm, setSaidaForm]       = useState({ nome:'', sig: null as string|null });
   const [fotosSaidaFiles, setFotosSaidaFiles] = useState([]);
   const [novoEquip, setNovoEquip]       = useState('');
+
+  // Manutenção Veicular — modais extras
+  const [modalProvisionar, setModalProvisionar]   = useState<any>(null);
+  const [provisionarForm, setProvisionarForm]     = useState({ data_provisao:'', periodo:'Manhã' });
+  const [modalConfirmarChegada, setModalConfirmarChegada] = useState<any>(null);
+  const [modalConcluirManu, setModalConcluirManu] = useState<any>(null);
+  const [concluirManuForm, setConcluirManuForm]   = useState({ observacoes:'', itens_usados: [] as any[] });
+  const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação
+  const [anexosSendoUpload, setAnexosSendoUpload] = useState(false);
+  const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
   const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', defeito:'' };
@@ -190,6 +221,7 @@ export default function SacTab({ currentUser }) {
     setSalvando(true);
     const agora = new Date().toISOString();
     const isGarantia = form.tipo_servico === 'Garantia';
+    const ehVeicular = isVeicular(form.tipo_projeto);
 
     // Gera primeiro número e faz upload de fotos (uma única vez)
     let numero = await gerarNumeroOS();
@@ -219,8 +251,17 @@ export default function SacTab({ currentUser }) {
       email: form.email || null,
       prazo_orcamento: !isGarantia ? (form.prazo_orcamento || null) : null,
       data_prevista_entrega: isGarantia ? (form.data_prevista_entrega || null) : null,
-      status: isGarantia ? 'Aprovado' : 'Diagnóstico',
-      aprovado: isGarantia ? true : null,
+      status: ehVeicular
+        ? (form.tipo_avaliacao === 'Remota' ? 'Em Cotação' : 'Em Provisionamento')
+        : (isGarantia ? 'Aprovado' : 'Diagnóstico'),
+      aprovado: isGarantia && !ehVeicular ? true : null,
+      is_manutencao_veicular: ehVeicular,
+      tipo_avaliacao: ehVeicular ? form.tipo_avaliacao : null,
+      acompanhamento_engenharia: form.acompanhamento_engenharia || false,
+      itens_cotacao: form.itens_cotacao?.length > 0 ? form.itens_cotacao : null,
+      cnpj_faturamento: form.cnpj_faturamento || null,
+      razao_social_faturamento: form.razao_social_faturamento || null,
+      endereco_faturamento: form.endereco_faturamento || null,
       acessorios: form.acessorios,
       fotos_entrada: urlsFotos,
       data_abertura: agora,
@@ -251,32 +292,50 @@ export default function SacTab({ currentUser }) {
 
     if (!osData) { alert('Não foi possível gerar número único. Tente novamente.'); setSalvando(false); return; }
 
-    // Auto-criar demanda para Laboratório
-    const sac_fase = isGarantia ? 'execucao' : 'diagnostico';
-    const descDemanda = isGarantia
-      ? `[SAC-EXEC] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`
-      : `[SAC-DIAG] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`;
-    await supabase.from('demandas_setoriais').insert([{
-      setor_destino: 'Laboratorio',
-      descricao: descDemanda,
-      numero_opl: numero,
-      status: 'Pendente',
-      criado_por: currentUser?.email,
-      criado_por_nome: currentUser?.nome,
-      data_abertura: agora,
-      sac_os_id: osData?.id,
-      sac_fase,
-      logs_demanda: [{
-        texto: isGarantia
-          ? `OS Garantia — aprovada automaticamente. Encaminhada para execução.`
-          : `OS aberta para diagnóstico e elaboração de orçamento.`,
-        usuario: currentUser?.nome, hora: agora,
-      }],
-    }]);
+    // Auto-criar demanda para Laboratório (apenas OS não veiculares)
+    if (!ehVeicular) {
+      const sac_fase = isGarantia ? 'execucao' : 'diagnostico';
+      const descDemanda = isGarantia
+        ? `[SAC-EXEC] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`
+        : `[SAC-DIAG] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`;
+      await supabase.from('demandas_setoriais').insert([{
+        setor_destino: 'Laboratorio',
+        descricao: descDemanda,
+        numero_opl: numero,
+        status: 'Pendente',
+        criado_por: currentUser?.email,
+        criado_por_nome: currentUser?.nome,
+        data_abertura: agora,
+        sac_os_id: osData?.id,
+        sac_fase,
+        logs_demanda: [{
+          texto: isGarantia
+            ? `OS Garantia — aprovada automaticamente. Encaminhada para execução.`
+            : `OS aberta para diagnóstico e elaboração de orçamento.`,
+          usuario: currentUser?.nome, hora: agora,
+        }],
+      }]);
+    }
+
+    // Se acompanhamento_engenharia: criar demanda para Engenharia
+    if (form.acompanhamento_engenharia) {
+      await supabase.from('demandas_setoriais').insert([{
+        setor_destino: 'Engenharia',
+        descricao: `[SAC-ENG] ${numero} — ${form.equipamento_nome} | Acompanhamento de Engenharia`,
+        numero_opl: numero,
+        status: 'Pendente',
+        criado_por: currentUser?.email,
+        criado_por_nome: currentUser?.nome,
+        data_abertura: agora,
+        sac_os_id: osData?.id,
+        sac_fase: 'acompanhamento',
+        logs_demanda: [{ texto: 'OS aberta com acompanhamento de engenharia solicitado.', usuario: currentUser?.nome, hora: agora }],
+      }]);
+    }
 
     notificarEvento('sac_os_aberta', `📋 *Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
-    setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setAcessInput('');
+    setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
     setEquipLista([{ ...EQUIP_VAZIO }]);
     setModalNova(false); setSalvando(false); fetchOrdens();
   };
@@ -372,6 +431,140 @@ export default function SacTab({ currentUser }) {
     setModalSaida(null); setSaidaForm({ nome:'', sig:null }); setFotosSaidaFiles([]); fetchOrdens();
   };
 
+  // ── FLUXO MANUTENÇÃO VEICULAR ─────────────────────────────────────────────
+
+  const salvarItensOS = async (osId: string, itens: any[]) => {
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({ itens_cotacao: itens, atualizado_em: agora }).eq('id', osId);
+    fetchOrdens();
+  };
+
+  const enviarCotacaoCliente = async (os: any) => {
+    const agora = new Date().toISOString();
+    const total = (os.itens_cotacao||[]).reduce((s,i)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Aguardando Aprovação',
+      valor_orcamento: total,
+      data_envio_orcamento: agora,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_cotacao_enviada', `💰 *Cotação enviada — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+    fetchOrdens();
+  };
+
+  const aprovarCotacao = async (os: any) => {
+    if (!window.confirm(`Confirmar aprovação do cliente para ${os.numero_os}?`)) return;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Em Provisionamento',
+      aprovado: true,
+      data_aprovacao: agora,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    fetchOrdens();
+  };
+
+  const recusarCotacao = async (os: any) => {
+    const motivo = window.prompt('Motivo da recusa (opcional):');
+    if (motivo === null) return; // cancelou
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Reprovado',
+      aprovado: false,
+      motivo_reprovacao: motivo,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    fetchOrdens();
+  };
+
+  const salvarProvisionamento = async () => {
+    if (!provisionarForm.data_provisao) { alert('Informe a data de provisionamento!'); return; }
+    const os = modalProvisionar;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Data Confirmada',
+      data_provisionamento: provisionarForm.data_provisao,
+      periodo_provisionamento: provisionarForm.periodo,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_data_definida', `📅 *Data definida — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${new Date(provisionarForm.data_provisao+'T12:00').toLocaleDateString('pt-BR')} (${provisionarForm.periodo})`);
+    setModalProvisionar(null); setProvisionarForm({ data_provisao:'', periodo:'Manhã' });
+    fetchOrdens();
+  };
+
+  const alterarData = (os: any) => {
+    setProvisionarForm({ data_provisao: os.data_provisionamento||'', periodo: os.periodo_provisionamento||'Manhã' });
+    setModalProvisionar(os);
+  };
+
+  const confirmarChegadaVeiculo = async () => {
+    const os = modalConfirmarChegada;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Em Manutenção',
+      data_chegada_veiculo: agora,
+      data_inicio_manutencao: agora,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_veiculo_chegou', `🚗 *Veículo chegou — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
+    setModalConfirmarChegada(null); fetchOrdens();
+  };
+
+  const salvarConclusaoManu = async () => {
+    const os = modalConcluirManu;
+    const agora = new Date().toISOString();
+    const kpi = os.data_inicio_manutencao
+      ? Number(((new Date().getTime()-new Date(os.data_inicio_manutencao).getTime())/3600000).toFixed(2))
+      : null;
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Manutenção Concluída',
+      data_conclusao_manutencao: agora,
+      materiais_utilizados: concluirManuForm.itens_usados,
+      observacoes_manutencao: concluirManuForm.observacoes || null,
+      kpi_execucao_horas: kpi,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] });
+    fetchOrdens();
+  };
+
+  const liberarEntregaVeicular = async (os: any) => {
+    if (!window.confirm(`Confirmar entrega do veículo ${os.numero_os} ao cliente?`)) return;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Entregue',
+      data_saida: agora,
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    fetchOrdens();
+  };
+
+  // Upload genérico de arquivo
+  const uploadArquivo = async (file: File, pasta: string): Promise<{nome:string;url:string;tipo:string}|null> => {
+    const path = `sac/${pasta}/${Date.now()}_${file.name.replace(/\s/g,'_')}`;
+    const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert:true, contentType:'application/octet-stream' });
+    if (error||!data) return null;
+    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+    return { nome: file.name, url: pub?.publicUrl||'', tipo: file.type };
+  };
+
+  const anexarArquivos = async (os: any, files: File[]) => {
+    if (!files.length) return;
+    setAnexosSendoUpload(true);
+    const existentes: any[] = Array.isArray(os.arquivos_os) ? os.arquivos_os : [];
+    const novos: any[] = [];
+    for (const f of files) {
+      const result = await uploadArquivo(f, `os_${os.numero_os.replace('/','_')}/arquivos`);
+      if (result) novos.push(result);
+    }
+    await supabase.from('sac_ordens_servico').update({
+      arquivos_os: [...existentes, ...novos],
+      atualizado_em: new Date().toISOString(),
+    }).eq('id', os.id);
+    setAnexosSendoUpload(false);
+    fetchOrdens();
+  };
+
   // ── NOVO EQUIPAMENTO ──────────────────────────────────────────────────────
   const salvarEquipamento = async () => {
     if (!novoEquip.trim()) return;
@@ -399,37 +592,103 @@ export default function SacTab({ currentUser }) {
   // ── AÇÕES POR STATUS ──────────────────────────────────────────────────────
   const renderAcoes = (os) => {
     const btns = [];
+    const eh = os.is_manutencao_veicular;
 
-    // Orçamento finalizado pelo Lab → SAC envia ao cliente
-    if (os.status === 'Orçamento Pronto')
-      btns.push(
-        <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
-          onClick={()=>{ setModalOrc(os); setOrcForm({ valor: os.valor_orcamento ? String(os.valor_orcamento) : '', condicoes: os.condicoes_pagamento || '' }); }}>
-          📤 Enviar
-        </button>
-      );
+    // ── FLUXO VEICULAR ──────────────────────────────────────────────────────
+    if (eh) {
+      // Remoto: Em Cotação → inserir itens e enviar
+      if (os.status === 'Em Cotação') {
+        btns.push(
+          <button key="itens" className="acn-btn" style={{background:'#0891b2',fontSize:9}}
+            onClick={()=>setModalItens(os)}>
+            📋 Itens
+          </button>,
+          <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+            onClick={()=>{ if(!(os.itens_cotacao?.length>0)){alert('Adicione os itens antes de enviar!');return;} enviarCotacaoCliente(os); }}>
+            📤 Enviar Cotação
+          </button>
+        );
+      }
+      // Aguardando Aprovação → aprovar/recusar
+      if (os.status === 'Aguardando Aprovação') {
+        btns.push(
+          <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarCotacao(os)}>✅ Aprovado</button>,
+          <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
+        );
+      }
+      // Em Provisionamento → definir data
+      if (os.status === 'Em Provisionamento') {
+        btns.push(
+          <button key="prov" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+            onClick={()=>{ setProvisionarForm({ data_provisao:'', periodo:'Manhã' }); setModalProvisionar(os); }}>
+            📅 Definir Data
+          </button>
+        );
+      }
+      // Data Confirmada → alterar data ou registrar chegada
+      if (os.status === 'Data Confirmada') {
+        btns.push(
+          <button key="altdata" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>alterarData(os)}>📅 Alterar Data</button>,
+          <button key="chegada" className="acn-btn" style={{background:'#dc2626',fontSize:9}} onClick={()=>setModalConfirmarChegada(os)}>🚗 Chegou</button>
+        );
+      }
+      // Em Manutenção → concluir
+      if (os.status === 'Em Manutenção') {
+        btns.push(
+          <button key="conc" className="acn-btn" style={{background:'#0d9488',fontSize:9}}
+            onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({ observacoes:'', itens_usados: Array.isArray(os.itens_cotacao)?os.itens_cotacao.map(i=>({...i})):[] }); }}>
+            🔧 Concluir Manutenção
+          </button>
+        );
+      }
+      // Manutenção Concluída → SAC entrega
+      if (os.status === 'Manutenção Concluída') {
+        btns.push(
+          <button key="entrega" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
+        );
+      }
+      // Reprovado veicular → reavaliar
+      if (os.status === 'Reprovado') {
+        btns.push(
+          <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+            onClick={()=>{ if(window.confirm(`Reabrir ${os.numero_os}?`)) supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+            🔄 Reavaliar
+          </button>
+        );
+      }
+    } else {
+      // ── FLUXO LAB (padrão) ────────────────────────────────────────────────
+      // Orçamento finalizado pelo Lab → SAC envia ao cliente
+      if (os.status === 'Orçamento Pronto')
+        btns.push(
+          <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+            onClick={()=>{ setModalOrc(os); setOrcForm({ valor: os.valor_orcamento ? String(os.valor_orcamento) : '', condicoes: os.condicoes_pagamento || '' }); }}>
+            📤 Enviar
+          </button>
+        );
 
-    // Cliente respondendo o orçamento enviado
-    if (os.status === 'Orç. Enviado')
-      btns.push(
-        <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalAprov(os);setAprovForm({nome:'',sig:null,data_entrega:''});}}>✅ Aprovar</button>,
-        <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalRepr(os);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});}}>❌ Reprovar</button>
-      );
+      // Cliente respondendo o orçamento enviado
+      if (os.status === 'Orç. Enviado')
+        btns.push(
+          <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalAprov(os);setAprovForm({nome:'',sig:null,data_entrega:''});}}>✅ Aprovar</button>,
+          <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalRepr(os);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});}}>❌ Reprovar</button>
+        );
 
-    // Reprovado — reagendar / reavaliar
-    if (os.status === 'Reprovado')
-      btns.push(
-        <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
-          onClick={()=>{ if(window.confirm(`Reabrir OS ${os.numero_os} para novo orçamento?`)) supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
-          🔄 Reavaliar
-        </button>
-      );
+      // Reprovado — reagendar / reavaliar
+      if (os.status === 'Reprovado')
+        btns.push(
+          <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+            onClick={()=>{ if(window.confirm(`Reabrir OS ${os.numero_os} para novo orçamento?`)) supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+            🔄 Reavaliar
+          </button>
+        );
 
-    // Lab concluiu o reparo → SAC faz a entrega
-    if (os.status === 'Concluído')
-      btns.push(
-        <button key="saida" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>🚚 Entrega</button>
-      );
+      // Lab concluiu o reparo → SAC faz a entrega
+      if (os.status === 'Concluído')
+        btns.push(
+          <button key="saida" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>🚚 Entrega</button>
+        );
+    }
 
     btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>gerarPdfOS(os)}>🖨️ PDF</button>);
     return btns;
@@ -1032,23 +1291,86 @@ export default function SacTab({ currentUser }) {
               )}
             </div>
 
-            {/* Fotos entrada */}
+            {/* Fotos / Arquivos entrada */}
             <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Fotos de Entrada</div>
-              <input type="file" accept="image/*" multiple
-                onChange={e=>setFotosEntradaFiles(Array.from(e.target.files||[]))} />
-              {fotosEntradaFiles.length > 0 && (
-                <div style={{fontSize:10,color:'#22c55e',marginTop:4}}>{fotosEntradaFiles.length} foto(s) selecionada(s)</div>
-              )}
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Fotos e Arquivos de Entrada</div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <div>
+                  <div style={{fontSize:9,color:'#6b7280',marginBottom:3}}>Fotos (imagens)</div>
+                  <input type="file" accept="image/*" multiple
+                    onChange={e=>setFotosEntradaFiles(Array.from(e.target.files||[]))} />
+                  {fotosEntradaFiles.length > 0 && <div style={{fontSize:10,color:'#22c55e',marginTop:2}}>{fotosEntradaFiles.length} foto(s)</div>}
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:'#6b7280',marginBottom:3}}>Documentos (PDF, Word, etc.)</div>
+                  <input type="file" multiple
+                    onChange={e=>setArquivosEntradaFiles(Array.from(e.target.files||[]))} />
+                  {arquivosEntradaFiles.length > 0 && <div style={{fontSize:10,color:'#22c55e',marginTop:2}}>{arquivosEntradaFiles.length} arquivo(s)</div>}
+                </div>
+              </div>
+            </div>
+
+            {/* Manutenção Veicular — campos específicos */}
+            {isVeicular(form.tipo_projeto) && (
+              <div style={{border:'2px solid #dc2626',borderRadius:6,padding:'12px',marginBottom:12,background:'#fff5f5'}}>
+                <div style={{fontWeight:700,fontSize:9,color:'#dc2626',letterSpacing:1,textTransform:'uppercase',marginBottom:10}}>🚗 Manutenção Veicular</div>
+                <div className="form-row" style={{marginBottom:8}}>
+                  <div className="form-group">
+                    <label className="acn-label">Tipo de Avaliação *</label>
+                    <div style={{display:'flex',gap:8}}>
+                      {['Presencial','Remota'].map(v=>(
+                        <label key={v} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,cursor:'pointer',
+                          padding:'5px 12px',border:`2px solid ${form.tipo_avaliacao===v?'#dc2626':'#d1d5db'}`,
+                          borderRadius:4,background:form.tipo_avaliacao===v?'#fee2e2':'white',fontWeight:form.tipo_avaliacao===v?700:400}}>
+                          <input type="radio" name="tipo_avaliacao" value={v}
+                            checked={form.tipo_avaliacao===v}
+                            onChange={()=>setForm(f=>({...f,tipo_avaliacao:v as any}))} style={{display:'none'}} />
+                          {v==='Presencial'?'🔧':'📡'} {v}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{fontSize:9,color:'#6b7280',marginTop:4}}>
+                      {form.tipo_avaliacao==='Presencial'
+                        ? '→ SAC define data de entrega do veículo (Provisionamento)'
+                        : '→ SAC insere itens e envia cotação ao cliente para aprovação'}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="acn-label" style={{display:'flex',alignItems:'center',gap:6}}>
+                      <input type="checkbox" checked={form.acompanhamento_engenharia}
+                        onChange={e=>setForm(f=>({...f,acompanhamento_engenharia:e.target.checked}))}
+                        style={{accentColor:'#2563eb'}} />
+                      <span>⚙️ Acompanhamento de Engenharia</span>
+                    </label>
+                    <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>Cria demanda adicional para a Engenharia acompanhar.</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Dados de Faturamento */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Dados de Faturamento (Fiscal / NF)</div>
+              <div className="form-row">
+                <div className="form-group"><label className="acn-label">CNPJ / CPF Faturamento</label>
+                  <input className="acn-input" style={{width:'100%'}} placeholder="Pode ser diferente do cliente"
+                    value={form.cnpj_faturamento} onChange={e=>setForm(f=>({...f,cnpj_faturamento:e.target.value}))} /></div>
+                <div className="form-group" style={{flex:2}}><label className="acn-label">Razão Social / Nome Faturamento</label>
+                  <input className="acn-input" style={{width:'100%'}}
+                    value={form.razao_social_faturamento} onChange={e=>setForm(f=>({...f,razao_social_faturamento:e.target.value}))} /></div>
+              </div>
+              <div className="form-group"><label className="acn-label">Endereço Faturamento</label>
+                <input className="acn-input" style={{width:'100%'}}
+                  value={form.endereco_faturamento} onChange={e=>setForm(f=>({...f,endereco_faturamento:e.target.value}))} /></div>
             </div>
 
             {/* Info */}
-            {form.tipo_servico !== 'Garantia' && (
+            {!isVeicular(form.tipo_projeto) && form.tipo_servico !== 'Garantia' && (
               <div style={{border:'1px solid rgba(59,130,246,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(59,130,246,.06)'}}>
                 ℹ️ A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.
               </div>
             )}
-            {form.tipo_servico === 'Garantia' && (
+            {!isVeicular(form.tipo_projeto) && form.tipo_servico === 'Garantia' && (
               <div style={{border:'1px solid rgba(34,197,94,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(34,197,94,.06)'}}>
                 ✅ Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.
               </div>
@@ -1165,6 +1487,197 @@ export default function SacTab({ currentUser }) {
             <div style={{display:'flex',gap:8,marginTop:12}}>
               <button className="acn-btn" style={{background:'#166534',flex:1}} onClick={salvarSaida}>CONFIRMAR ENTREGA</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalSaida(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAIS FLUXO VEICULAR ════════ */}
+
+      {/* Modal: Itens da Cotação */}
+      {modalItens && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">📋 Itens da Cotação — {modalItens.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalItens.cliente_nome}</div>
+            {/* Tabela de itens */}
+            {(() => {
+              const [localItens, setLocalItens] = React.useState<any[]>(
+                Array.isArray(modalItens.itens_cotacao) && modalItens.itens_cotacao.length > 0
+                  ? modalItens.itens_cotacao.map(i=>({...i}))
+                  : [{ codigo:'', descricao:'', quantidade:1, valor_unitario:0 }]
+              );
+              const total = localItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
+              const addLinha = () => setLocalItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]);
+              const remLinha = (idx) => setLocalItens(p=>p.filter((_,i)=>i!==idx));
+              const setItem = (idx, campo, val) => setLocalItens(p=>p.map((item,i)=>i===idx?{...item,[campo]:val}:item));
+              return (<>
+                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:8}}>
+                  <thead>
+                    <tr style={{background:'#f1f5f9'}}>
+                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0',width:90}}>Código</th>
+                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0'}}>Descrição</th>
+                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'center',borderBottom:'2px solid #e2e8f0',width:60}}>Qtd</th>
+                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Vl. Unit. (R$)</th>
+                      <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Total</th>
+                      <th style={{width:30,borderBottom:'2px solid #e2e8f0'}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {localItens.map((item, idx) => (
+                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'4px 6px'}}>
+                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo}
+                            onChange={e=>setItem(idx,'codigo',e.target.value)} placeholder="Cód." />
+                        </td>
+                        <td style={{padding:'4px 6px'}}>
+                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao}
+                            onChange={e=>setItem(idx,'descricao',e.target.value)} placeholder="Descrição do item..." />
+                        </td>
+                        <td style={{padding:'4px 6px'}}>
+                          <input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade}
+                            onChange={e=>setItem(idx,'quantidade',Number(e.target.value)||1)} />
+                        </td>
+                        <td style={{padding:'4px 6px'}}>
+                          <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario}
+                            onChange={e=>setItem(idx,'valor_unitario',Number(e.target.value)||0)} />
+                        </td>
+                        <td style={{padding:'4px 8px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>
+                          {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </td>
+                        <td style={{padding:'4px'}}>
+                          <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14,lineHeight:1}} onClick={()=>remLinha(idx)}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{background:'#f0fdf4'}}>
+                      <td colSpan={4} style={{padding:'8px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
+                      <td style={{padding:'8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
+                        R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+                <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}} onClick={addLinha}>+ Adicionar Linha</button>
+                <div style={{display:'flex',gap:8}}>
+                  <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={()=>{ salvarItensOS(modalItens.id, localItens); setModalItens(null); }}>✓ Salvar Itens</button>
+                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
+                </div>
+              </>);
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Provisionar Data */}
+      {modalProvisionar && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:400}}>
+            <div className="modal-title">📅 {modalProvisionar.data_provisionamento ? 'Alterar' : 'Definir'} Data de Provisionamento — {modalProvisionar.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>Cliente: {modalProvisionar.cliente_nome}</div>
+            <label className="acn-label">Data de Recebimento do Veículo *</label>
+            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
+              value={provisionarForm.data_provisao}
+              onChange={e=>setProvisionarForm(f=>({...f,data_provisao:e.target.value}))} />
+            <label className="acn-label">Período</label>
+            <div style={{display:'flex',gap:8,marginBottom:14}}>
+              {['Manhã','Tarde'].map(p=>(
+                <button key={p} className="acn-btn"
+                  style={{flex:1,background:provisionarForm.periodo===p?'#dc2626':'#e2e8f0',color:provisionarForm.periodo===p?'white':'#1e293b'}}
+                  onClick={()=>setProvisionarForm(f=>({...f,periodo:p}))}>
+                  {p==='Manhã'?'🌅':'🌇'} {p}
+                </button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={salvarProvisionamento}>✓ Confirmar Data</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalProvisionar(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Chegada do Veículo */}
+      {modalConfirmarChegada && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:380}}>
+            <div className="modal-title">🚗 Confirmar Chegada — {modalConfirmarChegada.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Cliente: {modalConfirmarChegada.cliente_nome}</div>
+            {modalConfirmarChegada.data_provisionamento && (
+              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+                📅 Data prevista: <strong>{new Date(modalConfirmarChegada.data_provisionamento+'T12:00').toLocaleDateString('pt-BR')}</strong>
+                {' '}({modalConfirmarChegada.periodo_provisionamento||''})
+              </div>
+            )}
+            <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11,textAlign:'center'}}>
+              ⚠️ Ao confirmar, o <strong>KPI de manutenção</strong> será iniciado automaticamente.
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#dc2626',flex:1}} onClick={confirmarChegadaVeiculo}>🚗 Veículo Chegou — Iniciar Manutenção</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConfirmarChegada(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Concluir Manutenção */}
+      {modalConcluirManu && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">🔧 Concluir Manutenção — {modalConcluirManu.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalConcluirManu.cliente_nome}</div>
+            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Materiais Utilizados</div>
+            {(() => {
+              const itens = concluirManuForm.itens_usados;
+              const total = itens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
+              const setIt = (idx, k, v) => setConcluirManuForm(f=>({...f, itens_usados: f.itens_usados.map((x,i)=>i===idx?{...x,[k]:v}:x)}));
+              const addIt = () => setConcluirManuForm(f=>({...f, itens_usados:[...f.itens_usados,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]}));
+              const remIt = (idx) => setConcluirManuForm(f=>({...f, itens_usados:f.itens_usados.filter((_,i)=>i!==idx)}));
+              return (<>
+                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
+                  <thead>
+                    <tr style={{background:'#f1f5f9'}}>
+                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0',width:80}}>Código</th>
+                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>Descrição</th>
+                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'center',borderBottom:'1px solid #e2e8f0',width:55}}>Qtd</th>
+                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Vl. Unit.</th>
+                      <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',borderBottom:'1px solid #e2e8f0',width:95}}>Total</th>
+                      <th style={{width:28,borderBottom:'1px solid #e2e8f0'}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itens.map((item,idx)=>(
+                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo} onChange={e=>setIt(idx,'codigo',e.target.value)} /></td>
+                        <td style={{padding:'3px 5px'}}><input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao} onChange={e=>setIt(idx,'descricao',e.target.value)} /></td>
+                        <td style={{padding:'3px 5px'}}><input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade} onChange={e=>setIt(idx,'quantidade',Number(e.target.value)||1)} /></td>
+                        <td style={{padding:'3px 5px'}}><input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario} onChange={e=>setIt(idx,'valor_unitario',Number(e.target.value)||0)} /></td>
+                        <td style={{padding:'3px 7px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>{((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                        <td><button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}} onClick={()=>remIt(idx)}>×</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{background:'#f0fdf4'}}>
+                      <td colSpan={4} style={{padding:'6px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
+                      <td style={{padding:'6px',fontWeight:800,fontSize:12,textAlign:'right',color:'#166534'}}>R$ {total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+                <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:10}} onClick={addIt}>+ Adicionar Material</button>
+              </>);
+            })()}
+            <label className="acn-label">Observações da Manutenção</label>
+            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:14}}
+              value={concluirManuForm.observacoes}
+              onChange={e=>setConcluirManuForm(f=>({...f,observacoes:e.target.value}))} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#0d9488',flex:1}} onClick={salvarConclusaoManu}>✓ CONCLUIR MANUTENÇÃO</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirManu(null)}>Cancelar</button>
             </div>
           </div>
         </div>

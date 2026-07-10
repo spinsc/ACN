@@ -532,7 +532,29 @@ export default function ComercialTab({ currentUser }) {
   const [modalEntregue, setModalEntregue] = useState(null);
   const [nomeRecebeu, setNomeRecebeu] = useState('');
 
-  useEffect(() => { fetchOpls(); const t = setInterval(fetchOpls, 30000); return () => clearInterval(t); }, []);
+  // Categorias de tipo de projeto (sac_categorias + hardcoded)
+  const [categoriasExtra, setCategoriasExtra] = useState<string[]>([]);
+  const [mostraNovaCat, setMostraNovaCat] = useState(false);
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
+
+  const fetchCategoriasExtra = async () => {
+    const { data } = await supabase.from('sac_categorias').select('nome').eq('ativo', true).order('nome');
+    const nomesBD = (data||[]).map(c=>c.nome);
+    const nomesBase = TIPOS_PROJETO.map(t=>t.label);
+    const extras = nomesBD.filter(n => !nomesBase.includes(n));
+    setCategoriasExtra(extras);
+  };
+
+  const salvarNovaCategoria = async () => {
+    const nome = novaCategoriaNome.trim();
+    if (!nome) return;
+    await supabase.from('sac_categorias').insert([{ nome, ativo: true }]);
+    setFormData(f=>({...f, tipo_projeto: nome}));
+    setNovaCategoriaNome(''); setMostraNovaCat(false);
+    fetchCategoriasExtra();
+  };
+
+  useEffect(() => { fetchOpls(); fetchCategoriasExtra(); const t = setInterval(fetchOpls, 30000); return () => clearInterval(t); }, []);
 
   const [oplsMkt, setOplsMkt] = useState([]);
 
@@ -667,9 +689,24 @@ export default function ComercialTab({ currentUser }) {
             </div>
             <div className="form-row">
               <div style={{flex:2,minWidth:200}}><label className="acn-label">Tipo de Projeto</label>
-                <select className="acn-input" style={{width:'100%'}} value={formData.tipo_projeto} onChange={e=>setFormData({...formData,tipo_projeto:e.target.value})}>
+                <select className="acn-input" style={{width:'100%'}} value={formData.tipo_projeto}
+                  onChange={e=>{
+                    if (e.target.value === '___NOVA___') { setMostraNovaCat(true); }
+                    else { setMostraNovaCat(false); setFormData({...formData,tipo_projeto:e.target.value}); }
+                  }}>
                   {TIPOS_PROJETO.map(t=><option key={t.label} value={t.label}>{t.emoji} {t.label}</option>)}
+                  {categoriasExtra.map(n=><option key={n} value={n}>📌 {n}</option>)}
+                  <option value="___NOVA___">➕ Nova Categoria...</option>
                 </select>
+                {mostraNovaCat && (
+                  <div style={{display:'flex',gap:6,marginTop:4}}>
+                    <input className="acn-input" style={{flex:1}} placeholder="Nome da nova categoria..."
+                      value={novaCategoriaNome} onChange={e=>setNovaCategoriaNome(e.target.value)}
+                      onKeyDown={e=>e.key==='Enter'&&salvarNovaCategoria()} autoFocus />
+                    <button className="acn-btn" style={{background:'#22c55e',fontSize:10,padding:'4px 10px'}} onClick={salvarNovaCategoria}>✓</button>
+                    <button className="acn-btn" style={{background:'#94a3b8',fontSize:10,padding:'4px 10px'}} onClick={()=>{setMostraNovaCat(false);setNovaCategoriaNome('');}}>✕</button>
+                  </div>
+                )}
               </div>
               <div className="form-group"><label className="acn-label">Tipo OP</label>
                 <select className="acn-input" style={{width:'100%'}} value={formData.tipo_op} onChange={e=>setFormData({...formData,tipo_op:e.target.value})}>

@@ -1034,6 +1034,7 @@ export default function RHTab({ currentUser }) {
   const [modalAut, setModalAut]           = useState(false);
 
   const isAdmin = true; // acesso já controlado pelo dashboard (abas_permitidas)
+  const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -1086,10 +1087,12 @@ export default function RHTab({ currentUser }) {
                 style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
                 📋 Lançar Horas
               </button>
-              <button onClick={()=>setModalAut(true)}
-                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                🖨️ Autorização
-              </button>
+              {podeAutorizar && (
+                <button onClick={()=>setModalAut(true)}
+                  style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                  🖨️ Autorização
+                </button>
+              )}
             </>
           )}
         </div>

@@ -101,7 +101,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false });
 
   useEffect(() => { fetchUsuarios(); }, []);
 
@@ -116,7 +116,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false });
     setModalEditar(u);
   };
 
@@ -135,6 +135,7 @@ function PainelUsuarios() {
       perfil: editForm.perfil,
       whatsapp: editForm.whatsapp.replace(/\D/g,'') || null,
       abas_permitidas: editForm.abas_permitidas,
+      pode_autorizar_rh: editForm.pode_autorizar_rh,
     };
     if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
@@ -254,6 +255,17 @@ function PainelUsuarios() {
                   );
                 })}
               </div>
+            </div>
+            {/* PERMISSÕES EXTRAS */}
+            <div style={{marginBottom:10,padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:6,background:'#fafafa'}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:6}}>Permissões Extras</div>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                <input type="checkbox"
+                  checked={editForm.pode_autorizar_rh}
+                  onChange={e=>setEditForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
+                  style={{accentColor:'#7c3aed'}} />
+                <span>🖨️ Pode emitir Autorizações (RH)</span>
+              </label>
             </div>
             <div style={{display:'flex',gap:8,marginTop:4}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarEdicao}>SALVAR</button>
