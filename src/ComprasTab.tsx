@@ -2,17 +2,21 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 
-// ─── MODAL REGISTRAR COMPRA (🛒 Em Andamento → Comprado) ────────────────────
-function ModalRegistrarCompra({ item, onClose, onSaved }) {
+// ─── MODAL CONCLUIR COMPRA (Em Andamento → Comprado) ────────────────────────
+function ModalConcluirCompra({ item, onClose, onSaved }) {
   const [valor, setValor] = useState(item.valor_compra ? String(item.valor_compra) : '');
   const [prazo, setPrazo] = useState(item.prazo_entrega || '');
   const [salvando, setSalvando] = useState(false);
 
   const salvar = async () => {
+    if (!valor) { alert('Informe o valor total da compra.'); return; }
+    if (!prazo)  { alert('Informe a previsão de recebimento.'); return; }
     setSalvando(true);
-    const updates: any = { status_solicitacao: 'Comprado' };
-    if (valor) updates.valor_compra = parseFloat(valor.replace(',', '.'));
-    if (prazo) updates.prazo_entrega = prazo;
+    const updates: any = {
+      status_solicitacao: 'Comprado',
+      valor_compra:       parseFloat(valor.replace(',', '.')),
+      prazo_entrega:      prazo,
+    };
     const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', item.id);
     if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
     onSaved();
@@ -22,38 +26,44 @@ function ModalRegistrarCompra({ item, onClose, onSaved }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(420px,96vw)', padding:24, boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ fontWeight:700, fontSize:14, marginBottom:4, color:'#1a3a52' }}>
-          🛒 Registrar Compra — {item.numero_pedido}
+      <div style={{ background:'#fff', borderRadius:8, width:'min(440px,96vw)', padding:24, boxShadow:'0 8px 32px #0004' }}>
+
+        <div style={{ fontWeight:700, fontSize:15, marginBottom:4, color:'#1a3a52' }}>
+          ✅ Concluir Compra
         </div>
-        <div style={{ fontSize:11, color:'#6b7280', marginBottom:18 }}>
+        <div style={{ fontSize:11, color:'#6b7280', marginBottom:6 }}>
+          Pedido: <strong>{item.numero_pedido}</strong>
+        </div>
+        <div style={{ background:'#f1f5f9', borderRadius:6, padding:'8px 12px', marginBottom:18, fontSize:11, color:'#374151' }}>
           {item.descricao_material} · Qtd: {item.quantidade}
         </div>
 
-        <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#374151', marginBottom:4 }}>
-          Valor da compra (R$)
-          <span style={{ color:'#9ca3af', fontWeight:400, marginLeft:6 }}>visível só para Compras / Gerência / Admin</span>
+        <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:6 }}>
+          Valor total da compra (R$) *
         </label>
         <input type="number" step="0.01" min="0" value={valor}
           onChange={e => setValor(e.target.value)}
-          placeholder="Ex: 1500.00"
-          style={{ width:'100%', padding:'8px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:12, boxSizing:'border-box', marginBottom:14 }} />
+          placeholder="0,00"
+          style={{ width:'100%', padding:'10px 12px', border:'2px solid #d1d5db', borderRadius:6,
+            fontSize:14, boxSizing:'border-box', marginBottom:16 }} />
 
-        <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#374151', marginBottom:4 }}>
-          Prazo previsto de entrega
+        <label style={{ display:'block', fontSize:12, fontWeight:700, color:'#374151', marginBottom:6 }}>
+          Previsão de recebimento da mercadoria *
         </label>
         <input type="date" value={prazo}
           onChange={e => setPrazo(e.target.value)}
-          style={{ width:'100%', padding:'8px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:12, boxSizing:'border-box', marginBottom:22 }} />
+          style={{ width:'100%', padding:'10px 12px', border:'2px solid #d1d5db', borderRadius:6,
+            fontSize:14, boxSizing:'border-box', marginBottom:22 }} />
 
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
           <button onClick={onClose}
-            style={{ padding:'8px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
+            style={{ padding:'9px 20px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:12, cursor:'pointer' }}>
             Cancelar
           </button>
           <button onClick={salvar} disabled={salvando}
-            style={{ padding:'8px 22px', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? '...' : '🛒 Confirmar Compra'}
+            style={{ padding:'9px 24px', background:'#16a34a', color:'#fff', border:'none',
+              borderRadius:6, fontWeight:700, fontSize:12, cursor:'pointer' }}>
+            {salvando ? 'Salvando...' : '✅ Confirmar Compra'}
           </button>
         </div>
       </div>
@@ -126,7 +136,7 @@ export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]       = useState([]);
   const [loading, setLoading]       = useState(false);
   const [filterStatus, setFilter]   = useState('');
-  const [modalComprar, setModalComprar] = useState<any>(null);
+  const [modalConcluirCompra, setModalConcluirCompra] = useState<any>(null);
   const [modalObs, setModalObs]     = useState<any>(null);
   const [editPrazo, setEditPrazo]   = useState<{id:string,valor:string}|null>(null);
   const [editValor, setEditValor]   = useState<{id:string,valor:string}|null>(null);
@@ -311,15 +321,21 @@ export default function ComprasTab({ currentUser }) {
                       <button onClick={() => updateStatus(p.id, 'Em Andamento')}
                         style={{ ...btnSmall, background:'#3b82f6', marginRight:3 }} title="Iniciar atendimento">▶️</button>
                     )}
-                    {/* 🛒 Em Andamento → Comprado (abre modal com valor + prazo) */}
+                    {/* ✅ Em Andamento → Comprado: abre modal com valor total + previsão */}
                     {p.status_solicitacao === 'Em Andamento' && (
-                      <button onClick={() => setModalComprar(p)}
-                        style={{ ...btnSmall, background:'#7c3aed', marginRight:3 }} title="Registrar compra — preencher valor e prazo">🛒 Comprar</button>
+                      <button onClick={() => setModalConcluirCompra(p)}
+                        style={{ ...btnSmall, background:'#16a34a', marginRight:3 }}
+                        title="Concluir compra — informar valor e previsão de recebimento">
+                        ✅ Concluir Compra
+                      </button>
                     )}
-                    {/* ✅ Comprado → Concluído (direto) */}
+                    {/* 📦 Comprado → Concluído: recebimento confirmado */}
                     {p.status_solicitacao === 'Comprado' && (
                       <button onClick={() => updateStatus(p.id, 'Concluído')}
-                        style={{ ...btnSmall, background:'#22c55e', marginRight:3 }} title="Confirmar recebimento">✅</button>
+                        style={{ ...btnSmall, background:'#0891b2', marginRight:3 }}
+                        title="Confirmar recebimento da mercadoria">
+                        📦 Recebido
+                      </button>
                     )}
                     {/* 💬 sempre disponível em qualquer status */}
                     <button onClick={() => setModalObs(p)}
@@ -353,10 +369,10 @@ export default function ComprasTab({ currentUser }) {
       </div>
 
       {/* ── MODAIS ── */}
-      {modalComprar && (
-        <ModalRegistrarCompra
-          item={modalComprar}
-          onClose={() => setModalComprar(null)}
+      {modalConcluirCompra && (
+        <ModalConcluirCompra
+          item={modalConcluirCompra}
+          onClose={() => setModalConcluirCompra(null)}
           onSaved={() => { setFilter(''); load(); }}
         />
       )}
