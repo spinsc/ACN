@@ -2,15 +2,15 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 
-// ─── MODAL INICIAR COMPRA ────────────────────────────────────────────────────
-function ModalIniciarCompra({ item, onClose, onSaved }) {
-  const [valor, setValor] = useState('');
+// ─── MODAL REGISTRAR COMPRA (🛒 Em Andamento → Comprado) ────────────────────
+function ModalRegistrarCompra({ item, onClose, onSaved }) {
+  const [valor, setValor] = useState(item.valor_compra ? String(item.valor_compra) : '');
   const [prazo, setPrazo] = useState(item.prazo_entrega || '');
   const [salvando, setSalvando] = useState(false);
 
   const salvar = async () => {
     setSalvando(true);
-    const updates: any = { status_solicitacao: 'Em Andamento' };
+    const updates: any = { status_solicitacao: 'Comprado' };
     if (valor) updates.valor_compra = parseFloat(valor.replace(',', '.'));
     if (prazo) updates.prazo_entrega = prazo;
     const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', item.id);
@@ -24,14 +24,15 @@ function ModalIniciarCompra({ item, onClose, onSaved }) {
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background:'#fff', borderRadius:8, width:'min(420px,96vw)', padding:24, boxShadow:'0 8px 32px #0004' }}>
         <div style={{ fontWeight:700, fontSize:14, marginBottom:4, color:'#1a3a52' }}>
-          ▶️ Iniciar Compra — {item.numero_pedido}
+          🛒 Registrar Compra — {item.numero_pedido}
         </div>
         <div style={{ fontSize:11, color:'#6b7280', marginBottom:18 }}>
           {item.descricao_material} · Qtd: {item.quantidade}
         </div>
 
         <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#374151', marginBottom:4 }}>
-          Valor da compra (R$) <span style={{ color:'#9ca3af', fontWeight:400 }}>— visível só para Compras/Gerência/Admin</span>
+          Valor da compra (R$)
+          <span style={{ color:'#9ca3af', fontWeight:400, marginLeft:6 }}>visível só para Compras / Gerência / Admin</span>
         </label>
         <input type="number" step="0.01" min="0" value={valor}
           onChange={e => setValor(e.target.value)}
@@ -51,8 +52,8 @@ function ModalIniciarCompra({ item, onClose, onSaved }) {
             Cancelar
           </button>
           <button onClick={salvar} disabled={salvando}
-            style={{ padding:'8px 22px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? '...' : '▶️ Iniciar'}
+            style={{ padding:'8px 22px', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
+            {salvando ? '...' : '🛒 Confirmar Compra'}
           </button>
         </div>
       </div>
@@ -125,7 +126,7 @@ export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]       = useState([]);
   const [loading, setLoading]       = useState(false);
   const [filterStatus, setFilter]   = useState('');
-  const [modalIniciar, setModalIniciar] = useState<any>(null);
+  const [modalComprar, setModalComprar] = useState<any>(null);
   const [modalObs, setModalObs]     = useState<any>(null);
   const [editPrazo, setEditPrazo]   = useState<{id:string,valor:string}|null>(null);
   const [editValor, setEditValor]   = useState<{id:string,valor:string}|null>(null);
@@ -305,18 +306,20 @@ export default function ComprasTab({ currentUser }) {
                   </td>
 
                   <td style={{ ...td, whiteSpace:'nowrap' }}>
-                    {/* ▶️ abre modal com valor + prazo */}
+                    {/* ▶️ Pendente → Em Andamento (direto, sem modal) */}
                     {p.status_solicitacao === 'Pendente' && (
-                      <button onClick={() => setModalIniciar(p)}
-                        style={{ ...btnSmall, background:'#3b82f6', marginRight:3 }} title="Iniciar compra">▶️</button>
+                      <button onClick={() => updateStatus(p.id, 'Em Andamento')}
+                        style={{ ...btnSmall, background:'#3b82f6', marginRight:3 }} title="Iniciar atendimento">▶️</button>
                     )}
+                    {/* 🛒 Em Andamento → Comprado (abre modal com valor + prazo) */}
                     {p.status_solicitacao === 'Em Andamento' && (
-                      <button onClick={() => updateStatus(p.id, 'Comprado')}
-                        style={{ ...btnSmall, background:'#7c3aed', marginRight:3 }} title="Marcar como Comprado">🛒</button>
+                      <button onClick={() => setModalComprar(p)}
+                        style={{ ...btnSmall, background:'#7c3aed', marginRight:3 }} title="Registrar compra — preencher valor e prazo">🛒 Comprar</button>
                     )}
+                    {/* ✅ Comprado → Concluído (direto) */}
                     {p.status_solicitacao === 'Comprado' && (
                       <button onClick={() => updateStatus(p.id, 'Concluído')}
-                        style={{ ...btnSmall, background:'#22c55e', marginRight:3 }} title="Concluir">✅</button>
+                        style={{ ...btnSmall, background:'#22c55e', marginRight:3 }} title="Confirmar recebimento">✅</button>
                     )}
                     {/* 💬 sempre disponível em qualquer status */}
                     <button onClick={() => setModalObs(p)}
@@ -350,12 +353,11 @@ export default function ComprasTab({ currentUser }) {
       </div>
 
       {/* ── MODAIS ── */}
-      {modalIniciar && (
-        <ModalIniciarCompra
-          item={modalIniciar}
-          currentUser={currentUser}
-          onClose={() => setModalIniciar(null)}
-          onSaved={load}
+      {modalComprar && (
+        <ModalRegistrarCompra
+          item={modalComprar}
+          onClose={() => setModalComprar(null)}
+          onSaved={() => { setFilter(''); load(); }}
         />
       )}
       {modalObs && (
