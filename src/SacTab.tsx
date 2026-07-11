@@ -182,6 +182,8 @@ export default function SacTab({ currentUser }) {
   const [anexosSendoUpload, setAnexosSendoUpload] = useState(false);
   const [modalAnexar, setModalAnexar] = useState<any>(null);
   const [anexarFiles, setAnexarFiles]   = useState<File[]>([]);
+  const [modalEntregaVeic, setModalEntregaVeic] = useState<any>(null);
+  const [nomeRecebeuVeic, setNomeRecebeuVeic]   = useState('');
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
@@ -565,14 +567,25 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     fetchOrdens();
   };
 
-  const liberarEntregaVeicular = async (os: any) => {
-    if (!window.confirm(`Confirmar entrega do veículo ${os.numero_os} ao cliente?`)) return;
+  const liberarEntregaVeicular = (os: any) => {
+    setNomeRecebeuVeic('');
+    setModalEntregaVeic(os);
+  };
+
+  const confirmarEntregaVeicular = async () => {
+    if (!nomeRecebeuVeic.trim()) { alert('Informe o nome de quem recebeu o veículo!'); return; }
+    const os = modalEntregaVeic;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
       status: 'Entregue',
       data_saida: agora,
+      nome_retirada_saida: nomeRecebeuVeic.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
+    notificarEvento('sac_os_entregue', `🚚 *Veículo entregue — ${os.numero_os}*
+Cliente: ${os.cliente_nome}
+Recebido por: ${nomeRecebeuVeic.trim()}`);
+    setModalEntregaVeic(null);
     fetchOrdens();
   };
 
@@ -1552,6 +1565,28 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       )}
 
       {/* ════════ MODAL SAÍDA / ENTREGA ════════ */}
+      {/* ════════ MODAL ENTREGA VEICULAR ════════ */}
+      {modalEntregaVeic && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:400}}>
+            <div className="modal-title">🚚 Entrega de Veículo — {modalEntregaVeic.numero_os}</div>
+            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:8,marginBottom:12,fontSize:11}}>
+              <strong>Cliente:</strong> {modalEntregaVeic.cliente_nome}<br/>
+              {modalEntregaVeic.veiculo_modelo && <><strong>Veículo:</strong> {modalEntregaVeic.veiculo_modelo} — {modalEntregaVeic.veiculo_placa}</>}
+            </div>
+            <label className="acn-label">Nome de quem recebeu o veículo *</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
+              placeholder="Nome completo do receptor"
+              value={nomeRecebeuVeic} onChange={e=>setNomeRecebeuVeic(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&confirmarEntregaVeicular()} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#166534',flex:1}} onClick={confirmarEntregaVeicular}>✅ Confirmar Entrega</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEntregaVeic(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ════════ MODAL ANEXAR ════════ */}
       {modalAnexar && (
         <div className="modal-overlay">
