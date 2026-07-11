@@ -153,6 +153,8 @@ export default function SacTab({ currentUser }) {
   const [modalNova, setModalNova]       = useState(false);
   const [modalOrc, setModalOrc]         = useState(null);
   const [modalAprov, setModalAprov]     = useState(null);
+  const [modalAprovCotacao, setModalAprovCotacao] = useState<any>(null);
+  const [aprovCotacaoNome, setAprovCotacaoNome]   = useState('');
   const [modalRepr, setModalRepr]       = useState(null);
   const [modalSaida, setModalSaida]     = useState(null);
   const [modalPrint, setModalPrint]     = useState(null);
@@ -460,20 +462,29 @@ export default function SacTab({ currentUser }) {
     fetchOrdens();
   };
 
-  const aprovarCotacao = async (os: any) => {
-    if (!window.confirm(`Confirmar aprovação do cliente para ${os.numero_os}?`)) return;
+  const aprovarCotacao = (os: any) => {
+    setAprovCotacaoNome('');
+    setModalAprovCotacao(os);
+  };
+
+  const confirmarAprovCotacao = async () => {
+    if (!aprovCotacaoNome.trim()) { alert('Informe o nome de quem aprovou!'); return; }
+    const os = modalAprovCotacao;
     const agora = new Date().toISOString();
-    const total = (os.itens_cotacao||[]).reduce((s,i)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
+    const total = (os.itens_cotacao||[]).reduce((s:number,i:any)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
     await supabase.from('sac_ordens_servico').update({
       status: 'Em Provisionamento',
       aprovado: true,
       data_aprovacao: agora,
+      aprovador_nome: aprovCotacaoNome.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
     notificarEvento('sac_aprovacao_remota', `✅ *Cotação APROVADA — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
+Aprovado por: ${aprovCotacaoNome.trim()}
 Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
 ⚙️ Produção: definir data de atendimento`);
+    setModalAprovCotacao(null);
     fetchOrdens();
   };
 
@@ -1531,6 +1542,28 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       )}
 
       {/* ════════ MODAL SAÍDA / ENTREGA ════════ */}
+      {/* ════════ MODAL APROVAÇÃO COTAÇÃO REMOTA ════════ */}
+      {modalAprovCotacao && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">✅ Aprovação de Cotação — {modalAprovCotacao.numero_os}</div>
+            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:8,marginBottom:12,fontSize:11}}>
+              <strong>Cliente:</strong> {modalAprovCotacao.cliente_nome}<br/>
+              <strong>Valor:</strong> {fmtVal(modalAprovCotacao.valor_orcamento || (modalAprovCotacao.itens_cotacao||[]).reduce((s:number,i:any)=>s+(i.quantidade||1)*(i.valor_unitario||0),0))}
+            </div>
+            <label className="acn-label">Nome de quem aprovou *</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
+              placeholder="Nome completo do aprovador"
+              value={aprovCotacaoNome} onChange={e=>setAprovCotacaoNome(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&confirmarAprovCotacao()} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarAprovCotacao}>✅ Confirmar Aprovação</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAprovCotacao(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalSaida && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
@@ -2068,14 +2101,4 @@ function PrintOS({ os }) {
         <div style={{fontSize:9.5,color:'#64748b',lineHeight:1.6}}>
           <div style={{fontWeight:700,color:'#0f766e',fontSize:10,marginBottom:2}}>ACN Sinal Verde</div>
           <div>📍 Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028</div>
-          <div>📞 (48) 3240-0336 &nbsp;|&nbsp; ✉️ acn@acn.com.br</div>
-          <div>📸 @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br</div>
-          <div style={{color:'#94a3b8',marginTop:2}}>Documento gerado em {new Date().toLocaleString('pt-BR')}</div>
-        </div>
-        <img src={base + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" style={{height:52,objectFit:'contain',flexShrink:0}} />
-      </div>
-
-
-    </div>
-  );
-}
+          <div>📞 (48)
