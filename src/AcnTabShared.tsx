@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import { ColaboradorSelect } from './ColaboradorSelect';
 
 
 // ─── Botão de Pendências por OPL ─────────────────────────────────────────────
@@ -649,10 +650,12 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
         <div className="modal-overlay">
           <div className="modal-box" style={{ maxWidth: 400 }}>
             <div className="modal-title">Iniciar — {modalIniciar.descricao?.replace('[AJUSTE] ', '')}</div>
-            <label className="acn-label">Responsavel *</label>
-            <input className="acn-input" style={{ width: '100%', marginBottom: 12 }}
-              value={responsavel} onChange={e => setResponsavel(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && iniciar()} autoFocus />
+            <label className="acn-label">Responsável *</label>
+            <ColaboradorSelect
+              value={responsavel} onChange={setResponsavel}
+              placeholder="Selecione o responsável"
+              className="acn-input" style={{ width: '100%', marginBottom: 12 }}
+              autoFocus onKeyDown={e => e.key === 'Enter' && iniciar()} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="acn-btn" style={{ background: cor || '#1e293b', flex: 1 }} onClick={iniciar}>INICIAR</button>
               <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setModalIniciar(null)}>Cancelar</button>

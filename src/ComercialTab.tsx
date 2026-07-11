@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
+import { ColaboradorSelect } from './ColaboradorSelect';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
@@ -760,7 +761,7 @@ export default function ComercialTab({ currentUser }) {
                   onSelect={c=>{ const d=clienteToForm(c); setFormData({...formData,cliente_nome:d.cliente_nome,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj}); }}
                 />
               </div>
-              <div className="form-group"><label className="acn-label">Responsavel</label><input className="acn-input" style={{width:'100%'}} value={formData.responsavel_comercial||currentUser?.nome} onChange={e=>setFormData({...formData,responsavel_comercial:e.target.value})} /></div>
+              <div className="form-group"><label className="acn-label">Responsável</label><ColaboradorSelect value={formData.responsavel_comercial||''} onChange={v=>setFormData({...formData,responsavel_comercial:v})} placeholder="Selecione o responsável" className="acn-input" style={{width:'100%'}} /></div>
             </div>
             <div className="form-row">
               <div className="form-group"><label className="acn-label">Prev. Entrega</label><input type="date" className="acn-input" style={{width:'100%'}} value={formData.data_prevista_entrega} onChange={e=>setFormData({...formData,data_prevista_entrega:e.target.value})} /></div>

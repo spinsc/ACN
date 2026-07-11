@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
+import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -318,13 +319,12 @@ export default function EngenhariaTab({ currentUser }) {
                 </div>
               )}
             </div>
-            <label className="acn-label">Responsavel pela Execucao *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:4}}
-              placeholder="Nome do responsavel..."
-              value={responsavelEng}
-              onChange={e=>setResponsavelEng(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&confirmarIniciarEng()}
-              autoFocus />
+            <label className="acn-label">Responsável pela Execução *</label>
+            <ColaboradorSelect
+              value={responsavelEng} onChange={setResponsavelEng}
+              placeholder="Selecione o responsável"
+              className="acn-input" style={{width:'100%',marginBottom:4}}
+              autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciarEng()} />
             <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>
               Pre-preenchido com seu nome. Altere se outra pessoa vai executar.
             </div>
@@ -402,12 +402,4 @@ export default function EngenhariaTab({ currentUser }) {
               placeholder="Descreva o motivo da devolucao..."
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverComercial}>CONFIRMAR DEVOLUCAO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+              <button className="acn-btn" sty

@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { ColaboradorSelect } from './ColaboradorSelect';
 
 // ─── Horas Úteis (Seg-Sex 8:00–17:30) ────────────────────────────────────────
 function horasUteis(inicio, fim) {
@@ -670,9 +671,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
               <strong>Demanda:</strong> {modalIniciar.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'}
             </div>
             <label className="acn-label">Responsável pela Execução *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:12}}
-              value={responsavelIniciar} onChange={e=>setResponsavelIniciar(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&confirmarIniciar()} autoFocus />
+            <ColaboradorSelect
+              value={responsavelIniciar} onChange={setResponsavelIniciar}
+              placeholder="Selecione o responsável"
+              className="acn-input" style={{width:'100%',marginBottom:12}}
+              autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciar()} />
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:cor||'#1e293b',flex:1}} onClick={confirmarIniciar}>INICIAR</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
