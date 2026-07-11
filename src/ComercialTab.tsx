@@ -581,7 +581,8 @@ export default function ComercialTab({ currentUser }) {
     if (!formData.opl || !formData.modelo) { alert('Preencha numero da OP e Modelo!'); return; }
     const isManutencao = (formData.tipo_projeto||'').toLowerCase().includes('manutencao') || (formData.tipo_projeto||'').toLowerCase().includes('manutenção');
     const statusInicial = editId ? formData.status_geral : (isManutencao ? 'Aguardando Agendamento Manutenção' : 'Em Espera Engenharia');
-    const payload = { ...formData, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: statusInicial };
+    const { _cliente_id: _cid, _cliente_obj: _cobj, ...formLimpo } = formData;
+    const payload = { ...formLimpo, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: statusInicial };
     if (editId) {
       // Buscar dados anteriores para log
       const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
