@@ -479,14 +479,15 @@ export default function SacTab({ currentUser }) {
       aprovador_nome: aprovCotacaoNome.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_aprovacao_remota', `✅ *Cotação APROVADA — ${os.numero_os}*
+    const msg2 = `✅ *Cotação APROVADA — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
 Aprovado por: ${aprovCotacaoNome.trim()}
 Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
-⚙️ Produção: definir data de atendimento`);
+⚙️ Produção: definir data de atendimento`;
+    notificarEvento('sac_aprovacao_remota', msg2);
     setModalAprovCotacao(null);
     fetchOrdens();
-  };
+  }
 
   const recusarCotacao = async (os: any) => {
     const motivo = window.prompt('Motivo da recusa (opcional):');
@@ -1542,7 +1543,6 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       )}
 
       {/* ════════ MODAL SAÍDA / ENTREGA ════════ */}
-      {/* ════════ MODAL APROVAÇÃO COTAÇÃO REMOTA ════════ */}
       {modalAprovCotacao && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:420}}>
@@ -2101,4 +2101,14 @@ function PrintOS({ os }) {
         <div style={{fontSize:9.5,color:'#64748b',lineHeight:1.6}}>
           <div style={{fontWeight:700,color:'#0f766e',fontSize:10,marginBottom:2}}>ACN Sinal Verde</div>
           <div>📍 Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028</div>
-          <div>📞 (48)
+          <div>📞 (48) 3240-0336 &nbsp;|&nbsp; ✉️ acn@acn.com.br</div>
+          <div>📸 @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br</div>
+          <div style={{color:'#94a3b8',marginTop:2}}>Documento gerado em {new Date().toLocaleString('pt-BR')}</div>
+        </div>
+        <img src={base + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" style={{height:52,objectFit:'contain',flexShrink:0}} />
+      </div>
+
+
+    </div>
+  );
+}
