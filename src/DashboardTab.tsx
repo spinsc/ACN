@@ -183,7 +183,7 @@ body.dark .acn-tab-btn       { background:#334155 !important; color:#94a3b8 !imp
 body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !important; }
 
 /* ── BADGES ── */
-.acn-badge { display:inline-block; padding:2px 6px; border-radius:3px; font-size:8px; font-weight:700; color:white; white-space:nowrap; letter-spacing:.2px; }
+.acn-badge { display:inline-block; padding:2px 6px; border-radius:3px; font-size:8px; font-weight:700; color:white; white-space:nowrap; letter-spacing:.2px; line-height:1; }
 
 /* ── INPUTS ── */
 .acn-input { font-size:9px; padding:3px 6px; border:1px solid #d1d5db; border-radius:4px; outline:none; box-sizing:border-box; color:#374151; background:#fff; }
