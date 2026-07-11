@@ -180,6 +180,8 @@ export default function SacTab({ currentUser }) {
   const [orcProdModo, setOrcProdModo]             = useState<'ver'|'editar'>('ver');
   const [orcProdItens, setOrcProdItens]           = useState<any[]>([]);
   const [anexosSendoUpload, setAnexosSendoUpload] = useState(false);
+  const [modalAnexar, setModalAnexar] = useState<any>(null);
+  const [anexarFiles, setAnexarFiles]   = useState<File[]>([]);
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
@@ -238,6 +240,11 @@ export default function SacTab({ currentUser }) {
       const url = await uploadFoto(f, `os_${numero.replace('/','_')}/entrada`);
       if (url) urlsFotos.push(url);
     }
+    const urlsArquivos: any[] = [];
+    for (const f of arquivosEntradaFiles) {
+      const result = await uploadArquivo(f, `os_${numero.replace('/','_')}/arquivos`);
+      if (result) urlsArquivos.push({ ...result, enviado_em: new Date().toISOString(), enviado_por: currentUser?.nome||'' });
+    }
 
     // Payload base sem numero_os (será preenchido em cada tentativa)
     const payloadBase = {
@@ -272,6 +279,7 @@ export default function SacTab({ currentUser }) {
       endereco_faturamento: form.endereco_faturamento || null,
       acessorios: form.acessorios,
       fotos_entrada: urlsFotos,
+      arquivos_os: urlsArquivos.length > 0 ? urlsArquivos : [],
       data_abertura: agora,
       criado_por_nome: currentUser?.nome,
       criado_por_email: currentUser?.email,
@@ -344,7 +352,7 @@ export default function SacTab({ currentUser }) {
     notificarEvento('sac_os_aberta', `📋 *Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
     const _savedCliente = { formData: { ...form }, clienteId: form._cliente_id };
-    setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
+    setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAnexarFiles([]); setAcessInput('');
     setEquipLista([{ ...EQUIP_VAZIO }]);
     setModalNova(false); setSalvando(false); fetchOrdens();
     if (_savedCliente.formData.cliente_nome?.trim()) salvarClienteAuto(_savedCliente.formData, _savedCliente.clienteId).catch(console.error);
@@ -734,6 +742,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
         );
     }
 
+    btns.push(<button key="anexar" className="acn-btn" style={{background:'#0369a1',fontSize:9}} onClick={()=>{setAnexarFiles([]);setModalAnexar(os);}}>📎 Anexar</button>);
     btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>gerarPdfOS(os)}>🖨️ PDF</button>);
     return btns;
   };
@@ -1543,6 +1552,64 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       )}
 
       {/* ════════ MODAL SAÍDA / ENTREGA ════════ */}
+      {/* ════════ MODAL ANEXAR ════════ */}
+      {modalAnexar && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:480}}>
+            <div className="modal-title">📎 Anexar Arquivos — {modalAnexar.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: <strong>{modalAnexar.cliente_nome}</strong></div>
+
+            {/* Anexos existentes */}
+            {Array.isArray(modalAnexar.arquivos_os) && modalAnexar.arquivos_os.length > 0 && (
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}}>Arquivos já anexados</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                  {modalAnexar.arquivos_os.map((a:any,i:number)=>{
+                    const isImg = a.tipo&&a.tipo.startsWith('image/');
+                    return isImg ? (
+                      <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.nome}>
+                        <img src={a.url} alt={a.nome} style={{height:52,width:52,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
+                      </a>
+                    ) : (
+                      <a key={i} href={a.url} target="_blank" rel="noreferrer"
+                        style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:'1px solid #e2e8f0',borderRadius:4,fontSize:10,color:'#0f766e',textDecoration:'none',background:'#f8fafc',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                        📄 {a.nome}
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Upload novos */}
+            <div style={{border:'2px dashed #cbd5e1',borderRadius:6,padding:'14px',textAlign:'center',marginBottom:14,background:'#f8fafc'}}>
+              <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Imagens, PDFs, Word, Excel…</div>
+              <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                onChange={e=>setAnexarFiles(Array.from(e.target.files||[]))}
+                style={{fontSize:11}} />
+              {anexarFiles.length > 0 && (
+                <div style={{marginTop:8,fontSize:11,color:'#22c55e',fontWeight:700}}>{anexarFiles.length} arquivo(s) selecionado(s)</div>
+              )}
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#0369a1',flex:1}}
+                disabled={!anexarFiles.length||anexosSendoUpload}
+                onClick={async()=>{
+                  await anexarArquivos(modalAnexar,anexarFiles);
+                  setAnexarFiles([]);
+                  // Refresh modalAnexar with updated data
+                  const {data} = await supabase.from('sac_ordens_servico').select('*').eq('id',modalAnexar.id).single();
+                  if(data) setModalAnexar(data);
+                }}>
+                {anexosSendoUpload ? '⏳ Enviando...' : '⬆️ Enviar Arquivos'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAnexar(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalAprovCotacao && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:420}}>
@@ -2092,6 +2159,28 @@ function PrintOS({ os }) {
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>FOTOS DE SAÍDA</div>
           <div style={{padding:8,display:'flex',flexWrap:'wrap',gap:6}}>
             {os.fotos_saida.map((u,i)=><img key={i} src={u} alt={`Foto ${i+1}`} style={{height:80,borderRadius:4,objectFit:'cover',border:'1px solid #e2e8f0'}} />)}
+          </div>
+        </div>
+      )}
+
+      {Array.isArray(os.arquivos_os) && os.arquivos_os.length > 0 && (
+        <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
+          <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>📎 ANEXOS</div>
+          <div style={{padding:'8px 10px',display:'flex',flexWrap:'wrap',gap:8}}>
+            {os.arquivos_os.map((a:any,i:number)=>{
+              const isImg = a.tipo&&a.tipo.startsWith('image/');
+              return isImg ? (
+                <div key={i} style={{textAlign:'center'}}>
+                  <img src={a.url} alt={a.nome} style={{height:70,borderRadius:4,objectFit:'cover',border:'1px solid #e2e8f0',display:'block',marginBottom:2}} />
+                  <div style={{fontSize:8,color:'#64748b',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.nome}</div>
+                </div>
+              ) : (
+                <a key={i} href={a.url} target="_blank" rel="noreferrer"
+                  style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:'1px solid #e2e8f0',borderRadius:4,fontSize:10,color:'#0f766e',textDecoration:'none',background:'#f8fafc'}}>
+                  📄 {a.nome}
+                </a>
+              );
+            })}
           </div>
         </div>
       )}
