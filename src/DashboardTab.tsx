@@ -174,7 +174,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-main h3 { font-size:10px !important; font-weight:700; margin:0 0 5px !important; padding:0 !important; border:none !important; color:#374151; }
 
 /* ── BOTÕES ── */
-.acn-btn { font-size:9px; font-weight:600; padding:3px 8px; border:none; border-radius:4px; cursor:pointer; color:white; white-space:nowrap; line-height:1.5; }
+.acn-btn { font-size:9px !important; font-weight:600; padding:3px 8px; border:none; border-radius:4px; cursor:pointer; color:white; white-space:nowrap; line-height:1.5; }
 .acn-btn:disabled { opacity:.4; cursor:not-allowed; }
 /* Tab-style navigation buttons (usados em AdminTab, DashboardTab, etc.) */
 .acn-tab-btn         { background:#f1f5f9; color:#475569 !important; }
