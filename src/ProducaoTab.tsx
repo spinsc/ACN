@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { ColaboradorSelect } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -827,20 +828,11 @@ function PainelSacVeicular({ currentUser }) {
               ⏱️ A contagem do KPI de manutenção inicia ao confirmar.
             </div>
             <label className="acn-label">Técnico Responsável *</label>
-            {funcionariosRH.length > 0 ? (
-              <select className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
-                value={iniciarManuTecnico} onChange={e=>setIniciarManuTecnico(e.target.value)}>
-                <option value="">— Selecione o técnico —</option>
-                {funcionariosRH.map(f=>(
-                  <option key={f.id} value={f.nome}>{f.nome}{f.cargo?' — '+f.cargo:''}{f.tipo_colaborador==='Terceiro'?' (Terceiro)':''}</option>
-                ))}
-              </select>
-            ) : (
-              <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
-                placeholder="Nome do técnico que executará"
-                value={iniciarManuTecnico} onChange={e=>setIniciarManuTecnico(e.target.value)}
-                onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
-            )}
+            <ColaboradorSelect
+              value={iniciarManuTecnico} onChange={setIniciarManuTecnico}
+              placeholder="Selecione o técnico responsável"
+              className="acn-input" style={{width:'100%',marginBottom:14}}
+              autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={iniciarManutencao}>▶️ Iniciar Manutenção</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciarManu(null)}>Cancelar</button>

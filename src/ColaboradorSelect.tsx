@@ -1,9 +1,8 @@
 // @ts-nocheck
 /**
  * ColaboradorSelect — dropdown compartilhado para todos os campos de responsável.
- * Carrega rh_funcionarios uma vez por sessão (cache de módulo) e exibe
- * select com nome + cargo + badge Terceiro. Fallback para input de texto
- * se a tabela estiver vazia.
+ * Carrega rh_funcionarios uma vez por sessão (cache de módulo).
+ * Fallback para input de texto se a tabela estiver vazia ou com erro.
  */
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
@@ -12,25 +11,52 @@ import { supabase } from './supabaseClient';
 let _cache: any[] | null = null;
 let _promise: Promise<any[]> | null = null;
 
+// Reseta o cache para forçar nova busca (ex: após cadastrar novo colaborador)
+export function resetColaboradoresCache() {
+  _cache = null;
+  _promise = null;
+}
+
 function loadColaboradores(): Promise<any[]> {
   if (_cache) return Promise.resolve(_cache);
   if (!_promise) {
+    // Busca apenas colunas que sempre existem; tipo_colaborador é opcional
     _promise = supabase
       .from('rh_funcionarios')
-      .select('id,nome,cargo,departamento,tipo_colaborador')
+      .select('id,nome,cargo,tipo_colaborador')
       .eq('ativo', true)
       .order('nome')
-      .then(({ data }) => { _cache = data || []; return _cache; });
+      .then(({ data, error }) => {
+        if (error) {
+          // Se falhar com tipo_colaborador (coluna pode não existir ainda), tenta select mínimo
+          return supabase
+            .from('rh_funcionarios')
+            .select('id,nome,cargo')
+            .eq('ativo', true)
+            .order('nome')
+            .then(({ data: d2 }) => { _cache = d2 || []; return _cache; });
+        }
+        _cache = data || [];
+        return _cache;
+      });
   }
   return _promise;
 }
 
 export function useColaboradores() {
   const [list, setList] = useState<any[]>(_cache || []);
+  const [loaded, setLoaded] = useState(!!_cache);
+
   useEffect(() => {
-    if (!_cache) loadColaboradores().then(setList);
+    if (!_cache) {
+      loadColaboradores().then(result => {
+        setList(result);
+        setLoaded(true);
+      });
+    }
   }, []);
-  return list;
+
+  return { list, loaded };
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────
@@ -48,7 +74,7 @@ export function ColaboradorSelect({
   value, onChange, placeholder = 'Selecione o colaborador',
   style, className, autoFocus, onKeyDown,
 }: Props) {
-  const list = useColaboradores();
+  const { list, loaded } = useColaboradores();
 
   const baseStyle: React.CSSProperties = {
     width: '100%',
@@ -61,6 +87,20 @@ export function ColaboradorSelect({
     ...style,
   };
 
+  // Enquanto carrega, mostra input desabilitado brevemente
+  if (!loaded) {
+    return (
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Carregando colaboradores..."
+        style={{ ...baseStyle, color: '#9ca3af' }}
+        className={className}
+      />
+    );
+  }
+
+  // Se não há colaboradores cadastrados, cai para input livre
   if (list.length === 0) {
     return (
       <input

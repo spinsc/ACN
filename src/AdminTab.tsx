@@ -737,7 +737,7 @@ const TABELAS_CONFIG = [
   { id:'demandas_setoriais',    label:'Demandas Setoriais',  desc:'Demandas e Ajustes',         cor:'#f59e0b' },
   { id:'demandas_avulsas',      label:'Demandas Avulsas',    desc:'Engenharia — tarefas livres', cor:'#7c3aed' },
   { id:'logistica_manifestos',  label:'Logística In/Out',    desc:'Manifestos de envio/recebimento', cor:'#0891b2' },
-  { id:'vistorias_patio',       label:'Autorizações Saída',  desc:'Autorizações de saída/entrada',   cor:'#ea580c' },
+  { id:'rh_autorizacoes',        label:'Autorizações RH',     desc:'Autorizações de saída/entrada antecipada', cor:'#ea580c' },
   { id:'crm_clientes',          label:'CRM — Clientes',      desc:'Prospects e clientes',       cor:'#16a34a' },
   { id:'crm_historico_contatos',label:'CRM — Histórico',     desc:'Contatos e interações',      cor:'#0d9488' },
   { id:'logs_movimentacao_opl', label:'Logs de OPL',         desc:'Histórico de movimentações', cor:'#475569' },
@@ -776,7 +776,7 @@ function PainelDados() {
       : tabelaAtiva === 'cq_auditorias' ? 'created_at'
       : tabelaAtiva === 'demandas_avulsas' ? 'criado_em'
       : tabelaAtiva === 'logistica_manifestos' ? 'data'
-      : tabelaAtiva === 'vistorias_patio' ? 'data_saida'
+      : tabelaAtiva === 'rh_autorizacoes' ? 'data'
       : 'created_at';
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);
@@ -865,12 +865,12 @@ function PainelDados() {
       return `OPL ${r.numero_opl} — ${r.resultado} — ${r.auditor_nome}`;
     if (tabelaAtiva === 'sac_ordens_servico')
       return `OS ${r.numero_os || r.id} — ${r.cliente_nome || '?'} — ${r.status || '?'} — ${r.tipo_servico || '?'}`;
-    if (tabelaAtiva === 'vistorias_patio')
-      return `[${r.tipo_servico || '?'}] ${r.veiculo_placa || '?'} ${r.veiculo_modelo || ''} — ${r.solicitante || '?'} → ${r.destino || '?'}`;
+    if (tabelaAtiva === 'rh_autorizacoes')
+      return `[${r.tipo || '?'}] ${r.data || '?'} — Saída: ${r.hora_saida || '—'} — ${r.motivo || '?'}`.substring(0,100);
     return r.id;
   };
 
-  const getDataCol = (r) => r.data_saida || r.criado_em || r.data || r.created_at || r.data_abertura || r.data_hora || r.data_contato;
+  const getDataCol = (r) => r.data_abertura || r.criado_em || r.data || r.created_at || r.data_hora || r.data_contato;
   const todosSelecionados = registros.length > 0 && selecionados.size === registros.length;
   const algumSelecionado = selecionados.size > 0;
 
@@ -1082,7 +1082,7 @@ function PainelNotificacoes() {
 const LABEL_TABELA = {
   oples:'OPLs', sac_ordens_servico:'SAC — OS', demandas_setoriais:'Demandas Setoriais',
   demandas_avulsas:'Demandas Avulsas', logistica_manifestos:'Logística In/Out',
-  vistorias_patio:'Autorizações Saída', crm_clientes:'CRM — Clientes',
+  rh_autorizacoes:'Autorizações RH', crm_clientes:'CRM — Clientes',
   crm_historico_contatos:'CRM — Histórico', logs_movimentacao_opl:'Logs de OPL',
   cq_auditorias:'Auditorias CQ',
 };
@@ -1146,7 +1146,7 @@ function PainelLixeira() {
       case 'demandas_setoriais': return `[${d.setor_destino || '?'}] ${(d.descricao || '').substring(0,60)}`;
       case 'demandas_avulsas': return `${(d.titulo || '?').substring(0,60)} — ${d.status || '?'}`;
       case 'logistica_manifestos': return `${d.tipo || '?'} — ${(d.descricao || d.transportadora || '').substring(0,60)}`;
-      case 'vistorias_patio': return `[${d.tipo_servico || '?'}] ${d.veiculo_placa || '?'} ${d.veiculo_modelo || ''} → ${d.destino || '?'}`;
+      case 'rh_autorizacoes': return `[${d.tipo || '?'}] ${d.data || '?'} — ${d.motivo || '?'}`.substring(0,80);
       case 'crm_clientes': return `${d.nome_empresa || d.nome || '?'} — ${d.contato_nome || '?'}`;
       case 'crm_historico_contatos': return `${d.nome_empresa || '?'} — ${d.tipo_contato || '?'}: ${(d.descricao || '').substring(0,50)}`;
       case 'logs_movimentacao_opl': return `OPL ${d.numero_opl || '?'} → ${d.setor || '?'}: ${(d.evento || '').substring(0,50)}`;
