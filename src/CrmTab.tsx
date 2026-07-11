@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { ClienteAutocomplete, ClienteSalvarModal, clienteToForm } from './ClienteUtils';
+import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -354,7 +354,6 @@ function CalendarioContatos({ leads, filtroUser, onSelectLead }) {
 function ModalNovoLead({ currentUser, onClose, onSaved }) {
   const [form, setForm] = useState({ ...LEAD_VAZIO, operador_responsavel: currentUser?.nome || '' });
   const [salvando, setSalvando] = useState(false);
-  const [clienteSalvarPendente, setClienteSalvarPendente] = useState<any>(null);
   const set = (k:string, v:string) => setForm(f => ({...f,[k]:v}));
 
   const salvar = async () => {
@@ -373,7 +372,7 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
     setSalvando(false);
     onSaved();
     onClose();
-    if (_savedCliente.formData.nome_cliente?.trim()) setClienteSalvarPendente(_savedCliente);
+    if (_savedCliente.formData.nome_cliente?.trim()) salvarClienteAuto(_savedCliente.formData, _savedCliente.clienteId).catch(console.error);
   };
 
   const Inp = ({ label, field, type='text', required=false }) => (
@@ -444,13 +443,7 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
           </button>
         </div>
       </div>
-      {clienteSalvarPendente && (
-        <ClienteSalvarModal
-          formData={clienteSalvarPendente.formData}
-          clienteId={clienteSalvarPendente.clienteId}
-          onClose={()=>setClienteSalvarPendente(null)}
-        />
-      )}
+
     </div>
   );
 }
@@ -595,13 +588,4 @@ export default function CrmTab({ currentUser }) {
 
       {/* ── MODAIS ── */}
       {modalNovo && (
-        <ModalNovoLead currentUser={currentUser} onClose={() => setModalNovo(false)} onSaved={fetchLeads} />
-      )}
-      {selectedLead && (
-        <LeadModal lead={selectedLead} currentUser={currentUser}
-          onClose={() => setSelectedLead(null)}
-          onRefresh={fetchLeads} />
-      )}
-    </div>
-  );
-}
+        <ModalNovoLead currentUser={currentUser} onClose={() => setModalNovo

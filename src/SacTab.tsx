@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
-import { ClienteAutocomplete, ClienteSalvarModal, clienteToForm } from './ClienteUtils';
+import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -159,7 +159,6 @@ export default function SacTab({ currentUser }) {
   const [modalNovoEquip, setModalNovoEquip] = useState(false);
 
   const [form, setForm]                 = useState<typeof FORM_VAZIO>({ ...FORM_VAZIO });
-  const [clienteSalvarPendente, setClienteSalvarPendente] = useState<any>(null);
   const [acessInput, setAcessInput]     = useState('');
   const [fotosEntradaFiles, setFotosEntradaFiles] = useState([]);
   const [salvando, setSalvando]         = useState(false);
@@ -346,7 +345,7 @@ export default function SacTab({ currentUser }) {
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAcessInput('');
     setEquipLista([{ ...EQUIP_VAZIO }]);
     setModalNova(false); setSalvando(false); fetchOrdens();
-    if (_savedCliente.formData.cliente_nome?.trim()) setClienteSalvarPendente(_savedCliente);
+    if (_savedCliente.formData.cliente_nome?.trim()) salvarClienteAuto(_savedCliente.formData, _savedCliente.clienteId).catch(console.error);
   };
 
   // ── ENVIAR ORÇAMENTO ──────────────────────────────────────────────────────
@@ -2064,13 +2063,7 @@ function PrintOS({ os }) {
         <img src={base + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" style={{height:52,objectFit:'contain',flexShrink:0}} />
       </div>
 
-      {clienteSalvarPendente && (
-        <ClienteSalvarModal
-          formData={clienteSalvarPendente.formData}
-          clienteId={clienteSalvarPendente.clienteId}
-          onClose={()=>setClienteSalvarPendente(null)}
-        />
-      )}
+
     </div>
   );
 }

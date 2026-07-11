@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
-import { ClienteAutocomplete, ClienteSalvarModal, clienteToForm } from './ClienteUtils';
+import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 
 
 const TIPOS_PROJETO = [
@@ -530,7 +530,6 @@ export default function ComercialTab({ currentUser }) {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(FORM_VAZIO);
   const [editId, setEditId] = useState(null);
-  const [clienteSalvarPendente, setClienteSalvarPendente] = useState(null);
   const [oneNoteUrl, setOneNoteUrl] = useState('');
   const [modalEntregue, setModalEntregue] = useState(null);
   const [modalVer, setModalVer] = useState(null);
@@ -625,7 +624,7 @@ export default function ComercialTab({ currentUser }) {
     const savedClienteObj = { ...formData };
     setFormData(FORM_VAZIO); setShowForm(false); setEditId(null); fetchOpls();
     if (!editId) notificarEvento('op_enviada_engenharia', msg.oplEnviada(formData.opl,'Engenharia',currentUser?.nome));
-    if (savedCliente) setClienteSalvarPendente({ formData: savedClienteObj, clienteId: savedClienteId });
+    if (savedCliente) salvarClienteAuto(savedClienteObj, savedClienteId).catch(console.error);
   };
 
   const enviarParaEngenharia = async (opl) => {
@@ -1008,13 +1007,7 @@ export default function ComercialTab({ currentUser }) {
         </div>
       )}
 
-      {clienteSalvarPendente && (
-        <ClienteSalvarModal
-          formData={clienteSalvarPendente.formData}
-          clienteId={clienteSalvarPendente.clienteId}
-          onClose={()=>setClienteSalvarPendente(null)}
-        />
-      )}
+      
     </div>
   );
 }

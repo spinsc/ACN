@@ -241,6 +241,63 @@ export function ClienteBuscaModal({ onSelect, onClose }: { onSelect: (c: any) =>
   );
 }
 
+// ─── salvarClienteAuto ──────────────────────────────────────────────────────
+// Salva ou atualiza cliente na tabela clientes de forma silenciosa (sem modal).
+// Chamado automaticamente ao salvar OS/OP/Lead.
+export async function salvarClienteAuto(formData: any, clienteId?: string | null): Promise<void> {
+  const nome = (formData.cliente_nome || formData.nome_cliente || formData.nome || '').trim();
+  if (!nome) return;
+
+  let existente: any = null;
+  if (clienteId) {
+    const { data } = await supabase.from('clientes').select('*').eq('id', clienteId).single();
+    existente = data;
+  } else {
+    const { data } = await supabase.from('clientes').select('*').ilike('nome', nome).limit(1);
+    existente = data?.[0] || null;
+  }
+
+  const tel = (formData.telefone || '').trim();
+  const eml = (formData.email || '').trim();
+  const agora = new Date().toISOString();
+
+  if (!existente) {
+    // Novo cliente
+    await supabase.from('clientes').insert([{
+      nome: nome.toUpperCase(),
+      tipo: (formData.cpf_cnpj || '').replace(/\D/g,'').length > 11 ? 'PJ' : 'PF',
+      documento: formData.cpf_cnpj || null,
+      empresa: formData.empresa_orgao || formData.empresa || null,
+      nome_contato: formData.nome_contato || null,
+      cargo_contato: formData.cargo || null,
+      telefones: tel ? [{ numero: tel, tipo: 'Principal' }] : [],
+      emails: eml ? [{ email: eml, tipo: 'Principal' }] : [],
+      endereco: formData.endereco || null,
+      bairro: formData.bairro || null,
+      cidade: formData.cidade || null,
+      estado: formData.estado || null,
+      cep: formData.cep || null,
+      atualizado_em: agora,
+    }]);
+  } else {
+    // Atualizar apenas campos com valor novo e diferente
+    const telExist: any[] = existente.telefones || [];
+    const emlExist: any[] = existente.emails || [];
+    const telNovos = tel && !telExist.some((t: any) => (t.numero || t) === tel)
+      ? [...telExist, { numero: tel, tipo: 'Adicional' }] : telExist;
+    const emlNovos = eml && !emlExist.some((e: any) => (e.email || e) === eml)
+      ? [...emlExist, { email: eml, tipo: 'Adicional' }] : emlExist;
+    const update: any = { atualizado_em: agora, telefones: telNovos, emails: emlNovos };
+    if (!existente.documento && formData.cpf_cnpj) update.documento = formData.cpf_cnpj;
+    if (!existente.empresa && (formData.empresa_orgao || formData.empresa)) update.empresa = formData.empresa_orgao || formData.empresa;
+    if (!existente.endereco && formData.endereco) update.endereco = formData.endereco;
+    if (!existente.cidade && formData.cidade) update.cidade = formData.cidade;
+    if (!existente.estado && formData.estado) update.estado = formData.estado;
+    if (!existente.cep && formData.cep) update.cep = formData.cep;
+    await supabase.from('clientes').update(update).eq('id', existente.id);
+  }
+}
+
 // ─── ClienteSalvarModal ──────────────────────────────────────────────────────
 // Exibido após salvar um form, para oferecer salvar/atualizar o cadastro
 interface SalvarProps {
