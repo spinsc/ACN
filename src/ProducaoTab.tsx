@@ -133,7 +133,7 @@ function CalendarioManutencao({ currentUser }) {
         .order('data_entrada', { ascending: false }),
       supabase.from('sac_ordens_servico').select('id,numero_os,cliente_nome,veiculo_placa,veiculo_modelo,data_provisionamento,periodo_provisionamento,status')
         .eq('is_manutencao_veicular', true)
-        .in('status', ['Provisionada','Em Execução'])
+        .in('status', ['Provisionada','Em Execução','Manutenção Concluída'])
         .not('data_provisionamento', 'is', null),
     ]);
     setAgendamentos(agRes.data || []);

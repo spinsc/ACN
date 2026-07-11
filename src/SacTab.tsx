@@ -662,8 +662,19 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
           </button>
         );
       }
-      // Manutenção Concluída → SAC faz entrega
+      // Manutenção Concluída → SAC faz entrega ou renegocia itens
       if (os.status === 'Manutenção Concluída') {
+        const itensRenegoc = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0
+          ? os.materiais_utilizados.map((i:any) => ({...i}))
+          : Array.isArray(os.itens_cotacao) && os.itens_cotacao.length > 0
+            ? os.itens_cotacao.map((i:any) => ({...i}))
+            : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0}];
+        btns.push(
+          <button key="renegoc" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+            onClick={()=>{ setOrcProdItens(itensRenegoc); setOrcProdModo('editar'); setModalOrcProd(os); }}>
+            ✏️ Renegociar
+          </button>
+        );
         btns.push(
           <button key="entrega" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
         );
@@ -1091,7 +1102,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
           ) : (
             <table>
               <thead><tr>
-                <th>Nº OS</th><th>Tipo</th><th>Equipamento</th><th>Cliente</th>
+                <th>Nº OS</th><th>Tipo</th><th>Atend.</th><th>Equipamento</th><th>Cliente</th>
                 <th>Abertura</th><th>Prazo Orç.</th><th>Valor</th>
                 <th>KPI Orç.</th><th>KPI Exec.</th><th>Status</th><th>Ações</th>
               </tr></thead>
@@ -1105,6 +1116,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
                   }}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
+                    <td>{o.tipo_avaliacao==='Remota' ? <span style={{fontSize:9,fontWeight:700,color:'#0ea5e9',background:'#e0f2fe',borderRadius:10,padding:'2px 7px'}}>📡 Remota</span> : o.tipo_avaliacao==='Presencial' ? <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',background:'#ede9fe',borderRadius:10,padding:'2px 7px'}}>📍 Presencial</span> : <span style={{color:'#cbd5e1',fontSize:9}}>—</span>}</td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.equipamento_nome}</td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.cliente_nome}</td>
                     <td style={{fontSize:10}}>{fmtDt(o.data_abertura)}</td>
