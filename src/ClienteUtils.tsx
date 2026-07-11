@@ -76,12 +76,16 @@ export function ClienteAutocomplete({ value, onChange, onSelect, placeholder = '
   }, []);
 
   // Busca com debounce
+  const [erroTabela, setErroTabela] = useState<string|null>(null);
+
   const buscar = useCallback(async (q: string) => {
     if (!q || q.length < 2) { setSugestoes([]); setAberto(false); return; }
     setBuscando(true);
-    const { data } = await supabase.from('clientes').select('id,nome,tipo,documento,empresa,telefones,emails,cidade')
+    const { data, error } = await supabase.from('clientes').select('id,nome,tipo,documento,empresa,telefones,emails,cidade')
       .or(`nome.ilike.%${q}%,documento.ilike.%${q}%,empresa.ilike.%${q}%`)
       .order('nome').limit(6);
+    if (error) { setErroTabela(error.message); setSugestoes([]); setAberto(false); setBuscando(false); return; }
+    setErroTabela(null);
     setSugestoes(data || []);
     setAberto(true);
     setBuscando(false);
@@ -119,6 +123,13 @@ export function ClienteAutocomplete({ value, onChange, onSelect, placeholder = '
         onClick={() => setModalBusca(true)}
         disabled={disabled}
       >🔍</button>
+
+      {/* Erro de tabela */}
+      {erroTabela && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:999, background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:'6px 10px', fontSize:10, color:'#dc2626', marginTop:2 }}>
+          ⚠️ Erro ao buscar clientes: {erroTabela}
+        </div>
+      )}
 
       {/* Dropdown sugestões */}
       {aberto && sugestoes.length > 0 && (
