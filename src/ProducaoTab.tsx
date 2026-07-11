@@ -133,7 +133,7 @@ function CalendarioManutencao({ currentUser }) {
         .order('data_entrada', { ascending: false }),
       supabase.from('sac_ordens_servico').select('id,numero_os,cliente_nome,veiculo_placa,veiculo_modelo,data_provisionamento,periodo_provisionamento,status')
         .eq('is_manutencao_veicular', true)
-        .in('status', ['Provisionada','Em Execução','Manutenção Concluída'])
+        .in('status', ['Provisionada','Aguardando Início','Em Execução','Manutenção Concluída'])
         .not('data_provisionamento', 'is', null),
     ]);
     setAgendamentos(agRes.data || []);
@@ -460,10 +460,12 @@ function PainelSacVeicular({ currentUser }) {
   const [verificacaoItens, setVerificacaoItens]             = useState([]);
   const [modalConcluirManu, setModalConcluirManu]           = useState(null);
   const [concluirManuForm, setConcluirManuForm]             = useState({ observacoes:'', itens_usados:[] });
+  const [modalIniciarManu, setModalIniciarManu]             = useState(null);
+  const [iniciarManuTecnico, setIniciarManuTecnico]         = useState('');
   const [modalItensExecucao, setModalItensExecucao]         = useState(null);
   const [itensExecucao, setItensExecucao]                   = useState([]);
 
-  const STATUSES_PROD = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
+  const STATUSES_PROD = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
 
   const load = async () => {
     setLoading(true);
@@ -482,6 +484,7 @@ function PainelSacVeicular({ currentUser }) {
     'Em Provisionamento':           '#7c3aed',
     'Aguardando Aceite SAC':        '#f59e0b',
     'Provisionada':                 '#16a34a',
+    'Aguardando Início':             '#f59e0b',
     'Verificação e Orçamento':      '#8b5cf6',
     'Aguardando Aprovação Cliente': '#f59e0b',
     'Em Manutenção':                '#dc2626',
@@ -507,11 +510,10 @@ function PainelSacVeicular({ currentUser }) {
   const confirmarChegada = async () => {
     const os = modalConfirmarChegada;
     const agora = new Date().toISOString();
-    const novoStatus = os.tipo_avaliacao === 'Remota' ? 'Em Execução' : 'Verificação e Orçamento';
+    const novoStatus = 'Aguardando Início';
     await supabase.from('sac_ordens_servico').update({
       status: novoStatus,
       data_chegada_veiculo: agora,
-      ...(os.tipo_avaliacao === 'Remota' ? { data_inicio_manutencao: agora } : {}),
       atualizado_em: agora,
     }).eq('id', os.id);
     notificarEvento('sac_veiculo_chegou', `Veiculo chegou — ${os.numero_os} — ${os.cliente_nome} — Status: ${novoStatus}`);
@@ -551,6 +553,20 @@ function PainelSacVeicular({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', os.id);
     setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
+  };
+
+  // Produção inicia manutenção: registra técnico + inicia KPI
+  const iniciarManutencao = async () => {
+    if (!iniciarManuTecnico.trim()) { alert('Informe o nome do técnico!'); return; }
+    const os = modalIniciarManu;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Em Execução',
+      data_inicio_manutencao: agora,
+      tecnico_responsavel: iniciarManuTecnico.trim(),
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    setModalIniciarManu(null); setIniciarManuTecnico(''); load();
   };
 
   // Produção salva itens conferidos durante execução (sem concluir)
@@ -641,6 +657,12 @@ function PainelSacVeicular({ currentUser }) {
                               )}
                             </>
                           )}
+                          {os.status === 'Aguardando Início' && (
+                            <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+                              onClick={()=>{ setIniciarManuTecnico(''); setModalIniciarManu(os); }}>
+                              ▶️ Iniciar
+                            </button>
+                          )}
                           {os.status === 'Verificação e Orçamento' && (
                             <button className="acn-btn" style={{background:'#8b5cf6',fontSize:9}}
                               onClick={()=>{ setVerificacaoItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalVerificacao(os); }}>
@@ -728,7 +750,7 @@ function PainelSacVeicular({ currentUser }) {
               </div>
             )}
             <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11}}>
-              ✅ Próximo status: <strong>{modalConfirmarChegada.tipo_avaliacao === 'Remota' ? 'Em Execução' : 'Verificação e Orçamento'}</strong>
+              ✅ Próximo status: <strong>Aguardando Início</strong>
             </div>
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarChegada}>🚗 Confirmar Chegada</button>
@@ -752,6 +774,31 @@ function PainelSacVeicular({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#8b5cf6',flex:1}} onClick={enviarVerificacao}>📤 Enviar para Aprovação</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVerificacao(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Iniciar Manutenção */}
+      {modalIniciarManu && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">▶️ Iniciar Manutenção — {modalIniciarManu.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
+              Cliente: <strong>{modalIniciarManu.cliente_nome}</strong>
+              {modalIniciarManu.veiculo_modelo && <> &nbsp;|&nbsp; Veículo: <strong>{modalIniciarManu.veiculo_modelo}</strong></>}
+            </div>
+            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+              ⏱️ A contagem do KPI de manutenção inicia ao confirmar.
+            </div>
+            <label className="acn-label">Técnico Responsável *</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
+              placeholder="Nome do técnico que executará"
+              value={iniciarManuTecnico} onChange={e=>setIniciarManuTecnico(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={iniciarManutencao}>▶️ Iniciar Manutenção</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciarManu(null)}>Cancelar</button>
             </div>
           </div>
         </div>

@@ -28,6 +28,7 @@ const STATUS_COR: Record<string, string> = {
   'Em Provisionamento':            '#7c3aed',
   'Aguardando Aceite SAC':         '#f59e0b',
   'Provisionada':                  '#16a34a',
+  'Aguardando Início':             '#f59e0b',
   'Verificação e Orçamento':       '#8b5cf6',
   'Em Manutenção':                 '#dc2626',
   'Manutenção Concluída':          '#0d9488',
@@ -516,7 +517,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   const confirmarAceiteSAC = async (os: any) => {
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
-      status: 'Provisionada',
+      status: os.tipo_avaliacao === 'Remota' ? 'Aguardando Início' : 'Provisionada',
       atualizado_em: agora,
     }).eq('id', os.id);
     notificarEvento('sac_aceite_data', `✅ *SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
