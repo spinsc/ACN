@@ -392,23 +392,22 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
         <div style={{ overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:10 }}>
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Nome *</label>
-            <ClienteAutocomplete
-              value={form.nome_cliente}
-              onChange={v=>setForm(f=>({...f,nome_cliente:v,_cliente_id:null,_cliente_obj:null}))}
-              onSelect={c=>{ const d=clienteToForm(c); setForm(f=>({...f,nome_cliente:d.nome_cliente,empresa:d.empresa||f.empresa,cargo:d.cargo||f.cargo,telefone:d.telefone||f.telefone,email:d.email||f.email,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj})); }}
-              placeholder="Nome do contato / lead..."
-            />
-          </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+        <label style={{fontSize:9,fontWeight:700,color:'#6b7280',display:'block',marginBottom:2,textTransform:'uppercase'}}>Nome *</label>
+        <ClienteAutocomplete
+          value={form.nome_cliente}
+          onChange={v=>setForm(f=>({...f,nome_cliente:v,_cliente_id:null,_cliente_obj:null}))}
+          onSelect={c=>{ const d=clienteToForm(c); setForm(f=>({...f,nome_cliente:d.nome_cliente||d.cliente_nome||'',empresa:d.empresa||f.empresa,cargo:d.cargo||f.cargo,telefone:d.telefone||f.telefone,email:d.email||f.email,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj})); }}
+        />
+      </div>
             <Inp label="Empresa" field="empresa" />
-            <Inp label="Cargo" field="cargo" />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Inp label="Cargo" field="cargo" />
             <Inp label="Telefone" field="telefone" />
-            <Inp label="E-mail" field="email" type="email" />
           </div>
+          <Inp label="E-mail" field="email" type="email" />
           <div>
             <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Estágio Inicial</label>
             <div style={{ display:'flex', gap:6 }}>
@@ -443,7 +442,6 @@ function ModalNovoLead({ currentUser, onClose, onSaved }) {
           </button>
         </div>
       </div>
-
     </div>
   );
 }
@@ -588,4 +586,13 @@ export default function CrmTab({ currentUser }) {
 
       {/* ── MODAIS ── */}
       {modalNovo && (
-        <ModalNovoLead currentUser={currentUser} onClose={() => setModalNovo
+        <ModalNovoLead currentUser={currentUser} onClose={() => setModalNovo(false)} onSaved={fetchLeads} />
+      )}
+      {selectedLead && (
+        <LeadModal lead={selectedLead} currentUser={currentUser}
+          onClose={() => setSelectedLead(null)}
+          onRefresh={fetchLeads} />
+      )}
+    </div>
+  );
+}
