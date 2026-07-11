@@ -2117,12 +2117,18 @@ function PrintOS({ os }) {
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <tbody>
               {row('Tipo de Avaliação', os.tipo_avaliacao)}
+              {row('Técnico Responsável', os.tecnico_responsavel)}
               {row('Chegada do Veículo', os.data_chegada_veiculo ? new Date(os.data_chegada_veiculo).toLocaleString('pt-BR') : '—')}
               {row('Início da Manutenção', os.data_inicio_manutencao ? new Date(os.data_inicio_manutencao).toLocaleString('pt-BR') : '—')}
               {row('Conclusão', os.data_conclusao_manutencao ? new Date(os.data_conclusao_manutencao).toLocaleString('pt-BR') : '—')}
-              {row('Observações', os.observacoes_manutencao)}
             </tbody>
           </table>
+          {os.observacoes_manutencao && (
+            <div style={{padding:'8px 10px',borderTop:'1px solid #fde68a'}}>
+              <div style={{fontWeight:700,fontSize:10,color:'#92400e',marginBottom:4,textTransform:'uppercase'}}>🔧 Observação de Produção</div>
+              <div style={{fontSize:11,whiteSpace:'pre-wrap'}}>{os.observacoes_manutencao}</div>
+            </div>
+          )}
           {Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0 && (
             <div style={{padding:'0 8px 8px'}}>
               <div style={{fontWeight:700,fontSize:10,color:'#92400e',margin:'8px 0 4px',textTransform:'uppercase'}}>Materiais Utilizados</div>

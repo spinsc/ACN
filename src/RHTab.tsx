@@ -1021,6 +1021,218 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO — RELATÓRIO DE TÉCNICOS
+// ─────────────────────────────────────────────────────────────────────────────
+function RelatorioTecnicos({ funcionarios }) {
+  const [dados, setDados] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroNome, setFiltroNome] = useState('');
+  const [expandido, setExpandido] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data: osData } = await supabase
+        .from('sac_ordens_servico')
+        .select('id,numero_os,cliente_nome,status,tecnico_responsavel,data_inicio_manutencao,data_conclusao_manutencao,tipo_avaliacao,veiculo_modelo')
+        .not('tecnico_responsavel','is',null)
+        .order('data_inicio_manutencao', { ascending: false });
+
+      const { data: opData } = await supabase
+        .from('oples')
+        .select('id,numero_opl,cliente_nome,status,responsavel_tecnico,criado_em')
+        .not('responsavel_tecnico','is',null)
+        .order('criado_em', { ascending: false });
+
+      const mapa = {};
+      const addEntry = (nome, entry) => {
+        if (!nome) return;
+        const key = nome.trim().toLowerCase();
+        if (!mapa[key]) mapa[key] = { nome: nome.trim(), os: [], op: [] };
+        if (entry.tipo === 'os') mapa[key].os.push(entry);
+        else mapa[key].op.push(entry);
+      };
+
+      (osData||[]).forEach(os => addEntry(os.tecnico_responsavel, {
+        tipo:'os', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
+        status:os.status, inicio:os.data_inicio_manutencao, fim:os.data_conclusao_manutencao,
+        avaliacao:os.tipo_avaliacao, veiculo:os.veiculo_modelo,
+      }));
+      (opData||[]).forEach(op => addEntry(op.responsavel_tecnico, {
+        tipo:'op', id:op.id, numero:op.numero_opl,
+        cliente:op.cliente_nome, status:op.status, inicio:op.criado_em,
+      }));
+
+      const result = Object.values(mapa).map((tec) => {
+        const func = funcionarios.find(f => f.nome.trim().toLowerCase() === tec.nome.toLowerCase());
+        return { ...tec, func, totalOS: tec.os.length, totalOP: tec.op.length };
+      });
+      result.sort((a,b) => (b.totalOS+b.totalOP) - (a.totalOS+a.totalOP));
+      setDados(result);
+      setLoading(false);
+    };
+    load();
+  }, [funcionarios]);
+
+  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const STC = { 'Em Execucao':'#8b5cf6','Manutencao Concluida':'#0d9488','Aguardando Inicio':'#f59e0b' };
+  const stcOf = (s) => { for (const k of Object.keys(STC)) if (s && s.includes(k.split(' ')[0])) return STC[k]; return '#94a3b8'; };
+
+  const filtrado = dados.filter(t => !filtroNome || t.nome.toLowerCase().includes(filtroNome.toLowerCase()));
+
+  const imprimir = () => {
+    const rows = filtrado.map(tec =>
+      `<tr style="background:#f0f9ff"><td colspan="5" style="padding:8px 10px;font-weight:700;font-size:12px;border-top:2px solid #bfdbfe">` +
+      `${tec.nome} ${tec.func ? '— ' + (tec.func.cargo||'') : '(nao cadastrado)'}` +
+      ` <span style="font-size:10px;color:#64748b">${tec.totalOS} OS · ${tec.totalOP} OP</span></td></tr>` +
+      tec.os.map(o =>
+        `<tr><td style="padding:4px 10px 4px 24px">${o.numero}</td><td>OS</td>` +
+        `<td>${o.cliente}</td><td>${o.status}</td><td>${fmtDt(o.inicio)}${o.fim ? ' > ' + fmtDt(o.fim) : ''}</td></tr>`
+      ).join('') +
+      tec.op.map(o =>
+        `<tr><td style="padding:4px 10px 4px 24px">${o.numero||'—'}</td><td>OP</td>` +
+        `<td>${o.cliente||'—'}</td><td>${o.status||'—'}</td><td>${fmtDt(o.inicio)}</td></tr>`
+      ).join('')
+    ).join('');
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio Tecnicos</title>` +
+      `<style>body{font-family:Arial,sans-serif;font-size:11px;margin:25px;}h2{text-align:center;font-size:14px;}` +
+      `.sub{text-align:center;font-size:10px;color:#555;margin-bottom:18px;}` +
+      `table{width:100%;border-collapse:collapse;}th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}` +
+      `td{padding:3px 8px;border-bottom:1px solid #f1f5f9;font-size:10px;}@media print{body{margin:12mm;}}</style></head><body>` +
+      `<h2>ACN SINAL VERDE — RELATORIO DE TECNICOS</h2>` +
+      `<div class="sub">Emitido em ${new Date().toLocaleString('pt-BR')}</div>` +
+      `<table><thead><tr><th>Nr</th><th>Tipo</th><th>Cliente</th><th>Status</th><th>Periodo</th></tr></thead>` +
+      `<tbody>${rows}</tbody></table>` +
+      `<scr` + `ipt>window.onload=function(){window.print()}<\/scr` + `ipt></body></html>`;
+    const w = window.open('','_blank'); w.document.write(html); w.document.close();
+  };
+
+  return (
+    <div style={{ marginTop:20, border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
+      <div className="sec-hdr" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
+        <span>📊 Relatório de Técnicos</span>
+        <div style={{ display:'flex', gap:6 }}>
+          <input value={filtroNome} onChange={e=>setFiltroNome(e.target.value)}
+            placeholder="Filtrar por nome..."
+            style={{ padding:'3px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, width:150 }} />
+          <button onClick={imprimir}
+            style={{ background:'#1e293b', color:'#fff', border:'none', borderRadius:4, padding:'3px 12px', fontSize:10, cursor:'pointer' }}>
+            🖨️ Imprimir
+          </button>
+        </div>
+      </div>
+      {loading ? (
+        <div className="acn-empty">Carregando...</div>
+      ) : filtrado.length === 0 ? (
+        <div className="acn-empty">Nenhum técnico designado encontrado.</div>
+      ) : (
+        <div style={{ padding:10 }}>
+          {filtrado.map(tec => (
+            <div key={tec.nome} style={{ marginBottom:8, border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden' }}>
+              <div onClick={()=>setExpandido(expandido===tec.nome?null:tec.nome)}
+                style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
+                  background: tec.func ? '#f0f9ff' : '#fafafa', cursor:'pointer',
+                  borderBottom: expandido===tec.nome ? '1px solid #bfdbfe' : 'none' }}>
+                <div style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center',
+                  justifyContent:'center', fontWeight:800, fontSize:13,
+                  background: tec.func ? '#2563eb' : '#94a3b8', color:'white' }}>
+                  {tec.nome[0].toUpperCase()}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:12, color:'#1e293b' }}>{tec.nome}</div>
+                  {tec.func && (
+                    <div style={{ fontSize:10, color:'#64748b' }}>
+                      {tec.func.cargo||'—'} · {tec.func.departamento||'—'}
+                      <span style={{ marginLeft:6, fontSize:9, padding:'1px 5px', borderRadius:8,
+                        background: tec.func.tipo_colaborador==='Terceiro'?'#fef3c7':'#eff6ff',
+                        color: tec.func.tipo_colaborador==='Terceiro'?'#92400e':'#1d4ed8',
+                        fontWeight:700, border:'1px solid currentColor' }}>
+                        {tec.func.tipo_colaborador||'Funcionário'}
+                      </span>
+                    </div>
+                  )}
+                  {!tec.func && <div style={{ fontSize:10, color:'#f59e0b', fontWeight:600 }}>Nao cadastrado no RH</div>}
+                </div>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  {tec.totalOS > 0 && <span style={{ background:'#ede9fe', color:'#5b21b6', borderRadius:12, padding:'2px 8px', fontSize:10, fontWeight:700 }}>{tec.totalOS} OS</span>}
+                  {tec.totalOP > 0 && <span style={{ background:'#dcfce7', color:'#166534', borderRadius:12, padding:'2px 8px', fontSize:10, fontWeight:700 }}>{tec.totalOP} OP</span>}
+                  <span style={{ fontSize:12, color:'#94a3b8' }}>{expandido===tec.nome?'▲':'▼'}</span>
+                </div>
+              </div>
+              {expandido === tec.nome && (
+                <div style={{ padding:'8px 12px', background:'#fafafa' }}>
+                  {tec.os.length > 0 && (
+                    <>
+                      <div style={{ fontSize:10, fontWeight:700, color:'#5b21b6', marginBottom:4, textTransform:'uppercase' }}>Ordens de Serviço</div>
+                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, marginBottom:8 }}>
+                        <thead><tr style={{ background:'#ede9fe' }}>
+                          <th style={{ padding:'4px 6px' }}>OS</th>
+                          <th style={{ padding:'4px 6px' }}>Cliente / Veículo</th>
+                          <th style={{ padding:'4px 6px' }}>Tipo</th>
+                          <th style={{ padding:'4px 6px' }}>Status</th>
+                          <th style={{ padding:'4px 6px' }}>Início</th>
+                          <th style={{ padding:'4px 6px' }}>Conclusão</th>
+                        </tr></thead>
+                        <tbody>
+                          {tec.os.map((o,i)=>(
+                            <tr key={i} style={{ background:i%2===0?'white':'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
+                              <td style={{ padding:'4px 6px', fontWeight:700, color:'#5b21b6' }}>{o.numero}</td>
+                              <td style={{ padding:'4px 6px' }}>{o.cliente}{o.veiculo ? ' — '+o.veiculo : ''}</td>
+                              <td style={{ padding:'4px 6px' }}>
+                                <span style={{ fontSize:9, padding:'1px 5px', borderRadius:8,
+                                  background:o.avaliacao==='Remota'?'#e0f2fe':'#ede9fe',
+                                  color:o.avaliacao==='Remota'?'#0369a1':'#5b21b6', fontWeight:700 }}>
+                                  {o.avaliacao||'—'}
+                                </span>
+                              </td>
+                              <td style={{ padding:'4px 6px' }}>
+                                <span style={{ fontSize:9, padding:'1px 5px', borderRadius:8, fontWeight:700,
+                                  background:(stcOf(o.status))+'22', color:stcOf(o.status) }}>
+                                  {o.status}
+                                </span>
+                              </td>
+                              <td style={{ padding:'4px 6px' }}>{fmtDt(o.inicio)}</td>
+                              <td style={{ padding:'4px 6px' }}>{fmtDt(o.fim)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                  {tec.op.length > 0 && (
+                    <>
+                      <div style={{ fontSize:10, fontWeight:700, color:'#166534', marginBottom:4, textTransform:'uppercase' }}>Ordens de Produção</div>
+                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+                        <thead><tr style={{ background:'#dcfce7' }}>
+                          <th style={{ padding:'4px 6px' }}>OP</th>
+                          <th style={{ padding:'4px 6px' }}>Cliente</th>
+                          <th style={{ padding:'4px 6px' }}>Status</th>
+                          <th style={{ padding:'4px 6px' }}>Data</th>
+                        </tr></thead>
+                        <tbody>
+                          {tec.op.map((o,i)=>(
+                            <tr key={i} style={{ background:i%2===0?'white':'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
+                              <td style={{ padding:'4px 6px', fontWeight:700, color:'#166534' }}>{o.numero||'—'}</td>
+                              <td style={{ padding:'4px 6px' }}>{o.cliente||'—'}</td>
+                              <td style={{ padding:'4px 6px' }}>{o.status||'—'}</td>
+                              <td style={{ padding:'4px 6px' }}>{fmtDt(o.inicio)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RHTab({ currentUser }) {
@@ -1115,6 +1327,7 @@ export default function RHTab({ currentUser }) {
           <BancoHoras funcionarios={funcionarios} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
+          <RelatorioTecnicos funcionarios={funcionarios} />
           <ListaAutorizacoes
             funcionarios={funcionarios}
             autorizacoes={autorizacoes}

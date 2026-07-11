@@ -462,6 +462,8 @@ function PainelSacVeicular({ currentUser }) {
   const [concluirManuForm, setConcluirManuForm]             = useState({ observacoes:'', itens_usados:[] });
   const [modalIniciarManu, setModalIniciarManu]             = useState(null);
   const [iniciarManuTecnico, setIniciarManuTecnico]         = useState('');
+  const [modalObsProd, setModalObsProd]                     = useState(null);
+  const [obsText, setObsText]                               = useState('');
   const [modalItensExecucao, setModalItensExecucao]         = useState(null);
   const [itensExecucao, setItensExecucao]                   = useState([]);
 
@@ -567,6 +569,15 @@ function PainelSacVeicular({ currentUser }) {
       atualizado_em: agora,
     }).eq('id', os.id);
     setModalIniciarManu(null); setIniciarManuTecnico(''); load();
+  };
+
+  // Salva observação de produção sem concluir (durante execução)
+  const salvarObsProducao = async () => {
+    await supabase.from('sac_ordens_servico').update({
+      observacoes_manutencao: obsText.trim() || null,
+      atualizado_em: new Date().toISOString(),
+    }).eq('id', modalObsProd.id);
+    setModalObsProd(null); setObsText(''); load();
   };
 
   // Produção salva itens conferidos durante execução (sem concluir)
@@ -677,6 +688,10 @@ function PainelSacVeicular({ currentUser }) {
                           )}
                           {os.status === 'Em Execução' && (
                             <>
+                              <button className="acn-btn" style={{background:'#64748b',fontSize:9}}
+                                onClick={()=>{ setObsText(os.observacoes_manutencao||''); setModalObsProd(os); }}>
+                                💬 Obs.
+                              </button>
                               <button className="acn-btn" style={{background:'#0891b2',fontSize:9}}
                                 onClick={()=>{ setItensExecucao(Array.isArray(os.materiais_utilizados)&&os.materiais_utilizados.length>0?os.materiais_utilizados.map(i=>({...i})):Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalItensExecucao(os); }}>
                                 📋 Itens
@@ -779,6 +794,26 @@ function PainelSacVeicular({ currentUser }) {
         </div>
       )}
 
+      {/* MODAL: Observação de Produção */}
+      {modalObsProd && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:460}}>
+            <div className="modal-title">💬 Observação de Produção — {modalObsProd.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              Cliente: <strong>{modalObsProd.cliente_nome}</strong>
+            </div>
+            <label className="acn-label">Observação (visível na impressão da OS)</label>
+            <textarea className="acn-input" rows={5} autoFocus style={{width:'100%',resize:'vertical',marginBottom:14}}
+              placeholder="Descreva o andamento, peças utilizadas, observações técnicas..."
+              value={obsText} onChange={e=>setObsText(e.target.value)} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#0891b2',flex:1}} onClick={salvarObsProducao}>💾 Salvar</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObsProd(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Iniciar Manutenção */}
       {modalIniciarManu && (
         <div className="modal-overlay">
@@ -792,10 +827,20 @@ function PainelSacVeicular({ currentUser }) {
               ⏱️ A contagem do KPI de manutenção inicia ao confirmar.
             </div>
             <label className="acn-label">Técnico Responsável *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
-              placeholder="Nome do técnico que executará"
-              value={iniciarManuTecnico} onChange={e=>setIniciarManuTecnico(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
+            {funcionariosRH.length > 0 ? (
+              <select className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
+                value={iniciarManuTecnico} onChange={e=>setIniciarManuTecnico(e.target.value)}>
+                <option value="">— Selecione o técnico —</option>
+                {funcionariosRH.map(f=>(
+                  <option key={f.id} value={f.nome}>{f.nome}{f.cargo?' — '+f.cargo:''}{f.tipo_colaborador==='Terceiro'?' (Terceiro)':''}</option>
+                ))}
+              </select>
+            ) : (
+              <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
+                placeholder="Nome do técnico que executará"
+                value={iniciarManuTecnico} onChange={e=>setIniciarManuTecnico(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
+            )}
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={iniciarManutencao}>▶️ Iniciar Manutenção</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciarManu(null)}>Cancelar</button>
