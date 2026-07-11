@@ -97,13 +97,13 @@ function imprimirAutorizacao(aut: any, func: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalFuncionario({ func, onClose, onSaved }) {
   const vazio = {
-    nome:'', email:'', cpf:'', cargo:'', departamento:'', data_admissao:'',
+    nome:'', email:'', cpf:'', cnpj:'', cargo:'', departamento:'', data_admissao:'',
     tipo_colaborador:'Funcionário',
     salario:'', valor_servicos:'',
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento',
   };
   const [form, setForm] = useState(func ? {
-    nome: func.nome||'', email: func.email||'', cpf: func.cpf||'',
+    nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
     cargo: func.cargo||'', departamento: func.departamento||'',
     data_admissao: func.data_admissao||'',
     tipo_colaborador: func.tipo_colaborador||'Funcionário',
@@ -141,7 +141,7 @@ function ModalFuncionario({ func, onClose, onSaved }) {
     if (!form.nome.trim()) { alert('Informe o nome!'); return; }
     setSalvando(true);
     const payload = {
-      nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(),
+      nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(), cnpj: form.cnpj.trim()||null,
       cargo: form.cargo.trim(), departamento: form.departamento.trim(),
       data_admissao: form.data_admissao || null,
       tipo_colaborador: form.tipo_colaborador,
@@ -181,10 +181,16 @@ function ModalFuncionario({ func, onClose, onSaved }) {
           {/* DADOS PESSOAIS */}
           <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
             <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>📋 Dados do Colaborador</div>
-            {[['nome','Nome completo *'],['email','E-mail'],['cpf',isFuncionario?'CPF':'CPF / CNPJ'],
+            {[['nome','Nome completo *'],['email','E-mail'],
               ['cargo','Cargo / Função'],['departamento','Departamento / Empresa']].map(([k,l])=>(
               <div key={k}>{lbl(l)}{inp(k)}</div>
             ))}
+            <div style={{ display:'grid', gridTemplateColumns: isFuncionario ? '1fr' : '1fr 1fr', gap:8 }}>
+              <div>{lbl('CPF')}{inp('cpf','000.000.000-00')}</div>
+              {!isFuncionario && (
+                <div>{lbl('CNPJ da Empresa')}{inp('cnpj','00.000.000/0001-00')}</div>
+              )}
+            </div>
             <div>
               {lbl(isFuncionario ? 'Data de Admissão' : 'Data de Início')}
               <input type="date" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)}
