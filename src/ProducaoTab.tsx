@@ -1486,10 +1486,12 @@ export default function ProducaoTab({ currentUser }) {
                 Avise o time de MKT para agendar os registros de foto/video.
               </div>
             )}
-            <label className="acn-label">Responsavel pela Producao</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:12}}
-              value={respNome} onChange={e=>setRespNome(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&iniciarProducao()} autoFocus />
+            <label className="acn-label">Responsável pela Produção</label>
+            <ColaboradorSelect
+              value={respNome} onChange={setRespNome}
+              placeholder="Selecione o responsável"
+              className="acn-input" style={{width:'100%',marginBottom:12}}
+              autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarProducao()} />
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={iniciarProducao}>INICIAR PRODUCAO</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
