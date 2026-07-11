@@ -898,4 +898,168 @@ function DemandaCard({ d, onClick }) {
 
           {!temEtapas && (
             <div style={{ marginTop:5, display:'flex', gap:10, flexWrap:'wrap' }}>
-              {d.responsavel_nome && <span style={{ fontSize:9, color:'#374151' }}>👤 {d.responsavel_n
+              {d.responsavel_nome && <span style={{ fontSize:9, color:'#374151' }}>👤 {d.responsavel_nome}</span>}
+              {d.prazo && <span style={{ fontSize:9, color: alerta?corBorda:'#6b7280' }}>⏰ {fmtDate(d.prazo)}</span>}
+              {d.data_inicio && !d.data_fim && (
+                <span style={{ fontSize:9, color:'#2563eb' }}>▶ {fmtH((Date.now() - new Date(d.data_inicio).getTime()) / 3600000)}</span>
+              )}
+            </div>
+          )}
+        </div>
+        {(d.informacoes?.length > 0) && (
+          <span style={{ fontSize:9, color:'#9ca3af', flexShrink:0 }}>💬 {d.informacoes.length}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
+export default function DemandaAvulsaPanel({ currentUser }) {
+  const [demandas, setDemandas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroStatus, setFiltroStatus] = useState<string>('ativas');
+  const [filtroResp, setFiltroResp] = useState<string>('');
+  const [filtroStatusSpec, setFiltroStatusSpec] = useState<string>('');
+  const [modalNova, setModalNova] = useState(false);
+  const [selected, setSelected] = useState<any | null>(null);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('demandas_avulsas')
+      .select('*').eq('setor', 'Engenharia')
+      .order('criado_em', { ascending: false });
+    setDemandas(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetch(); const t = setInterval(fetch, 30000); return () => clearInterval(t); }, [fetch]);
+
+  const isVencida = (d: any) => {
+    if (d.status === 'Concluída') return false;
+    const etapas = d.etapas || [];
+    if (etapas.length > 0) return etapas.some((e: any) => alertClass(e.prazo, e.status) === 'vencida');
+    return alertClass(d.prazo, d.status) === 'vencida';
+  };
+
+  const lista = demandas.filter(d => {
+    // Filtro principal de aba
+    if (filtroStatus === 'ativas' && d.status === 'Concluída') return false;
+    if (filtroStatus === 'concluidas' && d.status !== 'Concluída') return false;
+    if (filtroStatus === 'vencidas' && !isVencida(d)) return false;
+    // Filtro por status específico
+    if (filtroStatusSpec && d.status !== filtroStatusSpec) return false;
+    // Filtro por responsável
+    if (filtroResp) {
+      const resp = d.responsavel_nome || '';
+      if (!resp.toLowerCase().includes(filtroResp.toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  // Lista de responsáveis únicos para o dropdown
+  const responsaveis = Array.from(new Set(
+    demandas.map(d => d.responsavel_nome).filter(Boolean)
+  )).sort() as string[];
+
+  const vencidas = demandas.filter(isVencida).length;
+  const urgentes = demandas.filter(d => {
+    if (d.status === 'Concluída') return false;
+    const etapas = d.etapas || [];
+    if (etapas.length > 0) return etapas.some((e: any) => alertClass(e.prazo, e.status) === 'urgente') && !etapas.some((e: any) => alertClass(e.prazo, e.status) === 'vencida');
+    return alertClass(d.prazo, d.status) === 'urgente';
+  }).length;
+
+  return (
+    <div className="sec-card" style={{ marginTop:12 }}>
+      <div className="sec-hdr">
+        <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+          ⚡ Demandas Avulsas — Engenharia
+          {vencidas > 0 && (
+            <span onClick={() => setFiltroStatus(filtroStatus==='vencidas'?'ativas':'vencidas')}
+              style={{ background:'#dc2626', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, cursor:'pointer',
+                outline: filtroStatus==='vencidas'?'2px solid white':'none' }}>
+              🔴 {vencidas} vencida{vencidas>1?'s':''}
+            </span>
+          )}
+          {urgentes > 0 && filtroStatus!=='vencidas' && (
+            <span style={{ background:'#d97706', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>
+              🟡 {urgentes} urgente{urgentes>1?'s':''}
+            </span>
+          )}
+        </span>
+        <button onClick={() => setModalNova(true)}
+          style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'4px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+          + Nova Demanda
+        </button>
+      </div>
+
+      <div style={{ padding:'6px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+        {[['ativas','Ativas'],['concluidas','Concluídas'],['vencidas','Vencidas'],['todas','Todas']].map(([v,l]) => (
+          <button key={v} onClick={() => setFiltroStatus(v)}
+            style={{ border:'none', borderRadius:12, padding:'2px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
+              background: filtroStatus===v?(v==='vencidas'?'#dc2626':'#2563eb'):'#f1f5f9',
+              color: filtroStatus===v?'#fff':'#374151' }}>
+            {v==='vencidas'?'🔴 ':''}{ l}
+          </button>
+        ))}
+        <div style={{ width:1, background:'#e2e8f0', height:18, margin:'0 2px' }} />
+        {/* Filtro por status específico */}
+        <select value={filtroStatusSpec} onChange={e=>{setFiltroStatusSpec(e.target.value);if(filtroStatus==='concluidas'&&e.target.value&&e.target.value!=='Concluída')setFiltroStatus('ativas');}}
+          style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
+          <option value="">Status: Todos</option>
+          <option value="Pendente">Pendente</option>
+          <option value="Em Andamento">Em Andamento</option>
+          <option value="Concluída">Concluída</option>
+        </select>
+        {/* Filtro por responsável */}
+        {responsaveis.length > 0 && (
+          <select value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}
+            style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
+            <option value="">Responsável: Todos</option>
+            {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
+        {(filtroResp || filtroStatusSpec) && (
+          <button onClick={() => { setFiltroResp(''); setFiltroStatusSpec(''); }}
+            style={{ fontSize:9, padding:'2px 8px', border:'1px solid #fca5a5', borderRadius:8, background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontWeight:700 }}>
+            ✕ Limpar filtros
+          </button>
+        )}
+        <span style={{ marginLeft:'auto', fontSize:9, color:'#9ca3af', lineHeight:'22px' }}>{lista.length} demandas</span>
+      </div>
+
+      <div className="sec-body" style={{ padding:'10px 12px' }}>
+        {loading ? (
+          <div className="acn-empty">Carregando...</div>
+        ) : lista.length === 0 ? (
+          <div className="acn-empty">
+            {filtroStatus === 'ativas' ? 'Nenhuma demanda ativa. Clique em "+ Nova Demanda" para criar.' : 'Nenhuma demanda encontrada.'}
+          </div>
+        ) : (
+          lista.map(d => (
+            <DemandaCard key={d.id} d={d} onClick={() => setSelected(d)} />
+          ))
+        )}
+      </div>
+
+      {modalNova && (
+        <ModalNova currentUser={currentUser} onClose={() => setModalNova(false)} onSaved={fetch} />
+      )}
+      {selected && (
+        <ModalDetalhe
+          demanda={selected}
+          currentUser={currentUser}
+          onClose={() => setSelected(null)}
+          onRefresh={() => {
+            fetch();
+            supabase.from('demandas_avulsas').select('*').eq('id', selected.id).single()
+              .then(({ data }) => { if (data) setSelected(data); });
+          }}
+        />
+      )}
+    </div>
+  );
+}
