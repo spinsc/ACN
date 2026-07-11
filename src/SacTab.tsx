@@ -139,8 +139,9 @@ export default function SacTab({ currentUser }) {
   const [equipamentos, setEquipamentos] = useState([]);
   const [categorias, setCategorias]     = useState<any[]>([]);
   const [loading, setLoading]           = useState(false);
-  const [filtroStatus, setFiltroStatus] = useState('');
-  const [filtroTipo, setFiltroTipo]     = useState('');
+  const [filtroStatus, setFiltroStatus]       = useState('');
+  const [filtroTipo, setFiltroTipo]         = useState('');
+  const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [busca, setBusca]               = useState('');
 
   // Cadastros estados
@@ -596,6 +597,9 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   const ordensFiltradas = ordens.filter(o => {
     if (filtroStatus && o.status !== filtroStatus) return false;
     if (filtroTipo && o.tipo_servico !== filtroTipo) return false;
+    if (filtroAvaliacao === 'Remota' && o.tipo_avaliacao !== 'Remota') return false;
+    if (filtroAvaliacao === 'Presencial' && o.tipo_avaliacao !== 'Presencial') return false;
+    if (filtroAvaliacao === 'Veicular' && !o.is_manutencao_veicular) return false;
     if (busca) {
       const b = busca.toLowerCase();
       return o.numero_os?.toLowerCase().includes(b) || o.cliente_nome?.toLowerCase().includes(b) || o.equipamento_nome?.toLowerCase().includes(b);
@@ -1072,7 +1076,13 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
             <option value="">Todos os tipos</option>
             {['Orçamento','Conserto','Troca','Garantia'].map(t=><option key={t}>{t}</option>)}
           </select>
-          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setFiltroStatus('');setFiltroTipo('');setBusca('');}}>Limpar</button>
+          <select className="acn-input" style={{width:140}} value={filtroAvaliacao} onChange={e=>setFiltroAvaliacao(e.target.value)}>
+            <option value="">Presencial / Remota</option>
+            <option value="Veicular">🚗 Veiculares</option>
+            <option value="Presencial">📍 Presencial</option>
+            <option value="Remota">📡 Remota</option>
+          </select>
+          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setBusca('');}}>Limpar</button>
         </div>
 
         {/* ── TABELA ── */}
@@ -1820,6 +1830,11 @@ function PrintOS({ os }) {
         </div>
         <div style={{textAlign:'right'}}>
           <span style={{background: STATUS_COR[os.status]||'#94a3b8',color:'white',padding:'4px 12px',borderRadius:20,fontSize:11,fontWeight:700,display:'inline-block',marginBottom:4}}>{os.status}</span>
+          {os.tipo_avaliacao && (
+            <span style={{background:os.tipo_avaliacao==='Remota'?'#0ea5e9':'#7c3aed',color:'white',padding:'2px 10px',borderRadius:20,fontSize:10,fontWeight:600,display:'inline-block',marginBottom:4,marginLeft:4}}>
+              {os.tipo_avaliacao==='Remota'?'📡 Remota':'📍 Presencial'}
+            </span>
+          )}
           <div style={{fontSize:10,color:'#64748b'}}>{os.tipo_servico}</div>
         </div>
       </div>
@@ -1920,6 +1935,17 @@ function PrintOS({ os }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* OBSERVAÇÕES DE EXECUÇÃO */}
+      {(os.observacoes_manutencao || os.observacoes_execucao_sac) && !os.is_manutencao_veicular && (
+        <div style={{border:'1px solid #bfdbfe',borderRadius:4,marginBottom:10}}>
+          <div style={{background:'#eff6ff',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#1d4ed8',borderBottom:'1px solid #bfdbfe'}}>🔧 OBSERVAÇÕES DE EXECUÇÃO</div>
+          <div style={{padding:'8px 10px',fontSize:11}}>
+            {os.observacoes_manutencao && <div><strong>Produção:</strong> {os.observacoes_manutencao}</div>}
+            {os.observacoes_execucao_sac && <div style={{marginTop:4}}><strong>SAC:</strong> {os.observacoes_execucao_sac}</div>}
+          </div>
         </div>
       )}
 
