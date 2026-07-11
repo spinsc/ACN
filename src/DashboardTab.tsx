@@ -164,7 +164,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 /* ── TABELAS ── */
 .acn-main table { font-size:9px !important; width:100%; border-collapse:collapse; table-layout:auto; }
 .acn-main table thead tr { background:#1e293b !important; }
-.acn-main table th { background:#1e293b !important; color:#cbd5e1 !important; padding:5px 7px !important; font-size:9px !important; font-weight:600 !important; text-align:left; border:none !important; white-space:nowrap; letter-spacing:.2px; }
+.acn-main table th { background:#1e293b !important; color:#cbd5e1 !important; padding:2px 7px !important; font-size:9px !important; font-weight:600 !important; text-align:left; border:none !important; white-space:nowrap; letter-spacing:.2px; }
 .acn-main table td { padding:4px 7px !important; font-size:9px !important; border-bottom:1px solid #f1f5f9 !important; vertical-align:middle !important; color:#374151; }
 .acn-main table tr:last-child td { border-bottom:none !important; }
 .acn-main table tr:hover td { background:#f8fafc !important; }
@@ -174,7 +174,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-main h3 { font-size:10px !important; font-weight:700; margin:0 0 5px !important; padding:0 !important; border:none !important; color:#374151; }
 
 /* ── BOTÕES ── */
-.acn-btn { font-size:9px !important; font-weight:600; padding:3px 8px; border:none; border-radius:4px; cursor:pointer; color:white; white-space:nowrap; line-height:1.5; }
+.acn-btn { font-size:8px !important; font-weight:700; padding:2px 6px; border:none; border-radius:4px; cursor:pointer; color:white; white-space:nowrap; line-height:1; }
 .acn-btn:disabled { opacity:.4; cursor:not-allowed; }
 /* Tab-style navigation buttons (usados em AdminTab, DashboardTab, etc.) */
 .acn-tab-btn         { background:#f1f5f9; color:#475569 !important; }
