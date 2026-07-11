@@ -96,49 +96,168 @@ function imprimirAutorizacao(aut: any, func: any) {
 // MODAL — CADASTRAR FUNCIONÁRIO
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalFuncionario({ func, onClose, onSaved }) {
-  const vazio = { nome:'', email:'', cpf:'', cargo:'', departamento:'', data_admissao:'' };
-  const [form, setForm] = useState(func ? { nome:func.nome, email:func.email||'', cpf:func.cpf||'', cargo:func.cargo||'', departamento:func.departamento||'', data_admissao:func.data_admissao||'' } : vazio);
+  const vazio = {
+    nome:'', email:'', cpf:'', cargo:'', departamento:'', data_admissao:'',
+    tipo_colaborador:'Funcionário',
+    salario:'', valor_servicos:'',
+    recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento',
+  };
+  const [form, setForm] = useState(func ? {
+    nome: func.nome||'', email: func.email||'', cpf: func.cpf||'',
+    cargo: func.cargo||'', departamento: func.departamento||'',
+    data_admissao: func.data_admissao||'',
+    tipo_colaborador: func.tipo_colaborador||'Funcionário',
+    salario: func.salario!=null ? String(func.salario) : '',
+    valor_servicos: func.valor_servicos!=null ? String(func.valor_servicos) : '',
+    recebe_comissao: func.recebe_comissao||false,
+    percentual_comissao: func.percentual_comissao!=null ? String(func.percentual_comissao) : '',
+    incide_em: func.incide_em||'Faturamento',
+  } : vazio);
   const [salvando, setSalvando] = useState(false);
-  const set = (k:string,v:string) => setForm(f=>({...f,[k]:v}));
+  const set = (k, v) => setForm(f=>({...f,[k]:v}));
+
+  const lbl = (txt) => (
+    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>{txt}</label>
+  );
+  const inp = (k, placeholder='', type='text') => (
+    <input type={type} value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={placeholder}
+      style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+  );
+  const toggle = (options, key) => (
+    <div style={{ display:'flex', gap:6 }}>
+      {options.map(([val, label, cor]) => (
+        <button key={val} onClick={()=>set(key, val)}
+          style={{ flex:1, padding:'6px 0', border:`2px solid ${form[key]===val ? (cor||'#2563eb') : '#d1d5db'}`,
+            borderRadius:6, background: form[key]===val ? (cor||'#2563eb')+'18' : '#fff',
+            color: form[key]===val ? (cor||'#2563eb') : '#374151',
+            fontWeight: form[key]===val ? 700 : 400, fontSize:11, cursor:'pointer' }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   const salvar = async () => {
     if (!form.nome.trim()) { alert('Informe o nome!'); return; }
     setSalvando(true);
+    const payload = {
+      nome: form.nome.trim(), email: form.email.trim(), cpf: form.cpf.trim(),
+      cargo: form.cargo.trim(), departamento: form.departamento.trim(),
+      data_admissao: form.data_admissao || null,
+      tipo_colaborador: form.tipo_colaborador,
+      salario: form.salario ? Number(form.salario) : null,
+      valor_servicos: form.valor_servicos ? Number(form.valor_servicos) : null,
+      recebe_comissao: form.recebe_comissao,
+      percentual_comissao: form.recebe_comissao && form.percentual_comissao ? Number(form.percentual_comissao) : null,
+      incide_em: form.recebe_comissao ? form.incide_em : null,
+    };
     if (func) {
-      await supabase.from('rh_funcionarios').update({ ...form }).eq('id', func.id);
+      await supabase.from('rh_funcionarios').update(payload).eq('id', func.id);
     } else {
-      await supabase.from('rh_funcionarios').insert([{ ...form, status_presenca:'Ativo', ativo:true }]);
+      await supabase.from('rh_funcionarios').insert([{ ...payload, status_presenca:'Ativo', ativo:true }]);
     }
     setSalvando(false); onSaved(); onClose();
   };
 
+  const isFuncionario = form.tipo_colaborador === 'Funcionário';
+
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(440px,95vw)', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between' }}>
-          <span>{func ? 'Editar Funcionário' : '+ Novo Funcionário'}</span>
+      <div style={{ background:'#fff', borderRadius:8, width:'min(500px,95vw)', maxHeight:'90vh', overflow:'auto', boxShadow:'0 8px 32px #0004' }}>
+        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between', position:'sticky', top:0, background:'#fff', zIndex:1 }}>
+          <span>{func ? '✏️ Editar Colaborador' : '+ Novo Colaborador'}</span>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
-        <div style={{ padding:16, display:'flex', flexDirection:'column', gap:10 }}>
-          {[['nome','Nome completo *'],['email','E-mail'],['cpf','CPF'],['cargo','Cargo'],['departamento','Departamento']].map(([k,l])=>(
-            <div key={k}>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>{l}</label>
-              <input value={form[k]} onChange={e=>set(k,e.target.value)}
+
+        <div style={{ padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+
+          {/* TIPO DE VÍNCULO */}
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px' }}>
+            {lbl('Tipo de Vínculo')}
+            {toggle([['Funcionário','🏢 Funcionário','#2563eb'],['Terceiro','🤝 Terceiro','#7c3aed']], 'tipo_colaborador')}
+          </div>
+
+          {/* DADOS PESSOAIS */}
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>📋 Dados do Colaborador</div>
+            {[['nome','Nome completo *'],['email','E-mail'],['cpf',isFuncionario?'CPF':'CPF / CNPJ'],
+              ['cargo','Cargo / Função'],['departamento','Departamento / Empresa']].map(([k,l])=>(
+              <div key={k}>{lbl(l)}{inp(k)}</div>
+            ))}
+            <div>
+              {lbl(isFuncionario ? 'Data de Admissão' : 'Data de Início')}
+              <input type="date" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)}
                 style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
             </div>
-          ))}
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Data de Admissão</label>
-            <input type="date" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
           </div>
+
+          {/* REMUNERAÇÃO */}
+          <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:2 }}>💰 Remuneração</div>
+            {isFuncionario ? (
+              <div>
+                {lbl('Salário (R$)')}
+                <input type="number" min="0" step="0.01" value={form.salario} onChange={e=>set('salario',e.target.value)}
+                  placeholder="Ex: 3500.00"
+                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+              </div>
+            ) : (
+              <div>
+                {lbl('Valor dos Serviços (R$)')}
+                <input type="number" min="0" step="0.01" value={form.valor_servicos} onChange={e=>set('valor_servicos',e.target.value)}
+                  placeholder="Ex: 5000.00"
+                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                <div style={{ fontSize:9, color:'#6b7280', marginTop:2 }}>Valor do contrato ou por serviço prestado</div>
+              </div>
+            )}
+          </div>
+
+          {/* COMISSÃO */}
+          <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#92400e', marginBottom:2 }}>📈 Comissão</div>
+            <div>
+              {lbl('Recebe Comissão?')}
+              {toggle([['true','✅ Sim','#16a34a'],['false','✗ Não','#dc2626']], 'recebe_comissao_str')}
+            </div>
+            {/* Use separate boolean toggle */}
+            <div style={{ display:'flex', gap:6 }}>
+              {[['Sim','#16a34a'],['Não','#94a3b8']].map(([label, cor]) => (
+                <button key={label} onClick={()=>set('recebe_comissao', label==='Sim')}
+                  style={{ flex:1, padding:'6px 0', border:`2px solid ${(label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor : '#d1d5db'}`,
+                    borderRadius:6, background: (label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor+'18' : '#fff',
+                    color: (label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor : '#374151',
+                    fontWeight: (label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? 700 : 400, fontSize:11, cursor:'pointer' }}>
+                  {label==='Sim' ? '✅ Recebe Comissão' : '✗ Sem Comissão'}
+                </button>
+              ))}
+            </div>
+            {form.recebe_comissao && (
+              <>
+                <div>
+                  {lbl('Percentual de Comissão (%)')}
+                  <input type="number" min="0" max="100" step="0.1" value={form.percentual_comissao}
+                    onChange={e=>set('percentual_comissao',e.target.value)} placeholder="Ex: 5.0"
+                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                </div>
+                <div>
+                  {lbl('Comissão Incide Sobre')}
+                  {toggle([['Faturamento','💼 Faturamento','#2563eb'],['Mão de Obra','🔧 Mão de Obra','#7c3aed']], 'incide_em')}
+                </div>
+                <div style={{ background:'#fef3c7', border:'1px solid #fde68a', borderRadius:4, padding:'6px 8px', fontSize:9, color:'#92400e' }}>
+                  ℹ️ Estes dados serão usados para cálculo automático de comissões nos relatórios futuros.
+                </div>
+              </>
+            )}
+          </div>
+
         </div>
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
+
+        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end', position:'sticky', bottom:0, background:'#fff' }}>
           <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
           <button onClick={salvar} disabled={salvando}
             style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? '...' : '✓ Salvar'}
+            {salvando ? '...' : '✓ Salvar Colaborador'}
           </button>
         </div>
       </div>
@@ -385,12 +504,20 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr">👥 Status dos Funcionários</div>
+      <div className="sec-hdr">👥 Status dos Colaboradores</div>
       <div style={{ padding:12, display:'flex', flexWrap:'wrap', gap:10 }}>
         {funcionarios.filter(f=>f.ativo).map(f=>(
           <div key={f.id} style={{ background:'#f8fafc', border:`1.5px solid ${STATUS_COR[f.status_presenca]||'#e2e8f0'}`,
             borderRadius:8, padding:'10px 14px', minWidth:160, position:'relative' }}>
-            <div style={{ fontWeight:700, fontSize:12, color:'#1f2937' }}>{f.nome}</div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:4 }}>
+              <div style={{ fontWeight:700, fontSize:12, color:'#1f2937' }}>{f.nome}</div>
+              <span style={{ flexShrink:0, fontSize:8, padding:'1px 5px', borderRadius:8, fontWeight:700,
+                background: f.tipo_colaborador==='Terceiro'?'#fef3c7':'#eff6ff',
+                color: f.tipo_colaborador==='Terceiro'?'#92400e':'#1d4ed8',
+                border:'1px solid', borderColor: f.tipo_colaborador==='Terceiro'?'#fde68a':'#bfdbfe' }}>
+                {f.tipo_colaborador||'Func.'}
+              </span>
+            </div>
             <div style={{ fontSize:10, color:'#6b7280', marginBottom:6 }}>{f.cargo || f.departamento || '—'}</div>
             <select value={f.status_presenca}
               onChange={e=>alterarStatus(f.id, e.target.value)}
@@ -417,7 +544,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
           </div>
         ))}
         {funcionarios.filter(f=>f.ativo).length === 0 && (
-          <div className="acn-empty">Nenhum funcionário cadastrado.</div>
+          <div className="acn-empty">Nenhum colaborador cadastrado.</div>
         )}
       </div>
     </div>
@@ -1293,7 +1420,7 @@ export default function RHTab({ currentUser }) {
             <>
               <button onClick={()=>setModalFunc('new')}
                 style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                + Funcionário
+                + Colaborador
               </button>
               <button onClick={()=>setModalLanc(true)}
                 style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
