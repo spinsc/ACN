@@ -140,14 +140,25 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // ─────────────────────────────────────────────────────────────────────────
   // SALVAR CONTATO
   // ─────────────────────────────────────────────────────────────────────────
+  const limpar = (v: any) => (v === '' || v === undefined) ? null : v;
+
   const salvarContato = async () => {
     if (!formC.nome?.trim()) return;
     setSalvando(true);
-    const { _cliente_nome, ...payload } = formC;
     const p = {
-      ...payload,
-      operador_nome: payload.operador_nome || currentUser?.nome,
-      operador_id:   currentUser?.id,
+      nome:          formC.nome.trim(),
+      cargo:         limpar(formC.cargo),
+      empresa:       limpar(formC.empresa),
+      cliente_id:    limpar(formC.cliente_id),
+      whatsapp:      limpar(formC.whatsapp),
+      email:         limpar(formC.email),
+      telefone:      limpar(formC.telefone),
+      linkedin:      limpar(formC.linkedin),
+      observacoes:   limpar(formC.observacoes),
+      foco_id:       limpar(formC.foco_id),
+      operador_nome: formC.operador_nome || currentUser?.nome,
+      operador_id:   currentUser?.id || null,
+      ativo:         true,
     };
     if (modalContato?.id) {
       await supabase.from('crm_contatos').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalContato.id);

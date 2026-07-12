@@ -201,15 +201,30 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   // SALVAR OP
   // ─────────────────────────────────────────────────────────────────────────
+  // converte string vazia → null (evita 400 em colunas date/uuid no Postgres)
+  const limpar = (v: any) => (v === '' || v === undefined) ? null : v;
+
   const salvarOportunidade = async () => {
     if (!formOp.titulo?.trim()) return;
     setSalvando(true);
-    const p: any = { ...formOp, funil };
-    if (p.valor_registrado) {
-      p.valor_registrado = parseFloat(String(p.valor_registrado).replace(/\./g,'').replace(',','.'));
-    } else {
-      p.valor_registrado = null;
-    }
+    const p: any = {
+      funil,
+      titulo:            formOp.titulo?.trim() || null,
+      tipo_licitacao:    formOp.tipo_licitacao  || 'ordinaria',
+      numero_edital:     limpar(formOp.numero_edital),
+      orgao:             limpar(formOp.orgao),
+      data_sessao:       limpar(formOp.data_sessao),
+      data_validade_ata: limpar(formOp.data_validade_ata),
+      data_prev_fechamento: limpar(formOp.data_prev_fechamento),
+      valor_registrado:  formOp.valor_registrado
+        ? parseFloat(String(formOp.valor_registrado).replace(/\./g,'').replace(',','.'))
+        : null,
+      cliente_id:        limpar(formOp.cliente_id),
+      estagio_id:        limpar(formOp.estagio_id),
+      responsavel_id:    limpar(formOp.responsavel_id),
+      responsavel_nome:  limpar(formOp.responsavel_nome),
+      motivo_perda:      limpar(formOp.motivo_perda),
+    };
     if (!p.estagio_id) {
       const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e));
       if (first) p.estagio_id = first.id;
@@ -324,13 +339,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     if (!modalVenda || !formVenda.valor_total) return;
     setSalvando(true);
     const p: any = {
-      ...formVenda,
-      oportunidade_id: modalVenda.op.id,
-      valor_total: parseFloat(String(formVenda.valor_total).replace(/\./g,'').replace(',','.')),
-      valor_unitario: formVenda.valor_unitario
+      oportunidade_id:   modalVenda.op.id,
+      orgao_aderente:    limpar(formVenda.orgao_aderente),
+      cliente_id:        limpar(formVenda.cliente_id),
+      descricao:         limpar(formVenda.descricao),
+      quantidade:        formVenda.quantidade || null,
+      valor_unitario:    formVenda.valor_unitario
         ? parseFloat(String(formVenda.valor_unitario).replace(/\./g,'').replace(',','.'))
         : null,
-      quantidade: formVenda.quantidade || null,
+      valor_total:       parseFloat(String(formVenda.valor_total).replace(/\./g,'').replace(',','.')),
+      status_faturamento: formVenda.status_faturamento || 'pendente',
+      numero_nf:         limpar(formVenda.numero_nf),
+      data_faturamento:  limpar(formVenda.data_faturamento),
+      operador_id:       limpar(formVenda.operador_id),
+      operador_nome:     limpar(formVenda.operador_nome),
+      opl_id:            limpar(formVenda.opl_id),
     };
     if (modalVenda.venda?.id) {
       await supabase.from('crm_vendas').update(p).eq('id', modalVenda.venda.id);
