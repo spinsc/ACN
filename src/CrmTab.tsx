@@ -84,6 +84,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalMotivo, setModalMotivo]       = useState<any|null>(null);
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
+  const [numOp, setNumOp]                   = useState('');
   const [motivoTexto, setMotivoTexto]       = useState('');
   const [formOp, setFormOp]                 = useState({ ...VAZIO_OP });
   const [formVenda, setFormVenda]           = useState({ ...VAZIO_VENDA });
@@ -269,46 +270,76 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   const converterGanho = async () => {
     if (!modalConverter) return;
+    if (tipoConverter === 'op' && !numOp.trim()) {
+      alert('Informe o número da OP.');
+      return;
+    }
     setSalvando(true);
     const op = modalConverter;
+    const agora = new Date().toISOString();
     try {
       if (tipoConverter === 'op') {
-        const { data: novaOp } = await supabase.from('oples').insert({
-          titulo: op.titulo,
-          cliente_id: op.cliente_id,
-          valor: op.valor_registrado,
-          status_geral: 'Em Análise',
-          origem_crm: op.id,
-          responsavel_comercial: op.responsavel_nome,
-          criado_por_nome: currentUser?.nome,
+        const { data: novaOp, error } = await supabase.from('oples').insert({
+          opl:                   numOp.trim(),
+          modelo:                op.titulo,
+          cliente_nome:          op.orgao || op.titulo,
+          responsavel_comercial: op.responsavel_nome || null,
+          status_geral:          'Em Espera Engenharia',
+          data_entrada:          agora.slice(0, 10),
+          criado_por_nome:       currentUser?.nome,
+          criado_por:            currentUser?.email,
         }).select().single();
+        if (error) throw error;
         if (novaOp) {
           await supabase.from('crm_historico').insert({
             oportunidade_id: op.id, tipo: 'conversao_op',
-            conteudo: `OP criada: ${novaOp.id}`, usuario_nome: currentUser?.nome,
+            conteudo: `OP criada: ${numOp.trim()}`, usuario_nome: currentUser?.nome,
           });
         }
       } else {
-        const { data: novaOs } = await supabase.from('sac_ordens_servico').insert({
-          cliente_id: op.cliente_id,
+        // Gera numero_os igual ao SacTab (RPC + fallback)
+        let numero = '';
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('proximo_numero_os');
+        if (!rpcErr && rpcData) {
+          numero = rpcData as string;
+        } else {
+          const ano = new Date().getFullYear();
+          const { data: ultimos } = await supabase
+            .from('sac_ordens_servico').select('numero_os')
+            .like('numero_os', `OS-%-${ano}`);
+          let max = 0;
+          for (const row of (ultimos || [])) {
+            const match = row.numero_os?.match(/^OS-(\d+)\//);
+            if (match) { const n = parseInt(match[1], 10); if (n > max) max = n; }
+          }
+          numero = `OS-${String(max + 1).padStart(4, '0')}/${ano}`;
+        }
+
+        const { data: novaOs, error } = await supabase.from('sac_ordens_servico').insert({
+          numero_os:          numero,
           descricao_problema: op.titulo,
-          status: 'Aguardando Início',
-          tipo_avaliacao: 'Presencial',
-          origem_crm: op.id,
-          responsavel: op.responsavel_nome,
-          criado_por: currentUser?.nome,
+          cliente_nome:       op.orgao || op.titulo,
+          status:             'Aguardando Início',
+          tipo_avaliacao:     'Presencial',
+          responsavel:        op.responsavel_nome || null,
+          criado_por_nome:    currentUser?.nome,
+          criado_por_email:   currentUser?.email,
+          data_abertura:      agora,
+          atualizado_em:      agora,
         }).select().single();
+        if (error) throw error;
         if (novaOs) {
           await supabase.from('crm_historico').insert({
             oportunidade_id: op.id, tipo: 'conversao_os',
-            conteudo: `OS criada: ${novaOs.id}`, usuario_nome: currentUser?.nome,
+            conteudo: `OS criada: ${numero}`, usuario_nome: currentUser?.nome,
           });
         }
       }
       setModalConverter(null);
-      alert(`${tipoConverter === 'op' ? 'OP' : 'OS'} criada! Acesse a aba ${tipoConverter === 'op' ? 'Engenharia' : 'SAC'} para acompanhar.`);
-    } catch (e) {
-      alert('Erro ao criar. Verifique os campos obrigatórios na aba destino.');
+      setNumOp('');
+      alert(`${tipoConverter === 'op' ? `OP ${numOp.trim()}` : 'OS'} criada! Acesse a aba ${tipoConverter === 'op' ? 'Engenharia' : 'SAC'} para acompanhar.`);
+    } catch (e: any) {
+      alert('Erro ao criar: ' + (e?.message || 'Verifique o console.'));
     }
     setSalvando(false);
     await load();
@@ -479,12 +510,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           {ganho && (
             <>
               <button className="acn-btn" style={{ background:'#2563eb' }}
-                onClick={() => { setModalConverter(op); setTipoConverter('op'); }}>
+                onClick={() => { setModalConverter(op); setTipoConverter('op'); setNumOp(''); }}>
                 📋 Lançar OP
               </button>
               {funil === 'venda_direta' && (
                 <button className="acn-btn" style={{ background:'#ea580c' }}
-                  onClick={() => { setModalConverter(op); setTipoConverter('os'); }}>
+                  onClick={() => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }}>
                   🔧 Lançar OS
                 </button>
               )}
@@ -913,12 +944,30 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               ))}
             </div>
 
+            {tipoConverter === 'op' && (
+              <div style={{ marginBottom:10 }}>
+                <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
+                  Número da OP *
+                </label>
+                <input
+                  className="acn-input"
+                  style={{ width:'100%', fontSize:11 }}
+                  placeholder="Ex: 1234"
+                  value={numOp}
+                  onChange={e => setNumOp(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            )}
+
             <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
-              Os dados do cliente e valor serão copiados automaticamente para a {tipoConverter==='op'?'OP':'OS'}.
+              {tipoConverter === 'op'
+                ? 'Título → Modelo, Órgão → Cliente. Status: Em Espera Engenharia.'
+                : 'Número da OS será gerado automaticamente.'}
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalConverter(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); }}>Cancelar</button>
               <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
                 background: tipoConverter==='op' ? '#2563eb' : '#ea580c', opacity: salvando?.5:1 }}
                 onClick={converterGanho} disabled={salvando}>
