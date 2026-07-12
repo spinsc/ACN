@@ -233,6 +233,89 @@ body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !imp
 @media print { .acn-sidebar, .acn-header { display:none; } .acn-main { padding:0; } }
 
 /* ══════════════════════════════════════════════════════════════════
+   MOBILE — tela estreita (< 700px)
+   ══════════════════════════════════════════════════════════════════ */
+.acn-hamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:rgba(0,0,0,.22); border:none; border-radius:6px; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; }
+
+@media (max-width:700px) {
+  /* body pode rolar na área do app */
+  body { overflow:auto; }
+
+  /* Hamburger visível */
+  .acn-hamburger { display:flex; }
+
+  /* Header compacto */
+  .acn-header { padding:0 8px; height:46px; gap:6px; }
+  .acn-logo h1 { font-size:11px; }
+  .acn-logo p  { display:none; }
+  .acn-motorola { display:none !important; }
+  .acn-period   { display:none !important; }
+  .acn-user strong { font-size:9px; }
+  .acn-user span   { display:none; }
+
+  /* Sidebar: drawer que desliza da esquerda */
+  .acn-sidebar {
+    position:fixed;
+    top:46px;
+    left:-170px;
+    bottom:0;
+    z-index:300;
+    width:160px;
+    transition:left .22s ease;
+    box-shadow:none;
+  }
+  .acn-sidebar.mob-open {
+    left:0;
+    box-shadow:3px 0 16px rgba(0,0,0,.25);
+  }
+
+  /* Overlay escuro quando sidebar aberta */
+  .acn-mob-overlay {
+    display:none;
+    position:fixed;
+    inset:0;
+    top:46px;
+    background:rgba(0,0,0,.40);
+    z-index:299;
+  }
+  .acn-mob-overlay.mob-open { display:block; }
+
+  /* Conteúdo toma a largura toda */
+  .acn-body  { overflow-y:auto; overflow-x:hidden; }
+  .acn-main  { padding:8px; overflow:visible; }
+
+  /* Tabelas com scroll horizontal */
+  .sec-body  { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* Botões com área de toque maior */
+  .acn-btn { font-size:10px !important; padding:5px 8px !important; min-height:28px; }
+
+  /* Modais: quase tela cheia */
+  .modal-overlay { align-items:flex-end; }
+  .modal-box {
+    max-width:100% !important;
+    width:100% !important;
+    max-height:88vh !important;
+    border-radius:12px 12px 0 0 !important;
+    margin:0 !important;
+  }
+
+  /* Painéis fixos com position:fixed (ex: side panels) */
+  div[style*="width:min(700px"] ,
+  div[style*="width:min(640px"] ,
+  div[style*="width:min(500px"] ,
+  div[style*="width:min(460px"] {
+    width:100vw !important;
+    max-width:100vw !important;
+  }
+}
+
+@media (max-width:400px) {
+  .acn-logo img { height:30px; }
+  .acn-main { padding:6px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
    LIGHT MODE — força modo claro independente do tema do SO
    ══════════════════════════════════════════════════════════════════ */
 .acn-app { color-scheme: light; background:#f4f6f9; color:#374151; }
@@ -391,6 +474,7 @@ body.dark a[style*="color:#2563eb"] { color:#60a5fa !important; }
 export default function DashboardTab({ currentUser, onLogout }: Props) {
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
 
   // Navegação cross-tab vinda do CRM
   useEffect(() => {
@@ -574,6 +658,14 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
               <p>Workflow Industrial · KPIs em Horas</p>
             </div>
           </div>
+          {/* Hamburger — só visível no mobile via CSS */}
+          <button
+            className="acn-hamburger"
+            onClick={() => setSidebarOpen(o => !o)}
+            title="Menu">
+            {sidebarOpen ? '✕' : '☰'}
+          </button>
+
           <div className="acn-right">
             <div className="acn-motorola">
               <img src={import.meta.env.BASE_URL + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" />
@@ -599,8 +691,14 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
         {/* ── BODY: SIDEBAR + MAIN ── */}
         <div className="acn-body">
 
+          {/* Overlay escuro no mobile quando sidebar aberta */}
+          <div
+            className={`acn-mob-overlay${sidebarOpen ? ' mob-open' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+          />
+
           {/* ── SIDEBAR ── */}
-          <nav className="acn-sidebar">
+          <nav className={`acn-sidebar${sidebarOpen ? ' mob-open' : ''}`}>
             {SIDEBAR_GROUPS.map(group => (
               <React.Fragment key={group.section}>
                 <div className="sidebar-section">{group.section}</div>
@@ -608,7 +706,7 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
                   <div
                     key={item.id}
                     className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
                   >
                     <span className="sidebar-dot">●</span>
                     {item.label}
