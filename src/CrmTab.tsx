@@ -304,49 +304,24 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           });
         }
       } else {
-        // Gera numero_os igual ao SacTab (RPC + fallback)
-        let numero = '';
-        const { data: rpcData, error: rpcErr } = await supabase.rpc('proximo_numero_os');
-        if (!rpcErr && rpcData) {
-          numero = rpcData as string;
-        } else {
-          const ano = new Date().getFullYear();
-          const { data: ultimos } = await supabase
-            .from('sac_ordens_servico').select('numero_os')
-            .like('numero_os', `OS-%-${ano}`);
-          let max = 0;
-          for (const row of (ultimos || [])) {
-            const match = row.numero_os?.match(/^OS-(\d+)\//);
-            if (match) { const n = parseInt(match[1], 10); if (n > max) max = n; }
-          }
-          numero = `OS-${String(max + 1).padStart(4, '0')}/${ano}`;
-        }
-
-        const { data: novaOs, error } = await supabase.from('sac_ordens_servico').insert({
-          numero_os:        numero,
-          equipamento_nome: op.titulo,
+        // OS: redireciona para formulário completo do SAC pré-preenchido
+        sessionStorage.setItem('pendingOsFromCrm', JSON.stringify({
           defeito_reclamado: op.titulo,
-          cliente_nome:     op.orgao || op.titulo,
-          status:           'Aguardando Início',
-          tipo_avaliacao:   'Presencial',
-          tipo_servico:     'Orçamento',
-          tecnico_responsavel: op.responsavel_nome || null,
-          criado_por_nome:  currentUser?.nome,
-          criado_por_email: currentUser?.email,
-          data_abertura:    agora,
-          atualizado_em:    agora,
-        }).select().single();
-        if (error) throw error;
-        if (novaOs) {
-          await supabase.from('crm_historico').insert({
-            oportunidade_id: op.id, tipo: 'conversao_os',
-            conteudo: `OS criada: ${numero}`, usuario_nome: currentUser?.nome,
-          });
-        }
+          equipamento_nome:  op.titulo,
+          cliente_nome:      op.orgao || '',
+          empresa_orgao:     op.orgao || '',
+          cliente_id:        op.cliente_id || null,
+          observacoes:       `Originado do CRM — ${op.titulo}${op.numero_edital ? ' / Edital: ' + op.numero_edital : ''}`,
+        }));
+        setModalConverter(null);
+        setNumOp('');
+        window.dispatchEvent(new CustomEvent('crm:navegar-sac'));
+        setSalvando(false);
+        return;
       }
       setModalConverter(null);
       setNumOp('');
-      alert(`${tipoConverter === 'op' ? `OP ${numOp.trim()}` : 'OS'} criada! Acesse a aba ${tipoConverter === 'op' ? 'Engenharia' : 'SAC'} para acompanhar.`);
+      alert(`OP ${numOp.trim()} criada! Acesse a aba Engenharia para acompanhar.`);
     } catch (e: any) {
       alert('Erro ao criar: ' + (e?.message || 'Verifique o console.'));
     }

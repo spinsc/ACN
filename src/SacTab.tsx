@@ -191,7 +191,28 @@ export default function SacTab({ currentUser }) {
   const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', defeito:'' };
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
 
-  useEffect(() => { fetchOrdens(); fetchEquipamentos(); fetchCategorias(); }, []);
+  useEffect(() => {
+    fetchOrdens(); fetchEquipamentos(); fetchCategorias();
+    // Pré-preenchimento vindo do CRM (sessionStorage)
+    const raw = sessionStorage.getItem('pendingOsFromCrm');
+    if (raw) {
+      try {
+        const d = JSON.parse(raw);
+        sessionStorage.removeItem('pendingOsFromCrm');
+        setForm(f => ({
+          ...f,
+          defeito_reclamado: d.defeito_reclamado || '',
+          equipamento_nome:  d.equipamento_nome  || '',
+          cliente_nome:      d.cliente_nome      || '',
+          empresa_orgao:     d.empresa_orgao     || '',
+          _cliente_id:       d.cliente_id        || null,
+          observacoes:       d.observacoes       || '',
+        }));
+        setEquipLista([{ marca:'', modelo:'', numero_serie:'', defeito: d.defeito_reclamado || '' }]);
+        setModalNova(true);
+      } catch (_) {}
+    }
+  }, []);
 
   const fetchCategorias = async () => {
     const { data } = await supabase.from('sac_categorias').select('*').order('nome');

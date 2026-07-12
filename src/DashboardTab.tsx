@@ -392,6 +392,13 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
 
+  // Navegação cross-tab vinda do CRM
+  useEffect(() => {
+    const handler = () => setActiveTab('sac');
+    window.addEventListener('crm:navegar-sac', handler);
+    return () => window.removeEventListener('crm:navegar-sac', handler);
+  }, []);
+
   // Trocar senha
   const [modalSenha, setModalSenha] = useState(!!currentUser?.primeiro_acesso);
   const [senhaForm, setSenhaForm]   = useState({ atual:'', nova:'', confirmar:'' });
