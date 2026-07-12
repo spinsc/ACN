@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import ContactosSection from './ContactosSection';
+import CrmAnexosWidget from './CrmAnexosWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -502,6 +503,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           {currentUser?.perfil === 'Admin' && (
             <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirOp(op)}>✕</button>
           )}
+          <CrmAnexosWidget op={op} currentUser={currentUser} />
         </div>
       </div>
     );
