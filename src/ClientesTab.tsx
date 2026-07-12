@@ -357,7 +357,8 @@ export default function ClientesTab({ currentUser }) {
   const load = async () => {
     setLoading(true);
     // Carrega clientes + nome da empresa vinculada (self-join via empresa_id)
-    let q = supabase.from('clientes').select('*, empresa:empresa_id(id,nome)').order('nome');
+    // Alias "empresa_vinculada" para não conflitar com a coluna de texto "empresa"
+    let q = supabase.from('clientes').select('*, empresa_vinculada:empresa_id(id,nome)').order('nome');
     if (busca.length >= 2) q = q.or(`nome.ilike.%${busca}%,documento.ilike.%${busca}%,empresa.ilike.%${busca}%,cidade.ilike.%${busca}%`);
     if (filtroTipo) q = q.eq('tipo', filtroTipo);
     const { data } = await q.limit(200);
@@ -378,15 +379,15 @@ export default function ClientesTab({ currentUser }) {
 
   // Abre cliente pelo id (para "Ver empresa →" e "Ver contato →" dos vínculos)
   const abrirPorId = async (id: string) => {
-    const { data } = await supabase.from('clientes').select('*, empresa:empresa_id(id,nome)').eq('id', id).single();
+    const { data } = await supabase.from('clientes').select('*, empresa_vinculada:empresa_id(id,nome)').eq('id', id).single();
     if (data) {
-      setModalForm({ ...data, _empresa_nome: data.empresa?.nome || '' });
+      setModalForm({ ...data, _empresa_nome: data.empresa_vinculada?.nome || '' });
       setModoForm('ver');
     }
   };
 
   const abrirModal = (c: any, modo: 'novo'|'editar'|'ver') => {
-    setModalForm({ ...c, _empresa_nome: c.empresa?.nome || '' });
+    setModalForm({ ...c, _empresa_nome: c.empresa_vinculada?.nome || '' });
     setModoForm(modo);
   };
 
@@ -473,7 +474,7 @@ export default function ClientesTab({ currentUser }) {
                             color:'#0369a1', fontSize:10, fontWeight:700, padding:0, textAlign:'left' }}
                             onClick={() => abrirPorId(c.empresa_id)}
                             title="Ver empresa vinculada">
-                            🏢 {c.empresa?.nome || '—'}
+                            🏢 {c.empresa_vinculada?.nome || '—'}
                           </button>
                         )}
                         {c.tipo === 'PJ' && (
