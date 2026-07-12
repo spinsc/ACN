@@ -755,16 +755,24 @@ function PainelKPI() {
 
 // ---- PAINEL DADOS / LIMPEZA ----
 const TABELAS_CONFIG = [
-  { id:'oples',                 label:'OPLs',               desc:'Ordens de Produção',         cor:'#2563eb' },
-  { id:'sac_ordens_servico',    label:'SAC — OS',            desc:'Ordens de Serviço SAC',       cor:'#0f766e' },
-  { id:'demandas_setoriais',    label:'Demandas Setoriais',  desc:'Demandas e Ajustes',         cor:'#f59e0b' },
-  { id:'demandas_avulsas',      label:'Demandas Avulsas',    desc:'Engenharia — tarefas livres', cor:'#7c3aed' },
-  { id:'logistica_manifestos',  label:'Logística In/Out',    desc:'Manifestos de envio/recebimento', cor:'#0891b2' },
-  { id:'rh_autorizacoes',        label:'Autorizações RH',     desc:'Autorizações de saída/entrada antecipada', cor:'#ea580c' },
-  { id:'crm_clientes',          label:'CRM — Clientes',      desc:'Prospects e clientes',       cor:'#16a34a' },
-  { id:'crm_historico_contatos',label:'CRM — Histórico',     desc:'Contatos e interações',      cor:'#0d9488' },
-  { id:'logs_movimentacao_opl', label:'Logs de OPL',         desc:'Histórico de movimentações', cor:'#475569' },
-  { id:'cq_auditorias',         label:'Auditorias CQ',       desc:'Registros de qualidade',     cor:'#dc2626' },
+  { id:'oples',                 label:'OPLs',                    desc:'Ordens de Produção',                      cor:'#2563eb' },
+  { id:'sac_ordens_servico',    label:'SAC — OS',                desc:'Ordens de Serviço SAC',                   cor:'#0f766e' },
+  { id:'demandas_setoriais',    label:'Demandas Setoriais',       desc:'Demandas e Ajustes',                      cor:'#f59e0b' },
+  { id:'demandas_avulsas',      label:'Demandas Avulsas',         desc:'Engenharia — tarefas livres',             cor:'#7c3aed' },
+  { id:'logistica_manifestos',  label:'Logística In/Out',         desc:'Manifestos de envio/recebimento',         cor:'#0891b2' },
+  { id:'rh_autorizacoes',       label:'Autorizações RH',          desc:'Autorizações de saída/entrada antecipada',cor:'#ea580c' },
+  // ── CRM / Licitações ──────────────────────────────────────────────────────
+  { id:'crm_oportunidades',     label:'CRM — Oportunidades',      desc:'Licitações e Vendas Diretas',             cor:'#0891b2' },
+  { id:'crm_historico',         label:'CRM — Histórico',          desc:'Movimentações e auditoria do funil',      cor:'#0369a1' },
+  { id:'crm_vendas',            label:'CRM — Vendas Fechadas',    desc:'OPs/OSs geradas a partir do CRM',         cor:'#16a34a' },
+  { id:'crm_contatos',          label:'CRM — Contatos',           desc:'Pessoas físicas e leads do CRM',          cor:'#0d9488' },
+  { id:'crm_interacoes',        label:'CRM — Interações',         desc:'Ligações, WA, reuniões registradas',      cor:'#6366f1' },
+  { id:'crm_whatsapp_msgs',     label:'CRM — Msgs WhatsApp',      desc:'Mensagens sincronizadas via Evolution API',cor:'#16a34a' },
+  { id:'crm_anexos',            label:'CRM — Anexos',             desc:'Arquivos anexados às oportunidades',      cor:'#78716c' },
+  // ── Outros ───────────────────────────────────────────────────────────────
+  { id:'clientes',              label:'Cadastro Clientes',         desc:'Base unificada de clientes PF/PJ',        cor:'#0f766e' },
+  { id:'logs_movimentacao_opl', label:'Logs de OPL',              desc:'Histórico de movimentações',              cor:'#475569' },
+  { id:'cq_auditorias',         label:'Auditorias CQ',            desc:'Registros de qualidade',                  cor:'#dc2626' },
 ];
 
 function PainelDados() {
@@ -790,16 +798,18 @@ function PainelDados() {
 
   const fetchRegistros = async () => {
     setLoading(true);
-    const orderCol = tabelaAtiva === 'oples' ? 'data_entrada'
-      : tabelaAtiva === 'logs_movimentacao_opl' ? 'data_hora'
-      : tabelaAtiva === 'demandas_setoriais' ? 'data_abertura'
-      : tabelaAtiva === 'sac_ordens_servico' ? 'data_abertura'
-      : tabelaAtiva === 'crm_historico_contatos' ? 'data_contato'
-      : tabelaAtiva === 'crm_clientes' ? 'created_at'
-      : tabelaAtiva === 'cq_auditorias' ? 'created_at'
-      : tabelaAtiva === 'demandas_avulsas' ? 'criado_em'
-      : tabelaAtiva === 'logistica_manifestos' ? 'data'
-      : tabelaAtiva === 'rh_autorizacoes' ? 'data'
+    const orderCol = tabelaAtiva === 'oples'               ? 'data_entrada'
+      : tabelaAtiva === 'logs_movimentacao_opl'             ? 'data_hora'
+      : tabelaAtiva === 'demandas_setoriais'                ? 'data_abertura'
+      : tabelaAtiva === 'sac_ordens_servico'                ? 'data_abertura'
+      : tabelaAtiva === 'cq_auditorias'                     ? 'created_at'
+      : tabelaAtiva === 'logistica_manifestos'              ? 'data'
+      : tabelaAtiva === 'rh_autorizacoes'                   ? 'data'
+      : tabelaAtiva === 'crm_interacoes'                    ? 'data_interacao'
+      : tabelaAtiva === 'crm_whatsapp_msgs'                 ? 'data_msg'
+      // tabelas com criado_em
+      : ['demandas_avulsas','crm_oportunidades','crm_historico','crm_vendas',
+         'crm_contatos','crm_anexos','clientes'].includes(tabelaAtiva) ? 'criado_em'
       : 'created_at';
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);
@@ -878,10 +888,22 @@ function PainelDados() {
       return `[${r.status || '?'}] ${r.titulo?.substring(0,70) || '?'} — ${r.criado_por_nome || r.criado_por || '?'} · Prioridade: ${r.prioridade || '?'}`;
     if (tabelaAtiva === 'logistica_manifestos')
       return `${r.tipo || '?'} — ${r.descricao?.substring(0,60) || r.transportadora || '?'} — ${r.criado_por_nome || r.criado_por || '?'}`;
-    if (tabelaAtiva === 'crm_clientes')
-      return `${r.nome_empresa || r.nome || '?'} — ${r.contato_nome || '?'} — ${r.status_crm || r.estagio || '?'}`;
-    if (tabelaAtiva === 'crm_historico_contatos')
-      return `${r.nome_empresa || '?'} — ${r.tipo_contato || '?'}: ${r.descricao?.substring(0,50) || '?'}`;
+    if (tabelaAtiva === 'crm_oportunidades')
+      return `[${r.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda'}] ${r.titulo || '?'} — ${r.orgao || '?'} — Etapa: ${r.estagio_id ? '✓' : '?'} — R$ ${r.valor_estimado ? Number(r.valor_estimado).toLocaleString('pt-BR') : '—'}`;
+    if (tabelaAtiva === 'crm_historico')
+      return `${r.tipo || '?'}: ${r.conteudo?.substring(0,60) || '?'} — por ${r.usuario_nome || '?'}`;
+    if (tabelaAtiva === 'crm_vendas')
+      return `${r.tipo || '?'} — Número: ${r.numero || '?'} — ${r.cliente_nome || '?'} — R$ ${r.valor ? Number(r.valor).toLocaleString('pt-BR') : '—'}`;
+    if (tabelaAtiva === 'crm_contatos')
+      return `${r.nome || '?'} — ${r.empresa || '?'} — ${r.whatsapp || r.email || '?'} — op: ${r.operador_nome || '?'}`;
+    if (tabelaAtiva === 'crm_interacoes')
+      return `[${r.tipo || '?'}] ${r.resultado || '?'}: ${r.descricao?.substring(0,60) || '?'} — ${r.operador_nome || '?'}`;
+    if (tabelaAtiva === 'crm_whatsapp_msgs')
+      return `${r.direcao === 'saida' ? '→' : '←'} ${r.vendedor_nome || r.instance_name || '?'} ↔ ${r.numero_whatsapp || '?'}: ${r.conteudo?.substring(0,60) || '[mídia]'}`;
+    if (tabelaAtiva === 'crm_anexos')
+      return `${r.tipo || '?'} — ${r.nome || '?'} — ${r.criado_por || '?'}`;
+    if (tabelaAtiva === 'clientes')
+      return `[${r.tipo || '?'}] ${r.nome || '?'} — ${r.documento || '?'} — ${r.cidade || '?'}${r.estado ? '/' + r.estado : ''}`;
     if (tabelaAtiva === 'logs_movimentacao_opl')
       return `OPL ${r.numero_opl} → ${r.setor}: ${r.evento?.substring(0,50)}`;
     if (tabelaAtiva === 'cq_auditorias')
@@ -893,7 +915,7 @@ function PainelDados() {
     return r.id;
   };
 
-  const getDataCol = (r) => r.data_abertura || r.criado_em || r.data || r.created_at || r.data_hora || r.data_contato;
+  const getDataCol = (r) => r.data_abertura || r.criado_em || r.data_interacao || r.data_msg || r.data || r.created_at || r.data_hora || r.data_contato;
   const todosSelecionados = registros.length > 0 && selecionados.size === registros.length;
   const algumSelecionado = selecionados.size > 0;
 
@@ -1105,9 +1127,16 @@ function PainelNotificacoes() {
 const LABEL_TABELA = {
   oples:'OPLs', sac_ordens_servico:'SAC — OS', demandas_setoriais:'Demandas Setoriais',
   demandas_avulsas:'Demandas Avulsas', logistica_manifestos:'Logística In/Out',
-  rh_autorizacoes:'Autorizações RH', crm_clientes:'CRM — Clientes',
-  crm_historico_contatos:'CRM — Histórico', logs_movimentacao_opl:'Logs de OPL',
+  rh_autorizacoes:'Autorizações RH', logs_movimentacao_opl:'Logs de OPL',
   cq_auditorias:'Auditorias CQ',
+  // CRM / Licitações
+  crm_oportunidades:'CRM — Oportunidades', crm_historico:'CRM — Histórico',
+  crm_vendas:'CRM — Vendas', crm_contatos:'CRM — Contatos',
+  crm_interacoes:'CRM — Interações', crm_whatsapp_msgs:'CRM — Msgs WA',
+  crm_anexos:'CRM — Anexos',
+  // Legado (compatibilidade)
+  crm_clientes:'CRM — Clientes (legado)', crm_historico_contatos:'CRM — Histórico (legado)',
+  clientes:'Cadastro Clientes',
 };
 
 function PainelLixeira() {
@@ -1170,6 +1199,15 @@ function PainelLixeira() {
       case 'demandas_avulsas': return `${(d.titulo || '?').substring(0,60)} — ${d.status || '?'}`;
       case 'logistica_manifestos': return `${d.tipo || '?'} — ${(d.descricao || d.transportadora || '').substring(0,60)}`;
       case 'rh_autorizacoes': return `[${d.tipo || '?'}] ${d.data || '?'} — ${d.motivo || '?'}`.substring(0,80);
+      case 'crm_oportunidades': return `[${d.funil === 'licitacao' ? 'Licitação' : 'Venda'}] ${d.titulo || '?'} — ${d.orgao || '?'} — R$ ${d.valor_estimado ? Number(d.valor_estimado).toLocaleString('pt-BR') : '—'}`;
+      case 'crm_historico': return `${d.tipo || '?'}: ${(d.conteudo || '').substring(0,60)} — por ${d.usuario_nome || '?'}`;
+      case 'crm_vendas': return `${d.tipo || '?'} — ${d.numero || '?'} — ${d.cliente_nome || '?'}`;
+      case 'crm_contatos': return `${d.nome || '?'} — ${d.empresa || '?'} — ${d.whatsapp || d.email || '?'}`;
+      case 'crm_interacoes': return `[${d.tipo || '?'}] ${(d.descricao || '').substring(0,60)} — ${d.operador_nome || '?'}`;
+      case 'crm_whatsapp_msgs': return `${d.direcao === 'saida' ? '→' : '←'} ${d.numero_whatsapp || '?'}: ${(d.conteudo || '[mídia]').substring(0,60)}`;
+      case 'crm_anexos': return `${d.tipo || '?'} — ${d.nome || '?'}`;
+      case 'clientes': return `[${d.tipo || '?'}] ${d.nome || '?'} — ${d.documento || '?'}`;
+      // legado
       case 'crm_clientes': return `${d.nome_empresa || d.nome || '?'} — ${d.contato_nome || '?'}`;
       case 'crm_historico_contatos': return `${d.nome_empresa || '?'} — ${d.tipo_contato || '?'}: ${(d.descricao || '').substring(0,50)}`;
       case 'logs_movimentacao_opl': return `OPL ${d.numero_opl || '?'} → ${d.setor || '?'}: ${(d.evento || '').substring(0,50)}`;
