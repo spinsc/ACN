@@ -54,13 +54,19 @@ const mesNome = (m: number) => ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago',
 // GERADOR DE PDF DE AUTORIZAÇÃO (abre janela de impressão)
 // ─────────────────────────────────────────────────────────────────────────────
 function imprimirAutorizacao(aut: any, func: any) {
-  const isTerceiro = func?.tipo_colaborador === 'Terceiro';
+  // isTerceiro: verifica pelo cadastro do colaborador OU pelo tipo já gravado no banco
+  const isTerceiro = func?.tipo_colaborador === 'Terceiro'
+    || (aut.tipo||'').startsWith('Comunicação');
   const isSaida = (aut.tipo||'').includes('Saída');
-  const tipoLabel = aut.tipo || '—';
+  // Para reimpressão de registros antigos (tipo = 'Saída Antecipada'), normaliza o label
+  const tipoBaseLabel = isTerceiro && !(aut.tipo||'').startsWith('Comunicação')
+    ? (isSaida ? 'Comunicação de Saída Antecipada' : 'Comunicação de Entrada Antecipada')
+    : (aut.tipo || '—');
+  const tipoLabel = tipoBaseLabel;
   // Título do documento: Autorização (funcionário) ou Comunicação (terceiro)
   const tituloDoc = isTerceiro
-    ? `COMUNICAÇÃO DE ${tipoLabel.toUpperCase()}`
-    : `AUTORIZAÇÃO DE ${tipoLabel.toUpperCase()}`;
+    ? `COMUNICAÇÃO DE ${(isSaida ? 'SAÍDA ANTECIPADA' : 'ENTRADA ANTECIPADA')}`
+    : `AUTORIZAÇÃO DE ${(isSaida ? 'SAÍDA ANTECIPADA' : 'ENTRADA ANTECIPADA')}`;
   const obsDoc = isTerceiro
     ? 'ℹ️ Este documento registra a comunicação de saída/entrada antecipada do prestador de serviços.'
     : '⚠️ Este documento deve ser assinado pelo Gerente Responsável antes da saída/entrada antecipada do funcionário.';
