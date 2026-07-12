@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -74,6 +75,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const [filtroOp, setFiltroOp]       = useState('');
   const [contatoSel, setContatoSel]   = useState<any | null>(null);
   const [abaDetalhe, setAbaDetalhe]   = useState<'info'|'historico'|'whatsapp'>('info');
+  const [showWaConexoes, setShowWaConexoes] = useState(false);
 
   // modais
   const [modalContato, setModalContato]     = useState<any | null>(null); // null=fechado, {}=novo, obj=editar
@@ -560,7 +562,16 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
         <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
           {contatosFiltrados.length} contato{contatosFiltrados.length !== 1 ? 's' : ''}
         </span>
+        {isGerente && (
+          <button className="acn-btn"
+            style={{ background:'#16a34a', fontSize:9, padding:'3px 10px', marginLeft:4 }}
+            onClick={() => setShowWaConexoes(true)}>
+            ⚙️ WhatsApp
+          </button>
+        )}
       </div>
+
+      {showWaConexoes && <WhatsAppConexoesWidget onClose={() => setShowWaConexoes(false)} />}
 
       {/* ── Layout: lista + painel ── */}
       <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>

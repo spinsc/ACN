@@ -17,8 +17,9 @@ const diasAte = (v: string | null) => {
   if (!v) return null;
   return Math.ceil((new Date(v + 'T12:00:00').getTime() - Date.now()) / 86400000);
 };
-const isGanho  = (e: any) => e?.nome?.toLowerCase().includes('vencida') || e?.nome?.toLowerCase().includes('convertida');
-const isPerdido = (e: any) => e?.is_final && !isGanho(e);
+const isGanho       = (e: any) => e?.nome?.toLowerCase().includes('vencida') || e?.nome?.toLowerCase().includes('convertida');
+const isDesistencia = (e: any) => e?.nome?.toLowerCase().includes('desist');
+const isPerdido     = (e: any) => e?.is_final && !isGanho(e) && !isDesistencia(e);
 
 const VAZIO_OP: any = {
   funil: 'licitacao',
@@ -84,6 +85,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalGate, setModalGate]           = useState<any|null>(null);
   const [modalConverter, setModalConverter] = useState<any|null>(null);
   const [modalMotivo, setModalMotivo]       = useState<any|null>(null);
+  const [modalDesist, setModalDesist]       = useState<any|null>(null);
+  const [desistTexto, setDesistTexto]       = useState('');
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
@@ -180,6 +183,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
     const estDest = getEst(estagioDestId);
     setDragging(null);
+
+    if (isDesistencia(estDest)) {
+      setModalDesist({ op, estagioDestId });
+      setDesistTexto('');
+      return;
+    }
 
     if (isPerdido(estDest)) {
       setModalMotivo({ op, estagioDestId });
@@ -380,6 +389,31 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     await load();
   };
 
+  const confirmarDesistencia = async () => {
+    if (!modalDesist) return;
+    await supabase.from('crm_oportunidades').update({
+      estagio_id:          modalDesist.estagioDestId,
+      motivo_desistencia:  desistTexto,
+      atualizado_em:       new Date().toISOString(),
+    }).eq('id', modalDesist.op.id);
+    await supabase.from('crm_historico').insert({
+      oportunidade_id: modalDesist.op.id, tipo: 'status_change',
+      estagio_novo: getEst(modalDesist.estagioDestId)?.nome,
+      conteudo: `Desistência: ${desistTexto}`, usuario_nome: currentUser?.nome,
+    });
+    setModalDesist(null);
+    await load();
+  };
+
+  const reativarOp = async (op: any) => {
+    const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e) && !isDesistencia(e));
+    if (!first) return;
+    await supabase.from('crm_oportunidades').update({
+      estagio_id: first.id, motivo_desistencia: null, atualizado_em: new Date().toISOString(),
+    }).eq('id', op.id);
+    await load();
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   // SALVAR VENDA
   // ─────────────────────────────────────────────────────────────────────────
@@ -434,8 +468,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   const renderCard = (op: any) => {
     const est    = getEst(op.estagio_id);
-    const ganho  = isGanho(est);
-    const perdido = isPerdido(est);
+    const ganho      = isGanho(est);
+    const perdido    = isPerdido(est);
+    const desistiu   = isDesistencia(est);
     const chk    = chkPct(op.id, op.estagio_id);
     const dias   = diasAte(op.data_sessao || op.data_prev_fechamento);
     const vds    = getVendasOp(op.id);
@@ -522,6 +557,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         )}
 
+        {desistiu && op.motivo_desistencia && (
+          <div style={{ marginTop:4, fontSize:8, color:'#b45309', fontWeight:600, fontStyle:'italic' }}>
+            Desistência: {op.motivo_desistencia}
+          </div>
+        )}
+
         <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
           {ganho && (
             <>
@@ -541,7 +582,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               </button>
             </>
           )}
-          {!perdido && (
+          {desistiu && (
+            <button className="acn-btn" style={{ background:'#d97706' }}
+              onClick={() => reativarOp(op)}>
+              ↩ Reativar
+            </button>
+          )}
+          {!perdido && !desistiu && (
             <button className="acn-btn" style={{ background:'#475569' }}
               onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalOp(op); }}>
               ✏️ Editar
@@ -563,9 +610,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
       {estagiosFunil.map(est => {
         const cards   = opsFiltradas.filter(o => o.estagio_id === est.id);
-        const ganho   = isGanho(est);
-        const perdido = isPerdido(est);
-        const hdrBg   = perdido ? '#991b1b' : ganho ? '#166534' : (est.cor || '#1e293b');
+        const ganho      = isGanho(est);
+        const perdido    = isPerdido(est);
+        const desistiu   = isDesistencia(est);
+        const hdrBg      = perdido ? '#991b1b' : ganho ? '#166534' : desistiu ? '#92400e' : (est.cor || '#1e293b');
 
         return (
           <div key={est.id} style={{ width:200, flexShrink:0 }}>
@@ -583,13 +631,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               onDragLeave={() => setDragOver(null)}
               onDrop={() => handleDrop(est.id)}
               style={{
-                background: dragOver === est.id ? '#dbeafe' : perdido ? '#fee2e260' : ganho ? '#dcfce760' : '#e8ecf0',
+                background: dragOver === est.id ? '#dbeafe' : perdido ? '#fee2e260' : ganho ? '#dcfce760' : desistiu ? '#fef3c760' : '#e8ecf0',
                 borderRadius:'0 0 5px 5px', padding:5, minHeight:100, transition:'background .15s',
                 border: dragOver === est.id ? '2px dashed #3b82f6' : '2px solid transparent',
               }}
             >
               {cards.map(op => renderCard(op))}
-              {!perdido && !ganho && (
+              {!perdido && !ganho && !desistiu && (
                 <div
                   onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: est.id }); setModalOp({}); }}
                   style={{ background:'white', border:'1px dashed #cbd5e1', borderRadius:5, padding:'5px 8px',
@@ -940,6 +988,27 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:10 }}>
               <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalMotivo(null)}>Cancelar</button>
               <button className="acn-btn" style={{ background:'#991b1b', fontSize:10, padding:'4px 12px' }} onClick={confirmarPerda}>Confirmar Perda</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL DESISTÊNCIA ══════ */}
+      {modalDesist && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(380px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:12, color:'#92400e', marginBottom:8 }}>🚫 Registrar Desistência</div>
+            <div style={{ fontSize:10, color:'#374151', marginBottom:10 }}>
+              Motivo da desistência em <strong>"{modalDesist.op.titulo}"</strong>:
+            </div>
+            <textarea value={desistTexto} onChange={e => setDesistTexto(e.target.value)}
+              placeholder="Ex: Edital desfavorável, fora do escopo, capacidade técnica insuficiente, decisão estratégica..."
+              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, height:80, resize:'vertical', boxSizing:'border-box' }}
+              autoFocus
+            />
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:10 }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalDesist(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#92400e', fontSize:10, padding:'4px 12px' }} onClick={confirmarDesistencia}>Confirmar Desistência</button>
             </div>
           </div>
         </div>
