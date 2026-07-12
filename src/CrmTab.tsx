@@ -279,6 +279,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     const agora = new Date().toISOString();
     try {
       if (tipoConverter === 'op') {
+        // Checa duplicata antes de inserir
+        const { data: existente } = await supabase.from('oples').select('id').eq('opl', numOp.trim()).maybeSingle();
+        if (existente) {
+          alert(`OP "${numOp.trim()}" já está cadastrada. Use outro número.`);
+          setSalvando(false);
+          return;
+        }
         const { data: novaOp, error } = await supabase.from('oples').insert({
           opl:                   numOp.trim(),
           modelo:                op.titulo,
@@ -316,16 +323,18 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         }
 
         const { data: novaOs, error } = await supabase.from('sac_ordens_servico').insert({
-          numero_os:          numero,
-          descricao_problema: op.titulo,
-          cliente_nome:       op.orgao || op.titulo,
-          status:             'Aguardando Início',
-          tipo_avaliacao:     'Presencial',
-          responsavel:        op.responsavel_nome || null,
-          criado_por_nome:    currentUser?.nome,
-          criado_por_email:   currentUser?.email,
-          data_abertura:      agora,
-          atualizado_em:      agora,
+          numero_os:        numero,
+          equipamento_nome: op.titulo,
+          defeito_reclamado: op.titulo,
+          cliente_nome:     op.orgao || op.titulo,
+          status:           'Aguardando Início',
+          tipo_avaliacao:   'Presencial',
+          tipo_servico:     'Orçamento',
+          responsavel:      op.responsavel_nome || null,
+          criado_por_nome:  currentUser?.nome,
+          criado_por_email: currentUser?.email,
+          data_abertura:    agora,
+          atualizado_em:    agora,
         }).select().single();
         if (error) throw error;
         if (novaOs) {
