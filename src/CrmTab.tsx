@@ -1,597 +1,969 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTES
-// ─────────────────────────────────────────────────────────────────────────────
-const COLUNAS = ['Prospectado','Contatado','Em Negociação','Convertido'];
-const COR_COLUNA: Record<string,string> = {
-  'Prospectado':   '#6366f1',
-  'Contatado':     '#0891b2',
-  'Em Negociação': '#d97706',
-  'Convertido':    '#16a34a',
-};
-
-const LEAD_VAZIO = {
-  nome_cliente:'', empresa:'', cargo:'', telefone:'', email:'',
-  _cliente_id: null as string|null, _cliente_obj: null as any,
-  data_proximo_contato:'', observacoes:'', operador_responsavel:'',
-  status_kanban:'Prospectado',
-};
+import { ColaboradorSelect } from './ColaboradorSelect';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-const fmtDate = (v:string) => {
+const fmtMoeda = (v: number | null) =>
+  v == null ? '—' : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`;
+const fmtData = (v: string | null) =>
+  v ? new Date(v + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+const diasAte = (v: string | null) => {
   if (!v) return null;
-  return new Date(v).toLocaleDateString('pt-BR');
+  return Math.ceil((new Date(v + 'T12:00:00').getTime() - Date.now()) / 86400000);
 };
-const fmtDT = (v:string) => {
-  if (!v) return '—';
-  return new Date(v).toLocaleString('pt-BR',{ day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit' });
+const isGanho  = (e: any) => e?.nome?.toLowerCase().includes('vencida') || e?.nome?.toLowerCase().includes('convertida');
+const isPerdido = (e: any) => e?.is_final && !isGanho(e);
+
+const VAZIO_OP: any = {
+  funil: 'licitacao',
+  tipo_licitacao: 'ordinaria',
+  titulo: '',
+  numero_edital: '',
+  orgao: '',
+  data_sessao: '',
+  data_validade_ata: '',
+  valor_registrado: '',
+  cliente_id: null,
+  estagio_id: '',
+  responsavel_id: null,
+  responsavel_nome: '',
+  motivo_perda: '',
+  data_prev_fechamento: '',
 };
-const diasSemContato = (lead: any): number => {
-  const ref = lead.ultimo_contato || lead.created_at || lead.criado_em;
-  if (!ref) return 999;
-  return Math.floor((Date.now() - new Date(ref).getTime()) / 86400000);
-};
-const isEsquecido = (lead: any, maxDias: number) => {
-  if (lead.status_kanban === 'Convertido') return false;
-  return diasSemContato(lead) >= maxDias;
+
+const VAZIO_VENDA: any = {
+  orgao_aderente: '',
+  cliente_id: null,
+  descricao: '',
+  quantidade: '',
+  valor_unitario: '',
+  valor_total: '',
+  status_faturamento: 'pendente',
+  numero_nf: '',
+  data_faturamento: '',
+  operador_id: null,
+  operador_nome: '',
+  opl_id: null,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODAL DE LEAD
+// COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-function LeadModal({ lead: initialLead, currentUser, onClose, onRefresh }) {
-  const [lead, setLead] = useState(initialLead);
-  const [historico, setHistorico] = useState<any[]>([]);
-  const [novoContato, setNovoContato] = useState({ obs:'', data_proximo_contato:'' });
-  const [salvando, setSalvando] = useState(false);
-  const [editando, setEditando] = useState(false);
-  const [editForm, setEditForm] = useState({ ...initialLead });
+export default function CrmTab({ currentUser }: { currentUser: any }) {
+  // ── permissões ──
+  const pcrm = currentUser?.permissoes_crm || [];
+  const podeVerTotais       = pcrm.includes('totais_vendas')        || currentUser?.perfil === 'Admin';
+  const podeVerFaturamentos = pcrm.includes('painel_faturamentos')  || currentUser?.perfil === 'Admin';
+  const podeVerRelatorio    = pcrm.includes('relatorio_vendedores') || currentUser?.perfil === 'Admin';
 
-  const isAdmin = currentUser?.perfil === 'Admin';
+  // ── estado principal ──
+  const [funil, setFunil]           = useState<'licitacao'|'venda_direta'>('licitacao');
+  const [estagios, setEstagios]     = useState<any[]>([]);
+  const [ops, setOps]               = useState<any[]>([]);
+  const [itens, setItens]           = useState<any[]>([]);
+  const [progresso, setProgresso]   = useState<any[]>([]);
+  const [vendas, setVendas]         = useState<any[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [busca, setBusca]           = useState('');
+  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'>('kanban');
 
-  const fetchHistorico = useCallback(async () => {
-    const { data } = await supabase.from('crm_historico_contatos')
-      .select('*').eq('cliente_id', lead.id)
-      .order('data_contato', { ascending: false });
-    setHistorico(data || []);
-  }, [lead.id]);
+  // ── drag & drop ──
+  const [dragging, setDragging]     = useState<string|null>(null);
+  const [dragOver, setDragOver]     = useState<string|null>(null);
 
-  useEffect(() => { fetchHistorico(); }, [fetchHistorico]);
+  // ── modais ──
+  const [modalOp, setModalOp]               = useState<any|null>(null);
+  const [modalGate, setModalGate]           = useState<any|null>(null);
+  const [modalConverter, setModalConverter] = useState<any|null>(null);
+  const [modalMotivo, setModalMotivo]       = useState<any|null>(null);
+  const [modalVenda, setModalVenda]         = useState<any|null>(null);
+  const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
+  const [motivoTexto, setMotivoTexto]       = useState('');
+  const [formOp, setFormOp]                 = useState({ ...VAZIO_OP });
+  const [formVenda, setFormVenda]           = useState({ ...VAZIO_VENDA });
+  const [salvando, setSalvando]             = useState(false);
+  const [filtFat, setFiltFat]               = useState<'todos'|'pendente'|'faturado'>('todos');
+  const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
 
-  const registrarContato = async () => {
-    if (!novoContato.obs.trim()) { alert('Informe o que foi tratado no contato!'); return; }
+  // ─────────────────────────────────────────────────────────────────────────
+  // CARGA
+  // ─────────────────────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [r1, r2, r3, r4, r5] = await Promise.all([
+      supabase.from('crm_estagios_funil').select('*').order('ordem'),
+      supabase.from('crm_oportunidades').select('*').order('criado_em', { ascending: false }),
+      supabase.from('crm_checklist_itens').select('*').order('ordem'),
+      supabase.from('crm_checklist_progresso').select('*'),
+      supabase.from('crm_vendas').select('*').order('criado_em', { ascending: false }),
+    ]);
+    setEstagios(r1.data || []);
+    setOps(r2.data || []);
+    setItens(r3.data || []);
+    setProgresso(r4.data || []);
+    setVendas(r5.data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+    const ch = supabase
+      .channel('crm-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load]);
+
+  useEffect(() => { setAbaInterna('kanban'); }, [funil]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DERIVADOS
+  // ─────────────────────────────────────────────────────────────────────────
+  const estagiosFunil = estagios.filter(e => e.funil === funil);
+  const opsFunil      = ops.filter(o => o.funil === funil);
+  const opsFiltradas  = opsFunil.filter(o =>
+    !busca ||
+    o.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
+    o.orgao?.toLowerCase().includes(busca.toLowerCase()) ||
+    o.numero_edital?.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const getEst       = (id: string) => estagios.find(e => e.id === id);
+  const getItensEst  = (estagioId: string) => itens.filter(i => i.estagio_id === estagioId);
+  const getProgOp    = (opId: string) => progresso.filter(p => p.oportunidade_id === opId);
+  const getVendasOp  = (opId: string) => vendas.filter(v => v.oportunidade_id === opId);
+
+  const chkPct = (opId: string, estagioId: string) => {
+    const its = getItensEst(estagioId);
+    if (!its.length) return null;
+    const prog = getProgOp(opId);
+    const done = its.filter(i => prog.find(p => p.item_id === i.id && p.concluido)).length;
+    return { done, total: its.length };
+  };
+
+  const totalVendidoOp = (opId: string) =>
+    getVendasOp(opId).reduce((s, v) => s + (v.valor_total || 0), 0);
+  const totalFaturadoOp = (opId: string) =>
+    getVendasOp(opId).filter(v => v.status_faturamento === 'faturado').reduce((s, v) => s + (v.valor_total || 0), 0);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DRAG & DROP
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleDragStart = (id: string) => setDragging(id);
+  const handleDragEnd   = () => { setDragging(null); setDragOver(null); };
+
+  const handleDrop = async (estagioDestId: string) => {
+    setDragOver(null);
+    if (!dragging) return;
+    const op = ops.find(o => o.id === dragging);
+    if (!op || op.estagio_id === estagioDestId) { setDragging(null); return; }
+
+    const estDest = getEst(estagioDestId);
+    setDragging(null);
+
+    if (isPerdido(estDest)) {
+      setModalMotivo({ op, estagioDestId });
+      setMotivoTexto('');
+      return;
+    }
+
+    const its = getItensEst(op.estagio_id);
+    const prog = getProgOp(op.id);
+    const obrigPend = its.filter(i => i.obrigatorio && !prog.find(p => p.item_id === i.id && p.concluido));
+    if (obrigPend.length > 0) {
+      setModalGate({ op, estagioDestId, itens: its, prog });
+      return;
+    }
+
+    await moverCard(op.id, estagioDestId);
+  };
+
+  const moverCard = async (opId: string, estagioId: string) => {
+    await supabase.from('crm_oportunidades').update({
+      estagio_id: estagioId,
+      atualizado_em: new Date().toISOString(),
+    }).eq('id', opId);
+    await supabase.from('crm_historico').insert({
+      oportunidade_id: opId,
+      tipo: 'status_change',
+      estagio_novo: getEst(estagioId)?.nome,
+      usuario_nome: currentUser?.nome || 'Sistema',
+    });
+    await load();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALVAR OP
+  // ─────────────────────────────────────────────────────────────────────────
+  const salvarOportunidade = async () => {
+    if (!formOp.titulo?.trim()) return;
     setSalvando(true);
-    const agora = new Date().toISOString();
-    await supabase.from('crm_historico_contatos').insert([{
-      cliente_id: lead.id,
-      data_contato: agora,
-      resultado: novoContato.obs,
-      operador: currentUser?.nome,
-    }]);
-    // Atualiza ultimo_contato e próximo contato
-    const upd: any = { ultimo_contato: agora, atualizado_em: agora };
-    if (novoContato.data_proximo_contato) upd.data_proximo_contato = novoContato.data_proximo_contato;
-    await supabase.from('crm_clientes').update(upd).eq('id', lead.id);
-    setNovoContato({ obs:'', data_proximo_contato:'' });
-    await fetchHistorico();
-    // Recarrega lead
-    const { data } = await supabase.from('crm_clientes').select('*').eq('id', lead.id).single();
-    if (data) setLead(data);
+    const p: any = { ...formOp, funil };
+    if (p.valor_registrado) {
+      p.valor_registrado = parseFloat(String(p.valor_registrado).replace(/\./g,'').replace(',','.'));
+    } else {
+      p.valor_registrado = null;
+    }
+    if (!p.estagio_id) {
+      const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e));
+      if (first) p.estagio_id = first.id;
+    }
+    if (modalOp?.id) {
+      await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalOp.id);
+    } else {
+      await supabase.from('crm_oportunidades').insert(p);
+    }
     setSalvando(false);
-    onRefresh();
+    setModalOp(null);
+    await load();
   };
 
-  const moverColuna = async (novoStatus: string) => {
-    await supabase.from('crm_clientes').update({ status_kanban: novoStatus, atualizado_em: new Date().toISOString() }).eq('id', lead.id);
-    const { data } = await supabase.from('crm_clientes').select('*').eq('id', lead.id).single();
-    if (data) setLead(data);
-    onRefresh();
+  // ─────────────────────────────────────────────────────────────────────────
+  // TOGGLE CHECKLIST
+  // ─────────────────────────────────────────────────────────────────────────
+  const toggleItem = async (opId: string, itemId: string, atual: boolean) => {
+    const ex = progresso.find(p => p.oportunidade_id === opId && p.item_id === itemId);
+    if (ex) {
+      await supabase.from('crm_checklist_progresso').update({
+        concluido: !atual,
+        concluido_por: currentUser?.nome,
+        concluido_em: !atual ? new Date().toISOString() : null,
+      }).eq('id', ex.id);
+    } else {
+      await supabase.from('crm_checklist_progresso').insert({
+        oportunidade_id: opId, item_id: itemId, concluido: true,
+        concluido_por: currentUser?.nome, concluido_em: new Date().toISOString(),
+      });
+    }
+    const { data } = await supabase.from('crm_checklist_progresso').select('*').eq('oportunidade_id', opId);
+    setProgresso(prev => [...prev.filter(p => p.oportunidade_id !== opId), ...(data || [])]);
+    if (modalGate?.op?.id === opId) {
+      setModalGate((g: any) => g ? { ...g, prog: data || [] } : null);
+    }
   };
 
-  const salvarEdicao = async () => {
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONVERTER EM OP / OS
+  // ─────────────────────────────────────────────────────────────────────────
+  const converterGanho = async () => {
+    if (!modalConverter) return;
     setSalvando(true);
-    await supabase.from('crm_clientes').update({ ...editForm, atualizado_em: new Date().toISOString() }).eq('id', lead.id);
-    const { data } = await supabase.from('crm_clientes').select('*').eq('id', lead.id).single();
-    if (data) { setLead(data); setEditForm(data); }
-    setEditando(false);
+    const op = modalConverter;
+    try {
+      if (tipoConverter === 'op') {
+        const { data: novaOp } = await supabase.from('oples').insert({
+          titulo: op.titulo,
+          cliente_id: op.cliente_id,
+          valor: op.valor_registrado,
+          status_geral: 'Em Análise',
+          origem_crm: op.id,
+          responsavel_comercial: op.responsavel_nome,
+          criado_por_nome: currentUser?.nome,
+        }).select().single();
+        if (novaOp) {
+          await supabase.from('crm_historico').insert({
+            oportunidade_id: op.id, tipo: 'conversao_op',
+            conteudo: `OP criada: ${novaOp.id}`, usuario_nome: currentUser?.nome,
+          });
+        }
+      } else {
+        const { data: novaOs } = await supabase.from('sac_ordens_servico').insert({
+          cliente_id: op.cliente_id,
+          descricao_problema: op.titulo,
+          status: 'Aguardando Início',
+          tipo_avaliacao: 'Presencial',
+          origem_crm: op.id,
+          responsavel: op.responsavel_nome,
+          criado_por: currentUser?.nome,
+        }).select().single();
+        if (novaOs) {
+          await supabase.from('crm_historico').insert({
+            oportunidade_id: op.id, tipo: 'conversao_os',
+            conteudo: `OS criada: ${novaOs.id}`, usuario_nome: currentUser?.nome,
+          });
+        }
+      }
+      setModalConverter(null);
+      alert(`${tipoConverter === 'op' ? 'OP' : 'OS'} criada! Acesse a aba ${tipoConverter === 'op' ? 'Engenharia' : 'SAC'} para acompanhar.`);
+    } catch (e) {
+      alert('Erro ao criar. Verifique os campos obrigatórios na aba destino.');
+    }
     setSalvando(false);
-    onRefresh();
+    await load();
   };
 
-  const excluir = async () => {
-    if (!confirm('Excluir este lead permanentemente?')) return;
-    await supabase.from('crm_clientes').delete().eq('id', lead.id);
-    onClose();
-    onRefresh();
+  // ─────────────────────────────────────────────────────────────────────────
+  // MOTIVO PERDA
+  // ─────────────────────────────────────────────────────────────────────────
+  const confirmarPerda = async () => {
+    if (!modalMotivo) return;
+    await supabase.from('crm_oportunidades').update({
+      estagio_id: modalMotivo.estagioDestId,
+      motivo_perda: motivoTexto,
+      atualizado_em: new Date().toISOString(),
+    }).eq('id', modalMotivo.op.id);
+    await supabase.from('crm_historico').insert({
+      oportunidade_id: modalMotivo.op.id, tipo: 'status_change',
+      estagio_novo: getEst(modalMotivo.estagioDestId)?.nome,
+      conteudo: motivoTexto, usuario_nome: currentUser?.nome,
+    });
+    setModalMotivo(null);
+    await load();
   };
 
-  const cor = COR_COLUNA[lead.status_kanban] || '#374151';
-  const idx = COLUNAS.indexOf(lead.status_kanban);
+  // ─────────────────────────────────────────────────────────────────────────
+  // SALVAR VENDA
+  // ─────────────────────────────────────────────────────────────────────────
+  const salvarVenda = async () => {
+    if (!modalVenda || !formVenda.valor_total) return;
+    setSalvando(true);
+    const p: any = {
+      ...formVenda,
+      oportunidade_id: modalVenda.op.id,
+      valor_total: parseFloat(String(formVenda.valor_total).replace(/\./g,'').replace(',','.')),
+      valor_unitario: formVenda.valor_unitario
+        ? parseFloat(String(formVenda.valor_unitario).replace(/\./g,'').replace(',','.'))
+        : null,
+      quantidade: formVenda.quantidade || null,
+    };
+    if (modalVenda.venda?.id) {
+      await supabase.from('crm_vendas').update(p).eq('id', modalVenda.venda.id);
+    } else {
+      await supabase.from('crm_vendas').insert(p);
+    }
+    setSalvando(false);
+    setModalVenda(null);
+    await load();
+  };
 
-  return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'flex-start', justifyContent:'flex-end' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:'min(560px,95vw)', height:'100vh', background:'#fff', display:'flex', flexDirection:'column', boxShadow:'-4px 0 24px #0003' }}>
+  // ─────────────────────────────────────────────────────────────────────────
+  // EXCLUIR OP
+  // ─────────────────────────────────────────────────────────────────────────
+  const excluirOp = async (op: any) => {
+    if (!confirm(`Excluir "${op.titulo}"? Esta ação não pode ser desfeita.`)) return;
+    await supabase.from('crm_oportunidades').delete().eq('id', op.id);
+    await load();
+  };
 
-        {/* Header */}
-        <div style={{ background:cor, color:'#fff', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-          <div>
-            <div style={{ fontSize:9, opacity:.8, fontWeight:600 }}>{lead.status_kanban.toUpperCase()}</div>
-            <div style={{ fontSize:15, fontWeight:700 }}>{lead.nome_cliente}</div>
-            {lead.empresa && <div style={{ fontSize:10, opacity:.85 }}>{lead.empresa}{lead.cargo ? ` · ${lead.cargo}` : ''}</div>}
+  // ─────────────────────────────────────────────────────────────────────────
+  // TOTAIS
+  // ─────────────────────────────────────────────────────────────────────────
+  const totalGeral         = vendas.reduce((s, v) => s + (v.valor_total || 0), 0);
+  const totalFaturadoGeral = vendas.filter(v => v.status_faturamento === 'faturado').reduce((s, v) => s + (v.valor_total || 0), 0);
+  const totalPendenteGeral = vendas.filter(v => v.status_faturamento === 'pendente').reduce((s, v) => s + (v.valor_total || 0), 0);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CARD
+  // ─────────────────────────────────────────────────────────────────────────
+  const renderCard = (op: any) => {
+    const est    = getEst(op.estagio_id);
+    const ganho  = isGanho(est);
+    const perdido = isPerdido(est);
+    const chk    = chkPct(op.id, op.estagio_id);
+    const dias   = diasAte(op.data_sessao || op.data_prev_fechamento);
+    const vds    = getVendasOp(op.id);
+    const tvend  = totalVendidoOp(op.id);
+    const tfat   = totalFaturadoOp(op.id);
+    const accent = funil === 'licitacao' ? '#7c3aed' : '#0891b2';
+
+    return (
+      <div
+        key={op.id}
+        draggable
+        onDragStart={() => handleDragStart(op.id)}
+        onDragEnd={handleDragEnd}
+        style={{
+          background: dragging === op.id ? '#e0f2fe' : 'white',
+          borderRadius: 5, padding: '7px 8px',
+          boxShadow: '0 1px 3px rgba(0,0,0,.1)',
+          cursor: 'grab', marginBottom: 5,
+          borderLeft: `3px solid ${accent}`,
+          opacity: dragging === op.id ? .6 : 1,
+          userSelect: 'none',
+        }}
+      >
+        {op.tipo_licitacao === 'ata' && (
+          <span style={{ fontSize:8, fontWeight:700, background:'#f5f3ff', color:'#7c3aed', padding:'1px 5px', borderRadius:3, display:'inline-block', marginBottom:4 }}>
+            📋 Ata Reg. Preços
+          </span>
+        )}
+
+        <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3 }}>{op.titulo}</div>
+
+        {(op.orgao || op.numero_edital) && (
+          <div style={{ fontSize:8, color:'#64748b', marginBottom:3 }}>
+            {op.numero_edital && <span style={{ fontWeight:600 }}>{op.numero_edital} · </span>}
+            {op.orgao}
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
-        </div>
+        )}
 
-        {/* Mover entre colunas */}
-        <div style={{ background:'#f8fafc', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
-          <span style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginRight:4 }}>MOVER:</span>
-          {COLUNAS.filter(c => c !== lead.status_kanban).map(c => (
-            <button key={c} onClick={() => moverColuna(c)}
-              style={{ background:COR_COLUNA[c]+'18', color:COR_COLUNA[c], border:`1px solid ${COR_COLUNA[c]}40`,
-                borderRadius:4, padding:'2px 8px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-              → {c}
-            </button>
-          ))}
-          <div style={{ flex:1 }} />
-          {isAdmin && (
-            <button onClick={excluir} style={{ fontSize:9, color:'#dc2626', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:4, padding:'2px 8px', cursor:'pointer' }}>
-              🗑️ Excluir
-            </button>
+        {op.responsavel_nome && (
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:3 }}>👤 {op.responsavel_nome}</div>
+        )}
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
+          <span style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</span>
+          {dias !== null && !ganho && !perdido && (
+            <span style={{
+              fontSize:8, padding:'1px 5px', borderRadius:3, fontWeight:700,
+              background: dias < 0 ? '#fee2e2' : dias <= 3 ? '#fef9c3' : '#dcfce7',
+              color:      dias < 0 ? '#991b1b' : dias <= 3 ? '#854d0e' : '#166534',
+            }}>
+              {dias < 0 ? `${Math.abs(dias)}d atraso` : dias === 0 ? 'Hoje' : `+${dias}d`}
+            </span>
           )}
         </div>
 
-        <div style={{ flex:1, overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:14 }}>
-
-          {/* ── Info do Lead ── */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-              <span style={{ fontSize:10, fontWeight:700, color:'#374151', textTransform:'uppercase' }}>Dados do Lead</span>
-              <button onClick={() => setEditando(e => !e)}
-                style={{ fontSize:9, color:'#2563eb', background:'none', border:'1px solid #bfdbfe', borderRadius:4, padding:'2px 8px', cursor:'pointer' }}>
-                {editando ? '✕ Cancelar' : '✏️ Editar'}
-              </button>
+        {chk && !ganho && !perdido && (
+          <div style={{ marginTop:4, paddingTop:4, borderTop:'1px dashed #e2e8f0' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <div style={{ flex:1, height:4, background:'#e2e8f0', borderRadius:2, overflow:'hidden' }}>
+                <div style={{ width:`${(chk.done/chk.total)*100}%`, height:'100%', borderRadius:2,
+                  background: chk.done===chk.total ? '#22c55e' : '#f59e0b' }} />
+              </div>
+              <span style={{ fontSize:8, color:'#64748b', fontWeight:600 }}>{chk.done}/{chk.total}</span>
             </div>
-            {editando ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {[['Nome *','nome_cliente'],['Empresa','empresa'],['Cargo','cargo'],['Telefone','telefone'],['E-mail','email'],['Responsável','operador_responsavel']].map(([lbl,k]) => (
-                  <div key={k}>
-                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>{lbl}</label>
-                    <input value={editForm[k]||''} onChange={e=>setEditForm(f=>({...f,[k]:e.target.value}))}
-                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-                  </div>
-                ))}
-                <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>
-                  <textarea value={editForm.observacoes||''} onChange={e=>setEditForm(f=>({...f,observacoes:e.target.value}))}
-                    rows={3} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
-                </div>
-                <button onClick={salvarEdicao} disabled={salvando}
-                  style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'7px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-                  {salvando ? 'Salvando...' : '✓ Salvar'}
+          </div>
+        )}
+
+        {ganho && op.tipo_licitacao === 'ata' && (
+          <div style={{ marginTop:5, paddingTop:4, borderTop:'2px solid #86efac', fontSize:8, display:'flex', gap:6, flexWrap:'wrap' }}>
+            <span style={{ color:'#64748b' }}>Adesões: <strong>{vds.length}</strong></span>
+            <span style={{ color:'#0f766e' }}>Vendido: <strong>{fmtMoeda(tvend)}</strong></span>
+            {podeVerTotais && <span style={{ color:'#166534' }}>Faturado: <strong>{fmtMoeda(tfat)}</strong></span>}
+            {op.data_validade_ata && (
+              <span style={{ color: diasAte(op.data_validade_ata)! < 30 ? '#991b1b' : '#64748b' }}>
+                Validade: {fmtData(op.data_validade_ata)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {perdido && op.motivo_perda && (
+          <div style={{ marginTop:4, fontSize:8, color:'#991b1b', fontWeight:600, fontStyle:'italic' }}>
+            Motivo: {op.motivo_perda}
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
+          {ganho && (
+            <>
+              <button className="acn-btn" style={{ background:'#2563eb' }}
+                onClick={() => { setModalConverter(op); setTipoConverter('op'); }}>
+                📋 Lançar OP
+              </button>
+              {funil === 'venda_direta' && (
+                <button className="acn-btn" style={{ background:'#ea580c' }}
+                  onClick={() => { setModalConverter(op); setTipoConverter('os'); }}>
+                  🔧 Lançar OS
                 </button>
-              </div>
-            ) : (
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-                {[['Telefone',lead.telefone],['E-mail',lead.email],['Cargo',lead.cargo],['Responsável',lead.operador_responsavel]].filter(([,v])=>v).map(([k,v]) => (
-                  <div key={k}>
-                    <div style={{ fontSize:8, fontWeight:700, color:'#9ca3af', textTransform:'uppercase' }}>{k}</div>
-                    <div style={{ fontSize:11, color:'#1f2937' }}>{v}</div>
-                  </div>
-                ))}
-                {lead.observacoes && (
-                  <div style={{ gridColumn:'1/-1' }}>
-                    <div style={{ fontSize:8, fontWeight:700, color:'#9ca3af', textTransform:'uppercase' }}>Observações</div>
-                    <div style={{ fontSize:11, color:'#374151' }}>{lead.observacoes}</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── Próximo Contato ── */}
-          {lead.data_proximo_contato && !editando && (
-            <div style={{ background: new Date(lead.data_proximo_contato) < new Date() ? '#fef2f2' : '#f0fdf4',
-              border:`1px solid ${new Date(lead.data_proximo_contato) < new Date() ? '#fca5a5' : '#86efac'}`,
-              borderRadius:6, padding:'8px 12px', display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:16 }}>{new Date(lead.data_proximo_contato) < new Date() ? '⚠️' : '📅'}</span>
-              <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#6b7280' }}>PRÓXIMO CONTATO</div>
-                <div style={{ fontSize:12, fontWeight:700, color: new Date(lead.data_proximo_contato) < new Date() ? '#dc2626' : '#16a34a' }}>
-                  {fmtDate(lead.data_proximo_contato)}
-                  {new Date(lead.data_proximo_contato) < new Date() ? ' — ATRASADO' : ''}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Registrar Contato ── */}
-          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:12 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:'#1d4ed8', marginBottom:8 }}>📞 REGISTRAR CONTATO</div>
-            <textarea value={novoContato.obs} onChange={e=>setNovoContato(f=>({...f,obs:e.target.value}))}
-              placeholder="O que foi tratado? Resultado da conversa..." rows={3}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #bfdbfe', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box', marginBottom:8 }} />
-            <div style={{ display:'flex', gap:8, alignItems:'flex-end' }}>
-              <div style={{ flex:1 }}>
-                <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>AGENDAR PRÓXIMO CONTATO</label>
-                <input type="date" value={novoContato.data_proximo_contato}
-                  onChange={e=>setNovoContato(f=>({...f,data_proximo_contato:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #bfdbfe', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-              </div>
-              <button onClick={registrarContato} disabled={salvando}
-                style={{ background:'#1d4ed8', color:'#fff', border:'none', borderRadius:4, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer', flexShrink:0 }}>
-                {salvando ? '...' : '✓ Registrar'}
+              )}
+              <button className="acn-btn" style={{ background:'#0f766e' }}
+                onClick={() => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }}>
+                + Venda
               </button>
-            </div>
-          </div>
-
-          {/* ── Histórico de contatos ── */}
-          <div>
-            <div style={{ fontSize:10, fontWeight:700, color:'#374151', marginBottom:8 }}>📋 HISTÓRICO DE CONTATOS ({historico.length})</div>
-            {historico.length === 0 && (
-              <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:16 }}>Nenhum contato registrado.</div>
-            )}
-            {historico.map(h => (
-              <div key={h.id} style={{ borderLeft:'3px solid #6366f1', paddingLeft:10, marginBottom:10 }}>
-                <div style={{ fontSize:9, color:'#6b7280', fontWeight:600 }}>
-                  {fmtDT(h.data_contato)} · {h.operador}
-                </div>
-                <div style={{ fontSize:11, color:'#1f2937', marginTop:2 }}>{h.resultado}</div>
-              </div>
-            ))}
-          </div>
+            </>
+          )}
+          {!perdido && (
+            <button className="acn-btn" style={{ background:'#475569' }}
+              onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalOp(op); }}>
+              ✏️ Editar
+            </button>
+          )}
+          {currentUser?.perfil === 'Admin' && (
+            <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirOp(op)}>✕</button>
+          )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CARD DO LEAD NO KANBAN
-// ─────────────────────────────────────────────────────────────────────────────
-function LeadCard({ lead, maxDias, onClick }) {
-  const esquecido = isEsquecido(lead, maxDias);
-  const proximo = lead.data_proximo_contato;
-  const proxAtrasado = proximo && new Date(proximo) < new Date();
-
-  return (
-    <div onClick={onClick}
-      style={{ background:'#fff', border:`1.5px solid ${esquecido?'#fca5a5':'#e2e8f0'}`,
-        borderRadius:6, padding:'9px 11px', cursor:'pointer', marginBottom:8,
-        boxShadow: esquecido ? '0 0 0 2px #fca5a540' : '0 1px 3px #0001',
-        transition:'box-shadow .15s' }}
-      onMouseEnter={e=>(e.currentTarget.style.boxShadow='0 3px 8px #0002')}
-      onMouseLeave={e=>(e.currentTarget.style.boxShadow=esquecido?'0 0 0 2px #fca5a540':'0 1px 3px #0001')}>
-      {esquecido && (
-        <div style={{ fontSize:9, fontWeight:700, color:'#dc2626', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:3, padding:'1px 6px', marginBottom:5, display:'inline-block' }}>
-          ⚠️ Lead esquecido ({diasSemContato(lead)}d sem contato)
-        </div>
-      )}
-      <div style={{ fontWeight:700, fontSize:12, color:'#1f2937', marginBottom:2 }}>{lead.nome_cliente}</div>
-      {lead.empresa && <div style={{ fontSize:10, color:'#6b7280' }}>{lead.empresa}{lead.cargo ? ` · ${lead.cargo}` : ''}</div>}
-      {lead.telefone && <div style={{ fontSize:10, color:'#374151', marginTop:3 }}>📱 {lead.telefone}</div>}
-      {lead.email && <div style={{ fontSize:10, color:'#374151' }}>✉️ {lead.email}</div>}
-      {proximo && (
-        <div style={{ marginTop:6, display:'flex', alignItems:'center', gap:4,
-          color: proxAtrasado ? '#dc2626' : '#16a34a',
-          fontSize:9, fontWeight:700 }}>
-          {proxAtrasado ? '⚠️' : '📅'}
-          {proxAtrasado ? 'Contato atrasado: ' : 'Próximo contato: '}
-          {fmtDate(proximo)}
-        </div>
-      )}
-      {lead.operador_responsavel && (
-        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af' }}>👤 {lead.operador_responsavel}</div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CALENDÁRIO DE CONTATOS (semanal simplificado)
-// ─────────────────────────────────────────────────────────────────────────────
-function CalendarioContatos({ leads, filtroUser, onSelectLead }) {
-  const hoje = new Date();
-  // Próximos 14 dias
-  const dias: Date[] = Array.from({ length:14 }, (_,i) => {
-    const d = new Date(hoje);
-    d.setDate(hoje.getDate() + i);
-    return d;
-  });
-
-  const leadsComData = leads.filter(l => l.data_proximo_contato && (!filtroUser || l.operador_responsavel === filtroUser));
-
-  const porDia = (dia: Date) => {
-    const ds = dia.toISOString().split('T')[0];
-    return leadsComData.filter(l => l.data_proximo_contato?.startsWith(ds));
+    );
   };
 
-  const fmtDiaSem = (d: Date) => d.toLocaleDateString('pt-BR',{ weekday:'short', day:'2-digit', month:'2-digit' });
+  // ─────────────────────────────────────────────────────────────────────────
+  // KANBAN
+  // ─────────────────────────────────────────────────────────────────────────
+  const renderKanban = () => (
+    <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
+      {estagiosFunil.map(est => {
+        const cards   = opsFiltradas.filter(o => o.estagio_id === est.id);
+        const ganho   = isGanho(est);
+        const perdido = isPerdido(est);
+        const hdrBg   = perdido ? '#991b1b' : ganho ? '#166534' : (est.cor || '#1e293b');
 
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:4, padding:12, overflowY:'auto', maxHeight:400 }}>
-      {dias.map((dia, i) => {
-        const itens = porDia(dia);
-        const isHoje = i === 0;
-        const passado = dia < hoje && i > 0;
-        if (!itens.length && !isHoje) return null;
         return (
-          <div key={i} style={{ borderRadius:6, border:`1px solid ${isHoje?'#bfdbfe':'#e2e8f0'}`,
-            background: isHoje ? '#eff6ff' : '#fff', padding:'6px 10px' }}>
-            <div style={{ fontSize:9, fontWeight:700, color: isHoje ? '#1d4ed8' : '#6b7280', marginBottom:itens.length?4:0 }}>
-              {isHoje ? '📍 HOJE — ' : ''}{fmtDiaSem(dia)}
+          <div key={est.id} style={{ width:200, flexShrink:0 }}>
+            <div style={{ background:hdrBg, color:'white', padding:'4px 8px', borderRadius:'5px 5px 0 0',
+              fontSize:9, fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center',
+              textTransform:'uppercase', letterSpacing:'.4px' }}>
+              <span>{est.nome}</span>
+              <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 6px', fontSize:8 }}>
+                {cards.length}
+              </span>
             </div>
-            {itens.map(l => (
-              <div key={l.id} onClick={() => onSelectLead(l)}
-                style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 6px', background: COR_COLUNA[l.status_kanban]+'15',
-                  borderLeft:`3px solid ${COR_COLUNA[l.status_kanban]}`, borderRadius:3, marginBottom:3, cursor:'pointer' }}>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#1f2937' }}>{l.nome_cliente}</div>
-                  {l.empresa && <div style={{ fontSize:9, color:'#6b7280' }}>{l.empresa}</div>}
+
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(est.id); }}
+              onDragLeave={() => setDragOver(null)}
+              onDrop={() => handleDrop(est.id)}
+              style={{
+                background: dragOver === est.id ? '#dbeafe' : perdido ? '#fee2e260' : ganho ? '#dcfce760' : '#e8ecf0',
+                borderRadius:'0 0 5px 5px', padding:5, minHeight:100, transition:'background .15s',
+                border: dragOver === est.id ? '2px dashed #3b82f6' : '2px solid transparent',
+              }}
+            >
+              {cards.map(op => renderCard(op))}
+              {!perdido && !ganho && (
+                <div
+                  onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: est.id }); setModalOp({}); }}
+                  style={{ background:'white', border:'1px dashed #cbd5e1', borderRadius:5, padding:'5px 8px',
+                    textAlign:'center', color:'#94a3b8', fontSize:9, cursor:'pointer', marginTop: cards.length ? 4 : 0 }}>
+                  + Adicionar
                 </div>
-                {l.operador_responsavel && <span style={{ marginLeft:'auto', fontSize:8, color:'#9ca3af' }}>{l.operador_responsavel}</span>}
-              </div>
-            ))}
-            {isHoje && !itens.length && (
-              <div style={{ fontSize:10, color:'#9ca3af' }}>Nenhum contato agendado para hoje.</div>
-            )}
+              )}
+            </div>
           </div>
         );
       })}
     </div>
   );
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODAL NOVO LEAD
-// ─────────────────────────────────────────────────────────────────────────────
-function ModalNovoLead({ currentUser, onClose, onSaved }) {
-  const [form, setForm] = useState({ ...LEAD_VAZIO, operador_responsavel: currentUser?.nome || '' });
-  const [salvando, setSalvando] = useState(false);
-  const set = (k:string, v:string) => setForm(f => ({...f,[k]:v}));
-
-  const salvar = async () => {
-    if (!form.nome_cliente.trim()) { alert('Nome obrigatório!'); return; }
-    setSalvando(true);
-    const agora = new Date().toISOString();
-    await supabase.from('crm_clientes').insert([{
-      ...form,
-      status_kanban: form.status_kanban || 'Prospectado',
-      criado_por: currentUser?.email,
-      criado_por_nome: currentUser?.nome,
-      created_at: agora,
-      atualizado_em: agora,
-    }]);
-    const _savedCliente = { formData: { ...form, cliente_nome: form.nome_cliente }, clienteId: form._cliente_id };
-    setSalvando(false);
-    onSaved();
-    onClose();
-    if (_savedCliente.formData.nome_cliente?.trim()) salvarClienteAuto(_savedCliente.formData, _savedCliente.clienteId).catch(console.error);
-  };
-
-  const Inp = ({ label, field, type='text', required=false }) => (
-    <div>
-      <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>{label}{required?' *':''}</label>
-      <input type={type} value={form[field]||''} onChange={e=>set(field,e.target.value)}
-        style={{ width:'100%', padding:'5px 8px', border:`1px solid ${required&&!form[field]?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-    </div>
-  );
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(520px,95vw)', maxHeight:'85vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'14px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between' }}>
-          <span>+ Novo Lead</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
-        </div>
-        <div style={{ overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:10 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-        <label style={{fontSize:9,fontWeight:700,color:'#6b7280',display:'block',marginBottom:2,textTransform:'uppercase'}}>Nome *</label>
-        <ClienteAutocomplete
-          value={form.nome_cliente}
-          onChange={v=>setForm(f=>({...f,nome_cliente:v,_cliente_id:null,_cliente_obj:null}))}
-          onSelect={c=>{ const d=clienteToForm(c); setForm(f=>({...f,nome_cliente:d.nome_cliente||d.cliente_nome||'',empresa:d.empresa||f.empresa,cargo:d.cargo||f.cargo,telefone:d.telefone||f.telefone,email:d.email||f.email,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj})); }}
-        />
-      </div>
-            <Inp label="Empresa" field="empresa" />
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Inp label="Cargo" field="cargo" />
-            <Inp label="Telefone" field="telefone" />
-          </div>
-          <Inp label="E-mail" field="email" type="email" />
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Estágio Inicial</label>
-            <div style={{ display:'flex', gap:6 }}>
-              {COLUNAS.map(c => (
-                <button key={c} onClick={() => set('status_kanban',c)}
-                  style={{ flex:1, padding:'5px 4px', border:`1.5px solid ${form.status_kanban===c?COR_COLUNA[c]:'#d1d5db'}`,
-                    background: form.status_kanban===c ? COR_COLUNA[c]+'18' : '#fff',
-                    color: form.status_kanban===c ? COR_COLUNA[c] : '#374151',
-                    borderRadius:4, fontSize:9, fontWeight:700, cursor:'pointer' }}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Inp label="Responsável" field="operador_responsavel" />
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Próximo Contato</label>
-            <input type="date" value={form.data_proximo_contato} onChange={e=>set('data_proximo_contato',e.target.value)}
-              style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-          </div>
-          <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observações</label>
-            <textarea value={form.observacoes} onChange={e=>set('observacoes',e.target.value)} rows={3}
-              style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
-          </div>
-        </div>
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#6366f1', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? 'Salvando...' : '+ Criar Lead'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────────────────────────────────────
-export default function CrmTab({ currentUser }) {
-  const [leads, setLeads] = useState<any[]>([]);
-  const [maxDias, setMaxDias] = useState(7);
-  const [loading, setLoading] = useState(true);
-  const [selectedLead, setSelectedLead] = useState<any|null>(null);
-  const [modalNovo, setModalNovo] = useState(false);
-  const [verCalendario, setVerCalendario] = useState(false);
-  const [filtroUser, setFiltroUser] = useState('');
-  const [busca, setBusca] = useState('');
-
-  const isAdmin = currentUser?.perfil === 'Admin';
-
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
-    const [{ data: clientes }, { data: cfg }] = await Promise.all([
-      supabase.from('crm_clientes').select('*').order('nome_cliente', { ascending: true }),
-      supabase.from('crm_config').select('*').eq('id', 1).single(),
-    ]);
-    setLeads(clientes || []);
-    if (cfg?.dias_lead_esquecido) setMaxDias(cfg.dias_lead_esquecido);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchLeads(); }, [fetchLeads]);
-
-  const salvarMaxDias = async (dias: number) => {
-    await supabase.from('crm_config').upsert({ id:1, dias_lead_esquecido: dias, atualizado_em: new Date().toISOString() });
-    setMaxDias(dias);
-  };
-
-  // Leads filtrados para busca
-  const leadsFiltrados = leads.filter(l => {
-    if (busca) {
-      const b = busca.toLowerCase();
-      if (!(l.nome_cliente||'').toLowerCase().includes(b) &&
-          !(l.empresa||'').toLowerCase().includes(b) &&
-          !(l.telefone||'').includes(b) &&
-          !(l.email||'').toLowerCase().includes(b)) return false;
-    }
-    if (filtroUser && l.operador_responsavel !== filtroUser) return false;
+  // ─────────────────────────────────────────────────────────────────────────
+  // PAINEL FATURAMENTOS
+  // ─────────────────────────────────────────────────────────────────────────
+  const vendasFiltradas = vendas.filter(v => {
+    const op = ops.find(o => o.id === v.oportunidade_id);
+    if (filtFunil !== 'todos' && op?.funil !== filtFunil) return false;
+    if (filtFat   !== 'todos' && v.status_faturamento !== filtFat) return false;
     return true;
   });
 
-  const usuariosUnicos = [...new Set(leads.map(l => l.operador_responsavel).filter(Boolean))];
-  const totalEsquecidos = leads.filter(l => isEsquecido(l, maxDias)).length;
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f4f6f9' }}>
-
-      {/* ── HEADER ── */}
-      <div style={{ background:'#4338ca', color:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:15, fontWeight:700 }}>
-            🎯 CRM — Gestão de Leads
-            {totalEsquecidos > 0 && (
-              <span style={{ marginLeft:8, background:'#dc2626', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:700 }}>
-                ⚠️ {totalEsquecidos} esquecido{totalEsquecidos>1?'s':''}
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize:10, opacity:.75 }}>{leads.length} leads · {totalEsquecidos} esquecidos (+ {maxDias}d)</div>
+  const renderFaturamentos = () => (
+    <div>
+      {podeVerTotais && (
+        <div style={{ display:'flex', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+          {[
+            { label:'Total Vendido',  val: totalGeral,         cor:'#0f766e', bg:'#f0fdf4' },
+            { label:'Faturado',       val: totalFaturadoGeral, cor:'#166534', bg:'#dcfce7' },
+            { label:'A Faturar',      val: totalPendenteGeral, cor:'#854d0e', bg:'#fef9c3' },
+          ].map(({ label, val, cor, bg }) => (
+            <div key={label} style={{ background:bg, border:`1px solid ${cor}30`, borderRadius:6, padding:'7px 14px', minWidth:140 }}>
+              <div style={{ fontSize:8, color:'#94a3b8', fontWeight:700, textTransform:'uppercase', marginBottom:2 }}>{label}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:cor }}>{fmtMoeda(val)}</div>
+            </div>
+          ))}
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={() => setVerCalendario(v=>!v)}
-            style={{ background: verCalendario?'#fff':'rgba(255,255,255,.15)', color: verCalendario?'#4338ca':'#fff',
-              border:'1px solid rgba(255,255,255,.3)', borderRadius:6, padding:'6px 12px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-            {verCalendario ? '📋 Kanban' : '📅 Calendário'}
+      )}
+
+      <div style={{ display:'flex', gap:6, marginBottom:8, flexWrap:'wrap', alignItems:'center' }}>
+        {(['todos','pendente','faturado'] as const).map(f => (
+          <button key={f} className="acn-btn"
+            style={{ background: filtFat===f ? '#1e293b' : '#94a3b8' }}
+            onClick={() => setFiltFat(f)}>
+            {f === 'todos' ? 'Todos' : f === 'pendente' ? '⏳ Pendentes' : '✓ Faturados'}
           </button>
-          <button onClick={() => setModalNovo(true)}
-            style={{ background:'#6366f1', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            + Novo Lead
+        ))}
+        <span style={{ color:'#e2e8f0' }}>|</span>
+        {(['todos','licitacao','venda_direta'] as const).map(f => (
+          <button key={f} className="acn-btn"
+            style={{ background: filtFunil===f ? '#1e293b' : '#94a3b8' }}
+            onClick={() => setFiltFunil(f)}>
+            {f === 'todos' ? 'Todos' : f === 'licitacao' ? '🏛️ Licitações' : '💼 V. Diretas'}
           </button>
-        </div>
+        ))}
       </div>
 
-      {/* ── FILTROS ── */}
-      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:10, alignItems:'center', flexWrap:'wrap', flexShrink:0 }}>
-        <input placeholder="Buscar nome, empresa, telefone..." value={busca} onChange={e=>setBusca(e.target.value)}
-          style={{ padding:'5px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:11, width:220 }} />
-        <div>
-          <select value={filtroUser} onChange={e=>setFiltroUser(e.target.value)}
-            style={{ padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-            <option value="">Todos os responsáveis</option>
-            {usuariosUnicos.map(u => <option key={u} value={u}>{u}</option>)}
-          </select>
-        </div>
-        {isAdmin && (
-          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:10, color:'#6b7280', fontWeight:700 }}>⚙️ Lead esquecido após</span>
-            <input type="number" min={1} max={90} value={maxDias}
-              onChange={e => salvarMaxDias(parseInt(e.target.value)||7)}
-              style={{ width:50, padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, textAlign:'center' }} />
-            <span style={{ fontSize:10, color:'#6b7280' }}>dias</span>
+      <div style={{ background:'white', borderRadius:8, border:'1px solid #e2e8f0', overflow:'auto' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:9 }}>
+          <thead>
+            <tr>
+              {['Funil','Oportunidade','Órgão/Aderente','Operador','Qtd','Valor Total','NF','Data Fat.','Status',''].map(h => (
+                <th key={h} style={{ background:'#1e293b', color:'#cbd5e1', padding:'4px 7px', fontWeight:600, textAlign:'left', fontSize:8, whiteSpace:'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {vendasFiltradas.length === 0 ? (
+              <tr><td colSpan={10} style={{ textAlign:'center', padding:'20px', color:'#94a3b8', fontSize:10 }}>Nenhum registro encontrado</td></tr>
+            ) : vendasFiltradas.map(v => {
+              const opv = ops.find(o => o.id === v.oportunidade_id);
+              return (
+                <tr key={v.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                  <td style={{ padding:'5px 7px' }}>
+                    <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
+                      background: opv?.funil==='licitacao' ? '#f5f3ff' : '#ecfeff',
+                      color:      opv?.funil==='licitacao' ? '#7c3aed'  : '#0e7490' }}>
+                      {opv?.funil==='licitacao' ? '🏛️ Lic.' : '💼 VD'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'5px 7px', maxWidth:130, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    <strong title={opv?.titulo}>{opv?.titulo || '—'}</strong>
+                  </td>
+                  <td style={{ padding:'5px 7px' }}>{v.orgao_aderente || opv?.orgao || '—'}</td>
+                  <td style={{ padding:'5px 7px' }}>{v.operador_nome || '—'}</td>
+                  <td style={{ padding:'5px 7px', textAlign:'center' }}>{v.quantidade || '—'}</td>
+                  <td style={{ padding:'5px 7px', fontWeight:700, color:'#0f766e' }}>{fmtMoeda(v.valor_total)}</td>
+                  <td style={{ padding:'5px 7px' }}>{v.numero_nf || <span style={{ color:'#f59e0b' }}>Pendente</span>}</td>
+                  <td style={{ padding:'5px 7px' }}>{fmtData(v.data_faturamento)}</td>
+                  <td style={{ padding:'5px 7px' }}>
+                    <span style={{ fontSize:8, fontWeight:700, padding:'2px 7px', borderRadius:10,
+                      background: v.status_faturamento==='faturado' ? '#dcfce7' : v.status_faturamento==='cancelado' ? '#fee2e2' : '#fef9c3',
+                      color:      v.status_faturamento==='faturado' ? '#166534' : v.status_faturamento==='cancelado' ? '#991b1b' : '#854d0e' }}>
+                      {v.status_faturamento==='faturado' ? '✓ Faturado' : v.status_faturamento==='cancelado' ? 'Cancelado' : '⏳ Pendente'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'5px 7px' }}>
+                    <button className="acn-btn" style={{ background:'#475569' }}
+                      onClick={() => { setModalVenda({ op: opv, venda: v }); setFormVenda({ ...VAZIO_VENDA, ...v }); }}>
+                      ✏️
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {vendasFiltradas.length > 0 && (
+          <div style={{ padding:'5px 10px', background:'#f8fafc', borderTop:'1px solid #e2e8f0', display:'flex', gap:12, fontSize:9, color:'#64748b' }}>
+            <span>{vendasFiltradas.length} registros</span>
+            {podeVerTotais && (
+              <span>Total: <strong style={{ color:'#0f766e' }}>
+                {fmtMoeda(vendasFiltradas.reduce((s,v)=>s+(v.valor_total||0),0))}
+              </strong></span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
+  if (loading) return <div style={{ padding:20, color:'#64748b', fontSize:11 }}>Carregando CRM...</div>;
+
+  return (
+    <div style={{ padding:'8px 12px' }}>
+
+      {/* ── Sub-tabs funil ── */}
+      <div style={{ display:'flex', background:'#0f172a', margin:'-8px -12px 0', padding:'0 12px' }}>
+        {([['licitacao','🏛️ Licitações'],['venda_direta','💼 Vendas Diretas']] as const).map(([f, label]) => (
+          <div key={f} onClick={() => setFunil(f)} style={{
+            padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
+            color: funil===f ? (f==='licitacao'?'#a78bfa':'#38bdf8') : '#64748b',
+            borderBottom: funil===f ? `3px solid ${f==='licitacao'?'#7c3aed':'#0891b2'}` : '3px solid transparent',
+          }}>{label}</div>
+        ))}
+        <div style={{ flex:1 }} />
+        {podeVerFaturamentos && (
+          <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
+            {(['kanban','faturamentos'] as const).map(a => (
+              <div key={a} onClick={() => setAbaInterna(a)} style={{
+                padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer',
+                color: abaInterna===a ? 'white' : '#64748b',
+                background: abaInterna===a ? '#0f766e' : 'transparent',
+                borderRadius:4, margin:'4px 0',
+              }}>
+                {a==='kanban' ? '📋 Kanban' : '💰 Faturamentos'}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* ── VISTA CALENDÁRIO ── */}
-      {verCalendario ? (
-        <div style={{ flex:1, overflowY:'auto', padding:12 }}>
-          <div style={{ fontWeight:700, fontSize:12, color:'#374151', marginBottom:8 }}>📅 Agenda de Contatos — Próximos 14 dias</div>
-          <CalendarioContatos leads={leadsFiltrados} filtroUser={filtroUser} onSelectLead={setSelectedLead} />
-        </div>
+      {/* ── Toolbar ── */}
+      <div style={{ display:'flex', gap:6, alignItems:'center', margin:'8px 0', flexWrap:'wrap' }}>
+        <button className="acn-btn" style={{ background:'#0f766e', fontSize:9, padding:'3px 10px' }}
+          onClick={() => { setFormOp({ ...VAZIO_OP, funil }); setModalOp({}); }}>
+          + Nova {funil==='licitacao' ? 'Licitação' : 'Venda Direta'}
+        </button>
+        <input
+          placeholder={`🔍 Título, órgão ou edital...`}
+          value={busca} onChange={e => setBusca(e.target.value)}
+          style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9, width:200 }}
+        />
+        <span style={{ fontSize:9, color:'#94a3b8' }}>
+          {opsFunil.length} registros
+          {podeVerTotais && ` · Pipeline: ${fmtMoeda(opsFunil.filter(o=>!isPerdido(getEst(o.estagio_id))&&!isGanho(getEst(o.estagio_id))).reduce((s,o)=>s+(o.valor_registrado||0),0))}`}
+        </span>
+      </div>
+
+      {/* ── Conteúdo ── */}
+      {abaInterna === 'kanban' ? (
+        <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
       ) : (
-        /* ── KANBAN ── */
-        <div style={{ flex:1, display:'flex', gap:0, overflowX:'auto', padding:0 }}>
-          {COLUNAS.map(coluna => {
-            const items = leadsFiltrados.filter(l => (l.status_kanban || 'Prospectado') === coluna);
-            const esquecidosNaColuna = items.filter(l => isEsquecido(l, maxDias)).length;
-            return (
-              <div key={coluna} style={{ flex:'0 0 calc(25% - 1px)', minWidth:220, display:'flex', flexDirection:'column',
-                borderRight:'1px solid #e2e8f0', background:'#f8fafc' }}>
-                {/* Cabeçalho da coluna */}
-                <div style={{ padding:'10px 12px', background:COR_COLUNA[coluna], color:'#fff', display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
-                  <span style={{ fontWeight:700, fontSize:11, flex:1 }}>{coluna}</span>
-                  <span style={{ background:'rgba(255,255,255,.25)', borderRadius:10, padding:'1px 8px', fontSize:10, fontWeight:700 }}>{items.length}</span>
-                  {esquecidosNaColuna > 0 && (
-                    <span style={{ background:'#dc2626', borderRadius:10, padding:'1px 6px', fontSize:9, fontWeight:700 }}>⚠️{esquecidosNaColuna}</span>
-                  )}
-                </div>
-                {/* Cards */}
-                <div style={{ flex:1, overflowY:'auto', padding:'8px 8px' }}>
-                  {items.length === 0 && (
-                    <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>Nenhum lead</div>
-                  )}
-                  {items.map(l => (
-                    <LeadCard key={l.id} lead={l} maxDias={maxDias} onClick={() => setSelectedLead(l)} />
+        renderFaturamentos()
+      )}
+
+      {/* ══════ MODAL CRIAR/EDITAR OP ══════ */}
+      {modalOp !== null && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={e => { if (e.target===e.currentTarget) setModalOp(null); }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(540px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#1e293b' }}>
+              {modalOp?.id ? '✏️ Editar' : '+ Nova'} {funil==='licitacao' ? 'Licitação' : 'Venda Direta'}
+            </div>
+
+            {funil === 'licitacao' && (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Tipo de Licitação</div>
+                <div style={{ display:'flex', gap:12 }}>
+                  {([['ordinaria','📄 Licitação Ordinária'],['ata','📋 Ata de Registro de Preços']] as const).map(([t,label]) => (
+                    <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                      <input type="radio" checked={formOp.tipo_licitacao===t}
+                        onChange={() => setFormOp(f => ({...f, tipo_licitacao:t}))} />
+                      {label}
+                    </label>
                   ))}
                 </div>
               </div>
-            );
-          })}
+            )}
+
+            {/* Campos texto */}
+            {([
+              { label:'Título *', key:'titulo', placeholder:'Ex: Pregão SESP 2025/041' },
+              ...(funil==='licitacao' ? [
+                { label:'Número do Edital', key:'numero_edital', placeholder:'2025/041' },
+                { label:'Órgão', key:'orgao', placeholder:'Secretaria de Segurança Pública' },
+                { label:'Data da Sessão', key:'data_sessao', type:'date' },
+                ...(formOp.tipo_licitacao==='ata' ? [{ label:'Validade da Ata', key:'data_validade_ata', type:'date' }] : []),
+              ] : []),
+              { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
+              { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
+            ] as any[]).map(({ label, key, placeholder, type }) => (
+              <div key={key} style={{ marginBottom:8 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>{label}</div>
+                <input type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
+                  onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))}
+                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                />
+              </div>
+            ))}
+
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Estágio Inicial</div>
+              <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                <option value="">— Selecione —</option>
+                {estagiosFunil.filter(e => !isPerdido(e) && !isGanho(e)).map(e => (
+                  <option key={e.id} value={e.id}>{e.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Responsável / Operador</div>
+              <ColaboradorSelect
+                value={formOp.responsavel_nome||''}
+                onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))}
+                placeholder="Selecione o operador"
+              />
+            </div>
+
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalOp(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
+                onClick={salvarOportunidade} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ── MODAIS ── */}
-      {modalNovo && (
-        <ModalNovoLead currentUser={currentUser} onClose={() => setModalNovo(false)} onSaved={fetchLeads} />
+      {/* ══════ MODAL CHECKLIST GATE ══════ */}
+      {modalGate && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(420px,96vw)', maxHeight:'80vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', marginBottom:4 }}>📋 Gate Lean — Checklist Obrigatório</div>
+            <div style={{ fontSize:9, color:'#92400e', background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
+              ⚠️ Para avançar para <strong>"{getEst(modalGate.estagioDestId)?.nome}"</strong>, conclua os itens obrigatórios:
+            </div>
+
+            {modalGate.itens.map((it: any) => {
+              const done = !!modalGate.prog?.find((p: any) => p.item_id === it.id && p.concluido);
+              return (
+                <div key={it.id} onClick={() => toggleItem(modalGate.op.id, it.id, done)}
+                  style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0', borderBottom:'1px dashed #f1f5f9', cursor:'pointer' }}>
+                  <div style={{
+                    width:16, height:16, borderRadius:3, flexShrink:0,
+                    border:`2px solid ${done?'#22c55e':'#d1d5db'}`,
+                    background: done ? '#22c55e' : 'white',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                  }}>
+                    {done && <span style={{ color:'white', fontSize:10, fontWeight:900 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize:10, color:'#374151', flex:1 }}>{it.item_texto}</span>
+                  {it.obrigatorio && <span style={{ fontSize:7, color:'#ef4444', fontWeight:700, flexShrink:0 }}>OBRIG.</span>}
+                </div>
+              );
+            })}
+
+            {(() => {
+              const ok = modalGate.itens.filter((i:any)=>i.obrigatorio).every((i:any)=>modalGate.prog?.find((p:any)=>p.item_id===i.id&&p.concluido));
+              return (
+                <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:12 }}>
+                  <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalGate(null)}>Cancelar</button>
+                  <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
+                    background: ok ? '#22c55e' : '#94a3b8', cursor: ok ? 'pointer' : 'not-allowed' }}
+                    onClick={() => { if (ok) { moverCard(modalGate.op.id, modalGate.estagioDestId); setModalGate(null); } }}>
+                    {ok ? '✓ Avançar Estágio' : '🔒 Itens pendentes'}
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
       )}
-      {selectedLead && (
-        <LeadModal lead={selectedLead} currentUser={currentUser}
-          onClose={() => setSelectedLead(null)}
-          onRefresh={fetchLeads} />
+
+      {/* ══════ MODAL MOTIVO PERDA ══════ */}
+      {modalMotivo && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(380px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:12, color:'#991b1b', marginBottom:8 }}>❌ Registrar como Não Vencida/Perdida</div>
+            <div style={{ fontSize:10, color:'#374151', marginBottom:10 }}>
+              Informe o motivo para <strong>"{modalMotivo.op.titulo}"</strong>:
+            </div>
+            <textarea value={motivoTexto} onChange={e => setMotivoTexto(e.target.value)}
+              placeholder="Ex: Preço acima do mercado, prazo incompatível, concorrência..."
+              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, height:80, resize:'vertical', boxSizing:'border-box' }}
+            />
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:10 }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalMotivo(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#991b1b', fontSize:10, padding:'4px 12px' }} onClick={confirmarPerda}>Confirmar Perda</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL CONVERTER OP/OS ══════ */}
+      {modalConverter && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(460px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:12, color:'#166534', marginBottom:8 }}>🏆 Negócio Ganho — Lançar no Sistema</div>
+            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'8px 10px', marginBottom:12 }}>
+              <div style={{ fontSize:8, fontWeight:700, color:'#166534', marginBottom:2 }}>OPORTUNIDADE</div>
+              <div style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{modalConverter.titulo}</div>
+              {modalConverter.orgao && <div style={{ fontSize:9, color:'#64748b' }}>{modalConverter.orgao}</div>}
+              <div style={{ fontSize:10, color:'#0f766e', fontWeight:700, marginTop:2 }}>{fmtMoeda(modalConverter.valor_registrado)}</div>
+            </div>
+
+            <div style={{ fontSize:10, fontWeight:700, color:'#374151', marginBottom:8 }}>Tipo de lançamento:</div>
+            <div style={{ display:'grid', gridTemplateColumns: funil==='venda_direta' ? '1fr 1fr' : '1fr', gap:8, marginBottom:12 }}>
+              {([
+                { tipo:'op', icon:'📋', title:'Ordem de Produção', desc:'Equipamentos / instalação / fabricação', dest:'→ Aba Engenharia', cor:'#2563eb' },
+                ...(funil==='venda_direta' ? [{ tipo:'os', icon:'🔧', title:'Ordem de Serviço', desc:'Manutenção / suporte técnico / garantia', dest:'→ Aba SAC', cor:'#ea580c' }] : []),
+              ] as any[]).map(({ tipo, icon, title, desc, dest, cor }) => (
+                <div key={tipo} onClick={() => setTipoConverter(tipo)}
+                  style={{ border:`2px solid ${tipoConverter===tipo ? cor : '#e2e8f0'}`,
+                    borderRadius:6, padding:'10px 8px', textAlign:'center', cursor:'pointer',
+                    background: tipoConverter===tipo ? `${cor}12` : 'white', transition:'all .15s' }}>
+                  <div style={{ fontSize:24, marginBottom:4 }}>{icon}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:'#1e293b' }}>{title}</div>
+                  <div style={{ fontSize:8, color:'#64748b', margin:'3px 0' }}>{desc}</div>
+                  <div style={{ fontSize:8, color:cor, fontWeight:700 }}>{dest}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
+              Os dados do cliente e valor serão copiados automaticamente para a {tipoConverter==='op'?'OP':'OS'}.
+            </div>
+
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalConverter(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
+                background: tipoConverter==='op' ? '#2563eb' : '#ea580c', opacity: salvando?.5:1 }}
+                onClick={converterGanho} disabled={salvando}>
+                {salvando ? 'Criando...' : tipoConverter==='op' ? '📋 Criar OP' : '🔧 Criar OS'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL VENDA / ADESÃO ══════ */}
+      {modalVenda && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={e => { if (e.target===e.currentTarget) setModalVenda(null); }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(500px,96vw)', maxHeight:'88vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', marginBottom:8 }}>
+              {modalVenda.venda ? '✏️ Editar Venda' : '+ Registrar Venda / Adesão'}
+            </div>
+            {modalVenda.op && (
+              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'6px 10px', marginBottom:12, fontSize:9 }}>
+                <strong>{modalVenda.op.titulo}</strong>
+                {modalVenda.op.tipo_licitacao === 'ata' && (
+                  <span style={{ marginLeft:8, fontSize:8, background:'#f5f3ff', color:'#7c3aed', padding:'1px 5px', borderRadius:3, fontWeight:700 }}>Ata</span>
+                )}
+              </div>
+            )}
+
+            {([
+              { label:'Órgão Aderente / Comprador', key:'orgao_aderente', placeholder:'Ex: Corpo de Bombeiros / João Silva LTDA' },
+              { label:'Descrição do Item / Serviço', key:'descricao', placeholder:'Ex: 50x Rádio DMR Motorola DP4801e' },
+              { label:'Quantidade', key:'quantidade', placeholder:'50' },
+              { label:'Valor Unitário (R$)', key:'valor_unitario', placeholder:'6400' },
+              { label:'Valor Total (R$) *', key:'valor_total', placeholder:'320000' },
+            ] as any[]).map(({ label, key, placeholder }) => (
+              <div key={key} style={{ marginBottom:8 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>{label}</div>
+                <input value={formVenda[key]||''} placeholder={placeholder}
+                  onChange={e => setFormVenda(f => ({...f,[key]:e.target.value}))}
+                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                />
+              </div>
+            ))}
+
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Status Faturamento</div>
+              <select value={formVenda.status_faturamento} onChange={e => setFormVenda(f => ({...f, status_faturamento: e.target.value}))}
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                <option value="pendente">⏳ Pendente</option>
+                <option value="faturado">✓ Faturado</option>
+                <option value="cancelado">✕ Cancelado</option>
+              </select>
+            </div>
+
+            {formVenda.status_faturamento === 'faturado' && (
+              <>
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número da NF</div>
+                  <input value={formVenda.numero_nf||''} placeholder="Ex: 004821"
+                    onChange={e => setFormVenda(f => ({...f, numero_nf:e.target.value}))}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  />
+                </div>
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Data do Faturamento</div>
+                  <input type="date" value={formVenda.data_faturamento||''}
+                    onChange={e => setFormVenda(f => ({...f, data_faturamento:e.target.value}))}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                  />
+                </div>
+              </>
+            )}
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Operador Responsável (Vendedor)</div>
+              <ColaboradorSelect
+                value={formVenda.operador_nome||''}
+                onChange={v => setFormVenda(f => ({...f, operador_nome:v}))}
+                placeholder="Selecione o operador"
+              />
+            </div>
+
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalVenda(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
+                onClick={salvarVenda} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'Salvar Venda'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
