@@ -330,7 +330,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           status:           'Aguardando Início',
           tipo_avaliacao:   'Presencial',
           tipo_servico:     'Orçamento',
-          responsavel:      op.responsavel_nome || null,
+          tecnico_responsavel: op.responsavel_nome || null,
           criado_por_nome:  currentUser?.nome,
           criado_por_email: currentUser?.email,
           data_abertura:    agora,
