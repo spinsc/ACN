@@ -310,25 +310,28 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           const { data: cli } = await supabase.from('clientes').select('*').eq('id', op.cliente_id).single();
           clienteObj = cli || null;
         }
+        // Monta dados para o formulário SAC
+        const nomeCliente = clienteObj?.nome || op.orgao || op.titulo;
+        const fones = Array.isArray(clienteObj?.telefones) && clienteObj.telefones.length
+          ? (clienteObj.telefones[0]?.numero || clienteObj.telefones[0] || '')
+          : '';
+        const emails = Array.isArray(clienteObj?.emails) && clienteObj.emails.length
+          ? (clienteObj.emails[0]?.email || clienteObj.emails[0] || '')
+          : '';
+        const endereco = [clienteObj?.endereco, clienteObj?.numero, clienteObj?.complemento].filter(Boolean).join(', ');
         sessionStorage.setItem('pendingOsFromCrm', JSON.stringify({
-          defeito_reclamado:  op.titulo,
-          equipamento_nome:   op.titulo,
-          // dados "planos" para campos simples
-          cliente_nome:       clienteObj?.nome      || op.orgao || '',
-          empresa_orgao:      clienteObj?.empresa   || op.orgao || '',
-          cpf_cnpj:           clienteObj?.documento || '',
-          telefone:           Array.isArray(clienteObj?.telefones) && clienteObj.telefones.length
-                                ? (clienteObj.telefones[0].numero || clienteObj.telefones[0])
-                                : '',
-          email:              Array.isArray(clienteObj?.emails) && clienteObj.emails.length
-                                ? (clienteObj.emails[0].email || clienteObj.emails[0])
-                                : '',
-          endereco:           [clienteObj?.endereco, clienteObj?.numero, clienteObj?.complemento].filter(Boolean).join(', '),
-          // objeto bruto para auto-complete
-          cliente_obj:        clienteObj,
-          cliente_id:         op.cliente_id || null,
-          responsavel_nome:   op.responsavel_nome || '',
-          observacoes:        `Vendedor: ${op.responsavel_nome || '—'} | CRM: ${op.titulo}${op.numero_edital ? ' / Edital: ' + op.numero_edital : ''}`,
+          defeito_reclamado: op.titulo,
+          equipamento_nome:  op.titulo,
+          cliente_nome:      nomeCliente,
+          empresa_orgao:     clienteObj?.empresa || op.orgao || '',
+          cpf_cnpj:          clienteObj?.documento || '',
+          telefone:          fones,
+          email:             emails,
+          endereco:          endereco,
+          cliente_obj:       clienteObj,
+          cliente_id:        op.cliente_id || null,
+          responsavel_nome:  op.responsavel_nome || '',
+          observacoes:       `[CRM] Vendedor: ${op.responsavel_nome || 'não atribuído'}\nOportunidade: ${op.titulo}${op.numero_edital ? '\nEdital: ' + op.numero_edital : ''}${op.orgao ? '\nÓrgão: ' + op.orgao : ''}`,
         }));
         setModalConverter(null);
         setNumOp('');
