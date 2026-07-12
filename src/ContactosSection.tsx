@@ -690,7 +690,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               {/* Foco ID */}
               <div style={{ gridColumn:'1/-1' }}>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                  Foco ID <span style={{ color:'#94a3b8', fontWeight:400' }}>(integração futura)</span>
+                  Foco ID <span style={{ color:'#94a3b8', fontWeight:400 }}>(integração futura)</span>
                 </div>
                 <input value={formC.foco_id||''} placeholder="ID do contato no Sistema Foco"
                   onChange={e => setFormC(f => ({...f, foco_id:e.target.value}))}
