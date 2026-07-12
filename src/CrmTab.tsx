@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import ContactosSection from './ContactosSection';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -60,6 +61,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const podeVerRelatorio    = pcrm.includes('relatorio_vendedores') || currentUser?.perfil === 'Admin';
 
   // ── estado principal ──
+  const [secaoCrm, setSecaoCrm]     = useState<'funil'|'contatos'>('funil');
   const [funil, setFunil]           = useState<'licitacao'|'venda_direta'>('licitacao');
   const [estagios, setEstagios]     = useState<any[]>([]);
   const [ops, setOps]               = useState<any[]>([]);
@@ -647,17 +649,25 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   return (
     <div style={{ padding:'8px 12px' }}>
 
-      {/* ── Sub-tabs funil ── */}
+      {/* ── Navegação principal CRM ── */}
       <div style={{ display:'flex', background:'#0f172a', margin:'-8px -12px 0', padding:'0 12px' }}>
+        {/* Funis */}
         {([['licitacao','🏛️ Licitações'],['venda_direta','💼 Vendas Diretas']] as const).map(([f, label]) => (
-          <div key={f} onClick={() => setFunil(f)} style={{
+          <div key={f} onClick={() => { setFunil(f); setSecaoCrm('funil'); }} style={{
             padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
-            color: funil===f ? (f==='licitacao'?'#a78bfa':'#38bdf8') : '#64748b',
-            borderBottom: funil===f ? `3px solid ${f==='licitacao'?'#7c3aed':'#0891b2'}` : '3px solid transparent',
+            color: secaoCrm==='funil' && funil===f ? (f==='licitacao'?'#a78bfa':'#38bdf8') : '#64748b',
+            borderBottom: secaoCrm==='funil' && funil===f ? `3px solid ${f==='licitacao'?'#7c3aed':'#0891b2'}` : '3px solid transparent',
           }}>{label}</div>
         ))}
+        {/* Contatos */}
+        <div onClick={() => setSecaoCrm('contatos')} style={{
+          padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
+          color: secaoCrm==='contatos' ? '#fb923c' : '#64748b',
+          borderBottom: secaoCrm==='contatos' ? '3px solid #ea580c' : '3px solid transparent',
+        }}>📇 Contatos</div>
+
         <div style={{ flex:1 }} />
-        {podeVerFaturamentos && (
+        {secaoCrm === 'funil' && podeVerFaturamentos && (
           <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
             {(['kanban','faturamentos'] as const).map(a => (
               <div key={a} onClick={() => setAbaInterna(a)} style={{
@@ -672,6 +682,14 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         )}
       </div>
+
+      {/* ── Seção Contatos ── */}
+      {secaoCrm === 'contatos' && (
+        <ContactosSection currentUser={currentUser} />
+      )}
+
+      {/* ── Seção Funis (Kanban / Faturamentos) ── */}
+      {secaoCrm === 'funil' && <>
 
       {/* ── Toolbar ── */}
       <div style={{ display:'flex', gap:6, alignItems:'center', margin:'8px 0', flexWrap:'wrap' }}>
@@ -696,6 +714,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       ) : (
         renderFaturamentos()
       )}
+
+      </> /* fim secaoCrm === 'funil' */}
 
       {/* ══════ MODAL CRIAR/EDITAR OP ══════ */}
       {modalOp !== null && (
