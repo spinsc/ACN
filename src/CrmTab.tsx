@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
 import CrmAnexosWidget from './CrmAnexosWidget';
 
@@ -29,6 +30,7 @@ const VAZIO_OP: any = {
   data_validade_ata: '',
   valor_registrado: '',
   cliente_id: null,
+  _cliente_nome: '',   // campo temporário — não vai para o banco
   estagio_id: '',
   responsavel_id: null,
   responsavel_nome: '',
@@ -123,6 +125,16 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   }, [load]);
 
   useEffect(() => { setAbaInterna('kanban'); }, [funil]);
+
+  // Carrega nome do cliente ao abrir modal de edição
+  useEffect(() => {
+    if (modalOp?.cliente_id) {
+      supabase.from('clientes').select('id,nome').eq('id', modalOp.cliente_id).single()
+        .then(({ data }) => {
+          if (data) setFormOp(f => ({ ...f, _cliente_nome: data.nome }));
+        });
+    }
+  }, [modalOp]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // DERIVADOS
@@ -831,6 +843,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   <option key={e.id} value={e.id}>{e.nome}</option>
                 ))}
               </select>
+            </div>
+
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cliente (opcional)</div>
+              <ClienteAutocomplete
+                value={formOp._cliente_nome || ''}
+                onChange={v => setFormOp(f => ({ ...f, _cliente_nome: v, cliente_id: null }))}
+                onSelect={c => setFormOp(f => ({ ...f, _cliente_nome: c.nome, cliente_id: c.id }))}
+                placeholder="Vincular cliente do cadastro..."
+              />
+              {formOp.cliente_id && (
+                <div style={{ fontSize:8, color:'#059669', marginTop:2 }}>
+                  ✓ Cliente vinculado — dados serão puxados automaticamente ao lançar OS
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom:14 }}>
