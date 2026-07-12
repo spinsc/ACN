@@ -304,14 +304,31 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           });
         }
       } else {
-        // OS: redireciona para formulário completo do SAC pré-preenchido
+        // OS: busca dados completos do cliente e redireciona para SAC
+        let clienteObj = null;
+        if (op.cliente_id) {
+          const { data: cli } = await supabase.from('clientes').select('*').eq('id', op.cliente_id).single();
+          clienteObj = cli || null;
+        }
         sessionStorage.setItem('pendingOsFromCrm', JSON.stringify({
-          defeito_reclamado: op.titulo,
-          equipamento_nome:  op.titulo,
-          cliente_nome:      op.orgao || '',
-          empresa_orgao:     op.orgao || '',
-          cliente_id:        op.cliente_id || null,
-          observacoes:       `Originado do CRM — ${op.titulo}${op.numero_edital ? ' / Edital: ' + op.numero_edital : ''}`,
+          defeito_reclamado:  op.titulo,
+          equipamento_nome:   op.titulo,
+          // dados "planos" para campos simples
+          cliente_nome:       clienteObj?.nome      || op.orgao || '',
+          empresa_orgao:      clienteObj?.empresa   || op.orgao || '',
+          cpf_cnpj:           clienteObj?.documento || '',
+          telefone:           Array.isArray(clienteObj?.telefones) && clienteObj.telefones.length
+                                ? (clienteObj.telefones[0].numero || clienteObj.telefones[0])
+                                : '',
+          email:              Array.isArray(clienteObj?.emails) && clienteObj.emails.length
+                                ? (clienteObj.emails[0].email || clienteObj.emails[0])
+                                : '',
+          endereco:           [clienteObj?.endereco, clienteObj?.numero, clienteObj?.complemento].filter(Boolean).join(', '),
+          // objeto bruto para auto-complete
+          cliente_obj:        clienteObj,
+          cliente_id:         op.cliente_id || null,
+          responsavel_nome:   op.responsavel_nome || '',
+          observacoes:        `Vendedor: ${op.responsavel_nome || '—'} | CRM: ${op.titulo}${op.numero_edital ? ' / Edital: ' + op.numero_edital : ''}`,
         }));
         setModalConverter(null);
         setNumOp('');

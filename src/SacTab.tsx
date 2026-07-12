@@ -199,14 +199,22 @@ export default function SacTab({ currentUser }) {
       try {
         const d = JSON.parse(raw);
         sessionStorage.removeItem('pendingOsFromCrm');
+        // Se veio objeto bruto do cliente, usa clienteToForm para extrair campos completos
+        const cli = d.cliente_obj ? clienteToForm(d.cliente_obj) : null;
         setForm(f => ({
           ...f,
           defeito_reclamado: d.defeito_reclamado || '',
           equipamento_nome:  d.equipamento_nome  || '',
-          cliente_nome:      d.cliente_nome      || '',
-          empresa_orgao:     d.empresa_orgao     || '',
-          _cliente_id:       d.cliente_id        || null,
           observacoes:       d.observacoes       || '',
+          // dados do cliente — prioriza objeto completo, senão usa campos planos enviados
+          cliente_nome:  cli?.cliente_nome  || d.cliente_nome  || '',
+          empresa_orgao: cli?.empresa_orgao || d.empresa_orgao || '',
+          cpf_cnpj:      cli?.cpf_cnpj      || d.cpf_cnpj      || '',
+          telefone:      cli?.telefone      || d.telefone      || '',
+          email:         cli?.email         || d.email         || '',
+          endereco:      cli?.endereco      || d.endereco      || '',
+          _cliente_id:   cli?._cliente_id   || d.cliente_id    || null,
+          _cliente_obj:  cli?._cliente_obj  || d.cliente_obj   || null,
         }));
         setEquipLista([{ marca:'', modelo:'', numero_serie:'', defeito: d.defeito_reclamado || '' }]);
         setModalNova(true);
