@@ -106,6 +106,24 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: recarrega quando chega msg nova
+  useEffect(() => {
+    const channel = supabase
+      .channel('wa-msgs-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_whatsapp_msgs' }, () => {
+        supabase.from('crm_whatsapp_msgs').select('*').order('data_msg', { ascending: false })
+          .then(({ data }) => { if (data) setWaMsgs(data); });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Emite total de msgs não lidas para o DashboardTab (badge no sidebar)
+  useEffect(() => {
+    const naoLidas = waMsgs.filter(m => !m.lida).length;
+    window.dispatchEvent(new CustomEvent('crm:wa-unread-count', { detail: { count: naoLidas } }));
+  }, [waMsgs]);
+
   // atualiza contato selecionado quando dados recarregam
   useEffect(() => {
     if (contatoSel) {
@@ -288,8 +306,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                 </span>
               )}
               {nWA > 0 && (
-                <span style={{ fontSize:8, background:'#dcfce7', color:'#166534', padding:'2px 6px', borderRadius:10, fontWeight:700 }}>
-                  {nWA} msg{nWA !== 1 ? 's' : ''} não lida{nWA !== 1 ? 's' : ''}
+                <span className="acn-wa-unread-badge"
+                  style={{ fontSize:8, background:'#16a34a', color:'#fff', padding:'2px 7px', borderRadius:10, fontWeight:800, display:'inline-flex', alignItems:'center', gap:3 }}>
+                  💬 {nWA} não lida{nWA !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
@@ -362,15 +381,28 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
         {/* Abas internas */}
         <div style={{ display:'flex', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
-          {([['info','ℹ️ Info'],['historico',`📋 Histórico (${interacoesC.length})`],['whatsapp',`💬 WA (${waMsgsC.length})`]] as const).map(([aba, label]) => (
-            <div key={aba} onClick={() => setAbaDetalhe(aba)}
-              style={{ padding:'5px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
-                color: abaDetalhe===aba ? '#0891b2' : '#64748b',
-                borderBottom: abaDetalhe===aba ? '2px solid #0891b2' : '2px solid transparent',
-              }}>
-              {label}
-            </div>
-          ))}
+          {([
+            ['info',     'ℹ️ Info'],
+            ['historico', `📋 Histórico (${interacoesC.length})`],
+            ['whatsapp',  (() => {
+              const naoLidas = waMsgsC.filter((m: any) => !m.lida).length;
+              return naoLidas > 0
+                ? `💬 WA · ${naoLidas} nova${naoLidas !== 1 ? 's' : ''}`
+                : `💬 WA (${waMsgsC.length})`;
+            })()],
+          ] as const).map(([aba, label]) => {
+            const naoLidasWa = aba === 'whatsapp' ? waMsgsC.filter((m: any) => !m.lida).length : 0;
+            const temNaoLidas = aba === 'whatsapp' && naoLidasWa > 0;
+            return (
+              <div key={aba} onClick={() => setAbaDetalhe(aba)}
+                style={{ padding:'5px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
+                  color: temNaoLidas ? '#16a34a' : abaDetalhe===aba ? '#0891b2' : '#64748b',
+                  borderBottom: abaDetalhe===aba ? `2px solid ${temNaoLidas ? '#16a34a' : '#0891b2'}` : '2px solid transparent',
+                }}>
+                <span className={temNaoLidas ? 'acn-wa-tab-ativa' : ''}>{label}</span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Conteúdo aba */}

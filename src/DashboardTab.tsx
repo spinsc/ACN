@@ -233,6 +233,63 @@ body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !imp
 @media print { .acn-sidebar, .acn-header { display:none; } .acn-main { padding:0; } }
 
 /* ══════════════════════════════════════════════════════════════════
+   NOTIFICAÇÕES WHATSAPP
+   ══════════════════════════════════════════════════════════════════ */
+@keyframes acn-wa-ping {
+  0%   { transform: scale(1);   opacity: 1; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes acn-wa-glow {
+  0%, 100% { background: #16a34a; }
+  50%       { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+}
+@keyframes acn-wa-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.18); }
+}
+
+/* Ponto vermelho na sidebar (CRM) */
+.acn-wa-sidebar-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  background: #ef4444;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 800;
+  color: #fff;
+  padding: 0 3px;
+  margin-left: 5px;
+  position: relative;
+  flex-shrink: 0;
+  animation: acn-wa-badge-pulse 1.4s ease-in-out infinite;
+}
+.acn-wa-sidebar-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: #ef4444;
+  animation: acn-wa-ping 1.4s ease-out infinite;
+  z-index: -1;
+}
+
+/* Badge verde nas msgs não lidas (cards de contato) */
+.acn-wa-unread-badge {
+  animation: acn-wa-badge-pulse 1.4s ease-in-out infinite;
+}
+
+/* Aba WA pulsando quando tem msgs não lidas */
+.acn-wa-tab-ativa {
+  animation: acn-wa-glow 1.6s ease-in-out infinite;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
    MOBILE — tela estreita (< 700px)
    ══════════════════════════════════════════════════════════════════ */
 .acn-hamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:rgba(0,0,0,.22); border:none; border-radius:6px; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; }
@@ -475,6 +532,14 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [waNotifCount, setWaNotifCount] = useState(0);
+
+  // Escuta contagem de msgs WA não lidas emitida pelo ContactosSection
+  useEffect(() => {
+    const handler = (e: any) => setWaNotifCount(e.detail?.count || 0);
+    window.addEventListener('crm:wa-unread-count', handler);
+    return () => window.removeEventListener('crm:wa-unread-count', handler);
+  }, []);
 
   // Navegação cross-tab vinda do CRM
   useEffect(() => {
@@ -707,9 +772,17 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
                     key={item.id}
                     className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
                     onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}
                   >
-                    <span className="sidebar-dot">●</span>
-                    {item.label}
+                    <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      <span className="sidebar-dot">●</span>
+                      {item.label}
+                    </span>
+                    {item.id === 'crm' && waNotifCount > 0 && (
+                      <span className="acn-wa-sidebar-dot">
+                        {waNotifCount > 9 ? '9+' : waNotifCount}
+                      </span>
+                    )}
                   </div>
                 ))}
               </React.Fragment>
