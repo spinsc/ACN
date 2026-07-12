@@ -108,7 +108,7 @@ function PrazoBadge({ label, value }: { label:string; value:string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
-function LicitacaoModal({ licit, currentUser, onClose, onRefresh }) {
+function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
   const [tab, setTab] = useState<'info'|'anexos'|'historico'>('info');
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -371,6 +371,14 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh }) {
 
         {/* Footer — botões de ação */}
         <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 16px', flexShrink:0, display:'flex', flexDirection:'column', gap:8 }}>
+
+          {/* Excluir — somente Admin */}
+          {isAdmin && !confirmStatus && (
+            <button onClick={onExcluir}
+              style={{ background:'#fef2f2', color:'#dc2626', border:'1.5px solid #fca5a5', borderRadius:6, padding:'7px 16px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+              🗑️ Excluir esta licitação
+            </button>
+          )}
 
           {/* Próximo status no fluxo */}
           {btnProximo && !confirmStatus && (
@@ -635,6 +643,20 @@ export default function LicitacoesTab({ currentUser }) {
   const isAdmin = true; // acesso já controlado pelo dashboard
   const isAnalista = true;
 
+  const excluirLicitacao = async (l: any) => {
+    if (!confirm(`Excluir "${l.numero} — ${l.nome_projeto}"?\n\nEsta ação não pode ser desfeita.`)) return;
+    // salva na lixeira
+    await supabase.from('lixeira').insert([{
+      tabela: 'licitacoes',
+      registro_id: l.id,
+      dados: l,
+      deletado_por: currentUser?.nome || currentUser?.email,
+    }]).then(() => {});
+    await supabase.from('licitacoes').delete().eq('id', l.id);
+    setSelected(null);
+    fetch();
+  };
+
   const fetch = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from('licitacoes').select('*').order('criado_em', { ascending: false });
@@ -778,6 +800,7 @@ export default function LicitacoesTab({ currentUser }) {
           licit={selected}
           currentUser={currentUser}
           onClose={() => setSelected(null)}
+          onExcluir={() => excluirLicitacao(selected)}
           onRefresh={() => {
             fetch();
             // Atualiza o selected com os dados novos

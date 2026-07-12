@@ -762,6 +762,7 @@ const TABELAS_CONFIG = [
   { id:'logistica_manifestos',  label:'Logística In/Out',         desc:'Manifestos de envio/recebimento',         cor:'#0891b2' },
   { id:'rh_autorizacoes',       label:'Autorizações RH',          desc:'Autorizações de saída/entrada antecipada',cor:'#ea580c' },
   // ── CRM / Licitações ──────────────────────────────────────────────────────
+  { id:'licitacoes',            label:'Licitações',                desc:'Base de licitações cadastradas',          cor:'#1e3a5f' },
   { id:'crm_oportunidades',     label:'CRM — Oportunidades',      desc:'Licitações e Vendas Diretas',             cor:'#0891b2' },
   { id:'crm_historico',         label:'CRM — Histórico',          desc:'Movimentações e auditoria do funil',      cor:'#0369a1' },
   { id:'crm_vendas',            label:'CRM — Vendas Fechadas',    desc:'OPs/OSs geradas a partir do CRM',         cor:'#16a34a' },
@@ -807,6 +808,7 @@ function PainelDados() {
       : tabelaAtiva === 'rh_autorizacoes'                   ? 'data'
       : tabelaAtiva === 'crm_interacoes'                    ? 'data_interacao'
       : tabelaAtiva === 'crm_whatsapp_msgs'                 ? 'data_msg'
+      : tabelaAtiva === 'licitacoes'                        ? 'criado_em'
       // tabelas com criado_em
       : ['demandas_avulsas','crm_oportunidades','crm_historico','crm_vendas',
          'crm_contatos','crm_anexos','clientes'].includes(tabelaAtiva) ? 'criado_em'
@@ -888,6 +890,8 @@ function PainelDados() {
       return `[${r.status || '?'}] ${r.titulo?.substring(0,70) || '?'} — ${r.criado_por_nome || r.criado_por || '?'} · Prioridade: ${r.prioridade || '?'}`;
     if (tabelaAtiva === 'logistica_manifestos')
       return `${r.tipo || '?'} — ${r.descricao?.substring(0,60) || r.transportadora || '?'} — ${r.criado_por_nome || r.criado_por || '?'}`;
+    if (tabelaAtiva === 'licitacoes')
+      return `[${r.status || '?'}] ${r.numero || '?'} — ${r.nome_projeto || '?'} — ${r.orgao || '?'} — ${r.classificacao || '?'}`;
     if (tabelaAtiva === 'crm_oportunidades')
       return `[${r.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda'}] ${r.titulo || '?'} — ${r.orgao || '?'} — Etapa: ${r.estagio_id ? '✓' : '?'} — R$ ${r.valor_estimado ? Number(r.valor_estimado).toLocaleString('pt-BR') : '—'}`;
     if (tabelaAtiva === 'crm_historico')
@@ -1130,6 +1134,7 @@ const LABEL_TABELA = {
   rh_autorizacoes:'Autorizações RH', logs_movimentacao_opl:'Logs de OPL',
   cq_auditorias:'Auditorias CQ',
   // CRM / Licitações
+  licitacoes:'Licitações',
   crm_oportunidades:'CRM — Oportunidades', crm_historico:'CRM — Histórico',
   crm_vendas:'CRM — Vendas', crm_contatos:'CRM — Contatos',
   crm_interacoes:'CRM — Interações', crm_whatsapp_msgs:'CRM — Msgs WA',
@@ -1199,6 +1204,7 @@ function PainelLixeira() {
       case 'demandas_avulsas': return `${(d.titulo || '?').substring(0,60)} — ${d.status || '?'}`;
       case 'logistica_manifestos': return `${d.tipo || '?'} — ${(d.descricao || d.transportadora || '').substring(0,60)}`;
       case 'rh_autorizacoes': return `[${d.tipo || '?'}] ${d.data || '?'} — ${d.motivo || '?'}`.substring(0,80);
+      case 'licitacoes': return `[${d.status || '?'}] ${d.numero || '?'} — ${d.nome_projeto || '?'} — ${d.orgao || '?'}`;
       case 'crm_oportunidades': return `[${d.funil === 'licitacao' ? 'Licitação' : 'Venda'}] ${d.titulo || '?'} — ${d.orgao || '?'} — R$ ${d.valor_estimado ? Number(d.valor_estimado).toLocaleString('pt-BR') : '—'}`;
       case 'crm_historico': return `${d.tipo || '?'}: ${(d.conteudo || '').substring(0,60)} — por ${d.usuario_nome || '?'}`;
       case 'crm_vendas': return `${d.tipo || '?'} — ${d.numero || '?'} — ${d.cliente_nome || '?'}`;
