@@ -508,49 +508,79 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
     onRefresh();
   };
 
+  const ativos = funcionarios.filter(f => f.ativo);
+
   return (
     <div className="sec-card">
-      <div className="sec-hdr">👥 Status dos Colaboradores</div>
-      <div style={{ padding:12, display:'flex', flexWrap:'wrap', gap:10 }}>
-        {funcionarios.filter(f=>f.ativo).map(f=>(
-          <div key={f.id} style={{ background:'#f8fafc', border:`1.5px solid ${STATUS_COR[f.status_presenca]||'#e2e8f0'}`,
-            borderRadius:8, padding:'10px 14px', minWidth:160, position:'relative' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:4 }}>
-              <div style={{ fontWeight:700, fontSize:12, color:'#1f2937' }}>{f.nome}</div>
-              <span style={{ flexShrink:0, fontSize:8, padding:'1px 5px', borderRadius:8, fontWeight:700,
-                background: f.tipo_colaborador==='Terceiro'?'#fef3c7':'#eff6ff',
-                color: f.tipo_colaborador==='Terceiro'?'#92400e':'#1d4ed8',
-                border:'1px solid', borderColor: f.tipo_colaborador==='Terceiro'?'#fde68a':'#bfdbfe' }}>
-                {f.tipo_colaborador||'Func.'}
-              </span>
-            </div>
-            <div style={{ fontSize:10, color:'#6b7280', marginBottom:6 }}>{f.cargo || f.departamento || '—'}</div>
-            <select value={f.status_presenca}
-              onChange={e=>alterarStatus(f.id, e.target.value)}
-              style={{ width:'100%', padding:'3px 6px', border:`1px solid ${STATUS_COR[f.status_presenca]||'#d1d5db'}`,
-                borderRadius:4, fontSize:10, fontWeight:700,
-                background: STATUS_COR[f.status_presenca]+'18',
-                color: STATUS_COR[f.status_presenca]||'#374151', cursor:'pointer' }}>
-              {['Ativo','Em Viagem','Folga','Férias','Afastado'].map(s=>(
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <div style={{ display:'flex', gap:4, marginTop:6 }}>
-              <button onClick={()=>onEdit(f)}
-                style={{ flex:1, padding:'3px 0', fontSize:10, border:'1px solid #d1d5db', borderRadius:4,
-                  background:'#f9fafb', cursor:'pointer', color:'#374151' }}>
-                ✏️ Editar
-              </button>
-              <button onClick={()=>onDelete(f)}
-                style={{ padding:'3px 8px', fontSize:10, border:'1px solid #fca5a5', borderRadius:4,
-                  background:'#fef2f2', cursor:'pointer', color:'#dc2626', fontWeight:700 }}>
-                🗑️
-              </button>
-            </div>
-          </div>
-        ))}
-        {funcionarios.filter(f=>f.ativo).length === 0 && (
+      <div className="sec-hdr">👥 Status dos Colaboradores ({ativos.length})</div>
+      <div className="sec-body" style={{ overflowX:'auto', padding:0 }}>
+        {ativos.length === 0 ? (
           <div className="acn-empty">Nenhum colaborador cadastrado.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Cargo / Depto.</th>
+                <th>Status</th>
+                <th style={{ width:80 }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ativos.map(f => (
+                <tr key={f.id}>
+                  <td style={{ fontWeight:700, color:'#1f2937' }}>{f.nome}</td>
+                  <td>
+                    <span style={{
+                      fontSize:9, padding:'2px 7px', borderRadius:8, fontWeight:700,
+                      background: f.tipo_colaborador==='Terceiro' ? '#fef3c7' : '#eff6ff',
+                      color:      f.tipo_colaborador==='Terceiro' ? '#92400e' : '#1d4ed8',
+                      border:'1px solid',
+                      borderColor:f.tipo_colaborador==='Terceiro' ? '#fde68a' : '#bfdbfe',
+                      whiteSpace:'nowrap',
+                    }}>
+                      {f.tipo_colaborador || 'Funcionário'}
+                    </span>
+                  </td>
+                  <td style={{ fontSize:11, color:'#374151' }}>
+                    {[f.cargo, f.departamento].filter(Boolean).join(' · ') || '—'}
+                  </td>
+                  <td>
+                    <select
+                      value={f.status_presenca}
+                      onChange={e => alterarStatus(f.id, e.target.value)}
+                      style={{
+                        padding:'3px 6px',
+                        border:`1.5px solid ${STATUS_COR[f.status_presenca]||'#d1d5db'}`,
+                        borderRadius:4, fontSize:10, fontWeight:700,
+                        background: (STATUS_COR[f.status_presenca]||'#6b7280') + '15',
+                        color: STATUS_COR[f.status_presenca] || '#374151',
+                        cursor:'pointer',
+                      }}>
+                      {['Ativo','Em Viagem','Folga','Férias','Afastado'].map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <div style={{ display:'flex', gap:4 }}>
+                      <button onClick={() => onEdit(f)}
+                        style={{ padding:'3px 10px', fontSize:10, border:'1px solid #d1d5db',
+                          borderRadius:4, background:'#f9fafb', cursor:'pointer', color:'#374151' }}>
+                        ✏️
+                      </button>
+                      <button onClick={() => onDelete(f)}
+                        style={{ padding:'3px 8px', fontSize:10, border:'1px solid #fca5a5',
+                          borderRadius:4, background:'#fef2f2', cursor:'pointer', color:'#dc2626', fontWeight:700 }}>
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
