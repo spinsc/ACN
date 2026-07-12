@@ -54,8 +54,19 @@ const mesNome = (m: number) => ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago',
 // GERADOR DE PDF DE AUTORIZAÇÃO (abre janela de impressão)
 // ─────────────────────────────────────────────────────────────────────────────
 function imprimirAutorizacao(aut: any, func: any) {
+  const isTerceiro = func?.tipo_colaborador === 'Terceiro';
+  const isSaida = (aut.tipo||'').includes('Saída');
+  const tipoLabel = aut.tipo || '—';
+  // Título do documento: Autorização (funcionário) ou Comunicação (terceiro)
+  const tituloDoc = isTerceiro
+    ? `COMUNICAÇÃO DE ${tipoLabel.toUpperCase()}`
+    : `AUTORIZAÇÃO DE ${tipoLabel.toUpperCase()}`;
+  const obsDoc = isTerceiro
+    ? 'ℹ️ Este documento registra a comunicação de saída/entrada antecipada do prestador de serviços.'
+    : '⚠️ Este documento deve ser assinado pelo Gerente Responsável antes da saída/entrada antecipada do funcionário.';
+  const labelColaborador = isTerceiro ? 'Prestador / Terceiro' : 'Funcionário';
   const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-  <title>Autorização</title>
+  <title>${tituloDoc}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 12px; margin: 30px; color: #000; }
     h2 { text-align: center; font-size: 15px; margin-bottom: 4px; }
@@ -69,22 +80,22 @@ function imprimirAutorizacao(aut: any, func: any) {
     .obs { background: #fffbe6; border: 1px solid #ccc; padding: 8px; margin-bottom: 16px; font-size: 11px; }
     @media print { body { margin: 15mm; } }
   </style></head><body>
-  <h2>ACN SINAL VERDE — AUTORIZAÇÃO DE ${(aut.tipo||'').toUpperCase()}</h2>
+  <h2>ACN SINAL VERDE — ${tituloDoc}</h2>
   <div class="sub">Formulário de controle de ponto — ${new Date(aut.data+'T00:00:00').toLocaleDateString('pt-BR', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
   <table>
-    <tr><td class="label">Funcionário</td><td>${func?.nome || '—'}</td></tr>
+    <tr><td class="label">${labelColaborador}</td><td>${func?.nome || '—'}</td></tr>
     <tr><td class="label">Cargo / Depto.</td><td>${[func?.cargo, func?.departamento].filter(Boolean).join(' — ') || '—'}</td></tr>
-    <tr><td class="label">Tipo</td><td><strong>${aut.tipo}</strong></td></tr>
+    <tr><td class="label">Tipo</td><td><strong>${tipoLabel}</strong></td></tr>
     <tr><td class="label">Data</td><td>${new Date(aut.data+'T00:00:00').toLocaleDateString('pt-BR')}</td></tr>
-    <tr><td class="label">Horário de Saída</td><td>${aut.hora_saida || '—'}</td></tr>
-    <tr><td class="label">Horário de Retorno</td><td>${aut.hora_retorno || '—'}</td></tr>
+    <tr><td class="label">${isSaida ? 'Horário de Saída' : 'Horário de Entrada'}</td><td>${aut.hora_saida || '—'}</td></tr>
+    <tr><td class="label">${isSaida ? 'Horário de Retorno' : 'Horário de Saída Normal'}</td><td>${aut.hora_retorno || '—'}</td></tr>
     <tr><td class="label">Motivo</td><td>${aut.motivo || '—'}</td></tr>
-    <tr><td class="label">Aprovado por</td><td>${aut.aprovado_por || '—'}</td></tr>
+    <tr><td class="label">${isTerceiro ? 'Ciente por' : 'Aprovado por'}</td><td>${aut.aprovado_por || '—'}</td></tr>
   </table>
-  <div class="obs">⚠️ Este documento deve ser assinado pelo Gerente Responsável antes da saída/entrada antecipada do funcionário.</div>
+  <div class="obs">${obsDoc}</div>
   <div class="assinatura">
-    <div><div class="linha"></div>Assinatura do Funcionário<br/><small>${func?.nome || ''}</small></div>
-    <div><div class="linha"></div>Assinatura do Gerente<br/><small>${aut.aprovado_por || 'Gerente Responsável'}</small></div>
+    <div><div class="linha"></div>Assinatura do ${isTerceiro ? 'Prestador' : 'Funcionário'}<br/><small>${func?.nome || ''}</small></div>
+    <div><div class="linha"></div>${isTerceiro ? 'Ciente — Gerente / Responsável' : 'Assinatura do Gerente'}<br/><small>${aut.aprovado_por || 'Gerente Responsável'}</small></div>
   </div>
   <script>window.onload = function(){ window.print(); }<\/script>
   </body></html>`;
@@ -411,15 +422,40 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
   const [salvando, setSalvando] = useState(false);
   const set = (k:string,v:string) => setForm(f=>({...f,[k]:v}));
 
+  // Determina se o colaborador selecionado é Terceiro
+  const funcSelecionado = funcionarios.find(f => f.id === form.funcionario_id);
+  const isTerceiro = funcSelecionado?.tipo_colaborador === 'Terceiro';
+
+  // Opções de tipo e labels conforme vínculo
+  const tipoSaida   = isTerceiro ? 'Comunicação de Saída Antecipada'   : 'Saída Antecipada';
+  const tipoEntrada = isTerceiro ? 'Comunicação de Entrada Antecipada' : 'Entrada Antecipada';
+  const tiposDisponiveis = [tipoSaida, tipoEntrada];
+
+  // Ao trocar colaborador, ajusta o tipo automaticamente
+  const onChangeFuncionario = (e: any) => {
+    const novoId = e.target.value;
+    const novoFunc = funcionarios.find(f => f.id === novoId);
+    const novoTerceiro = novoFunc?.tipo_colaborador === 'Terceiro';
+    const novoTipo = form.tipo.includes('Entrada')
+      ? (novoTerceiro ? 'Comunicação de Entrada Antecipada' : 'Entrada Antecipada')
+      : (novoTerceiro ? 'Comunicação de Saída Antecipada'  : 'Saída Antecipada');
+    setForm(f => ({ ...f, funcionario_id: novoId, tipo: novoTipo }));
+  };
+
+  const isSaida = form.tipo.includes('Saída');
+  const tituloModal = isTerceiro
+    ? '🖨️ Comunicação de Saída / Entrada'
+    : '🖨️ Autorização de Saída / Entrada';
+  const labelAprovado = isTerceiro ? 'Ciente por (Gerente)' : 'Aprovado por (Gerente)';
+
   const salvarEImprimir = async () => {
-    if (!form.funcionario_id) { alert('Selecione o funcionário!'); return; }
+    if (!form.funcionario_id) { alert('Selecione o colaborador!'); return; }
     if (!form.hora_saida) { alert('Informe o horário!'); return; }
     if (!form.motivo.trim()) { alert('Informe o motivo!'); return; }
     setSalvando(true);
     const { data: aut } = await supabase.from('rh_autorizacoes').insert([{ ...form }]).select().single();
     setSalvando(false);
-    const func = funcionarios.find(f=>f.id===form.funcionario_id);
-    imprimirAutorizacao(aut || form, func);
+    imprimirAutorizacao(aut || form, funcSelecionado);
     onSaved(); onClose();
   };
 
@@ -428,27 +464,33 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
       <div style={{ background:'#fff', borderRadius:8, width:'min(460px,95vw)', boxShadow:'0 8px 32px #0004' }}>
         <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between' }}>
-          <span>🖨️ Autorização de Saída / Entrada</span>
+          <span>{tituloModal}</span>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
+        {/* Badge indicador quando Terceiro */}
+        {isTerceiro && (
+          <div style={{ background:'#fef3c7', borderBottom:'1px solid #fde68a', padding:'5px 16px', fontSize:10, color:'#92400e', fontWeight:700 }}>
+            🤝 Terceiro — documento gerado como Comunicação (sem necessidade de assinatura de autorização)
+          </div>
+        )}
         <div style={{ padding:16, display:'flex', flexDirection:'column', gap:10 }}>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Funcionário *</label>
-            <select value={form.funcionario_id} onChange={e=>set('funcionario_id',e.target.value)}
+            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Colaborador *</label>
+            <select value={form.funcionario_id} onChange={onChangeFuncionario}
               style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}>
               <option value="">Selecione...</option>
-              {funcionarios.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+              {funcionarios.map(f=><option key={f.id} value={f.id}>{f.nome} {f.tipo_colaborador==='Terceiro'?'(Terceiro)':''}</option>)}
             </select>
           </div>
           <div>
             <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Tipo</label>
             <div style={{ display:'flex', gap:8 }}>
-              {['Saída Antecipada','Entrada Antecipada'].map(t=>(
+              {tiposDisponiveis.map(t=>(
                 <button key={t} onClick={()=>set('tipo',t)}
                   style={{ flex:1, padding:'6px', border:`1.5px solid ${form.tipo===t?'#2563eb':'#d1d5db'}`,
                     background: form.tipo===t?'#eff6ff':'#fff',
                     color: form.tipo===t?'#1d4ed8':'#374151',
-                    borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                    borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer' }}>
                   {t}
                 </button>
               ))}
@@ -462,14 +504,14 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
-                {form.tipo === 'Saída Antecipada' ? 'Horário de Saída *' : 'Horário de Entrada *'}
+                {isSaida ? 'Horário de Saída *' : 'Horário de Entrada *'}
               </label>
               <input type="time" value={form.hora_saida} onChange={e=>set('hora_saida',e.target.value)}
                 style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
             </div>
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
-                {form.tipo === 'Saída Antecipada' ? 'Horário de Retorno' : 'Horário de Saída Normal'}
+                {isSaida ? 'Horário de Retorno' : 'Horário de Saída Normal'}
               </label>
               <input type="time" value={form.hora_retorno} onChange={e=>set('hora_retorno',e.target.value)}
                 style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
@@ -481,7 +523,7 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
               style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Aprovado por (Gerente)</label>
+            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>{labelAprovado}</label>
             <input value={form.aprovado_por} onChange={e=>set('aprovado_por',e.target.value)}
               placeholder="Nome do gerente responsável"
               style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
@@ -835,8 +877,8 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
                   <tr key={a.id}>
                     <td style={{whiteSpace:'nowrap'}}>{fmtDate(a.data)}</td>
                     <td>{func?.nome||'—'}</td>
-                    <td><span style={{ background: a.tipo==='Saída Antecipada'?'#fef2f2':'#eff6ff',
-                      color: a.tipo==='Saída Antecipada'?'#dc2626':'#2563eb',
+                    <td><span style={{ background: (a.tipo||'').includes('Saída')?'#fef2f2':'#eff6ff',
+                      color: (a.tipo||'').includes('Saída')?'#dc2626':'#2563eb',
                       borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>{a.tipo}</span></td>
                     <td>{a.hora_saida||'—'}</td>
                     <td>{a.hora_retorno||'—'}</td>
