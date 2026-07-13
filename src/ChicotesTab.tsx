@@ -28,12 +28,12 @@ export default function ChicotesTab({ currentUser }) {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(()=>fetchData(true), 30000);
     return () => clearInterval(interval);
   }, [tab, filterStatus]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent=false) => {
+    if (!silent) setLoading(true);
     try {
       // Carregar OPs disponíveis
       const { data: opsData } = await supabase
@@ -60,7 +60,7 @@ export default function ChicotesTab({ currentUser }) {
     } catch (err) {
       console.error('Erro:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

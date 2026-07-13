@@ -109,7 +109,7 @@ function PrazoBadge({ label, value }: { label:string; value:string }) {
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
 function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
-  const [tab, setTab] = useState<'info'|'anexos'|'historico'>('info');
+  const [tab, setTab] = useState<'info'|'anexos'|'historico'|'andamento'>('info');
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [tipoAnexo, setTipoAnexo] = useState('documento');
@@ -118,6 +118,8 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
   const [fileInput, setFileInput] = useState<FileList|null>(null);
   const [obsEncerramento, setObsEncerramento] = useState('');
   const [confirmStatus, setConfirmStatus] = useState<string|null>(null);
+  const [novoAndamento, setNovoAndamento] = useState('');
+  const [salvandoAndamento, setSalvandoAndamento] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = true; // acesso já controlado pelo dashboard
@@ -132,6 +134,22 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
   }, [licit.id]);
 
   useEffect(() => { fetchAnexos(); }, [fetchAnexos]);
+
+  // ── Salvar andamento ────────────────────────────────────────────────────
+  const salvarAndamento = async () => {
+    if (!novoAndamento.trim()) return;
+    setSalvandoAndamento(true);
+    const { error } = await supabase.from('licitacao_anexos').insert([{
+      licitacao_id: licit.id,
+      tipo: 'andamento',
+      conteudo: novoAndamento.trim(),
+      criado_por_nome: currentUser?.nome || currentUser?.email || 'Usuário',
+      criado_em: new Date().toISOString(),
+    }]);
+    if (error) { alert('Erro ao salvar: ' + error.message); }
+    else { setNovoAndamento(''); await fetchAnexos(); }
+    setSalvandoAndamento(false);
+  };
 
   // ── Mudar status ────────────────────────────────────────────────────────
   const mudarStatus = async (novoStatus: string) => {
@@ -249,13 +267,21 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
 
         {/* Tabs de navegação */}
         <div style={{ display:'flex', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
-          {(['info','anexos','historico'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              style={{ flex:1, padding:'8px 4px', border:'none', borderBottom: tab===t?'2px solid #2563eb':'2px solid transparent',
-                background:'none', fontWeight:tab===t?700:400, color:tab===t?'#2563eb':'#6b7280', fontSize:11, cursor:'pointer' }}>
-              {t==='info'?'📋 Informações':t==='anexos'?`📁 Documentos (${anexos.length})`:'📜 Histórico'}
-            </button>
-          ))}
+          {(['info','andamento','anexos','historico'] as const).map(t => {
+            const andamentos = anexos.filter(a=>a.tipo==='andamento');
+            const label = t==='info'?'📋 Informações'
+              : t==='andamento'?`📝 Andamento${andamentos.length>0?' ('+andamentos.length+')':''}`
+              : t==='anexos'?`📁 Documentos (${anexos.filter(a=>a.tipo!=='andamento').length})`
+              : '📜 Histórico';
+            return (
+              <button key={t} onClick={() => setTab(t)}
+                style={{ flex:1, padding:'8px 4px', border:'none', borderBottom: tab===t?'2px solid #2563eb':'2px solid transparent',
+                  background: t==='andamento'&&tab!=='andamento'&&andamentos.length>0?'#f0fdf4':'none',
+                  fontWeight:tab===t?700:400, color:tab===t?'#2563eb':'#6b7280', fontSize:10, cursor:'pointer' }}>
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Conteúdo */}
@@ -346,6 +372,52 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
                 );
               })}
               {!anexos.length && <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhum documento ainda.</div>}
+            </div>
+          )}
+
+          {/* ── TAB ANDAMENTO ── */}
+          {tab === 'andamento' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {/* Nova observação */}
+              <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
+                <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
+                <textarea
+                  value={novoAndamento}
+                  onChange={e=>setNovoAndamento(e.target.value)}
+                  placeholder="Descreva o andamento da negociação..."
+                  rows={3}
+                  style={{ width:'100%', padding:'7px 10px', border:'1px solid #86efac', borderRadius:4, fontSize:11,
+                    resize:'vertical', boxSizing:'border-box', marginBottom:8, fontFamily:'inherit' }} />
+                <button onClick={salvarAndamento} disabled={salvandoAndamento||!novoAndamento.trim()}
+                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'6px 18px',
+                    fontWeight:700, fontSize:11, cursor:'pointer', opacity:novoAndamento.trim()?1:.5 }}>
+                  {salvandoAndamento ? 'Salvando...' : '+ Registrar'}
+                </button>
+              </div>
+              {/* Histórico de andamentos */}
+              {anexos.filter(a=>a.tipo==='andamento').length === 0 && (
+                <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização registrada ainda.</div>
+              )}
+              {anexos.filter(a=>a.tipo==='andamento').map((a,i) => (
+                <div key={a.id||i} style={{ display:'flex', gap:10, padding:'10px 12px',
+                  background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #2563eb' }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>
+                      {a.conteudo}
+                    </div>
+                    <div style={{ marginTop:5, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                      <span>👤 {a.criado_por_nome||'—'}</span>
+                      <span>🕒 {fmtDT(a.criado_em)}</span>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <button onClick={async()=>{
+                      await supabase.from('licitacao_anexos').delete().eq('id',a.id);
+                      fetchAnexos();
+                    }} style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px', alignSelf:'flex-start' }}>✕</button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

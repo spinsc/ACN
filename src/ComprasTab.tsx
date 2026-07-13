@@ -74,19 +74,19 @@ export default function ComprasTab({ currentUser }) {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(()=>load(true), 30000);
     return () => clearInterval(t);
   }, [filtro]);
 
   const [queryError, setQueryError] = useState<string|null>(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent=false) => {
+    if (!silent) setLoading(true);
     setQueryError(null);
     let q = supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', {ascending:false});
     if (filtro) q = q.eq('status_compra', filtro);
     const { data, error } = await q;
-    if (error) { setQueryError(error.message); setLoading(false); setPedidos([]); return; }
+    if (error) { setQueryError(error.message); if (!silent) setLoading(false); setPedidos([]); return; }
     setPedidos(data || []);
     const init: any = {};
     (data||[]).forEach((p:any) => {
@@ -97,7 +97,7 @@ export default function ComprasTab({ currentUser }) {
       };
     });
     setInline(init);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const setInlineField = (id: string, field: string, val: string) =>

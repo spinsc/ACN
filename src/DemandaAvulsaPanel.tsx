@@ -926,16 +926,16 @@ export default function DemandaAvulsaPanel({ currentUser }) {
   const [modalNova, setModalNova] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
+  const fetch = useCallback(async (silent=false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('demandas_avulsas')
       .select('*').eq('setor', 'Engenharia')
       .order('criado_em', { ascending: false });
     setDemandas(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
-  useEffect(() => { fetch(); const t = setInterval(fetch, 30000); return () => clearInterval(t); }, [fetch]);
+  useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
 
   const isVencida = (d: any) => {
     if (d.status === 'Concluída') return false;

@@ -90,6 +90,11 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
+  // ── andamento ──
+  const [modalAndamento, setModalAndamento] = useState<any|null>(null); // op selecionada
+  const [andamentoHistorico, setAndamentoHistorico] = useState<any[]>([]);
+  const [novoAndamento, setNovoAndamento]   = useState('');
+  const [salvandoAndamento, setSalvandoAndamento] = useState(false);
   const [motivoTexto, setMotivoTexto]       = useState('');
   const [formOp, setFormOp]                 = useState({ ...VAZIO_OP });
   const [formVenda, setFormVenda]           = useState({ ...VAZIO_VENDA });
@@ -100,8 +105,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
   // ─────────────────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent=false) => {
+    if (!silent) setLoading(true);
     const [r1, r2, r3, r4, r5] = await Promise.all([
       supabase.from('crm_estagios_funil').select('*').order('ordem'),
       supabase.from('crm_oportunidades').select('*').order('criado_em', { ascending: false }),
@@ -114,15 +119,15 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     setItens(r3.data || []);
     setProgresso(r4.data || []);
     setVendas(r5.data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
     const ch = supabase
       .channel('crm-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_oportunidades' }, ()=>load(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_vendas' }, ()=>load(true))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
@@ -219,6 +224,45 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       usuario_nome: currentUser?.nome || 'Sistema',
     });
     await load();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ANDAMENTO
+  // ─────────────────────────────────────────────────────────────────────────
+  const abrirAndamento = async (op: any) => {
+    setModalAndamento(op);
+    setNovoAndamento('');
+    const { data } = await supabase
+      .from('crm_historico')
+      .select('*')
+      .eq('oportunidade_id', op.id)
+      .eq('tipo', 'observacao')
+      .order('criado_em', { ascending: false });
+    setAndamentoHistorico(data || []);
+  };
+
+  const salvarAndamentoCrm = async () => {
+    if (!novoAndamento.trim() || !modalAndamento) return;
+    setSalvandoAndamento(true);
+    const { error } = await supabase.from('crm_historico').insert({
+      oportunidade_id: modalAndamento.id,
+      tipo: 'observacao',
+      texto: novoAndamento.trim(),
+      usuario_nome: currentUser?.nome || currentUser?.email || 'Usuário',
+      criado_em: new Date().toISOString(),
+    });
+    if (error) { alert('Erro ao salvar: ' + error.message); }
+    else {
+      setNovoAndamento('');
+      const { data } = await supabase
+        .from('crm_historico')
+        .select('*')
+        .eq('oportunidade_id', modalAndamento.id)
+        .eq('tipo', 'observacao')
+        .order('criado_em', { ascending: false });
+      setAndamentoHistorico(data || []);
+    }
+    setSalvandoAndamento(false);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -597,6 +641,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           {currentUser?.perfil === 'Admin' && (
             <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirOp(op)}>✕</button>
           )}
+          <button className="acn-btn" style={{ background:'#7c3aed' }} onClick={e => { e.stopPropagation(); abrirAndamento(op); }}>
+            📝 Andamento
+          </button>
           <CrmAnexosWidget op={op} currentUser={currentUser} />
         </div>
       </div>
@@ -1009,6 +1056,56 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end', marginTop:10 }}>
               <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalDesist(null)}>Cancelar</button>
               <button className="acn-btn" style={{ background:'#92400e', fontSize:10, padding:'4px 12px' }} onClick={confirmarDesistencia}>Confirmar Desistência</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL ANDAMENTO ══════ */}
+      {modalAndamento && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={()=>setModalAndamento(null)}>
+          <div style={{ background:'white', borderRadius:8, width:'min(480px,96vw)', maxHeight:'85vh', display:'flex', flexDirection:'column',
+            padding:'16px 18px', boxShadow:'0 8px 32px #0004' }} onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:12, color:'#7c3aed' }}>📝 Andamento da Negociação</div>
+                <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>{modalAndamento.titulo}</div>
+              </div>
+              <button onClick={()=>setModalAndamento(null)} style={{ background:'none', border:'none', fontSize:16, color:'#94a3b8', cursor:'pointer' }}>✕</button>
+            </div>
+            {/* Nova observação */}
+            <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:10, marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#6d28d9', marginBottom:5 }}>✏️ Nova atualização</div>
+              <textarea
+                value={novoAndamento}
+                onChange={e=>setNovoAndamento(e.target.value)}
+                placeholder="Descreva o andamento da negociação..."
+                rows={3}
+                style={{ width:'100%', padding:'6px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11,
+                  resize:'vertical', boxSizing:'border-box', marginBottom:6, fontFamily:'inherit' }} />
+              <button onClick={salvarAndamentoCrm} disabled={salvandoAndamento||!novoAndamento.trim()}
+                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
+                  fontWeight:700, fontSize:10, cursor:'pointer', opacity:novoAndamento.trim()?1:.5 }}>
+                {salvandoAndamento ? 'Salvando...' : '+ Registrar'}
+              </button>
+            </div>
+            {/* Histórico */}
+            <div style={{ overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:6 }}>
+              {andamentoHistorico.length === 0 && (
+                <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>Nenhuma atualização registrada ainda.</div>
+              )}
+              {andamentoHistorico.map((h,i)=>(
+                <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0',
+                  borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
+                  <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>{h.texto}</div>
+                  <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                    <span>👤 {h.usuario_nome||'—'}</span>
+                    <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

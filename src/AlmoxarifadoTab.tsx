@@ -14,15 +14,15 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [modalVer, setModalVer] = useState(null);
   const [obsFalta, setObsFalta] = useState('');
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll,30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (silent=false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('oples').select('*')
       .in('status_geral', ['Aguardando Almox'])
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const setAlmox = async (opl, statusAlmox, statusGeral, obs='') => {

@@ -323,12 +323,17 @@ function ModalLancamento({ funcionarios, onClose, onSaved, lancEdit }) {
       criado_por: 'sistema',
     };
     setSalvando(true);
+    let erro = null;
     if (lancEdit) {
-      await supabase.from('rh_lancamentos').update(payload).eq('id', lancEdit.id);
+      const { error } = await supabase.from('rh_lancamentos').update(payload).eq('id', lancEdit.id);
+      erro = error;
     } else {
-      await supabase.from('rh_lancamentos').insert([payload]);
+      const { error } = await supabase.from('rh_lancamentos').insert([payload]);
+      erro = error;
     }
-    setSalvando(false); onSaved(); onClose();
+    setSalvando(false);
+    if (erro) { alert('Erro ao salvar lançamento: ' + erro.message); return; }
+    onSaved(); onClose();
   };
 
   const tipoSelecionado = TIPO_MAP[form.tipo];
@@ -643,9 +648,10 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
   const [mes, setMes] = useState(hoje.getMonth()+1);
   const [ano, setAno] = useState(hoje.getFullYear());
   const [fechando, setFechando] = useState<string|null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   // Calcula saldo para cada funcionário no mês/ano selecionado
-  const lancsMes = lancamentos.filter(l => l.mes === mes && l.ano === ano);
+  const lancsMes = lancamentos.filter(l => Number(l.mes) === mes && Number(l.ano) === ano);
 
   const calcSaldo = (funcId: string) => {
     const lancs = lancsMes.filter(l => l.funcionario_id === funcId);
@@ -665,9 +671,9 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr">
+      <div className="sec-hdr" style={{ cursor:'pointer' }} onClick={()=>setCollapsed(c=>!c)}>
         <span>⏱️ Banco de Horas</span>
-        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }} onClick={e=>e.stopPropagation()}>
           <select value={mes} onChange={e=>setMes(Number(e.target.value))}
             style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
             {Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{mesNome(i+1)}</option>)}
@@ -676,9 +682,13 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
             style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
             {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
           </select>
+          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
+            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+            {collapsed?'▸':'▾'}
+          </button>
         </div>
       </div>
-      <div className="sec-body" style={{ overflowX:'auto' }}>
+      {!collapsed && <div className="sec-body" style={{ overflowX:'auto' }}>
         <table>
           <thead><tr>
             <th>Funcionário</th><th>Cargo</th>
@@ -713,7 +723,7 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -727,11 +737,12 @@ function KpiRH({ funcionarios, lancamentos }) {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroMes, setFiltroMes] = useState(hoje.getMonth()+1);
   const [filtroAno, setFiltroAno] = useState(hoje.getFullYear());
+  const [collapsed, setCollapsed] = useState(false);
 
   const filtered = lancamentos.filter(l =>
     (!filtroFunc || l.funcionario_id === filtroFunc) &&
     (!filtroTipo || l.tipo === filtroTipo) &&
-    (l.mes === filtroMes && l.ano === filtroAno)
+    (Number(l.mes) === filtroMes && Number(l.ano) === filtroAno)
   );
 
   // Absenteísmo = faltas + declarações (como % dos dias úteis estimados ~22 dias)
@@ -740,9 +751,9 @@ function KpiRH({ funcionarios, lancamentos }) {
 
   // Agrupado por funcionário para gráfico
   const porFunc = funcionarios.filter(f=>f.ativo).map(f=>{
-    const ls = lancamentos.filter(l=>l.funcionario_id===f.id && l.mes===filtroMes && l.ano===filtroAno);
+    const ls = lancamentos.filter(l=>l.funcionario_id===f.id && Number(l.mes)===filtroMes && Number(l.ano)===filtroAno);
     return {
-      nome: f.nome.split(' ')[0], // primeiro nome
+      nome: f.nome, // nome completo conforme cadastro
       faltas: ls.filter(l=>l.tipo==='Falta').reduce((a,l)=>a+l.minutos,0),
       atestados: ls.filter(l=>l.tipo==='Atestado').reduce((a,l)=>a+l.minutos,0),
       atrasos: ls.filter(l=>l.tipo==='Atraso').reduce((a,l)=>a+l.minutos,0),
@@ -758,9 +769,9 @@ function KpiRH({ funcionarios, lancamentos }) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr">
+      <div className="sec-hdr" style={{ cursor:'pointer' }} onClick={()=>setCollapsed(c=>!c)}>
         <span>📊 KPI — Absenteísmo & Horas</span>
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
           <select value={filtroFunc} onChange={e=>setFiltroFunc(e.target.value)}
             style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:9 }}>
             <option value="">Todos os funcionários</option>
@@ -779,11 +790,15 @@ function KpiRH({ funcionarios, lancamentos }) {
             style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:9 }}>
             {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
           </select>
+          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
+            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+            {collapsed?'▸':'▾'}
+          </button>
         </div>
       </div>
 
       {/* Gráfico de barras simples em SVG */}
-      {porFunc.length > 0 && (
+      {!collapsed && porFunc.length > 0 && (
         <div style={{ padding:'12px 16px', borderBottom:'1px solid #f1f5f9' }}>
           <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:8 }}>
             Gráfico — {mesNome(filtroMes)}/{filtroAno}
@@ -823,7 +838,7 @@ function KpiRH({ funcionarios, lancamentos }) {
       )}
 
       {/* Tabela de lançamentos filtrados */}
-      <div className="sec-body" style={{ overflowX:'auto' }}>
+      {!collapsed && <div className="sec-body" style={{ overflowX:'auto' }}>
         {filtered.length === 0 ? (
           <div className="acn-empty">Nenhum lançamento encontrado.</div>
         ) : (
@@ -856,7 +871,7 @@ function KpiRH({ funcionarios, lancamentos }) {
             </tbody>
           </table>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -865,10 +880,18 @@ function KpiRH({ funcionarios, lancamentos }) {
 // SEÇÃO — AUTORIZAÇÕES REGISTRADAS
 // ─────────────────────────────────────────────────────────────────────────────
 function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
+  const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="sec-card">
-      <div className="sec-hdr">🖨️ Autorizações de Saída / Entrada ({autorizacoes.length})</div>
-      <div className="sec-body" style={{ overflowX:'auto' }}>
+      <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+        onClick={()=>setCollapsed(c=>!c)}>
+        <span>🖨️ Autorizações de Saída / Entrada ({autorizacoes.length})</span>
+        <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
+          style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+          {collapsed?'▸':'▾'}
+        </button>
+      </div>
+      {!collapsed && <div className="sec-body" style={{ overflowX:'auto' }}>
         {autorizacoes.length === 0 ? (
           <div className="acn-empty">Nenhuma autorização registrada.</div>
         ) : (
@@ -902,7 +925,7 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
             </tbody>
           </table>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -1030,12 +1053,13 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
   const [funcId, setFuncId]     = useState('');
   const [dtInicio, setDtInicio] = useState('');
   const [dtFim, setDtFim]       = useState('');
+  const [collapsed, setCollapsed] = useState(false);
 
   const meses = Array.from({length:12},(_,i)=>i+1);
   const anos  = [2024,2025,2026,2027];
 
   // ── Filtros por aba ──────────────────────────────────────────────────────
-  const lancsMenoAno = lancamentos.filter(l => l.mes===mes && l.ano===ano);
+  const lancsMenoAno = lancamentos.filter(l => Number(l.mes)===mes && Number(l.ano)===ano);
 
   const lancsPeriodo = (inicio: string, fim: string) => {
     if (!inicio || !fim) return lancamentos;
@@ -1047,7 +1071,7 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
     if (!funcId) return [];
     const f = funcionarios.find(f=>f.id===funcId);
     if (!f) return [];
-    const ls = lancsMenoAno.filter(l=>l.funcionario_id===funcId);
+    const ls = lancsMenoAno.filter(l=>l.funcionario_id===funcId || l.funcionario_id==funcId);
     return calcLinhas([f], ls);
   })();
 
@@ -1142,10 +1166,15 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr">
+      <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+        onClick={()=>setCollapsed(c=>!c)}>
         <span>📄 Relatórios de Horas</span>
+        <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
+          style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+          {collapsed?'▸':'▾'}
+        </button>
       </div>
-      <div className="sec-body">
+      {!collapsed && <div className="sec-body">
         {/* Abas */}
         <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
           {btnAba('individual','👤 Individual')}
@@ -1226,7 +1255,7 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
             <TabelaPreview linhas={linhasConsolidado} />
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -1239,6 +1268,7 @@ function RelatorioTecnicos({ funcionarios }) {
   const [loading, setLoading] = useState(true);
   const [filtroNome, setFiltroNome] = useState('');
   const [expandido, setExpandido] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -1320,9 +1350,10 @@ function RelatorioTecnicos({ funcionarios }) {
 
   return (
     <div style={{ marginTop:20, border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-      <div className="sec-hdr" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
+      <div className="sec-hdr" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6, cursor:'pointer' }}
+        onClick={()=>setCollapsed(c=>!c)}>
         <span>📊 Relatório de Técnicos</span>
-        <div style={{ display:'flex', gap:6 }}>
+        <div style={{ display:'flex', gap:6 }} onClick={e=>e.stopPropagation()}>
           <input value={filtroNome} onChange={e=>setFiltroNome(e.target.value)}
             placeholder="Filtrar por nome..."
             style={{ padding:'3px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, width:150 }} />
@@ -1330,9 +1361,13 @@ function RelatorioTecnicos({ funcionarios }) {
             style={{ background:'#1e293b', color:'#fff', border:'none', borderRadius:4, padding:'3px 12px', fontSize:10, cursor:'pointer' }}>
             🖨️ Imprimir
           </button>
+          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
+            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+            {collapsed?'▸':'▾'}
+          </button>
         </div>
       </div>
-      {loading ? (
+      {!collapsed && (loading ? (
         <div className="acn-empty">Carregando...</div>
       ) : filtrado.length === 0 ? (
         <div className="acn-empty">Nenhum técnico designado encontrado.</div>
@@ -1438,7 +1473,7 @@ function RelatorioTecnicos({ funcionarios }) {
             </div>
           ))}
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -1455,6 +1490,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
   const [loading, setLoading] = useState(false);
   const [aprovando, setAprovando] = useState<string|null>(null);
   const [abaComissao, setAbaComissao] = useState<'calculo'|'relatorio'>('calculo');
+  const [collapsed, setCollapsed] = useState(false);
 
   const meses = [1,2,3,4,5,6,7,8,9,10,11,12];
   const anos = [hoje.getFullYear()-1, hoje.getFullYear(), hoje.getFullYear()+1];
@@ -1573,17 +1609,22 @@ function ComissoesRH({ funcionarios, currentUser }) {
 
   return (
     <div style={{marginTop:20,border:'1px solid #e2e8f0',borderRadius:8,overflow:'hidden'}}>
-      <div className="sec-hdr" style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
+      <div className="sec-hdr" style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6,cursor:'pointer'}}
+        onClick={()=>setCollapsed(c=>!c)}>
         <span>💰 Comissões de Técnicos</span>
-        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
           <button className={`acn-btn acn-tab-btn${abaComissao==='calculo'?' ativo':''}`}
             style={{fontSize:10,padding:'4px 12px'}} onClick={()=>setAbaComissao('calculo')}>Cálculo</button>
           <button className={`acn-btn acn-tab-btn${abaComissao==='relatorio'?' ativo':''}`}
             style={{fontSize:10,padding:'4px 12px'}} onClick={()=>setAbaComissao('relatorio')}>Histórico</button>
+          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
+            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+            {collapsed?'▸':'▾'}
+          </button>
         </div>
       </div>
 
-      {abaComissao === 'calculo' && (
+      {!collapsed && abaComissao === 'calculo' && (
         <div style={{padding:'10px 12px'}}>
           <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
             <select value={mes} onChange={e=>setMes(Number(e.target.value))}
@@ -1672,12 +1713,13 @@ function ComissoesRH({ funcionarios, currentUser }) {
         </div>
       )}
 
-      {abaComissao === 'relatorio' && <HistoricoComissoes funcionarios={funcionarios} />}
+      {!collapsed && abaComissao === 'relatorio' && <HistoricoComissoes funcionarios={funcionarios} />}
     </div>
   );
 }
 
 function HistoricoComissoes({ funcionarios }) {
+  const [collapsed, setCollapsed] = useState(false);
   const hoje = new Date();
   const [mes, setMes] = useState(hoje.getMonth()+1);
   const [ano, setAno] = useState(hoje.getFullYear());
@@ -1770,8 +1812,8 @@ export default function RHTab({ currentUser }) {
   const isAdmin = true; // acesso já controlado pelo dashboard (abas_permitidas)
   const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
+  const fetch = useCallback(async (silent=false) => {
+    if (!silent) setLoading(true);
     const [fRes, lRes, aRes] = await Promise.all([
       supabase.from('rh_funcionarios').select('*').eq('ativo', true).order('nome'),
       supabase.from('rh_lancamentos').select('*').order('data', { ascending: false }),
@@ -1780,10 +1822,10 @@ export default function RHTab({ currentUser }) {
     setFuncionarios(fRes.data || []);
     setLancamentos(lRes.data || []);
     setAutorizacoes(aRes.data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
-  useEffect(() => { fetch(); const t = setInterval(fetch, 60000); return () => clearInterval(t); }, [fetch]);
+  useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 60000); return () => clearInterval(t); }, [fetch]);
 
   const resumo = {
     ativos:    funcionarios.filter(f=>f.status_presenca==='Ativo').length,
