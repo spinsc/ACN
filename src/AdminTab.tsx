@@ -4,14 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 
 
-const PERFIS = ['Admin','Gerente','Gerente Comercial','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Laboratorio','Analista de Licitações','Analista Técnico','RH','Visualizador'];
+const PERFIS = [
+  'Admin','Gerente','Gerente Comercial','Comercial',
+  'Engenharia','PCP','Produção','Chicote','Serralheria',
+  'Laboratório','Compras','Almoxarifado','CQ',
+  'Logística','Vistorias','Fiscal','SAC','CRM',
+  'Licitações','RH','Marketing','Visualizador',
+];
 
 // ---- USUARIOS ----
 const TODAS_ABAS = [
   { id:'dashboard',    label:'Dashboard' },
   { id:'comercial',    label:'1. Comercial' },
   { id:'engenharia',   label:'2. Engenharia' },
-  { id:'ajustes',      label:'2b. Ajustes de Projeto' },
+  { id:'ajustes',      label:'2b. Demandas Avulsas' },
   { id:'pcp',          label:'3. PCP' },
   { id:'serralheria',  label:'4b. Serralheria' },
   { id:'chicotes',     label:'4c. Chicotes' },
@@ -31,6 +37,36 @@ const TODAS_ABAS = [
   { id:'relatorios',   label:'Relatorios' },
   { id:'admin',        label:'Admin' },
 ];
+
+// ---- PERMISSÕES PADRÃO POR PERFIL ----
+const PERFIS_PADRAO_ABAS: Record<string, string[]> = {
+  'Admin':             ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','crm','licitacoes','rh','relatorios','admin'],
+  'Gerente':           ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','crm','licitacoes','rh','relatorios','admin'],
+  'Gerente Comercial': ['dashboard','comercial','crm','licitacoes','relatorios','rh'],
+  'Comercial':         ['dashboard','comercial'],
+  'Engenharia':        ['dashboard','engenharia','ajustes','compras','almoxarifado'],
+  'PCP':               ['dashboard','pcp','comercial','engenharia'],
+  'Produção':          ['dashboard','producao','pcp'],
+  'Chicote':           ['dashboard','chicotes','compras'],
+  'Serralheria':       ['dashboard','serralheria','compras'],
+  'Laboratório':       ['dashboard','laboratorio'],
+  'Compras':           ['dashboard','compras','almoxarifado'],
+  'Almoxarifado':      ['dashboard','almoxarifado','compras'],
+  'CQ':                ['dashboard','qualidade'],
+  'Logística':         ['dashboard','logistica','vistorias'],
+  'Vistorias':         ['dashboard','vistorias'],
+  'Fiscal':            ['dashboard','fiscal','comercial'],
+  'SAC':               ['dashboard','sac','comercial'],
+  'CRM':               ['dashboard','crm','comercial'],
+  'Licitações':        ['dashboard','licitacoes','crm'],
+  'RH':                ['dashboard','rh'],
+  'Marketing':         ['dashboard','marketing','sac'],
+  'Visualizador':      ['dashboard'],
+};
+
+const PERFIS_PADRAO_RH: Record<string, boolean> = {
+  'Admin': true, 'Gerente': true, 'Gerente Comercial': true, 'RH': true,
+};
 
 function ModalPermissoes({ usuario, onClose, onSalvo }) {
   const [selecionadas, setSelecionadas] = useState(
@@ -96,20 +132,39 @@ function ModalPermissoes({ usuario, onClose, onSalvo }) {
 
 function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Operador', whatsapp:'', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false });
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
   const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [] });
+  const [perfisDB, setPerfisDB] = useState([]);
 
-  useEffect(() => { fetchUsuarios(); }, []);
+  useEffect(() => { fetchUsuarios(); fetchPerfisDB(); }, []);
 
   const fetchUsuarios = async () => {
     setLoading(true);
     const { data } = await supabase.from('auth_usuarios').select('*').order('nome');
     setUsuarios(data || []);
     setLoading(false);
+  };
+
+  const fetchPerfisDB = async () => {
+    try {
+      const { data } = await supabase.from('admin_perfis_sistema').select('nome, abas_permitidas, pode_autorizar_rh');
+      setPerfisDB(data || []);
+    } catch {}
+  };
+
+  const aplicarPerfil = (nomePerfil: string, target: 'form' | 'editForm') => {
+    const pDB = perfisDB.find((p: any) => p.nome === nomePerfil);
+    const abas: string[] = pDB ? (pDB.abas_permitidas || ['dashboard']) : (PERFIS_PADRAO_ABAS[nomePerfil] || ['dashboard']);
+    const autoRH: boolean = pDB ? (pDB.pode_autorizar_rh || false) : (PERFIS_PADRAO_RH[nomePerfil] || false);
+    if (target === 'form') {
+      setForm(f => ({ ...f, abas_permitidas: abas, pode_autorizar_rh: autoRH }));
+    } else {
+      setEditForm(f => ({ ...f, abas_permitidas: abas, pode_autorizar_rh: autoRH }));
+    }
   };
 
   const abrirEditar = (u) => {
@@ -161,7 +216,7 @@ function PainelUsuarios() {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
     const { error } = await supabase.from('auth_usuarios').insert([{ ...form, ativo: true }]);
     if (error) { alert('Erro: ' + error.message); return; }
-    setForm({ nome:'', email:'', senha:'', perfil:'Operador', whatsapp:'', abas_permitidas: TODAS_ABAS.map(a=>a.id) });
+    setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false });
     setShowForm(false); fetchUsuarios();
   };
 
@@ -217,6 +272,11 @@ function PainelUsuarios() {
                   onChange={e=>setEditForm(f=>({...f,perfil:e.target.value}))}>
                   {PERFIS.map(p=><option key={p}>{p}</option>)}
                 </select>
+                <button className="acn-btn" style={{width:'100%',marginTop:4,background:'#0369a1',fontSize:9,padding:'3px 0'}}
+                  onClick={()=>aplicarPerfil(editForm.perfil,'editForm')}
+                  title="Preenche as abas e permissões conforme o perfil selecionado">
+                  ⚡ Aplicar permissões do perfil
+                </button>
               </div>
               <div style={{gridColumn:'1/-1'}}>
                 <label className="acn-label">Nova Senha (deixe em branco para manter)</label>
@@ -322,6 +382,11 @@ function PainelUsuarios() {
                   onChange={e=>setForm({...form,perfil:e.target.value})}>
                   {PERFIS.map(p=><option key={p}>{p}</option>)}
                 </select>
+                <button className="acn-btn" style={{width:'100%',marginTop:4,background:'#0369a1',fontSize:9,padding:'3px 0'}}
+                  onClick={()=>aplicarPerfil(form.perfil,'form')}
+                  title="Preenche as abas conforme o perfil">
+                  ⚡ Aplicar permissões do perfil
+                </button>
               </div>
               <div className="form-group"><label className="acn-label">WhatsApp (55DDD+número)</label>
                 <input className="acn-input" style={{width:'100%'}} value={form.whatsapp}
@@ -331,7 +396,15 @@ function PainelUsuarios() {
             </div>
             {/* Seleção de abas */}
             <div style={{marginTop:8}}>
-              <label className="acn-label" style={{marginBottom:6}}>Abas com Acesso</label>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                <label className="acn-label" style={{margin:0}}>Abas com Acesso</label>
+                <div style={{display:'flex',gap:4}}>
+                  <button className="acn-btn" style={{background:'#1e293b',fontSize:9,padding:'2px 8px'}}
+                    onClick={()=>setForm(f=>({...f,abas_permitidas:TODAS_ABAS.map(a=>a.id)}))}>Marcar Todas</button>
+                  <button className="acn-btn" style={{background:'#94a3b8',fontSize:9,padding:'2px 8px'}}
+                    onClick={()=>setForm(f=>({...f,abas_permitidas:['dashboard']}))}>Limpar</button>
+                </div>
+              </div>
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:4}}>
                 {TODAS_ABAS.map(aba => (
                   <label key={aba.id} style={{
@@ -348,6 +421,17 @@ function PainelUsuarios() {
                   </label>
                 ))}
               </div>
+            </div>
+            {/* Permissões extras no formulário de criação */}
+            <div style={{marginTop:8,padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:6,background:'#fafafa'}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:5}}>Permissões Extras</div>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                <input type="checkbox"
+                  checked={form.pode_autorizar_rh}
+                  onChange={e=>setForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
+                  style={{accentColor:'#7c3aed'}} />
+                <span>🖨️ Pode emitir Autorizações de Saída/Entrada (RH)</span>
+              </label>
             </div>
             <button className="acn-btn" style={{background:'#22c55e',width:'100%',padding:'7px',marginTop:10}} onClick={salvar}>
               Criar Usuario
@@ -416,6 +500,234 @@ function PainelUsuarios() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- PAINEL DE PERFIS ----
+function PainelPerfis() {
+  const [perfis, setPerfis] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [modal, setModal] = useState(null); // {mode:'novo'|'editar', id?, nome?}
+  const [form, setForm] = useState({ nome:'', descricao:'', abas_permitidas:['dashboard'], pode_autorizar_rh:false });
+  const [salvando, setSalvando] = useState(false);
+  const [importando, setImportando] = useState(false);
+
+  useEffect(() => { fetchPerfis(); }, []);
+
+  const fetchPerfis = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('admin_perfis_sistema').select('*').order('nome');
+      if (!error) setPerfis(data || []);
+    } catch {}
+    setLoading(false);
+  };
+
+  const abrirNovo = () => {
+    setForm({ nome:'', descricao:'', abas_permitidas:['dashboard'], pode_autorizar_rh:false });
+    setModal({ mode:'novo' });
+  };
+
+  const abrirEditar = (p) => {
+    setForm({ nome:p.nome, descricao:p.descricao||'', abas_permitidas:Array.isArray(p.abas_permitidas)?p.abas_permitidas:['dashboard'], pode_autorizar_rh:p.pode_autorizar_rh||false });
+    setModal({ mode:'editar', id:p.id, nome:p.nome });
+  };
+
+  const toggleAba = (id) => setForm(f => ({
+    ...f,
+    abas_permitidas: f.abas_permitidas.includes(id)
+      ? (id==='dashboard' ? f.abas_permitidas : f.abas_permitidas.filter(a=>a!==id))
+      : [...f.abas_permitidas, id]
+  }));
+
+  const salvar = async () => {
+    if (!form.nome.trim()) { alert('Informe um nome para o perfil.'); return; }
+    setSalvando(true);
+    try {
+      if (modal.mode === 'novo') {
+        const { error } = await supabase.from('admin_perfis_sistema').insert([{
+          nome: form.nome.trim(), descricao: form.descricao,
+          abas_permitidas: form.abas_permitidas, pode_autorizar_rh: form.pode_autorizar_rh,
+        }]);
+        if (error) { alert('Erro: ' + error.message); return; }
+      } else {
+        const { error } = await supabase.from('admin_perfis_sistema').update({
+          nome: form.nome.trim(), descricao: form.descricao,
+          abas_permitidas: form.abas_permitidas, pode_autorizar_rh: form.pode_autorizar_rh,
+        }).eq('id', modal.id);
+        if (error) { alert('Erro: ' + error.message); return; }
+      }
+      setModal(null); fetchPerfis();
+    } finally { setSalvando(false); }
+  };
+
+  const excluir = async (p) => {
+    if (!window.confirm(`Excluir perfil "${p.nome}"?`)) return;
+    await supabase.from('admin_perfis_sistema').delete().eq('id', p.id);
+    fetchPerfis();
+  };
+
+  const importarPadroes = async () => {
+    if (!window.confirm('Isso vai criar todos os perfis padrão que ainda não existem. Continuar?')) return;
+    setImportando(true);
+    const padroes = Object.entries(PERFIS_PADRAO_ABAS).map(([nome, abas]) => ({
+      nome, abas_permitidas: abas,
+      pode_autorizar_rh: PERFIS_PADRAO_RH[nome] || false, descricao: '',
+    }));
+    const existentes = perfis.map((p:any) => p.nome);
+    const novos = padroes.filter(p => !existentes.includes(p.nome));
+    if (novos.length === 0) { alert('Todos os perfis padrão já existem.'); setImportando(false); return; }
+    const { error } = await supabase.from('admin_perfis_sistema').insert(novos);
+    if (error) alert('Erro: ' + error.message);
+    fetchPerfis(); setImportando(false);
+  };
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>Perfis de Acesso ({perfis.length})</span>
+          <div style={{display:'flex',gap:6}}>
+            <button className="acn-btn" style={{background:'#0369a1',fontSize:10}}
+              onClick={importarPadroes} disabled={importando}>
+              {importando ? 'Importando...' : '⚡ Importar Perfis Padrão'}
+            </button>
+            <button className="acn-btn" style={{background:'#166534'}} onClick={abrirNovo}>
+              + Novo Perfil
+            </button>
+          </div>
+        </div>
+        <div style={{padding:'7px 12px',fontSize:10,color:'#64748b',background:'#f0fdf4',borderBottom:'1px solid #e2e8f0'}}>
+          Configure as permissões padrão de cada perfil. Ao clicar em <strong>⚡ Aplicar permissões do perfil</strong> na tela de usuário, as abas serão preenchidas automaticamente.
+        </div>
+        {loading ? <div className="acn-empty">Carregando...</div>
+        : perfis.length === 0 ? (
+          <div className="acn-empty" style={{padding:24,textAlign:'center'}}>
+            Nenhum perfil cadastrado.<br/>
+            <button className="acn-btn" style={{background:'#0369a1',marginTop:12}} onClick={importarPadroes}>
+              ⚡ Importar Perfis Padrão
+            </button>
+          </div>
+        ) : (
+          <div style={{overflowX:'auto'}}>
+            <table>
+              <thead><tr>
+                <th>Perfil</th>
+                <th>Descrição</th>
+                <th style={{textAlign:'center'}}>Abas Liberadas</th>
+                <th style={{textAlign:'center'}}>Autoriza RH</th>
+                <th>Ações</th>
+              </tr></thead>
+              <tbody>
+                {perfis.map((p:any) => (
+                  <tr key={p.id}>
+                    <td><strong>{p.nome}</strong></td>
+                    <td style={{fontSize:10,color:'#64748b'}}>{p.descricao||'—'}</td>
+                    <td style={{textAlign:'center'}}>
+                      <span style={{fontSize:10,fontWeight:700,
+                        color: (p.abas_permitidas||[]).length===TODAS_ABAS.length ? '#22c55e' : '#3b82f6'}}>
+                        {(p.abas_permitidas||[]).length===TODAS_ABAS.length
+                          ? `Todas (${TODAS_ABAS.length})`
+                          : `${(p.abas_permitidas||[]).length} abas`}
+                      </span>
+                    </td>
+                    <td style={{textAlign:'center'}}>
+                      {p.pode_autorizar_rh
+                        ? <span style={{color:'#7c3aed',fontWeight:700,fontSize:13}}>✓</span>
+                        : <span style={{color:'#e2e8f0'}}>—</span>}
+                    </td>
+                    <td>
+                      <div style={{display:'flex',gap:4}}>
+                        <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+                          onClick={()=>abrirEditar(p)}>✏️ Editar</button>
+                        <button className="acn-btn" style={{background:'#ef4444',fontSize:9}}
+                          onClick={()=>excluir(p)}>🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL CRIAR/EDITAR PERFIL */}
+      {modal && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:560,maxHeight:'92vh',overflowY:'auto'}}>
+            <div className="modal-title">
+              {modal.mode==='novo' ? '+ Novo Perfil de Acesso' : `✏️ Editar Perfil — ${modal.nome}`}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="acn-label">Nome do Perfil *</label>
+                <input className="acn-input" style={{width:'100%'}}
+                  value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} />
+              </div>
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="acn-label">Descrição (opcional)</label>
+                <input className="acn-input" style={{width:'100%'}}
+                  placeholder="Ex: Acesso ao módulo de Engenharia e Demandas Avulsas"
+                  value={form.descricao} onChange={e=>setForm(f=>({...f,descricao:e.target.value}))} />
+              </div>
+            </div>
+
+            {/* Seleção de abas */}
+            <div style={{marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <label className="acn-label" style={{margin:0}}>Abas com Acesso</label>
+                <div style={{display:'flex',gap:4}}>
+                  <button className="acn-btn" style={{background:'#1e293b',fontSize:9,padding:'2px 8px'}}
+                    onClick={()=>setForm(f=>({...f,abas_permitidas:TODAS_ABAS.map(a=>a.id)}))}>Todas</button>
+                  <button className="acn-btn" style={{background:'#94a3b8',fontSize:9,padding:'2px 8px'}}
+                    onClick={()=>setForm(f=>({...f,abas_permitidas:['dashboard']}))}>Limpar</button>
+                </div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(155px,1fr))',gap:4}}>
+                {TODAS_ABAS.map(aba => {
+                  const sel = form.abas_permitidas.includes(aba.id);
+                  return (
+                    <label key={aba.id} style={{
+                      display:'flex',alignItems:'center',gap:5,padding:'4px 7px',
+                      border:'1px solid',borderRadius:3,fontSize:10,
+                      cursor:aba.id==='dashboard'?'default':'pointer',
+                      borderColor: sel?'#166534':'#e5e7eb',
+                      background: sel?'#f0fdf4':'transparent',
+                      fontWeight: sel?700:400,
+                    }}>
+                      <input type="checkbox" checked={sel}
+                        onChange={()=>toggleAba(aba.id)}
+                        style={{accentColor:'#166534'}} disabled={aba.id==='dashboard'} />
+                      {aba.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Permissões extras */}
+            <div style={{padding:'8px 10px',border:'1px solid #ede9fe',borderRadius:6,background:'#faf5ff',marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',textTransform:'uppercase',marginBottom:6}}>Permissões Extras</div>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer'}}>
+                <input type="checkbox"
+                  checked={form.pode_autorizar_rh}
+                  onChange={e=>setForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
+                  style={{accentColor:'#7c3aed'}} />
+                <span>🖨️ Pode emitir Autorizações de Saída/Entrada (RH)</span>
+              </label>
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'7px'}} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'SALVAR PERFIL'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModal(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1317,6 +1629,7 @@ function PainelLixeira() {
 // ---- ADMINTAB PRINCIPAL ----
 const ABAS_ADMIN = [
   { id:'usuarios',       label:'Usuários' },
+  { id:'perfis',         label:'🔐 Perfis de Acesso' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
@@ -1345,6 +1658,7 @@ export default function AdminTab() {
       </div>
 
       {abaAtiva === 'usuarios'     && <PainelUsuarios />}
+      {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}
