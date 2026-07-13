@@ -132,6 +132,8 @@ const FORM_VAZIO = {
   itens_cotacao: [] as {codigo:string;descricao:string;quantidade:number;valor_unitario:number}[],
   // Faturamento
   cnpj_faturamento:'', razao_social_faturamento:'', endereco_faturamento:'',
+  // Financeiro / Comissões
+  valor_total: '' as string|number, valor_mao_de_obra: '' as string|number, data_faturamento: '',
 };
 
 export default function SacTab({ currentUser }) {
@@ -185,6 +187,8 @@ export default function SacTab({ currentUser }) {
   const [anexarFiles, setAnexarFiles]   = useState<File[]>([]);
   const [modalEntregaVeic, setModalEntregaVeic] = useState<any>(null);
   const [nomeRecebeuVeic, setNomeRecebeuVeic]   = useState('');
+  const [modalFinanceiro, setModalFinanceiro] = useState<any>(null);
+  const [financeiroForm, setFinanceiroForm] = useState({ valor_total:'', valor_mao_de_obra:'', data_faturamento:'' });
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
@@ -324,6 +328,9 @@ export default function SacTab({ currentUser }) {
         (parseFloat(form.despesa_hospedagem.replace(',','.'))   || 0) +
         (parseFloat(form.despesa_alimentacao.replace(',','.'))  || 0)
       ) : null,
+      valor_total: form.valor_total ? parseFloat(String(form.valor_total).replace(',','.')) : null,
+      valor_mao_de_obra: form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(',','.')) : null,
+      data_faturamento: form.data_faturamento || null,
     };
 
     // INSERT com retry automático: se número já existe (23505), gera o próximo e tenta de novo
@@ -785,9 +792,24 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
         );
     }
 
+    btns.push(<button key="financeiro" className="acn-btn" style={{background:'#059669',fontSize:9}} onClick={()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??'',data_faturamento:(os.data_faturamento||'').slice(0,10)});setModalFinanceiro(os);}}>💰 Financeiro</button>);
     btns.push(<button key="anexar" className="acn-btn" style={{background:'#0369a1',fontSize:9}} onClick={()=>{setAnexarFiles([]);setModalAnexar(os);}}>📎 Anexar</button>);
     btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>gerarPdfOS(os)}>🖨️ PDF</button>);
     return btns;
+  };
+
+  // ── SALVAR FINANCEIRO DA OS ───────────────────────────────────────────────
+  const salvarFinanceiroOS = async () => {
+    if (!modalFinanceiro) return;
+    const payload: any = {
+      valor_total: financeiroForm.valor_total ? parseFloat(String(financeiroForm.valor_total).replace(',','.')) : null,
+      valor_mao_de_obra: financeiroForm.valor_mao_de_obra ? parseFloat(String(financeiroForm.valor_mao_de_obra).replace(',','.')) : null,
+      data_faturamento: financeiroForm.data_faturamento || null,
+    };
+    const { error } = await supabase.from('sac_ordens_servico').update(payload).eq('id', modalFinanceiro.id);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    setModalFinanceiro(null);
+    fetchOrdens();
   };
 
   // ── GERAR PDF DA OS ───────────────────────────────────────────────────────
@@ -1492,6 +1514,22 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                   value={form.endereco_faturamento} onChange={e=>setForm(f=>({...f,endereco_faturamento:e.target.value}))} /></div>
             </div>
 
+            {/* Financeiro / Comissões */}
+            <div style={{border:'1px solid rgba(16,185,129,.3)',borderRadius:6,padding:'10px 14px',marginBottom:12,background:'rgba(16,185,129,.04)'}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#059669',marginBottom:8}}>💰 Valores Financeiros (Comissões)</div>
+              <div className="form-row">
+                <div className="form-group" style={{maxWidth:160}}><label className="acn-label">Valor Total (R$)</label>
+                  <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                    value={form.valor_total||''} onChange={e=>setForm(f=>({...f,valor_total:e.target.value}))} /></div>
+                <div className="form-group" style={{maxWidth:160}}><label className="acn-label">Mão de Obra (R$)</label>
+                  <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                    value={form.valor_mao_de_obra||''} onChange={e=>setForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
+                <div className="form-group" style={{maxWidth:160}}><label className="acn-label">Data Faturamento</label>
+                  <input type="date" className="acn-input" style={{width:'100%'}}
+                    value={form.data_faturamento||''} onChange={e=>setForm(f=>({...f,data_faturamento:e.target.value}))} /></div>
+              </div>
+            </div>
+
             {/* Info */}
             {!form.is_veiculo && form.tipo_servico !== 'Garantia' && (
               <div style={{border:'1px solid rgba(59,130,246,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(59,130,246,.06)'}}>
@@ -1955,6 +1993,30 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={salvarEquipamento}>SALVAR</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalNovoEquip(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL FINANCEIRO ════════ */}
+      {modalFinanceiro && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:420,width:'95vw'}}>
+            <div className="modal-title">💰 Valores Financeiros — {modalFinanceiro.numero_os}</div>
+            <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0 16px'}}>
+              <div><label className="acn-label">Valor Total (R$)</label>
+                <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                  value={financeiroForm.valor_total} onChange={e=>setFinanceiroForm(f=>({...f,valor_total:e.target.value}))} /></div>
+              <div><label className="acn-label">Mão de Obra (R$)</label>
+                <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                  value={financeiroForm.valor_mao_de_obra} onChange={e=>setFinanceiroForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
+              <div><label className="acn-label">Data Faturamento</label>
+                <input type="date" className="acn-input" style={{width:'100%'}}
+                  value={financeiroForm.data_faturamento} onChange={e=>setFinanceiroForm(f=>({...f,data_faturamento:e.target.value}))} /></div>
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFinanceiro(null)}>Cancelar</button>
+              <button className="acn-btn" style={{background:'#059669'}} onClick={salvarFinanceiroOS}>Salvar</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import { ColaboradorSelect } from './ColaboradorSelect';
+import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -453,6 +453,7 @@ function ItemTable({ itens, setItens }) {
 function PainelSacVeicular({ currentUser }) {
   const [ordens, setOrdens] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { list: colaboradoresList } = useColaboradores();
 
   const [modalProvisionar, setModalProvisionar]             = useState(null);
   const [provisionarForm, setProvisionarForm]               = useState({ data_provisao:'', periodo:'Manhã' });
@@ -463,6 +464,7 @@ function PainelSacVeicular({ currentUser }) {
   const [concluirManuForm, setConcluirManuForm]             = useState({ observacoes:'', itens_usados:[] });
   const [modalIniciarManu, setModalIniciarManu]             = useState(null);
   const [iniciarManuTecnico, setIniciarManuTecnico]         = useState('');
+  const [iniciarManuTecnicoId, setIniciarManuTecnicoId]     = useState<string|null>(null);
   const [modalObsProd, setModalObsProd]                     = useState(null);
   const [obsText, setObsText]                               = useState('');
   const [modalItensExecucao, setModalItensExecucao]         = useState(null);
@@ -567,9 +569,10 @@ function PainelSacVeicular({ currentUser }) {
       status: 'Em Execução',
       data_inicio_manutencao: agora,
       tecnico_responsavel: iniciarManuTecnico.trim(),
+      tecnico_producao_id: iniciarManuTecnicoId || null,
       atualizado_em: agora,
     }).eq('id', os.id);
-    setModalIniciarManu(null); setIniciarManuTecnico(''); load();
+    setModalIniciarManu(null); setIniciarManuTecnico(''); setIniciarManuTecnicoId(null); load();
   };
 
   // Salva observação de produção sem concluir (durante execução)
@@ -829,7 +832,7 @@ function PainelSacVeicular({ currentUser }) {
             </div>
             <label className="acn-label">Técnico Responsável *</label>
             <ColaboradorSelect
-              value={iniciarManuTecnico} onChange={setIniciarManuTecnico}
+              value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
               placeholder="Selecione o técnico responsável"
               className="acn-input" style={{width:'100%',marginBottom:14}}
               autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
@@ -1283,10 +1286,12 @@ function VoucherServicos({ currentUser }) {
 export default function ProducaoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { list: colaboradoresList } = useColaboradores();
   const [modalDevolver, setModalDevolver] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalIniciar, setModalIniciar] = useState(null);
   const [respNome, setRespNome] = useState('');
+  const [respId, setRespId] = useState<string|null>(null);
 
   useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30000); return () => clearInterval(t); }, []);
 
@@ -1307,6 +1312,7 @@ export default function ProducaoTab({ currentUser }) {
       status_geral: 'Em Producao',
       data_inicio_producao: agora,
       responsavel_producao: resp,
+      tecnico_producao_id: respId || null,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
@@ -1314,7 +1320,7 @@ export default function ProducaoTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Em Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    setModalIniciar(null); setRespNome(''); fetchAll();
+    setModalIniciar(null); setRespNome(''); setRespId(null); fetchAll();
   };
 
   const liberarChecklist = async (opl) => {
@@ -1488,7 +1494,7 @@ export default function ProducaoTab({ currentUser }) {
             )}
             <label className="acn-label">Responsável pela Produção</label>
             <ColaboradorSelect
-              value={respNome} onChange={setRespNome}
+              value={respNome} onChange={(nome)=>{ setRespNome(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setRespId(colab?.id||null); }}
               placeholder="Selecione o responsável"
               className="acn-input" style={{width:'100%',marginBottom:12}}
               autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarProducao()} />

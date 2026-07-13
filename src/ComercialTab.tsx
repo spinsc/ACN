@@ -33,6 +33,7 @@ const FORM_VAZIO = {
   data_entrada: new Date().toISOString().split('T')[0],
   data_prevista_entrega:'', item_envio:false, liberado_divulgacao:false, observacoes_comercial:'',
   quantidade: 1,
+  valor_total: '', valor_mao_de_obra: '',
 };
 
 // ---- CRM removido — use a aba CRM independente ----
@@ -767,6 +768,8 @@ export default function ComercialTab({ currentUser }) {
             <div className="form-row">
               <div className="form-group"><label className="acn-label">Prev. Entrega</label><input type="date" className="acn-input" style={{width:'100%'}} value={formData.data_prevista_entrega} onChange={e=>setFormData({...formData,data_prevista_entrega:e.target.value})} /></div>
               <div className="form-group" style={{maxWidth:110}}><label className="acn-label">Qtd. Unidades *</label><input type="number" min={1} className="acn-input" style={{width:'100%'}} value={formData.quantidade||1} onChange={e=>setFormData({...formData,quantidade:parseInt(e.target.value)||1})} /></div>
+              <div className="form-group" style={{maxWidth:140}}><label className="acn-label">Valor Total (R$)</label><input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00" value={formData.valor_total||''} onChange={e=>setFormData({...formData,valor_total:e.target.value})} /></div>
+              <div className="form-group" style={{maxWidth:140}}><label className="acn-label">Mão de Obra (R$)</label><input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00" value={formData.valor_mao_de_obra||''} onChange={e=>setFormData({...formData,valor_mao_de_obra:e.target.value})} /></div>
               <div style={{flex:3}}><label className="acn-label">Observacoes</label><input className="acn-input" style={{width:'100%'}} value={formData.observacoes_comercial} onChange={e=>setFormData({...formData,observacoes_comercial:e.target.value})} /></div>
               <div style={{display:'flex',alignItems:'flex-end',paddingBottom:2}}>
                 <label style={{fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}}><input type="checkbox" checked={formData.item_envio} onChange={e=>setFormData({...formData,item_envio:e.target.checked})} style={{marginRight:4}}/>Item de Envio</label>

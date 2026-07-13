@@ -140,6 +140,12 @@ function PainelUsuarios() {
   const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [] });
   const [perfisDB, setPerfisDB] = useState([]);
 
+  // Perfis disponíveis = padrão + qualquer extra criado no banco
+  const perfisDisponiveis = [
+    ...PERFIS,
+    ...(perfisDB as any[]).map((p:any)=>p.nome).filter((n:string)=>!PERFIS.includes(n)),
+  ];
+
   useEffect(() => { fetchUsuarios(); fetchPerfisDB(); }, []);
 
   const fetchUsuarios = async () => {
@@ -270,7 +276,7 @@ function PainelUsuarios() {
                 <select className="acn-input" style={{width:'100%'}}
                   value={editForm.perfil}
                   onChange={e=>setEditForm(f=>({...f,perfil:e.target.value}))}>
-                  {PERFIS.map(p=><option key={p}>{p}</option>)}
+                  {perfisDisponiveis.map(p=><option key={p}>{p}</option>)}
                 </select>
                 <button className="acn-btn" style={{width:'100%',marginTop:4,background:'#0369a1',fontSize:9,padding:'3px 0'}}
                   onClick={()=>aplicarPerfil(editForm.perfil,'editForm')}
@@ -380,7 +386,7 @@ function PainelUsuarios() {
               <div className="form-group"><label className="acn-label">Perfil</label>
                 <select className="acn-input" style={{width:'100%'}} value={form.perfil}
                   onChange={e=>setForm({...form,perfil:e.target.value})}>
-                  {PERFIS.map(p=><option key={p}>{p}</option>)}
+                  {perfisDisponiveis.map(p=><option key={p}>{p}</option>)}
                 </select>
                 <button className="acn-btn" style={{width:'100%',marginTop:4,background:'#0369a1',fontSize:9,padding:'3px 0'}}
                   onClick={()=>aplicarPerfil(form.perfil,'form')}
@@ -454,7 +460,7 @@ function PainelUsuarios() {
                         <td>
                           <select className="acn-input" style={{padding:'2px 6px'}} value={u.perfil||'Operador'}
                             onChange={e=>alterarPerfil(u,e.target.value)}>
-                            {PERFIS.map(p=><option key={p}>{p}</option>)}
+                            {perfisDisponiveis.map(p=><option key={p}>{p}</option>)}
                           </select>
                         </td>
                         <td>

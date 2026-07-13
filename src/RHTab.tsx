@@ -1444,6 +1444,317 @@ function RelatorioTecnicos({ funcionarios }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO — COMISSÕES DE TÉCNICOS
+// ─────────────────────────────────────────────────────────────────────────────
+function ComissoesRH({ funcionarios, currentUser }) {
+  const hoje = new Date();
+  const [mes, setMes]     = useState(hoje.getMonth() + 1);
+  const [ano, setAno]     = useState(hoje.getFullYear());
+  const [dados, setDados] = useState<any[]>([]);
+  const [fechamentos, setFechamentos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [aprovando, setAprovando] = useState<string|null>(null);
+  const [abaComissao, setAbaComissao] = useState<'calculo'|'relatorio'>('calculo');
+
+  const meses = [1,2,3,4,5,6,7,8,9,10,11,12];
+  const anos = [hoje.getFullYear()-1, hoje.getFullYear(), hoje.getFullYear()+1];
+  const fmtMoeda = (v: number) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+  const fmtDt = (d: any) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;
+
+  const calcular = async () => {
+    setLoading(true);
+    // Buscar OPs faturadas no mês/ano selecionado
+    const mesStr = String(mes).padStart(2,'0');
+    const inicioMes = `${ano}-${mesStr}-01`;
+    const fimMes    = new Date(ano, mes, 0).toISOString().split('T')[0];
+
+    const [opRes, osRes, fechRes] = await Promise.all([
+      supabase.from('oples')
+        .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,data_emissao_nf')
+        .gte('data_emissao_nf', inicioMes).lte('data_emissao_nf', fimMes)
+        .not('tecnico_producao_id','is',null),
+      supabase.from('sac_ordens_servico')
+        .select('id,numero_os,cliente_nome,tecnico_producao_id,tecnico_responsavel,valor_total,valor_mao_de_obra,data_faturamento')
+        .gte('data_faturamento', inicioMes).lte('data_faturamento', fimMes)
+        .not('tecnico_producao_id','is',null),
+      supabase.from('rh_comissoes_fechamento')
+        .select('*').eq('mes', mes).eq('ano', ano),
+    ]);
+
+    const ops: any[] = opRes.data || [];
+    const oss: any[] = osRes.data || [];
+    setFechamentos(fechRes.data || []);
+
+    // Agrupar por tecnico_producao_id
+    const mapa: Record<string, any> = {};
+    const addItem = (tecId: string, item: any) => {
+      if (!mapa[tecId]) {
+        const func = funcionarios.find((f:any) => f.id === tecId);
+        mapa[tecId] = {
+          tecnicoId: tecId,
+          tecnicoNome: func?.nome || '—',
+          func,
+          incideEm: func?.incide_em || 'Faturamento',
+          percentual: func?.percentual_comissao || 0,
+          ops: [], oss: [], totalBase: 0, totalComissao: 0,
+        };
+      }
+      mapa[tecId].ops = mapa[tecId].ops || [];
+      mapa[tecId].oss = mapa[tecId].oss || [];
+      if (item.tipo === 'OP') mapa[tecId].ops.push(item);
+      else mapa[tecId].oss.push(item);
+    };
+
+    ops.forEach(op => {
+      const base = mapa[op.tecnico_producao_id]?.incideEm === 'Mão de Obra'
+        ? Number(op.valor_mao_de_obra || 0)
+        : Number(op.valor_total || 0);
+      addItem(op.tecnico_producao_id, {
+        tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
+        valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
+        data_faturamento:op.data_emissao_nf, base,
+      });
+    });
+    oss.forEach(os => {
+      const base = mapa[os.tecnico_producao_id]?.incideEm === 'Mão de Obra'
+        ? Number(os.valor_mao_de_obra || 0)
+        : Number(os.valor_total || 0);
+      addItem(os.tecnico_producao_id, {
+        tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
+        valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra,
+        data_faturamento:os.data_faturamento, base,
+      });
+    });
+
+    // Recalcular totais com incideEm correto
+    Object.values(mapa).forEach((tec: any) => {
+      const allItems = [...tec.ops, ...tec.oss];
+      tec.totalBase = allItems.reduce((s: number, i: any) => {
+        const b = tec.incideEm === 'Mão de Obra' ? Number(i.valor_mao_de_obra || 0) : Number(i.valor_total || 0);
+        return s + b;
+      }, 0);
+      allItems.forEach((i: any) => {
+        i.base = tec.incideEm === 'Mão de Obra' ? Number(i.valor_mao_de_obra || 0) : Number(i.valor_total || 0);
+      });
+      tec.totalComissao = tec.totalBase * (tec.percentual / 100);
+    });
+
+    setDados(Object.values(mapa));
+    setLoading(false);
+  };
+
+  const aprovar = async (tec: any) => {
+    if (!podeAutorizar) { alert('Sem permissão para aprovar comissões.'); return; }
+    setAprovando(tec.tecnicoId);
+    const payload = {
+      mes, ano,
+      tecnico_id: tec.tecnicoId,
+      tecnico_nome: tec.tecnicoNome,
+      incide_em: tec.incideEm,
+      percentual: tec.percentual,
+      total_base: tec.totalBase,
+      total_comissao: tec.totalComissao,
+      qtd_ops: tec.ops.length,
+      qtd_oss: tec.oss.length,
+      detalhes: [...tec.ops, ...tec.oss],
+      status: 'aprovado',
+      aprovado_por: currentUser?.nome,
+      aprovado_em: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('rh_comissoes_fechamento').upsert([payload], { onConflict: 'mes,ano,tecnico_id' });
+    if (error) { alert('Erro: ' + error.message); setAprovando(null); return; }
+    const { data: newFech } = await supabase.from('rh_comissoes_fechamento').select('*').eq('mes', mes).eq('ano', ano);
+    setFechamentos(newFech || []);
+    setAprovando(null);
+  };
+
+  const jaAprovado = (tecId: string) => fechamentos.find((f:any) => f.tecnico_id === tecId && f.status === 'aprovado');
+
+  return (
+    <div style={{marginTop:20,border:'1px solid #e2e8f0',borderRadius:8,overflow:'hidden'}}>
+      <div className="sec-hdr" style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
+        <span>💰 Comissões de Técnicos</span>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+          <button className={`acn-btn acn-tab-btn${abaComissao==='calculo'?' ativo':''}`}
+            style={{fontSize:10,padding:'4px 12px'}} onClick={()=>setAbaComissao('calculo')}>Cálculo</button>
+          <button className={`acn-btn acn-tab-btn${abaComissao==='relatorio'?' ativo':''}`}
+            style={{fontSize:10,padding:'4px 12px'}} onClick={()=>setAbaComissao('relatorio')}>Histórico</button>
+        </div>
+      </div>
+
+      {abaComissao === 'calculo' && (
+        <div style={{padding:'10px 12px'}}>
+          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+            <select value={mes} onChange={e=>setMes(Number(e.target.value))}
+              style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+              {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
+            </select>
+            <select value={ano} onChange={e=>setAno(Number(e.target.value))}
+              style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+              {anos.map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={calcular} disabled={loading}
+              style={{background:'#2563eb',color:'#fff',border:'none',borderRadius:4,padding:'4px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
+              {loading ? 'Calculando...' : '🔍 Calcular'}
+            </button>
+            <span style={{fontSize:10,color:'#64748b'}}>Período: {mesNome(mes)}/{ano} · Apenas OPs/OSs faturadas no mês</span>
+          </div>
+
+          {dados.length === 0 && !loading && (
+            <div className="acn-empty">Clique em Calcular para carregar as comissões do período.</div>
+          )}
+          {dados.map(tec => {
+            const aprov = jaAprovado(tec.tecnicoId);
+            const allItems = [...tec.ops, ...tec.oss];
+            return (
+              <div key={tec.tecnicoId} style={{marginBottom:10,border:`1px solid ${aprov?'#86efac':'#e2e8f0'}`,borderRadius:6,overflow:'hidden'}}>
+                {/* Cabeçalho técnico */}
+                <div style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',
+                  background:aprov?'#f0fdf4':'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:12,color:'#1e293b'}}>{tec.tecnicoNome}</div>
+                    <div style={{fontSize:10,color:'#64748b'}}>
+                      Incide em: <strong>{tec.incideEm}</strong> ·
+                      Percentual: <strong style={{color:'#2563eb'}}>{tec.percentual}%</strong> ·
+                      {tec.ops.length > 0 && <> {tec.ops.length} OP</>}
+                      {tec.oss.length > 0 && <> · {tec.oss.length} OS</>}
+                    </div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:11,color:'#475569'}}>Base: <strong>{fmtMoeda(tec.totalBase)}</strong></div>
+                    <div style={{fontSize:14,fontWeight:800,color:aprov?'#16a34a':'#2563eb'}}>
+                      Comissão: {fmtMoeda(tec.totalComissao)}
+                    </div>
+                    {aprov && <div style={{fontSize:9,color:'#16a34a',fontWeight:600}}>✅ Aprovado por {aprov.aprovado_por}</div>}
+                  </div>
+                  {podeAutorizar && !aprov && (
+                    <button onClick={()=>aprovar(tec)} disabled={aprovando===tec.tecnicoId}
+                      style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:4,padding:'5px 12px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
+                      {aprovando===tec.tecnicoId ? '...' : 'Aprovar'}
+                    </button>
+                  )}
+                </div>
+                {/* Lista de itens */}
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
+                  <thead><tr style={{background:'#f1f5f9'}}>
+                    <th style={{padding:'4px 8px',textAlign:'left'}}>Tipo</th>
+                    <th style={{padding:'4px 8px',textAlign:'left'}}>Nº</th>
+                    <th style={{padding:'4px 8px',textAlign:'left'}}>Cliente</th>
+                    <th style={{padding:'4px 8px',textAlign:'right'}}>Valor Total</th>
+                    <th style={{padding:'4px 8px',textAlign:'right'}}>Mão de Obra</th>
+                    <th style={{padding:'4px 8px',textAlign:'right'}}>Base Cálculo</th>
+                    <th style={{padding:'4px 8px',textAlign:'right',color:'#2563eb'}}>Comissão</th>
+                    <th style={{padding:'4px 8px',textAlign:'center'}}>Fat.</th>
+                  </tr></thead>
+                  <tbody>
+                    {allItems.map((item: any, i: number) => (
+                      <tr key={i} style={{background:i%2===0?'white':'#f8fafc',borderBottom:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'4px 8px'}}>
+                          <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
+                            background:item.tipo==='OP'?'#dcfce7':'#ede9fe',
+                            color:item.tipo==='OP'?'#166534':'#5b21b6'}}>{item.tipo}</span>
+                        </td>
+                        <td style={{padding:'4px 8px',fontWeight:700}}>{item.numero||'—'}</td>
+                        <td style={{padding:'4px 8px'}}>{item.cliente||'—'}</td>
+                        <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_total != null ? fmtMoeda(item.valor_total) : '—'}</td>
+                        <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_mao_de_obra != null ? fmtMoeda(item.valor_mao_de_obra) : '—'}</td>
+                        <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700}}>{fmtMoeda(item.base)}</td>
+                        <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#2563eb'}}>{fmtMoeda(item.base * tec.percentual / 100)}</td>
+                        <td style={{padding:'4px 8px',textAlign:'center'}}>{fmtDt(item.data_faturamento)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {abaComissao === 'relatorio' && <HistoricoComissoes funcionarios={funcionarios} />}
+    </div>
+  );
+}
+
+function HistoricoComissoes({ funcionarios }) {
+  const hoje = new Date();
+  const [mes, setMes] = useState(hoje.getMonth()+1);
+  const [ano, setAno] = useState(hoje.getFullYear());
+  const [dados, setDados] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const meses = [1,2,3,4,5,6,7,8,9,10,11,12];
+  const anos = [hoje.getFullYear()-1, hoje.getFullYear(), hoje.getFullYear()+1];
+  const fmtMoeda = (v: number) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+  const fmtDt = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+
+  const buscar = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('rh_comissoes_fechamento').select('*').eq('mes', mes).eq('ano', ano).order('tecnico_nome');
+    setDados(data || []);
+    setLoading(false);
+  };
+
+  return (
+    <div style={{padding:'10px 12px'}}>
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+        <select value={mes} onChange={e=>setMes(Number(e.target.value))}
+          style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+          {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
+        </select>
+        <select value={ano} onChange={e=>setAno(Number(e.target.value))}
+          style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+          {anos.map(y=><option key={y} value={y}>{y}</option>)}
+        </select>
+        <button onClick={buscar} disabled={loading}
+          style={{background:'#475569',color:'#fff',border:'none',borderRadius:4,padding:'4px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
+          {loading ? 'Buscando...' : '📋 Buscar'}
+        </button>
+      </div>
+      {dados.length === 0 && !loading && <div className="acn-empty">Nenhum fechamento encontrado para o período.</div>}
+      {dados.length > 0 && (
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
+          <thead><tr style={{background:'#1e293b',color:'#fff'}}>
+            <th style={{padding:'6px 8px',textAlign:'left'}}>Técnico</th>
+            <th style={{padding:'6px 8px',textAlign:'center'}}>Incide em</th>
+            <th style={{padding:'6px 8px',textAlign:'center'}}>%</th>
+            <th style={{padding:'6px 8px',textAlign:'right'}}>OPs</th>
+            <th style={{padding:'6px 8px',textAlign:'right'}}>OSs</th>
+            <th style={{padding:'6px 8px',textAlign:'right'}}>Base</th>
+            <th style={{padding:'6px 8px',textAlign:'right'}}>Comissão</th>
+            <th style={{padding:'6px 8px',textAlign:'center'}}>Status</th>
+            <th style={{padding:'6px 8px',textAlign:'left'}}>Aprovado por</th>
+            <th style={{padding:'6px 8px',textAlign:'left'}}>Data</th>
+          </tr></thead>
+          <tbody>
+            {dados.map((d:any,i:number) => (
+              <tr key={d.id} style={{background:i%2===0?'white':'#f8fafc',borderBottom:'1px solid #f1f5f9'}}>
+                <td style={{padding:'5px 8px',fontWeight:700}}>{d.tecnico_nome}</td>
+                <td style={{padding:'5px 8px',textAlign:'center'}}>{d.incide_em}</td>
+                <td style={{padding:'5px 8px',textAlign:'center'}}>{d.percentual}%</td>
+                <td style={{padding:'5px 8px',textAlign:'right'}}>{d.qtd_ops}</td>
+                <td style={{padding:'5px 8px',textAlign:'right'}}>{d.qtd_oss}</td>
+                <td style={{padding:'5px 8px',textAlign:'right'}}>{fmtMoeda(d.total_base)}</td>
+                <td style={{padding:'5px 8px',textAlign:'right',fontWeight:700,color:'#16a34a'}}>{fmtMoeda(d.total_comissao)}</td>
+                <td style={{padding:'5px 8px',textAlign:'center'}}>
+                  <span style={{fontSize:9,padding:'2px 7px',borderRadius:8,fontWeight:700,
+                    background:d.status==='aprovado'?'#dcfce7':'#fef3c7',
+                    color:d.status==='aprovado'?'#166534':'#92400e'}}>
+                    {d.status==='aprovado'?'✅ Aprovado':'Pendente'}
+                  </span>
+                </td>
+                <td style={{padding:'5px 8px'}}>{d.aprovado_por||'—'}</td>
+                <td style={{padding:'5px 8px'}}>{fmtDt(d.aprovado_em)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RHTab({ currentUser }) {
@@ -1539,6 +1850,7 @@ export default function RHTab({ currentUser }) {
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <RelatorioTecnicos funcionarios={funcionarios} />
+          <ComissoesRH funcionarios={funcionarios} currentUser={currentUser} />
           <ListaAutorizacoes
             funcionarios={funcionarios}
             autorizacoes={autorizacoes}
