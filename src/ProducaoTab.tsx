@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
+import AnaliseWidget from './AnaliseWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -1474,6 +1475,7 @@ export default function ProducaoTab({ currentUser }) {
         </div>
       </div>
 
+      <AnaliseWidget setor="Producao" currentUser={currentUser} />
       <DemandasSetorWidget setor="Producao" cor="#7c3aed" currentUser={currentUser} />
       <OplMovimentadas setor="Producao" />
       <DemandaFooter setor="Producao" />

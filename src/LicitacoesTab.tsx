@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -109,7 +110,8 @@ function PrazoBadge({ label, value }: { label:string; value:string }) {
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
 function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
-  const [tab, setTab] = useState<'info'|'anexos'|'historico'|'andamento'>('info');
+  const [tab, setTab] = useState<'info'|'anexos'|'historico'|'andamento'|'analise'>('info');
+  const [showModalSolicitar, setShowModalSolicitar] = useState(false);
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [tipoAnexo, setTipoAnexo] = useState('documento');
@@ -267,10 +269,11 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
 
         {/* Tabs de navegação */}
         <div style={{ display:'flex', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
-          {(['info','andamento','anexos','historico'] as const).map(t => {
+          {(['info','andamento','analise','anexos','historico'] as const).map(t => {
             const andamentos = anexos.filter(a=>a.tipo==='andamento');
             const label = t==='info'?'📋 Informações'
               : t==='andamento'?`📝 Andamento${andamentos.length>0?' ('+andamentos.length+')':''}`
+              : t==='analise'?'🔍 Análise'
               : t==='anexos'?`📁 Documentos (${anexos.filter(a=>a.tipo!=='andamento').length})`
               : '📜 Histórico';
             return (
@@ -421,6 +424,18 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
             </div>
           )}
 
+          {/* ── TAB ANÁLISE ── */}
+          {tab === 'analise' && (
+            <AnaliseStatusPanel
+              origemId={licit.id}
+              origemTitulo={licit.nome_projeto}
+              origemNumero={licit.numero}
+              origem="licitacao"
+              currentUser={currentUser}
+              onSolicitarNova={() => setShowModalSolicitar(true)}
+            />
+          )}
+
           {/* ── TAB HISTÓRICO ── */}
           {tab === 'historico' && (
             <div>
@@ -443,6 +458,14 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
 
         {/* Footer — botões de ação */}
         <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 16px', flexShrink:0, display:'flex', flexDirection:'column', gap:8 }}>
+
+          {/* Solicitar Análise */}
+          {!confirmStatus && (
+            <button onClick={() => setShowModalSolicitar(true)}
+              style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:6, padding:'7px 16px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+              🔍 Solicitar Análise
+            </button>
+          )}
 
           {/* Excluir — somente Admin */}
           {isAdmin && !confirmStatus && (
@@ -495,6 +518,19 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
           )}
         </div>
       </div>
+
+      {/* Modal Solicitar Análise */}
+      {showModalSolicitar && (
+        <ModalSolicitarAnalise
+          origem="licitacao"
+          origemId={licit.id}
+          origemTitulo={licit.nome_projeto}
+          origemNumero={licit.numero}
+          currentUser={currentUser}
+          onClose={() => setShowModalSolicitar(false)}
+          onSaved={() => setTab('analise')}
+        />
+      )}
     </div>
   );
 }
@@ -690,9 +726,12 @@ function LicitCard({ l, onClick }) {
           </span>
         )}
       </div>
-      {l.analista_nome && (
-        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af' }}>👤 {l.analista_nome}</div>
-      )}
+      <div style={{ marginTop:4, display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
+        {l.analista_nome && (
+          <span style={{ fontSize:9, color:'#9ca3af' }}>👤 {l.analista_nome}</span>
+        )}
+        <AnaliseStatusBadge origemId={l.id} />
+      </div>
     </div>
   );
 }

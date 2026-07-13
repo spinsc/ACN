@@ -5,6 +5,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
 import CrmAnexosWidget from './CrmAnexosWidget';
+import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -90,6 +91,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
+  // ── solicitar análise ──
+  const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
   // ── andamento ──
   const [modalAndamento, setModalAndamento] = useState<any|null>(null); // op selecionada
   const [andamentoHistorico, setAndamentoHistorico] = useState<any[]>([]);
@@ -544,7 +547,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </span>
         )}
 
-        <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3 }}>{op.titulo}</div>
+        <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:4 }}>
+          <span>{op.titulo}</span>
+          <AnaliseStatusBadge origemId={op.id} />
+        </div>
 
         {(op.orgao || op.numero_edital) && (
           <div style={{ fontSize:8, color:'#64748b', marginBottom:3 }}>
@@ -643,6 +649,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           )}
           <button className="acn-btn" style={{ background:'#7c3aed' }} onClick={e => { e.stopPropagation(); abrirAndamento(op); }}>
             📝 Andamento
+          </button>
+          <button className="acn-btn" style={{ background:'#0369a1' }} onClick={e => { e.stopPropagation(); setModalSolicitarAnalise(op); }}>
+            🔍 Análise
           </button>
           <CrmAnexosWidget op={op} currentUser={currentUser} />
         </div>
@@ -1059,6 +1068,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══════ MODAL SOLICITAR ANÁLISE ══════ */}
+      {modalSolicitarAnalise && (
+        <ModalSolicitarAnalise
+          origem="crm"
+          origemId={modalSolicitarAnalise.id}
+          origemTitulo={modalSolicitarAnalise.titulo}
+          origemNumero={modalSolicitarAnalise.numero_edital || null}
+          currentUser={currentUser}
+          onClose={() => setModalSolicitarAnalise(null)}
+          onSaved={() => setModalSolicitarAnalise(null)}
+        />
       )}
 
       {/* ══════ MODAL ANDAMENTO ══════ */}

@@ -53,6 +53,7 @@ const SIDEBAR_GROUPS = [
     items: [
       { id: 'comercial',  label: 'Comercial' },
       { id: 'engenharia', label: 'Engenharia' },
+      { id: 'telecom',    label: 'Telecom' },
       { id: 'ajustes',    label: 'Demandas Gerais' },
       { id: 'pcp',        label: 'PCP' },
     ],
@@ -685,6 +686,7 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
     switch (activeTab) {
       case 'comercial':    return <ComercialTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
+      case 'telecom':      return <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
       case 'pcp':          return <PCPTab currentUser={currentUser} />;
       case 'serralheria':  return <SetorDemandaTab currentUser={currentUser} setor="Serralheria" cor="#ea580c" />;

@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
+import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -990,6 +991,7 @@ export default function ComercialTab({ currentUser }) {
         </div>
       </div>
 
+      <AnaliseWidget setor="Comercial" currentUser={currentUser} />
       <OplMovimentadas setor="Comercial" />
       <DemandaFooter setor="Comercial" />
 

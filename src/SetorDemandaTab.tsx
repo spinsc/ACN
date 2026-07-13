@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 
 // ─── Horas Úteis (Seg-Sex 8:00–17:30) ────────────────────────────────────────
@@ -649,6 +650,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             </div>
           </div>
 
+          <AnaliseWidget setor={setor} currentUser={currentUser} />
           <OplMovimentadas setor={setor} />
           <DemandaFooter setor={setor} />
         </>

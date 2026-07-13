@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
+import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import OplAnexosWidget from './OplAnexosWidget';
@@ -299,6 +300,7 @@ export default function EngenhariaTab({ currentUser }) {
         </div>
       )}
 
+      <AnaliseWidget setor="Engenharia" currentUser={currentUser} />
       <DemandasSetorWidget setor="Engenharia" cor="#2563eb" currentUser={currentUser} />
       <OplMovimentadas setor="Engenharia" />
       <DemandaFooter setor="Engenharia" />
