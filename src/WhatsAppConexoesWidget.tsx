@@ -32,7 +32,9 @@ const STATUS_LABEL: Record<string, string> = {
   aguardando_qr:'🟡 Aguardando QR',
 };
 
-const EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-admin`;
+// URL hardcoded igual ao supabaseClient.ts — VITE_SUPABASE_URL não está definido no build do GitHub Pages
+const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/whatsapp-admin`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => void }) {
@@ -108,6 +110,10 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
         },
         body: JSON.stringify({ action: 'create', instanceName: novaInst.trim(), vendedorNome: novaVend.trim() }),
       });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        throw new Error(`A Edge Function "whatsapp-admin" não foi encontrada no Supabase (HTTP ${res.status}). Execute: supabase functions deploy whatsapp-admin`);
+      }
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setModalNova(false);
@@ -130,6 +136,9 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
       const res = await fetch(`${EDGE_URL}?action=qrcode&instance=${encodeURIComponent(instanceName)}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
+      if (!res.ok && !(res.headers.get('content-type') || '').includes('application/json')) {
+        throw new Error(`Edge Function indisponível (HTTP ${res.status}). Deploy: supabase functions deploy whatsapp-admin`);
+      }
       const json = await res.json();
       // Evolution API v2 retorna { base64: 'data:image/png;base64,...' } ou { qrcode: { base64: ... } }
       const b64 = json.base64 || json.qrcode?.base64 || json.code || null;
@@ -151,6 +160,9 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
       const res = await fetch(`${EDGE_URL}?action=status&instance=${encodeURIComponent(inst.instance_name)}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
+      if (!res.ok && !(res.headers.get('content-type') || '').includes('application/json')) {
+        throw new Error(`Edge Function indisponível (HTTP ${res.status})`);
+      }
       const json = await res.json();
       // Evolution API v2: { instance: { instanceName, state } }
       const state = json.instance?.state || json.state || 'close';
@@ -266,10 +278,10 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
                 borderRadius:5, fontSize:9 }}>
                 <span style={{ fontWeight:700, color:'#1e40af' }}>Webhook URL</span>
                 <span style={{ color:'#1e293b', marginLeft:6, fontFamily:'monospace', userSelect:'all' }}>
-                  {import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook
+                  {SUPABASE_URL}/functions/v1/whatsapp-webhook
                 </span>
                 <button onClick={() => navigator.clipboard.writeText(
-                  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`
+                  `${SUPABASE_URL}/functions/v1/whatsapp-webhook`
                 )} style={{ marginLeft:8, fontSize:8, background:'#2563eb', color:'white',
                   border:'none', borderRadius:3, padding:'1px 6px', cursor:'pointer' }}>
                   Copiar

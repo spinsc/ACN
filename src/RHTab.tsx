@@ -556,6 +556,8 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
 // SEÇÃO — PAINEL DE STATUS
 // ─────────────────────────────────────────────────────────────────────────────
 function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   const alterarStatus = async (id: string, status: string) => {
     await supabase.from('rh_funcionarios').update({ status_presenca: status }).eq('id', id);
     onRefresh();
@@ -565,8 +567,15 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr">👥 Status dos Colaboradores ({ativos.length})</div>
-      <div className="sec-body" style={{ overflowX:'auto', padding:0 }}>
+      <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+        onClick={() => setCollapsed(c => !c)}>
+        <span>👥 Status dos Colaboradores ({ativos.length})</span>
+        <button onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }}
+          style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, color:'inherit', padding:'0 2px' }}>
+          {collapsed ? '▸' : '▾'}
+        </button>
+      </div>
+      {!collapsed && <div className="sec-body" style={{ overflowX:'auto', padding:0 }}>
         {ativos.length === 0 ? (
           <div className="acn-empty">Nenhum colaborador cadastrado.</div>
         ) : (
@@ -635,7 +644,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
             </tbody>
           </table>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
