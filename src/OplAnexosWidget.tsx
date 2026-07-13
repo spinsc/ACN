@@ -274,7 +274,7 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
             background: btnBg,
             color:'#fff', border:'none', borderRadius:4,
             padding: compact ? '3px 7px' : '5px 10px',
-            fontSize: compact ? 9 : 10, fontWeight:700, opacity: uploading ? .6 : 1 }}>
+            fontSize: compact ? 9 : 10, fontWeight:700, lineHeight:1, opacity: uploading ? .6 : 1 }}>
           {btnLabel}
           <input ref={fileRef} type="file" multiple
             accept={acceptAttr}
@@ -288,7 +288,7 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
             color: count && count > 0 ? '#fff' : '#6b7280',
             border:'none', borderRadius:4,
             padding: compact ? '3px 7px' : '5px 10px',
-            fontSize: compact ? 9 : 10, fontWeight:700, cursor:'pointer',
+            fontSize: compact ? 9 : 10, fontWeight:700, cursor:'pointer', lineHeight:1,
             display:'flex', alignItems:'center', gap:3 }}>
           {TIPO_ICONE[tipoFixo || ''] || '📂'} {count !== null ? count : '…'}
         </button>
