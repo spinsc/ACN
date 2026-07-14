@@ -161,8 +161,17 @@ export default function EngenhariaTab({ currentUser }) {
                   const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
                   const tempo = inicio ? ((new Date() - inicio) / 3600000) : null;
                   const envioDireto = isEnvioDireto(o);
+                  // KPI 48h: Em Espera Engenharia sem iniciar após 48h do lançamento
+                  const emEspera = o.status_geral === 'Em Espera Engenharia';
+                  const horasSemIniciar = emEspera && !o.data_inicio_engenharia && o.data_entrada
+                    ? (new Date().getTime() - new Date(o.data_entrada).getTime()) / 3600000
+                    : 0;
+                  const kpi48h = emEspera && horasSemIniciar > 48;
+                  const rowStyle = kpi48h
+                    ? { background:'#fef2f2', borderLeft:'4px solid #ef4444' }
+                    : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' } : {};
                   return (
-                    <tr key={o.id} style={envioDireto ? {background:'#fffbeb',borderLeft:'4px solid #f59e0b'} : {}}>
+                    <tr key={o.id} style={rowStyle}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td>
                         <strong style={{color:'#2563eb'}}>{o.opl}</strong>
@@ -177,10 +186,19 @@ export default function EngenhariaTab({ currentUser }) {
                       <td>{o.chassi || '—'}</td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
-                      <td><span className="acn-badge" style={{background: emAndamento?'#3b82f6':'#f59e0b'}}>
-                        {o.status_geral}
-                        {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}}>REVISAO</span>}
-                      </span></td>
+                      <td>
+                        <span className="acn-badge" style={{background: emAndamento?'#3b82f6': kpi48h?'#ef4444':'#f59e0b'}}>
+                          {o.status_geral}
+                          {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}}>REVISAO</span>}
+                        </span>
+                        {kpi48h && (
+                          <div style={{marginTop:2}}>
+                            <span style={{fontSize:9,fontWeight:700,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10}}>
+                              🔴 {Math.floor(horasSemIniciar)}h sem iniciar
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td>{o.responsavel_engenharia || '—'}</td>
                       <td>{fmtDt(o.data_inicio_engenharia)}</td>
                       <td>{emAndamento && tempo ? fmtH(tempo) : '—'}</td>

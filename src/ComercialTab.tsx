@@ -7,6 +7,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 
 
 const TIPOS_PROJETO = [
@@ -35,7 +36,25 @@ const FORM_VAZIO = {
   data_prevista_entrega:'', item_envio:false, liberado_divulgacao:false, observacoes_comercial:'',
   quantidade: 1,
   valor_total: '', valor_mao_de_obra: '',
+  // ── DADOS DA VENDA ────────────────────────────────────────────────────────
+  data_aceite_cliente:     '',
+  faturamento_empresa:     'ACN',
+  vendedor:                '',
+  cliente_final:           '',
+  edital:                  '',
+  proposta:                '',
+  veiculo:                 '',
+  local_instalacao:        '',
+  data_chegada_veiculo:    '',
+  prazo_entrega_producao:  '',
+  prazo_entrega_comercial: '',
+  // ── COMPOSIÇÃO COMERCIAL ──────────────────────────────────────────────────
+  composicao_comercial: [],  // [{item, qtd, qtd_por_veiculo, descricao, estoque_cod, total}]
+  // ── Observações críticas ──────────────────────────────────────────────────
+  observacoes_atencao: '',
 };
+
+const COMP_LINHA_VAZIA = { item:1, qtd:'', qtd_por_veiculo:'', descricao:'', estoque_cod:'', total:'' };
 
 // ---- CRM removido — use a aba CRM independente ----
 function CRMSection({ currentUser }) { return null; }
@@ -621,7 +640,32 @@ export default function ComercialTab({ currentUser }) {
           status_anterior: '', status_novo: 'Em Espera PCP',
           usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: new Date().toISOString(),
         }]);
+        // Salvar menções nas observações de atenção
+        if (formData.observacoes_atencao) {
+          await salvarMencoes({
+            texto: formData.observacoes_atencao,
+            mencionanteId: currentUser?.id || '',
+            mencionanteNome: currentUser?.nome || '',
+            contexto: 'op',
+            contextoId: nova.id,
+            contextoDescricao: `OP ${formData.opl}`,
+            campo: 'observacoes_atencao',
+            abaDestino: 'comercial',
+          });
+        }
       }
+    }
+    if (editId && formData.observacoes_atencao) {
+      await salvarMencoes({
+        texto: formData.observacoes_atencao,
+        mencionanteId: currentUser?.id || '',
+        mencionanteNome: currentUser?.nome || '',
+        contexto: 'op',
+        contextoId: editId,
+        contextoDescricao: `OP ${formData.opl}`,
+        campo: 'observacoes_atencao',
+        abaDestino: 'comercial',
+      });
     }
     const savedCliente = formData.cliente_nome;
     const savedClienteId = formData._cliente_id;
@@ -796,6 +840,114 @@ export default function ComercialTab({ currentUser }) {
                 </label>
               </div>
             </div>
+
+            {/* ── DADOS DA VENDA ─────────────────────────────────────────── */}
+            <div style={{marginTop:14,padding:'10px 12px',background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6}}>
+              <div style={{fontWeight:700,fontSize:10,color:'#0369a1',marginBottom:8,letterSpacing:.3}}>📋 DADOS DA VENDA</div>
+              <div className="form-row">
+                <div className="form-group"><label className="acn-label">Data do Aceite do Cliente</label>
+                  <input type="date" className="acn-input" style={{width:'100%'}} value={formData.data_aceite_cliente||''} onChange={e=>setFormData({...formData,data_aceite_cliente:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Faturamento</label>
+                  <select className="acn-input" style={{width:'100%'}} value={formData.faturamento_empresa||'ACN'} onChange={e=>setFormData({...formData,faturamento_empresa:e.target.value})}>
+                    <option value="ACN">ACN</option>
+                    <option value="DETECH">DETECH</option>
+                  </select>
+                </div>
+                <div className="form-group"><label className="acn-label">Vendedor</label>
+                  <input className="acn-input" style={{width:'100%'}} value={formData.vendedor||''} onChange={e=>setFormData({...formData,vendedor:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Cliente Final</label>
+                  <input className="acn-input" style={{width:'100%'}} placeholder="Se diferente do cliente principal" value={formData.cliente_final||''} onChange={e=>setFormData({...formData,cliente_final:e.target.value})} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label className="acn-label">Edital</label>
+                  <input className="acn-input" style={{width:'100%'}} value={formData.edital||''} onChange={e=>setFormData({...formData,edital:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Proposta</label>
+                  <input className="acn-input" style={{width:'100%'}} value={formData.proposta||''} onChange={e=>setFormData({...formData,proposta:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Veículo</label>
+                  <input className="acn-input" style={{width:'100%'}} value={formData.veiculo||''} onChange={e=>setFormData({...formData,veiculo:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Local</label>
+                  <input className="acn-input" style={{width:'100%'}} value={formData.local_instalacao||''} onChange={e=>setFormData({...formData,local_instalacao:e.target.value})} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label className="acn-label">Data de Chegada do Veículo</label>
+                  <input type="date" className="acn-input" style={{width:'100%'}} value={formData.data_chegada_veiculo||''} onChange={e=>setFormData({...formData,data_chegada_veiculo:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Prazo Entrega — PRODUÇÃO</label>
+                  <input type="date" className="acn-input" style={{width:'100%'}} value={formData.prazo_entrega_producao||''} onChange={e=>setFormData({...formData,prazo_entrega_producao:e.target.value})} /></div>
+                <div className="form-group"><label className="acn-label">Prazo Entrega — COMERCIAL</label>
+                  <input type="date" className="acn-input" style={{width:'100%'}} value={formData.prazo_entrega_comercial||''} onChange={e=>setFormData({...formData,prazo_entrega_comercial:e.target.value})} /></div>
+              </div>
+            </div>
+
+            {/* ── COMPOSIÇÃO COMERCIAL ───────────────────────────────────── */}
+            <div style={{marginTop:10,padding:'10px 12px',background:'#fafafa',border:'1px solid #e2e8f0',borderRadius:6}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                <div style={{fontWeight:700,fontSize:10,color:'#1e293b',letterSpacing:.3}}>📦 COMPOSIÇÃO COMERCIAL</div>
+                <button className="acn-btn" style={{background:'#0891b2',fontSize:9,padding:'2px 10px'}}
+                  onClick={()=>setFormData(f=>({...f,composicao_comercial:[...(f.composicao_comercial||[]),{...COMP_LINHA_VAZIA,item:(f.composicao_comercial||[]).length+1}]}))}>
+                  + Linha
+                </button>
+              </div>
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',fontSize:9,borderCollapse:'collapse'}}>
+                  <thead>
+                    <tr style={{background:'#e2e8f0'}}>
+                      {['ITEM','QTD','QTD/VEIC.','DESCRIÇÃO','EST. / COD INT.','TOTAL',''].map(h=>(
+                        <th key={h} style={{padding:'4px 6px',textAlign:'left',fontWeight:700,color:'#475569',whiteSpace:'nowrap'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(formData.composicao_comercial||[]).length === 0 && (
+                      <tr><td colSpan={7} style={{padding:'10px 6px',color:'#94a3b8',textAlign:'center',fontSize:9}}>Nenhum item. Clique em "+ Linha" para adicionar.</td></tr>
+                    )}
+                    {(formData.composicao_comercial||[]).map((linha, idx)=>(
+                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'3px 4px',width:36}}>
+                          <input className="acn-input" style={{width:36,textAlign:'center',padding:'2px 4px'}} value={linha.item} readOnly />
+                        </td>
+                        <td style={{padding:'3px 4px',width:60}}>
+                          <input className="acn-input" style={{width:60,padding:'2px 4px'}} type="number" min={0} value={linha.qtd}
+                            onChange={e=>{const nc=[...(formData.composicao_comercial||[])];nc[idx]={...nc[idx],qtd:e.target.value};setFormData({...formData,composicao_comercial:nc});}} />
+                        </td>
+                        <td style={{padding:'3px 4px',width:70}}>
+                          <input className="acn-input" style={{width:70,padding:'2px 4px'}} type="number" min={0} value={linha.qtd_por_veiculo}
+                            onChange={e=>{const nc=[...(formData.composicao_comercial||[])];nc[idx]={...nc[idx],qtd_por_veiculo:e.target.value};setFormData({...formData,composicao_comercial:nc});}} />
+                        </td>
+                        <td style={{padding:'3px 4px'}}>
+                          <input className="acn-input" style={{width:'100%',minWidth:180,padding:'2px 4px'}} value={linha.descricao}
+                            onChange={e=>{const nc=[...(formData.composicao_comercial||[])];nc[idx]={...nc[idx],descricao:e.target.value};setFormData({...formData,composicao_comercial:nc});}} />
+                        </td>
+                        <td style={{padding:'3px 4px',width:130}}>
+                          <input className="acn-input" style={{width:130,padding:'2px 4px'}} value={linha.estoque_cod}
+                            onChange={e=>{const nc=[...(formData.composicao_comercial||[])];nc[idx]={...nc[idx],estoque_cod:e.target.value};setFormData({...formData,composicao_comercial:nc});}} />
+                        </td>
+                        <td style={{padding:'3px 4px',width:80}}>
+                          <input className="acn-input" style={{width:80,padding:'2px 4px'}} value={linha.total}
+                            onChange={e=>{const nc=[...(formData.composicao_comercial||[])];nc[idx]={...nc[idx],total:e.target.value};setFormData({...formData,composicao_comercial:nc});}} />
+                        </td>
+                        <td style={{padding:'3px 4px'}}>
+                          <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:12,padding:'0 4px'}}
+                            onClick={()=>{const nc=(formData.composicao_comercial||[]).filter((_,i)=>i!==idx).map((l,i)=>({...l,item:i+1}));setFormData({...formData,composicao_comercial:nc});}}>✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ── OBSERVAÇÕES DE ATENÇÃO ─────────────────────────────────── */}
+            <div style={{marginTop:10,padding:'10px 12px',background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:6}}>
+              <div style={{fontWeight:700,fontSize:10,color:'#c2410c',marginBottom:6}}>⚠️ OBSERVAÇÕES DE ATENÇÃO — Itens Críticos</div>
+              <MencaoTextarea
+                value={formData.observacoes_atencao||''}
+                onChange={v=>setFormData({...formData,observacoes_atencao:v})}
+                rows={3}
+                placeholder="Descreva itens críticos, restrições ou atenções especiais... use @Nome para mencionar um usuário"
+                style={{borderColor:'#fed7aa'}}
+              />
+            </div>
+
             <div style={{display:'flex',gap:6,marginTop:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'7px'}} onClick={salvarOPL}>{editId?'Atualizar':'Liberar para Engenharia'}</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setShowForm(false);setEditId(null);}}>Cancelar</button>

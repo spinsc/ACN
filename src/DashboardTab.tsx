@@ -24,6 +24,7 @@ import ClientesTab from './ClientesTab';
 import RHTab from './RHTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel from './AnaliseInboxPanel';
+import MencoesInboxPanel from './MencoesInboxPanel';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -555,6 +556,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [waNotifCount, setWaNotifCount] = useState(0);
   const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);
+  const [mencoesCount, setMencoesCount]         = useState(0);
+  const [showMencoesPanel, setShowMencoesPanel] = useState(false);
 
   // Escuta contagem de msgs WA não lidas emitida pelo ContactosSection
   useEffect(() => {
@@ -579,6 +582,24 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const iv = setInterval(fetchAnalise, 60000);
     return () => clearInterval(iv);
   }, [currentUser?.recebe_alerta_analise]);
+
+  // Badge de menções — contagem de menções não lidas
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const fetchMencoes = async () => {
+      try {
+        const { count } = await supabase
+          .from('mencoes')
+          .select('id', { count: 'exact', head: true })
+          .eq('mencionado_id', currentUser.id)
+          .eq('lida', false);
+        setMencoesCount(count || 0);
+      } catch { /* mencoes table may not exist yet */ }
+    };
+    fetchMencoes();
+    const iv = setInterval(fetchMencoes, 30000);
+    return () => clearInterval(iv);
+  }, [currentUser?.id]);
 
   // Navegação cross-tab vinda do CRM
   useEffect(() => {
@@ -781,6 +802,22 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
               title={dark ? 'Modo claro' : 'Modo escuro'}>
               {dark ? '☀️' : '🌙'}
             </button>
+            {/* Badge menções */}
+            <div
+              title={mencoesCount > 0 ? `${mencoesCount} menção(ões) não lida(s)` : 'Menções'}
+              style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
+                background: mencoesCount > 0 ? 'rgba(99,102,241,.2)' : 'rgba(255,255,255,.1)',
+                border:`1px solid ${mencoesCount > 0 ? 'rgba(99,102,241,.5)' : 'rgba(255,255,255,.2)'}`,
+                borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#c7d2fe', fontWeight:700 }}
+              onClick={() => setShowMencoesPanel(true)}>
+              💬 Menções
+              {mencoesCount > 0 && (
+                <span style={{ background:'#6366f1', color:'white', borderRadius:10, padding:'0 5px',
+                  fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
+                  {mencoesCount}
+                </span>
+              )}
+            </div>
             {currentUser?.recebe_alerta_analise && (
               <div
                 title={analiseAlertCount > 0 ? `${analiseAlertCount} análise(s) orçamentária(s) pendente(s)` : 'Análises orçamentárias'}
@@ -966,6 +1003,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           onClose={() => setShowAnalisePanel(false)}
           onCountChange={n => setAnaliseAlertCount(n)}
           onNavigate={(tab) => { setShowAnalisePanel(false); setActiveTab(tab); }}
+        />
+      )}
+
+      {/* Painel lateral de Menções */}
+      {showMencoesPanel && (
+        <MencoesInboxPanel
+          currentUser={currentUser}
+          onClose={() => setShowMencoesPanel(false)}
+          onCountChange={n => setMencoesCount(n)}
+          onNavigate={(tab) => { setShowMencoesPanel(false); setActiveTab(tab); }}
         />
       )}
     </>

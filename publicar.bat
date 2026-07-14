@@ -58,6 +58,8 @@ git add public/logo.png
 git add public/motorola.png
 git add src/AnaliseWidget.tsx
 git add src/AnaliseInboxPanel.tsx
+git add src/MencoesInboxPanel.tsx
+git add src/MencaoTextarea.tsx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
@@ -76,7 +78,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: AnaliseInboxPanel painel lateral inbox analise orcamentaria, badge clicavel, navegar CRM/licitacoes, concluir setores, LoginTab salva campos extras"
+git commit -m "feat: ComercialTab dados da venda + composicao comercial + MencaoTextarea @usuario; EngenhariaTab KPI 48h linha vermelha; DashboardTab badge mencoes + MencoesInboxPanel; salvarMencoes apos salvar OP; MencaoTextarea componente reutilizavel; SQL mencoes + novos campos oples"
 
 :: Push
 echo.
@@ -181,6 +183,32 @@ echo   criado_em timestamptz DEFAULT now(),
 echo   UNIQUE(mes, ano, tecnico_id)
 echo );
 echo ALTER TABLE rh_comissoes_fechamento DISABLE ROW LEVEL SECURITY;
+echo.
+echo -- [NOVO] Novos campos OP + Tabela Mencoes - RODAR NO SUPABASE:
+echo -- Arquivo: supabase/sql/mencoes_e_op_campos.sql
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS data_aceite_cliente date;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS faturamento_empresa text DEFAULT 'ACN';
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS vendedor text;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS cliente_final text;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS edital text;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS proposta text;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS veiculo text;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS local_instalacao text;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS data_chegada_veiculo date;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS prazo_entrega_producao date;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS prazo_entrega_comercial date;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS composicao_comercial jsonb DEFAULT '[]'::jsonb;
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS observacoes_atencao text;
+echo.
+echo CREATE TABLE IF NOT EXISTS mencoes (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   mencionado_id uuid, mencionado_nome text,
+echo   mencionante_id uuid, mencionante_nome text,
+echo   contexto text NOT NULL, contexto_id text, contexto_descricao text,
+echo   campo text, texto_trecho text, aba_destino text,
+echo   lida boolean DEFAULT false, criado_em timestamptz DEFAULT now()
+echo );
+echo ALTER TABLE mencoes DISABLE ROW LEVEL SECURITY;
 echo.
 echo LEMBRETE - Demais SQLs:
 echo.
