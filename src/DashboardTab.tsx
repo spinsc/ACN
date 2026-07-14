@@ -529,7 +529,25 @@ body.dark .acn-btn:not(.acn-tab-btn) { color:white !important; }
 body.dark a[style*="color:#2563eb"] { color:#60a5fa !important; }
 `;
 
-export default function DashboardTab({ currentUser, onLogout }: Props) {
+export default function DashboardTab({ currentUser: currentUserProp, onLogout }: Props) {
+  // currentUser pode não ter campos novos (localStorage antigo) — recarrega do banco
+  const [currentUser, setCurrentUser] = useState<any>(currentUserProp);
+
+  useEffect(() => {
+    if (!currentUserProp?.id) return;
+    supabase.from('auth_usuarios')
+      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,recebe_alerta_analise')
+      .eq('id', currentUserProp.id)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        const merged = { ...currentUserProp, ...data };
+        setCurrentUser(merged);
+        // Atualiza localStorage para próximo login não precisar recarregar
+        try { localStorage.setItem('user', JSON.stringify(merged)); } catch(_) {}
+      });
+  }, [currentUserProp?.id]);
+
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
