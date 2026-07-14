@@ -57,6 +57,8 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   // QR code
   const [qrData, setQrData]           = useState<Record<string, string>>({}); // instance_name → base64
   const [qrLoading, setQrLoading]     = useState<Record<string, boolean>>({});
+  const [instInexistente, setInstInexistente] = useState<Record<string, boolean>>({});
+  const [recriando, setRecriando]     = useState<Record<string, boolean>>({});
 
   // ─── carga ─────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -144,7 +146,14 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
       const json = await res.json();
       // Evolution API v2 retorna { base64: 'data:image/png;base64,...' } ou { qrcode: { base64: ... } }
       const b64 = json.base64 || json.qrcode?.base64 || json.code || null;
-      if (b64) {
+      // Detecta instância inexistente no servidor Evolution API
+      const msgs: string[] = json.response?.message || [];
+      const inexistente = json.status === 404 ||
+        msgs.some((m: string) => m.toLowerCase().includes('does not exist') || m.toLowerCase().includes('not found'));
+      if (inexistente) {
+        setInstInexistente(prev => ({ ...prev, [instanceName]: true }));
+      } else if (b64) {
+        setInstInexistente(prev => ({ ...prev, [instanceName]: false }));
         setQrData(prev => ({ ...prev, [instanceName]: b64 }));
       } else {
         alert('QR code não disponível. Tente novamente em alguns segundos.\n\nResposta: ' + JSON.stringify(json));
@@ -153,6 +162,26 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
       alert('Erro ao buscar QR: ' + e.message);
     }
     setQrLoading(prev => ({ ...prev, [instanceName]: false }));
+  };
+
+  // ─── recriar instância no servidor (quando Evolution API perdeu o registro) ──
+  const recriarInstancia = async (inst: Instancia) => {
+    setRecriando(prev => ({ ...prev, [inst.instance_name]: true }));
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ action: 'create', instanceName: inst.instance_name, vendedorNome: inst.vendedor_nome }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setInstInexistente(prev => ({ ...prev, [inst.instance_name]: false }));
+      await load();
+      await buscarQR(inst.instance_name);
+    } catch (e: any) {
+      alert('Erro ao recriar instância: ' + e.message);
+    }
+    setRecriando(prev => ({ ...prev, [inst.instance_name]: false }));
   };
 
   // ─── verificar status ──────────────────────────────────────────────────────
@@ -316,9 +345,11 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
 
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               {instancias.map(inst => {
-                const cor = STATUS_COR[inst.status] || '#64748b';
-                const qr  = qrData[inst.instance_name];
-                const qrL = qrLoading[inst.instance_name];
+                const cor      = STATUS_COR[inst.status] || '#64748b';
+                const qr       = qrData[inst.instance_name];
+                const qrL      = qrLoading[inst.instance_name];
+                const instInex = instInexistente[inst.instance_name];
+                const recrL    = recriando[inst.instance_name];
 
                 return (
                   <div key={inst.id} style={{ border:'1px solid #e2e8f0', borderRadius:8,
@@ -379,6 +410,27 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
                         </button>
                       </div>
                     </div>
+
+                    {/* Instância inexistente no servidor */}
+                    {instInex && !qr && (
+                      <div style={{ marginTop:10, padding:'10px 12px', background:'#fef3c7',
+                        border:'1px solid #fbbf24', borderRadius:6, display:'flex', gap:10, alignItems:'flex-start' }}>
+                        <span style={{ fontSize:14 }}>⚠️</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:10, fontWeight:700, color:'#92400e', marginBottom:4 }}>
+                            Instância não encontrada no servidor
+                          </div>
+                          <div style={{ fontSize:9, color:'#78350f', marginBottom:8, lineHeight:1.4 }}>
+                            O servidor WhatsApp (Evolution API) foi reiniciado ou a instância foi removida. Clique em "Recriar" para recadastrá-la e escanear o QR novamente.
+                          </div>
+                          <button className="acn-btn"
+                            style={{ background: recrL ? '#94a3b8' : '#d97706', fontSize:9, padding:'3px 12px', opacity: recrL?.6:1 }}
+                            onClick={() => recriarInstancia(inst)} disabled={recrL}>
+                            {recrL ? '⏳ Recriando...' : '🔁 Recriar Instância'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* QR Code */}
                     {qr && (
