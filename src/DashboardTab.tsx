@@ -23,6 +23,7 @@ import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
 import RHTab from './RHTab';
 import ChatWidget from './ChatWidget';
+import AnaliseInboxPanel from './AnaliseInboxPanel';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -553,6 +554,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [waNotifCount, setWaNotifCount] = useState(0);
   const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
+  const [showAnalisePanel, setShowAnalisePanel] = useState(false);
 
   // Escuta contagem de msgs WA não lidas emitida pelo ContactosSection
   useEffect(() => {
@@ -779,15 +781,21 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
               title={dark ? 'Modo claro' : 'Modo escuro'}>
               {dark ? '☀️' : '🌙'}
             </button>
-            {currentUser?.recebe_alerta_analise && analiseAlertCount > 0 && (
+            {currentUser?.recebe_alerta_analise && (
               <div
-                title={`${analiseAlertCount} análise(s) orçamentária(s) pendente(s)`}
-                style={{ position:'relative', display:'flex', alignItems:'center', gap:4, background:'rgba(217,119,6,.15)', border:'1px solid rgba(217,119,6,.4)', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#fde68a', fontWeight:700 }}
-                onClick={() => setActiveTab('licitacoes')}>
+                title={analiseAlertCount > 0 ? `${analiseAlertCount} análise(s) orçamentária(s) pendente(s)` : 'Análises orçamentárias'}
+                style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
+                  background: analiseAlertCount > 0 ? 'rgba(217,119,6,.15)' : 'rgba(255,255,255,.1)',
+                  border:`1px solid ${analiseAlertCount > 0 ? 'rgba(217,119,6,.4)' : 'rgba(255,255,255,.2)'}`,
+                  borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#fde68a', fontWeight:700 }}
+                onClick={() => setShowAnalisePanel(true)}>
                 🔔 Análise
-                <span style={{ background:'#d97706', color:'white', borderRadius:10, padding:'0 5px', fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
-                  {analiseAlertCount}
-                </span>
+                {analiseAlertCount > 0 && (
+                  <span style={{ background:'#d97706', color:'white', borderRadius:10, padding:'0 5px',
+                    fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
+                    {analiseAlertCount}
+                  </span>
+                )}
               </div>
             )}
             <div className="acn-user">
@@ -950,6 +958,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       )}
 
       <ChatWidget currentUser={currentUser} />
+
+      {/* Painel lateral de Análises Orçamentárias */}
+      {showAnalisePanel && (
+        <AnaliseInboxPanel
+          currentUser={currentUser}
+          onClose={() => setShowAnalisePanel(false)}
+          onCountChange={n => setAnaliseAlertCount(n)}
+          onNavigate={(tab) => { setShowAnalisePanel(false); setActiveTab(tab); }}
+        />
+      )}
     </>
   );
 }

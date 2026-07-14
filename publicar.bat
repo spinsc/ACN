@@ -57,6 +57,7 @@ git add src/DemandaAvulsaPanel.tsx
 git add public/logo.png
 git add public/motorola.png
 git add src/AnaliseWidget.tsx
+git add src/AnaliseInboxPanel.tsx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
@@ -75,7 +76,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: modal compras CRM, vendas filhas OP XXXX.XXXX, badge analise header, logistica vincula pedido compra, WhatsApp salvar em qualquer card, Orcamento em analise grupos, recebe_alerta_analise admin"
+git commit -m "feat: AnaliseInboxPanel painel lateral inbox analise orcamentaria, badge clicavel, navegar CRM/licitacoes, concluir setores, LoginTab salva campos extras"
 
 :: Push
 echo.
