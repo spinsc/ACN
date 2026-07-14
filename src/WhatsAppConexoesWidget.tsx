@@ -177,6 +177,8 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
       if (json.error) throw new Error(json.error);
       setInstInexistente(prev => ({ ...prev, [inst.instance_name]: false }));
       await load();
+      // Aguarda Evolution API inicializar a instância antes de pedir QR
+      await new Promise(resolve => setTimeout(resolve, 2500));
       await buscarQR(inst.instance_name);
     } catch (e: any) {
       alert('Erro ao recriar instância: ' + e.message);

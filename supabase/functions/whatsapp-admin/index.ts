@@ -117,8 +117,7 @@ Deno.serve(async (req) => {
         const { instanceName, vendedorNome, vendedorId } = body
         if (!instanceName || !vendedorNome) return json({ error: 'instanceName e vendedorNome obrigatórios' }, 400)
 
-        // Cria na Evolution API
-        const evoRes = await evoPost(EVO_URL, EVO_TOKEN, '/instance/create', {
+        const createPayload = {
           instanceName,
           qrcode: true,
           integration: 'WHATSAPP-BAILEYS',
@@ -128,7 +127,22 @@ Deno.serve(async (req) => {
             base64: true,
             events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
           },
-        })
+        }
+
+        // Cria na Evolution API
+        let evoRes = await evoPost(EVO_URL, EVO_TOKEN, '/instance/create', createPayload)
+
+        // Se a instância já existe no servidor (409 ou "already exist"), deleta e recria
+        const alreadyExists =
+          evoRes?.status === 409 ||
+          [evoRes?.response?.message].flat().some((m: string) =>
+            typeof m === 'string' && (m.toLowerCase().includes('already exist') || m.toLowerCase().includes('já existe'))
+          )
+        if (alreadyExists) {
+          await evoDel(EVO_URL, EVO_TOKEN, `/instance/delete/${instanceName}`)
+          await new Promise(r => setTimeout(r, 800))
+          evoRes = await evoPost(EVO_URL, EVO_TOKEN, '/instance/create', createPayload)
+        }
 
         // Salva no Supabase
         await supabase.from('crm_whatsapp_instancias').upsert({
