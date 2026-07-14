@@ -11,10 +11,12 @@ const FORM_VAZIO = {
   tipo: 'Recebimento', data: new Date().toISOString().split('T')[0],
   remetente: '', destinatario: '', tipo_mercadoria: 'Equipamento',
   descricao: '', quantidade: '', peso: '', nf_referencia: '', veiculo_placa: '', observacoes: '',
+  pedido_compra_id: '',
 };
 
 export default function LogisticaTab({ currentUser }) {
   const [manifestos, setManifestos] = useState([]);
+  const [pedidosCompra, setPedidosCompra] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(FORM_VAZIO);
@@ -174,8 +176,12 @@ export default function LogisticaTab({ currentUser }) {
 
   const fetchAll = async () => {
     setLoading(true);
-    const { data } = await supabase.from('logistica_manifestos').select('*').order('data', { ascending: false });
-    setManifestos(data || []);
+    const [{ data: mData }, { data: pcData }] = await Promise.all([
+      supabase.from('logistica_manifestos').select('*').order('data', { ascending: false }),
+      supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material, data_prevista_recebimento').eq('status_compra', 'Comprado').order('data_prevista_recebimento', { ascending: true }),
+    ]);
+    setManifestos(mData || []);
+    setPedidosCompra(pcData || []);
     setLoading(false);
   };
 
@@ -202,13 +208,24 @@ export default function LogisticaTab({ currentUser }) {
       }
     }
 
-    const { error } = await supabase.from('logistica_manifestos').insert([{
-      ...form, fotos: fotosUrls,
+    const payload = {
+      ...form,
+      fotos: fotosUrls,
+      pedido_compra_id: form.pedido_compra_id || null,
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
-    }]);
+    };
+    const { error } = await supabase.from('logistica_manifestos').insert([payload]);
     if (error) { alert('Erro ao salvar: ' + error.message); }
-    else { setForm(FORM_VAZIO); setFotos([]); setShowForm(false); fetchAll(); }
+    else {
+      // Se recebimento vinculado a pedido de compra, avança status para Concluído
+      if (form.tipo === 'Recebimento' && form.pedido_compra_id) {
+        await supabase.from('pcp_pedidos_compra')
+          .update({ status_compra: 'Concluído', data_conclusao: new Date().toISOString().split('T')[0] })
+          .eq('id', form.pedido_compra_id);
+      }
+      setForm(FORM_VAZIO); setFotos([]); setShowForm(false); fetchAll();
+    }
     setUploading(false);
   };
 
@@ -283,6 +300,25 @@ export default function LogisticaTab({ currentUser }) {
                 <input className="acn-input" style={{width:'100%'}} value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})} />
               </div>
             </div>
+
+            {/* VINCULAR PEDIDO DE COMPRA — só para Recebimento */}
+            {form.tipo === 'Recebimento' && pedidosCompra.length > 0 && (
+              <div className="form-row" style={{marginTop:4}}>
+                <div style={{flex:1}}>
+                  <label className="acn-label">Vincular Pedido de Compra (opcional)</label>
+                  <select className="acn-input" style={{width:'100%'}} value={form.pedido_compra_id}
+                    onChange={e => setForm({...form, pedido_compra_id: e.target.value})}>
+                    <option value="">— Não vincular —</option>
+                    {pedidosCompra.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.numero_pedido ? `#${p.numero_pedido} — ` : ''}{p.descricao_material || '(sem descrição)'}
+                        {p.data_prevista_recebimento ? ` · Prev: ${new Date(p.data_prevista_recebimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             {/* FOTOS */}
             <div style={{marginTop:8}}>

@@ -15,6 +15,12 @@ export const ANALISE_GRUPOS = [
     ],
   },
   {
+    grupo: 'Orçamento',
+    opcoes: [
+      { id: 'Orcamento', label: 'Análise Orçamentária' },
+    ],
+  },
+  {
     grupo: 'Departamento',
     opcoes: [
       { id: 'Chicotes',    label: 'Chicotes' },
@@ -29,6 +35,7 @@ export const SETOR_LABEL: Record<string, string> = {
   Comercial:  'Comercial/ADM',
   Telecom:    'Téc. Telecom',
   Engenharia: 'Téc. Engenharia',
+  Orcamento:  'Orçamento',
   Chicotes:   'Chicotes',
   Serralheria:'Serralheria',
   Producao:   'Produção',
@@ -39,6 +46,7 @@ const SETOR_COR: Record<string, string> = {
   Comercial:  '#2563eb',
   Telecom:    '#0891b2',
   Engenharia: '#16a34a',
+  Orcamento:  '#b45309',
   Chicotes:   '#7c3aed',
   Serralheria:'#ea580c',
   Producao:   '#d97706',

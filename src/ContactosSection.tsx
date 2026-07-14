@@ -552,8 +552,27 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                       {m.transcricao && m.tipo_msg === 'audio' && (
                         <div style={{ fontSize:8, color:'#7c3aed', marginTop:2 }}>🎙️ Transcrito</div>
                       )}
-                      <div style={{ fontSize:8, color:'#94a3b8', marginTop:3, textAlign:'right' }}>
-                        {fmtDT(m.data_msg)} {!m.lida && <span style={{ color:'#0369a1' }}>● novo</span>}
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:4 }}>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setModalInteracao({ contato: c });
+                            setFormI({
+                              ...VAZIO_INTERACAO,
+                              tipo: 'whatsapp',
+                              descricao: m.conteudo || m.transcricao || '',
+                              transcricao: m.transcricao || '',
+                              oportunidade_id: null,
+                            });
+                          }}
+                          title="Salvar esta mensagem como interação em qualquer card CRM"
+                          style={{ fontSize:8, color:'#2563eb', background:'none', border:'1px solid #bfdbfe', borderRadius:4,
+                            padding:'1px 6px', cursor:'pointer', fontWeight:600, lineHeight:'14px' }}>
+                          📌 Salvar no CRM
+                        </button>
+                        <div style={{ fontSize:8, color:'#94a3b8', textAlign:'right' }}>
+                          {fmtDT(m.data_msg)} {!m.lida && <span style={{ color:'#0369a1' }}>● novo</span>}
+                        </div>
                       </div>
                     </div>
                   ))}

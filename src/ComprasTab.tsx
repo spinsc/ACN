@@ -128,6 +128,19 @@ export default function ComprasTab({ currentUser }) {
     try { updates.valor_compra = parseFloat(row.valor.replace(',','.')); } catch(_) {}
     const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', p.id);
     if (error) { alert('Erro: ' + error.message); setInline(prev => ({...prev, [p.id]:{...prev[p.id],salvando:false}})); return; }
+    // Se vinculado a oportunidade CRM, registrar nota no histórico
+    if (p.oportunidade_id) {
+      const dataFmt = row.prazo ? new Date(row.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+      const nota = `📦 Compra confirmada — previsão de recebimento: ${dataFmt}${p.descricao_material ? ` (${p.descricao_material})` : ''}`;
+      try {
+        await supabase.from('crm_historico').insert({
+          oportunidade_id: p.oportunidade_id,
+          texto: nota,
+          usuario_nome: currentUser?.nome || 'Compras',
+          criado_em: new Date().toISOString(),
+        });
+      } catch(_) {}
+    }
     setFiltro('');
     load();
   };

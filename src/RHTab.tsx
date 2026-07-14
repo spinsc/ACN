@@ -1282,17 +1282,38 @@ function RelatorioTecnicos({ funcionarios }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data: osData } = await supabase
-        .from('sac_ordens_servico')
-        .select('id,numero_os,cliente_nome,status,tecnico_responsavel,data_inicio_manutencao,data_conclusao_manutencao,tipo_avaliacao,veiculo_modelo')
-        .not('tecnico_responsavel','is',null)
-        .order('data_inicio_manutencao', { ascending: false });
+      // OS de manutenção por técnico — colunas tecnico_responsavel e data_inicio_manutencao
+      // são novas (ALTER TABLE) — usar fallback se não existirem ainda
+      let osData: any[] = [];
+      try {
+        const { data: osD, error: osErr } = await supabase
+          .from('sac_ordens_servico')
+          .select('id,numero_os,cliente_nome,status,tecnico_responsavel,data_inicio_manutencao,data_conclusao_manutencao,tipo_avaliacao,veiculo_modelo')
+          .not('tecnico_responsavel','is',null)
+          .order('data_inicio_manutencao', { ascending: false });
+        if (!osErr) osData = osD || [];
+        else {
+          // fallback sem colunas novas
+          const { data: osD2 } = await supabase
+            .from('sac_ordens_servico')
+            .select('id,numero_os,cliente_nome,status')
+            .order('id', { ascending: false })
+            .limit(100);
+          osData = osD2 || [];
+        }
+      } catch { osData = []; }
 
-      const { data: opData } = await supabase
-        .from('oples')
-        .select('id,numero_opl,cliente_nome,status,responsavel_tecnico,criado_em')
-        .not('responsavel_tecnico','is',null)
-        .order('criado_em', { ascending: false });
+      // OPs com responsável comercial ordenadas por data_entrada (sempre existe)
+      let opData: any[] = [];
+      try {
+        const { data: opD } = await supabase
+          .from('oples')
+          .select('id,opl,cliente_nome,status_geral,responsavel_comercial,data_entrada')
+          .not('responsavel_comercial','is',null)
+          .order('data_entrada', { ascending: false })
+          .limit(200);
+        opData = opD || [];
+      } catch { opData = []; }
 
       const mapa = {};
       const addEntry = (nome, entry) => {
@@ -1303,14 +1324,14 @@ function RelatorioTecnicos({ funcionarios }) {
         else mapa[key].op.push(entry);
       };
 
-      (osData||[]).forEach(os => addEntry(os.tecnico_responsavel, {
+      osData.forEach(os => addEntry(os.tecnico_responsavel, {
         tipo:'os', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
         status:os.status, inicio:os.data_inicio_manutencao, fim:os.data_conclusao_manutencao,
         avaliacao:os.tipo_avaliacao, veiculo:os.veiculo_modelo,
       }));
-      (opData||[]).forEach(op => addEntry(op.responsavel_tecnico, {
-        tipo:'op', id:op.id, numero:op.numero_opl,
-        cliente:op.cliente_nome, status:op.status, inicio:op.criado_em,
+      opData.forEach(op => addEntry(op.responsavel_comercial, {
+        tipo:'op', id:op.id, numero:op.opl,
+        cliente:op.cliente_nome, status:op.status_geral, inicio:op.data_entrada,
       }));
 
       const result = Object.values(mapa).map((tec) => {

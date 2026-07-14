@@ -534,6 +534,7 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [waNotifCount, setWaNotifCount] = useState(0);
+  const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
 
   // Escuta contagem de msgs WA não lidas emitida pelo ContactosSection
   useEffect(() => {
@@ -541,6 +542,23 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
     window.addEventListener('crm:wa-unread-count', handler);
     return () => window.removeEventListener('crm:wa-unread-count', handler);
   }, []);
+
+  // Badge análise orçamentária — só para usuários com recebe_alerta_analise
+  useEffect(() => {
+    if (!currentUser?.recebe_alerta_analise) return;
+    const fetchAnalise = async () => {
+      try {
+        const { count } = await supabase
+          .from('analise_solicitacoes')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'em_andamento');
+        setAnaliseAlertCount(count || 0);
+      } catch(_) {}
+    };
+    fetchAnalise();
+    const iv = setInterval(fetchAnalise, 60000);
+    return () => clearInterval(iv);
+  }, [currentUser?.recebe_alerta_analise]);
 
   // Navegação cross-tab vinda do CRM
   useEffect(() => {
@@ -743,6 +761,17 @@ export default function DashboardTab({ currentUser, onLogout }: Props) {
               title={dark ? 'Modo claro' : 'Modo escuro'}>
               {dark ? '☀️' : '🌙'}
             </button>
+            {currentUser?.recebe_alerta_analise && analiseAlertCount > 0 && (
+              <div
+                title={`${analiseAlertCount} análise(s) orçamentária(s) pendente(s)`}
+                style={{ position:'relative', display:'flex', alignItems:'center', gap:4, background:'rgba(217,119,6,.15)', border:'1px solid rgba(217,119,6,.4)', borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#fde68a', fontWeight:700 }}
+                onClick={() => setActiveTab('licitacoes')}>
+                🔔 Análise
+                <span style={{ background:'#d97706', color:'white', borderRadius:10, padding:'0 5px', fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
+                  {analiseAlertCount}
+                </span>
+              </div>
+            )}
             <div className="acn-user">
               <strong>{currentUser?.nome || 'Usuário'}</strong>
               <span>{currentUser?.perfil || ''}</span>

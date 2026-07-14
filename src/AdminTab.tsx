@@ -137,7 +137,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [] });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false });
   const [perfisDB, setPerfisDB] = useState([]);
 
   // Perfis disponíveis = padrão + qualquer extra criado no banco
@@ -177,7 +177,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [] });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false });
     setModalEditar(u);
   };
 
@@ -198,6 +198,7 @@ function PainelUsuarios() {
       abas_permitidas: editForm.abas_permitidas,
       pode_autorizar_rh: editForm.pode_autorizar_rh,
       permissoes_crm: editForm.permissoes_crm,
+      recebe_alerta_analise: editForm.recebe_alerta_analise,
     };
     if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
@@ -354,6 +355,16 @@ function PainelUsuarios() {
                     <span>{label}</span>
                   </label>
                 ))}
+              </div>
+              {/* Análise Orçamentária */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.recebe_alerta_analise}
+                    onChange={e=>setEditForm(f=>({...f,recebe_alerta_analise:e.target.checked}))}
+                    style={{accentColor:'#d97706'}} />
+                  <span>🔔 Recebe alertas de Análise Orçamentária</span>
+                </label>
               </div>
             </div>
             <div style={{display:'flex',gap:8,marginTop:4}}>

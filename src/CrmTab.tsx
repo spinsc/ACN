@@ -53,7 +53,23 @@ const VAZIO_VENDA: any = {
   operador_id: null,
   operador_nome: '',
   opl_id: null,
+  numero_op: '',   // formato XXXX.XXXX
+  observacoes: '',
 };
+
+const VAZIO_COMPRA: any = {
+  descricao_material: '',
+  quantidade: 1,
+  fornecedor: '',
+  observacoes_compra: '',
+};
+
+// Máscara de formato XXXX.XXXX para número de OP
+function mascaraOp(valor: string): string {
+  const num = valor.replace(/\D/g, '').slice(0, 8);
+  if (num.length <= 4) return num;
+  return num.slice(0, 4) + '.' + num.slice(4);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
@@ -91,6 +107,11 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
+  // ── compras ──
+  const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
+  const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
+  const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
+  const [salvandoCompra, setSalvandoCompra] = useState(false);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
   // ── andamento ──
@@ -122,6 +143,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     setItens(r3.data || []);
     setProgresso(r4.data || []);
     setVendas(r5.data || []);
+    // Carrega pedidos de compra vinculados ao CRM
+    const { data: pcData } = await supabase
+      .from('pcp_pedidos_compra')
+      .select('*')
+      .not('oportunidade_id','is',null);
+    setPedidosCompra(pcData || []);
     if (!silent) setLoading(false);
   }, []);
 
@@ -277,6 +304,49 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       }
     }
     setSalvandoAndamento(false);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EMITIR PEDIDO DE COMPRA (vinculado ao card CRM)
+  // ─────────────────────────────────────────────────────────────────────────
+  const emitirPedidoCompraCrm = async () => {
+    if (!modalCompras) return;
+    setSalvandoCompra(true);
+    const agora = new Date().toISOString();
+    const numRef = modalCompras.numero_edital ? modalCompras.numero_edital.replace(/\D/g,'').slice(-6) : Date.now().toString().slice(-6);
+    const numeroPedido = `PC-CRM-${numRef}`;
+    const obsCompleta = [
+      `Pedido de Compra — CRM: ${modalCompras.titulo || '—'}`,
+      `Órgão: ${modalCompras.orgao || '—'}`,
+      formCompras.observacoes_compra || '',
+      `Solicitado por: ${currentUser?.nome || '—'}`,
+    ].filter(Boolean).join('\n');
+
+    const { error } = await supabase.from('pcp_pedidos_compra').insert([{
+      numero_pedido:        numeroPedido,
+      opl:                  modalCompras.numero_edital || null,
+      descricao_material:   formCompras.descricao_material || modalCompras.titulo || '—',
+      quantidade:           formCompras.quantidade || 1,
+      fornecedor:           formCompras.fornecedor || null,
+      status_compra:        'Pendente',
+      observacoes_compra:   obsCompleta,
+      oportunidade_id:      modalCompras.id,
+      data_criacao:         agora,
+    }]);
+    setSalvandoCompra(false);
+    if (error) { alert('Erro ao emitir pedido: ' + error.message); return; }
+    // Nota no histórico do card
+    await supabase.from('crm_historico').insert({
+      oportunidade_id: modalCompras.id,
+      tipo: 'observacao',
+      texto: `📦 Pedido de Compra ${numeroPedido} emitido para o setor Compras.`,
+      usuario_nome: currentUser?.nome || 'Sistema',
+      criado_em: agora,
+    });
+    alert(`✅ Pedido ${numeroPedido} criado! Acompanhe na aba Compras.`);
+    setModalCompras(null);
+    setFormCompras({ ...VAZIO_COMPRA });
+    load(true);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -494,6 +564,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       operador_id:       limpar(formVenda.operador_id),
       operador_nome:     limpar(formVenda.operador_nome),
       opl_id:            limpar(formVenda.opl_id),
+      numero_op:         limpar(formVenda.numero_op),
+      observacoes:       limpar(formVenda.observacoes),
     };
     if (modalVenda.venda?.id) {
       await supabase.from('crm_vendas').update(p).eq('id', modalVenda.venda.id);
@@ -624,6 +696,24 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         )}
 
+        {/* Badge de previsão de entrega de compra */}
+        {ganho && (() => {
+          const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
+          const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
+          const pendente = pc.find(p => p.status_compra === 'Pendente' || p.status_compra === 'Em Andamento');
+          if (comprado) return (
+            <div style={{ marginTop:4, fontSize:9, color:'#166534', background:'#dcfce7', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block' }}>
+              📦 Entrega prev.: {new Date(comprado.data_prevista_recebimento + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </div>
+          );
+          if (pendente) return (
+            <div style={{ marginTop:4, fontSize:9, color:'#92400e', background:'#fef3c7', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block' }}>
+              📦 Compra em andamento
+            </div>
+          );
+          return null;
+        })()}
+
         <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
           {ganho && (
             <>
@@ -640,6 +730,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               <button className="acn-btn" style={{ background:'#0f766e' }}
                 onClick={() => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }}>
                 + Venda
+              </button>
+              <button className="acn-btn" style={{ background:'#0369a1' }}
+                onClick={() => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }}>
+                📦 Compras
               </button>
             </>
           )}
@@ -1182,11 +1276,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 <input
                   className="acn-input"
                   style={{ width:'100%', fontSize:11 }}
-                  placeholder="Ex: 1234"
+                  placeholder="Ex: 2024.0001"
                   value={numOp}
-                  onChange={e => setNumOp(e.target.value)}
+                  onChange={e => setNumOp(mascaraOp(e.target.value))}
+                  maxLength={9}
                   autoFocus
                 />
+                <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>Formato: XXXX.XXXX (ex: 2024.0001)</div>
               </div>
             )}
 
@@ -1225,8 +1321,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               </div>
             )}
 
+            {/* Número da OP vinculada — formato XXXX.XXXX */}
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Nº da OP Vinculada (formato XXXX.XXXX)</div>
+              <input value={formVenda.numero_op||''} placeholder="Ex: 2024.0001"
+                maxLength={9}
+                onChange={e => setFormVenda(f => ({...f, numero_op: mascaraOp(e.target.value)}))}
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+              />
+              <div style={{ fontSize:8, color:'#94a3b8', marginTop:1 }}>Formato XXXX.XXXX — identifica a OP de produção desta venda filha</div>
+            </div>
+
             {([
-              { label:'Órgão Aderente / Comprador', key:'orgao_aderente', placeholder:'Ex: Corpo de Bombeiros / João Silva LTDA' },
+              { label:'Órgão Aderente / Comprador *', key:'orgao_aderente', placeholder:'Ex: Corpo de Bombeiros / João Silva LTDA' },
               { label:'Descrição do Item / Serviço', key:'descricao', placeholder:'Ex: 50x Rádio DMR Motorola DP4801e' },
               { label:'Quantidade', key:'quantidade', placeholder:'50' },
               { label:'Valor Unitário (R$)', key:'valor_unitario', placeholder:'6400' },
@@ -1270,7 +1377,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               </>
             )}
 
-            <div style={{ marginBottom:14 }}>
+            <div style={{ marginBottom:8 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Operador Responsável (Vendedor)</div>
               <ColaboradorSelect
                 value={formVenda.operador_nome||''}
@@ -1279,11 +1386,78 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               />
             </div>
 
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
+              <textarea value={formVenda.observacoes||''} rows={2}
+                placeholder="Notas adicionais sobre esta venda / adesão..."
+                onChange={e => setFormVenda(f => ({...f, observacoes:e.target.value}))}
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit' }}
+              />
+            </div>
+
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
               <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalVenda(null)}>Cancelar</button>
               <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvando?.5:1 }}
                 onClick={salvarVenda} disabled={salvando}>
-                {salvando ? 'Salvando...' : 'Salvar Venda'}
+                {salvando ? 'Salvando...' : 'Salvar Venda Filha'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Compras ─────────────────────────────────────────── */}
+      {modalCompras && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'#fff', borderRadius:8, padding:20, width:420, maxWidth:'95vw', boxShadow:'0 8px 32px rgba(0,0,0,.3)' }}>
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#0f766e' }}>
+              📦 Solicitar Compra — {modalCompras.titulo || '(sem título)'}
+            </div>
+
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Descrição do Material / Serviço *</div>
+              <input value={formCompras.descricao_material}
+                onChange={e => setFormCompras(f => ({...f, descricao_material:e.target.value}))}
+                placeholder="Ex: Câmeras IP, instalação elétrica..."
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+              />
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Quantidade</div>
+                <input type="number" min={1} value={formCompras.quantidade}
+                  onChange={e => setFormCompras(f => ({...f, quantidade: Number(e.target.value)||1 }))}
+                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Fornecedor (opcional)</div>
+                <input value={formCompras.fornecedor}
+                  onChange={e => setFormCompras(f => ({...f, fornecedor:e.target.value}))}
+                  placeholder="Nome do fornecedor..."
+                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
+              <textarea value={formCompras.observacoes_compra}
+                onChange={e => setFormCompras(f => ({...f, observacoes_compra:e.target.value}))}
+                rows={2} placeholder="Especificações técnicas, urgência, referências..."
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit' }}
+              />
+            </div>
+
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }}
+                onClick={() => { setModalCompras(null); setFormCompras({...VAZIO_COMPRA}); }}>
+                Cancelar
+              </button>
+              <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvandoCompra?.5:1 }}
+                onClick={emitirPedidoCompraCrm} disabled={salvandoCompra || !formCompras.descricao_material.trim()}>
+                {salvandoCompra ? 'Enviando...' : '📦 Enviar para Compras'}
               </button>
             </div>
           </div>

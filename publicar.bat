@@ -48,6 +48,7 @@ git add src/AlmoxarifadoTab.tsx
 git add src/FiscalTab.tsx
 git add src/ChicotesTab.tsx
 git add src/ComprasTab.tsx
+git add src/LogisticaTab.tsx
 git add src/DemandaAvulsaPanel.tsx
 git add src/EngenhariaTab.tsx
 git add src/SetorDemandaTab.tsx
@@ -74,7 +75,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: pedido compra direta ao vencer licitacao, pre-fill op, fix whatsapp 401, fix crm_historico 400"
+git commit -m "feat: modal compras CRM, vendas filhas OP XXXX.XXXX, badge analise header, logistica vincula pedido compra, WhatsApp salvar em qualquer card, Orcamento em analise grupos, recebe_alerta_analise admin"
 
 :: Push
 echo.
