@@ -721,7 +721,21 @@ export default function ComercialTab({ currentUser }) {
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef9c3',borderBottom:'2px solid #fde047'}}>
           <span style={{color:'#713f12'}}>{editId ? '✏️ Editando OP' : 'Entrada de Demanda Comercial'}</span>
-          {!showForm && <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setFormData(FORM_VAZIO);setEditId(null);setShowForm(true);}}>+ Nova OP</button>}
+          {!showForm && <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{
+          // Lê pré-preenchimento de licitação vencida (se houver)
+          const prefillRaw = localStorage.getItem('acn_nova_op_prefill');
+          if (prefillRaw) {
+            try {
+              const prefill = JSON.parse(prefillRaw);
+              setFormData({...FORM_VAZIO, ...prefill});
+              localStorage.removeItem('acn_nova_op_prefill');
+            } catch { setFormData(FORM_VAZIO); }
+          } else {
+            setFormData(FORM_VAZIO);
+          }
+          setEditId(null);
+          setShowForm(true);
+        }}>+ Nova OP</button>}
         </div>
         {showForm && (
           <div className="sec-body">

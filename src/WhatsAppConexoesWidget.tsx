@@ -36,6 +36,10 @@ const STATUS_LABEL: Record<string, string> = {
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/whatsapp-admin`;
 
+// App usa auth customizada (auth_usuarios), não Supabase Auth.
+// supabase.auth.getSession() retorna null → usar anon key diretamente para chamar Edge Functions.
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => void }) {
   const [instancias, setInstancias]   = useState<Instancia[]>([]);
@@ -101,12 +105,11 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
     if (!configId) { alert('Salve a configuração da Evolution API primeiro.'); return; }
     setCriando(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(EDGE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({ action: 'create', instanceName: novaInst.trim(), vendedorNome: novaVend.trim() }),
       });
@@ -132,9 +135,8 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   const buscarQR = async (instanceName: string) => {
     setQrLoading(prev => ({ ...prev, [instanceName]: true }));
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${EDGE_URL}?action=qrcode&instance=${encodeURIComponent(instanceName)}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
       });
       if (!res.ok && !(res.headers.get('content-type') || '').includes('application/json')) {
         throw new Error(`Edge Function indisponível (HTTP ${res.status}). Deploy: supabase functions deploy whatsapp-admin`);
@@ -156,9 +158,8 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   // ─── verificar status ──────────────────────────────────────────────────────
   const verificarStatus = async (inst: Instancia) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${EDGE_URL}?action=status&instance=${encodeURIComponent(inst.instance_name)}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
       });
       if (!res.ok && !(res.headers.get('content-type') || '').includes('application/json')) {
         throw new Error(`Edge Function indisponível (HTTP ${res.status})`);
@@ -185,10 +186,9 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   const desconectar = async (inst: Instancia) => {
     if (!confirm(`Desconectar WhatsApp de ${inst.vendedor_nome}?`)) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       await fetch(EDGE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ action: 'logout', instanceName: inst.instance_name }),
       });
       setQrData(prev => { const n = { ...prev }; delete n[inst.instance_name]; return n; });
@@ -202,10 +202,9 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
   const excluirInstancia = async (inst: Instancia) => {
     if (!confirm(`Excluir instância "${inst.instance_name}" de ${inst.vendedor_nome}?\n\nIsso remove a instância da Evolution API e do sistema.`)) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       await fetch(EDGE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ action: 'delete', instanceName: inst.instance_name }),
       });
       setQrData(prev => { const n = { ...prev }; delete n[inst.instance_name]; return n; });

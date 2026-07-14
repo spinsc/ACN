@@ -235,13 +235,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const abrirAndamento = async (op: any) => {
     setModalAndamento(op);
     setNovoAndamento('');
-    const { data } = await supabase
+    const { data, error: errH } = await supabase
       .from('crm_historico')
       .select('*')
       .eq('oportunidade_id', op.id)
       .eq('tipo', 'observacao')
       .order('criado_em', { ascending: false });
-    setAndamentoHistorico(data || []);
+    if (errH) {
+      // criado_em pode não existir ainda — rodar SQL: ALTER TABLE crm_historico ADD COLUMN IF NOT EXISTS criado_em timestamptz DEFAULT now()
+      const { data: d2 } = await supabase.from('crm_historico').select('*').eq('oportunidade_id', op.id).eq('tipo', 'observacao');
+      setAndamentoHistorico(d2 || []);
+    } else {
+      setAndamentoHistorico(data || []);
+    }
   };
 
   const salvarAndamentoCrm = async () => {
@@ -257,13 +263,18 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
       setNovoAndamento('');
-      const { data } = await supabase
+      const { data: dH, error: eH } = await supabase
         .from('crm_historico')
         .select('*')
         .eq('oportunidade_id', modalAndamento.id)
         .eq('tipo', 'observacao')
         .order('criado_em', { ascending: false });
-      setAndamentoHistorico(data || []);
+      if (eH) {
+        const { data: d2 } = await supabase.from('crm_historico').select('*').eq('oportunidade_id', modalAndamento.id).eq('tipo', 'observacao');
+        setAndamentoHistorico(d2 || []);
+      } else {
+        setAndamentoHistorico(dH || []);
+      }
     }
     setSalvandoAndamento(false);
   };

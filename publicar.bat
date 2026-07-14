@@ -58,6 +58,9 @@ git add public/motorola.png
 git add src/AnaliseWidget.tsx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
+git add src/LicitacoesTab.tsx
+git add src/ComercialTab.tsx
+git add src/CrmTab.tsx
 git add supabase/functions/whatsapp-admin/index.ts
 git add supabase/functions/whatsapp-webhook/index.ts
 git add supabase/functions/transcrever-audio/index.ts
@@ -71,7 +74,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: solicitar analise licitacoes+crm, aba telecom, widget analise nos setores"
+git commit -m "feat: pedido compra direta ao vencer licitacao, pre-fill op, fix whatsapp 401, fix crm_historico 400"
 
 :: Push
 echo.

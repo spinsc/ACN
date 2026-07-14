@@ -112,6 +112,9 @@ function PrazoBadge({ label, value }: { label:string; value:string }) {
 function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
   const [tab, setTab] = useState<'info'|'anexos'|'historico'|'andamento'|'analise'>('info');
   const [showModalSolicitar, setShowModalSolicitar] = useState(false);
+  const [showAcoesVencida, setShowAcoesVencida] = useState(false);
+  const [emitindoPedido, setEmitindoPedido] = useState(false);
+  const [pedidoEmitido, setPedidoEmitido] = useState<string|null>(null);
   const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [tipoAnexo, setTipoAnexo] = useState('documento');
@@ -173,7 +176,52 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
     setObsEncerramento('');
     setSalvando(false);
     onRefresh();
-    onClose();
+    // Licitação vencida: mostra painel de ações ao invés de fechar
+    if (novoStatus === 'Vencida') {
+      setShowAcoesVencida(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // ── Emitir Pedido de Compra Direta ────────────────────────────────────────
+  const emitirPedidoCompra = async () => {
+    setEmitindoPedido(true);
+    const agora = new Date().toISOString();
+    const numRef = licit.numero ? licit.numero.replace(/\D/g,'').slice(-6) : Date.now().toString().slice(-6);
+    const numero = `PC-L${numRef}`;
+    const obs = [
+      `Pedido de Compra Direta — ${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} Vencida`,
+      `Número: ${licit.numero || '—'}`,
+      `Projeto: ${licit.nome_projeto || '—'}`,
+      `Órgão/Cliente: ${licit.orgao || '—'}`,
+      `Objeto: ${licit.objeto_principal || '—'}`,
+      `Solicitado por: ${currentUser?.nome || '—'}`,
+      `Data: ${new Date().toLocaleString('pt-BR')}`,
+    ].join('\n');
+    const { error } = await supabase.from('pcp_pedidos_compra').insert([{
+      numero_pedido: numero,
+      opl: licit.numero || null,
+      descricao_material: licit.objeto_principal || licit.nome_projeto || '—',
+      quantidade: 1,
+      status_compra: 'Pendente',
+      observacoes_compra: obs,
+      data_criacao: agora,
+    }]);
+    setEmitindoPedido(false);
+    if (error) { alert('Erro ao emitir pedido de compra: ' + error.message); return; }
+    setPedidoEmitido(numero);
+  };
+
+  // ── Preparar pré-preenchimento da OP no Comercial ────────────────────────
+  const prepararOpComercial = () => {
+    const prefill = {
+      cliente_nome: licit.orgao || '',
+      modelo: licit.nome_projeto || '',
+      observacoes_comercial: `${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} vencida: ${licit.numero} — ${licit.nome_projeto}`,
+    };
+    localStorage.setItem('acn_nova_op_prefill', JSON.stringify(prefill));
+    alert('✅ Dados salvos!\n\nVá para a aba Comercial e clique em "+ Nova OP" para pré-preencher o formulário com os dados desta licitação.');
   };
 
   // ── Toggle marcador ─────────────────────────────────────────────────────
@@ -459,8 +507,46 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
         {/* Footer — botões de ação */}
         <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 16px', flexShrink:0, display:'flex', flexDirection:'column', gap:8 }}>
 
+          {/* ── Ações Pós-Vitória ── */}
+          {showAcoesVencida && (
+            <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:8, padding:14 }}>
+              <div style={{ fontWeight:700, color:'#166534', fontSize:14, marginBottom:4 }}>
+                🏆 Licitação marcada como VENCIDA!
+              </div>
+              <div style={{ fontSize:11, color:'#374151', marginBottom:12 }}>
+                Emita os documentos necessários para dar continuidade ao processo.
+              </div>
+
+              {/* Pedido de Compra */}
+              {pedidoEmitido ? (
+                <div style={{ background:'#dcfce7', borderRadius:6, padding:'8px 12px', fontSize:11, color:'#166534', fontWeight:700, marginBottom:8 }}>
+                  ✅ Pedido <strong>{pedidoEmitido}</strong> emitido! Verifique a aba Compras.
+                </div>
+              ) : (
+                <button onClick={emitirPedidoCompra} disabled={emitindoPedido}
+                  style={{ width:'100%', background:'#0369a1', color:'#fff', border:'none', borderRadius:6,
+                    padding:'9px', fontWeight:700, fontSize:11, cursor:'pointer', marginBottom:6, opacity: emitindoPedido ? .6 : 1 }}>
+                  {emitindoPedido ? 'Emitindo...' : '📦 Emitir Pedido de Compra Direta'}
+                </button>
+              )}
+
+              {/* Preparar OP */}
+              <button onClick={prepararOpComercial}
+                style={{ width:'100%', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6,
+                  padding:'9px', fontWeight:700, fontSize:11, cursor:'pointer', marginBottom:6 }}>
+                🏭 Preparar OP no Comercial (pré-preencher formulário)
+              </button>
+
+              <button onClick={onClose}
+                style={{ width:'100%', background:'#fff', color:'#374151', border:'1px solid #d1d5db',
+                  borderRadius:6, padding:'8px', fontSize:11, cursor:'pointer' }}>
+                Fechar
+              </button>
+            </div>
+          )}
+
           {/* Solicitar Análise */}
-          {!confirmStatus && (
+          {!showAcoesVencida && !confirmStatus && (
             <button onClick={() => setShowModalSolicitar(true)}
               style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:6, padding:'7px 16px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
               🔍 Solicitar Análise
@@ -468,7 +554,7 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
           )}
 
           {/* Excluir — somente Admin */}
-          {isAdmin && !confirmStatus && (
+          {!showAcoesVencida && isAdmin && !confirmStatus && (
             <button onClick={onExcluir}
               style={{ background:'#fef2f2', color:'#dc2626', border:'1.5px solid #fca5a5', borderRadius:6, padding:'7px 16px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
               🗑️ Excluir esta licitação
@@ -476,7 +562,7 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
           )}
 
           {/* Próximo status no fluxo */}
-          {btnProximo && !confirmStatus && (
+          {!showAcoesVencida && btnProximo && !confirmStatus && (
             <button onClick={() => setConfirmStatus(btnProximo.next)}
               style={{ background:STATUS_COR[btnProximo.next], color:'#fff', border:'none', borderRadius:6, padding:'8px 16px', fontWeight:700, fontSize:12, cursor:'pointer' }}>
               {btnProximo.label}
@@ -484,7 +570,7 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
           )}
 
           {/* Botões de encerramento (Em Andamento) */}
-          {s === 'Em Andamento' && isAnalista && !confirmStatus && (
+          {!showAcoesVencida && s === 'Em Andamento' && isAnalista && !confirmStatus && (
             <div style={{ display:'flex', gap:8 }}>
               {['Vencida','Perdida','Descartada'].map(ns => (
                 <button key={ns} onClick={() => setConfirmStatus(ns)}
