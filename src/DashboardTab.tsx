@@ -161,7 +161,12 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 
 /* ── CARDS ── */
 .sec-card { background:white; border:1px solid #e8ecf0; border-radius:6px; margin-bottom:8px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); }
-.sec-hdr  { padding:6px 10px; font-size:9px; font-weight:700; color:#374151; background:#fafbfc; border-bottom:1px solid #e8ecf0; display:flex; align-items:center; justify-content:space-between; gap:8px; letter-spacing:.4px; text-transform:uppercase; }
+.sec-hdr  { padding:6px 10px; font-size:9px; font-weight:700; color:#374151; background:#fafbfc; border-bottom:1px solid #e8ecf0; display:flex; align-items:center; justify-content:space-between; gap:8px; letter-spacing:.4px; text-transform:uppercase; cursor:pointer; user-select:none; }
+.sec-hdr::after { content:'▾'; font-size:11px; opacity:.45; margin-left:auto; flex-shrink:0; }
+.sec-hdr.no-collapse::after { display:none; }
+.sec-card.sec-collapsed .sec-hdr::after { content:'▸'; }
+.sec-card.sec-collapsed .sec-body { display:none !important; }
+.sec-card.sec-collapsed .sec-hdr { border-bottom:none; }
 .sec-body { padding:8px 10px; }
 
 /* ── TABELAS ── */
@@ -600,6 +605,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const iv = setInterval(fetchMencoes, 30000);
     return () => clearInterval(iv);
   }, [currentUser?.id]);
+
+  // ── Collapse global: clique em qualquer .sec-hdr colapsa/expande o .sec-card pai ──
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const hdr = (e.target as HTMLElement).closest('.sec-hdr');
+      if (!hdr) return;
+      // Não colapsa se o clique foi em botão ou input dentro do header
+      if ((e.target as HTMLElement).closest('button,input,select,a')) return;
+      const card = hdr.closest('.sec-card');
+      if (card) card.classList.toggle('sec-collapsed');
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, []);
 
   // Navegação cross-tab vinda do CRM
   useEffect(() => {

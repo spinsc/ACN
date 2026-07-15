@@ -1,11 +1,13 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // MencaoTextarea — textarea com autocomplete @usuário
+// Usa position:fixed para o dropdown escapar de overflow:hidden nos containers
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { supabase } from './supabaseClient';
 
-// Salva menções no banco após gravar o registro pai
+// ─── Exportação: salva menções no banco após gravar o registro pai ────────────
 export async function salvarMencoes(opts: {
   texto: string;
   mencionanteId: string;
@@ -19,7 +21,7 @@ export async function salvarMencoes(opts: {
   const { texto, mencionanteId, mencionanteNome, contexto, contextoId, contextoDescricao, campo, abaDestino } = opts;
   if (!texto || !contextoId) return;
 
-  const matches = [...texto.matchAll(/@([A-ZÀ-Úa-zà-ú][A-ZÀ-Úa-zà-ú ]+?)(?=\s|$|[,.;:!?])/g)];
+  const matches = [...texto.matchAll(/@([A-ZÀ-Úa-zà-ú][^\s@,;:!?.]{1,40})(?=\s|$|[,;:!?.])/g)];
   if (!matches.length) return;
 
   const nomes = [...new Set(matches.map(m => m[1].trim()))];
@@ -58,6 +60,54 @@ export async function salvarMencoes(opts: {
   }
 }
 
+// ─── Dropdown via portal (fixed) ─────────────────────────────────────────────
+function Dropdown({ sugestoes, rect, onSelect }) {
+  if (!rect || !sugestoes.length) return null;
+  return ReactDOM.createPortal(
+    <div style={{
+      position: 'fixed',
+      top:  rect.bottom + 4,
+      left: rect.left,
+      width: Math.max(rect.width, 220),
+      zIndex: 99999,
+      background: 'white',
+      border: '1.5px solid #c7d2fe',
+      borderRadius: 8,
+      boxShadow: '0 8px 28px rgba(0,0,0,.18)',
+      maxHeight: 220,
+      overflowY: 'auto',
+    }}>
+      <div style={{
+        padding: '5px 10px', fontSize: 9, color: '#6366f1', fontWeight: 700,
+        borderBottom: '1px solid #e0e7ff', background: '#f5f3ff',
+        borderRadius: '8px 8px 0 0',
+      }}>
+        👤 Mencionar usuário
+      </div>
+      {sugestoes.map(u => (
+        <div
+          key={u.id}
+          onMouseDown={e => { e.preventDefault(); onSelect(u); }}
+          style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#eef2ff')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+        >
+          <span style={{
+            width: 28, height: 28, borderRadius: '50%', background: '#6366f1', color: 'white',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, flexShrink: 0,
+          }}>
+            {(u.nome || '?')[0].toUpperCase()}
+          </span>
+          <span style={{ fontWeight: 600 }}>@{u.nome}</span>
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 interface Props {
   value: string;
   onChange: (v: string) => void;
@@ -71,49 +121,41 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [showDrop, setShowDrop]   = useState(false);
   const [atPos, setAtPos]         = useState(-1);
-  const [dropTop, setDropTop]     = useState(0);
-  const taRef   = useRef<HTMLTextAreaElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect]           = useState<DOMRect | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // Carrega todos os usuários uma vez (sem filtro ativo para não excluir ninguém)
+  // Carrega usuários uma vez
   useEffect(() => {
     supabase.from('auth_usuarios').select('id, nome').order('nome')
       .then(({ data }) => setTodos(data || []));
   }, []);
 
-  // Fecha dropdown ao clicar fora
+  // Fecha ao clicar fora
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setShowDrop(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const h = () => setShowDrop(false);
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  const verificarMencao = useCallback((val: string, cursorPos: number) => {
+  const verificar = useCallback((val: string, cursorPos: number) => {
     const antes    = val.slice(0, cursorPos);
     const idx      = antes.lastIndexOf('@');
-
     if (idx === -1) { setShowDrop(false); return; }
 
     const fragment = antes.slice(idx + 1);
-
-    // Espaço/quebra de linha no fragmento → não é mais uma menção ativa
+    // Se há espaço no fragmento, não é menção ativa
     if (/\s/.test(fragment)) { setShowDrop(false); return; }
 
     const filtrados = fragment.length === 0
       ? todos.slice(0, 8)
       : todos.filter(u => u.nome.toLowerCase().includes(fragment.toLowerCase())).slice(0, 8);
 
-    if (filtrados.length === 0) { setShowDrop(false); return; }
+    if (!filtrados.length) { setShowDrop(false); return; }
 
-    // Posiciona dropdown logo abaixo do textarea
+    // Pega o rect do textarea para posicionar o dropdown em fixed
     if (taRef.current) {
-      setDropTop(taRef.current.offsetHeight + 2);
+      setRect(taRef.current.getBoundingClientRect());
     }
-
     setAtPos(idx);
     setSugestoes(filtrados);
     setShowDrop(true);
@@ -122,19 +164,14 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     onChange(val);
-    // Usa setTimeout para garantir que selectionStart já foi atualizado
-    setTimeout(() => {
-      if (taRef.current) {
-        verificarMencao(val, taRef.current.selectionStart ?? val.length);
-      }
-    }, 0);
+    const pos = e.target.selectionStart ?? val.length;
+    verificar(val, pos);
   };
 
   const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Escape') { setShowDrop(false); return; }
     const ta = taRef.current;
-    if (!ta) return;
-    verificarMencao(ta.value, ta.selectionStart ?? ta.value.length);
+    if (ta) verificar(ta.value, ta.selectionStart ?? ta.value.length);
   };
 
   const selecionar = (u: any) => {
@@ -154,90 +191,24 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
   };
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
+    <>
       <textarea
         ref={taRef}
         value={value}
         onChange={handleChange}
         onKeyUp={handleKeyUp}
+        onBlur={() => setTimeout(() => setShowDrop(false), 150)}
         rows={rows}
         placeholder={placeholder ?? 'Digite aqui... use @Nome para mencionar um usuário'}
         style={{
-          width: '100%',
-          padding: '6px 8px',
-          border: '1px solid #d1d5db',
-          borderRadius: 4,
-          fontSize: 10,
-          boxSizing: 'border-box',
-          resize: 'vertical',
-          fontFamily: 'inherit',
-          lineHeight: 1.5,
+          width: '100%', padding: '6px 8px',
+          border: '1px solid #d1d5db', borderRadius: 4,
+          fontSize: 10, boxSizing: 'border-box',
+          resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5,
           ...style,
         }}
       />
-
-      {showDrop && sugestoes.length > 0 && (
-        <div style={{
-          position: 'absolute',
-          top: dropTop,
-          left: 0,
-          zIndex: 9999,
-          background: 'white',
-          border: '1px solid #c7d2fe',
-          borderRadius: 8,
-          boxShadow: '0 8px 24px rgba(0,0,0,.18)',
-          minWidth: 220,
-          maxHeight: 220,
-          overflowY: 'auto',
-        }}>
-          <div style={{
-            padding: '5px 10px',
-            fontSize: 9,
-            color: '#6366f1',
-            fontWeight: 700,
-            borderBottom: '1px solid #e0e7ff',
-            background: '#f5f3ff',
-            borderRadius: '8px 8px 0 0',
-          }}>
-            👤 Mencionar usuário
-          </div>
-          {sugestoes.map(u => (
-            <div
-              key={u.id}
-              onMouseDown={e => { e.preventDefault(); selecionar(u); }}
-              style={{
-                padding: '8px 12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 11,
-                color: '#1e293b',
-                borderBottom: '1px solid #f1f5f9',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#eef2ff')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'white')}
-            >
-              <span style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: '#6366f1',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 700,
-                flexShrink: 0,
-              }}>
-                {(u.nome || '?')[0].toUpperCase()}
-              </span>
-              <span style={{ fontWeight: 600 }}>@{u.nome}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      {showDrop && <Dropdown sugestoes={sugestoes} rect={rect} onSelect={selecionar} />}
+    </>
   );
 }
