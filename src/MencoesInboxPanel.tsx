@@ -59,19 +59,25 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const uid = String(currentUser?.id || '');
       const q = supabase
         .from('mencoes')
         .select('*')
-        .eq('mencionado_id', currentUser?.id)
+        .eq('mencionado_id', uid)
         .order('criado_em', { ascending: false })
         .limit(100);
       if (filtro === 'nao_lidas') q.eq('lida', false);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.error('[MencoesInbox] erro ao carregar:', error.message);
+      }
       const lista = data || [];
       setMencoes(lista);
       const naoLidas = lista.filter(m => !m.lida).length;
       onCountChange?.(filtro === 'nao_lidas' ? lista.length : naoLidas);
-    } catch { /* table may not exist yet */ }
+    } catch (e) {
+      console.error('[MencoesInbox] exceção:', e);
+    }
     setLoading(false);
   }, [currentUser?.id, filtro]);
 

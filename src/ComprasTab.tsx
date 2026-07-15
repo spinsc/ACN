@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import MencaoTextarea from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 
 function imprimirSolicitacao(p: any) {
   const fmt = (v: any) => v
@@ -227,7 +227,19 @@ export default function ComprasTab({ currentUser }) {
     const atual = modalObs.observacoes_compra || '';
     const { error } = await supabase.from('pcp_pedidos_compra')
       .update({ observacoes_compra: atual ? `${atual}\n${linha}` : linha }).eq('id', modalObs.id);
-    if (!error) { setModalObs(null); setObsTexto(''); load(); }
+    if (!error) {
+      await salvarMencoes({
+        texto: obsTexto,
+        mencionanteId: String(currentUser?.id || ''),
+        mencionanteNome: currentUser?.nome || 'Sistema',
+        contexto: 'compra',
+        contextoId: String(modalObs.id),
+        contextoDescricao: `Pedido ${modalObs.numero_pedido || ''}`,
+        campo: 'observacoes_compra',
+        abaDestino: 'compras',
+      });
+      setModalObs(null); setObsTexto(''); load();
+    }
     else alert('Erro: ' + error.message);
     setSalvandoObs(false);
   };

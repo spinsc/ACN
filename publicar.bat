@@ -61,6 +61,7 @@ git add src/LoginTab.tsx
 git add src/AnaliseInboxPanel.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/MencaoTextarea.tsx
+git add acn_fix_mencoes.sql
 git add src/ChatWidget.tsx
 git add src/ProducaoTab.tsx
 git add src/AcnTabShared.tsx
@@ -90,7 +91,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: ProducaoTab equipes+dupla+editar-resp+botao-ver; ComprasTab centro-de-custo; RelatoriosTab rel-centro-custo; docs: manual+pdf+pptx atualizados"
+git commit -m "fix: mencoes — ID text em vez de uuid, logs de erro, salvarMencoes no CrmTab; feat: ProducaoTab VER; ComprasTab centro-custo; RelatoriosTab rel-centro-custo"
 
 :: Push
 echo.
@@ -212,15 +213,9 @@ echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS prazo_entrega_comercial date;
 echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS composicao_comercial jsonb DEFAULT '[]'::jsonb;
 echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS observacoes_atencao text;
 echo.
-echo CREATE TABLE IF NOT EXISTS mencoes (
-echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-echo   mencionado_id uuid, mencionado_nome text,
-echo   mencionante_id uuid, mencionante_nome text,
-echo   contexto text NOT NULL, contexto_id text, contexto_descricao text,
-echo   campo text, texto_trecho text, aba_destino text,
-echo   lida boolean DEFAULT false, criado_em timestamptz DEFAULT now()
-echo );
-echo ALTER TABLE mencoes DISABLE ROW LEVEL SECURITY;
+echo -- [IMPORTANTE] Mencoes com IDs como TEXT (correcao de tipo):
+echo -- RODAR: acn_fix_mencoes.sql  (faz DROP + CREATE com mencionado_id text)
+echo -- Isso corrige o problema de mencoes nao aparecerem no inbox.
 echo.
 echo LEMBRETE - Demais SQLs:
 echo.

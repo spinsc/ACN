@@ -75,22 +75,32 @@ export async function salvarMencoes(opts: {
   const nomes = [...new Set(matches.map(m => m[1]))];
 
   for (const nome of nomes) {
-    const { data: us } = await supabase
+    const { data: us, error: errUs } = await supabase
       .from('auth_usuarios').select('id, nome').ilike('nome', `%${nome}%`).limit(3);
+    if (errUs) { console.error('[salvarMencoes] busca usuário:', errUs.message); continue; }
     for (const u of (us || [])) {
-      if (u.id === mencionanteId) continue;
-      const { count } = await supabase.from('mencoes')
+      const uId = String(u.id);
+      const mId = String(mencionanteId);
+      if (uId === mId) continue;  // não menciona a si mesmo
+      const { count, error: errCount } = await supabase.from('mencoes')
         .select('id', { count: 'exact', head: true })
-        .eq('mencionado_id', u.id).eq('contexto_id', contextoId)
+        .eq('mencionado_id', uId).eq('contexto_id', contextoId)
         .eq('campo', campo).eq('lida', false);
+      if (errCount) { console.error('[salvarMencoes] check dup:', errCount.message); }
       if ((count || 0) === 0) {
-        await supabase.from('mencoes').insert({
-          mencionado_id: u.id, mencionado_nome: u.nome,
-          mencionante_id: mencionanteId, mencionante_nome: mencionanteNome,
+        const { error: errIns } = await supabase.from('mencoes').insert({
+          mencionado_id: uId, mencionado_nome: u.nome,
+          mencionante_id: mId, mencionante_nome: mencionanteNome,
           contexto, contexto_id: contextoId, contexto_descricao: contextoDescricao,
           campo, texto_trecho: texto.slice(0, 200),
           aba_destino: abaDestino, lida: false, criado_em: new Date().toISOString(),
         });
+        if (errIns) {
+          console.error('[salvarMencoes] insert falhou:', errIns.message,
+            '| mencionado_id:', uId, '| contexto_id:', contextoId);
+        } else {
+          console.log('[salvarMencoes] ✅ menção salva para', u.nome, '| contexto:', contextoId);
+        }
       }
     }
   }

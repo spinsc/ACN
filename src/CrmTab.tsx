@@ -6,7 +6,7 @@ import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
-import MencaoTextarea from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -302,6 +302,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     });
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
+      // Salva @menções do andamento
+      await salvarMencoes({
+        texto: novoAndamento.trim(),
+        mencionanteId: String(currentUser?.id || ''),
+        mencionanteNome: currentUser?.nome || 'Sistema',
+        contexto: 'crm',
+        contextoId: String(modalAndamento.id),
+        contextoDescricao: `CRM: ${modalAndamento.titulo || '—'}`,
+        campo: 'andamento_crm',
+        abaDestino: 'crm',
+      });
       setNovoAndamento('');
       const { data: dH, error: eH } = await supabase
         .from('crm_historico')
@@ -348,6 +359,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     }]);
     setSalvandoCompra(false);
     if (error) { alert('Erro ao emitir pedido: ' + error.message); return; }
+    // Salva @menções das observações da compra
+    if (formCompras.observacoes_compra?.trim()) {
+      await salvarMencoes({
+        texto: formCompras.observacoes_compra,
+        mencionanteId: String(currentUser?.id || ''),
+        mencionanteNome: currentUser?.nome || 'Sistema',
+        contexto: 'crm',
+        contextoId: String(modalCompras.id),
+        contextoDescricao: `Compra CRM: ${modalCompras.titulo || '—'}`,
+        campo: 'observacoes_compra',
+        abaDestino: 'compras',
+      });
+    }
     // Nota no histórico do card
     await supabase.from('crm_historico').insert({
       oportunidade_id: modalCompras.id,
@@ -587,6 +611,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       await supabase.from('crm_vendas').update(p).eq('id', modalVenda.venda.id);
     } else {
       await supabase.from('crm_vendas').insert(p);
+    }
+    // Salva @menções das observações da venda
+    if (formVenda.observacoes?.trim()) {
+      await salvarMencoes({
+        texto: formVenda.observacoes,
+        mencionanteId: String(currentUser?.id || ''),
+        mencionanteNome: currentUser?.nome || 'Sistema',
+        contexto: 'crm',
+        contextoId: String(modalVenda.op.id),
+        contextoDescricao: `Venda CRM: ${modalVenda.op.titulo || '—'}`,
+        campo: 'observacoes_venda',
+        abaDestino: 'crm',
+      });
     }
     setSalvando(false);
     setModalVenda(null);
