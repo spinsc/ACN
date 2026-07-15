@@ -56,12 +56,15 @@ export default function LoginTab() {
       }
 
       localStorage.setItem('user', JSON.stringify({
-        id: usuario.id,
-        email: usuario.email,
-        nome: usuario.nome,
-        perfil: usuario.perfil,
-        abas_permitidas: usuario.abas_permitidas || [],
-        primeiro_acesso: primeiroAcesso,
+        id:                    usuario.id,
+        email:                 usuario.email,
+        nome:                  usuario.nome,
+        perfil:                usuario.perfil,
+        abas_permitidas:       usuario.abas_permitidas || [],
+        primeiro_acesso:       primeiroAcesso,
+        pode_autorizar_rh:     usuario.pode_autorizar_rh     || false,
+        permissoes_crm:        usuario.permissoes_crm        || [],
+        recebe_alerta_analise: usuario.recebe_alerta_analise || false,
       }));
 
       window.location.href = window.location.origin + '/ACN/';

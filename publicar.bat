@@ -57,6 +57,7 @@ git add src/DemandaAvulsaPanel.tsx
 git add public/logo.png
 git add public/motorola.png
 git add src/AnaliseWidget.tsx
+git add src/LoginTab.tsx
 git add src/AnaliseInboxPanel.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/MencaoTextarea.tsx
@@ -78,7 +79,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: ComercialTab dados da venda + composicao comercial + MencaoTextarea @usuario; EngenhariaTab KPI 48h linha vermelha; DashboardTab badge mencoes + MencoesInboxPanel; salvarMencoes apos salvar OP; MencaoTextarea componente reutilizavel; SQL mencoes + novos campos oples"
+git commit -m "feat: CrmTab campos contato+prox_contato+nome_contato, filtro por responsavel, painel contatos do dia; LicitacoesTab filtro responsavel; MencaoTextarea fix portal fixed+ref; DashboardTab collapse global sec-card; LoginTab fix"
 
 :: Push
 echo.

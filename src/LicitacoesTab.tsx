@@ -948,7 +948,7 @@ export default function LicitacoesTab({ currentUser }) {
           </select>
         </div>
         <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>ANALISTA</div>
+          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>👤 RESPONSÁVEL</div>
           <select value={filtroAnalista} onChange={e=>setFiltroAnalista(e.target.value)}
             style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
             <option value="">Todos</option>

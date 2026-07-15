@@ -38,6 +38,10 @@ const VAZIO_OP: any = {
   responsavel_nome: '',
   motivo_perda: '',
   data_prev_fechamento: '',
+  // ── contato ──
+  nome_contato:  '',
+  contato:       '',
+  prox_contato:  '',
 };
 
 const VAZIO_VENDA: any = {
@@ -125,6 +129,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [salvando, setSalvando]             = useState(false);
   const [filtFat, setFiltFat]               = useState<'todos'|'pendente'|'faturado'>('todos');
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
+  const [filtResp, setFiltResp]             = useState('');
 
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
@@ -177,14 +182,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   // DERIVADOS
   // ─────────────────────────────────────────────────────────────────────────
-  const estagiosFunil = estagios.filter(e => e.funil === funil);
-  const opsFunil      = ops.filter(o => o.funil === funil);
-  const opsFiltradas  = opsFunil.filter(o =>
-    !busca ||
-    o.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
-    o.orgao?.toLowerCase().includes(busca.toLowerCase()) ||
-    o.numero_edital?.toLowerCase().includes(busca.toLowerCase())
-  );
+  const estagiosFunil  = estagios.filter(e => e.funil === funil);
+  const opsFunil       = ops.filter(o => o.funil === funil);
+  const respUnicos     = [...new Set(opsFunil.map(o => o.responsavel_nome).filter(Boolean))].sort();
+  // Contatos agendados para hoje (qualquer funil)
+  const hoje           = new Date().toISOString().slice(0, 10);
+  const contatosHoje   = ops.filter(o => o.prox_contato === hoje);
+  const opsFiltradas   = opsFunil.filter(o => {
+    if (filtResp && o.responsavel_nome !== filtResp) return false;
+    if (!busca) return true;
+    return (
+      o.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
+      o.orgao?.toLowerCase().includes(busca.toLowerCase()) ||
+      o.numero_edital?.toLowerCase().includes(busca.toLowerCase())
+    );
+  });
 
   const getEst       = (id: string) => estagios.find(e => e.id === id);
   const getItensEst  = (estagioId: string) => itens.filter(i => i.estagio_id === estagioId);
@@ -375,6 +387,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       responsavel_id:    limpar(formOp.responsavel_id),
       responsavel_nome:  limpar(formOp.responsavel_nome),
       motivo_perda:      limpar(formOp.motivo_perda),
+      nome_contato:      limpar(formOp.nome_contato),
+      contato:           limpar(formOp.contato),
+      prox_contato:      limpar(formOp.prox_contato) || null,
     };
     if (!p.estagio_id) {
       const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e));
@@ -644,6 +659,15 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
         {op.responsavel_nome && (
           <div style={{ fontSize:8, color:'#94a3b8', marginBottom:3 }}>👤 {op.responsavel_nome}</div>
+        )}
+        {op.prox_contato && (
+          <div style={{
+            fontSize:8, fontWeight:700, marginBottom:3,
+            color: op.prox_contato === hoje ? '#92400e' : op.prox_contato < hoje ? '#dc2626' : '#0369a1',
+          }}>
+            📅 {op.prox_contato === hoje ? '⚡ HOJE' : op.prox_contato < hoje ? '⚠️ ATRASADO' : ''} {op.prox_contato}
+            {op.nome_contato && <span style={{ fontWeight:400 }}> · {op.nome_contato}</span>}
+          </div>
         )}
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
@@ -972,6 +996,31 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       {/* ── Seção Funis (Kanban / Faturamentos) ── */}
       {secaoCrm === 'funil' && <>
 
+      {/* ── Contatos do Dia ── */}
+      {contatosHoje.length > 0 && (
+        <div style={{ background:'#fefce8', border:'1.5px solid #fde047', borderRadius:6, padding:'8px 12px', marginBottom:8 }}>
+          <div style={{ fontSize:9, fontWeight:700, color:'#854d0e', marginBottom:6 }}>
+            📅 CONTATOS AGENDADOS PARA HOJE ({contatosHoje.length})
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {contatosHoje.map(o => (
+              <div key={o.id} style={{
+                background:'white', border:'1px solid #fde047', borderRadius:5,
+                padding:'5px 10px', fontSize:9,
+              }}>
+                <div style={{ fontWeight:700, color:'#1e293b' }}>{o.titulo}</div>
+                {o.nome_contato && <div style={{ color:'#475569' }}>👤 {o.nome_contato}</div>}
+                {o.contato      && <div style={{ color:'#0891b2' }}>📞 {o.contato}</div>}
+                {o.responsavel_nome && <div style={{ color:'#94a3b8' }}>por {o.responsavel_nome}</div>}
+                <div style={{ fontSize:8, color:'#64748b', marginTop:2 }}>
+                  {o.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda Direta'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Toolbar ── */}
       <div style={{ display:'flex', gap:6, alignItems:'center', margin:'8px 0', flexWrap:'wrap' }}>
         <button className="acn-btn" style={{ background:'#0f766e', fontSize:9, padding:'3px 10px' }}
@@ -981,11 +1030,23 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         <input
           placeholder={`🔍 Título, órgão ou edital...`}
           value={busca} onChange={e => setBusca(e.target.value)}
-          style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9, width:200 }}
+          style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9, width:180 }}
         />
+        {/* Filtro por responsável */}
+        <select value={filtResp} onChange={e => setFiltResp(e.target.value)}
+          style={{ padding:'3px 7px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
+          <option value="">👤 Todos os responsáveis</option>
+          {respUnicos.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        {filtResp && (
+          <button onClick={() => setFiltResp('')}
+            style={{ fontSize:9, padding:'2px 7px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer' }}>
+            ✕
+          </button>
+        )}
         <span style={{ fontSize:9, color:'#94a3b8' }}>
-          {opsFunil.length} registros
-          {podeVerTotais && ` · Pipeline: ${fmtMoeda(opsFunil.filter(o=>!isPerdido(getEst(o.estagio_id))&&!isGanho(getEst(o.estagio_id))).reduce((s,o)=>s+(o.valor_registrado||0),0))}`}
+          {opsFiltradas.length} registros
+          {podeVerTotais && ` · Pipeline: ${fmtMoeda(opsFiltradas.filter(o=>!isPerdido(getEst(o.estagio_id))&&!isGanho(getEst(o.estagio_id))).reduce((s,o)=>s+(o.valor_registrado||0),0))}`}
         </span>
       </div>
 
@@ -1069,13 +1130,35 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               )}
             </div>
 
-            <div style={{ marginBottom:14 }}>
+            <div style={{ marginBottom:10 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Responsável / Operador</div>
               <ColaboradorSelect
                 value={formOp.responsavel_nome||''}
                 onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))}
                 placeholder="Selecione o operador"
               />
+            </div>
+
+            {/* ── Campos de contato ── */}
+            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:6 }}>📞 CONTATO</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
+                <div>
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
+                    value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
+                </div>
+                <div>
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Contato (tel/e-mail)</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999 ou e-mail"
+                    value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Próximo Contato</div>
+                <input type="date" className="acn-input" style={{ width:'100%' }}
+                  value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+              </div>
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
