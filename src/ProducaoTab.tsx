@@ -72,6 +72,7 @@ function OplRow({ o, onAction }) {
         </td>
         <td>
           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+            <button className="acn-btn" style={{background:'#0891b2',fontSize:10}} onClick={()=>onAction('ver',o)}>👁 VER</button>
             {aguardando && (
               <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>onAction('iniciar',o)}>INICIAR</button>
             )}
@@ -1449,6 +1450,7 @@ export default function ProducaoTab({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const { list: colaboradoresList } = useColaboradores();
   const [modalDevolver, setModalDevolver] = useState(null);
+  const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalIniciar, setModalIniciar] = useState(null);
   const [respNome, setRespNome] = useState('');
@@ -1639,6 +1641,7 @@ export default function ProducaoTab({ currentUser }) {
     }
     if (tipo === 'checklist')          liberarChecklist(opl);
     if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
+    if (tipo === 'ver')                setModalVerOpl(opl);
     if (tipo === 'iniciar_retrabalho') iniciarRetrabalho(opl);
     if (tipo === 'concluir_retrabalho') concluirRetrabalho(opl);
     if (tipo === 'editar_resp') {
@@ -1901,6 +1904,59 @@ export default function ProducaoTab({ currentUser }) {
           </div>
         </div>
       )}
+
+      {/* MODAL VER OPL */}
+      {modalVerOpl && (() => {
+        const o = modalVerOpl;
+        const fmtDate = (d:any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+        const fmtTs   = (d:any) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+        const field = {fontSize:10,marginBottom:4};
+        const label = {fontWeight:700,color:'#64748b',fontSize:9,textTransform:'uppercase' as const,letterSpacing:'0.4px'};
+        const val   = {color:'#1e293b',fontSize:11};
+        return (
+          <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalVerOpl(null);}}>
+            <div className="modal-box" style={{maxWidth:520,maxHeight:'85vh',overflowY:'auto'}}>
+              <div className="modal-title">👁 OPL {o.opl} — Detalhes</div>
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px 16px',marginBottom:12}}>
+                <div style={field}><div style={label}>Tipo de Projeto</div><div style={val}>{o.tipo_projeto||'—'}</div></div>
+                <div style={field}><div style={label}>Chassi</div><div style={val}>{o.chassi||'—'}</div></div>
+                <div style={field}><div style={label}>Status</div><div style={val}><span className="acn-badge" style={{background:'#3b82f6'}}>{o.status_geral}</span></div></div>
+                <div style={field}><div style={label}>Quantidade</div><div style={val}>{o.quantidade||1}</div></div>
+                <div style={field}><div style={label}>Modo Execução</div><div style={val}>{o.modo_execucao||'individual'}</div></div>
+                <div style={field}><div style={label}>Responsável</div><div style={val}>
+                  {o.modo_execucao==='equipe'
+                    ? `🏷️ ${o.equipe_nome||'—'}`
+                    : o.responsavel_producao||'—'}
+                  {o.tecnico_producao_2_nome && <div style={{fontSize:9,color:'#6366f1'}}>+ {o.tecnico_producao_2_nome}</div>}
+                </div></div>
+                <div style={field}><div style={label}>Início Produção</div><div style={val}>{fmtTs(o.data_inicio_producao)}</div></div>
+                <div style={field}><div style={label}>Prazo Entrega</div><div style={val}>{fmtDate(o.prazo_entrega_producao)}</div></div>
+                <div style={field}><div style={label}>Prazo Comercial</div><div style={val}>{fmtDate(o.prazo_entrega_comercial)}</div></div>
+                <div style={field}><div style={label}>Vendedor</div><div style={val}>{o.vendedor||'—'}</div></div>
+                <div style={field}><div style={label}>Cliente Final</div><div style={val}>{o.cliente_final||'—'}</div></div>
+                <div style={field}><div style={label}>Local Instalação</div><div style={val}>{o.local_instalacao||'—'}</div></div>
+              </div>
+
+              {o.observacoes_atencao && (
+                <div style={{background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:6,padding:'8px 12px',marginBottom:10}}>
+                  <div style={label}>⚠ Atenção</div>
+                  <div style={{fontSize:11,color:'#9a3412',marginTop:3}}>{o.observacoes_atencao}</div>
+                </div>
+              )}
+
+              {o.obs_reprovacao_cq && (
+                <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,padding:'8px 12px',marginBottom:10}}>
+                  <div style={label}>❌ Reprovação CQ — {o.cq_auditor||''}</div>
+                  <div style={{fontSize:11,color:'#991b1b',marginTop:3}}>{o.obs_reprovacao_cq}</div>
+                </div>
+              )}
+
+              <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:4}} onClick={()=>setModalVerOpl(null)}>Fechar</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL DEVOLVER PCP */}
       {modalDevolver && (

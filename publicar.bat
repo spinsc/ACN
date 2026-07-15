@@ -68,6 +68,10 @@ git add supabase/sql/producao_equipes.sql
 git add supabase/sql/centro_custo.sql
 git add src/ComprasTab.tsx
 git add src/RelatoriosTab.tsx
+git add src/ProducaoTab.tsx
+git add Manual_ACN_Sinal_Verde.docx
+git add Manual_ACN_Sinal_Verde.pdf
+git add ACN_Sinal_Verde_Treinamento.pptx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
@@ -86,7 +90,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: ProducaoTab equipes+dupla+editar-resp; ChatWidget DMs dedup+nao-lidas; MencaoTextarea paginacao async; ComprasTab centro-de-custo; RelatoriosTab rel-centro-custo"
+git commit -m "feat: ProducaoTab equipes+dupla+editar-resp+botao-ver; ComprasTab centro-de-custo; RelatoriosTab rel-centro-custo; docs: manual+pdf+pptx atualizados"
 
 :: Push
 echo.
