@@ -833,6 +833,118 @@ function RelOplsParadas() {
   );
 }
 
+// ── REL CENTRO DE CUSTO ──
+function RelCentroCusto() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandido, setExpandido] = useState<Record<string,boolean>>({});
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pcp_pedidos_compra')
+        .select('id,numero_pedido,descricao_material,fornecedor,valor_total,centro_custo,status_compra,data_pedido')
+        .not('centro_custo','is',null)
+        .order('data_pedido',{ascending:false});
+      if (!error && data) setRows(data);
+      setLoading(false);
+    })();
+  }, []);
+
+  // Agrupar por centro_custo
+  const grupos: Record<string,any[]> = {};
+  for (const r of rows) {
+    const k = r.centro_custo || '—';
+    if (!grupos[k]) grupos[k] = [];
+    grupos[k].push(r);
+  }
+  const centros = Object.keys(grupos).sort();
+
+  const fmt = (v:any) => v!=null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+  const total = (g:any[]) => g.reduce((s,r)=>s+Number(r.valor_total||0),0);
+
+  const th: any = {padding:'6px 8px',fontWeight:700,fontSize:9,color:'#64748b',borderBottom:'2px solid #e2e8f0',textAlign:'left'};
+  const td: any = {padding:'5px 8px',fontSize:10,borderBottom:'1px solid #f1f5f9',verticalAlign:'middle'};
+
+  if (loading) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Carregando...</div>;
+  if (centros.length===0) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Nenhuma compra com centro de custo definido.</div>;
+
+  const totalGeral = rows.reduce((s,r)=>s+Number(r.valor_total||0),0);
+
+  return (
+    <div>
+      {/* Resumo geral */}
+      <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
+        <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
+          <div style={{fontSize:9,color:'#1d4ed8',fontWeight:700,marginBottom:4}}>CENTROS COM COMPRAS</div>
+          <div style={{fontSize:22,fontWeight:900,color:'#1e40af'}}>{centros.length}</div>
+        </div>
+        <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
+          <div style={{fontSize:9,color:'#166534',fontWeight:700,marginBottom:4}}>TOTAL COMPRAS</div>
+          <div style={{fontSize:22,fontWeight:900,color:'#15803d'}}>{fmt(totalGeral)}</div>
+        </div>
+        <div style={{background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
+          <div style={{fontSize:9,color:'#9a3412',fontWeight:700,marginBottom:4}}>PEDIDOS TOTAL</div>
+          <div style={{fontSize:22,fontWeight:900,color:'#c2410c'}}>{rows.length}</div>
+        </div>
+      </div>
+
+      {centros.map(centro => {
+        const itens = grupos[centro];
+        const tot = total(itens);
+        const pct = totalGeral > 0 ? (tot/totalGeral*100).toFixed(1) : '0';
+        const aberto = expandido[centro];
+        return (
+          <div key={centro} style={{marginBottom:10,borderRadius:8,border:'1.5px solid #e2e8f0',overflow:'hidden'}}>
+            <div onClick={()=>setExpandido(p=>({...p,[centro]:!p[centro]}))}
+              style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',cursor:'pointer',
+                background:'#f8fafc',borderBottom:aberto?'1.5px solid #e2e8f0':'none'}}>
+              <span style={{fontSize:13}}>{aberto?'▼':'▶'}</span>
+              <span style={{fontWeight:800,fontSize:12,color:'#1e293b',flex:1}}>{centro}</span>
+              <span style={{fontSize:10,color:'#64748b'}}>{itens.length} pedido{itens.length!==1?'s':''}</span>
+              <span style={{background:'#eff6ff',color:'#1d4ed8',borderRadius:10,padding:'2px 10px',fontSize:11,fontWeight:700}}>{fmt(tot)}</span>
+              <span style={{background:'#f1f5f9',color:'#475569',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700}}>{pct}%</span>
+            </div>
+            {aberto && (
+              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{background:'#f8fafc'}}>
+                    <th style={th}>Pedido</th>
+                    <th style={th}>Descrição</th>
+                    <th style={th}>Fornecedor</th>
+                    <th style={th}>Status</th>
+                    <th style={th}>Data</th>
+                    <th style={{...th,textAlign:'right'}}>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itens.map(r=>(
+                    <tr key={r.id}>
+                      <td style={td}><span style={{fontWeight:700,color:'#4f46e5',fontSize:9}}>{r.numero_pedido||'—'}</span></td>
+                      <td style={{...td,maxWidth:180}}><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block',maxWidth:180}}>{r.descricao_material||'—'}</span></td>
+                      <td style={td}>{r.fornecedor||'—'}</td>
+                      <td style={td}>
+                        <span style={{background:'#f1f5f9',borderRadius:10,padding:'2px 7px',fontSize:8,fontWeight:700,color:'#475569'}}>{r.status_compra||'—'}</span>
+                      </td>
+                      <td style={td}>{r.data_pedido ? new Date(r.data_pedido).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td style={{...td,textAlign:'right',fontWeight:700,color:'#0f766e'}}>{fmt(r.valor_total)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{background:'#f8fafc'}}>
+                    <td colSpan={5} style={{...td,fontWeight:700,color:'#475569',textAlign:'right'}}>TOTAL {centro}</td>
+                    <td style={{...td,fontWeight:900,color:'#1d4ed8',textAlign:'right'}}>{fmt(tot)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── MAIN ──
 export default function RelatoriosTab({ currentUser }) {
   const [aba, setAba] = useState('opls');
@@ -846,6 +958,7 @@ export default function RelatoriosTab({ currentUser }) {
     {id:'avulsas',    label:'Dem. Avulsas'},
     {id:'area',       label:'Por Área'},
     {id:'producao',   label:'Produção'},
+    {id:'centrocusto',label:'Centro Custo'},
   ];
 
   return (
@@ -869,6 +982,7 @@ export default function RelatoriosTab({ currentUser }) {
       {aba==='avulsas'     && <RelDemandasAvulsas />}
       {aba==='area'        && <RelAreaDemandas />}
       {aba==='producao'    && <RelProducao />}
+      {aba==='centrocusto' && <RelCentroCusto />}
     </div>
   );
 }

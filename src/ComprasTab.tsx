@@ -48,6 +48,20 @@ export default function ComprasTab({ currentUser }) {
   const [modalObs, setModalObs] = useState<any>(null);
   const [obsTexto, setObsTexto] = useState('');
   const [salvandoObs, setSalvandoObs] = useState(false);
+  // Centro de Custo
+  const [centrosCusto, setCentrosCusto]         = useState<any[]>([]);
+  const [modalCentro, setModalCentro]           = useState<any>(null); // pedido em edição
+  const [centroTipo, setCentroTipo]             = useState<'op'|'custom'|'livre'>('op');
+  const [centroLivre, setCentroLivre]           = useState('');
+  const [centroCustom, setCentroCustom]         = useState('');
+  const [opBusca, setOpBusca]                   = useState('');
+  const [opResultados, setOpResultados]         = useState<any[]>([]);
+  const [opSelecionada, setOpSelecionada]       = useState('');
+  const [salvandoCentro, setSalvandoCentro]     = useState(false);
+  const [modalGerCentros, setModalGerCentros]   = useState(false);
+  const [novoCodigo, setNovoCodigo]             = useState('');
+  const [novoNome, setNovoNome]                 = useState('');
+  const [salvandoNovoCentro, setSalvandoNovoCentro] = useState(false);
 
   // Valores inline por pedido: { [id]: { valor, prazo, salvando } }
   const [inline, setInline] = useState<Record<string,{valor:string,prazo:string,salvando:boolean}>>({});
@@ -75,9 +89,68 @@ export default function ComprasTab({ currentUser }) {
 
   useEffect(() => {
     load();
+    loadCentros();
     const t = setInterval(()=>load(true), 30000);
     return () => clearInterval(t);
   }, [filtro]);
+
+  const loadCentros = async () => {
+    const { data } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
+    setCentrosCusto(data || []);
+  };
+
+  const buscarOps = async (q: string) => {
+    if (!q.trim()) { setOpResultados([]); return; }
+    const { data } = await supabase.from('oples').select('id,opl,cliente_nome,tipo_projeto')
+      .ilike('opl', `%${q}%`).limit(8);
+    setOpResultados(data || []);
+  };
+
+  const abrirModalCentro = (p: any) => {
+    setModalCentro(p);
+    setCentroTipo('op');
+    setOpBusca(p.opl || '');
+    setOpSelecionada(p.opl ? (p.centro_custo?.startsWith('OP') ? p.centro_custo : `OP ${p.opl}`) : '');
+    setCentroCustom('');
+    setCentroLivre(p.centro_custo || '');
+    setOpResultados([]);
+  };
+
+  const salvarCentro = async () => {
+    if (!modalCentro) return;
+    let valor = '';
+    if (centroTipo === 'op') {
+      if (!opSelecionada) { alert('Selecione uma OP.'); return; }
+      valor = opSelecionada;
+    } else if (centroTipo === 'custom') {
+      if (!centroCustom) { alert('Selecione um centro de custo.'); return; }
+      valor = centroCustom;
+    } else {
+      if (!centroLivre.trim()) { alert('Informe o centro de custo.'); return; }
+      valor = centroLivre.trim();
+    }
+    setSalvandoCentro(true);
+    await supabase.from('pcp_pedidos_compra').update({ centro_custo: valor }).eq('id', modalCentro.id);
+    setSalvandoCentro(false);
+    setModalCentro(null);
+    load();
+  };
+
+  const criarCentro = async () => {
+    if (!novoCodigo.trim() || !novoNome.trim()) { alert('Informe código e nome.'); return; }
+    setSalvandoNovoCentro(true);
+    const { error } = await supabase.from('centros_custo').insert([{
+      codigo: novoCodigo.trim().toUpperCase(), nome: novoNome.trim(), ativo: true,
+    }]);
+    if (error) { alert('Erro: ' + error.message); }
+    else { setNovoCodigo(''); setNovoNome(''); loadCentros(); }
+    setSalvandoNovoCentro(false);
+  };
+
+  const excluirCentro = async (id: string) => {
+    await supabase.from('centros_custo').update({ ativo: false }).eq('id', id);
+    loadCentros();
+  };
 
   const [queryError, setQueryError] = useState<string|null>(null);
 
@@ -169,7 +242,11 @@ export default function ComprasTab({ currentUser }) {
 
       {/* CABEÇALHO */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}}>
-        <h2 style={{fontSize:15,fontWeight:700,color:'#1a3a52',margin:0}}>🛒 Requisições de Compra — OP Vinculada</h2>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <h2 style={{fontSize:15,fontWeight:700,color:'#1a3a52',margin:0}}>🛒 Requisições de Compra — OP Vinculada</h2>
+          <button onClick={()=>setModalGerCentros(true)}
+            style={{...btn,background:'#6366f1',fontSize:10,whiteSpace:'nowrap'}}>⚙️ Centros de Custo</button>
+        </div>
         <select value={filtro} onChange={e=>setFiltro(e.target.value)}
           style={{padding:'5px 10px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11}}>
           <option value="">Todos os status</option>
@@ -196,6 +273,7 @@ export default function ComprasTab({ currentUser }) {
                 <th style={th}>Qtd</th>
                 <th style={th}>Fornecedor</th>
                 {canVerValor && <th style={th}>💰 Valor da Compra</th>}
+                <th style={th}>🏷️ Centro de Custo</th>
                 <th style={th}>📅 Prev. Recebimento</th>
                 <th style={th}>Status</th>
                 <th style={th}>Ações</th>
@@ -234,6 +312,24 @@ export default function ComprasTab({ currentUser }) {
                         )}
                       </td>
                     )}
+
+                    {/* CENTRO DE CUSTO */}
+                    <td style={{...td,maxWidth:130}}>
+                      {p.centro_custo ? (
+                        <div style={{display:'flex',alignItems:'center',gap:5}}>
+                          <span style={{background:'#eff6ff',color:'#1d4ed8',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={p.centro_custo}>
+                            {p.centro_custo}
+                          </span>
+                          <button onClick={()=>abrirModalCentro(p)} title="Alterar centro de custo"
+                            style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+                        </div>
+                      ) : (
+                        <button onClick={()=>abrirModalCentro(p)}
+                          style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
+                          + Definir
+                        </button>
+                      )}
+                    </td>
 
                     {/* PRAZO — editável direto para itens Em Andamento */}
                     <td style={td}>
@@ -305,6 +401,147 @@ export default function ComprasTab({ currentUser }) {
           </div>
         ))}
       </div>
+
+      {/* MODAL CENTRO DE CUSTO */}
+      {modalCentro && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalCentro(null);}}>
+          <div className="modal-box" style={{maxWidth:460}}>
+            <div className="modal-title">🏷️ Centro de Custo — {modalCentro.numero_pedido}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>{modalCentro.descricao_material}</div>
+
+            {/* Seletor de tipo */}
+            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
+              {([['op','📋 OP/OS'],['custom','🏷️ Centro'],['livre','✏️ Livre']] as const).map(([t,l])=>(
+                <button key={t} onClick={()=>setCentroTipo(t as any)} style={{
+                  flex:1,padding:'7px 4px',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,
+                  background:centroTipo===t?'#6366f1':'white',
+                  color:centroTipo===t?'white':'#475569',
+                  borderRight:t!=='livre'?'1px solid #d1d5db':'none',
+                }}>{l}</button>
+              ))}
+            </div>
+
+            {/* OP/OS */}
+            {centroTipo==='op' && (
+              <>
+                <label className="acn-label">Número da OP</label>
+                <input className="acn-input" style={{width:'100%',marginBottom:6}}
+                  value={opBusca} placeholder="Digite o número da OP para buscar..."
+                  onChange={e=>{ setOpBusca(e.target.value); buscarOps(e.target.value); }} />
+                {opResultados.length>0 && (
+                  <div style={{border:'1px solid #e2e8f0',borderRadius:6,marginBottom:10,maxHeight:160,overflowY:'auto'}}>
+                    {opResultados.map((o:any)=>(
+                      <div key={o.id} onClick={()=>{setOpSelecionada(`OP ${o.opl}`);setOpBusca(o.opl);setOpResultados([]);}}
+                        style={{padding:'7px 12px',cursor:'pointer',fontSize:10,
+                          background:opSelecionada===`OP ${o.opl}`?'#eff6ff':'white',
+                          borderBottom:'1px solid #f1f5f9'}}
+                        onMouseEnter={e=>(e.currentTarget.style.background='#f8fafc')}
+                        onMouseLeave={e=>(e.currentTarget.style.background=opSelecionada===`OP ${o.opl}`?'#eff6ff':'white')}>
+                        <strong>{o.opl}</strong>
+                        <span style={{color:'#64748b',marginLeft:8}}>{o.cliente_nome||''} {o.tipo_projeto?`— ${o.tipo_projeto}`:''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {opSelecionada && <div style={{fontSize:10,color:'#1d4ed8',marginBottom:10}}>✔ Selecionado: <strong>{opSelecionada}</strong></div>}
+              </>
+            )}
+
+            {/* Centro personalizado */}
+            {centroTipo==='custom' && (
+              <>
+                <label className="acn-label">Centro de Custo</label>
+                {centrosCusto.length===0 ? (
+                  <div style={{fontSize:10,color:'#ef4444',marginBottom:10}}>
+                    Nenhum centro cadastrado. Use ⚙️ Centros de Custo para criar.
+                  </div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10,maxHeight:200,overflowY:'auto'}}>
+                    {centrosCusto.map((c:any)=>(
+                      <div key={c.id} onClick={()=>setCentroCustom(`${c.codigo} — ${c.nome}`)} style={{
+                        padding:'8px 12px',borderRadius:6,cursor:'pointer',fontSize:11,
+                        border:centroCustom===`${c.codigo} — ${c.nome}`?'2px solid #6366f1':'1.5px solid #e2e8f0',
+                        background:centroCustom===`${c.codigo} — ${c.nome}`?'#eef2ff':'white',
+                      }}>
+                        <strong style={{color:'#4f46e5'}}>{c.codigo}</strong>
+                        <span style={{marginLeft:8}}>{c.nome}</span>
+                        {c.descricao && <span style={{color:'#94a3b8',marginLeft:6,fontSize:9}}>{c.descricao}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Texto livre */}
+            {centroTipo==='livre' && (
+              <>
+                <label className="acn-label">Descrição do Centro de Custo</label>
+                <input className="acn-input" style={{width:'100%',marginBottom:10}}
+                  value={centroLivre} onChange={e=>setCentroLivre(e.target.value)}
+                  placeholder="Ex: Evento, Marketing, Infraestrutura..." />
+              </>
+            )}
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={salvarCentro} disabled={salvandoCentro}>
+                {salvandoCentro?'Salvando...':'💾 Salvar Centro de Custo'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalCentro(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GERENCIAR CENTROS DE CUSTO */}
+      {modalGerCentros && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalGerCentros(false);}}>
+          <div className="modal-box" style={{maxWidth:480}}>
+            <div className="modal-title">⚙️ Centros de Custo</div>
+
+            {/* Criar novo */}
+            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>Novo Centro de Custo</div>
+              <div style={{display:'flex',gap:8,marginBottom:8}}>
+                <div style={{flex:'0 0 100px'}}>
+                  <label className="acn-label">Código *</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novoCodigo}
+                    onChange={e=>setNovoCodigo(e.target.value)} placeholder="Ex: ADM-01" />
+                </div>
+                <div style={{flex:1}}>
+                  <label className="acn-label">Nome *</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novoNome}
+                    onChange={e=>setNovoNome(e.target.value)} placeholder="Ex: Administração" />
+                </div>
+              </div>
+              <button className="acn-btn" style={{background:'#0f766e',width:'100%'}} onClick={criarCentro} disabled={salvandoNovoCentro}>
+                {salvandoNovoCentro?'Salvando...':'+ Criar Centro'}
+              </button>
+            </div>
+
+            {/* Lista */}
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>Centros Cadastrados ({centrosCusto.length})</div>
+            {centrosCusto.length===0 ? (
+              <div style={{textAlign:'center',color:'#94a3b8',fontSize:11,padding:20}}>Nenhum centro cadastrado.</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:5,maxHeight:280,overflowY:'auto'}}>
+                {centrosCusto.map((c:any)=>(
+                  <div key={c.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:'white',border:'1px solid #e2e8f0',borderRadius:6}}>
+                    <span style={{fontWeight:700,color:'#4f46e5',minWidth:60,fontSize:11}}>{c.codigo}</span>
+                    <span style={{flex:1,fontSize:11}}>{c.nome}</span>
+                    <button onClick={()=>excluirCentro(c.id)} title="Excluir"
+                      style={{...btn,background:'#ef4444',padding:'3px 8px',fontSize:10}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{marginTop:14}}>
+              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalGerCentros(false)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL OBSERVAÇÕES */}
       {modalObs && (

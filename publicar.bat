@@ -63,7 +63,11 @@ git add src/MencoesInboxPanel.tsx
 git add src/MencaoTextarea.tsx
 git add src/ChatWidget.tsx
 git add src/ProducaoTab.tsx
+git add src/AcnTabShared.tsx
 git add supabase/sql/producao_equipes.sql
+git add supabase/sql/centro_custo.sql
+git add src/ComprasTab.tsx
+git add src/RelatoriosTab.tsx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
@@ -82,7 +86,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: ProducaoTab equipes+dupla+editar-resp; ChatWidget DMs dedup+nao-lidas; MencaoTextarea paginacao async"
+git commit -m "feat: ProducaoTab equipes+dupla+editar-resp; ChatWidget DMs dedup+nao-lidas; MencaoTextarea paginacao async; ComprasTab centro-de-custo; RelatoriosTab rel-centro-custo"
 
 :: Push
 echo.
@@ -321,6 +325,13 @@ echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS tecnico_producao_2_id uuid;
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS tecnico_producao_2_nome text;
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS equipe_id uuid;
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS equipe_nome text;
+echo ==============================================
+echo.
+echo ==============================================
+echo  CENTRO DE CUSTO - RODAR NO SUPABASE (arquivo: supabase/sql/centro_custo.sql):
+echo  CREATE TABLE IF NOT EXISTS centros_custo (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), codigo text NOT NULL UNIQUE, nome text NOT NULL, descricao text, ativo boolean DEFAULT true, criado_em timestamptz DEFAULT now());
+echo  ALTER TABLE centros_custo DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE pcp_pedidos_compra ADD COLUMN IF NOT EXISTS centro_custo text;
 echo ==============================================
 echo.
 echo ==============================================

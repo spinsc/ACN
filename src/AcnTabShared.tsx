@@ -479,6 +479,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   const [demandas, setDemandas] = useState<any[]>([]);
   const [modalIniciar, setModalIniciar] = useState<any>(null);
   const [modalObs, setModalObs] = useState<any>(null);
+  const [modalVer, setModalVer] = useState<any>(null);
   const [responsavel, setResponsavel] = useState('');
   const [obsTexto, setObsTexto] = useState('');
   const [tick, setTick] = useState(0);
@@ -616,6 +617,8 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <button className="acn-btn" style={{ background: '#0891b2', fontSize: 10 }}
+                        onClick={() => setModalVer(d)}>👁 VER</button>
                       {d.status === 'Pendente' && (
                         <button className="acn-btn" style={{ background: cor || '#1e293b' }}
                           onClick={() => { setModalIniciar(d); setResponsavel(currentUser?.nome || ''); }}>INICIAR</button>
@@ -677,6 +680,83 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
           </div>
         </div>
       )}
+
+      {/* MODAL VER DETALHES */}
+      {modalVer && (() => {
+        const d = modalVer;
+        const isAjuste = d.descricao?.startsWith('[AJUSTE]');
+        const desc = isAjuste ? d.descricao.replace('[AJUSTE] ', '') : (d.descricao || '—');
+        const logs: any[] = d.logs_demanda || [];
+        const fmt = (v: any) => v ? new Date(v).toLocaleString('pt-BR') : '—';
+        const emAndamento = d.status === 'Em Andamento';
+        const pausado = !!d.pausado || fora;
+        const seg = emAndamento && d.data_inicio
+          ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, (d.pausado || fora) ? (d.data_pausa || new Date().toISOString()) : null)
+          : 0;
+        return (
+          <div className="modal-overlay">
+            <div className="modal-box" style={{ maxWidth: 520, maxHeight: '88vh', overflowY: 'auto' }}>
+              <div className="modal-title">
+                👁 Detalhes da Demanda
+                {isAjuste && <span style={{ marginLeft: 8, fontSize: 10, background: '#f59e0b', color: '#fff', padding: '2px 7px', borderRadius: 10 }}>AJUSTE</span>}
+              </div>
+
+              {/* Info principal */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginBottom: 14 }}>
+                {[
+                  ['Descrição', desc],
+                  ['Status', d.status + (emAndamento && pausado ? ' (Pausado)' : '')],
+                  ['OPL', d.numero_opl || '—'],
+                  ['Setor', d.setor_destino || '—'],
+                  ['Responsável', d.responsavel_nome || 'Não iniciado'],
+                  ['Tempo útil', emAndamento && d.data_inicio ? fmtHMS(seg) : d.tempo_execucao_horas ? `${Number(d.tempo_execucao_horas).toFixed(2)}h` : '—'],
+                  ['Aberta em', fmt(d.data_abertura)],
+                  ['Iniciada em', fmt(d.data_inicio)],
+                  ['Concluída em', fmt(d.data_conclusao)],
+                  ['Aberto por', d.aberto_por || '—'],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .4 }}>{label}</div>
+                    <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600, marginTop: 1 }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Observações */}
+              {d.observacoes_execucao && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>Observações</div>
+                  <div style={{ fontSize: 11, color: '#334155', whiteSpace: 'pre-wrap' }}>{d.observacoes_execucao}</div>
+                </div>
+              )}
+
+              {/* Logs / histórico */}
+              {logs.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>Histórico de Ações</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {logs.map((l: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 10px', background: '#f8fafc', borderRadius: 5, border: '1px solid #e2e8f0' }}>
+                        <div style={{ flexShrink: 0, fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap', minWidth: 100 }}>
+                          {l.hora ? new Date(l.hora).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—'}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: 10, color: '#1e293b' }}>{l.texto}</span>
+                          {l.usuario && <span style={{ fontSize: 9, color: '#6366f1', marginLeft: 6 }}>— {l.usuario}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: 14 }}>
+                <button className="acn-btn" style={{ background: '#94a3b8', width: '100%' }} onClick={() => setModalVer(null)}>Fechar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
