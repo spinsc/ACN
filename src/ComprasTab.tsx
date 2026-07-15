@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import MencaoTextarea from './MencaoTextarea';
 
 function imprimirSolicitacao(p: any) {
   const fmt = (v: any) => v
@@ -320,10 +321,9 @@ export default function ComprasTab({ currentUser }) {
               <div style={{fontSize:10,color:'#9ca3af',marginBottom:12,fontStyle:'italic'}}>Sem observações anteriores.</div>
             )}
             <label className="acn-label">Nova observação</label>
-            <textarea className="acn-input" rows={4} value={obsTexto}
-              onChange={e=>setObsTexto(e.target.value)}
-              placeholder="Ex: Fornecedor adiou entrega. Aguardando nova data..."
-              style={{width:'100%',resize:'vertical',marginBottom:12}} />
+            <MencaoTextarea value={obsTexto} rows={4} onChange={v=>setObsTexto(v)}
+              placeholder="Ex: Fornecedor adiou entrega. Aguardando nova data... @Nome para mencionar"
+              style={{marginBottom:12}} />
             <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalObs(null);setObsTexto('');}}>Cancelar</button>
               <button className="acn-btn" style={{background:'#0891b2'}} onClick={salvarObs} disabled={salvandoObs}>

@@ -6,6 +6,7 @@ import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
+import MencaoTextarea from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -1288,13 +1289,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             {/* Nova observação */}
             <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:10, marginBottom:10 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#6d28d9', marginBottom:5 }}>✏️ Nova atualização</div>
-              <textarea
+              <MencaoTextarea
                 value={novoAndamento}
-                onChange={e=>setNovoAndamento(e.target.value)}
-                placeholder="Descreva o andamento da negociação..."
+                onChange={v => setNovoAndamento(v)}
+                placeholder="Descreva o andamento da negociação... use @Nome para mencionar alguém"
                 rows={3}
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11,
-                  resize:'vertical', boxSizing:'border-box', marginBottom:6, fontFamily:'inherit' }} />
+                style={{ border:'1px solid #c4b5fd', fontSize:11, marginBottom:6 }} />
               <button onClick={salvarAndamentoCrm} disabled={salvandoAndamento||!novoAndamento.trim()}
                 style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
                   fontWeight:700, fontSize:10, cursor:'pointer', opacity:novoAndamento.trim()?1:.5 }}>
@@ -1471,11 +1471,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
             <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
-              <textarea value={formVenda.observacoes||''} rows={2}
-                placeholder="Notas adicionais sobre esta venda / adesão..."
-                onChange={e => setFormVenda(f => ({...f, observacoes:e.target.value}))}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit' }}
-              />
+              <MencaoTextarea value={formVenda.observacoes||''} rows={2}
+                placeholder="Notas adicionais sobre esta venda / adesão... @Nome para mencionar"
+                onChange={v => setFormVenda(f => ({...f, observacoes:v}))} />
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
@@ -1526,11 +1524,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
             <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
-              <textarea value={formCompras.observacoes_compra}
-                onChange={e => setFormCompras(f => ({...f, observacoes_compra:e.target.value}))}
-                rows={2} placeholder="Especificações técnicas, urgência, referências..."
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit' }}
-              />
+              <MencaoTextarea value={formCompras.observacoes_compra||''} rows={2}
+                placeholder="Especificações técnicas, urgência, referências... @Nome para mencionar"
+                onChange={v => setFormCompras(f => ({...f, observacoes_compra:v}))} />
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>

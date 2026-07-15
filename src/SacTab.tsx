@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
+import MencaoTextarea from './MencaoTextarea';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -1342,8 +1343,9 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
             {/* OBSERVAÇÕES GERAIS */}
             <div style={{marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Observações Gerais</div>
-              <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}} placeholder="Observações adicionais..."
-                value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} />
+              <MencaoTextarea value={form.observacoes||''} rows={2}
+                placeholder="Observações adicionais... @Nome para mencionar alguém"
+                onChange={v=>setForm(f=>({...f,observacoes:v}))} />
             </div>
 
             {/* DADOS DO CLIENTE */}

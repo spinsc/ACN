@@ -79,7 +79,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: CrmTab campos contato+prox_contato+nome_contato, filtro por responsavel, painel contatos do dia; LicitacoesTab filtro responsavel; MencaoTextarea fix portal fixed+ref; DashboardTab collapse global sec-card; LoginTab fix"
+git commit -m "feat: MencaoTextarea @mencao em todos os campos — CrmTab+LicitacoesTab+DemandaAvulsaPanel+SacTab+ComprasTab; CrmTab contato+prox_contato+filtroResp+contatosHoje; DashboardTab collapse sec-card global; EngenhariaTab KPI 48h; ComercialTab dados venda+composicao"
 
 :: Push
 echo.
@@ -307,6 +307,13 @@ echo  CRM DESISTENCIA - RODAR NO SUPABASE (se ainda nao rodou):
 echo  Arquivo: supabase/sql/crm_desistencia.sql
 echo  1. ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS motivo_desistencia text;
 echo  2. INSERT estagio "Desistencia" em crm_estagios_funil (licitacao + venda_direta)
+echo ==============================================
+echo.
+echo ==============================================
+echo  CRM CONTATO/PROX CONTATO - RODAR NO SUPABASE:
+echo  ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS nome_contato text;
+echo  ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS contato text;
+echo  ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS prox_contato date;
 echo ==============================================
 echo.
 echo ==============================================

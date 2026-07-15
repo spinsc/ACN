@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
+import MencaoTextarea from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -370,13 +371,13 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
                   {Object.entries(TIPO_ANEXO_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
                 {tipoAnexo === 'anotacao' ? (
-                  <textarea value={anotacaoTxt} onChange={e=>setAnotacaoTxt(e.target.value)}
-                    placeholder="Anotação..." rows={3}
-                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+                  <MencaoTextarea value={anotacaoTxt} onChange={v=>setAnotacaoTxt(v)}
+                    placeholder="Anotação... use @Nome para mencionar alguém" rows={3}
+                    style={{ fontSize:11 }} />
                 ) : tipoAnexo === 'contato' ? (
-                  <textarea value={contatoTxt} onChange={e=>setContatoTxt(e.target.value)}
-                    placeholder="Nome, telefone, e-mail, observações..." rows={3}
-                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+                  <MencaoTextarea value={contatoTxt} onChange={v=>setContatoTxt(v)}
+                    placeholder="Nome, telefone, e-mail, observações... @Nome para mencionar" rows={3}
+                    style={{ fontSize:11 }} />
                 ) : (
                   <input type="file" multiple ref={fileRef}
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp"

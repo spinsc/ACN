@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { supabase } from './supabaseClient';
+import MencaoTextarea from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -511,8 +512,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>DESCRIÇÃO</label>
-                  <textarea value={editForm.descricao} onChange={e=>setEditForm(f=>({...f,descricao:e.target.value}))} rows={2}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+                  <MencaoTextarea value={editForm.descricao} onChange={v=>setEditForm(f=>({...f,descricao:v}))} rows={2} style={{fontSize:11}} />
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>PRIORIDADE</label>
@@ -530,8 +530,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>
-                  <textarea value={editForm.observacoes} onChange={e=>setEditForm(f=>({...f,observacoes:e.target.value}))} rows={3}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+                  <MencaoTextarea value={editForm.observacoes} onChange={v=>setEditForm(f=>({...f,observacoes:v}))} rows={3} style={{fontSize:11}} />
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={salvarEdicao} disabled={salvando}
@@ -755,8 +754,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             </div>
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Descrição</label>
-              <textarea value={form.descricao} onChange={e=>set('descricao',e.target.value)} rows={2}
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+              <MencaoTextarea value={form.descricao} onChange={v=>set('descricao',v)} rows={2} style={{fontSize:11}} />
             </div>
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>
