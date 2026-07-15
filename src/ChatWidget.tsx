@@ -260,7 +260,17 @@ export default function ChatWidget({ currentUser }: any) {
     const lista = isAdmin
       ? (data || [])
       : (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
-    setDiretos(lista);
+
+    // Deduplica: mantém apenas 1 DM por outro usuário (a mais recente)
+    const seen = new Map<string, any>();
+    for (const d of lista) {
+      const outroId = String((d.membros || []).find((m: any) => String(m.id) !== uid)?.id || d.id);
+      const atual = seen.get(outroId);
+      if (!atual || (d.criado_em || '') > (atual.criado_em || '')) {
+        seen.set(outroId, d);
+      }
+    }
+    setDiretos([...seen.values()]);
   };
 
   const fetchUsuarios = async () => {
@@ -561,12 +571,12 @@ export default function ChatWidget({ currentUser }: any) {
                       </div>
                     ))}
 
-                    {diretos.length > 0 && (
+                    {diretos.filter(d => (naoLidasPorSala[d.id] || 0) > 0).length > 0 && (
                       <>
                         <div style={{ padding: '10px 14px 3px', fontSize: 8, fontWeight: 700, color: '#b0bac5', textTransform: 'uppercase', letterSpacing: .5 }}>
-                          {currentUser?.perfil === 'Admin' ? 'Todos os DMs' : 'Recentes'}
+                          💬 Não lidas
                         </div>
-                        {diretos.map(d => {
+                        {diretos.filter(d => (naoLidasPorSala[d.id] || 0) > 0).map(d => {
                           const unread = naoLidasPorSala[d.id] || 0;
                           return (
                             <div key={d.id} style={{ borderBottom: '1px solid #f8fafc' }}>

@@ -13,16 +13,27 @@ let _cache: any[]         = [];
 let _loaded               = false;
 let _callbacks: Function[] = [];
 
-function loadUsers() {
+async function loadUsers() {
   if (_loaded) return;
-  supabase.from('auth_usuarios').select('id, nome').order('nome')
-    .then(({ data, error }) => {
-      if (error) console.warn('[MencaoTextarea] erro ao carregar usuários:', error.message);
-      _cache  = data || [];
-      _loaded = true;
-      _callbacks.forEach(cb => cb(_cache));
-      _callbacks = [];
-    });
+  console.log('[MencaoTextarea] iniciando carga de usuários...');
+  try {
+    const { data, error } = await supabase
+      .from('auth_usuarios')
+      .select('id, nome')
+      .order('nome')
+      .limit(500);
+    if (error) {
+      console.error('[MencaoTextarea] erro Supabase:', error.message, error);
+    }
+    _cache  = (data || []).filter((u: any) => u.nome?.trim());
+    _loaded = true;
+    console.log('[MencaoTextarea] usuários carregados:', _cache.length, _cache.map((u:any)=>u.nome));
+    _callbacks.forEach(cb => cb(_cache));
+    _callbacks = [];
+  } catch (err) {
+    console.error('[MencaoTextarea] exceção ao carregar usuários:', err);
+    _loaded = false; // permite nova tentativa
+  }
 }
 
 function useUsers(): any[] {
@@ -118,8 +129,8 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
     if (/[\s\n]/.test(frag)) { setShowDrop(false); return; }
 
     const filtrados = frag.length === 0
-      ? users.slice(0, 8)
-      : users.filter(u => u.nome.toLowerCase().includes(frag.toLowerCase())).slice(0, 8);
+      ? users.slice(0, 10)
+      : users.filter(u => u.nome?.toLowerCase().includes(frag.toLowerCase())).slice(0, 10);
 
     if (!filtrados.length) { setShowDrop(false); return; }
 

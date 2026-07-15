@@ -61,6 +61,7 @@ git add src/LoginTab.tsx
 git add src/AnaliseInboxPanel.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/MencaoTextarea.tsx
+git add src/ChatWidget.tsx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
@@ -79,7 +80,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: MencaoTextarea @mencao em todos os campos — CrmTab+LicitacoesTab+DemandaAvulsaPanel+SacTab+ComprasTab; CrmTab contato+prox_contato+filtroResp+contatosHoje; DashboardTab collapse sec-card global; EngenhariaTab KPI 48h; ComercialTab dados venda+composicao"
+git commit -m "feat: ChatWidget DMs dedup+apenas nao lidas; MencaoTextarea async+debug log; CrmTab+ComprasTab mencao em obs compras"
 
 :: Push
 echo.
