@@ -274,8 +274,20 @@ export default function ChatWidget({ currentUser }: any) {
   };
 
   const fetchUsuarios = async () => {
-    const { data } = await supabase.from('auth_usuarios').select('id,nome,email,perfil').order('nome');
-    setUsuarios((data || []).filter(u => String(u.id || u.email) !== uid));
+    // Pagina em blocos de 100 para contornar max_rows do servidor
+    let all: any[] = [];
+    const PAGE = 100;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('auth_usuarios').select('id,nome,email,perfil').order('nome')
+        .range(from, from + PAGE - 1);
+      if (error || !data || data.length === 0) break;
+      all = [...all, ...data];
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    setUsuarios(all.filter(u => String(u.id || u.email) !== uid));
   };
 
   const fetchMensagens = async (salaId: string) => {

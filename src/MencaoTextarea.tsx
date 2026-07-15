@@ -15,24 +15,31 @@ let _callbacks: Function[] = [];
 
 async function loadUsers() {
   if (_loaded) return;
-  console.log('[MencaoTextarea] iniciando carga de usuários...');
   try {
-    const { data, error } = await supabase
-      .from('auth_usuarios')
-      .select('id, nome')
-      .order('nome')
-      .limit(500);
-    if (error) {
-      console.error('[MencaoTextarea] erro Supabase:', error.message, error);
+    // Pagina em blocos de 100 para contornar max_rows do servidor Supabase
+    let all: any[] = [];
+    const PAGE = 100;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('auth_usuarios')
+        .select('id, nome')
+        .order('nome')
+        .range(from, from + PAGE - 1);
+      if (error) { console.error('[MencaoTextarea] erro:', error.message); break; }
+      if (!data || data.length === 0) break;
+      all = [...all, ...data];
+      if (data.length < PAGE) break; // última página
+      from += PAGE;
     }
-    _cache  = (data || []).filter((u: any) => u.nome?.trim());
+    _cache  = all.filter((u: any) => u.nome?.trim());
     _loaded = true;
-    console.log('[MencaoTextarea] usuários carregados:', _cache.length, _cache.map((u:any)=>u.nome));
+    console.log('[MencaoTextarea] usuários carregados:', _cache.length);
     _callbacks.forEach(cb => cb(_cache));
     _callbacks = [];
   } catch (err) {
-    console.error('[MencaoTextarea] exceção ao carregar usuários:', err);
-    _loaded = false; // permite nova tentativa
+    console.error('[MencaoTextarea] exceção:', err);
+    _loaded = false;
   }
 }
 
