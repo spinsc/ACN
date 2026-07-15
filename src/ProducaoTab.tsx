@@ -52,7 +52,14 @@ function OplRow({ o, onAction }) {
         <td>{o.chassi || '—'}</td>
         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
         <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
-        <td>{o.responsavel_producao || '—'}</td>
+        <td>
+          {o.modo_execucao === 'equipe'
+            ? <span>🏷️ <strong>{o.equipe_nome || '—'}</strong></span>
+            : o.modo_execucao === 'dupla'
+            ? <span>{o.responsavel_producao || '—'}{o.tecnico_producao_2_nome ? <><br/><span style={{fontSize:9,color:'#6366f1'}}>+ {o.tecnico_producao_2_nome}</span></> : ''}</span>
+            : o.responsavel_producao || '—'
+          }
+        </td>
         <td>
           {emProd   && <span style={{fontFamily:'monospace',color:'#2563eb',fontWeight:700,fontSize:12}}>{timerProd}</span>}
           {emRetrab && <span style={{fontFamily:'monospace',color:'#dc2626',fontWeight:700,fontSize:12}}>{timerRetrab}</span>}
@@ -71,6 +78,7 @@ function OplRow({ o, onAction }) {
             {emProd && (
               <>
                 <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>onAction('checklist',o)}>LIB. CQ</button>
+                <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
                 <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>onAction('devolver',o)}>DEV. PCP</button>
               </>
             )}
@@ -1284,6 +1292,158 @@ function VoucherServicos({ currentUser }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CADASTRO DE EQUIPES DE PRODUÇÃO
+// ─────────────────────────────────────────────────────────────────────────────
+function EquipesSection({ currentUser }) {
+  const { list: colabs } = useColaboradores();
+  const [equipes, setEquipes]   = useState<any[]>([]);
+  const [modal, setModal]       = useState<'nova'|'editar'|null>(null);
+  const [editando, setEditando] = useState<any>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  const FORM_VAZIO = { nome:'', head_line_id:'', head_line_nome:'', membros:[] as any[] };
+  const [form, setForm] = useState({ ...FORM_VAZIO });
+  const [membroAdd, setMembroAdd] = useState('');
+
+  const load = async () => {
+    const { data } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    setEquipes(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const abrirNova = () => { setForm({ ...FORM_VAZIO }); setEditando(null); setModal('nova'); };
+  const abrirEditar = (eq: any) => {
+    setForm({ nome: eq.nome, head_line_id: eq.head_line_id || '', head_line_nome: eq.head_line_nome, membros: eq.membros || [] });
+    setEditando(eq);
+    setModal('editar');
+  };
+
+  const salvar = async () => {
+    if (!form.nome.trim() || !form.head_line_nome.trim()) { alert('Informe nome da equipe e Head Line.'); return; }
+    setSalvando(true);
+    const payload = {
+      nome: form.nome.trim(),
+      head_line_id: form.head_line_id || null,
+      head_line_nome: form.head_line_nome.trim(),
+      membros: form.membros,
+      ativa: true,
+    };
+    if (editando) {
+      await supabase.from('producao_equipes').update(payload).eq('id', editando.id);
+    } else {
+      await supabase.from('producao_equipes').insert([payload]);
+    }
+    setSalvando(false); setModal(null); setEditando(null); load();
+  };
+
+  const excluir = async (eq: any) => {
+    if (!window.confirm(`Excluir equipe "${eq.nome}"?`)) return;
+    await supabase.from('producao_equipes').update({ ativa: false }).eq('id', eq.id);
+    load();
+  };
+
+  const addMembro = () => {
+    const nome = membroAdd.trim();
+    if (!nome) return;
+    const colab = colabs.find(c => c.nome === nome);
+    if (form.membros.some(m => m.nome === nome)) return;
+    setForm(f => ({ ...f, membros: [...f.membros, { id: colab?.id || null, nome }] }));
+    setMembroAdd('');
+  };
+
+  const remMembro = (nome: string) => setForm(f => ({ ...f, membros: f.membros.filter(m => m.nome !== nome) }));
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <div style={{ fontWeight:700, fontSize:13, color:'#1e293b' }}>🏷️ Equipes de Produção</div>
+        <button className="acn-btn" style={{ background:'#0f766e' }} onClick={abrirNova}>+ Nova Equipe</button>
+      </div>
+
+      {equipes.length === 0 ? (
+        <div className="acn-empty">Nenhuma equipe cadastrada.</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {equipes.map(eq => (
+            <div key={eq.id} style={{ background:'white', border:'1px solid #e2e8f0', borderRadius:8, padding:'12px 16px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:12, color:'#1e293b', marginBottom:4 }}>{eq.nome}</div>
+                  <div style={{ fontSize:10, color:'#475569', marginBottom:6 }}>
+                    👑 Head Line: <strong>{eq.head_line_nome}</strong>
+                  </div>
+                  {(eq.membros || []).length > 0 && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                      {(eq.membros || []).map((m: any) => (
+                        <span key={m.nome} style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:12, padding:'2px 10px', fontSize:10, fontWeight:600 }}>
+                          👤 {m.nome}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button className="acn-btn" style={{ background:'#6366f1', fontSize:10 }} onClick={() => abrirEditar(eq)}>✏️ Editar</button>
+                  <button className="acn-btn" style={{ background:'#ef4444', fontSize:10 }} onClick={() => excluir(eq)}>🗑️</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* MODAL EQUIPE */}
+      {modal && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ maxWidth:460 }}>
+            <div className="modal-title">{modal === 'nova' ? 'Nova Equipe' : 'Editar Equipe'}</div>
+
+            <label className="acn-label">Nome da Equipe *</label>
+            <input className="acn-input" style={{ width:'100%', marginBottom:10 }}
+              value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Ex: Equipe Alpha" />
+
+            <label className="acn-label">👑 Head Line (Técnico Responsável) *</label>
+            <ColaboradorSelect
+              value={form.head_line_nome}
+              onChange={nome => { const c = colabs.find(x => x.nome === nome); setForm(f => ({ ...f, head_line_nome: nome, head_line_id: c?.id || '' })); }}
+              placeholder="Selecione o técnico líder"
+              className="acn-input" style={{ width:'100%', marginBottom:12 }} />
+
+            <label className="acn-label">👥 Membros da Equipe</label>
+            <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+              <ColaboradorSelect
+                value={membroAdd}
+                onChange={v => setMembroAdd(v)}
+                placeholder="Adicionar técnico..."
+                className="acn-input" style={{ flex:1 }} />
+              <button className="acn-btn" style={{ background:'#0f766e', whiteSpace:'nowrap' }} onClick={addMembro}>+ Adicionar</button>
+            </div>
+            {form.membros.length > 0 && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:12, padding:'8px 10px', background:'#f8fafc', borderRadius:6, border:'1px solid #e2e8f0' }}>
+                {form.membros.map(m => (
+                  <span key={m.nome} style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:12, padding:'3px 10px', fontSize:10, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
+                    👤 {m.nome}
+                    <button onClick={() => remMembro(m.nome)} style={{ background:'none', border:'none', cursor:'pointer', color:'#dc2626', fontWeight:700, fontSize:11, padding:0 }}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="acn-btn" style={{ background:'#0f766e', flex:1 }} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : modal === 'nova' ? 'Criar Equipe' : 'Salvar Alterações'}
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setModal(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProducaoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1293,8 +1453,27 @@ export default function ProducaoTab({ currentUser }) {
   const [modalIniciar, setModalIniciar] = useState(null);
   const [respNome, setRespNome] = useState('');
   const [respId, setRespId] = useState<string|null>(null);
+  // Dupla / Equipe
+  const [modoExecucao, setModoExecucao] = useState<'individual'|'dupla'|'equipe'>('individual');
+  const [respNome2, setRespNome2] = useState('');
+  const [respId2, setRespId2] = useState<string|null>(null);
+  const [equipes, setEquipes] = useState<any[]>([]);
+  const [equipeSel, setEquipeSel] = useState<any>(null);
+  // Editar responsável
+  const [modalEditResp, setModalEditResp] = useState<any>(null);
+  const [editModo, setEditModo] = useState<'individual'|'dupla'|'equipe'>('individual');
+  const [editResp1Nome, setEditResp1Nome] = useState('');
+  const [editResp1Id, setEditResp1Id] = useState<string|null>(null);
+  const [editResp2Nome, setEditResp2Nome] = useState('');
+  const [editResp2Id, setEditResp2Id] = useState<string|null>(null);
+  const [editEquipeSel, setEditEquipeSel] = useState<any>(null);
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    fetchAll();
+    fetchEquipes();
+    const t = setInterval(fetchAll, 30000);
+    return () => clearInterval(t);
+  }, []);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -1305,23 +1484,83 @@ export default function ProducaoTab({ currentUser }) {
     setLoading(false);
   };
 
+  const fetchEquipes = async () => {
+    const { data } = await supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome');
+    setEquipes(data || []);
+  };
+
   const iniciarProducao = async () => {
     const opl = modalIniciar;
     const agora = new Date().toISOString();
-    const resp = respNome || currentUser?.nome;
-    await supabase.from('oples').update({
-      status_geral: 'Em Producao',
-      data_inicio_producao: agora,
-      responsavel_producao: resp,
-      tecnico_producao_id: respId || null,
-    }).eq('id', opl.id);
+    let upd: any = { status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: modoExecucao };
+    let logResp = '';
+
+    if (modoExecucao === 'individual') {
+      const resp = respNome || currentUser?.nome;
+      upd = { ...upd, responsavel_producao: resp, tecnico_producao_id: respId || null,
+               tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null };
+      logResp = resp;
+    } else if (modoExecucao === 'dupla') {
+      if (!respNome || !respNome2) { alert('Informe os dois técnicos.'); return; }
+      upd = { ...upd, responsavel_producao: respNome, tecnico_producao_id: respId || null,
+               tecnico_producao_2_nome: respNome2, tecnico_producao_2_id: respId2 || null,
+               equipe_id: null, equipe_nome: null };
+      logResp = `${respNome} + ${respNome2}`;
+    } else if (modoExecucao === 'equipe') {
+      if (!equipeSel) { alert('Selecione uma equipe.'); return; }
+      upd = { ...upd, responsavel_producao: equipeSel.head_line_nome,
+               tecnico_producao_id: equipeSel.head_line_id || null,
+               equipe_id: equipeSel.id, equipe_nome: equipeSel.nome,
+               tecnico_producao_2_nome: null, tecnico_producao_2_id: null };
+      logResp = `Equipe ${equipeSel.nome} (Head: ${equipeSel.head_line_nome})`;
+    }
+
+    await supabase.from('oples').update(upd).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
-      evento: `Inicio da producao. Responsavel: ${resp}`,
+      evento: `Inicio da producao. Responsavel: ${logResp}`,
       status_anterior: opl.status_geral, status_novo: 'Em Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    setModalIniciar(null); setRespNome(''); setRespId(null); fetchAll();
+    setModalIniciar(null); setRespNome(''); setRespId(null); setRespNome2(''); setRespId2(null);
+    setModoExecucao('individual'); setEquipeSel(null); fetchAll();
+  };
+
+  const editarResponsavel = async () => {
+    const opl = modalEditResp;
+    if (!opl) return;
+    const agora = new Date().toISOString();
+    let upd: any = { modo_execucao: editModo };
+    let logResp = '';
+
+    if (editModo === 'individual') {
+      if (!editResp1Nome) { alert('Informe o técnico.'); return; }
+      upd = { ...upd, responsavel_producao: editResp1Nome, tecnico_producao_id: editResp1Id || null,
+               tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null };
+      logResp = editResp1Nome;
+    } else if (editModo === 'dupla') {
+      if (!editResp1Nome || !editResp2Nome) { alert('Informe os dois técnicos.'); return; }
+      upd = { ...upd, responsavel_producao: editResp1Nome, tecnico_producao_id: editResp1Id || null,
+               tecnico_producao_2_nome: editResp2Nome, tecnico_producao_2_id: editResp2Id || null,
+               equipe_id: null, equipe_nome: null };
+      logResp = `${editResp1Nome} + ${editResp2Nome}`;
+    } else if (editModo === 'equipe') {
+      if (!editEquipeSel) { alert('Selecione uma equipe.'); return; }
+      upd = { ...upd, responsavel_producao: editEquipeSel.head_line_nome,
+               tecnico_producao_id: editEquipeSel.head_line_id || null,
+               equipe_id: editEquipeSel.id, equipe_nome: editEquipeSel.nome,
+               tecnico_producao_2_nome: null, tecnico_producao_2_id: null };
+      logResp = `Equipe ${editEquipeSel.nome} (Head: ${editEquipeSel.head_line_nome})`;
+    }
+
+    await supabase.from('oples').update(upd).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `Responsavel alterado para: ${logResp}`,
+      status_anterior: 'Em Producao', status_novo: 'Em Producao',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    setModalEditResp(null); fetchAll();
   };
 
   const liberarChecklist = async (opl) => {
@@ -1394,11 +1633,23 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const handleAction = (tipo, opl) => {
-    if (tipo === 'iniciar')            { setModalIniciar(opl); setRespNome(currentUser?.nome || ''); }
+    if (tipo === 'iniciar')            {
+      setModalIniciar(opl); setRespNome(currentUser?.nome || '');
+      setModoExecucao('individual'); setRespNome2(''); setRespId2(null); setEquipeSel(null);
+    }
     if (tipo === 'checklist')          liberarChecklist(opl);
     if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
     if (tipo === 'iniciar_retrabalho') iniciarRetrabalho(opl);
     if (tipo === 'concluir_retrabalho') concluirRetrabalho(opl);
+    if (tipo === 'editar_resp') {
+      setModalEditResp(opl);
+      setEditModo((opl.modo_execucao as any) || 'individual');
+      setEditResp1Nome(opl.responsavel_producao || '');
+      setEditResp1Id(opl.tecnico_producao_id || null);
+      setEditResp2Nome(opl.tecnico_producao_2_nome || '');
+      setEditResp2Id(opl.tecnico_producao_2_id || null);
+      setEditEquipeSel(opl.equipe_id ? { id: opl.equipe_id, nome: opl.equipe_nome, head_line_nome: opl.responsavel_producao } : null);
+    }
   };
 
   const [abaProducao, setAbaProducao] = useState('producao');
@@ -1416,11 +1667,14 @@ export default function ProducaoTab({ currentUser }) {
           onClick={()=>setAbaProducao('agenda')}>📅 Agendamentos</button>
         <button style={{flex:1,padding:'8px',background:abaProducao==='voucher'?'#7c3aed':'white',color:abaProducao==='voucher'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaProducao('voucher')}>🎟️ Voucher</button>
+        <button style={{flex:1,padding:'8px',background:abaProducao==='equipes'?'#0891b2':'white',color:abaProducao==='equipes'?'white':'#0891b2',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaProducao('equipes')}>🏷️ Equipes</button>
       </div>
 
       {abaProducao === 'veicular' && <PainelSacVeicular currentUser={currentUser} />}
       {abaProducao === 'agenda' && <CalendarioManutencao currentUser={currentUser} />}
       {abaProducao === 'voucher' && <VoucherServicos currentUser={currentUser} />}
+      {abaProducao === 'equipes' && <EquipesSection currentUser={currentUser} />}
       {abaProducao === 'producao' && <div>
       {/* ALERTA RETRABALHO */}
       {emRetrabalho.length > 0 && (
@@ -1483,26 +1737,166 @@ export default function ProducaoTab({ currentUser }) {
       {/* MODAL INICIAR */}
       {modalIniciar && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Iniciar Producao — OPL {modalIniciar.opl}</div>
+          <div className="modal-box" style={{maxWidth:440}}>
+            <div className="modal-title">▶️ Iniciar Produção — OPL {modalIniciar.opl}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               Tipo: {modalIniciar.tipo_projeto} | Chassi: {modalIniciar.chassi || '—'}
             </div>
             {modalIniciar.liberado_divulgacao && (
               <div style={{background:'#faf5ff',border:'1px solid #c4b5fd',borderRadius:4,padding:'7px 10px',marginBottom:10,fontSize:10,color:'#5b21b6'}}>
-                📸 <strong>Esta OP esta liberada para divulgacao pelo Marketing.</strong><br/>
-                Avise o time de MKT para agendar os registros de foto/video.
+                📸 <strong>OP liberada para divulgacao pelo Marketing.</strong> Avise o MKT.
               </div>
             )}
-            <label className="acn-label">Responsável pela Produção</label>
-            <ColaboradorSelect
-              value={respNome} onChange={(nome)=>{ setRespNome(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setRespId(colab?.id||null); }}
-              placeholder="Selecione o responsável"
-              className="acn-input" style={{width:'100%',marginBottom:12}}
-              autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarProducao()} />
+
+            {/* Seletor de modo */}
+            <label className="acn-label">Modo de Execução</label>
+            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
+              {(['individual','dupla','equipe'] as const).map(m => (
+                <button key={m} onClick={()=>setModoExecucao(m)} style={{
+                  flex:1, padding:'7px 4px', border:'none', cursor:'pointer', fontSize:10, fontWeight:700,
+                  background: modoExecucao===m ? '#2563eb' : 'white',
+                  color: modoExecucao===m ? 'white' : '#475569',
+                  borderRight: m!=='equipe' ? '1px solid #d1d5db' : 'none',
+                }}>
+                  {m==='individual'?'👤 Individual':m==='dupla'?'👥 Dupla':'🏷️ Equipe'}
+                </button>
+              ))}
+            </div>
+
+            {/* Individual */}
+            {modoExecucao === 'individual' && (
+              <>
+                <label className="acn-label">Técnico Responsável</label>
+                <ColaboradorSelect value={respNome}
+                  onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
+                  placeholder="Selecione o técnico"
+                  className="acn-input" style={{width:'100%',marginBottom:12}} autoFocus />
+              </>
+            )}
+
+            {/* Dupla */}
+            {modoExecucao === 'dupla' && (
+              <>
+                <label className="acn-label">Técnico 1</label>
+                <ColaboradorSelect value={respNome}
+                  onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
+                  placeholder="Selecione o 1º técnico"
+                  className="acn-input" style={{width:'100%',marginBottom:8}} />
+                <label className="acn-label">Técnico 2</label>
+                <ColaboradorSelect value={respNome2}
+                  onChange={nome=>{ setRespNome2(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId2(c?.id||null); }}
+                  placeholder="Selecione o 2º técnico"
+                  className="acn-input" style={{width:'100%',marginBottom:12}} />
+              </>
+            )}
+
+            {/* Equipe */}
+            {modoExecucao === 'equipe' && (
+              <>
+                <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
+                {equipes.length === 0 ? (
+                  <div style={{fontSize:10,color:'#ef4444',marginBottom:12}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:12}}>
+                    {equipes.map(eq => (
+                      <div key={eq.id} onClick={()=>setEquipeSel(eq)} style={{
+                        padding:'9px 12px', borderRadius:6, cursor:'pointer', fontSize:11,
+                        border: equipeSel?.id===eq.id ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
+                        background: equipeSel?.id===eq.id ? '#eff6ff' : 'white',
+                      }}>
+                        <strong>{eq.nome}</strong>
+                        <span style={{color:'#475569',marginLeft:8,fontSize:10}}>Head: {eq.head_line_nome}</span>
+                        {(eq.membros||[]).length>0 && (
+                          <span style={{color:'#6366f1',marginLeft:8,fontSize:9}}>+{eq.membros.length} membros</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={iniciarProducao}>INICIAR PRODUCAO</button>
+              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={iniciarProducao}>▶️ INICIAR PRODUÇÃO</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR RESPONSÁVEL */}
+      {modalEditResp && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:440}}>
+            <div className="modal-title">✏️ Editar Responsável — OPL {modalEditResp.opl}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              Atual: <strong>{modalEditResp.responsavel_producao || '—'}</strong>
+              {modalEditResp.tecnico_producao_2_nome && <> + <strong>{modalEditResp.tecnico_producao_2_nome}</strong></>}
+              {modalEditResp.equipe_nome && <> · Equipe: <strong>{modalEditResp.equipe_nome}</strong></>}
+            </div>
+
+            <label className="acn-label">Modo de Execução</label>
+            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
+              {(['individual','dupla','equipe'] as const).map(m => (
+                <button key={m} onClick={()=>setEditModo(m)} style={{
+                  flex:1, padding:'7px 4px', border:'none', cursor:'pointer', fontSize:10, fontWeight:700,
+                  background: editModo===m ? '#6366f1' : 'white',
+                  color: editModo===m ? 'white' : '#475569',
+                  borderRight: m!=='equipe' ? '1px solid #d1d5db' : 'none',
+                }}>
+                  {m==='individual'?'👤 Individual':m==='dupla'?'👥 Dupla':'🏷️ Equipe'}
+                </button>
+              ))}
+            </div>
+
+            {editModo === 'individual' && (
+              <>
+                <label className="acn-label">Técnico Responsável</label>
+                <ColaboradorSelect value={editResp1Nome}
+                  onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
+                  placeholder="Selecione o técnico"
+                  className="acn-input" style={{width:'100%',marginBottom:12}} />
+              </>
+            )}
+            {editModo === 'dupla' && (
+              <>
+                <label className="acn-label">Técnico 1</label>
+                <ColaboradorSelect value={editResp1Nome}
+                  onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
+                  placeholder="Selecione o 1º técnico"
+                  className="acn-input" style={{width:'100%',marginBottom:8}} />
+                <label className="acn-label">Técnico 2</label>
+                <ColaboradorSelect value={editResp2Nome}
+                  onChange={nome=>{ setEditResp2Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp2Id(c?.id||null); }}
+                  placeholder="Selecione o 2º técnico"
+                  className="acn-input" style={{width:'100%',marginBottom:12}} />
+              </>
+            )}
+            {editModo === 'equipe' && (
+              <>
+                <label className="acn-label">Selecione a Equipe</label>
+                {equipes.length === 0 ? (
+                  <div style={{fontSize:10,color:'#ef4444',marginBottom:12}}>Nenhuma equipe cadastrada.</div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:12}}>
+                    {equipes.map(eq => (
+                      <div key={eq.id} onClick={()=>setEditEquipeSel(eq)} style={{
+                        padding:'9px 12px', borderRadius:6, cursor:'pointer', fontSize:11,
+                        border: editEquipeSel?.id===eq.id ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
+                        background: editEquipeSel?.id===eq.id ? '#eef2ff' : 'white',
+                      }}>
+                        <strong>{eq.nome}</strong>
+                        <span style={{color:'#475569',marginLeft:8,fontSize:10}}>Head: {eq.head_line_nome}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={editarResponsavel}>✏️ SALVAR ALTERAÇÃO</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditResp(null)}>Cancelar</button>
             </div>
           </div>
         </div>

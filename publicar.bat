@@ -62,6 +62,8 @@ git add src/AnaliseInboxPanel.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/MencaoTextarea.tsx
 git add src/ChatWidget.tsx
+git add src/ProducaoTab.tsx
+git add supabase/sql/producao_equipes.sql
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
@@ -80,7 +82,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: ChatWidget DMs dedup+apenas nao lidas; MencaoTextarea async+debug log; CrmTab+ComprasTab mencao em obs compras"
+git commit -m "feat: ProducaoTab equipes+dupla+editar-resp; ChatWidget DMs dedup+nao-lidas; MencaoTextarea paginacao async"
 
 :: Push
 echo.
@@ -308,6 +310,17 @@ echo  CRM DESISTENCIA - RODAR NO SUPABASE (se ainda nao rodou):
 echo  Arquivo: supabase/sql/crm_desistencia.sql
 echo  1. ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS motivo_desistencia text;
 echo  2. INSERT estagio "Desistencia" em crm_estagios_funil (licitacao + venda_direta)
+echo ==============================================
+echo.
+echo ==============================================
+echo  PRODUCAO EQUIPES - RODAR NO SUPABASE (arquivo: supabase/sql/producao_equipes.sql):
+echo  CREATE TABLE IF NOT EXISTS producao_equipes (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), nome text NOT NULL, head_line_id uuid, head_line_nome text NOT NULL, membros jsonb DEFAULT '[]'::jsonb, ativa boolean DEFAULT true, criado_em timestamptz DEFAULT now());
+echo  ALTER TABLE producao_equipes DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS modo_execucao text DEFAULT 'individual';
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS tecnico_producao_2_id uuid;
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS tecnico_producao_2_nome text;
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS equipe_id uuid;
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS equipe_nome text;
 echo ==============================================
 echo.
 echo ==============================================
