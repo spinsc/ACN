@@ -62,6 +62,12 @@ git add src/AnaliseInboxPanel.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/MencaoTextarea.tsx
 git add acn_fix_mencoes.sql
+git add acn_acompanhamentos.sql
+git add src/OplAcompModal.tsx
+git add src/AcnTabShared.tsx
+git add src/ProducaoTab.tsx
+git add src/SacTab.tsx
+git add src/ComercialTab.tsx
 git add src/ChatWidget.tsx
 git add src/ProducaoTab.tsx
 git add src/AcnTabShared.tsx
@@ -91,7 +97,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "fix: mencoes — ID text em vez de uuid, logs de erro, salvarMencoes no CrmTab; feat: ProducaoTab VER; ComprasTab centro-custo; RelatoriosTab rel-centro-custo"
+git commit -m "feat: OplAcompModal — acompanhamentos com @mencoes em OPs/OSes em todos setores; fix: mencoes uuid→text; AcnTabShared OBS+ACOMP; ProducaoTab+SacTab+ComercialTab ACOMP"
 
 :: Push
 echo.
@@ -212,6 +218,12 @@ echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS prazo_entrega_producao date;
 echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS prazo_entrega_comercial date;
 echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS composicao_comercial jsonb DEFAULT '[]'::jsonb;
 echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS observacoes_atencao text;
+echo.
+echo ==============================================
+echo  ACOMPANHAMENTOS OP/OS - RODAR NO SUPABASE (se ainda nao rodou):
+echo  Arquivo: acn_acompanhamentos.sql
+echo  CREATE TABLE op_acompanhamentos (id uuid PK, referencia_id text, referencia_tipo text, setor text, texto text, usuario_id text, usuario_nome text, criado_em timestamptz)
+echo ==============================================
 echo.
 echo -- [IMPORTANTE] Mencoes com IDs como TEXT (correcao de tipo):
 echo -- RODAR: acn_fix_mencoes.sql  (faz DROP + CREATE com mencionado_id text)

@@ -4,6 +4,7 @@ import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
+import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -73,6 +74,7 @@ function OplRow({ o, onAction }) {
         <td>
           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
             <button className="acn-btn" style={{background:'#0891b2',fontSize:10}} onClick={()=>onAction('ver',o)}>👁 VER</button>
+            <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('acomp',o)}>💬 ACOMP.</button>
             {aguardando && (
               <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>onAction('iniciar',o)}>INICIAR</button>
             )}
@@ -1451,6 +1453,7 @@ export default function ProducaoTab({ currentUser }) {
   const { list: colaboradoresList } = useColaboradores();
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
+  const [modalAcomp,  setModalAcomp]      = useState<any>(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalIniciar, setModalIniciar] = useState(null);
   const [respNome, setRespNome] = useState('');
@@ -1642,6 +1645,7 @@ export default function ProducaoTab({ currentUser }) {
     if (tipo === 'checklist')          liberarChecklist(opl);
     if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
     if (tipo === 'ver')                setModalVerOpl(opl);
+    if (tipo === 'acomp')              setModalAcomp(opl);
     if (tipo === 'iniciar_retrabalho') iniciarRetrabalho(opl);
     if (tipo === 'concluir_retrabalho') concluirRetrabalho(opl);
     if (tipo === 'editar_resp') {
@@ -1972,6 +1976,18 @@ export default function ProducaoTab({ currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL ACOMPANHAMENTO DA OP */}
+      {modalAcomp && (
+        <OplAcompModal
+          referenciaId={modalAcomp.opl || String(modalAcomp.id)}
+          referenciaDesc={`OP ${modalAcomp.opl || '—'}`}
+          referenciaType="op"
+          setor="Producao"
+          currentUser={currentUser}
+          onClose={() => setModalAcomp(null)}
+        />
       )}
     </div>}
     </div>

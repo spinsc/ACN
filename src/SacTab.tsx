@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea from './MencaoTextarea';
+import OplAcompModal from './OplAcompModal';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -147,6 +148,7 @@ export default function SacTab({ currentUser }) {
   const [filtroTipo, setFiltroTipo]         = useState('');
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [busca, setBusca]               = useState('');
+  const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
 
   // Cadastros estados
   const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'>('equipamentos');
@@ -682,7 +684,11 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
 
   // ── AÇÕES POR STATUS ──────────────────────────────────────────────────────
   const renderAcoes = (os) => {
-    const btns = [];
+    const btns = [
+      // Botão de acompanhamento — sempre visível em qualquer status
+      <button key="acomp" className="acn-btn" style={{background:'#6366f1',fontSize:9}}
+        onClick={()=>setModalAcomp(os)}>💬 ACOMP.</button>,
+    ];
     const eh = os.is_manutencao_veicular;
 
     // ── FLUXO VEICULAR ──────────────────────────────────────────────────────
@@ -2038,6 +2044,18 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
             <PrintOS os={modalPrint} />
           </div>
         </div>
+      )}
+
+      {/* MODAL ACOMPANHAMENTO DA OS */}
+      {modalAcomp && (
+        <OplAcompModal
+          referenciaId={String(modalAcomp.id)}
+          referenciaDesc={`OS ${modalAcomp.numero_os || '—'}`}
+          referenciaType="os"
+          setor="SAC"
+          currentUser={currentUser}
+          onClose={() => setModalAcomp(null)}
+        />
       )}
     </div>}  {/* fim abaAtiva === 'os' */}
     </div>

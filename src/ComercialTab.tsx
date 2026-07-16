@@ -8,6 +8,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import OplAcompModal from './OplAcompModal';
 
 
 const TIPOS_PROJETO = [
@@ -554,7 +555,8 @@ export default function ComercialTab({ currentUser }) {
   const [editId, setEditId] = useState(null);
   const [oneNoteUrl, setOneNoteUrl] = useState('');
   const [modalEntregue, setModalEntregue] = useState(null);
-  const [modalVer, setModalVer] = useState(null);
+  const [modalVer, setModalVer]           = useState(null);
+  const [modalAcomp, setModalAcomp]       = useState<any>(null); // acompanhamento OP
   const [nomeRecebeu, setNomeRecebeu] = useState('');
 
   // Categorias de tipo de projeto (sac_categorias + hardcoded)
@@ -1146,6 +1148,7 @@ export default function ComercialTab({ currentUser }) {
                           {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button>}
                           {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
                           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                          <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬 ACOMP.</button>
                         </div>
                       </td>
                     </tr>
@@ -1162,6 +1165,18 @@ export default function ComercialTab({ currentUser }) {
       <DemandaFooter setor="Comercial" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+
+      {/* MODAL ACOMPANHAMENTO DA OP */}
+      {modalAcomp && (
+        <OplAcompModal
+          referenciaId={modalAcomp.opl || String(modalAcomp.id)}
+          referenciaDesc={`OP ${modalAcomp.opl || '—'} — ${modalAcomp.cliente_nome || ''}`}
+          referenciaType="op"
+          setor="Comercial"
+          currentUser={currentUser}
+          onClose={() => setModalAcomp(null)}
+        />
+      )}
 
       {/* MODAL ENTREGUE */}
       {modalEntregue && (

@@ -2,6 +2,8 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import OplAcompModal from './OplAcompModal';
 
 
 // ─── Botão de Pendências por OPL ─────────────────────────────────────────────
@@ -480,6 +482,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   const [modalIniciar, setModalIniciar] = useState<any>(null);
   const [modalObs, setModalObs] = useState<any>(null);
   const [modalVer, setModalVer] = useState<any>(null);
+  const [modalAcomp, setModalAcomp] = useState<any>(null);   // OP acompanhamento
   const [responsavel, setResponsavel] = useState('');
   const [obsTexto, setObsTexto] = useState('');
   const [tick, setTick] = useState(0);
@@ -563,6 +566,17 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
     const logs = d.logs_demanda || [];
     logs.push({ texto: obsTexto, usuario: currentUser?.nome, hora: new Date().toISOString() });
     await supabase.from('demandas_setoriais').update({ observacoes_execucao: obsTexto, logs_demanda: logs }).eq('id', d.id);
+    // Salva @menções da observação
+    await salvarMencoes({
+      texto:             obsTexto,
+      mencionanteId:     String(currentUser?.id || ''),
+      mencionanteNome:   currentUser?.nome || 'Sistema',
+      contexto:          'demanda',
+      contextoId:        String(d.id),
+      contextoDescricao: `Demanda ${setor}: ${(d.descricao || '').replace('[AJUSTE] ','').slice(0,50)}`,
+      campo:             'observacoes_execucao',
+      abaDestino:        setor.toLowerCase().replace('ção','cao').replace('ística','istica'),
+    });
     setObsTexto(''); setModalObs(null);
     fetchDemandas();
   };
@@ -619,6 +633,14 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button className="acn-btn" style={{ background: '#0891b2', fontSize: 10 }}
                         onClick={() => setModalVer(d)}>👁 VER</button>
+                      {/* Botão de acompanhamento — sempre visível se a demanda tem OP vinculada */}
+                      {d.numero_opl && (
+                        <button className="acn-btn" style={{ background: '#6366f1', fontSize: 9 }}
+                          onClick={() => setModalAcomp(d)}>💬 ACOMP.</button>
+                      )}
+                      {/* OBS — visível para qualquer status (Pendente ou Em Andamento) */}
+                      <button className="acn-btn" style={{ background: '#475569', fontSize: 10 }}
+                        onClick={() => { setModalObs(d); setObsTexto(''); }}>OBS</button>
                       {d.status === 'Pendente' && (
                         <button className="acn-btn" style={{ background: cor || '#1e293b' }}
                           onClick={() => { setModalIniciar(d); setResponsavel(currentUser?.nome || ''); }}>INICIAR</button>
@@ -630,8 +652,6 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                           ) : (
                             <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={() => retomar(d)}>▶ RETOMAR</button>
                           )}
-                          <button className="acn-btn" style={{ background: '#475569', fontSize: 10 }}
-                            onClick={() => { setModalObs(d); setObsTexto(''); }}>OBS</button>
                           {!d.pausado && (
                             <button className="acn-btn" style={{ background: '#22c55e' }} onClick={() => concluir(d)}>CONCLUIR</button>
                           )}
@@ -669,16 +689,32 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
 
       {modalObs && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: 450 }}>
-            <div className="modal-title">Observacao — {modalObs.descricao?.replace('[AJUSTE] ', '')}</div>
-            <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', marginBottom: 8 }}
-              placeholder="Adicione uma observacao..." value={obsTexto} onChange={e => setObsTexto(e.target.value)} />
-            <div style={{ display: 'flex', gap: 8 }}>
+          <div className="modal-box" style={{ maxWidth: 480 }}>
+            <div className="modal-title">Observação — {modalObs.descricao?.replace('[AJUSTE] ', '')}</div>
+            <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 6 }}>
+              Use @Nome para mencionar um colega
+            </div>
+            <MencaoTextarea
+              value={obsTexto} onChange={setObsTexto} rows={3}
+              placeholder="Adicione uma observação... @Nome para mencionar" />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <button className="acn-btn" style={{ background: cor || '#1e293b', flex: 1 }} onClick={salvarObs}>SALVAR</button>
               <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setModalObs(null)}>Fechar</button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL ACOMPANHAMENTO DA OP */}
+      {modalAcomp && (
+        <OplAcompModal
+          referenciaId={modalAcomp.numero_opl || String(modalAcomp.id)}
+          referenciaDesc={`OP ${modalAcomp.numero_opl || '—'}`}
+          referenciaType="op"
+          setor={setor}
+          currentUser={currentUser}
+          onClose={() => setModalAcomp(null)}
+        />
       )}
 
       {/* MODAL VER DETALHES */}
