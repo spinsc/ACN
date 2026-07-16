@@ -7,8 +7,9 @@ import MencaoTextarea from './MencaoTextarea';
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
-const STATUS_LIST = ['Aberta','Em Análise','Analisada','Em Andamento','Vencida','Perdida','Descartada'];
+const STATUS_LIST = ['Aguardando Licitação','Aberta','Em Análise','Analisada','Em Andamento','Vencida','Perdida','Descartada'];
 const STATUS_COR: Record<string,string> = {
+  'Aguardando Licitação': '#94a3b8',
   'Aberta':       '#2563eb',
   'Em Análise':   '#d97706',
   'Analisada':    '#7c3aed',
@@ -110,51 +111,134 @@ function PrazoBadge({ label, value }: { label:string; value:string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
+// Categorias para o painel direito
+const TABS_DIREITO = [
+  { key:'andamento',    label:'📝 Andamento' },
+  { key:'processo',     label:'📂 Processo' },
+  { key:'impugnacoes',  label:'⚠️ Impugnações' },
+  { key:'recursos',     label:'📜 Recursos' },
+  { key:'contratos',    label:'📋 Contratos' },
+  { key:'empenhos',     label:'💰 Empenhos' },
+  { key:'doc_terceiros',label:'📁 Doc Terceiros' },
+  { key:'prospeccoes',  label:'🔍 Prospecções' },
+  { key:'analise',      label:'🔬 Análise' },
+] as const;
+
 function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
-  const [tab, setTab] = useState<'info'|'anexos'|'historico'|'andamento'|'analise'>('info');
+  // ── LEFT FORM (edição) ───────────────────────────────────────────────────
+  const [formEdit, setFormEdit] = useState<any>({ ...licit });
+  const [salvandoForm, setSalvandoForm] = useState(false);
+  const setF = (k: string, v: any) => setFormEdit((f: any) => ({ ...f, [k]: v }));
+
+  // ── RIGHT PANEL (abas de documentos) ────────────────────────────────────
+  const [tabDir, setTabDir] = useState<string>('andamento');
+  const [docs, setDocs] = useState<any[]>([]);
+  const [docsLegacy, setDocsLegacy] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [novoText, setNovoText] = useState('');
+  const [novoAnexoFile, setNovoAnexoFile] = useState<File|null>(null);
+  const [uploadFile, setUploadFile] = useState<File|null>(null);
+  const [salvandoDoc, setSalvandoDoc] = useState(false);
+  const [uploadDesc, setUploadDesc] = useState('');
+  const novoAnexoRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+
+  // ── Status / fluxo ──────────────────────────────────────────────────────
   const [showModalSolicitar, setShowModalSolicitar] = useState(false);
   const [showAcoesVencida, setShowAcoesVencida] = useState(false);
   const [emitindoPedido, setEmitindoPedido] = useState(false);
   const [pedidoEmitido, setPedidoEmitido] = useState<string|null>(null);
-  const [anexos, setAnexos] = useState<any[]>([]);
   const [salvando, setSalvando] = useState(false);
-  const [tipoAnexo, setTipoAnexo] = useState('documento');
-  const [anotacaoTxt, setAnotacaoTxt] = useState('');
-  const [contatoTxt, setContatoTxt] = useState('');
-  const [fileInput, setFileInput] = useState<FileList|null>(null);
   const [obsEncerramento, setObsEncerramento] = useState('');
   const [confirmStatus, setConfirmStatus] = useState<string|null>(null);
-  const [novoAndamento, setNovoAndamento] = useState('');
-  const [salvandoAndamento, setSalvandoAndamento] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = true; // acesso já controlado pelo dashboard
+  const isAdmin = true;
   const isAnalista = true;
   const isCoordenador = true;
 
-  const fetchAnexos = useCallback(async () => {
-    const { data } = await supabase.from('licitacao_anexos')
-      .select('*').eq('licitacao_id', licit.id)
-      .order('criado_em', { ascending: false });
-    setAnexos(data || []);
-  }, [licit.id]);
+  // ── Fetch documentos por categoria ──────────────────────────────────────
+  const fetchDocs = useCallback(async () => {
+    if (tabDir === 'analise') return;
+    setLoadingDocs(true);
+    const [novosRes, legacyRes] = await Promise.all([
+      supabase.from('licitacao_documentos')
+        .select('*').eq('licitacao_id', licit.id).eq('categoria', tabDir)
+        .order('criado_em', { ascending: false }),
+      tabDir === 'andamento'
+        ? supabase.from('licitacao_anexos').select('*')
+            .eq('licitacao_id', licit.id).eq('tipo', 'andamento')
+            .order('criado_em', { ascending: false })
+        : Promise.resolve({ data: [] }),
+    ]);
+    setDocs(novosRes.data || []);
+    setDocsLegacy(legacyRes.data || []);
+    setLoadingDocs(false);
+  }, [licit.id, tabDir]);
 
-  useEffect(() => { fetchAnexos(); }, [fetchAnexos]);
+  useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
-  // ── Salvar andamento ────────────────────────────────────────────────────
-  const salvarAndamento = async () => {
-    if (!novoAndamento.trim()) return;
-    setSalvandoAndamento(true);
-    const { error } = await supabase.from('licitacao_anexos').insert([{
-      licitacao_id: licit.id,
-      tipo: 'andamento',
-      conteudo: novoAndamento.trim(),
-      criado_por_nome: currentUser?.nome || currentUser?.email || 'Usuário',
-      criado_em: new Date().toISOString(),
-    }]);
+  // ── Salvar form editável (lado esquerdo) ────────────────────────────────
+  const salvarForm = async () => {
+    setSalvandoForm(true);
+    const agora = new Date().toISOString();
+    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, ...editaveis } = formEdit;
+    const { error } = await supabase.from('licitacoes').update({ ...editaveis, atualizado_em: agora }).eq('id', licit.id);
     if (error) { alert('Erro ao salvar: ' + error.message); }
-    else { setNovoAndamento(''); await fetchAnexos(); }
-    setSalvandoAndamento(false);
+    else { onRefresh(); }
+    setSalvandoForm(false);
+  };
+
+  // ── Salvar documento/andamento (lado direito) ────────────────────────────
+  const salvarDoc = async () => {
+    if (tabDir === 'andamento' && !novoText.trim() && !novoAnexoFile) return;
+    if (tabDir !== 'andamento' && !uploadFile && !uploadDesc.trim()) return;
+    setSalvandoDoc(true);
+    const agora = new Date().toISOString();
+    const autor = currentUser?.nome || currentUser?.email || 'Usuário';
+    try {
+      if (tabDir === 'andamento') {
+        // Upload do anexo opcional
+        let anexoUrl: string|null = null;
+        let anexoNome: string|null = null;
+        if (novoAnexoFile) {
+          anexoUrl = await uploadAnexo(novoAnexoFile, licit.id, 'andamento');
+          anexoNome = novoAnexoFile.name;
+        }
+        const { error } = await supabase.from('licitacao_documentos').insert([{
+          licitacao_id: licit.id, categoria: 'andamento',
+          nome: 'Andamento', conteudo: novoText.trim(),
+          anexo_url: anexoUrl, anexo_nome: anexoNome,
+          criado_por: currentUser?.email, criado_por_nome: autor,
+          criado_em: agora,
+        }]);
+        if (error) { alert('Erro: ' + error.message); }
+        else { setNovoText(''); setNovoAnexoFile(null); if (novoAnexoRef.current) novoAnexoRef.current.value = ''; }
+      } else {
+        let url: string|null = null;
+        let nome: string|null = uploadFile?.name || null;
+        if (uploadFile) {
+          url = await uploadAnexo(uploadFile, licit.id, tabDir);
+        }
+        const { error } = await supabase.from('licitacao_documentos').insert([{
+          licitacao_id: licit.id, categoria: tabDir,
+          nome: nome || uploadDesc.slice(0,80) || 'Documento',
+          url, conteudo: uploadDesc.trim() || null,
+          criado_por: currentUser?.email, criado_por_nome: autor,
+          criado_em: agora,
+        }]);
+        if (error) { alert('Erro: ' + error.message); }
+        else { setUploadFile(null); setUploadDesc(''); if (uploadRef.current) uploadRef.current.value = ''; }
+      }
+      await fetchDocs();
+    } finally {
+      setSalvandoDoc(false);
+    }
+  };
+
+  const excluirDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
+    if (!confirm('Remover este registro?')) return;
+    await supabase.from(tabela).delete().eq('id', id);
+    fetchDocs();
   };
 
   // ── Mudar status ────────────────────────────────────────────────────────
@@ -233,43 +317,6 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
     onRefresh();
   };
 
-  // ── Upload de arquivo ───────────────────────────────────────────────────
-  const salvarAnexo = async () => {
-    setSalvando(true);
-    if ((tipoAnexo === 'anotacao' || tipoAnexo === 'contato')) {
-      const txt = tipoAnexo === 'anotacao' ? anotacaoTxt : contatoTxt;
-      if (!txt.trim()) { setSalvando(false); return; }
-      await supabase.from('licitacao_anexos').insert([{
-        licitacao_id: licit.id, tipo: tipoAnexo,
-        nome: tipoAnexo === 'anotacao' ? 'Anotação' : 'Contato',
-        conteudo: txt,
-        criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
-      }]);
-      setAnotacaoTxt(''); setContatoTxt('');
-    } else if (fileInput && fileInput.length > 0) {
-      for (let i = 0; i < fileInput.length; i++) {
-        const url = await uploadAnexo(fileInput[i], licit.id, tipoAnexo);
-        if (url) {
-          await supabase.from('licitacao_anexos').insert([{
-            licitacao_id: licit.id, tipo: tipoAnexo,
-            nome: fileInput[i].name, url,
-            criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
-          }]);
-        }
-      }
-      if (fileRef.current) fileRef.current.value = '';
-      setFileInput(null);
-    }
-    await fetchAnexos();
-    setSalvando(false);
-  };
-
-  const excluirAnexo = async (id: string) => {
-    if (!confirm('Remover este anexo?')) return;
-    await supabase.from('licitacao_anexos').delete().eq('id', id);
-    fetchAnexos();
-  };
-
   const s = licit.status;
   const marcadores: string[] = licit.marcadores || [];
 
@@ -285,324 +332,373 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
 
   const btnProximo = botaoProximoStatus();
 
+  // helper de campo editável
+  const FInput = ({ label, field, type='text' }: { label:string; field:string; type?:string }) => (
+    <div>
+      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
+      <input type={type} value={formEdit[field]||''} onChange={e=>setF(field,e.target.value)}
+        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+    </div>
+  );
+
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'flex-start', justifyContent:'flex-end' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width:'min(700px,95vw)', height:'100vh', background:'#fff', display:'flex', flexDirection:'column', boxShadow:'-4px 0 24px #0003' }}>
+    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex' }}>
+      <div style={{ display:'flex', width:'100%', height:'100%' }}>
 
-        {/* Header */}
-        <div style={{ padding:'14px 16px', background:STATUS_COR[s]||'#374151', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-          <div>
-            <div style={{ fontSize:10, opacity:.8, fontWeight:600 }}>{s.toUpperCase()} · {licit.classificacao}</div>
-            <div style={{ fontSize:14, fontWeight:700 }}>{licit.numero} — {licit.nome_projeto}</div>
-            <div style={{ fontSize:10, opacity:.85 }}>{licit.orgao}</div>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
-        </div>
+        {/* ══════════════ ESQUERDO: Formulário Editável ══════════════ */}
+        <div style={{ width:'42%', minWidth:320, display:'flex', flexDirection:'column', background:'#fff', borderRight:'2px solid #e2e8f0', boxShadow:'2px 0 12px #0002' }}>
 
-        {/* Prioridade + Marcadores */}
-        <div style={{ padding:'8px 16px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', flexShrink:0 }}>
-          <span style={{ background:PRIO_COR[licit.prioridade]||'#374151', color:'#fff', borderRadius:4, padding:'1px 8px', fontSize:10, fontWeight:700 }}>
-            ★ {licit.prioridade}
-          </span>
-          {s === 'Em Andamento' && MARCADORES.map(m => (
-            <button key={m} onClick={() => toggleMarcador(m)}
-              style={{ border:`1.5px solid ${marcadores.includes(m)?'#dc2626':'#d1d5db'}`,
-                background: marcadores.includes(m)?'#fef2f2':'#fff',
-                color: marcadores.includes(m)?'#dc2626':'#6b7280',
-                borderRadius:4, padding:'2px 8px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
-              {marcadores.includes(m)?'✓ ':''}{m}
-            </button>
-          ))}
-        </div>
-
-        {/* Tabs de navegação */}
-        <div style={{ display:'flex', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
-          {(['info','andamento','analise','anexos','historico'] as const).map(t => {
-            const andamentos = anexos.filter(a=>a.tipo==='andamento');
-            const label = t==='info'?'📋 Informações'
-              : t==='andamento'?`📝 Andamento${andamentos.length>0?' ('+andamentos.length+')':''}`
-              : t==='analise'?'🔍 Análise'
-              : t==='anexos'?`📁 Documentos (${anexos.filter(a=>a.tipo!=='andamento').length})`
-              : '📜 Histórico';
-            return (
-              <button key={t} onClick={() => setTab(t)}
-                style={{ flex:1, padding:'8px 4px', border:'none', borderBottom: tab===t?'2px solid #2563eb':'2px solid transparent',
-                  background: t==='andamento'&&tab!=='andamento'&&andamentos.length>0?'#f0fdf4':'none',
-                  fontWeight:tab===t?700:400, color:tab===t?'#2563eb':'#6b7280', fontSize:10, cursor:'pointer' }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Conteúdo */}
-        <div style={{ flex:1, overflowY:'auto', padding:16 }}>
-
-          {/* ── TAB INFO ── */}
-          {tab === 'info' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              <InfoRow label="Número" value={licit.numero} />
-              <InfoRow label="Projeto" value={licit.nome_projeto} />
-              <InfoRow label="Órgão" value={licit.orgao} />
-              <InfoRow label="Objeto" value={licit.objeto_principal || '—'} />
-              <InfoRow label="Classificação" value={licit.classificacao} />
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <InfoRow label="Registro" value={fmtDT(licit.data_registro)} />
-                <InfoRow label="Limite Esclarecimentos/Impugnação" value={fmtDT(licit.data_limite_esclarecimentos)} alert={isVencido(licit.data_limite_esclarecimentos)} />
-                <InfoRow label="Limite Proposta" value={fmtDT(licit.data_limite_proposta)} alert={isVencido(licit.data_limite_proposta)} />
-                <InfoRow label="Data de Disputa" value={fmtDT(licit.data_disputa)} alert={isVencido(licit.data_disputa)} />
-                <InfoRow label="Limite Análise Técnica" value={fmtDT(licit.data_limite_analise_tecnica)} alert={isVencido(licit.data_limite_analise_tecnica)} />
-              </div>
-              {licit.analista_nome && <InfoRow label="Analista" value={`${licit.analista_nome} (${licit.analista_email||''})`} />}
-              {licit.coordenador_nome && <InfoRow label="Analista Técnico" value={`${licit.coordenador_nome} (${licit.coordenador_email||''})`} />}
-              {licit.obs_encerramento && <InfoRow label="Obs. Encerramento" value={licit.obs_encerramento} />}
+          {/* Header */}
+          <div style={{ padding:'12px 14px', background:STATUS_COR[s]||'#374151', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+            <div>
+              <div style={{ fontSize:9, opacity:.8, fontWeight:700, letterSpacing:.5 }}>{s.toUpperCase()} · {licit.classificacao}</div>
+              <div style={{ fontSize:13, fontWeight:700 }}>{licit.numero} — {licit.nome_projeto}</div>
+              <div style={{ fontSize:9, opacity:.85 }}>{licit.orgao}</div>
             </div>
-          )}
+            <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+          </div>
 
-          {/* ── TAB ANEXOS ── */}
-          {tab === 'anexos' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {/* Upload */}
-              <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
-                <div style={{ fontWeight:700, fontSize:10, color:'#374151', marginBottom:8 }}>ADICIONAR</div>
-                <select value={tipoAnexo} onChange={e=>setTipoAnexo(e.target.value)}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, marginBottom:8 }}>
-                  {Object.entries(TIPO_ANEXO_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+          {/* Marcadores + Prioridade */}
+          <div style={{ padding:'6px 12px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', flexShrink:0 }}>
+            <span style={{ background:PRIO_COR[formEdit.prioridade]||'#374151', color:'#fff', borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:700 }}>★ {formEdit.prioridade}</span>
+            {MARCADORES.map(m => (
+              <button key={m} onClick={() => toggleMarcador(m)}
+                style={{ border:`1.5px solid ${marcadores.includes(m)?'#dc2626':'#d1d5db'}`,
+                  background: marcadores.includes(m)?'#fef2f2':'#fff',
+                  color: marcadores.includes(m)?'#dc2626':'#6b7280',
+                  borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+                {marcadores.includes(m)?'✓ ':''}{m}
+              </button>
+            ))}
+          </div>
+
+          {/* Form editável (scrollable) */}
+          <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              <FInput label="Número" field="numero" />
+              <div>
+                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação</label>
+                <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)}
+                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                  <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
                 </select>
-                {tipoAnexo === 'anotacao' ? (
-                  <MencaoTextarea value={anotacaoTxt} onChange={v=>setAnotacaoTxt(v)}
-                    placeholder="Anotação... use @Nome para mencionar alguém" rows={3}
-                    style={{ fontSize:11 }} />
-                ) : tipoAnexo === 'contato' ? (
-                  <MencaoTextarea value={contatoTxt} onChange={v=>setContatoTxt(v)}
-                    placeholder="Nome, telefone, e-mail, observações... @Nome para mencionar" rows={3}
-                    style={{ fontSize:11 }} />
+              </div>
+            </div>
+
+            <FInput label="Nome do Projeto" field="nome_projeto" />
+            <FInput label="Órgão" field="orgao" />
+            <FInput label="Objeto Principal" field="objeto_principal" />
+
+            <div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Prioridade</label>
+              <div style={{ display:'flex', gap:6 }}>
+                {PRIORIDADES.map(p => (
+                  <button key={p} onClick={() => setF('prioridade', p)}
+                    style={{ flex:1, padding:'4px', border:`1.5px solid ${formEdit.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
+                      background: formEdit.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
+                      color: formEdit.prioridade===p ? PRIO_COR[p] : '#374151',
+                      borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>PRAZOS</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <FInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" type="datetime-local" />
+                <FInput label="Limite Proposta" field="data_limite_proposta" type="datetime-local" />
+                <FInput label="Data/Hora de Disputa" field="data_disputa" type="datetime-local" />
+                <FInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" type="datetime-local" />
+              </div>
+            </div>
+
+            <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>RESPONSÁVEIS</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <FInput label="Analista de Licitações" field="analista_nome" />
+                <FInput label="E-mail Analista" field="analista_email" type="email" />
+                <FInput label="Analista Técnico" field="coordenador_nome" />
+                <FInput label="E-mail Analista Técnico" field="coordenador_email" type="email" />
+              </div>
+            </div>
+
+            {/* Histórico de status */}
+            {(licit.historico||[]).length > 0 && (
+              <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>HISTÓRICO</div>
+                {[...(licit.historico||[])].reverse().slice(0,5).map((h: any, i: number) => (
+                  <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:STATUS_COR[h.status]||'#6b7280', marginTop:3, flexShrink:0 }} />
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:700, color:STATUS_COR[h.status]||'#374151' }}>{h.status}</div>
+                      <div style={{ fontSize:9, color:'#6b7280' }}>{h.usuario} · {fmtDT(h.data)}</div>
+                      {h.obs && <div style={{ fontSize:9, color:'#374151' }}>{h.obs}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer: Salvar + Status + Ações */}
+          <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 14px', flexShrink:0, display:'flex', flexDirection:'column', gap:6 }}>
+
+            {/* Pós-vitória */}
+            {showAcoesVencida && (
+              <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:6, padding:10, marginBottom:4 }}>
+                <div style={{ fontWeight:700, color:'#166534', fontSize:12, marginBottom:6 }}>🏆 VENCIDA! Emita os documentos:</div>
+                {pedidoEmitido ? (
+                  <div style={{ background:'#dcfce7', borderRadius:4, padding:'6px 10px', fontSize:10, color:'#166534', fontWeight:700, marginBottom:4 }}>
+                    ✅ Pedido {pedidoEmitido} emitido! Veja aba Compras.
+                  </div>
                 ) : (
-                  <input type="file" multiple ref={fileRef}
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp"
-                    onChange={e=>setFileInput(e.target.files)}
-                    style={{ width:'100%', fontSize:11 }} />
+                  <button onClick={emitirPedidoCompra} disabled={emitindoPedido}
+                    style={{ width:'100%', background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4, opacity:emitindoPedido?.6:1 }}>
+                    {emitindoPedido ? 'Emitindo...' : '📦 Emitir Pedido de Compra'}
+                  </button>
                 )}
-                <button onClick={salvarAnexo} disabled={salvando}
-                  style={{ marginTop:8, background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'6px 16px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                  {salvando ? 'Salvando...' : '+ Adicionar'}
+                <button onClick={prepararOpComercial}
+                  style={{ width:'100%', background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4 }}>
+                  🏭 Preparar OP no Comercial
+                </button>
+                <button onClick={onClose}
+                  style={{ width:'100%', background:'#fff', color:'#374151', border:'1px solid #d1d5db', borderRadius:4, padding:'5px', fontSize:10, cursor:'pointer' }}>
+                  Fechar
                 </button>
               </div>
+            )}
 
-              {/* Lista de anexos por tipo */}
-              {['proposta','habilitacao','orcamento','documento','foto','anotacao','contato'].map(tipo => {
-                const lista = anexos.filter(a => a.tipo === tipo);
-                if (!lista.length) return null;
-                return (
-                  <div key={tipo}>
-                    <div style={{ fontWeight:700, fontSize:9, color:'#6b7280', marginBottom:4, textTransform:'uppercase', letterSpacing:'.5px' }}>
-                      {TIPO_ANEXO_LABELS[tipo]} ({lista.length})
-                    </div>
-                    {lista.map(a => (
-                      <div key={a.id} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'6px 8px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:4, marginBottom:4 }}>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          {a.url ? (
-                            <a href={a.url} target="_blank" rel="noreferrer"
-                              style={{ color:'#2563eb', fontSize:11, fontWeight:600, wordBreak:'break-all' }}>
-                              📎 {a.nome}
-                            </a>
-                          ) : (
-                            <div style={{ fontSize:11, color:'#374151', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{a.conteudo}</div>
-                          )}
-                          <div style={{ fontSize:9, color:'#9ca3af', marginTop:2 }}>
-                            {a.criado_por_nome} · {fmtDT(a.criado_em)}
-                          </div>
-                        </div>
-                        {isAdmin && (
-                          <button onClick={() => excluirAnexo(a.id)}
-                            style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px' }}>✕</button>
-                        )}
-                      </div>
+            {/* Confirmação de transição de status */}
+            {confirmStatus && (
+              <div style={{ background:'#fef3c7', border:'1px solid #fcd34d', borderRadius:4, padding:8 }}>
+                <div style={{ fontWeight:700, fontSize:10, marginBottom:5 }}>
+                  Mover para: <span style={{ color:STATUS_COR[confirmStatus] }}>{confirmStatus}</span>
+                </div>
+                <textarea value={obsEncerramento} onChange={e=>setObsEncerramento(e.target.value)}
+                  placeholder="Observação (opcional)..." rows={2}
+                  style={{ width:'100%', padding:'4px 7px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, resize:'none', boxSizing:'border-box', marginBottom:5 }} />
+                <div style={{ display:'flex', gap:6 }}>
+                  <button onClick={() => mudarStatus(confirmStatus)} disabled={salvando}
+                    style={{ flex:1, background:STATUS_COR[confirmStatus], color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
+                    {salvando ? '...' : '✓ Confirmar'}
+                  </button>
+                  <button onClick={() => { setConfirmStatus(null); setObsEncerramento(''); }}
+                    style={{ padding:'5px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!showAcoesVencida && !confirmStatus && (
+              <>
+                {/* Botão Salvar */}
+                <button onClick={salvarForm} disabled={salvandoForm}
+                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'8px', fontWeight:700, fontSize:12, cursor:'pointer', opacity:salvandoForm?.6:1 }}>
+                  {salvandoForm ? 'Salvando...' : '💾 Salvar Alterações'}
+                </button>
+
+                {/* Próximo status */}
+                {btnProximo && (
+                  <button onClick={() => setConfirmStatus(btnProximo.next)}
+                    style={{ background:STATUS_COR[btnProximo.next], color:'#fff', border:'none', borderRadius:6, padding:'7px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                    {btnProximo.label}
+                  </button>
+                )}
+
+                {/* Encerramento (Em Andamento) */}
+                {s === 'Em Andamento' && isAnalista && (
+                  <div style={{ display:'flex', gap:6 }}>
+                    {['Vencida','Perdida','Descartada'].map(ns => (
+                      <button key={ns} onClick={() => setConfirmStatus(ns)}
+                        style={{ flex:1, background:STATUS_COR[ns], color:'#fff', border:'none', borderRadius:4, padding:'5px 4px', fontWeight:700, fontSize:9, cursor:'pointer' }}>
+                        {ns === 'Vencida' ? '🏆 Vencida' : ns === 'Perdida' ? '😞 Perdida' : '🗑️ Descartada'}
+                      </button>
                     ))}
                   </div>
-                );
-              })}
-              {!anexos.length && <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhum documento ainda.</div>}
-            </div>
-          )}
+                )}
 
-          {/* ── TAB ANDAMENTO ── */}
-          {tab === 'andamento' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {/* Nova observação */}
-              <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
-                <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
-                <textarea
-                  value={novoAndamento}
-                  onChange={e=>setNovoAndamento(e.target.value)}
-                  placeholder="Descreva o andamento da negociação..."
-                  rows={3}
-                  style={{ width:'100%', padding:'7px 10px', border:'1px solid #86efac', borderRadius:4, fontSize:11,
-                    resize:'vertical', boxSizing:'border-box', marginBottom:8, fontFamily:'inherit' }} />
-                <button onClick={salvarAndamento} disabled={salvandoAndamento||!novoAndamento.trim()}
-                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'6px 18px',
-                    fontWeight:700, fontSize:11, cursor:'pointer', opacity:novoAndamento.trim()?1:.5 }}>
-                  {salvandoAndamento ? 'Salvando...' : '+ Registrar'}
-                </button>
-              </div>
-              {/* Histórico de andamentos */}
-              {anexos.filter(a=>a.tipo==='andamento').length === 0 && (
-                <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização registrada ainda.</div>
-              )}
-              {anexos.filter(a=>a.tipo==='andamento').map((a,i) => (
-                <div key={a.id||i} style={{ display:'flex', gap:10, padding:'10px 12px',
-                  background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #2563eb' }}>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>
-                      {a.conteudo}
-                    </div>
-                    <div style={{ marginTop:5, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                      <span>👤 {a.criado_por_nome||'—'}</span>
-                      <span>🕒 {fmtDT(a.criado_em)}</span>
-                    </div>
-                  </div>
+                {/* Solicitar Análise + Excluir */}
+                <div style={{ display:'flex', gap:6 }}>
+                  <button onClick={() => setShowModalSolicitar(true)}
+                    style={{ flex:1, background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
+                    🔍 Solicitar Análise
+                  </button>
                   {isAdmin && (
-                    <button onClick={async()=>{
-                      await supabase.from('licitacao_anexos').delete().eq('id',a.id);
-                      fetchAnexos();
-                    }} style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px', alignSelf:'flex-start' }}>✕</button>
+                    <button onClick={onExcluir}
+                      style={{ background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:4, padding:'5px 10px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
+                      🗑️ Excluir
+                    </button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── TAB ANÁLISE ── */}
-          {tab === 'analise' && (
-            <AnaliseStatusPanel
-              origemId={licit.id}
-              origemTitulo={licit.nome_projeto}
-              origemNumero={licit.numero}
-              origem="licitacao"
-              currentUser={currentUser}
-              onSolicitarNova={() => setShowModalSolicitar(true)}
-            />
-          )}
-
-          {/* ── TAB HISTÓRICO ── */}
-          {tab === 'historico' && (
-            <div>
-              {[...(licit.historico||[])].reverse().map((h: any, i: number) => (
-                <div key={i} style={{ display:'flex', gap:10, marginBottom:10 }}>
-                  <div style={{ width:10, height:10, borderRadius:'50%', background:STATUS_COR[h.status]||'#6b7280', marginTop:3, flexShrink:0 }} />
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:11, color:STATUS_COR[h.status]||'#374151' }}>{h.status}</div>
-                    <div style={{ fontSize:10, color:'#6b7280' }}>{h.usuario} · {fmtDT(h.data)}</div>
-                    {h.obs && <div style={{ fontSize:11, color:'#374151', marginTop:2 }}>{h.obs}</div>}
-                  </div>
-                </div>
-              ))}
-              {!(licit.historico||[]).length && (
-                <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Histórico vazio.</div>
-              )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Footer — botões de ação */}
-        <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 16px', flexShrink:0, display:'flex', flexDirection:'column', gap:8 }}>
+        {/* ══════════════ DIREITO: Abas de Documentos ══════════════ */}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden' }}>
 
-          {/* ── Ações Pós-Vitória ── */}
-          {showAcoesVencida && (
-            <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:8, padding:14 }}>
-              <div style={{ fontWeight:700, color:'#166534', fontSize:14, marginBottom:4 }}>
-                🏆 Licitação marcada como VENCIDA!
-              </div>
-              <div style={{ fontSize:11, color:'#374151', marginBottom:12 }}>
-                Emita os documentos necessários para dar continuidade ao processo.
-              </div>
+          {/* Tab bar */}
+          <div style={{ display:'flex', overflowX:'auto', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0, scrollbarWidth:'none' }}>
+            {TABS_DIREITO.map(t => (
+              <button key={t.key} onClick={() => setTabDir(t.key)}
+                style={{ flex:'0 0 auto', padding:'9px 12px', border:'none',
+                  borderBottom: tabDir===t.key ? '2px solid #2563eb' : '2px solid transparent',
+                  background: 'none', fontWeight: tabDir===t.key ? 700 : 400,
+                  color: tabDir===t.key ? '#2563eb' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-              {/* Pedido de Compra */}
-              {pedidoEmitido ? (
-                <div style={{ background:'#dcfce7', borderRadius:6, padding:'8px 12px', fontSize:11, color:'#166534', fontWeight:700, marginBottom:8 }}>
-                  ✅ Pedido <strong>{pedidoEmitido}</strong> emitido! Verifique a aba Compras.
+          {/* Conteúdo da aba */}
+          <div style={{ flex:1, overflowY:'auto', padding:14 }}>
+
+            {/* ── ANÁLISE ── */}
+            {tabDir === 'analise' && (
+              <AnaliseStatusPanel
+                origemId={licit.id}
+                origemTitulo={licit.nome_projeto}
+                origemNumero={licit.numero}
+                origem="licitacao"
+                currentUser={currentUser}
+                onSolicitarNova={() => setShowModalSolicitar(true)}
+              />
+            )}
+
+            {/* ── ANDAMENTO (com legado + novo) ── */}
+            {tabDir === 'andamento' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {/* Input de nova entrada */}
+                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
+                  <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
+                  <MencaoTextarea value={novoText} onChange={v=>setNovoText(v)}
+                    placeholder="Descreva o andamento... @Nome para mencionar" rows={3}
+                    style={{ fontSize:11 }} />
+                  {/* Anexo opcional */}
+                  <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8 }}>
+                    <label style={{ fontSize:10, color:'#374151', cursor:'pointer', display:'flex', alignItems:'center', gap:4, background:'#e0f2fe', borderRadius:4, padding:'3px 8px', border:'1px solid #7dd3fc' }}>
+                      📎 Vincular arquivo
+                      <input type="file" ref={novoAnexoRef} style={{ display:'none' }}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+                        onChange={e=>setNovoAnexoFile(e.target.files?.[0]||null)} />
+                    </label>
+                    {novoAnexoFile && (
+                      <span style={{ fontSize:9, color:'#0369a1', fontWeight:600 }}>
+                        📎 {novoAnexoFile.name}
+                        <button onClick={()=>{setNovoAnexoFile(null);if(novoAnexoRef.current)novoAnexoRef.current.value='';}}
+                          style={{ marginLeft:4, background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:10 }}>✕</button>
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={salvarDoc} disabled={salvandoDoc||(!novoText.trim()&&!novoAnexoFile)}
+                    style={{ marginTop:8, background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'6px 18px', fontWeight:700, fontSize:11, cursor:'pointer', opacity:(novoText.trim()||novoAnexoFile)?1:.5 }}>
+                    {salvandoDoc ? 'Salvando...' : '+ Registrar'}
+                  </button>
                 </div>
-              ) : (
-                <button onClick={emitirPedidoCompra} disabled={emitindoPedido}
-                  style={{ width:'100%', background:'#0369a1', color:'#fff', border:'none', borderRadius:6,
-                    padding:'9px', fontWeight:700, fontSize:11, cursor:'pointer', marginBottom:6, opacity: emitindoPedido ? .6 : 1 }}>
-                  {emitindoPedido ? 'Emitindo...' : '📦 Emitir Pedido de Compra Direta'}
-                </button>
-              )}
 
-              {/* Preparar OP */}
-              <button onClick={prepararOpComercial}
-                style={{ width:'100%', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6,
-                  padding:'9px', fontWeight:700, fontSize:11, cursor:'pointer', marginBottom:6 }}>
-                🏭 Preparar OP no Comercial (pré-preencher formulário)
-              </button>
+                {/* Entradas novas (licitacao_documentos) */}
+                {docs.map((d: any) => (
+                  <div key={d.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #2563eb', padding:'10px 12px' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        {d.conteudo && <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>{d.conteudo}</div>}
+                        {d.anexo_url && (
+                          <a href={d.anexo_url} target="_blank" rel="noreferrer"
+                            style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:'#2563eb', fontWeight:600, marginTop:4 }}>
+                            📎 {d.anexo_nome||'Arquivo'}
+                          </a>
+                        )}
+                        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                          <span>👤 {d.criado_por_nome||'—'}</span>
+                          <span>🕒 {fmtDT(d.criado_em)}</span>
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => excluirDoc(d.id,'licitacao_documentos')}
+                          style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px', flexShrink:0 }}>✕</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
 
-              <button onClick={onClose}
-                style={{ width:'100%', background:'#fff', color:'#374151', border:'1px solid #d1d5db',
-                  borderRadius:6, padding:'8px', fontSize:11, cursor:'pointer' }}>
-                Fechar
-              </button>
-            </div>
-          )}
+                {/* Entradas legadas (licitacao_anexos tipo=andamento) */}
+                {docsLegacy.length > 0 && (
+                  <>
+                    <div style={{ fontSize:9, color:'#9ca3af', fontWeight:700, textAlign:'center', padding:'4px 0' }}>— registros anteriores —</div>
+                    {docsLegacy.map((a: any) => (
+                      <div key={a.id} style={{ background:'#fafafa', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #94a3b8', padding:'8px 12px' }}>
+                        <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>{a.conteudo}</div>
+                        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                          <span>👤 {a.criado_por_nome||'—'}</span>
+                          <span>🕒 {fmtDT(a.criado_em)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
 
-          {/* Solicitar Análise */}
-          {!showAcoesVencida && !confirmStatus && (
-            <button onClick={() => setShowModalSolicitar(true)}
-              style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:6, padding:'7px 16px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-              🔍 Solicitar Análise
-            </button>
-          )}
-
-          {/* Excluir — somente Admin */}
-          {!showAcoesVencida && isAdmin && !confirmStatus && (
-            <button onClick={onExcluir}
-              style={{ background:'#fef2f2', color:'#dc2626', border:'1.5px solid #fca5a5', borderRadius:6, padding:'7px 16px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-              🗑️ Excluir esta licitação
-            </button>
-          )}
-
-          {/* Próximo status no fluxo */}
-          {!showAcoesVencida && btnProximo && !confirmStatus && (
-            <button onClick={() => setConfirmStatus(btnProximo.next)}
-              style={{ background:STATUS_COR[btnProximo.next], color:'#fff', border:'none', borderRadius:6, padding:'8px 16px', fontWeight:700, fontSize:12, cursor:'pointer' }}>
-              {btnProximo.label}
-            </button>
-          )}
-
-          {/* Botões de encerramento (Em Andamento) */}
-          {!showAcoesVencida && s === 'Em Andamento' && isAnalista && !confirmStatus && (
-            <div style={{ display:'flex', gap:8 }}>
-              {['Vencida','Perdida','Descartada'].map(ns => (
-                <button key={ns} onClick={() => setConfirmStatus(ns)}
-                  style={{ flex:1, background:STATUS_COR[ns], color:'#fff', border:'none', borderRadius:6, padding:'7px 8px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-                  {ns === 'Vencida' ? '🏆 Vencida' : ns === 'Perdida' ? '😞 Perdida' : '🗑️ Descartada'}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Confirmação de transição */}
-          {confirmStatus && (
-            <div style={{ background:'#fef3c7', border:'1px solid #fcd34d', borderRadius:6, padding:10 }}>
-              <div style={{ fontWeight:700, fontSize:11, marginBottom:6 }}>
-                Mover para: <span style={{ color:STATUS_COR[confirmStatus] }}>{confirmStatus}</span>
+                {docs.length === 0 && docsLegacy.length === 0 && !loadingDocs && (
+                  <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização ainda.</div>
+                )}
               </div>
-              <textarea value={obsEncerramento} onChange={e=>setObsEncerramento(e.target.value)}
-                placeholder="Observação (opcional)..." rows={2}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'none', boxSizing:'border-box', marginBottom:6 }} />
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => mudarStatus(confirmStatus)} disabled={salvando}
-                  style={{ flex:1, background:STATUS_COR[confirmStatus], color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-                  {salvando ? 'Salvando...' : '✓ Confirmar'}
-                </button>
-                <button onClick={() => { setConfirmStatus(null); setObsEncerramento(''); }}
-                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
-                  Cancelar
-                </button>
+            )}
+
+            {/* ── OUTRAS ABAS DE DOCUMENTOS ── */}
+            {tabDir !== 'andamento' && tabDir !== 'analise' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {/* Upload */}
+                <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
+                  <div style={{ fontWeight:700, fontSize:10, color:'#374151', marginBottom:8 }}>
+                    + Adicionar em {TABS_DIREITO.find(t=>t.key===tabDir)?.label}
+                  </div>
+                  <input type="file" ref={uploadRef}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar"
+                    onChange={e=>setUploadFile(e.target.files?.[0]||null)}
+                    style={{ width:'100%', fontSize:11, marginBottom:8 }} />
+                  <input type="text" placeholder="Descrição / legenda (opcional)"
+                    value={uploadDesc} onChange={e=>setUploadDesc(e.target.value)}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', marginBottom:8 }} />
+                  <button onClick={salvarDoc} disabled={salvandoDoc||(!uploadFile&&!uploadDesc.trim())}
+                    style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'6px 16px', fontSize:11, fontWeight:700, cursor:'pointer', opacity:(uploadFile||uploadDesc.trim())?1:.5 }}>
+                    {salvandoDoc ? 'Salvando...' : '+ Adicionar'}
+                  </button>
+                </div>
+
+                {/* Lista */}
+                {loadingDocs && <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:16 }}>Carregando...</div>}
+                {!loadingDocs && docs.length === 0 && (
+                  <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhum documento nesta categoria.</div>
+                )}
+                {docs.map((d: any) => (
+                  <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:6 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      {d.url ? (
+                        <a href={d.url} target="_blank" rel="noreferrer"
+                          style={{ color:'#2563eb', fontSize:11, fontWeight:600, wordBreak:'break-all', display:'flex', alignItems:'center', gap:4 }}>
+                          📎 {d.nome}
+                        </a>
+                      ) : (
+                        <div style={{ fontSize:11, color:'#374151', fontWeight:600 }}>{d.nome}</div>
+                      )}
+                      {d.conteudo && <div style={{ fontSize:10, color:'#64748b', marginTop:2, whiteSpace:'pre-wrap' }}>{d.conteudo}</div>}
+                      <div style={{ fontSize:9, color:'#9ca3af', marginTop:3 }}>
+                        👤 {d.criado_por_nome||'—'} · 🕒 {fmtDT(d.criado_em)}
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <button onClick={() => excluirDoc(d.id,'licitacao_documentos')}
+                        style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px' }}>✕</button>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -615,7 +711,7 @@ function LicitacaoModal({ licit, currentUser, onClose, onRefresh, onExcluir }) {
           origemNumero={licit.numero}
           currentUser={currentUser}
           onClose={() => setShowModalSolicitar(false)}
-          onSaved={() => setTab('analise')}
+          onSaved={() => setTabDir('analise')}
         />
       )}
     </div>

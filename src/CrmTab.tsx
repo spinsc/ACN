@@ -106,6 +106,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalOp, setModalOp]               = useState<any|null>(null);
   const [modalGate, setModalGate]           = useState<any|null>(null);
   const [modalConverter, setModalConverter] = useState<any|null>(null);
+  const [modalConverterLicit, setModalConverterLicit] = useState<any|null>(null); // converter venda direta → licitação/ATA
   const [modalMotivo, setModalMotivo]       = useState<any|null>(null);
   const [modalDesist, setModalDesist]       = useState<any|null>(null);
   const [desistTexto, setDesistTexto]       = useState('');
@@ -811,6 +812,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               ✏️ Editar
             </button>
           )}
+          {funil === 'venda_direta' && !desistiu && (
+            <button className="acn-btn" style={{ background:'#7c3aed', fontSize:8 }}
+              onClick={() => setModalConverterLicit(op)}>
+              🏛️ → Licitação/ATA
+            </button>
+          )}
           {currentUser?.perfil === 'Admin' && (
             <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirOp(op)}>✕</button>
           )}
@@ -1354,6 +1361,95 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL CONVERTER VENDA DIRETA → LICITAÇÃO/ATA ══════ */}
+      {modalConverterLicit && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1001, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={e => { if (e.target===e.currentTarget) setModalConverterLicit(null); }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(460px,96vw)', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:10 }}>🏛️ Converter para Licitação / Adesão a ATA</div>
+            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:12, fontSize:10 }}>
+              <strong>{modalConverterLicit.titulo}</strong>
+              {modalConverterLicit.orgao && <div style={{ color:'#0369a1' }}>{modalConverterLicit.orgao}</div>}
+            </div>
+            <div style={{ fontSize:10, color:'#374151', marginBottom:12 }}>
+              Escolha o tipo de processo licitatório:
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <button
+                style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
+                disabled={salvando}
+                onClick={async () => {
+                  if (!window.confirm('Converter em Licitação (status: Aguardando Licitação)?')) return;
+                  setSalvando(true);
+                  const agora = new Date().toISOString();
+                  const op = modalConverterLicit;
+                  const historico = [{ status:'Aguardando Licitação', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM: ${op.titulo}` }];
+                  const { error } = await supabase.from('licitacoes').insert([{
+                    numero: op.numero_edital || `VD-${op.id.slice(0,6).toUpperCase()}`,
+                    nome_projeto: op.titulo || '—',
+                    orgao: op.orgao || '',
+                    objeto_principal: op.descricao || '',
+                    classificacao: 'Direta',
+                    status: 'Aguardando Licitação',
+                    prioridade: 'Média',
+                    analista_nome: op.responsavel_nome || currentUser?.nome || '',
+                    analista_email: currentUser?.email || '',
+                    historico,
+                    marcadores: [],
+                    criado_por: currentUser?.email,
+                    criado_por_nome: currentUser?.nome,
+                    criado_em: agora,
+                    atualizado_em: agora,
+                  }]);
+                  setSalvando(false);
+                  if (error) { alert('Erro: ' + error.message); return; }
+                  setModalConverterLicit(null);
+                  alert('✅ Licitação criada com status "Aguardando Licitação"! Acesse a aba Licitações para acompanhar.');
+                }}>
+                🏛️ Processo Licitatório<br/>
+                <span style={{ fontSize:9, fontWeight:400 }}>Cria nova licitação com status "Aguardando Licitação"</span>
+              </button>
+              <button
+                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
+                disabled={salvando}
+                onClick={async () => {
+                  if (!window.confirm('Converter em Adesão a ATA?')) return;
+                  setSalvando(true);
+                  const agora = new Date().toISOString();
+                  const op = modalConverterLicit;
+                  const historico = [{ status:'Aguardando Licitação', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM (Adesão a ATA): ${op.titulo}` }];
+                  const { error } = await supabase.from('licitacoes').insert([{
+                    numero: op.numero_edital || `ATA-${op.id.slice(0,6).toUpperCase()}`,
+                    nome_projeto: op.titulo || '—',
+                    orgao: op.orgao || '',
+                    objeto_principal: op.descricao || '',
+                    classificacao: 'Adesão a ATA',
+                    status: 'Aguardando Licitação',
+                    prioridade: 'Média',
+                    analista_nome: op.responsavel_nome || currentUser?.nome || '',
+                    analista_email: currentUser?.email || '',
+                    historico,
+                    marcadores: [],
+                    criado_por: currentUser?.email,
+                    criado_por_nome: currentUser?.nome,
+                    criado_em: agora,
+                    atualizado_em: agora,
+                  }]);
+                  setSalvando(false);
+                  if (error) { alert('Erro: ' + error.message); return; }
+                  setModalConverterLicit(null);
+                  alert('✅ Adesão a ATA criada! Acesse a aba Licitações para acompanhar.');
+                }}>
+                📋 Adesão a ATA<br/>
+                <span style={{ fontSize:9, fontWeight:400 }}>Cria registro de Adesão a Ata de Registro de Preços</span>
+              </button>
+            </div>
+            <button style={{ marginTop:10, width:'100%', padding:'7px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}
+              onClick={() => setModalConverterLicit(null)}>Cancelar</button>
           </div>
         </div>
       )}

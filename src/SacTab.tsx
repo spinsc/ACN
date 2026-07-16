@@ -182,6 +182,7 @@ export default function SacTab({ currentUser }) {
   const [modalAceiteSAC, setModalAceiteSAC]       = useState<any>(null);
   const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação (Em Cotação)
   const [localItens, setLocalItens]               = useState<any[]>([]); // itens editáveis do modal de cotação
+  const [horasCobradas, setHorasCobradas]         = useState<string>(''); // horas cobradas na cotação remota
   const [modalOrcProd, setModalOrcProd]           = useState<any>(null); // ver/editar orçamento vindo da Produção
   const [orcProdModo, setOrcProdModo]             = useState<'ver'|'editar'>('ver');
   const [orcProdItens, setOrcProdItens]           = useState<any[]>([]);
@@ -493,9 +494,14 @@ export default function SacTab({ currentUser }) {
 
   // ── FLUXO MANUTENÇÃO VEICULAR ─────────────────────────────────────────────
 
-  const salvarItensOS = async (osId: string, itens: any[]) => {
+  const salvarItensOS = async (osId: string, itens: any[], horasCobradasVal?: string) => {
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({ itens_cotacao: itens, atualizado_em: agora }).eq('id', osId);
+    const hc = horasCobradasVal !== undefined && horasCobradasVal !== '' ? Number(horasCobradasVal) : null;
+    await supabase.from('sac_ordens_servico').update({
+      itens_cotacao: itens,
+      horas_cobradas_cotacao: hc,
+      atualizado_em: agora,
+    }).eq('id', osId);
     fetchOrdens();
   };
 
@@ -697,7 +703,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
       if (os.status === 'Em Cotação') {
         btns.push(
           <button key="itens" className="acn-btn" style={{background:'#0891b2',fontSize:9}}
-            onClick={()=>{ setLocalItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setModalItens(os); }}>
+            onClick={()=>{ setLocalItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setHorasCobradas(os.horas_cobradas_cotacao!=null?String(os.horas_cobradas_cotacao):''); setModalItens(os); }}>
             📋 Itens
           </button>,
           <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
@@ -1222,6 +1228,15 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                     </td>
                     <td style={{fontSize:10,color:'#8b5cf6',fontWeight:o.kpi_execucao_horas?700:400}}>
                       {o.kpi_execucao_horas ? `${Number(o.kpi_execucao_horas).toFixed(1)}h` : '—'}
+                      {o.tipo_avaliacao==='Remota' && o.horas_cobradas_cotacao!=null && o.kpi_execucao_horas!=null && Math.abs(Number(o.horas_cobradas_cotacao)-Number(o.kpi_execucao_horas))>0.01 && (
+                        <span title={`Cobrado: ${Number(o.horas_cobradas_cotacao).toFixed(1)}h | Real: ${Number(o.kpi_execucao_horas).toFixed(1)}h`}
+                          style={{marginLeft:4,background:Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'#dcfce7':'#fef2f2',
+                            color:Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'#166534':'#dc2626',
+                            border:`1px solid ${Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'#86efac':'#fca5a5'}`,
+                            borderRadius:3,padding:'0 4px',fontSize:8,fontWeight:700,cursor:'help'}}>
+                          ⏱️{Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'▲':'▼'}
+                        </span>
+                      )}
                     </td>
                     <td><span className="acn-badge" style={{background: STATUS_COR[o.status]||'#94a3b8'}}>{o.status}</span></td>
                     <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{renderAcoes(o)}</div></td>
@@ -1829,8 +1844,19 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
               </table>
               <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}}
                 onClick={()=>setLocalItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>+ Adicionar Linha</button>
+              {/* Horas cobradas na cotação remota */}
+              <div style={{background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:6,padding:'10px 12px',marginBottom:12}}>
+                <label className="acn-label" style={{color:'#c2410c'}}>⏱️ Horas Cobradas na Cotação (h)</label>
+                <input type="number" min={0} step="0.5" className="acn-input" style={{width:140}}
+                  placeholder="Ex: 2.5"
+                  value={horasCobradas}
+                  onChange={e=>setHorasCobradas(e.target.value)} />
+                <div style={{fontSize:9,color:'#9a3412',marginTop:4}}>
+                  Será comparado com as horas reais apontadas na Produção (KPI).
+                </div>
+              </div>
               <div style={{display:'flex',gap:8}}>
-                <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={()=>{ salvarItensOS(modalItens.id, localItens); setModalItens(null); }}>✓ Salvar Itens</button>
+                <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={()=>{ salvarItensOS(modalItens.id, localItens, horasCobradas); setModalItens(null); }}>✓ Salvar Itens</button>
                 <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
               </div>
             </>

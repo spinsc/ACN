@@ -88,6 +88,9 @@ git add supabase/functions/whatsapp-admin/index.ts
 git add supabase/functions/whatsapp-webhook/index.ts
 git add supabase/functions/transcrever-audio/index.ts
 git add supabase/sql/
+:: Novos arquivos desta release
+git add acn_novas_colunas.sql
+git add src/RHTab.tsx
 git add publicar.bat
 
 :: Verificar
@@ -97,7 +100,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: OplAcompModal — acompanhamentos com @mencoes em OPs/OSes em todos setores; fix: mencoes uuid→text; AcnTabShared OBS+ACOMP; ProducaoTab+SacTab+ComercialTab ACOMP"
+git commit -m "feat: MO Serralheria na OP; comissao serralheria RHTab; badge horas SAC; LicitacoesTab split-view redesign + abas documentos; CrmTab converter VendaDireta->Licitacao/ATA; status Aguardando Licitacao"
 
 :: Push
 echo.
@@ -113,6 +116,15 @@ if %ERRORLEVEL%==0 (
 )
 echo =============================================
 
+echo.
+echo =============================================
+echo  SQLS NECESSARIOS - RODAR NO SUPABASE:
+echo =============================================
+echo.
+echo [NOVO] acn_novas_colunas.sql - EXECUTE NO SUPABASE SQL EDITOR:
+echo  - ALTER TABLE oples ADD COLUMN valor_mao_de_obra_serralheria numeric(12,2)
+echo  - ALTER TABLE sac_ordens_servico ADD COLUMN horas_cobradas_cotacao numeric(8,2)
+echo  - CREATE TABLE licitacao_documentos (...)
 echo.
 echo LEMBRETE - Rodar no Supabase (em ordem):
 echo.

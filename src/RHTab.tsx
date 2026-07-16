@@ -265,7 +265,7 @@ function ModalFuncionario({ func, onClose, onSaved }) {
                 </div>
                 <div>
                   {lbl('Comissão Incide Sobre')}
-                  {toggle([['Faturamento','💼 Faturamento','#2563eb'],['Mão de Obra','🔧 Mão de Obra','#7c3aed']], 'incide_em')}
+                  {toggle([['Faturamento','💼 Faturamento','#2563eb'],['Mão de Obra','🔧 MO Adaptação','#7c3aed'],['Serralheria','⚙️ MO Serralheria','#d97706']], 'incide_em')}
                 </div>
                 <div style={{ background:'#fef3c7', border:'1px solid #fde68a', borderRadius:4, padding:'6px 8px', fontSize:9, color:'#92400e' }}>
                   ℹ️ Estes dados serão usados para cálculo automático de comissões nos relatórios futuros.
@@ -1537,7 +1537,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
 
     const [opRes, osRes, fechRes] = await Promise.all([
       supabase.from('oples')
-        .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,data_emissao_nf')
+        .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf')
         .gte('data_emissao_nf', inicioMes).lte('data_emissao_nf', fimMes)
         .not('tecnico_producao_id','is',null),
       supabase.from('sac_ordens_servico')
@@ -1573,18 +1573,25 @@ function ComissoesRH({ funcionarios, currentUser }) {
     };
 
     ops.forEach(op => {
-      const base = mapa[op.tecnico_producao_id]?.incideEm === 'Mão de Obra'
+      const incideEm = mapa[op.tecnico_producao_id]?.incideEm;
+      const base = incideEm === 'Mão de Obra'
         ? Number(op.valor_mao_de_obra || 0)
+        : incideEm === 'Serralheria'
+        ? Number(op.valor_mao_de_obra_serralheria || 0)
         : Number(op.valor_total || 0);
       addItem(op.tecnico_producao_id, {
         tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
         valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
+        valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria,
         data_faturamento:op.data_emissao_nf, base,
       });
     });
     oss.forEach(os => {
-      const base = mapa[os.tecnico_producao_id]?.incideEm === 'Mão de Obra'
+      const incideEm = mapa[os.tecnico_producao_id]?.incideEm;
+      const base = incideEm === 'Mão de Obra'
         ? Number(os.valor_mao_de_obra || 0)
+        : incideEm === 'Serralheria'
+        ? Number(os.valor_mao_de_obra_serralheria || 0)
         : Number(os.valor_total || 0);
       addItem(os.tecnico_producao_id, {
         tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
@@ -1596,13 +1603,13 @@ function ComissoesRH({ funcionarios, currentUser }) {
     // Recalcular totais com incideEm correto
     Object.values(mapa).forEach((tec: any) => {
       const allItems = [...tec.ops, ...tec.oss];
-      tec.totalBase = allItems.reduce((s: number, i: any) => {
-        const b = tec.incideEm === 'Mão de Obra' ? Number(i.valor_mao_de_obra || 0) : Number(i.valor_total || 0);
-        return s + b;
-      }, 0);
-      allItems.forEach((i: any) => {
-        i.base = tec.incideEm === 'Mão de Obra' ? Number(i.valor_mao_de_obra || 0) : Number(i.valor_total || 0);
-      });
+      const getBase = (i: any) => {
+        if (tec.incideEm === 'Mão de Obra') return Number(i.valor_mao_de_obra || 0);
+        if (tec.incideEm === 'Serralheria') return Number(i.valor_mao_de_obra_serralheria || 0);
+        return Number(i.valor_total || 0);
+      };
+      tec.totalBase = allItems.reduce((s: number, i: any) => s + getBase(i), 0);
+      allItems.forEach((i: any) => { i.base = getBase(i); });
       tec.totalComissao = tec.totalBase * (tec.percentual / 100);
     });
 
