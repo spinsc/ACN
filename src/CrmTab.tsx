@@ -143,6 +143,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [abrirUploadDesc, setAbrirUploadDesc] = useState('');
   const [abrirSalvandoDoc, setAbrirSalvandoDoc] = useState(false);
   const abrirUploadRef = useRef<HTMLInputElement>(null);
+  const abrirNotaRef  = useRef<HTMLDivElement>(null);
+  const abrirNotaImgRef = useRef<HTMLInputElement>(null);
+  const [abrirNotaSalvando, setAbrirNotaSalvando] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
@@ -460,6 +463,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   useEffect(() => {
     if (!modalAbrir) return;
     fetchAbrirTabContent(modalAbrir, abrirTabDir);
+    // pequeno delay para o DOM do contenteditable estar montado
+    setTimeout(() => carregarNotaLivre(modalAbrir, abrirTabDir), 100);
   }, [modalAbrir?.id, abrirTabDir]);
 
   const fetchAbrirTabContent = async (op: any, tab: string) => {
@@ -536,6 +541,53 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     if (!window.confirm('Excluir este registro?')) return;
     await supabase.from(tabela).delete().eq('id', id);
     await fetchAbrirTabContent(modalAbrir, abrirTabDir);
+  };
+
+  // ── Nota Livre (editor rico) ──
+  const carregarNotaLivre = async (op: any, tab: string) => {
+    const { data } = await supabase.from('licitacao_documentos')
+      .select('conteudo').eq('licitacao_id', op.id).eq('categoria', 'nota__' + tab).eq('nome', '__nota_livre__')
+      .maybeSingle();
+    const html = data?.conteudo || '';
+    if (abrirNotaRef.current) abrirNotaRef.current.innerHTML = html;
+  };
+
+  const salvarNotaLivre = async () => {
+    if (!modalAbrir || !abrirNotaRef.current) return;
+    setAbrirNotaSalvando(true);
+    const html = abrirNotaRef.current.innerHTML;
+    const cat = 'nota__' + abrirTabDir;
+    await supabase.from('licitacao_documentos').delete()
+      .eq('licitacao_id', modalAbrir.id).eq('categoria', cat).eq('nome', '__nota_livre__');
+    if (html && html.replace(/<br\s*\/?>/gi,'').trim()) {
+      await supabase.from('licitacao_documentos').insert([{
+        licitacao_id: modalAbrir.id, categoria: cat, nome: '__nota_livre__',
+        conteudo: html, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+        criado_em: new Date().toISOString(),
+      }]);
+    }
+    setAbrirNotaSalvando(false);
+  };
+
+  const inserirImagemNota = async (file: File) => {
+    if (!modalAbrir) return;
+    const ext = file.name.split('.').pop();
+    const path = `crm-docs/${modalAbrir.id}/nota/${Date.now()}.${ext}`;
+    await supabase.storage.from('acn-media').upload(path, file);
+    const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+    abrirNotaRef.current?.focus();
+    document.execCommand('insertHTML', false,
+      `<img src="${pub.publicUrl}" style="max-width:100%;border-radius:4px;margin:4px 0;display:block;" />`);
+  };
+
+  const inserirLinkNota = () => {
+    const url = window.prompt('URL do link (ex: https://...)');
+    if (!url) return;
+    const sel = window.getSelection()?.toString();
+    const label = sel || url;
+    abrirNotaRef.current?.focus();
+    document.execCommand('insertHTML', false,
+      `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#0369a1;text-decoration:underline;">${label}</a>`);
   };
 
   const salvarAbrirForm = async () => {
@@ -1115,6 +1167,67 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ÁREA LIVRE (rich text editor reutilizável)
+  // ─────────────────────────────────────────────────────────────────────────
+  const NotaLivreEditor = (
+    <div style={{ marginTop:16, border:'1px solid #d1d5db', borderRadius:6, overflow:'hidden' }}>
+      <div style={{ background:'#f1f5f9', padding:'5px 8px', borderBottom:'1px solid #d1d5db',
+        display:'flex', alignItems:'center', gap:4, flexWrap:'wrap' }}>
+        <span style={{ fontSize:9, fontWeight:700, color:'#475569', marginRight:4 }}>📌 Área Livre</span>
+        <button onMouseDown={e=>{ e.preventDefault(); document.execCommand('bold'); }}
+          title="Negrito" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, fontWeight:700, cursor:'pointer', lineHeight:1.4 }}>
+          <b>B</b>
+        </button>
+        <button onMouseDown={e=>{ e.preventDefault(); document.execCommand('italic'); }}
+          title="Itálico" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, fontStyle:'italic', cursor:'pointer', lineHeight:1.4 }}>
+          <i>I</i>
+        </button>
+        <button onMouseDown={e=>{ e.preventDefault(); inserirLinkNota(); }}
+          title="Inserir link" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          🔗
+        </button>
+        <button onMouseDown={e=>{ e.preventDefault(); abrirNotaImgRef.current?.click(); }}
+          title="Inserir imagem" style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          📷
+        </button>
+        <input ref={abrirNotaImgRef} type="file" accept="image/*" style={{ display:'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagemNota(f); e.target.value=''; }} />
+      </div>
+      <div
+        ref={abrirNotaRef}
+        contentEditable
+        suppressContentEditableWarning
+        style={{ minHeight:100, padding:'10px 12px', fontSize:12, color:'#1e293b',
+          lineHeight:1.6, outline:'none', background:'#fff', wordBreak:'break-word' }}
+        onPaste={e => {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          for (const item of Array.from(items)) {
+            if (item.type.startsWith('image/')) {
+              e.preventDefault();
+              const file = item.getAsFile();
+              if (file) inserirImagemNota(file);
+              return;
+            }
+          }
+        }}
+      />
+      <div style={{ background:'#f8fafc', borderTop:'1px solid #e2e8f0', padding:'6px 10px', display:'flex', justifyContent:'flex-end' }}>
+        <button onClick={salvarNotaLivre} disabled={abrirNotaSalvando}
+          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4,
+            padding:'5px 14px', fontWeight:700, fontSize:10, cursor:'pointer',
+            opacity: abrirNotaSalvando ? .6 : 1 }}>
+          {abrirNotaSalvando ? 'Salvando...' : '💾 Salvar Nota'}
+        </button>
       </div>
     </div>
   );
@@ -1962,9 +2075,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         {abrirSalvandoDoc ? 'Salvando...' : '+ Registrar'}
                       </button>
                     </div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
                       {abrirAndamentoHist.length === 0 && (
-                        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>Nenhuma atualização registrada ainda.</div>
+                        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:'10px 0' }}>Nenhuma atualização registrada ainda.</div>
                       )}
                       {abrirAndamentoHist.map((h,i) => (
                         <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
@@ -1982,6 +2095,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         </div>
                       ))}
                     </div>
+                    {/* ── Área Livre ── */}
+                    {NotaLivreEditor}
                   </div>
                 )}
 
@@ -2006,7 +2121,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         {abrirSalvandoDoc ? 'Salvando...' : '+ Salvar'}
                       </button>
                     </div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14 }}>
                       {abrirDocs.length === 0 && (
                         <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:16 }}>Nenhum documento registrado.</div>
                       )}
@@ -2034,6 +2149,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         </div>
                       ))}
                     </div>
+                    {/* ── Área Livre ── */}
+                    {NotaLivreEditor}
                   </div>
                 )}
               </div>
