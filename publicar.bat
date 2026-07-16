@@ -100,7 +100,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: MO Serralheria na OP; comissao serralheria RHTab; badge horas SAC; LicitacoesTab split-view redesign + abas documentos; CrmTab converter VendaDireta->Licitacao/ATA; status Aguardando Licitacao"
+git commit -m "feat: CrmTab cards Licita+VendaDireta: botao Abrir -> split-screen (form esq + 9 abas doc dir: Andamento/Processo/etc); MO Serralheria OP; comissao serralheria RHTab; badge horas SAC; LicitacoesTab split redesign; CrmTab converter->Licitacao/ATA"
 
 :: Push
 echo.

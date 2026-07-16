@@ -133,6 +133,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
   const [filtResp, setFiltResp]             = useState('');
 
+  // ── modal ABRIR (split-screen CRM) ──
+  const [modalAbrir, setModalAbrir]         = useState<any|null>(null);
+  const [abrirTabDir, setAbrirTabDir]       = useState<string>('andamento');
+  const [abrirDocs, setAbrirDocs]           = useState<any[]>([]);
+  const [abrirAndamentoHist, setAbrirAndamentoHist] = useState<any[]>([]);
+  const [abrirNovoText, setAbrirNovoText]   = useState('');
+  const [abrirUploadFile, setAbrirUploadFile] = useState<File|null>(null);
+  const [abrirUploadDesc, setAbrirUploadDesc] = useState('');
+  const [abrirSalvandoDoc, setAbrirSalvandoDoc] = useState(false);
+  const abrirUploadRef = useRef<HTMLInputElement>(null);
+
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
   // ─────────────────────────────────────────────────────────────────────────
@@ -429,6 +440,129 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     setSalvando(false);
     setModalOp(null);
     await load();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ABRIR MODAL — split-screen
+  // ─────────────────────────────────────────────────────────────────────────
+  const TABS_CRM = [
+    { key:'andamento',    label:'📝 Andamento' },
+    { key:'processo',     label:'📂 Processo' },
+    { key:'impugnacoes',  label:'⚠️ Impugnações' },
+    { key:'recursos',     label:'📜 Recursos' },
+    { key:'contratos',    label:'📋 Contratos' },
+    { key:'empenhos',     label:'💰 Empenhos' },
+    { key:'doc_terceiros',label:'📁 Doc Terceiros' },
+    { key:'prospeccoes',  label:'🔍 Prospecções' },
+    { key:'analise',      label:'🔬 Análise' },
+  ] as const;
+
+  useEffect(() => {
+    if (!modalAbrir) return;
+    fetchAbrirTabContent(modalAbrir, abrirTabDir);
+  }, [modalAbrir?.id, abrirTabDir]);
+
+  const fetchAbrirTabContent = async (op: any, tab: string) => {
+    setAbrirDocs([]);
+    setAbrirAndamentoHist([]);
+    if (tab === 'andamento') {
+      const { data } = await supabase.from('crm_historico')
+        .select('*').eq('oportunidade_id', op.id).eq('tipo', 'observacao')
+        .order('criado_em', { ascending: false });
+      setAbrirAndamentoHist(data || []);
+    } else if (tab !== 'analise') {
+      const { data } = await supabase.from('licitacao_documentos')
+        .select('*').eq('licitacao_id', op.id).eq('categoria', tab)
+        .order('criado_em', { ascending: false });
+      setAbrirDocs(data || []);
+    }
+  };
+
+  const salvarAbrirAndamento = async () => {
+    if (!abrirNovoText.trim() || !modalAbrir) return;
+    setAbrirSalvandoDoc(true);
+    const agora = new Date().toISOString();
+    await supabase.from('crm_historico').insert([{
+      oportunidade_id: modalAbrir.id,
+      tipo: 'observacao',
+      texto: abrirNovoText,
+      usuario_nome: currentUser?.nome,
+      criado_em: agora,
+    }]);
+    await salvarMencoes(abrirNovoText, {
+      mencionadoPor: String(currentUser?.id || ''),
+      mencionadoPorNome: currentUser?.nome || '',
+      contextoId: String(modalAbrir.id),
+      contextoDescricao: `CRM: ${modalAbrir.titulo || '—'}`,
+      campo: 'andamento_crm',
+    });
+    setAbrirNovoText('');
+    await fetchAbrirTabContent(modalAbrir, 'andamento');
+    setAbrirSalvandoDoc(false);
+  };
+
+  const salvarAbrirDoc = async () => {
+    if (!modalAbrir || (!abrirUploadFile && !abrirUploadDesc.trim())) return;
+    setAbrirSalvandoDoc(true);
+    const agora = new Date().toISOString();
+    let url = '';
+    let nome = '';
+    if (abrirUploadFile) {
+      const ext = abrirUploadFile.name.split('.').pop();
+      const path = `crm-docs/${modalAbrir.id}/${abrirTabDir}/${Date.now()}.${ext}`;
+      await supabase.storage.from('acn-media').upload(path, abrirUploadFile);
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      url = pub.publicUrl;
+      nome = abrirUploadFile.name;
+    }
+    await supabase.from('licitacao_documentos').insert([{
+      licitacao_id: modalAbrir.id,
+      categoria: abrirTabDir,
+      nome: nome || abrirUploadDesc,
+      url: url || null,
+      conteudo: abrirUploadDesc || null,
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+      criado_em: agora,
+    }]);
+    setAbrirUploadFile(null);
+    setAbrirUploadDesc('');
+    if (abrirUploadRef.current) abrirUploadRef.current.value = '';
+    await fetchAbrirTabContent(modalAbrir, abrirTabDir);
+    setAbrirSalvandoDoc(false);
+  };
+
+  const excluirAbrirDoc = async (id: string, tabela: string) => {
+    if (!window.confirm('Excluir este registro?')) return;
+    await supabase.from(tabela).delete().eq('id', id);
+    await fetchAbrirTabContent(modalAbrir, abrirTabDir);
+  };
+
+  const salvarAbrirForm = async () => {
+    if (!formOp.titulo?.trim() || !modalAbrir) return;
+    setSalvando(true);
+    const p: any = {
+      titulo:            formOp.titulo?.trim() || null,
+      tipo_licitacao:    formOp.tipo_licitacao  || 'ordinaria',
+      numero_edital:     limpar(formOp.numero_edital),
+      orgao:             limpar(formOp.orgao),
+      data_sessao:       limpar(formOp.data_sessao),
+      data_validade_ata: limpar(formOp.data_validade_ata),
+      data_prev_fechamento: limpar(formOp.data_prev_fechamento),
+      valor_registrado:  formOp.valor_registrado
+        ? parseFloat(String(formOp.valor_registrado).replace(/\./g,'').replace(',','.'))
+        : null,
+      cliente_id:        limpar(formOp.cliente_id),
+      estagio_id:        limpar(formOp.estagio_id),
+      responsavel_id:    limpar(formOp.responsavel_id),
+      responsavel_nome:  limpar(formOp.responsavel_nome),
+      nome_contato:      limpar(formOp.nome_contato),
+      contato:           limpar(formOp.contato),
+      prox_contato:      limpar(formOp.prox_contato) || null,
+    };
+    await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
+    setSalvando(false);
+    await load(true);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -807,9 +941,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             </button>
           )}
           {!perdido && !desistiu && (
-            <button className="acn-btn" style={{ background:'#475569' }}
-              onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalOp(op); }}>
-              ✏️ Editar
+            <button className="acn-btn" style={{ background:'#0369a1' }}
+              onClick={e => { e.stopPropagation(); setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}>
+              📂 Abrir
             </button>
           )}
           {funil === 'venda_direta' && !desistiu && (
@@ -821,12 +955,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           {currentUser?.perfil === 'Admin' && (
             <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirOp(op)}>✕</button>
           )}
-          <button className="acn-btn" style={{ background:'#7c3aed' }} onClick={e => { e.stopPropagation(); abrirAndamento(op); }}>
-            📝 Andamento
-          </button>
-          <button className="acn-btn" style={{ background:'#0369a1' }} onClick={e => { e.stopPropagation(); setModalSolicitarAnalise(op); }}>
-            🔍 Análise
-          </button>
           <CrmAnexosWidget op={op} currentUser={currentUser} />
         </div>
       </div>
@@ -1675,6 +1803,246 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         </div>
       )}
+      {/* ══════ MODAL ABRIR — split-screen ══════ */}
+      {modalAbrir && (
+        <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1100, display:'flex' }}>
+          <div style={{ display:'flex', width:'100%', height:'100%' }}>
+
+            {/* ── ESQUERDO: formulário editável ── */}
+            <div style={{ width:'42%', minWidth:320, display:'flex', flexDirection:'column', background:'#fff', borderRight:'2px solid #e2e8f0', boxShadow:'2px 0 12px #0002' }}>
+              {/* Header */}
+              <div style={{ padding:'12px 14px', background:'#1e3a5f', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+                <div>
+                  <div style={{ fontSize:9, opacity:.8, fontWeight:700, letterSpacing:.5 }}>
+                    {modalAbrir.funil === 'licitacao' ? 'LICITAÇÃO CRM' : 'VENDA DIRETA'}
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:700 }}>{modalAbrir.titulo}</div>
+                  {modalAbrir.orgao && <div style={{ fontSize:9, opacity:.85 }}>{modalAbrir.orgao}</div>}
+                </div>
+                <button onClick={() => setModalAbrir(null)} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+              </div>
+
+              {/* Formulário (scrollável) */}
+              <div style={{ flex:1, overflowY:'auto', padding:'10px 14px' }}>
+
+                {modalAbrir.funil === 'licitacao' && (
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Tipo de Licitação</div>
+                    <div style={{ display:'flex', gap:12 }}>
+                      {([['ordinaria','📄 Ordinária'],['ata','📋 Ata de Registro']] as const).map(([t,label]) => (
+                        <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                          <input type="radio" checked={formOp.tipo_licitacao===t} onChange={() => setFormOp(f => ({...f, tipo_licitacao:t}))} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {([
+                  { label:'Título *', key:'titulo', placeholder:'Ex: Pregão SESP 2025/041' },
+                  ...(modalAbrir.funil==='licitacao' ? [
+                    { label:'Número do Edital', key:'numero_edital', placeholder:'2025/041' },
+                    { label:'Órgão', key:'orgao', placeholder:'Secretaria de Segurança Pública' },
+                    { label:'Data da Sessão', key:'data_sessao', type:'date' },
+                    ...(formOp.tipo_licitacao==='ata' ? [{ label:'Validade da Ata', key:'data_validade_ata', type:'date' }] : []),
+                  ] : []),
+                  { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
+                  { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
+                ] as any[]).map(({ label, key, placeholder, type }) => (
+                  <div key={key} style={{ marginBottom:7 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>{label}</div>
+                    <input type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
+                      onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))}
+                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+                  </div>
+                ))}
+
+                <div style={{ marginBottom:7 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Estágio</div>
+                  <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+                    <option value="">— Selecione —</option>
+                    {estagiosFunil.filter(e => !isPerdido(e) && !isGanho(e)).map(e => (
+                      <option key={e.id} value={e.id}>{e.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom:7 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Cliente (opcional)</div>
+                  <ClienteAutocomplete
+                    value={formOp._cliente_nome || ''}
+                    onChange={v => setFormOp(f => ({ ...f, _cliente_nome: v, cliente_id: null }))}
+                    onSelect={c => setFormOp(f => ({ ...f, _cliente_nome: c.nome, cliente_id: c.id }))}
+                    placeholder="Vincular cliente..." />
+                </div>
+
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Responsável</div>
+                  <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o operador" />
+                </div>
+
+                <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:8 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:5 }}>📞 CONTATO</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
+                      <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
+                        value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Tel/E-mail</div>
+                      <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999"
+                        value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Próximo Contato</div>
+                    <input type="date" className="acn-input" style={{ width:'100%' }}
+                      value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding:'10px 14px', borderTop:'1px solid #e2e8f0', display:'flex', gap:6, flexShrink:0 }}>
+                <button onClick={salvarAbrirForm} disabled={salvando}
+                  style={{ flex:1, background:'#0f766e', color:'#fff', border:'none', borderRadius:5, padding:'7px 0', fontWeight:700, fontSize:11, cursor:'pointer', opacity:salvando?.6:1 }}>
+                  {salvando ? 'Salvando...' : '💾 Salvar Alterações'}
+                </button>
+                <button onClick={() => setModalAbrir(null)}
+                  style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:5, padding:'7px 12px', fontSize:10, cursor:'pointer' }}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            {/* ── DIREITO: abas de documentos ── */}
+            <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden' }}>
+
+              {/* Tab bar */}
+              <div style={{ display:'flex', overflowX:'auto', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0, scrollbarWidth:'none' }}>
+                {TABS_CRM.map(t => (
+                  <button key={t.key} onClick={() => setAbrirTabDir(t.key)}
+                    style={{ flex:'0 0 auto', padding:'9px 11px', border:'none',
+                      borderBottom: abrirTabDir===t.key ? '2px solid #0369a1' : '2px solid transparent',
+                      background:'none', fontWeight: abrirTabDir===t.key ? 700 : 400,
+                      color: abrirTabDir===t.key ? '#0369a1' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Conteúdo */}
+              <div style={{ flex:1, overflowY:'auto', padding:14 }}>
+
+                {/* ── ANÁLISE ── */}
+                {abrirTabDir === 'analise' && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <AnaliseStatusBadge origemId={modalAbrir.id} />
+                    <button className="acn-btn" style={{ background:'#7c3aed', alignSelf:'flex-start' }}
+                      onClick={() => setModalSolicitarAnalise(modalAbrir)}>
+                      🔬 Solicitar / Ver Análise
+                    </button>
+                  </div>
+                )}
+
+                {/* ── ANDAMENTO ── */}
+                {abrirTabDir === 'andamento' && (
+                  <div>
+                    <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:10, marginBottom:10 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#6d28d9', marginBottom:5 }}>✏️ Nova atualização</div>
+                      <MencaoTextarea value={abrirNovoText} onChange={v => setAbrirNovoText(v)}
+                        placeholder="Descreva o andamento... use @Nome para mencionar alguém"
+                        rows={3} style={{ border:'1px solid #c4b5fd', fontSize:11, marginBottom:6 }} />
+                      <button onClick={salvarAbrirAndamento} disabled={abrirSalvandoDoc || !abrirNovoText.trim()}
+                        style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
+                          fontWeight:700, fontSize:10, cursor:'pointer', opacity:abrirNovoText.trim()?1:.5 }}>
+                        {abrirSalvandoDoc ? 'Salvando...' : '+ Registrar'}
+                      </button>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {abrirAndamentoHist.length === 0 && (
+                        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>Nenhuma atualização registrada ainda.</div>
+                      )}
+                      {abrirAndamentoHist.map((h,i) => (
+                        <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                            <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}>{h.texto}</div>
+                            {currentUser?.perfil==='Admin' && (
+                              <button onClick={() => excluirAbrirDoc(h.id,'crm_historico')}
+                                style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
+                            )}
+                          </div>
+                          <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                            <span>👤 {h.usuario_nome||'—'}</span>
+                            <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── DEMAIS ABAS (documentos) ── */}
+                {abrirTabDir !== 'andamento' && abrirTabDir !== 'analise' && (
+                  <div>
+                    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:10 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:6 }}>
+                        + Adicionar em {TABS_CRM.find(t=>t.key===abrirTabDir)?.label}
+                      </div>
+                      <div style={{ marginBottom:6 }}>
+                        <input ref={abrirUploadRef} type="file"
+                          onChange={e => setAbrirUploadFile(e.target.files?.[0]||null)}
+                          style={{ fontSize:10, width:'100%', marginBottom:4 }} />
+                        <input placeholder="Legenda / descrição (opcional)"
+                          value={abrirUploadDesc} onChange={e => setAbrirUploadDesc(e.target.value)}
+                          style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+                      </div>
+                      <button onClick={salvarAbrirDoc} disabled={abrirSalvandoDoc || (!abrirUploadFile && !abrirUploadDesc.trim())}
+                        style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
+                          fontWeight:700, fontSize:10, cursor:'pointer', opacity:(!abrirUploadFile&&!abrirUploadDesc.trim())?.5:1 }}>
+                        {abrirSalvandoDoc ? 'Salvando...' : '+ Salvar'}
+                      </button>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {abrirDocs.length === 0 && (
+                        <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:16 }}>Nenhum documento registrado.</div>
+                      )}
+                      {abrirDocs.map((d,i) => (
+                        <div key={d.id||i} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, padding:'8px 10px' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                            <div style={{ flex:1 }}>
+                              {d.url && (
+                                <a href={d.url} target="_blank" rel="noopener noreferrer"
+                                  style={{ fontSize:11, color:'#0369a1', fontWeight:600, display:'block', marginBottom:2 }}>
+                                  📎 {d.nome || 'Arquivo'}
+                                </a>
+                              )}
+                              {d.conteudo && <div style={{ fontSize:10, color:'#475569', whiteSpace:'pre-wrap' }}>{d.conteudo}</div>}
+                            </div>
+                            {currentUser?.perfil==='Admin' && (
+                              <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos')}
+                                style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
+                            )}
+                          </div>
+                          <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                            <span>👤 {d.criado_por_nome||'—'}</span>
+                            <span>🕒 {d.criado_em ? new Date(d.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
