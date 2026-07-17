@@ -65,6 +65,7 @@ export default function LoginTab() {
         pode_autorizar_rh:     usuario.pode_autorizar_rh     || false,
         permissoes_crm:        usuario.permissoes_crm        || [],
         recebe_alerta_analise: usuario.recebe_alerta_analise || false,
+        pode_enviar_avisos:    usuario.pode_enviar_avisos    || false,
       }));
 
       window.location.href = window.location.origin + '/ACN/';

@@ -24,17 +24,43 @@ function prazoLabel(av: any): string {
 
 // ─── componente ──────────────────────────────────────────────────────────────
 export default function AvisoSistemaWidget({ currentUser }: any) {
-  const [avisos, setAvisos]         = useState<any[]>([]);
-  const [minimizado, setMinimizado] = useState(false);
-  const [mostraForm, setMostraForm] = useState(false);
-  const [form, setForm]             = useState<any>({ ...VAZIO_FORM });
-  const [salvando, setSalvando]     = useState(false);
-  const [pos, setPos]               = useState<{ x: number; y: number } | null>(null);
+  const [avisos, setAvisos]           = useState<any[]>([]);
+  const [minimizado, setMinimizado]   = useState(false);
+  const [mostraForm, setMostraForm]   = useState(false);
+  const [form, setForm]               = useState<any>({ ...VAZIO_FORM });
+  const [salvando, setSalvando]       = useState(false);
+  const [pos, setPos]                 = useState<{ x: number; y: number } | null>(null);
+  const [podePublicar, setPodePublicar] = useState(false);
   const drag = useRef<any>({ on: false });
 
-  // lê permissão do localStorage (atualizada no login)
-  const user         = currentUser || JSON.parse(localStorage.getItem('user') || '{}');
-  const podePublicar = !!(user?.pode_enviar_avisos) || user?.perfil === 'Admin';
+  const user = currentUser || JSON.parse(localStorage.getItem('user') || '{}')
+
+  // ── verifica permissão direto no banco (resolve usuários já logados antes da coluna existir) ──
+  useEffect(() => {
+    if (!user?.id) return;
+    // parte rápida: checa localStorage primeiro
+    if (user?.pode_enviar_avisos || user?.perfil === 'Admin') {
+      setPodePublicar(true);
+      return;
+    }
+    // busca fresca no banco para não depender de sessão antiga
+    supabase
+      .from('auth_usuarios')
+      .select('pode_enviar_avisos, perfil')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        const pode = !!(data.pode_enviar_avisos) || data.perfil === 'Admin';
+        setPodePublicar(pode);
+        // atualiza localStorage para que próximos renders não precisem consultar
+        try {
+          const stored = JSON.parse(localStorage.getItem('user') || '{}');
+          stored.pode_enviar_avisos = data.pode_enviar_avisos || false;
+          localStorage.setItem('user', JSON.stringify(stored));
+        } catch (_) {}
+      });
+  }, [user?.id]);
 
   // ── load ──────────────────────────────────────────────────────────────────
   const carregar = useCallback(async () => {
