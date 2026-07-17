@@ -94,6 +94,8 @@ git add avisos_sistema.sql
 git add src/AvisoSistemaWidget.tsx
 git add src/RHTab.tsx
 git add publicar.bat
+git add index.html
+git add vite.config.ts
 
 :: Verificar
 echo.

@@ -8,6 +8,55 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Polyfills para iOS 10 / Safari 10 (iPad 4ª geração) -->
+    <script>
+      if (typeof WeakRef === 'undefined') {
+        window.WeakRef = function(t) { this._t = t; };
+        window.WeakRef.prototype.deref = function() { return this._t; };
+      }
+      if (typeof FinalizationRegistry === 'undefined') {
+        window.FinalizationRegistry = function() {};
+        window.FinalizationRegistry.prototype.register = function() {};
+        window.FinalizationRegistry.prototype.unregister = function() {};
+      }
+      if (typeof globalThis === 'undefined') { window.globalThis = window; }
+      if (typeof queueMicrotask === 'undefined') {
+        window.queueMicrotask = function(fn) { Promise.resolve().then(fn); };
+      }
+
+      /* ── DEBUG VISUAL — remove depois de resolver ─────────────────── */
+      (function() {
+        var box = null;
+        function showErr(msg) {
+          if (!box) {
+            box = document.createElement('div');
+            box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;'
+              + 'background:#1e293b;color:#f87171;font:13px/1.5 monospace;'
+              + 'padding:12px 14px;max-height:45vh;overflow-y:auto;'
+              + 'border-top:3px solid #ef4444;white-space:pre-wrap;word-break:break-all;';
+            var title = document.createElement('div');
+            title.style.cssText = 'font-weight:bold;color:#fbbf24;margin-bottom:6px;font-size:14px;';
+            title.textContent = '⚠️ ERRO JS — copie e mande para o suporte:';
+            box.appendChild(title);
+            document.body ? document.body.appendChild(box) :
+              document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(box); });
+          }
+          var line = document.createElement('div');
+          line.style.borderTop = '1px solid #334155';
+          line.style.paddingTop = '4px';
+          line.style.marginTop = '4px';
+          line.textContent = msg;
+          box.appendChild(line);
+        }
+        window.addEventListener('error', function(e) {
+          showErr('ERROR: ' + e.message + '\n  em: ' + e.filename + ':' + e.lineno + ':' + e.colno);
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+          showErr('PROMISE: ' + (e.reason && (e.reason.message || String(e.reason))));
+        });
+      })();
+      /* ────────────────────────────────────────────────────────────────── */
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
