@@ -377,6 +377,16 @@ function PainelUsuarios() {
                   <span>📢 Pode publicar Avisos do Sistema</span>
                 </label>
               </div>
+              {/* Licitações — exclusão de anexos */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.pode_deletar_anexos||false}
+                    onChange={e=>setEditForm(f=>({...f,pode_deletar_anexos:e.target.checked}))}
+                    style={{accentColor:'#0891b2'}} />
+                  <span>🗑️ Pode excluir anexos em Licitações</span>
+                </label>
+              </div>
             </div>
             <div style={{display:'flex',gap:8,marginTop:4}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarEdicao}>SALVAR</button>

@@ -98,6 +98,7 @@ git add index.html
 git add vite.config.ts
 git add src/supabaseClient.ts
 git add src/main.tsx
+git add sql/licitacoes_melhorias.sql
 
 :: Verificar
 echo.
@@ -106,7 +107,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "fix(ios10): compatibilidade iPad 4 - build.target es2015 transpile toda sintaxe moderna; safari10:true no legacy plugin; polyfills WeakRef/FinalizationRegistry/structuredClone/Object.hasOwn/Array.at/Promise.allSettled/AbortController no index.html; supabaseClient sem auth auto-init; feat: AvisoSistemaWidget post-it flutuante; AdminTab aba Avisos; CrmTab area livre; CrmTab 9 abas; PPTX 4 slides novos"
+git commit -m "feat(licitacoes): refactor completo LicitacoesTab - modal redimensionavel+minimizavel, tabela licitacao_contatos, contatos WhatsApp, area livre por aba com autosave, edicao de andamento, multiplos arquivos, permissao pode_deletar_anexos; novas abas: Arquivos, Impugnacoes, Custos, Docs Enviados, Fase de Contrato, Atestado, Informacoes; campos faturamento_empresa/operador/horario_sessao/valor_estimado; AdminTab pode_deletar_anexos; SQL licitacoes_melhorias.sql"
 
 :: Push
 echo.
