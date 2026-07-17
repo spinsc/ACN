@@ -132,12 +132,12 @@ function ModalPermissoes({ usuario, onClose, onSalvo }) {
 
 function PainelUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false });
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, pode_enviar_avisos: false });
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false, pode_enviar_avisos: false });
   const [perfisDB, setPerfisDB] = useState([]);
 
   // Perfis disponíveis = padrão + qualquer extra criado no banco
@@ -177,7 +177,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false });
     setModalEditar(u);
   };
 
@@ -197,6 +197,7 @@ function PainelUsuarios() {
       whatsapp: editForm.whatsapp.replace(/\D/g,'') || null,
       abas_permitidas: editForm.abas_permitidas,
       pode_autorizar_rh: editForm.pode_autorizar_rh,
+      pode_enviar_avisos: editForm.pode_enviar_avisos,
       permissoes_crm: editForm.permissoes_crm,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
     };
@@ -223,7 +224,7 @@ function PainelUsuarios() {
     if (!form.nome || !form.email || !form.senha) { alert('Preencha nome, email e senha!'); return; }
     const { error } = await supabase.from('auth_usuarios').insert([{ ...form, ativo: true }]);
     if (error) { alert('Erro: ' + error.message); return; }
-    setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false });
+    setForm({ nome:'', email:'', senha:'', perfil:'Comercial', whatsapp:'', abas_permitidas: ['dashboard'], pode_autorizar_rh: false, pode_enviar_avisos: false });
     setShowForm(false); fetchUsuarios();
   };
 
@@ -366,6 +367,16 @@ function PainelUsuarios() {
                   <span>🔔 Recebe alertas de Análise Orçamentária</span>
                 </label>
               </div>
+              {/* Avisos do Sistema */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.pode_enviar_avisos}
+                    onChange={e=>setEditForm(f=>({...f,pode_enviar_avisos:e.target.checked}))}
+                    style={{accentColor:'#dc2626'}} />
+                  <span>📢 Pode publicar Avisos do Sistema</span>
+                </label>
+              </div>
             </div>
             <div style={{display:'flex',gap:8,marginTop:4}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarEdicao}>SALVAR</button>
@@ -442,12 +453,19 @@ function PainelUsuarios() {
             {/* Permissões extras no formulário de criação */}
             <div style={{marginTop:8,padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:6,background:'#fafafa'}}>
               <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:5}}>Permissões Extras</div>
-              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer',marginBottom:5}}>
                 <input type="checkbox"
                   checked={form.pode_autorizar_rh}
                   onChange={e=>setForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
                   style={{accentColor:'#7c3aed'}} />
                 <span>🖨️ Pode emitir Autorizações de Saída/Entrada (RH)</span>
+              </label>
+              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                <input type="checkbox"
+                  checked={form.pode_enviar_avisos}
+                  onChange={e=>setForm(f=>({...f,pode_enviar_avisos:e.target.checked}))}
+                  style={{accentColor:'#dc2626'}} />
+                <span>📢 Pode publicar Avisos do Sistema</span>
               </label>
             </div>
             <button className="acn-btn" style={{background:'#22c55e',width:'100%',padding:'7px',marginTop:10}} onClick={salvar}>
@@ -1671,6 +1689,9 @@ const COR_CRIT: Record<string, { bg: string; border: string }> = {
 };
 
 function PainelAvisos() {
+  const currentUser                = JSON.parse(localStorage.getItem('user') || '{}');
+  const podeGerenciar              = !!(currentUser?.pode_enviar_avisos) || currentUser?.perfil === 'Admin';
+
   const [avisos, setAvisos]       = useState<any[]>([]);
   const [form, setForm]           = useState<any>({ ...VAZIO_AVISO });
   const [editId, setEditId]       = useState<string|null>(null);
@@ -1742,10 +1763,10 @@ function PainelAvisos() {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 16, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: podeGerenciar ? '340px 1fr' : '1fr', gap: 16, alignItems: 'start' }}>
 
       {/* ── FORMULÁRIO ── */}
-      <div className="sec-card">
+      {podeGerenciar && <div className="sec-card">
         <div className="sec-header" style={{ background: '#1e293b', color: '#fff', padding: '8px 12px', fontWeight: 700, fontSize: 11 }}>
           {editId ? '✏️ Editar Aviso' : '+ Novo Aviso'}
         </div>
@@ -1807,7 +1828,7 @@ function PainelAvisos() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* ── LISTA ── */}
       <div>
@@ -1860,6 +1881,7 @@ function PainelAvisos() {
                       <span>{av.permanente ? '📌 Permanente' : av.data_expiracao ? `⏱ Até ${new Date(av.data_expiracao).toLocaleString('pt-BR')}` : ''}</span>
                     </div>
                   </div>
+                  {podeGerenciar && (
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     <button onClick={() => iniciarEdicao(av)}
                       style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1',
@@ -1878,6 +1900,7 @@ function PainelAvisos() {
                       🗑
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             );

@@ -20,3 +20,6 @@ CREATE TABLE IF NOT EXISTS avisos_sistema (
 ALTER TABLE avisos_sistema DISABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS idx_avisos_ativo ON avisos_sistema(ativo);
+
+-- Permissão por usuário para publicar avisos
+ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS pode_enviar_avisos boolean NOT NULL DEFAULT false;

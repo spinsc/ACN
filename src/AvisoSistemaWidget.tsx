@@ -74,11 +74,11 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   }, [pos]);
 
   // ── render ────────────────────────────────────────────────────────────────
-  if (!pos || avisos.length === 0) return null;
+  if (!pos) return null;
 
   const topCrit  = avisos[0]?.criticidade ?? 'baixa';
-  const cor      = COR[topCrit];
-  const pulsar   = topCrit === 'alta';
+  const cor      = avisos.length > 0 ? COR[topCrit] : { bg: '#f1f5f9', border: '#94a3b8', text: '#475569', dot: '#64748b' };
+  const pulsar   = topCrit === 'alta' && avisos.length > 0;
 
   return (
     <>
@@ -98,7 +98,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
           <button
             onClick={() => setMinimizado(false)}
             className={pulsar ? 'aviso-pulse' : ''}
-            title={`${avisos.length} aviso(s) do sistema`}
+            title={avisos.length > 0 ? `${avisos.length} aviso(s) do sistema` : 'Avisos do Sistema'}
             style={{
               width: 46, height: 46, borderRadius: '50%',
               border: `2.5px solid ${cor.border}`, background: cor.bg,
@@ -107,15 +107,17 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
             }}
           >
             📌
-            <span style={{
-              position: 'absolute', top: -5, right: -5,
-              background: cor.dot, color: '#fff', borderRadius: '50%',
-              width: 20, height: 20, fontSize: 10, fontWeight: 800,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '2px solid #fff',
-            }}>
-              {avisos.length}
-            </span>
+            {avisos.length > 0 && (
+              <span style={{
+                position: 'absolute', top: -5, right: -5,
+                background: cor.dot, color: '#fff', borderRadius: '50%',
+                width: 20, height: 20, fontSize: 10, fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '2px solid #fff',
+              }}>
+                {avisos.length}
+              </span>
+            )}
           </button>
 
         ) : (
@@ -153,6 +155,11 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
 
             {/* lista de avisos */}
             <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+              {avisos.length === 0 && (
+                <div style={{ padding: '20px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 11, background: '#f8fafc' }}>
+                  Nenhum aviso ativo no momento.
+                </div>
+              )}
               {avisos.map((av, i) => {
                 const c = COR[av.criticidade] ?? COR.media;
                 return (
