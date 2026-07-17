@@ -1650,10 +1650,243 @@ const ABAS_ADMIN = [
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
+  { id:'avisos',         label:'📢 Avisos' },
   { id:'logs',           label:'Logs do Sistema' },
   { id:'dados',          label:'🗑 Dados / Limpeza' },
   { id:'lixeira',        label:'♻️ Lixeira (24h)' },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL AVISOS DO SISTEMA
+// ─────────────────────────────────────────────────────────────────────────────
+const VAZIO_AVISO = {
+  titulo: '', mensagem: '', tipo: 'admin', criticidade: 'media',
+  permanente: false, data_expiracao: '',
+};
+
+const COR_CRIT: Record<string, { bg: string; border: string }> = {
+  baixa: { bg: '#fef9c3', border: '#ca8a04' },
+  media: { bg: '#ffedd5', border: '#ea580c' },
+  alta:  { bg: '#fee2e2', border: '#dc2626' },
+};
+
+function PainelAvisos() {
+  const [avisos, setAvisos]       = useState<any[]>([]);
+  const [form, setForm]           = useState<any>({ ...VAZIO_AVISO });
+  const [editId, setEditId]       = useState<string|null>(null);
+  const [salvando, setSalvando]   = useState(false);
+  const [filtro, setFiltro]       = useState<'todos'|'ativos'|'expirados'>('ativos');
+
+  const carregar = async () => {
+    const { data } = await supabase.from('avisos_sistema').select('*').order('criado_em', { ascending: false });
+    setAvisos(data || []);
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const salvar = async () => {
+    if (!form.titulo?.trim() || !form.mensagem?.trim()) return;
+    setSalvando(true);
+    const payload: any = {
+      titulo:      form.titulo.trim(),
+      mensagem:    form.mensagem.trim(),
+      tipo:        form.tipo,
+      criticidade: form.criticidade,
+      permanente:  !!form.permanente,
+      data_expiracao: (!form.permanente && form.data_expiracao) ? new Date(form.data_expiracao).toISOString() : null,
+      ativo: true,
+    };
+    if (editId) {
+      await supabase.from('avisos_sistema').update(payload).eq('id', editId);
+      setEditId(null);
+    } else {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      payload.criado_por      = user.email || '';
+      payload.criado_por_nome = user.nome  || '';
+      await supabase.from('avisos_sistema').insert([payload]);
+    }
+    setForm({ ...VAZIO_AVISO });
+    setSalvando(false);
+    await carregar();
+  };
+
+  const excluir = async (id: string) => {
+    if (!window.confirm('Excluir este aviso?')) return;
+    await supabase.from('avisos_sistema').delete().eq('id', id);
+    await carregar();
+  };
+
+  const toggleAtivo = async (av: any) => {
+    await supabase.from('avisos_sistema').update({ ativo: !av.ativo }).eq('id', av.id);
+    await carregar();
+  };
+
+  const iniciarEdicao = (av: any) => {
+    setEditId(av.id);
+    setForm({
+      titulo: av.titulo, mensagem: av.mensagem, tipo: av.tipo,
+      criticidade: av.criticidade, permanente: av.permanente,
+      data_expiracao: av.data_expiracao ? av.data_expiracao.slice(0, 16) : '',
+    });
+  };
+
+  const now = new Date();
+  const visiveis = avisos.filter(av => {
+    if (filtro === 'ativos')    return av.ativo && (av.permanente || !av.data_expiracao || new Date(av.data_expiracao) > now);
+    if (filtro === 'expirados') return !av.ativo || (!av.permanente && av.data_expiracao && new Date(av.data_expiracao) <= now);
+    return true;
+  });
+
+  const inpStyle: React.CSSProperties = {
+    width: '100%', padding: '6px 8px', border: '1px solid #d1d5db',
+    borderRadius: 4, fontSize: 11, boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 16, alignItems: 'start' }}>
+
+      {/* ── FORMULÁRIO ── */}
+      <div className="sec-card">
+        <div className="sec-header" style={{ background: '#1e293b', color: '#fff', padding: '8px 12px', fontWeight: 700, fontSize: 11 }}>
+          {editId ? '✏️ Editar Aviso' : '+ Novo Aviso'}
+        </div>
+        <div className="sec-body" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Título *</label>
+            <input value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})}
+              placeholder="Ex: Reunião amanhã às 9h" style={inpStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Mensagem *</label>
+            <textarea value={form.mensagem} onChange={e => setForm({...form, mensagem: e.target.value})}
+              rows={4} placeholder="Texto completo do aviso..." style={{ ...inpStyle, resize: 'vertical' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Origem</label>
+              <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} style={inpStyle}>
+                <option value="admin">👮 Admin</option>
+                <option value="diretoria">🏢 Diretoria</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Criticidade</label>
+              <select value={form.criticidade} onChange={e => setForm({...form, criticidade: e.target.value})} style={inpStyle}>
+                <option value="baixa">🟡 Baixa</option>
+                <option value="media">🟠 Média</option>
+                <option value="alta">🔴 Alta</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11 }}>
+              <input type="checkbox" checked={form.permanente}
+                onChange={e => setForm({...form, permanente: e.target.checked, data_expiracao: ''})} />
+              <span>📌 Manter permanentemente</span>
+            </label>
+          </div>
+          {!form.permanente && (
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Válido até</label>
+              <input type="datetime-local" value={form.data_expiracao}
+                onChange={e => setForm({...form, data_expiracao: e.target.value})} style={inpStyle} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <button onClick={salvar} disabled={salvando || !form.titulo?.trim() || !form.mensagem?.trim()}
+              style={{ flex: 1, background: '#1e293b', color: '#fff', border: 'none', borderRadius: 4,
+                padding: '7px 0', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                opacity: (!form.titulo?.trim() || !form.mensagem?.trim()) ? .5 : 1 }}>
+              {salvando ? 'Salvando...' : editId ? '💾 Atualizar' : '📢 Publicar'}
+            </button>
+            {editId && (
+              <button onClick={() => { setEditId(null); setForm({ ...VAZIO_AVISO }); }}
+                style={{ background: '#94a3b8', color: '#fff', border: 'none', borderRadius: 4,
+                  padding: '7px 12px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── LISTA ── */}
+      <div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {(['ativos','todos','expirados'] as const).map(f => (
+            <button key={f} onClick={() => setFiltro(f)}
+              style={{ padding: '4px 12px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 10,
+                fontWeight: 700, cursor: 'pointer', background: filtro === f ? '#1e293b' : '#fff',
+                color: filtro === f ? '#fff' : '#374151' }}>
+              {f === 'ativos' ? '✅ Ativos' : f === 'todos' ? '📋 Todos' : '⏰ Expirados'}
+            </button>
+          ))}
+        </div>
+
+        {visiveis.length === 0 && (
+          <div style={{ color: '#9ca3af', fontSize: 12, textAlign: 'center', padding: 32 }}>
+            Nenhum aviso encontrado.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {visiveis.map(av => {
+            const c = COR_CRIT[av.criticidade] ?? COR_CRIT.media;
+            const expirou = !av.permanente && av.data_expiracao && new Date(av.data_expiracao) <= now;
+            return (
+              <div key={av.id} style={{
+                borderLeft: `4px solid ${c.border}`, background: expirou ? '#f8fafc' : c.bg,
+                borderRadius: 6, padding: '10px 14px',
+                opacity: expirou || !av.ativo ? .65 : 1,
+                boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {av.titulo}
+                      <span style={{
+                        background: av.tipo === 'diretoria' ? '#1e293b' : '#0369a1',
+                        color: '#fff', borderRadius: 3, padding: '1px 5px', fontSize: 9, fontWeight: 700,
+                      }}>{av.tipo === 'diretoria' ? '🏢 Diretoria' : '👮 Admin'}</span>
+                      <span style={{
+                        background: c.border, color: '#fff', borderRadius: 3,
+                        padding: '1px 5px', fontSize: 9, fontWeight: 700, textTransform: 'capitalize',
+                      }}>{av.criticidade}</span>
+                      {!av.ativo && <span style={{ background: '#94a3b8', color: '#fff', borderRadius: 3, padding: '1px 5px', fontSize: 9 }}>inativo</span>}
+                      {expirou && <span style={{ background: '#ef4444', color: '#fff', borderRadius: 3, padding: '1px 5px', fontSize: 9 }}>expirado</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap', marginBottom: 4 }}>{av.mensagem}</div>
+                    <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      <span>✍️ {av.criado_por_nome || '—'}</span>
+                      <span>{av.permanente ? '📌 Permanente' : av.data_expiracao ? `⏱ Até ${new Date(av.data_expiracao).toLocaleString('pt-BR')}` : ''}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => iniciarEdicao(av)}
+                      style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1',
+                        borderRadius: 4, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+                      ✏️
+                    </button>
+                    <button onClick={() => toggleAtivo(av)}
+                      title={av.ativo ? 'Desativar' : 'Reativar'}
+                      style={{ background: av.ativo ? '#fef9c3' : '#f0fdf4', border: `1px solid ${av.ativo ? '#ca8a04' : '#16a34a'}`,
+                        color: av.ativo ? '#854d0e' : '#15803d', borderRadius: 4, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+                      {av.ativo ? '⏸' : '▶️'}
+                    </button>
+                    <button onClick={() => excluir(av.id)}
+                      style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626',
+                        borderRadius: 4, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminTab() {
   const [abaAtiva, setAbaAtiva] = useState('usuarios');
@@ -1661,7 +1894,7 @@ export default function AdminTab() {
   return (
     <div>
       <div className="sec-card" style={{marginBottom:10}}>
-        <div className="sec-body" style={{padding:'6px 10px',display:'flex',gap:4}}>
+        <div className="sec-body" style={{padding:'6px 10px',display:'flex',gap:4,flexWrap:'wrap'}}>
           {ABAS_ADMIN.map(a => (
             <button
               key={a.id}
@@ -1679,6 +1912,7 @@ export default function AdminTab() {
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}
+      {abaAtiva === 'avisos'       && <PainelAvisos />}
       {abaAtiva === 'logs'         && <PainelLogs />}
       {abaAtiva === 'dados'        && <PainelDados />}
       {abaAtiva === 'lixeira'      && <PainelLixeira />}

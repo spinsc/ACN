@@ -90,6 +90,8 @@ git add supabase/functions/transcrever-audio/index.ts
 git add supabase/sql/
 :: Novos arquivos desta release
 git add acn_novas_colunas.sql
+git add avisos_sistema.sql
+git add src/AvisoSistemaWidget.tsx
 git add src/RHTab.tsx
 git add publicar.bat
 
@@ -100,7 +102,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: CrmTab cards Licita+VendaDireta: botao Abrir -> split-screen (form esq + 9 abas doc dir: Andamento/Processo/etc); MO Serralheria OP; comissao serralheria RHTab; badge horas SAC; LicitacoesTab split redesign; CrmTab converter->Licitacao/ATA"
+git commit -m "feat: AvisoSistemaWidget post-it flutuante (draggable, criticidade baixa/media/alta, prazo/permanente, origem admin/diretoria); AdminTab aba Avisos CRUD; CrmTab area livre contenteditable; CrmTab split modal area livre nota"
 
 :: Push
 echo.
