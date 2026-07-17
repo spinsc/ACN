@@ -96,6 +96,7 @@ git add src/RHTab.tsx
 git add publicar.bat
 git add index.html
 git add vite.config.ts
+git add src/supabaseClient.ts
 
 :: Verificar
 echo.
@@ -104,7 +105,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: AvisoSistemaWidget post-it flutuante (draggable, criticidade baixa/media/alta, prazo/permanente, origem admin/diretoria); AdminTab aba Avisos CRUD; CrmTab area livre contenteditable; CrmTab split modal 9 abas; docs: Manual Word capítulos 30-31 (Avisos + CRM Modal/Área Livre); PPTX 4 novos slides (slides 35-38)"
+git commit -m "fix(ios10): compatibilidade iPad 4 - build.target es2015 transpile toda sintaxe moderna; safari10:true no legacy plugin; polyfills WeakRef/FinalizationRegistry/structuredClone/Object.hasOwn/Array.at/Promise.allSettled/AbortController no index.html; supabaseClient sem auth auto-init; feat: AvisoSistemaWidget post-it flutuante; AdminTab aba Avisos; CrmTab area livre; CrmTab 9 abas; PPTX 4 slides novos"
 
 :: Push
 echo.

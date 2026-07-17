@@ -10,6 +10,7 @@
     <div id="root"></div>
     <!-- Polyfills para iOS 10 / Safari 10 (iPad 4ª geração) -->
     <script>
+      /* WeakRef / FinalizationRegistry — usados pelo React 19 internamente */
       if (typeof WeakRef === 'undefined') {
         window.WeakRef = function(t) { this._t = t; };
         window.WeakRef.prototype.deref = function() { return this._t; };
@@ -19,9 +20,50 @@
         window.FinalizationRegistry.prototype.register = function() {};
         window.FinalizationRegistry.prototype.unregister = function() {};
       }
+      /* globalThis — iOS < 12.1 não tem */
       if (typeof globalThis === 'undefined') { window.globalThis = window; }
+      /* queueMicrotask — iOS < 12.2 não tem */
       if (typeof queueMicrotask === 'undefined') {
         window.queueMicrotask = function(fn) { Promise.resolve().then(fn); };
+      }
+      /* structuredClone — iOS < 15.4 não tem; usado pelo Supabase */
+      if (typeof structuredClone === 'undefined') {
+        window.structuredClone = function(obj) {
+          return JSON.parse(JSON.stringify(obj));
+        };
+      }
+      /* Object.hasOwn — iOS < 15.4 não tem */
+      if (!Object.hasOwn) {
+        Object.hasOwn = function(obj, key) {
+          return Object.prototype.hasOwnProperty.call(obj, key);
+        };
+      }
+      /* Array.prototype.at — iOS < 15.4 não tem */
+      if (!Array.prototype.at) {
+        Array.prototype.at = function(n) {
+          n = Math.trunc(n) || 0;
+          if (n < 0) n += this.length;
+          if (n < 0 || n >= this.length) return undefined;
+          return this[n];
+        };
+      }
+      /* Promise.allSettled — iOS < 13 não tem */
+      if (!Promise.allSettled) {
+        Promise.allSettled = function(promises) {
+          return Promise.all(promises.map(function(p) {
+            return Promise.resolve(p).then(
+              function(v) { return { status: 'fulfilled', value: v }; },
+              function(e) { return { status: 'rejected', reason: e }; }
+            );
+          }));
+        };
+      }
+      /* AbortController — iOS < 11.3 não tem */
+      if (typeof AbortController === 'undefined') {
+        window.AbortController = function() {
+          this.signal = { aborted: false, addEventListener: function(){}, removeEventListener: function(){} };
+          this.abort = function() { this.signal.aborted = true; };
+        };
       }
 
       /* ── DEBUG VISUAL — remove depois de resolver ─────────────────── */
