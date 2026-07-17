@@ -38,11 +38,11 @@ const VAZIO_OP: any = {
   responsavel_id: null,
   responsavel_nome: '',
   motivo_perda: '',
-  data_prev_fechamento: '',
   // ── contato ──
-  nome_contato:  '',
-  contato:       '',
-  prox_contato:  '',
+  nome_contato:   '',
+  contato:        '',  // telefone
+  contato_email:  '',
+  prox_contato:   '',
 };
 
 const VAZIO_VENDA: any = {
@@ -146,6 +146,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const abrirNotaRef  = useRef<HTMLDivElement>(null);
   const abrirNotaImgRef = useRef<HTMLInputElement>(null);
   const [abrirNotaSalvando, setAbrirNotaSalvando] = useState(false);
+  // ── resize + minimize do modal Abrir ──
+  const [abrirLeftWidth, setAbrirLeftWidth]   = useState(42);
+  const [abrirIsDragging, setAbrirIsDragging] = useState(false);
+  const [abrirMinimized, setAbrirMinimized]   = useState(false);
+  const abrirContainerRef = useRef<any>(null);
+  const abrirDragStartX   = useRef(0);
+  const abrirDragStartW   = useRef(0);
 
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
@@ -429,6 +436,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       motivo_perda:      limpar(formOp.motivo_perda),
       nome_contato:      limpar(formOp.nome_contato),
       contato:           limpar(formOp.contato),
+      contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
     };
     if (!p.estagio_id) {
@@ -450,13 +458,13 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   const TABS_CRM = [
     { key:'andamento',    label:'📝 Andamento' },
-    { key:'processo',     label:'📂 Processo' },
-    { key:'impugnacoes',  label:'⚠️ Impugnações' },
-    { key:'recursos',     label:'📜 Recursos' },
-    { key:'contratos',    label:'📋 Contratos' },
-    { key:'empenhos',     label:'💰 Empenhos' },
-    { key:'doc_terceiros',label:'📁 Doc Terceiros' },
-    { key:'prospeccoes',  label:'🔍 Prospecções' },
+    { key:'processo',     label:'📂 Arquivos de Licitação' },
+    { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
+    { key:'custos',       label:'💰 Custos e Docs Técnicos' },
+    { key:'docs_enviados',label:'📤 Docs Enviados ao Processo' },
+    { key:'contratos',    label:'📋 Fase de Contrato' },
+    { key:'atestado',     label:'🏅 Atestado' },
+    { key:'informacoes',  label:'ℹ️ Informações Importantes' },
     { key:'analise',      label:'🔬 Análise' },
   ] as const;
 
@@ -466,6 +474,26 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     // pequeno delay para o DOM do contenteditable estar montado
     setTimeout(() => carregarNotaLivre(modalAbrir, abrirTabDir), 100);
   }, [modalAbrir?.id, abrirTabDir]);
+
+  // ── resize do modal Abrir (drag divider) ──
+  useEffect(() => {
+    if (!abrirIsDragging) return;
+    const handleMove = (e: MouseEvent) => {
+      const container = abrirContainerRef.current;
+      if (!container) return;
+      const containerW = container.getBoundingClientRect().width;
+      const dx = e.clientX - abrirDragStartX.current;
+      const newW = Math.min(70, Math.max(25, abrirDragStartW.current + (dx / containerW) * 100));
+      setAbrirLeftWidth(newW);
+    };
+    const handleUp = () => setAbrirIsDragging(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+  }, [abrirIsDragging]);
 
   const fetchAbrirTabContent = async (op: any, tab: string) => {
     setAbrirDocs([]);
@@ -610,6 +638,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       responsavel_nome:  limpar(formOp.responsavel_nome),
       nome_contato:      limpar(formOp.nome_contato),
       contato:           limpar(formOp.contato),
+      contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
     };
     await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
@@ -1209,15 +1238,15 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         style={{ minHeight:100, padding:'10px 12px', fontSize:12, color:'#1e293b',
           lineHeight:1.6, outline:'none', background:'#fff', wordBreak:'break-word' }}
         onPaste={e => {
-          const items = e.clipboardData?.items;
-          if (!items) return;
-          for (const item of Array.from(items)) {
-            if (item.type.startsWith('image/')) {
-              e.preventDefault();
-              const file = item.getAsFile();
-              if (file) inserirImagemNota(file);
-              return;
-            }
+          const items = Array.from(e.clipboardData?.items || []);
+          // Se houver HTML no clipboard (ex: tabela colada do Excel/Word), deixa o browser
+          // colar normalmente — só intercepta imagem pura (print screen, etc.)
+          const hasHtml = items.some(i => i.type === 'text/html');
+          const imageItem = items.find(i => i.type.startsWith('image/'));
+          if (imageItem && !hasHtml) {
+            e.preventDefault();
+            const file = imageItem.getAsFile();
+            if (file) inserirImagemNota(file);
           }
         }}
       />
@@ -1379,7 +1408,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 ...(formOp.tipo_licitacao==='ata' ? [{ label:'Validade da Ata', key:'data_validade_ata', type:'date' }] : []),
               ] : []),
               { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
-              { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
             ] as any[]).map(({ label, key, placeholder, type }) => (
               <div key={key} style={{ marginBottom:8 }}>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>{label}</div>
@@ -1389,17 +1417,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 />
               </div>
             ))}
-
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Estágio Inicial</div>
-              <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-                <option value="">— Selecione —</option>
-                {estagiosFunil.filter(e => !isPerdido(e) && !isGanho(e)).map(e => (
-                  <option key={e.id} value={e.id}>{e.nome}</option>
-                ))}
-              </select>
-            </div>
 
             <div style={{ marginBottom:8 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cliente (opcional)</div>
@@ -1428,16 +1445,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             {/* ── Campos de contato ── */}
             <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:10 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:6 }}>📞 CONTATO</div>
+              <div style={{ marginBottom:5 }}>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
+                <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
+                  value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
                 <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
-                    value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Telefone</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999"
+                    value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
                 </div>
                 <div>
-                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Contato (tel/e-mail)</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999 ou e-mail"
-                    value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>E-mail</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="email@exemplo.com"
+                    value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
                 </div>
               </div>
               <div>
@@ -1917,12 +1939,26 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         </div>
       )}
       {/* ══════ MODAL ABRIR — split-screen ══════ */}
-      {modalAbrir && (
+      {modalAbrir && abrirMinimized && (
+        <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:1200, background:'#1e3a5f', color:'#fff',
+          display:'flex', alignItems:'center', padding:'8px 14px', gap:10, boxShadow:'0 -2px 12px #0004' }}>
+          <div style={{ flex:1, fontSize:11, fontWeight:700, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+            {modalAbrir.funil === 'licitacao' ? '🏛️' : '💼'} {modalAbrir.titulo}
+          </div>
+          <button onClick={() => setAbrirMinimized(false)}
+            style={{ background:'#2563eb', border:'none', color:'#fff', borderRadius:4, padding:'4px 10px', fontSize:10, cursor:'pointer', fontWeight:700 }}>
+            ⬆ Restaurar
+          </button>
+          <button onClick={() => { setModalAbrir(null); setAbrirMinimized(false); }}
+            style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+        </div>
+      )}
+      {modalAbrir && !abrirMinimized && (
         <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1100, display:'flex' }}>
-          <div style={{ display:'flex', width:'100%', height:'100%' }}>
+          <div ref={abrirContainerRef} style={{ display:'flex', width:'100%', height:'100%' }}>
 
             {/* ── ESQUERDO: formulário editável ── */}
-            <div style={{ width:'42%', minWidth:320, display:'flex', flexDirection:'column', background:'#fff', borderRight:'2px solid #e2e8f0', boxShadow:'2px 0 12px #0002' }}>
+            <div style={{ width:`${abrirLeftWidth}%`, minWidth:280, display:'flex', flexDirection:'column', background:'#fff', boxShadow:'2px 0 12px #0002' }}>
               {/* Header */}
               <div style={{ padding:'12px 14px', background:'#1e3a5f', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
                 <div>
@@ -1932,7 +1968,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   <div style={{ fontSize:13, fontWeight:700 }}>{modalAbrir.titulo}</div>
                   {modalAbrir.orgao && <div style={{ fontSize:9, opacity:.85 }}>{modalAbrir.orgao}</div>}
                 </div>
-                <button onClick={() => setModalAbrir(null)} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+                <div style={{ display:'flex', gap:4 }}>
+                  <button onClick={() => setAbrirMinimized(true)}
+                    title="Minimizar" style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px', lineHeight:1 }}>─</button>
+                  <button onClick={() => setModalAbrir(null)}
+                    style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'2px 6px' }}>✕</button>
+                </div>
               </div>
 
               {/* Formulário (scrollável) */}
@@ -1998,16 +2039,27 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
                 <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:8 }}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:5 }}>📞 CONTATO</div>
+                  <div style={{ marginBottom:5 }}>
+                    <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
+                    <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
+                      value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
+                  </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
                     <div>
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
-                      <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
-                        value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Tel/E-mail</div>
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Telefone</div>
                       <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999"
                         value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
+                      {formOp.contato && (
+                        <a href={`https://wa.me/55${(formOp.contato||'').replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
+                          style={{ fontSize:8, color:'#16a34a', display:'flex', alignItems:'center', gap:3, marginTop:2, textDecoration:'none' }}>
+                          💬 WhatsApp
+                        </a>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>E-mail</div>
+                      <input className="acn-input" style={{ width:'100%' }} placeholder="email@exemplo.com"
+                        value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
                     </div>
                   </div>
                   <div>
@@ -2029,6 +2081,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   Fechar
                 </button>
               </div>
+            </div>
+
+            {/* ── DIVIDER (drag resize) ── */}
+            <div
+              onMouseDown={e => {
+                e.preventDefault();
+                setAbrirIsDragging(true);
+                abrirDragStartX.current = e.clientX;
+                abrirDragStartW.current = abrirLeftWidth;
+              }}
+              style={{ width:6, background: abrirIsDragging ? '#93c5fd' : '#e2e8f0', cursor:'col-resize',
+                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'background .15s' }}>
+              <div style={{ width:2, height:40, background:'#c0c0c0', borderRadius:1 }} />
             </div>
 
             {/* ── DIREITO: abas de documentos ── */}

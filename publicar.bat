@@ -99,6 +99,7 @@ git add vite.config.ts
 git add src/supabaseClient.ts
 git add src/main.tsx
 git add sql/licitacoes_melhorias.sql
+git add sql/crm_melhorias.sql
 
 :: Verificar
 echo.
@@ -107,7 +108,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat(licitacoes): refactor completo LicitacoesTab - modal redimensionavel+minimizavel, tabela licitacao_contatos, contatos WhatsApp, area livre por aba com autosave, edicao de andamento, multiplos arquivos, permissao pode_deletar_anexos; novas abas: Arquivos, Impugnacoes, Custos, Docs Enviados, Fase de Contrato, Atestado, Informacoes; campos faturamento_empresa/operador/horario_sessao/valor_estimado; AdminTab pode_deletar_anexos; SQL licitacoes_melhorias.sql"
+git commit -m "feat(crm+licitacoes): CrmTab modal resize+minimize+novas abas+telefone+email separados+fix onPaste Excel+remove estagio inicial; LicitacoesTab refactor completo; SQL crm_melhorias.sql+licitacoes_melhorias.sql"
 
 :: Push
 echo.
