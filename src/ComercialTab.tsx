@@ -605,7 +605,15 @@ export default function ComercialTab({ currentUser }) {
     const isManutencao = (formData.tipo_projeto||'').toLowerCase().includes('manutencao') || (formData.tipo_projeto||'').toLowerCase().includes('manutenção');
     const statusInicial = editId ? formData.status_geral : (isManutencao ? 'Aguardando Agendamento Manutenção' : 'Em Espera Engenharia');
     const { _cliente_id: _cid, _cliente_obj: _cobj, ...formLimpo } = formData;
-    const payload = { ...formLimpo, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: statusInicial };
+    // Converte strings vazias em campos de data/número para null
+    // (PostgreSQL rejeita "" para tipo date ou numeric)
+    const CAMPOS_DATA = ['data_aceite_cliente','data_chegada_veiculo','prazo_entrega_producao',
+      'prazo_entrega_comercial','data_prevista_entrega','data_entrada'];
+    const CAMPOS_NUM  = ['valor_total','valor_mao_de_obra','valor_mao_de_obra_serralheria','quantidade'];
+    const formSanitizado = { ...formLimpo };
+    CAMPOS_DATA.forEach(k => { if (formSanitizado[k] === '') formSanitizado[k] = null; });
+    CAMPOS_NUM.forEach(k  => { if (formSanitizado[k] === '' || formSanitizado[k] === undefined) formSanitizado[k] = null; });
+    const payload = { ...formSanitizado, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: statusInicial };
     if (editId) {
       // Buscar dados anteriores para log
       const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
