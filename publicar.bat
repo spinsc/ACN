@@ -97,6 +97,7 @@ git add publicar.bat
 git add index.html
 git add vite.config.ts
 git add src/supabaseClient.ts
+git add src/main.tsx
 
 :: Verificar
 echo.

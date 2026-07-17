@@ -65,6 +65,17 @@
           this.abort = function() { this.signal.aborted = true; };
         };
       }
+      /* System (SystemJS) stub — evita erro "can't find variable: System" no iOS 10.
+         O Safari 10 executa TANTO o bundle moderno (type=module) QUANTO o bundle
+         legado (nomodule), devido a um bug. Se o SystemJS polyfill não chegou
+         a tempo, a chamada System.import() crasha. Este stub absorve a chamada
+         sem carregar o bundle legado novamente (o moderno já rodou). */
+      if (typeof System === 'undefined') {
+        window.System = {
+          import: function() { return Promise.resolve(); },
+          register: function() {}
+        };
+      }
 
       /* ── DEBUG VISUAL — remove depois de resolver ─────────────────── */
       (function() {
