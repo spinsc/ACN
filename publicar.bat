@@ -102,7 +102,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: AvisoSistemaWidget post-it flutuante (draggable, criticidade baixa/media/alta, prazo/permanente, origem admin/diretoria); AdminTab aba Avisos CRUD; CrmTab area livre contenteditable; CrmTab split modal area livre nota"
+git commit -m "feat: AvisoSistemaWidget post-it flutuante (draggable, criticidade baixa/media/alta, prazo/permanente, origem admin/diretoria); AdminTab aba Avisos CRUD; CrmTab area livre contenteditable; CrmTab split modal 9 abas; docs: Manual Word capítulos 30-31 (Avisos + CRM Modal/Área Livre); PPTX 4 novos slides (slides 35-38)"
 
 :: Push
 echo.

@@ -23,6 +23,7 @@ export default function LogisticaTab({ currentUser }) {
   const [fotos, setFotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [modalVer, setModalVer] = useState(null);
+  const [modalDetalhes, setModalDetalhes] = useState(null);
   const fileRef = useRef(null);
 
   const carregarScript = (url) => new Promise((res, rej) => {
@@ -380,7 +381,8 @@ export default function LogisticaTab({ currentUser }) {
                       ) : '—'}
                     </td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{m.observacoes || '—'}</td>
-                    <td>
+                    <td style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                      <button className="acn-btn" style={{background:'#0369a1',fontSize:10}} onClick={()=>setModalDetalhes(m)}>👁 Ver</button>
                       <button className="acn-btn" style={{background:'#1e293b',fontSize:10}} onClick={()=>gerarPDF(m)}>PDF</button>
                     </td>
                   </tr>
@@ -392,6 +394,60 @@ export default function LogisticaTab({ currentUser }) {
       </div>
 
       <DemandaFooter setor="Logistica" />
+
+      {/* MODAL DETALHES */}
+      {modalDetalhes && (() => {
+        const m = modalDetalhes;
+        const cor = corTipo(m.tipo);
+        const row = (label, val) => (
+          <div style={{display:'grid',gridTemplateColumns:'140px 1fr',gap:'6px 12px',padding:'6px 0',borderBottom:'1px solid #f1f5f9',alignItems:'start'}}>
+            <span style={{fontSize:11,color:'#64748b',fontWeight:600}}>{label}</span>
+            <span style={{fontSize:12,color:'#1e293b',wordBreak:'break-word'}}>{val || '—'}</span>
+          </div>
+        );
+        return (
+          <div className="modal-overlay">
+            <div className="modal-box" style={{maxWidth:560,maxHeight:'90vh',overflowY:'auto'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+                <span className="acn-badge" style={{background:cor,fontSize:13,padding:'3px 12px'}}>{m.tipo}</span>
+                <span style={{fontWeight:700,fontSize:15,color:'#1e293b'}}>Detalhes do Manifesto</span>
+                <span style={{marginLeft:'auto',fontSize:11,color:'#94a3b8'}}>ID: {(m.id||'').slice(0,8).toUpperCase()}</span>
+              </div>
+
+              {row('Data', fmtDt(m.data))}
+              {row('Remetente', m.remetente)}
+              {row('Destinatário', m.destinatario)}
+              {row('Tipo de Mercadoria', m.tipo_mercadoria)}
+              {row('Descrição', m.descricao)}
+              {row('Quantidade', m.quantidade ? `${m.quantidade} un.` : null)}
+              {row('Peso', m.peso ? `${m.peso} kg` : null)}
+              {row('NF Referência', m.nf_referencia)}
+              {row('Placa do Veículo', m.veiculo_placa)}
+              {row('Observações', m.observacoes)}
+              {row('Registrado por', m.criado_por_nome || m.criado_por)}
+              {m.pedido_compra_id && row('Pedido de Compra', `#${m.pedido_compra_id.slice(0,8).toUpperCase()}`)}
+
+              {m.fotos && m.fotos.length > 0 && (
+                <div style={{marginTop:12}}>
+                  <div style={{fontWeight:700,fontSize:11,color:'#475569',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}}>Fotos ({m.fotos.length})</div>
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                    {m.fotos.map((url,i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={`foto ${i+1}`} style={{width:110,height:82,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{display:'flex',gap:8,marginTop:16}}>
+                <button className="acn-btn" style={{background:'#1e293b',flex:1}} onClick={()=>{setModalDetalhes(null);gerarPDF(m);}}>📄 Gerar PDF</button>
+                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDetalhes(null)}>Fechar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL FOTOS */}
       {modalVer && (
