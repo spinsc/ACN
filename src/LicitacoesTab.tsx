@@ -328,54 +328,131 @@ function ContatosSection({ licitacaoId, currentUser }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ÁREA LIVRE POR ABA (salva em licitacoes.areas_livres[tabKey])
+// ÁREA LIVRE POR ABA — editor rico com suporte a tabelas coladas do Excel/Word
+// Salva em licitacoes.areas_livres[tabKey] como HTML
 // ─────────────────────────────────────────────────────────────────────────────
 function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
-  const [texto, setTexto] = useState<string>((areasLivres||{})[tabKey] || '');
+  const editorRef  = useRef<any>(null);
+  const imgInputRef = useRef<any>(null);
+  const timerRef   = useRef<any>(null);
   const [salvando, setSalvando] = useState(false);
-  const [salvo, setSalvo] = useState(false);
-  const timerRef = useRef<any>(null);
+  const [salvo, setSalvo]       = useState(false);
 
-  // Sync with prop on tab change
+  // Carrega conteúdo quando muda aba ou licitação
   useEffect(() => {
-    setTexto((areasLivres||{})[tabKey] || '');
+    const el = editorRef.current;
+    if (!el) return;
+    const html = (areasLivres || {})[tabKey] || '';
+    if (el.innerHTML !== html) el.innerHTML = html;
   }, [tabKey, licitacaoId]);
 
-  const handleChange = (v: string) => {
-    setTexto(v);
-    setSalvo(false);
+  const autosave = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
+      const el = editorRef.current;
+      if (!el) return;
+      const html = el.innerHTML;
       setSalvando(true);
-      const novasAreas = { ...(areasLivres||{}), [tabKey]: v };
+      const novasAreas = { ...(areasLivres || {}), [tabKey]: html };
       const { error } = await supabase.from('licitacoes')
         .update({ areas_livres: novasAreas, atualizado_em: new Date().toISOString() })
         .eq('id', licitacaoId);
       setSalvando(false);
       if (!error) {
-        setSalvo(true);
         onAreasLivresChange(novasAreas);
+        setSalvo(true);
         setTimeout(() => setSalvo(false), 2000);
       }
     }, 1500);
   };
 
+  const inserirImagem = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+    const path = `licitacoes/${licitacaoId}/area-livre/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('licitacao-docs').upload(path, file, { upsert: true });
+    if (error) return;
+    const { data: urlData } = supabase.storage.from('licitacao-docs').getPublicUrl(path);
+    const url = urlData?.publicUrl;
+    if (!url) return;
+    document.execCommand('insertHTML', false, `<img src="${url}" style="max-width:100%;border-radius:4px;margin:4px 0" />`);
+    autosave();
+  };
+
+  const handlePaste = (e: any) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    // Se há HTML no clipboard (Excel/Word), deixa o browser colar a tabela
+    const hasHtml = items.some((i: any) => i.type === 'text/html');
+    const imageItem = items.find((i: any) => i.type.startsWith('image/')) as any;
+    if (imageItem && !hasHtml) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) inserirImagem(file);
+    }
+    // else: browser lida — tabelas HTML do Excel colam e ficam editáveis
+    setTimeout(autosave, 100);
+  };
+
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return (
-    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginTop:10 }}>
-      <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6, display:'flex', justifyContent:'space-between' }}>
-        <span>📋 Área Livre</span>
-        {salvando && <span style={{ color:'#d97706', fontSize:9 }}>Salvando...</span>}
-        {salvo && !salvando && <span style={{ color:'#16a34a', fontSize:9 }}>✓ Salvo</span>}
+    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden', marginTop:10 }}>
+      {/* Toolbar */}
+      <div style={{ background:'#f1f5f9', borderBottom:'1px solid #e2e8f0', padding:'4px 8px',
+        display:'flex', alignItems:'center', gap:4 }}>
+        <span style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginRight:4 }}>✏️ Área Livre</span>
+        {(['bold','italic'] as const).map(cmd => (
+          <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd); }}
+            title={cmd === 'bold' ? 'Negrito' : 'Itálico'}
+            style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+              padding:'2px 7px', fontSize:11, fontWeight: cmd==='bold' ? 700 : 400,
+              fontStyle: cmd==='italic' ? 'italic' : 'normal', cursor:'pointer', lineHeight:1.4 }}>
+            {cmd === 'bold' ? 'B' : 'I'}
+          </button>
+        ))}
+        <button onMouseDown={e => {
+          e.preventDefault();
+          const url = window.prompt('URL do link:');
+          if (url) document.execCommand('createLink', false, url);
+        }} title="Inserir link"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          🔗
+        </button>
+        <button onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click(); }}
+          title="Inserir imagem"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          📷
+        </button>
+        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagem(f); e.target.value = ''; }} />
+        <div style={{ flex:1 }} />
+        {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
+        {salvo && !salvando && <span style={{ fontSize:9, color:'#16a34a' }}>✓ Salvo</span>}
       </div>
-      <MencaoTextarea
-        value={texto}
-        onChange={handleChange}
-        placeholder="Notas livres, @mencione usuários, cole tabelas..."
-        rows={4}
-        style={{ fontSize:11 }}
+      {/* Editor */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        className="licit-area-livre"
+        onInput={autosave}
+        onPaste={handlePaste}
+        style={{ minHeight:90, padding:'10px 12px', fontSize:11, color:'#1e293b',
+          lineHeight:1.6, outline:'none', background:'#fff', wordBreak:'break-word' }}
+        data-placeholder="Notas livres, cole tabelas do Excel, imagens, links..."
       />
+      <style>{`
+        [data-placeholder]:empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          pointer-events: none;
+        }
+        /* Tabelas coladas do Excel ficam com estilo básico */
+        .licit-area-livre table { border-collapse:collapse; width:100%; }
+        .licit-area-livre td, .licit-area-livre th {
+          border:1px solid #d1d5db; padding:4px 6px; font-size:10px; }
+      `}</style>
     </div>
   );
 }
