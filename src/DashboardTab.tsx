@@ -46,43 +46,48 @@ const METRICAS_CONFIG = [
 
 const SIDEBAR_GROUPS = [
   {
-    section: 'Geral',
+    section: 'Dashboard',
     items: [
       { id: 'dashboard', label: 'Dashboard' },
     ],
   },
   {
-    section: 'Operações',
+    section: 'Comercial',
     items: [
-      { id: 'engenharia', label: 'Engenharia' },
-      { id: 'telecom',    label: 'Telecom' },
-      { id: 'ajustes',    label: 'Demandas Gerais' },
-      { id: 'pcp',        label: 'PCP' },
+      { id: 'crm',       label: 'Comercial/CRM' },
+      { id: 'clientes',  label: 'Clientes' },
+      { id: 'marketing', label: 'Marketing' },
+    ],
+  },
+  {
+    section: 'Controle de Produção',
+    items: [
+      { id: 'engenharia',   label: 'Engenharia' },
+      { id: 'pcp',          label: 'PCP' },
+      { id: 'almoxarifado', label: 'Almoxarifado' },
     ],
   },
   {
     section: 'Produção',
     items: [
-      { id: 'serralheria',  label: 'Serralheria' },
-      { id: 'chicotes',     label: 'Chicotes' },
-      { id: 'laboratorio',  label: 'Laboratório' },
-      { id: 'compras',      label: 'Compras' },
-      { id: 'almoxarifado', label: 'Almoxarifado' },
-      { id: 'producao',     label: 'Produção' },
+      { id: 'producao',    label: 'Adaptação' },
+      { id: 'serralheria', label: 'Serralheria' },
+      { id: 'chicotes',    label: 'Chicotes' },
+      { id: 'laboratorio', label: 'Laboratório' },
+      { id: 'qualidade',   label: 'Ctrl. Qualidade' },
+      { id: 'telecom',     label: 'Telecom' },
     ],
   },
   {
-    section: 'Qualidade & Entrega',
+    section: 'Administrativo',
     items: [
-      { id: 'qualidade', label: 'Ctrl. Qualidade' },
-      { id: 'logistica', label: 'Logística In/Out' },
-      { id: 'vistorias', label: 'Vistorias Pátio' },
-    ],
-  },
-  {
-    section: 'Marketing',
-    items: [
-      { id: 'marketing', label: 'Marketing' },
+      { id: 'logistica',  label: 'Logística In/Out' },
+      { id: 'vistorias',  label: 'Vistorias de Pátio' },
+      { id: 'ajustes',    label: 'Demandas Gerais' },
+      { id: 'compras',    label: 'Compras' },
+      { id: 'rh',         label: 'RH' },
+      { id: 'fiscal',     label: 'Fiscal' },
+      { id: 'relatorios', label: 'Relatórios' },
     ],
   },
   {
@@ -92,29 +97,9 @@ const SIDEBAR_GROUPS = [
     ],
   },
   {
-    section: 'Clientes',
+    section: 'Admin',
     items: [
-      { id: 'clientes', label: 'Clientes' },
-    ],
-  },
-  {
-    section: 'Comercial',
-    items: [
-      { id: 'crm', label: 'Comercial/CRM' },
-    ],
-  },
-  {
-    section: 'RH',
-    items: [
-      { id: 'rh', label: 'RH' },
-    ],
-  },
-  {
-    section: 'Fiscal & Admin',
-    items: [
-      { id: 'fiscal',     label: 'Fiscal' },
-      { id: 'relatorios', label: 'Relatórios' },
-      { id: 'admin',      label: 'Admin' },
+      { id: 'admin', label: 'Admin' },
     ],
   },
 ];
@@ -800,6 +785,33 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
               <h1>ACN <span>SINAL VERDE</span></h1>
               <p>Workflow Industrial · KPIs em Horas</p>
             </div>
+            {/* Badge aba ativa */}
+            {(() => {
+              const GROUP_COLORS: Record<string,string> = {
+                'Dashboard': '#334155',
+                'Comercial': '#7c3aed',
+                'Controle de Produção': '#0891b2',
+                'Produção': '#d97706',
+                'Administrativo': '#475569',
+                'SAC': '#0f766e',
+                'Admin': '#dc2626',
+              };
+              for (const g of SIDEBAR_GROUPS) {
+                const item = g.items.find(i => i.id === activeTab);
+                if (item) return (
+                  <div style={{
+                    marginLeft: 10, display:'inline-flex', alignItems:'center', gap:5,
+                    background: GROUP_COLORS[g.section] || '#334155',
+                    borderRadius: 20, padding:'3px 10px', flexShrink:0,
+                  }}>
+                    <span style={{ fontSize:9, color:'rgba(255,255,255,.65)', fontWeight:600, letterSpacing:.4, textTransform:'uppercase' }}>{g.section}</span>
+                    <span style={{ width:3, height:3, borderRadius:'50%', background:'rgba(255,255,255,.4)', display:'inline-block' }} />
+                    <span style={{ fontSize:10, color:'white', fontWeight:700 }}>{item.label}</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
           {/* Hamburger — só visível no mobile via CSS */}
           <button
