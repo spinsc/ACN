@@ -34,7 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_sac_os_crm_oportunidade_id ON sac_ordens_servico 
 
 INSERT INTO crm_oportunidades (
   id, funil, titulo, numero_edital, orgao, data_sessao,
-  valor_registrado, status, prioridade, marcadores,
+  valor_registrado, prioridade, marcadores,
   analista_nome, faturamento_empresa, areas_livres,
   objeto_principal, obs_encerramento,
   criado_em, atualizado_em,
@@ -48,7 +48,6 @@ SELECT
   l.orgao,
   l.data_disputa                                           AS data_sessao,
   NULL                                                     AS valor_registrado,
-  l.status,
   l.prioridade,
   l.marcadores,
   l.analista_nome,
@@ -102,7 +101,6 @@ SELECT
 FROM oples o
 -- Só migra OPLs que não têm card CRM ainda e que estão em fase pré-produção
 WHERE o.crm_oportunidade_id IS NULL
-  AND o.etapa_atual IS NULL        -- sem etapa de produção ativa
   AND o.cliente_nome IS NOT NULL
   AND o.cliente_nome <> '';
 
