@@ -8,6 +8,8 @@ import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import NovaOpOsModal from './NovaOpOsModal';
+import OplAnexosWidget from './OplAnexosWidget';
+import OplAcompModal from './OplAcompModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -101,6 +103,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
+  const [oplEditando, setOplEditando]   = useState<any|null>(null);   // OPL sendo editada
+  const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
+  const [oplFormEdit, setOplFormEdit]   = useState<any>({});
+  const [oplSalvando, setOplSalvando]   = useState(false);
 
   // ── drag & drop ──
   const [dragging, setDragging]     = useState<string|null>(null);
@@ -502,6 +508,25 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       document.removeEventListener('mouseup', handleUp);
     };
   }, [abrirIsDragging]);
+
+  const salvarOplEdit = async () => {
+    if (!oplEditando) return;
+    setOplSalvando(true);
+    const { error } = await supabase.from('oples').update({
+      chassi:                oplFormEdit.chassi || null,
+      modelo:                oplFormEdit.modelo || null,
+      quantidade:            Number(oplFormEdit.quantidade) || 1,
+      data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
+      responsavel_comercial: oplFormEdit.responsavel_comercial || null,
+      observacoes_comercial: oplFormEdit.observacoes_comercial || null,
+      faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
+      atualizado_em:         new Date().toISOString(),
+    }).eq('id', oplEditando.id);
+    setOplSalvando(false);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    setOplEditando(null);
+    fetchOplsEmAberto();
+  };
 
   const fetchOplsEmAberto = async () => {
     setOplsLoading(true);
@@ -1480,7 +1505,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                   <thead>
                     <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
-                      {['OPL','Cliente','Tipo/Modelo','Empresa','Status','Entrada','Prazo','Responsável','CRM'].map(h => (
+                      {['OPL','Cliente','Tipo/Modelo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
                         <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -1530,6 +1555,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                             ) : (
                               <span style={{ fontSize:8, color:'#cbd5e1' }}>—</span>
                             )}
+                          </td>
+                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
+                            <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                              <button title="Editar OPL"
+                                onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
+                                style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                ✏️ Editar
+                              </button>
+                              <button title="Acompanhamentos / Notas"
+                                onClick={() => setOplAcomp(o)}
+                                style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                💬 Notas
+                              </button>
+                              <OplAnexosWidget opl={o} setor="Comercial/CRM" currentUser={currentUser} compact={true} />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2398,6 +2438,70 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         </div>
       )}
+
+    {/* ── Modal Editar OPL (aba OPLs em Aberto) ── */}
+    {oplEditando && (
+      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center' }}
+        onClick={e => { if (e.target===e.currentTarget) setOplEditando(null); }}>
+        <div style={{ background:'white', borderRadius:8, width:'min(520px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
+          <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:14 }}>✏️ Editar OPL {oplEditando.opl}</div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Chassi</div>
+              <input className="acn-input" value={oplFormEdit.chassi||''} onChange={e=>setOplFormEdit((f:any)=>({...f,chassi:e.target.value}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Modelo</div>
+              <input className="acn-input" value={oplFormEdit.modelo||''} onChange={e=>setOplFormEdit((f:any)=>({...f,modelo:e.target.value}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Quantidade</div>
+              <input className="acn-input" type="number" min={1} value={oplFormEdit.quantidade||1} onChange={e=>setOplFormEdit((f:any)=>({...f,quantidade:e.target.value}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Prazo de Entrega</div>
+              <input className="acn-input" type="date" value={oplFormEdit.data_prevista_entrega||''} onChange={e=>setOplFormEdit((f:any)=>({...f,data_prevista_entrega:e.target.value}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Empresa</div>
+              <select className="acn-input" value={oplFormEdit.faturamento_empresa||'ACN'} onChange={e=>setOplFormEdit((f:any)=>({...f,faturamento_empresa:e.target.value}))} style={{ width:'100%' }}>
+                <option>ACN</option><option>Detech</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Responsável Comercial</div>
+              <ColaboradorSelect value={oplFormEdit.responsavel_comercial||''} onChange={v=>setOplFormEdit((f:any)=>({...f,responsavel_comercial:v}))} placeholder="Selecione..." />
+            </div>
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
+            <textarea className="acn-input" rows={3} value={oplFormEdit.observacoes_comercial||''} onChange={e=>setOplFormEdit((f:any)=>({...f,observacoes_comercial:e.target.value}))} style={{ width:'100%', resize:'vertical' }} />
+          </div>
+
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={() => setOplEditando(null)} style={{ padding:'7px 16px', border:'1px solid #e2e8f0', borderRadius:5, background:'#f8fafc', cursor:'pointer', fontSize:11 }}>Cancelar</button>
+            <button onClick={salvarOplEdit} disabled={oplSalvando}
+              style={{ padding:'7px 18px', border:'none', borderRadius:5, background:'#0f766e', color:'white', fontWeight:700, cursor:'pointer', fontSize:11, opacity:oplSalvando?.6:1 }}>
+              {oplSalvando ? 'Salvando...' : '💾 Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Modal Acompanhamentos/Notas OPL ── */}
+    {oplAcomp && (
+      <OplAcompModal
+        referenciaId={oplAcomp.id}
+        referenciaDesc={`OPL ${oplAcomp.opl} — ${oplAcomp.cliente_nome||''}`}
+        referenciaType="opl"
+        setor="Comercial/CRM"
+        currentUser={currentUser}
+        onClose={() => setOplAcomp(null)}
+      />
+    )}
 
     {/* ── Modal Nova OP / OS ── */}
     {modalNovaOpOs && (
