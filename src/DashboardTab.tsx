@@ -557,6 +557,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
   const [waNotifCount, setWaNotifCount] = useState(0);
   const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);
@@ -874,29 +875,45 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
           {/* ── SIDEBAR ── */}
           <nav className={`acn-sidebar${sidebarOpen ? ' mob-open' : ''}`}>
-            {SIDEBAR_GROUPS.map(group => (
-              <React.Fragment key={group.section}>
-                <div className="sidebar-section">{group.section}</div>
-                {group.items.filter(item => isVisible(item.id)).map(item => (
+            {SIDEBAR_GROUPS.map(group => {
+              const collapsed = sectionsCollapsed.has(group.section);
+              const visibleItems = group.items.filter(item => isVisible(item.id));
+              if (visibleItems.length === 0) return null;
+              return (
+                <React.Fragment key={group.section}>
                   <div
-                    key={item.id}
-                    className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
-                    onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}
+                    className="sidebar-section"
+                    onClick={() => setSectionsCollapsed(prev => {
+                      const next = new Set(prev);
+                      next.has(group.section) ? next.delete(group.section) : next.add(group.section);
+                      return next;
+                    })}
+                    style={{ cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', userSelect:'none' }}
                   >
-                    <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      <span className="sidebar-dot">●</span>
-                      {item.label}
-                    </span>
-                    {item.id === 'crm' && waNotifCount > 0 && (
-                      <span className="acn-wa-sidebar-dot">
-                        {waNotifCount > 9 ? '9+' : waNotifCount}
-                      </span>
-                    )}
+                    <span>{group.section}</span>
+                    <span style={{ fontSize:7, opacity:.7 }}>{collapsed ? '▶' : '▼'}</span>
                   </div>
-                ))}
-              </React.Fragment>
-            ))}
+                  {!collapsed && visibleItems.map(item => (
+                    <div
+                      key={item.id}
+                      className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
+                      onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}
+                    >
+                      <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                        <span className="sidebar-dot">●</span>
+                        {item.label}
+                      </span>
+                      {item.id === 'crm' && waNotifCount > 0 && (
+                        <span className="acn-wa-sidebar-dot">
+                          {waNotifCount > 9 ? '9+' : waNotifCount}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </React.Fragment>
+              );
+            })}
           </nav>
 
           {/* ── MAIN ── */}

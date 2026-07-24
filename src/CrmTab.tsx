@@ -97,7 +97,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [vendas, setVendas]         = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
-  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'>('kanban');
+  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'>('kanban');
+  const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
+  const [oplsLoading, setOplsLoading]   = useState(false);
+  const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
 
   // ── drag & drop ──
   const [dragging, setDragging]     = useState<string|null>(null);
@@ -499,6 +502,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       document.removeEventListener('mouseup', handleUp);
     };
   }, [abrirIsDragging]);
+
+  const fetchOplsEmAberto = async () => {
+    setOplsLoading(true);
+    const { data } = await supabase
+      .from('oples')
+      .select('id,opl,cliente_nome,modelo,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id')
+      .not('status_geral', 'in', '("Faturado","Cancelado")')
+      .order('data_entrada', { ascending: false });
+    setOplsEmAberto(data || []);
+    setOplsLoading(false);
+  };
+
+  useEffect(() => {
+    if (abaInterna === 'opls') fetchOplsEmAberto();
+  }, [abaInterna]);
 
   const fetchAbrirTabContent = async (op: any, tab: string) => {
     setAbrirDocs([]);
@@ -1324,16 +1342,20 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         }}>📇 Contatos</div>
 
         <div style={{ flex:1 }} />
-        {secaoCrm === 'funil' && podeVerFaturamentos && (
+        {secaoCrm === 'funil' && (
           <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
-            {(['kanban','faturamentos'] as const).map(a => (
-              <div key={a} onClick={() => setAbaInterna(a)} style={{
+            {([
+              ['kanban',       '📋 Kanban'],
+              ['opls',         '🔧 OPLs em Aberto'],
+              ...(podeVerFaturamentos ? [['faturamentos', '💰 Faturamentos']] : []),
+            ] as [string,string][]).map(([a, label]) => (
+              <div key={a} onClick={() => setAbaInterna(a as any)} style={{
                 padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer',
                 color: abaInterna===a ? 'white' : '#64748b',
                 background: abaInterna===a ? '#0f766e' : 'transparent',
                 borderRadius:4, margin:'4px 0',
               }}>
-                {a==='kanban' ? '📋 Kanban' : '💰 Faturamentos'}
+                {label}
               </div>
             ))}
           </div>
@@ -1407,11 +1429,118 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       </div>
 
       {/* ── Conteúdo ── */}
-      {abaInterna === 'kanban' ? (
+      {abaInterna === 'kanban' && (
         <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
-      ) : (
-        renderFaturamentos()
       )}
+      {abaInterna === 'faturamentos' && renderFaturamentos()}
+      {abaInterna === 'opls' && (() => {
+        const STATUS_COR: Record<string,string> = {
+          'Em Espera Engenharia':           '#7c3aed',
+          'Em Analise Engenharia':          '#7c3aed',
+          'Devolvida para Engenharia':      '#dc2626',
+          'Devolvida Comercial':            '#dc2626',
+          'Em Espera PCP':                  '#0891b2',
+          'Em Analise PCP':                 '#0891b2',
+          'Em Producao':                    '#d97706',
+          'Aguarda Emissao NF':             '#16a34a',
+          'Faturado e Disponivel para Entrega': '#166534',
+          'Aguardando Agendamento Manutenção': '#ea580c',
+          'Manutenção Agendada':            '#ea580c',
+        };
+        const oplsFiltradas = oplsEmAberto.filter(o => {
+          if (oplsFiltro === 'crm')     return !!o.crm_oportunidade_id;
+          if (oplsFiltro === 'sem_crm') return !o.crm_oportunidade_id;
+          return true;
+        });
+        return (
+          <div style={{ padding:'8px 4px' }}>
+            {/* Filtros */}
+            <div style={{ display:'flex', gap:6, marginBottom:10, alignItems:'center', flexWrap:'wrap' }}>
+              {([['todos','Todas'],['crm','Vinculadas ao CRM'],['sem_crm','Sem vínculo CRM']] as const).map(([v,l]) => (
+                <button key={v} onClick={() => setOplsFiltro(v)}
+                  style={{ fontSize:9, padding:'3px 10px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', fontWeight:700,
+                    background: oplsFiltro===v ? '#0f766e' : '#f8fafc', color: oplsFiltro===v ? 'white' : '#64748b' }}>
+                  {l}
+                </button>
+              ))}
+              <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
+                {oplsFiltradas.length} OPL{oplsFiltradas.length !== 1 ? 's' : ''}
+              </span>
+              <button onClick={fetchOplsEmAberto} style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', background:'#f8fafc', color:'#64748b' }}>
+                🔄
+              </button>
+            </div>
+
+            {oplsLoading ? (
+              <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Carregando...</div>
+            ) : oplsFiltradas.length === 0 ? (
+              <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Nenhuma OPL em aberto.</div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+                  <thead>
+                    <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
+                      {['OPL','Cliente','Tipo/Modelo','Empresa','Status','Entrada','Prazo','Responsável','CRM'].map(h => (
+                        <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {oplsFiltradas.map((o, i) => {
+                      const hoje = new Date().toISOString().slice(0,10);
+                      const atrasada = o.data_prevista_entrega && o.data_prevista_entrega < hoje;
+                      const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
+                      return (
+                        <tr key={o.id} style={{ background: i%2===0 ? 'white' : '#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
+                          <td style={{ padding:'5px 8px', fontWeight:700, color:'#1e293b', whiteSpace:'nowrap' }}>{o.opl}</td>
+                          <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome||'—'}</td>
+                          <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
+                            {o.tipo_projeto||o.modelo||'—'}
+                          </td>
+                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
+                            <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
+                              background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
+                              color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                              {o.faturamento_empresa||'ACN'}
+                            </span>
+                          </td>
+                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
+                            <span style={{ fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:3, color:'white',
+                              background: STATUS_COR[o.status_geral] || '#64748b' }}>
+                              {o.status_geral||'—'}
+                            </span>
+                          </td>
+                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
+                            {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                          </td>
+                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap', fontWeight: atrasada ? 700 : 400,
+                            color: atrasada ? '#dc2626' : '#64748b' }}>
+                            {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                            {atrasada && ' ⚠️'}
+                          </td>
+                          <td style={{ padding:'5px 8px', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
+                            {o.responsavel_comercial||'—'}
+                          </td>
+                          <td style={{ padding:'5px 8px' }}>
+                            {crmCard ? (
+                              <button onClick={() => { setFormOp({ ...VAZIO_OP, ...crmCard }); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                                style={{ fontSize:8, padding:'2px 6px', background:'#ede9fe', color:'#7c3aed', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
+                                🔗 {crmCard.titulo?.slice(0,20)||'CRM'}
+                              </button>
+                            ) : (
+                              <span style={{ fontSize:8, color:'#cbd5e1' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       </> /* fim secaoCrm === 'funil' */}
 
