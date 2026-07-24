@@ -7,6 +7,7 @@ import ContactosSection from './ContactosSection';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import NovaOpOsModal from './NovaOpOsModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -132,6 +133,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [filtFat, setFiltFat]               = useState<'todos'|'pendente'|'faturado'>('todos');
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
   const [filtResp, setFiltResp]             = useState('');
+  // ── modal Nova OP/OS ──
+  const [modalNovaOpOs, setModalNovaOpOs]   = useState<{ crmCard?: any } | null>(null);
 
   // ── modal ABRIR (split-screen CRM) ──
   const [modalAbrir, setModalAbrir]         = useState<any|null>(null);
@@ -893,11 +896,18 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           userSelect: 'none',
         }}
       >
-        {op.tipo_licitacao === 'ata' && (
-          <span style={{ fontSize:8, fontWeight:700, background:'#f5f3ff', color:'#7c3aed', padding:'1px 5px', borderRadius:3, display:'inline-block', marginBottom:4 }}>
-            📋 Ata Reg. Preços
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom: (op.tipo_licitacao === 'ata' || true) ? 4 : 0 }}>
+          <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3, display:'inline-block',
+            background: op.funil === 'licitacao' ? '#f5f3ff' : '#ecfeff',
+            color:      op.funil === 'licitacao' ? '#7c3aed'  : '#0e7490' }}>
+            {op.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda Direta'}
           </span>
-        )}
+          {op.tipo_licitacao === 'ata' && (
+            <span style={{ fontSize:8, fontWeight:700, background:'#fdf4ff', color:'#a21caf', padding:'1px 5px', borderRadius:3, display:'inline-block' }}>
+              📋 Ata Reg. Preços
+            </span>
+          )}
+        </div>
 
         <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:4 }}>
           <span>{op.titulo}</span>
@@ -1341,6 +1351,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         <button className="acn-btn" style={{ background:'#0f766e', fontSize:9, padding:'3px 10px' }}
           onClick={() => { setFormOp({ ...VAZIO_OP, funil }); setModalOp({}); }}>
           + Nova {funil==='licitacao' ? 'Licitação' : 'Venda Direta'}
+        </button>
+        <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9, padding:'3px 10px' }}
+          onClick={() => setModalNovaOpOs({})}>
+          🔧 Nova OP / OS
         </button>
         <input
           placeholder={`🔍 Título, órgão ou edital...`}
@@ -2080,6 +2094,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:5, padding:'7px 12px', fontSize:10, cursor:'pointer' }}>
                   Fechar
                 </button>
+                <button onClick={() => setModalNovaOpOs({ crmCard: modalAbrir })}
+                  style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:5, padding:'7px 12px', fontSize:10, cursor:'pointer', fontWeight:700 }}>
+                  🔧 Nova OP / OS
+                </button>
               </div>
             </div>
 
@@ -2224,6 +2242,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         </div>
       )}
+
+    {/* ── Modal Nova OP / OS ── */}
+    {modalNovaOpOs && (
+      <NovaOpOsModal
+        isOpen={true}
+        onClose={() => setModalNovaOpOs(null)}
+        currentUser={currentUser}
+        crmCard={modalNovaOpOs.crmCard}
+        onSaved={() => setModalNovaOpOs(null)}
+      />
+    )}
 
     </div>
   );

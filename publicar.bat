@@ -100,6 +100,8 @@ git add src/supabaseClient.ts
 git add src/main.tsx
 git add sql/licitacoes_melhorias.sql
 git add sql/crm_melhorias.sql
+git add sql/unificacao_comercial_crm.sql
+git add src/NovaOpOsModal.tsx
 
 :: Verificar
 echo.
@@ -108,7 +110,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat(crm+licitacoes): CrmTab modal resize+minimize+novas abas+telefone+email separados+fix onPaste Excel+remove estagio inicial; LicitacoesTab refactor completo; SQL crm_melhorias.sql+licitacoes_melhorias.sql"
+git commit -m "feat(unificacao-comercial-crm): Comercial+Licitacoes fundidos no CrmTab; NovaOpOsModal centralizado; badge tipo kanban; botao Nova OP/OS no card; DashboardTab remove Comercial+Licitacoes e renomeia CRM; SacTab ganha vinculo CRM; SQL unificacao_comercial_crm.sql"
 
 :: Push
 echo.

@@ -136,6 +136,9 @@ const FORM_VAZIO = {
   cnpj_faturamento:'', razao_social_faturamento:'', endereco_faturamento:'',
   // Financeiro / Comissões
   valor_total: '' as string|number, valor_mao_de_obra: '' as string|number, data_faturamento: '',
+  // Vínculo CRM
+  crm_oportunidade_id: null as string|null,
+  _crm_titulo: '',
 };
 
 export default function SacTab({ currentUser }) {
@@ -157,6 +160,9 @@ export default function SacTab({ currentUser }) {
   const [editCat, setEditCat]           = useState<any>(null);
 
   const [modalNova, setModalNova]       = useState(false);
+  const [crmBusca, setCrmBusca]         = useState('');
+  const [crmSugestoes, setCrmSugestoes] = useState<any[]>([]);
+  const [crmBuscando, setCrmBuscando]   = useState(false);
   const [modalOrc, setModalOrc]         = useState(null);
   const [modalAprov, setModalAprov]     = useState(null);
   const [modalAprovCotacao, setModalAprovCotacao] = useState<any>(null);
@@ -335,6 +341,7 @@ export default function SacTab({ currentUser }) {
       valor_total: form.valor_total ? parseFloat(String(form.valor_total).replace(',','.')) : null,
       valor_mao_de_obra: form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(',','.')) : null,
       data_faturamento: form.data_faturamento || null,
+      crm_oportunidade_id: form.crm_oportunidade_id || null,
     };
 
     // INSERT com retry automático: se número já existe (23505), gera o próximo e tenta de novo
@@ -397,6 +404,7 @@ export default function SacTab({ currentUser }) {
     const _savedCliente = { formData: { ...form }, clienteId: form._cliente_id };
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAnexarFiles([]); setAcessInput('');
     setEquipLista([{ ...EQUIP_VAZIO }]);
+    setCrmBusca(''); setCrmSugestoes([]);
     setModalNova(false); setSalvando(false); fetchOrdens();
     if (_savedCliente.formData.cliente_nome?.trim()) salvarClienteAuto(_savedCliente.formData, _savedCliente.clienteId).catch(console.error);
   };
@@ -1564,6 +1572,56 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                 ✅ Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.
               </div>
             )}
+
+            {/* ── Vínculo CRM (opcional) ── */}
+            <div style={{marginBottom:12,background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:6,padding:'10px 12px'}}>
+              <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',marginBottom:6,letterSpacing:.5,textTransform:'uppercase'}}>🔗 Vínculo Comercial/CRM (opcional)</div>
+              {form.crm_oportunidade_id ? (
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{flex:1,fontSize:10,color:'#5b21b6',fontWeight:600}}>✓ {form._crm_titulo}</span>
+                  <button type="button" style={{fontSize:9,padding:'2px 8px',background:'#e9d5ff',color:'#7c3aed',border:'none',borderRadius:3,cursor:'pointer'}}
+                    onClick={()=>{setForm(f=>({...f,crm_oportunidade_id:null,_crm_titulo:''}));setCrmBusca('');setCrmSugestoes([]);}}>
+                    ✕ remover
+                  </button>
+                </div>
+              ) : (
+                <div style={{position:'relative'}}>
+                  <input className="acn-input" style={{width:'100%'}} placeholder="Buscar oportunidade CRM para vincular..."
+                    value={crmBusca}
+                    onChange={async e => {
+                      const q = e.target.value;
+                      setCrmBusca(q);
+                      if (q.length < 2) { setCrmSugestoes([]); return; }
+                      setCrmBuscando(true);
+                      const { data } = await supabase.from('crm_oportunidades')
+                        .select('id,titulo,orgao,funil')
+                        .or(`titulo.ilike.%${q}%,orgao.ilike.%${q}%`)
+                        .order('atualizado_em', { ascending: false })
+                        .limit(8);
+                      setCrmSugestoes(data || []);
+                      setCrmBuscando(false);
+                    }}
+                  />
+                  {crmBuscando && <span style={{position:'absolute',right:8,top:6,fontSize:9,color:'#94a3b8'}}>...</span>}
+                  {crmSugestoes.length > 0 && (
+                    <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:999,background:'white',border:'1px solid #ddd6fe',borderRadius:4,boxShadow:'0 4px 12px #0002',maxHeight:160,overflowY:'auto'}}>
+                      {crmSugestoes.map(c => (
+                        <div key={c.id} style={{padding:'6px 10px',cursor:'pointer',fontSize:10,borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:6}}
+                          onMouseEnter={e=>(e.currentTarget.style.background='#f5f3ff')}
+                          onMouseLeave={e=>(e.currentTarget.style.background='white')}
+                          onClick={()=>{setForm(f=>({...f,crm_oportunidade_id:c.id,_crm_titulo:c.titulo||c.orgao||'—'}));setCrmBusca('');setCrmSugestoes([]);}}>
+                          <span style={{fontSize:8,color:c.funil==='licitacao'?'#7c3aed':'#0e7490',fontWeight:700,flexShrink:0}}>
+                            {c.funil==='licitacao'?'🏛️':'💼'}
+                          </span>
+                          <span style={{flex:1}}>{c.titulo||'—'}</span>
+                          {c.orgao && <span style={{fontSize:8,color:'#94a3b8',flexShrink:0}}>{c.orgao}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div style={{display:'flex',gap:8,marginTop:4}}>
               <button className="acn-btn" style={{background:'#0f766e',flex:1,padding:'10px',fontSize:11,opacity:salvando?0.6:1}}

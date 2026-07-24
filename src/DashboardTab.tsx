@@ -54,7 +54,6 @@ const SIDEBAR_GROUPS = [
   {
     section: 'Operações',
     items: [
-      { id: 'comercial',  label: 'Comercial' },
       { id: 'engenharia', label: 'Engenharia' },
       { id: 'telecom',    label: 'Telecom' },
       { id: 'ajustes',    label: 'Demandas Gerais' },
@@ -99,10 +98,9 @@ const SIDEBAR_GROUPS = [
     ],
   },
   {
-    section: 'Comercial & Licitações',
+    section: 'Comercial',
     items: [
-      { id: 'crm',        label: 'CRM' },
-      { id: 'licitacoes', label: 'Licitações' },
+      { id: 'crm', label: 'Comercial/CRM' },
     ],
   },
   {
@@ -763,7 +761,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'comercial':    return <ComercialTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
@@ -779,7 +776,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'vistorias':    return <VistoriasPatio currentUser={currentUser} />;
       case 'marketing':    return <MarketingTab currentUser={currentUser} />;
       case 'sac':          return <SacTab currentUser={currentUser} />;
-      case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
       case 'crm':          return <CrmTab currentUser={currentUser} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
