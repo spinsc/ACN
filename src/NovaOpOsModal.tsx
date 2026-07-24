@@ -105,6 +105,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     setSalvando(true);
     try {
       if (form.tipo === 'OP') {
+        // Verificar duplicata
+        const { data: existente } = await supabase.from('oples').select('id').eq('opl', form.opl.trim()).maybeSingle();
+        if (existente) {
+          alert(`OP "${form.opl.trim()}" já está cadastrada. Use um número diferente.`);
+          setSalvando(false);
+          return;
+        }
         const payload: any = {
           opl:                    form.opl.trim(),
           tipo_op:                'OPL',
@@ -120,7 +127,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           cliente_nome:           form.cliente_nome.trim(),
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
-          criado_por:             currentUser?.id,
+          status_geral:           'Em Espera Engenharia',
+          criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    crmCard?.id || null,
         };

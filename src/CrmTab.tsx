@@ -133,6 +133,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [filtFat, setFiltFat]               = useState<'todos'|'pendente'|'faturado'>('todos');
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
   const [filtResp, setFiltResp]             = useState('');
+  // ── cards colapsados (Set de IDs) ──
+  const [cardsExpandidos, setCardsExpandidos] = useState<Set<string>>(new Set());
   // ── modal Nova OP/OS ──
   const [modalNovaOpOs, setModalNovaOpOs]   = useState<{ crmCard?: any } | null>(null);
 
@@ -878,7 +880,16 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     const vds    = getVendasOp(op.id);
     const tvend  = totalVendidoOp(op.id);
     const tfat   = totalFaturadoOp(op.id);
-    const accent = funil === 'licitacao' ? '#7c3aed' : '#0891b2';
+    const accent = op.funil === 'licitacao' ? '#7c3aed' : '#0891b2';
+    const expandido = cardsExpandidos.has(op.id);
+    const toggleExpand = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setCardsExpandidos(prev => {
+        const next = new Set(prev);
+        next.has(op.id) ? next.delete(op.id) : next.add(op.id);
+        return next;
+      });
+    };
 
     return (
       <div
@@ -888,7 +899,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         onDragEnd={handleDragEnd}
         style={{
           background: dragging === op.id ? '#e0f2fe' : 'white',
-          borderRadius: 5, padding: '7px 8px',
+          borderRadius: 5, padding: '6px 8px',
           boxShadow: '0 1px 3px rgba(0,0,0,.1)',
           cursor: 'grab', marginBottom: 5,
           borderLeft: `3px solid ${accent}`,
@@ -896,7 +907,25 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           userSelect: 'none',
         }}
       >
-        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom: (op.tipo_licitacao === 'ata' || true) ? 4 : 0 }}>
+        {/* ── Linha do título (sempre visível) ── */}
+        <div style={{ display:'flex', alignItems:'center', gap:4 }} onClick={toggleExpand}>
+          <span style={{ fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:3, flexShrink:0,
+            background: op.funil === 'licitacao' ? '#f5f3ff' : '#ecfeff',
+            color:      op.funil === 'licitacao' ? '#7c3aed'  : '#0e7490' }}>
+            {op.funil === 'licitacao' ? '🏛️' : '💼'}
+          </span>
+          <span style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, flex:1, cursor:'pointer' }}>
+            {op.titulo}
+          </span>
+          <span style={{ fontSize:9, color:'#94a3b8', flexShrink:0, cursor:'pointer' }}>
+            {expandido ? '▲' : '▼'}
+          </span>
+        </div>
+
+        {/* ── Corpo (visível só quando expandido) ── */}
+        {expandido && (<>
+        <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
+        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:4 }}>
           <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3, display:'inline-block',
             background: op.funil === 'licitacao' ? '#f5f3ff' : '#ecfeff',
             color:      op.funil === 'licitacao' ? '#7c3aed'  : '#0e7490' }}>
@@ -907,10 +936,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               📋 Ata Reg. Preços
             </span>
           )}
-        </div>
-
-        <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:4 }}>
-          <span>{op.titulo}</span>
           <AnaliseStatusBadge origemId={op.id} />
         </div>
 
@@ -1048,6 +1073,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           )}
           <CrmAnexosWidget op={op} currentUser={currentUser} />
         </div>
+        </div>{/* fecha wrapper expandido */}
+        </>)}{/* fecha {expandido && } */}
       </div>
     );
   };
