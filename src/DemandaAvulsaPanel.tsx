@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { supabase } from './supabaseClient';
-import MencaoTextarea from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -79,7 +79,7 @@ function etapaVencida(e: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE ETAPA (dentro do ModalDetalhe)
 // ─────────────────────────────────────────────────────────────────────────────
-function EtapaCard({ etapa, idx, total, onUpdate, currentUser }) {
+function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const [obsExec, setObsExec] = useState('');
   const [salvando, setSalvando] = useState(false);
   const al = etapaVencida(etapa);
@@ -103,6 +103,16 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser }) {
     setSalvando(true);
     const obs_lista = [...(etapa.obs_execucao || []), { texto: obsExec, usuario: currentUser?.nome, data: new Date().toISOString() }];
     await onUpdate(idx, { obs_execucao: obs_lista });
+    await salvarMencoes({
+      texto:               obsExec,
+      mencionanteId:       String(currentUser?.id || currentUser?.email || ''),
+      mencionanteNome:     currentUser?.nome || '',
+      contexto:            'demanda_avulsa',
+      contextoId:          String(demandaId || ''),
+      contextoDescricao:   `Demanda Avulsa — Etapa ${idx + 1}`,
+      campo:               'obs_execucao',
+      abaDestino:          'engenharia',
+    });
     setObsExec('');
     setSalvando(false);
   };
@@ -187,13 +197,18 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser }) {
 
         {/* Adicionar obs de execução */}
         {etapa.status !== 'Concluída' && (
-          <div style={{ display:'flex', gap:6 }}>
-            <input value={obsExec} onChange={e => setObsExec(e.target.value)}
-              placeholder="Observação durante execução..."
-              style={{ flex:1, padding:'4px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-              onKeyDown={e => e.key === 'Enter' && addObs()} />
+          <div style={{ display:'flex', gap:6, alignItems:'flex-end' }}>
+            <div style={{ flex:1 }}>
+              <MencaoTextarea
+                value={obsExec}
+                onChange={setObsExec}
+                rows={2}
+                placeholder="Observação durante execução... use @Nome para mencionar"
+                style={{ fontSize:10 }}
+              />
+            </div>
             <button onClick={addObs} disabled={salvando || !obsExec.trim()}
-              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'4px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+              style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'6px 12px', fontSize:9, fontWeight:700, cursor:'pointer', flexShrink:0, marginBottom:1 }}>
               +
             </button>
           </div>
@@ -323,6 +338,16 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     setSalvando(true);
     const lista = [...(d.informacoes || []), { texto: novaInfo, usuario: currentUser?.nome, data: new Date().toISOString() }];
     await supabase.from('demandas_avulsas').update({ informacoes: lista, atualizado_em: new Date().toISOString() }).eq('id', d.id);
+    await salvarMencoes({
+      texto:             novaInfo,
+      mencionanteId:     String(currentUser?.id || currentUser?.email || ''),
+      mencionanteNome:   currentUser?.nome || '',
+      contexto:          'demanda_avulsa',
+      contextoId:        String(d.id),
+      contextoDescricao: d.titulo || 'Demanda Avulsa',
+      campo:             'informacao_geral',
+      abaDestino:        'engenharia',
+    });
     setNovaInfo('');
     await reload();
     setSalvando(false);
@@ -573,7 +598,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                 <span style={{ fontSize:11, fontWeight:700, color: pct === 100 ? '#16a34a' : '#2563eb' }}>{pct}%</span>
               </div>
               {etapas.map((e, i) => (
-                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} />
+                <EtapaCard key={i} etapa={e} idx={i} total={etapas.length} onUpdate={updateEtapa} currentUser={currentUser} demandaId={d.id} />
               ))}
             </div>
           )}
@@ -581,9 +606,13 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {/* ── Nova Informação ── */}
           <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:12 }}>
             <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>📝 NOVA INFORMAÇÃO GERAL</div>
-            <textarea value={novaInfo} onChange={e=>setNovaInfo(e.target.value)}
-              placeholder="Atualização geral, ocorrência, decisão..." rows={3}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #bfdbfe', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box', marginBottom:6 }} />
+            <MencaoTextarea
+              value={novaInfo}
+              onChange={setNovaInfo}
+              rows={3}
+              placeholder="Atualização geral, ocorrência, decisão... use @Nome para mencionar"
+              style={{ fontSize:11, borderColor:'#bfdbfe', marginBottom:6 }}
+            />
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               <button onClick={adicionarInfo} disabled={salvando || !novaInfo.trim()}
                 style={{ background:'#1d4ed8', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
