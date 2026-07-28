@@ -165,10 +165,10 @@ export default function MarketingTab({ currentUser }) {
   const [salvandoPedido, setSalvandoPedido] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState('Todos');
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 60000); return () => clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true), 60000); return () => clearInterval(t); }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (silent=false) => {
+    if (!silent) setLoading(true);
     const [oplsRes, intRes, pedRes] = await Promise.all([
       supabase.from('oples').select('*').eq('liberado_divulgacao', true).order('data_entrada', { ascending: false }),
       supabase.from('mkt_intervencoes').select('*').order('created_at', { ascending: false }),
@@ -177,7 +177,7 @@ export default function MarketingTab({ currentUser }) {
     setOpls(oplsRes.data || []);
     setIntervencoes(intRes.data || []);
     setPedidos(pedRes.data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const salvarPedido = async () => {

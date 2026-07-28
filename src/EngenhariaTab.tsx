@@ -27,15 +27,15 @@ export default function EngenhariaTab({ currentUser }) {
   const [modalVer, setModalVer] = useState(null);
   const [novaObsAcomp, setNovaObsAcomp] = useState('');
 
-  useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(true); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (silent=false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('oples').select('*')
       .in('status_geral', ['Em Espera Engenharia', 'Em Analise Engenharia', 'Devolvida para Engenharia'])
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const fetchOsAcomp = async () => {

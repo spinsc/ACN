@@ -18,10 +18,10 @@ export default function PCPTab({ currentUser }) {
   const [descDemanda, setDescDemanda] = useState('');
   const [setorDemanda, setSetorDemanda] = useState('Chicotes');
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll,30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (silent=false) => {
+    if (!silent) setLoading(true);
     const [oplsRes, faltaRes] = await Promise.all([
       supabase.from('oples').select('*')
         .in('status_geral', ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP','Retrabalho'])
@@ -31,7 +31,7 @@ export default function PCPTab({ currentUser }) {
     ]);
     setOpls(oplsRes.data || []);
     setOplsFalta(faltaRes.data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const liberarProducao = async (opl) => {

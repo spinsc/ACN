@@ -102,6 +102,16 @@ git add sql/licitacoes_melhorias.sql
 git add sql/crm_melhorias.sql
 git add sql/unificacao_comercial_crm.sql
 git add src/NovaOpOsModal.tsx
+:: fix: silent polling — sem flash de tela a cada 30s
+git add src/EngenhariaTab.tsx
+git add src/PCPTab.tsx
+git add src/QualidadeTab.tsx
+git add src/SerralheriaTab.tsx
+git add src/ProducaoTab.tsx
+git add src/SetorDemandaTab.tsx
+git add src/MarketingTab.tsx
+git add src/ComercialTab.tsx
+git add src/ChatWidget.tsx
 
 :: Verificar
 echo.
@@ -110,7 +120,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat(unificacao-comercial-crm): Comercial+Licitacoes fundidos no CrmTab; NovaOpOsModal centralizado; badge tipo kanban; botao Nova OP/OS no card; DashboardTab remove Comercial+Licitacoes e renomeia CRM; SacTab ganha vinculo CRM; SQL unificacao_comercial_crm.sql"
+git commit -m "fix(silent-polling): remove flash de tela a cada 30s — todos os tabs usam silent=true no setInterval, ChatWidget usa currentUser.id como dep"
 
 :: Push
 echo.

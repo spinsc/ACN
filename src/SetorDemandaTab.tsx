@@ -248,13 +248,13 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
 
   useEffect(() => {
     fetchDemandas();
-    const t = setInterval(fetchDemandas, 30000);
+    const t = setInterval(()=>fetchDemandas(true), 30000);
     return () => clearInterval(t);
   }, [filtro, setor]);
   useEffect(() => { const t = setInterval(()=>setTick(p=>p+1), 1000); return ()=>clearInterval(t); }, []);
 
-  const fetchDemandas = async () => {
-    setLoading(true);
+  const fetchDemandas = async (silent=false) => {
+    if (!silent) setLoading(true);
     let q = supabase.from('demandas_setoriais').select('*').eq('setor_destino', setor).order('data_abertura', { ascending: false });
     if (filtro !== 'Todos') q = q.eq('status', filtro);
     const { data: lista } = await q;
@@ -274,7 +274,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
         setSacOrdensMap({});
       }
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   // ── Timer de horas úteis ──────────────────────────────────────────────────

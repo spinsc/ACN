@@ -55,17 +55,17 @@ export default function QualidadeTab({ currentUser }) {
   const [signData, setSignData] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll,30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (silent=false) => {
+    if (!silent) setLoading(true);
     const [oplsRes, ckRes] = await Promise.all([
       supabase.from('oples').select('*').eq('status_geral','Aguardando CQ').order('data_entrada',{ascending:false}),
       supabase.from('cq_checklist_itens').select('*').eq('ativo',true).order('ordem',{ascending:true}),
     ]);
     setOpls(oplsRes.data || []);
     setChecklist(ckRes.data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   // checkStates: null=PENDENTE, true=OK, false=NOK, 'na'=N/A

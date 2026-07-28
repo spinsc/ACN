@@ -219,14 +219,14 @@ export default function ChatWidget({ currentUser }: any) {
       .subscribe();
 
     return () => { broadcastRef.current?.unsubscribe(); };
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   // Polling badge a cada 5s
   useEffect(() => {
     if (!currentUser) return;
     const t = setInterval(verificarNovas, 5000);
     return () => clearInterval(t);
-  }, [currentUser, verificarNovas]);
+  }, [currentUser?.id, verificarNovas]);
 
   // Polling mensagens na sala aberta a cada 2s — marca lida automaticamente
   useEffect(() => {

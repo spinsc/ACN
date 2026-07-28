@@ -484,16 +484,16 @@ function PainelSacVeicular({ currentUser }) {
 
   const STATUSES_PROD = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent=false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('sac_ordens_servico').select('*')
       .eq('is_manutencao_veicular', true)
       .in('status', STATUSES_PROD)
       .order('data_abertura', { ascending: false });
     setOrdens(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { load(); const t = setInterval(()=>load(true), 30000); return () => clearInterval(t); }, []);
 
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
 
@@ -1476,17 +1476,17 @@ export default function ProducaoTab({ currentUser }) {
   useEffect(() => {
     fetchAll();
     fetchEquipes();
-    const t = setInterval(fetchAll, 30000);
+    const t = setInterval(()=>fetchAll(true), 30000);
     return () => clearInterval(t);
   }, []);
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const fetchAll = async (silent=false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('oples').select('*')
       .in('status_geral', ['Aguardando Inicio Producao', 'Em Producao', 'Retrabalho', 'Em Retrabalho'])
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const fetchEquipes = async () => {

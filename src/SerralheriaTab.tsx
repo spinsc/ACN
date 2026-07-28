@@ -27,12 +27,12 @@ export default function SerralheriaTab({ currentUser }) {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(()=>fetchData(true), 30000);
     return () => clearInterval(interval);
   }, [tab, filterStatus]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent=false) => {
+    if (!silent) setLoading(true);
     try {
       if (tab === 'vinculadas') {
         let query = supabase.from('pcp_pedidos_serralheria').select('*').order('data_prevista', { ascending: true });
@@ -50,7 +50,7 @@ export default function SerralheriaTab({ currentUser }) {
     } catch (err) {
       console.error('Erro:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

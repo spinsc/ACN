@@ -581,7 +581,7 @@ export default function ComercialTab({ currentUser }) {
     fetchCategoriasExtra();
   };
 
-  useEffect(() => { fetchOpls(); fetchCategoriasExtra(); const t = setInterval(fetchOpls, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => { fetchOpls(); fetchCategoriasExtra(); const t = setInterval(()=>fetchOpls(true), 30000); return () => clearInterval(t); }, []);
 
   const [oplsMkt, setOplsMkt] = useState([]);
 
@@ -593,11 +593,11 @@ export default function ComercialTab({ currentUser }) {
     setOplsMkt(data || []);
   };
 
-  const fetchOpls = async () => {
-    setLoading(true);
+  const fetchOpls = async (silent=false) => {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('oples').select('*').order('data_entrada', { ascending: false });
     setOpls(data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const salvarOPL = async () => {
