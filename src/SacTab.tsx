@@ -2286,6 +2286,13 @@ function PrintOS({ os }) {
         </div>
       </div>
 
+      {os.resumo_servicos && (
+        <div style={{border:'1.5px solid #86efac',borderRadius:4,marginBottom:10}}>
+          <div style={{background:'#f0fdf4',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#166534',borderBottom:'1px solid #86efac'}}>🔧 RESUMO DOS SERVIÇOS A SEREM EXECUTADOS</div>
+          <div style={{padding:'8px 10px',fontSize:11,whiteSpace:'pre-wrap',color:'#14532d'}}>{os.resumo_servicos}</div>
+        </div>
+      )}
+
       {Array.isArray(os.acessorios) && os.acessorios.length > 0 && (
         <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginBottom:10}}>
           <div style={{background:'#f8fafc',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#0f766e',borderBottom:'1px solid #e2e8f0'}}>ACESSÓRIOS</div>

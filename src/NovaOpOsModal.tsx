@@ -57,6 +57,9 @@ const VAZIO = {
   tipo_servico_terceiro:  'Película',
   obs_servico_terceiro:   '',
 
+  // ── Resumo dos Serviços ───────────────────────────────────────────────────
+  resumo_servicos:        '',
+
   // ── Campos OS ────────────────────────────────────────────────────────────
   tipo_servico:           'Manutenção Corretiva',
   descricao_problema:     '',
@@ -144,6 +147,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           servico_terceiro:       !!form.servico_terceiro,
           tipo_servico_terceiro:  form.servico_terceiro ? form.tipo_servico_terceiro : null,
           obs_servico_terceiro:   (form.servico_terceiro && form.tipo_servico_terceiro === 'Outro') ? (form.obs_servico_terceiro || null) : null,
+          resumo_servicos:        form.resumo_servicos || null,
         };
         const { data, error } = await supabase.from('oples').insert([payload]).select().single();
         if (error) throw error;
@@ -160,6 +164,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           data_abertura:        form.data_entrada,
           data_prevista:        form.prazo_entrega || null,
           observacoes:          form.observacoes || null,
+          resumo_servicos:      form.resumo_servicos || null,
           status:               'Aberta',
           criado_por:           currentUser?.id,
           criado_por_nome:      currentUser?.nome,
@@ -349,6 +354,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             </>
           )}
 
+          {/* Resumo dos Serviços — OP */}
+          {isOP && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Resumo dos Serviços a serem executados</div>
+              <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+                placeholder="Descreva os serviços que serão executados nesta OP..."
+                value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)} />
+            </div>
+          )}
+
           {/* Campos OS */}
           {!isOP && (
             <>
@@ -371,6 +386,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical' }}
                   placeholder="Descreva o que precisa ser feito..."
                   value={form.descricao_problema} onChange={e => setF('descricao_problema', e.target.value)} />
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Resumo dos Serviços a serem executados</div>
+                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical' }}
+                  placeholder="Descreva os serviços que serão executados nesta OS..."
+                  value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)} />
               </div>
             </>
           )}

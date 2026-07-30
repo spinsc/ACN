@@ -445,6 +445,16 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
           <Campo label="Qualidade"    value={opl.responsavel_qualidade} />
         </div>
 
+        {/* ── Resumo dos Serviços ── */}
+        {opl.resumo_servicos && (
+          <>
+            <Sec title="🔧 Resumo dos Serviços a serem executados" />
+            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: '#14532d', whiteSpace: 'pre-wrap' }}>{opl.resumo_servicos}</div>
+            </div>
+          </>
+        )}
+
         {/* ── Observações ── */}
         {(opl.observacoes_comercial || opl.observacoes || opl.observacoes_atencao) && (
           <>

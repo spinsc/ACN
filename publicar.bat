@@ -118,6 +118,11 @@ git add src/NovaOpOsModal.tsx
 git add src/SacTab.tsx
 git add sql/servico_terceiro.sql
 git add sql/sac_tipos_servico.sql
+:: feat: campo resumo dos servicos na OP e OS
+git add src/AcnTabShared.tsx
+git add src/NovaOpOsModal.tsx
+git add src/SacTab.tsx
+git add sql/resumo_servicos.sql
 
 :: Verificar
 echo.
@@ -126,7 +131,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: OplDetalheModal completo (modelo/recebimento/entrega/obs/terceiro); servico_terceiro na OP com destaque; SAC tipos de servico dinamicos; fix silent polling todos os tabs"
+git commit -m "feat: campo resumo_servicos na OP e OS (criacao + ver); OplDetalheModal completo; servico_terceiro destacado; SAC tipos dinamicos; fix silent polling"
 
 :: Push
 echo.
