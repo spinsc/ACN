@@ -330,54 +330,154 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
   const fmtDtH = (d: any) => d
     ? new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     : '—';
+  const fmtR$ = (v: any) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 
-  const Campo = ({ label, value }: { label: string; value: any }) => value != null && value !== '' ? (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
+  const Sec = ({ title }: { title: string }) => (
+    <div style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase',
+      letterSpacing: '.6px', margin: '14px 0 8px', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>
+      {title}
     </div>
-  ) : null;
+  );
+
+  const Campo = ({ label, value, full = false }: { label: string; value: any; full?: boolean }) =>
+    value != null && value !== '' && value !== false ? (
+      <div style={{ marginBottom: 8, gridColumn: full ? '1 / -1' : undefined }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
+      </div>
+    ) : null;
+
+  const temServTerceiro = !!opl.servico_terceiro;
+  const tipoServTerceiro = opl.tipo_servico_terceiro || '';
+  const obsServTerceiro  = opl.obs_servico_terceiro  || '';
 
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 680, width: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div className="modal-title">👁 Detalhes — OPL {opl.opl}</div>
+      <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto' }}>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px', marginBottom: 14 }}>
-          <Campo label="Número OPL"       value={opl.opl} />
-          <Campo label="Status"           value={opl.status_geral} />
-          <Campo label="Cliente"          value={opl.cliente_nome} />
-          <Campo label="Tipo de Projeto"  value={opl.tipo_projeto} />
-          <Campo label="Chassi"           value={opl.chassi} />
-          <Campo label="Modelo"           value={opl.modelo} />
-          <Campo label="Quantidade"       value={opl.quantidade} />
-          <Campo label="NF-e"             value={opl.numero_nf} />
-          <Campo label="Data Entrada"     value={fmtDt(opl.data_entrada)} />
-          <Campo label="Prev. Entrega"    value={fmtDt(opl.data_prevista_entrega)} />
-          <Campo label="Resp. Comercial"  value={opl.responsavel_comercial || opl.criado_por_nome} />
-          <Campo label="Resp. Engenharia" value={opl.responsavel_engenharia} />
-          <Campo label="Resp. Almox"      value={opl.responsavel_almox} />
-          <Campo label="Resp. Producao"   value={opl.responsavel_producao} />
-          <Campo label="Resp. Fiscal"     value={opl.responsavel_fiscal} />
-          <Campo label="Cadastrado em"    value={fmtDtH(opl.criado_em)} />
+        {/* Cabeçalho */}
+        <div style={{ background: '#0f172a', color: '#fff', margin: '-14px -14px 0', padding: '12px 16px',
+          borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, opacity: .65, fontWeight: 700, letterSpacing: .5, textTransform: 'uppercase' }}>
+              {opl.faturamento_empresa || 'ACN'} · {opl.tipo_projeto || 'OP'}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>OP {opl.opl}</div>
+          </div>
+          <span style={{ background: opl.status_geral === 'Faturado' ? '#16a34a' : opl.status_geral === 'Cancelado' ? '#dc2626' : '#334155',
+            color: '#fff', fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 12, letterSpacing: .3 }}>
+            {opl.status_geral || 'Sem status'}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
         </div>
 
-        {opl.observacoes && (
-          <div style={{ marginBottom: 14, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>Observações</div>
-            <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}>{opl.observacoes}</div>
+        {/* Alerta serviço de terceiro */}
+        {temServTerceiro && (
+          <div style={{ margin: '12px 0 0', padding: '10px 14px', background: '#fffbeb',
+            border: '2px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 22 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#b45309' }}>NECESSITA SERVIÇO DE TERCEIRO</div>
+              <div style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>
+                <strong>Tipo:</strong> {tipoServTerceiro}
+                {tipoServTerceiro === 'Outro' && obsServTerceiro && (
+                  <> — {obsServTerceiro}</>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
-          📋 Histórico de Movimentações
+        {/* ── Identificação ── */}
+        <Sec title="🔍 Identificação" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+          <Campo label="Número OP"         value={opl.opl} />
+          <Campo label="Empresa"           value={opl.faturamento_empresa} />
+          <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
+          <Campo label="Cliente"           value={opl.cliente_nome} />
+          <Campo label="Qtd. Veículos"     value={opl.quantidade} />
+          <Campo label="NF-e"              value={opl.numero_nf} />
+          <Campo label="Criado por"        value={opl.criado_por_nome || opl.criado_por} />
+          <Campo label="Cadastrado em"     value={fmtDtH(opl.criado_em)} />
         </div>
+
+        {/* ── Veículo ── */}
+        <Sec title="🚗 Veículo" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+          <Campo label="Modelo"                    value={opl.modelo} />
+          <Campo label="Chassi"                    value={opl.chassi} />
+          <Campo label="Qtd. Veículos"             value={opl.quantidade} />
+          <Campo label="Data Entrada"              value={fmtDt(opl.data_entrada)} />
+          <Campo label="Recebimento do Veículo"    value={fmtDt(opl.data_chegada_veiculo)} />
+          <Campo label="Previsão de Entrega"       value={fmtDt(opl.data_prevista_entrega)} />
+          <Campo label="Prazo Entrega Comercial"   value={fmtDt(opl.prazo_entrega_comercial)} />
+          <Campo label="Prazo Entrega Produção"    value={fmtDt(opl.prazo_entrega_producao)} />
+          <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} />
+        </div>
+
+        {/* ── Financeiro ── */}
+        {(opl.valor_total != null || opl.valor_mao_de_obra != null) && (
+          <>
+            <Sec title="💰 Financeiro" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+              <Campo label="Valor Total"     value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} />
+              <Campo label="Valor M.O."      value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} />
+              <Campo label="Faturamento"     value={opl.faturamento_empresa} />
+            </div>
+          </>
+        )}
+
+        {/* ── Status por Setor ── */}
+        <Sec title="📊 Status por Setor" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+          <Campo label="Status BOM"        value={opl.status_bom} />
+          <Campo label="Status Almox"      value={opl.status_almox} />
+        </div>
+
+        {/* ── Responsáveis ── */}
+        <Sec title="👥 Responsáveis" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+          <Campo label="Comercial"    value={opl.responsavel_comercial || opl.criado_por_nome} />
+          <Campo label="Engenharia"   value={opl.responsavel_engenharia} />
+          <Campo label="Almoxarifado" value={opl.responsavel_almox} />
+          <Campo label="Produção"     value={opl.responsavel_producao} />
+          <Campo label="Fiscal"       value={opl.responsavel_fiscal} />
+          <Campo label="Qualidade"    value={opl.responsavel_qualidade} />
+        </div>
+
+        {/* ── Observações ── */}
+        {(opl.observacoes_comercial || opl.observacoes || opl.observacoes_atencao) && (
+          <>
+            <Sec title="📝 Observações" />
+            {opl.observacoes_atencao && (
+              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 3 }}>⚠️ Atenção</div>
+                <div style={{ fontSize: 11, color: '#7f1d1d', whiteSpace: 'pre-wrap' }}>{opl.observacoes_atencao}</div>
+              </div>
+            )}
+            {opl.observacoes_comercial && (
+              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Observações Comerciais</div>
+                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}>{opl.observacoes_comercial}</div>
+              </div>
+            )}
+            {opl.observacoes && (
+              <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Observações Gerais</div>
+                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}>{opl.observacoes}</div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Histórico de Movimentações ── */}
+        <Sec title="📋 Histórico de Movimentações" />
         {loading ? (
           <div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11 }}>Carregando...</div>
         ) : logs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 12, color: '#94a3b8', fontSize: 11 }}>Nenhum registro de movimentação.</div>
         ) : (
-          <div style={{ maxHeight: 230, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+          <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
               <thead><tr style={{ background: '#1e293b', position: 'sticky', top: 0 }}>
                 <th style={{ padding: '5px 8px', color: '#cbd5e1', textAlign: 'left', fontSize: 9, fontWeight: 600 }}>Data/Hora</th>

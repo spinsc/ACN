@@ -34,32 +34,40 @@ const TIPOS_OS = [
   'Outro',
 ];
 
+const TIPOS_SERVICO_TERCEIRO = ['Película', 'Blindagem', 'Plotagem', 'Pintura', 'Outro'];
+
 const VAZIO = {
   tipo:          'OP',   // 'OP' | 'OS'
   empresa:       'ACN',  // 'ACN' | 'Detech'
 
   // ── Campos OP ────────────────────────────────────────────────────────────
-  opl:                  '',
-  tipo_projeto:         'Transformacao Veicular Ostensiva',
-  chassi:               '',
-  modelo:               '',
-  quantidade:           1,
-  valor_total:          '',
-  valor_mao_de_obra:    '',
-  prazo_entrega:        '',
-  observacoes:          '',
+  opl:                    '',
+  tipo_projeto:           'Transformacao Veicular Ostensiva',
+  chassi:                 '',
+  modelo:                 '',
+  quantidade:             1,
+  valor_total:            '',
+  valor_mao_de_obra:      '',
+  prazo_entrega:          '',
+  data_chegada_veiculo:   '',
+  observacoes:            '',
+
+  // ── Serviço de Terceiro ───────────────────────────────────────────────────
+  servico_terceiro:       false,
+  tipo_servico_terceiro:  'Película',
+  obs_servico_terceiro:   '',
 
   // ── Campos OS ────────────────────────────────────────────────────────────
-  tipo_servico:         'Manutenção Corretiva',
-  descricao_problema:   '',
-  equipamento:          '',
-  numero_serie:         '',
+  tipo_servico:           'Manutenção Corretiva',
+  descricao_problema:     '',
+  equipamento:            '',
+  numero_serie:           '',
 
   // ── Comum ─────────────────────────────────────────────────────────────────
-  cliente_nome:         '',
-  _cliente_id:          null,
-  responsavel:          '',
-  data_entrada:         new Date().toISOString().split('T')[0],
+  cliente_nome:           '',
+  _cliente_id:            null,
+  responsavel:            '',
+  data_entrada:           new Date().toISOString().split('T')[0],
 };
 
 interface Props {
@@ -124,6 +132,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           valor_mao_de_obra:      form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(/\./g,'').replace(',','.')) : null,
           data_entrada:           form.data_entrada,
           data_prevista_entrega:  form.prazo_entrega || null,
+          data_chegada_veiculo:   form.data_chegada_veiculo || null,
           cliente_nome:           form.cliente_nome.trim(),
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
@@ -131,6 +140,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    crmCard?.id || null,
+          // Serviço de terceiro
+          servico_terceiro:       !!form.servico_terceiro,
+          tipo_servico_terceiro:  form.servico_terceiro ? form.tipo_servico_terceiro : null,
+          obs_servico_terceiro:   (form.servico_terceiro && form.tipo_servico_terceiro === 'Outro') ? (form.obs_servico_terceiro || null) : null,
         };
         const { data, error } = await supabase.from('oples').insert([payload]).select().single();
         if (error) throw error;
@@ -281,6 +294,57 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 12000"
                     value={form.valor_mao_de_obra} onChange={e => setF('valor_mao_de_obra', e.target.value)} />
                 </div>
+              </div>
+
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Data de Recebimento do Veículo</div>
+                <input type="date" className="acn-input" style={{ width:'100%' }}
+                  value={form.data_chegada_veiculo} onChange={e => setF('data_chegada_veiculo', e.target.value)} />
+              </div>
+
+              {/* ── Serviço de Terceiro ──────────────────────────────────────── */}
+              <div style={{ marginBottom:12, border: form.servico_terceiro ? '2px solid #f59e0b' : '1.5px solid #e2e8f0',
+                borderRadius:8, padding:'10px 12px', background: form.servico_terceiro ? '#fffbeb' : '#f8fafc',
+                transition:'all .2s' }}>
+                <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
+                  <input type="checkbox" checked={form.servico_terceiro}
+                    onChange={e => setF('servico_terceiro', e.target.checked)}
+                    style={{ width:16, height:16, cursor:'pointer', accentColor:'#f59e0b' }} />
+                  <span style={{ fontSize:11, fontWeight:700, color: form.servico_terceiro ? '#b45309' : '#475569' }}>
+                    ⚠️ Necessita Serviço de Terceiro
+                  </span>
+                  {form.servico_terceiro && (
+                    <span style={{ marginLeft:4, background:'#f59e0b', color:'#fff', fontSize:8,
+                      fontWeight:800, padding:'2px 7px', borderRadius:10, letterSpacing:.4 }}>ATENÇÃO</span>
+                  )}
+                </label>
+
+                {form.servico_terceiro && (
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:6 }}>Tipo de Serviço de Terceiro *</div>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                      {TIPOS_SERVICO_TERCEIRO.map(t => (
+                        <label key={t} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10,
+                          background: form.tipo_servico_terceiro===t ? '#f59e0b' : '#fff',
+                          color: form.tipo_servico_terceiro===t ? '#fff' : '#475569',
+                          padding:'4px 10px', borderRadius:6, cursor:'pointer', fontWeight:700,
+                          border: `1.5px solid ${form.tipo_servico_terceiro===t ? '#f59e0b' : '#d1d5db'}` }}>
+                          <input type="radio" name="tipo_servico_terceiro" value={t}
+                            checked={form.tipo_servico_terceiro===t}
+                            onChange={() => setF('tipo_servico_terceiro', t)}
+                            style={{ display:'none' }} />
+                          {t}
+                        </label>
+                      ))}
+                    </div>
+                    {form.tipo_servico_terceiro === 'Outro' && (
+                      <input className="acn-input" style={{ width:'100%' }}
+                        placeholder="Descreva o serviço de terceiro..."
+                        value={form.obs_servico_terceiro}
+                        onChange={e => setF('obs_servico_terceiro', e.target.value)} />
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}

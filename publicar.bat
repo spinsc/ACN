@@ -112,6 +112,12 @@ git add src/SetorDemandaTab.tsx
 git add src/MarketingTab.tsx
 git add src/ComercialTab.tsx
 git add src/ChatWidget.tsx
+:: feat: OplDetalheModal completo + serviço de terceiro na OP + tipos SAC dinâmicos
+git add src/AcnTabShared.tsx
+git add src/NovaOpOsModal.tsx
+git add src/SacTab.tsx
+git add sql/servico_terceiro.sql
+git add sql/sac_tipos_servico.sql
 
 :: Verificar
 echo.
@@ -120,7 +126,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "fix(silent-polling): remove flash de tela a cada 30s — todos os tabs usam silent=true no setInterval, ChatWidget usa currentUser.id como dep"
+git commit -m "feat: OplDetalheModal completo (modelo/recebimento/entrega/obs/terceiro); servico_terceiro na OP com destaque; SAC tipos de servico dinamicos; fix silent polling todos os tabs"
 
 :: Push
 echo.

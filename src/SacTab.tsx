@@ -154,10 +154,13 @@ export default function SacTab({ currentUser }) {
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
 
   // Cadastros estados
-  const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'>('equipamentos');
+  const [abaCad, setAbaCad]             = useState<'equipamentos'|'categorias'|'tipos_servico'>('equipamentos');
   const [novoEquipCad, setNovoEquipCad] = useState('');
   const [novaCat, setNovaCat]           = useState({ nome:'', tem_despesas: false });
   const [editCat, setEditCat]           = useState<any>(null);
+  // Tipos de serviço dinâmicos
+  const [tiposServico, setTiposServico]       = useState<any[]>([]);
+  const [novoTipoServico, setNovoTipoServico] = useState('');
 
   const [modalNova, setModalNova]       = useState(false);
   const [crmBusca, setCrmBusca]         = useState('');
@@ -206,7 +209,7 @@ export default function SacTab({ currentUser }) {
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
 
   useEffect(() => {
-    fetchOrdens(); fetchEquipamentos(); fetchCategorias();
+    fetchOrdens(); fetchEquipamentos(); fetchCategorias(); fetchTiposServico();
     // Pré-preenchimento vindo do CRM (sessionStorage)
     const raw = sessionStorage.getItem('pendingOsFromCrm');
     if (raw) {
@@ -239,6 +242,32 @@ export default function SacTab({ currentUser }) {
   const fetchCategorias = async () => {
     const { data } = await supabase.from('sac_categorias').select('*').order('nome');
     setCategorias(data || []);
+  };
+
+  const fetchTiposServico = async () => {
+    const { data } = await supabase.from('sac_tipos_servico').select('*').order('nome');
+    setTiposServico(data || []);
+    // fallback se tabela ainda não existe
+    if (!data?.length) {
+      setTiposServico([
+        { id:'1', nome:'Orçamento', ativo:true },
+        { id:'2', nome:'Conserto', ativo:true },
+        { id:'3', nome:'Troca', ativo:true },
+        { id:'4', nome:'Garantia', ativo:true },
+      ]);
+    }
+  };
+
+  const salvarTipoServico = async () => {
+    if (!novoTipoServico.trim()) return;
+    await supabase.from('sac_tipos_servico').insert([{ nome: novoTipoServico.trim() }]);
+    setNovoTipoServico('');
+    fetchTiposServico();
+  };
+
+  const toggleTipoServico = async (t: any) => {
+    await supabase.from('sac_tipos_servico').update({ ativo: !t.ativo }).eq('id', t.id);
+    fetchTiposServico();
   };
 
   const fetchOrdens = async () => {
@@ -1048,8 +1077,8 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
       {abaAtiva === 'cadastros' && (
         <div>
           {/* Sub-abas */}
-          <div style={{display:'flex',gap:6,marginBottom:10}}>
-            {[{id:'equipamentos',label:'Equipamentos'},{id:'categorias',label:'Categorias (Tipo Projeto)'}].map(a=>(
+          <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+            {[{id:'equipamentos',label:'Equipamentos'},{id:'categorias',label:'Categorias (Tipo Projeto)'},{id:'tipos_servico',label:'Tipos de Serviço'}].map(a=>(
               <button key={a.id} className="acn-btn"
                 style={{background:abaCad===a.id?'#0f766e':'#94a3b8'}}
                 onClick={()=>setAbaCad(a.id as any)}>{a.label}</button>
@@ -1146,6 +1175,39 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                             <button className="acn-btn" style={{background:c.ativo?'#ef4444':'#22c55e',fontSize:9}}
                               onClick={()=>toggleCategoria(c)}>{c.ativo?'Desativar':'Ativar'}</button>
                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Tipos de Serviço ── */}
+          {abaCad === 'tipos_servico' && (
+            <div className="sec-card">
+              <div className="sec-hdr"><span>Tipos de Serviço</span></div>
+              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input className="acn-input" style={{flex:1}} placeholder="Nome do tipo de serviço..."
+                    value={novoTipoServico} onChange={e=>setNovoTipoServico(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&salvarTipoServico()} />
+                  <button className="acn-btn" style={{background:'#0f766e'}} onClick={salvarTipoServico}>+ Adicionar</button>
+                </div>
+              </div>
+              <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+                <table>
+                  <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
+                  <tbody>
+                    {tiposServico.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum tipo cadastrado. Rode o SQL sac_tipos_servico.sql no Supabase.</div></td></tr>}
+                    {tiposServico.map((t: any) => (
+                      <tr key={t.id} style={{opacity:t.ativo?1:0.5}}>
+                        <td><strong>{t.nome}</strong></td>
+                        <td><span className="acn-badge" style={{background:t.ativo?'#22c55e':'#94a3b8'}}>{t.ativo?'Ativo':'Inativo'}</span></td>
+                        <td>
+                          <button className="acn-btn" style={{background:t.ativo?'#ef4444':'#22c55e',fontSize:9}}
+                            onClick={()=>toggleTipoServico(t)}>{t.ativo?'Desativar':'Ativar'}</button>
                         </td>
                       </tr>
                     ))}
@@ -1300,7 +1362,12 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                 <div className="form-group">
                   <label className="acn-label">Tipo de Serviço *</label>
                   <select className="acn-input" style={{width:'100%'}} value={form.tipo_servico} onChange={e=>setForm(f=>({...f,tipo_servico:e.target.value}))}>
-                    <option>Orçamento</option><option>Conserto</option><option>Troca</option><option>Garantia</option>
+                    {tiposServico.filter(t=>t.ativo).map(t=>(
+                      <option key={t.id} value={t.nome}>{t.nome}</option>
+                    ))}
+                    {tiposServico.length === 0 && (
+                      <><option>Orçamento</option><option>Conserto</option><option>Troca</option><option>Garantia</option></>
+                    )}
                   </select>
                 </div>
                 <div className="form-group">
