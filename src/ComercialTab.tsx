@@ -700,7 +700,11 @@ export default function ComercialTab({ currentUser }) {
 
   const liberarFaturamento = async (opl) => {
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({ status_geral: 'Aguarda Emissao NF', status_fiscal: 'Aguardando', data_liberacao_comercial: agora }).eq('id', opl.id);
+    const { error } = await supabase.from('oples').update({
+      status_geral: 'Aguarda Emissao NF',
+      data_liberacao_comercial: agora,
+    }).eq('id', opl.id);
+    if (error) { alert('Erro ao liberar faturamento: ' + error.message); return; }
     await supabase.from('logs_movimentacao_opl').insert([{ opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial', evento: 'OPL liberada para faturamento Fiscal.', status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF', usuario_nome: currentUser?.nome, data_hora: agora }]);
     notificarEvento('fiscal_nf_emitida', msg.oplEnviada(opl.opl,'Fiscal (Emissão NF)',currentUser?.nome));
     fetchOpls();
@@ -710,7 +714,8 @@ export default function ComercialTab({ currentUser }) {
     if (!nomeRecebeu.trim()) { alert('Informe o nome de quem recebeu!'); return; }
     const opl = modalEntregue;
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({ status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu, data_entrega: agora }).eq('id', opl.id);
+    const { error } = await supabase.from('oples').update({ status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu, data_entrega: agora }).eq('id', opl.id);
+    if (error) { alert('Erro ao confirmar entrega: ' + error.message); return; }
     await supabase.from('logs_movimentacao_opl').insert([{ opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial', evento: `Equipamento entregue. Recebeu: ${nomeRecebeu}`, status_anterior: opl.status_geral, status_novo: 'Faturado', usuario_nome: currentUser?.nome, data_hora: agora }]);
     notificarEvento('comercial_entregue', msg.entregue(opl.opl, opl.cliente_nome||'—', nomeRecebeu));
     setModalEntregue(null); setNomeRecebeu(''); fetchOpls();
@@ -718,7 +723,15 @@ export default function ComercialTab({ currentUser }) {
 
   const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
   const diasAtraso = (prev) => { if (!prev) return null; const d = Math.ceil((new Date() - new Date(prev)) / 86400000); return d > 0 ? d : null; };
-  const statusCor = (s) => ({ 'Em Espera PCP':'#f59e0b','Em Producao':'#3b82f6','Faturado':'#22c55e','Aguarda Emissao NF':'#ef4444' })[s] || '#94a3b8';
+  const statusCor = (s) => ({
+    'Em Espera PCP':'#f59e0b',
+    'Em Producao':'#3b82f6',
+    'Faturado':'#22c55e',
+    'Aguarda Emissao NF':'#ef4444',
+    'Aprovado CQ - Aguardando Liberacao Comercial':'#16a34a',
+    'Aguardando Liberacao Comercial':'#16a34a',
+    'Faturado e Disponivel para Entrega':'#0ea5e9',
+  })[s] || '#94a3b8';
 
   const oplsFaturar  = opls.filter(o => o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial');
   const oplsEntrega  = opls.filter(o => o.status_geral === 'Faturado e Disponivel para Entrega');
@@ -1000,25 +1013,30 @@ export default function ComercialTab({ currentUser }) {
         </div>
       )}
 
-      {oplsFaturar.length > 0 && (
-        <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#ecfdf5',borderBottom:'2px solid #22c55e'}}><span style={{color:'#166534'}}>Aprovado CQ — Aguardando Liberacao Comercial ({oplsFaturar.length})</span></div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+      {/* APROVADO CQ — sempre visível */}
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#ecfdf5',borderBottom:'2px solid #22c55e'}}><span style={{color:'#166534'}}>✅ Aprovado CQ — Aguardando Liberacao Comercial ({oplsFaturar.length})</span></div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {oplsFaturar.length === 0 ? (
+            <div style={{textAlign:'center',color:'#94a3b8',padding:'16px',fontSize:12}}>Nenhuma OP aguardando liberação de faturamento.</div>
+          ) : (
             <table><thead><tr><th>OPL</th><th>Chassi</th><th>Tipo</th><th>Prev. Entrega</th><th>Acao</th></tr></thead>
             <tbody>{oplsFaturar.map(o=>(
               <tr key={o.id}><td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td><td>{o.chassi||'—'}</td><td>{o.tipo_projeto}</td>
               <td>{fmtDt(o.data_prevista_entrega)}</td>
               <td><button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button></td></tr>
             ))}</tbody></table>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* AGUARDANDO ENTREGA */}
-      {oplsEntrega.length > 0 && (
-        <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#eff6ff',borderBottom:'2px solid #3b82f6'}}><span style={{color:'#1e40af'}}>Faturado — Disponivel para Entrega ({oplsEntrega.length})</span></div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+      {/* AGUARDANDO ENTREGA — sempre visível */}
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#eff6ff',borderBottom:'2px solid #3b82f6'}}><span style={{color:'#1e40af'}}>📦 Faturado — Disponivel para Entrega ({oplsEntrega.length})</span></div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {oplsEntrega.length === 0 ? (
+            <div style={{textAlign:'center',color:'#94a3b8',padding:'16px',fontSize:12}}>Nenhuma OP aguardando entrega ao cliente.</div>
+          ) : (
             <table><thead><tr><th>OPL</th><th>Chassi</th><th>NF</th><th>Cliente</th><th>Checklist/Arquivos</th><th>Acao</th></tr></thead>
             <tbody>{oplsEntrega.map(o=>(
               <tr key={o.id}><td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td><td>{o.chassi||'—'}</td>
@@ -1031,9 +1049,9 @@ export default function ComercialTab({ currentUser }) {
               </td>
               <td><button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button></td></tr>
             ))}</tbody></table>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* CRM movido para aba CRM independente */}
 

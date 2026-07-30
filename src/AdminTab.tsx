@@ -31,6 +31,7 @@ const TODAS_ABAS = [
   { id:'fiscal',       label:'12. Fiscal' },
   { id:'marketing',    label:'Marketing' },
   { id:'sac',          label:'SAC' },
+  { id:'telecom',      label:'Telecom' },
   { id:'crm',          label:'CRM' },
   { id:'licitacoes',   label:'Licitações' },
   { id:'rh',           label:'RH' },
@@ -40,8 +41,8 @@ const TODAS_ABAS = [
 
 // ---- PERMISSÕES PADRÃO POR PERFIL ----
 const PERFIS_PADRAO_ABAS: Record<string, string[]> = {
-  'Admin':             ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','crm','licitacoes','rh','relatorios','admin'],
-  'Gerente':           ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','crm','licitacoes','rh','relatorios','admin'],
+  'Admin':             ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','telecom','crm','licitacoes','rh','relatorios','admin'],
+  'Gerente':           ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','telecom','crm','licitacoes','rh','relatorios','admin'],
   'Gerente Comercial': ['dashboard','comercial','crm','licitacoes','relatorios','rh'],
   'Comercial':         ['dashboard','comercial'],
   'Engenharia':        ['dashboard','engenharia','ajustes','compras','almoxarifado'],
