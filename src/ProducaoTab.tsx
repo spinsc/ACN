@@ -85,6 +85,9 @@ function OplRow({ o, onAction }) {
                 <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>onAction('devolver',o)}>DEV. PCP</button>
               </>
             )}
+            {emRetrab && (
+              <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
+            )}
             {retrabalho && (
               <button className="acn-btn" style={{background:'#ef4444',fontWeight:700}} onClick={()=>onAction('iniciar_retrabalho',o)}>
                 🔁 INICIAR RETRABALHO
@@ -1562,7 +1565,7 @@ export default function ProducaoTab({ currentUser }) {
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Responsavel alterado para: ${logResp}`,
-      status_anterior: 'Em Producao', status_novo: 'Em Producao',
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     setModalEditResp(null); fetchAll();

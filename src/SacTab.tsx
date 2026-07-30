@@ -5,6 +5,7 @@ import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
+import { ColaboradorSelect } from './ColaboradorSelect';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -202,6 +203,9 @@ export default function SacTab({ currentUser }) {
   const [nomeRecebeuVeic, setNomeRecebeuVeic]   = useState('');
   const [modalFinanceiro, setModalFinanceiro] = useState<any>(null);
   const [financeiroForm, setFinanceiroForm] = useState({ valor_total:'', valor_mao_de_obra:'', data_faturamento:'' });
+  // Editar responsável da OS
+  const [modalEditRespOS, setModalEditRespOS] = useState<any>(null);
+  const [editRespOSNome, setEditRespOSNome]   = useState('');
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
@@ -842,10 +846,27 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
         );
     }
 
+    // Botão alterar responsável — disponível enquanto OS não estiver encerrada
+    if (!['Entregue','Cancelada'].includes(os.status)) {
+      btns.push(<button key="editresp" className="acn-btn" style={{background:'#6366f1',fontSize:9}}
+        onClick={()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); }}>✏️ Resp.</button>);
+    }
     btns.push(<button key="financeiro" className="acn-btn" style={{background:'#059669',fontSize:9}} onClick={()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??'',data_faturamento:(os.data_faturamento||'').slice(0,10)});setModalFinanceiro(os);}}>💰 Financeiro</button>);
     btns.push(<button key="anexar" className="acn-btn" style={{background:'#0369a1',fontSize:9}} onClick={()=>{setAnexarFiles([]);setModalAnexar(os);}}>📎 Anexar</button>);
     btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>gerarPdfOS(os)}>🖨️ PDF</button>);
     return btns;
+  };
+
+  // ── ALTERAR RESPONSÁVEL DA OS ────────────────────────────────────────────
+  const salvarRespOS = async () => {
+    if (!modalEditRespOS) return;
+    if (!editRespOSNome.trim()) { alert('Informe o responsável.'); return; }
+    const { error } = await supabase.from('sac_ordens_servico')
+      .update({ responsavel_nome: editRespOSNome.trim() })
+      .eq('id', modalEditRespOS.id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalEditRespOS(null);
+    fetchOrdens();
   };
 
   // ── SALVAR FINANCEIRO DA OS ───────────────────────────────────────────────
@@ -2159,6 +2180,30 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={salvarEquipamento}>SALVAR</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalNovoEquip(false)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ MODAL EDITAR RESPONSÁVEL OS ════════ */}
+      {modalEditRespOS && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:380,width:'95vw'}}>
+            <div className="modal-title">✏️ Responsável — {modalEditRespOS.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              Atual: <strong>{modalEditRespOS.responsavel_nome || '—'}</strong>
+            </div>
+            <label className="acn-label">Novo Responsável</label>
+            <ColaboradorSelect
+              value={editRespOSNome}
+              onChange={v => setEditRespOSNome(v)}
+              placeholder="Selecione o responsável..."
+              className="acn-input"
+              style={{width:'100%',marginBottom:16}}
+            />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={salvarRespOS}>✏️ SALVAR</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditRespOS(null)}>Cancelar</button>
             </div>
           </div>
         </div>
