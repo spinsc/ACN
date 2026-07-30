@@ -1292,7 +1292,14 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                     <td style={{fontSize:10,color: o.prazo_orcamento && new Date(o.prazo_orcamento)<new Date() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
                       {fmtDt(o.prazo_orcamento)}
                     </td>
-                    <td style={{fontSize:10}}>{fmtVal(o.valor_orcamento)}</td>
+                    <td style={{fontSize:10}}>{(() => {
+                      const v = Number(o.valor_orcamento) || 0;
+                      const itensTotal = Array.isArray(o.itens_cotacao) && o.itens_cotacao.length
+                        ? o.itens_cotacao.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0)
+                        : 0;
+                      const total = v > 0 ? v : (itensTotal > 0 ? itensTotal : null);
+                      return fmtVal(total);
+                    })()}</td>
                     <td style={{fontSize:10,color:'#0891b2',fontWeight:o.kpi_orcamento_horas?700:400}}>
                       {o.kpi_orcamento_horas ? `${Number(o.kpi_orcamento_horas).toFixed(1)}h` : '—'}
                     </td>
