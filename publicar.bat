@@ -145,7 +145,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: botao LIBERAR FISCAL em todos os tabs; multi-servico-terceiro; docs desde registro; resumo CRM; fix fluxo comercial; telecom permissoes"
+git commit -m "feat: botao LIBERAR FISCAL em todos os tabs; multi-servico-terceiro; docs desde registro; resumo CRM; fix fluxo comercial; telecom permissoes; docs visiveis na aba Adaptacao"
 
 :: Push
 echo.
