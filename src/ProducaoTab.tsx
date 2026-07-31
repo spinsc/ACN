@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
+import OplAnexosWidget from './OplAnexosWidget';
 import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -23,7 +24,7 @@ function useTimer(start) {
   return `${h}:${m}:${s}`;
 }
 
-function OplRow({ o, onAction }) {
+function OplRow({ o, onAction, currentUser }) {
   const emProd       = o.status_geral === 'Em Producao';
   const aguardando   = o.status_geral === 'Aguardando Inicio Producao';
   const retrabalho   = o.status_geral === 'Retrabalho';
@@ -74,6 +75,7 @@ function OplRow({ o, onAction }) {
         <td>
           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
             <button className="acn-btn" style={{background:'#0891b2',fontSize:10}} onClick={()=>onAction('ver',o)}>👁 VER</button>
+            <OplAnexosWidget opl={o} setor="Producao" currentUser={currentUser} compact={true} />
             <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('acomp',o)}>💬 ACOMP.</button>
             {aguardando && (
               <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>onAction('iniciar',o)}>INICIAR</button>
