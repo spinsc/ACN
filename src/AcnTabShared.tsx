@@ -349,9 +349,14 @@ export function OplMovimentadas({ setor }: { setor: string }) {
 
 
 // ─── Modal de Detalhes da OPL ────────────────────────────────────────────────
-export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => void }) {
-  const [logs, setLogs] = useState<any[]>([]);
+export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: any; onClose: () => void; currentUser?: any }) {
+  const [opl, setOpl]       = useState<any>(oplProp);
+  const [logs, setLogs]     = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [liberando, setLiberando] = useState(false);
+
+  // Sincroniza se prop mudar
+  useEffect(() => { setOpl(oplProp); }, [oplProp?.id]);
 
   useEffect(() => {
     if (!opl?.id) return;
@@ -363,6 +368,32 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
       .limit(50)
       .then(({ data }) => { setLogs(data || []); setLoading(false); });
   }, [opl?.id]);
+
+  // ── Liberar OP para o Fiscal emitir NF ──────────────────────────────────
+  const liberarParaFiscal = async () => {
+    if (!window.confirm(`Liberar OP ${opl.opl} para o Fiscal emitir a Nota Fiscal?`)) return;
+    setLiberando(true);
+    const agora = new Date().toISOString();
+    const { error } = await supabase.from('oples').update({
+      status_geral: 'Aguarda Emissao NF',
+      data_liberacao_comercial: agora,
+    }).eq('id', opl.id);
+    if (error) { alert('Erro ao liberar: ' + error.message); setLiberando(false); return; }
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial',
+      evento: 'OPL liberada para emissão de NF pelo Fiscal.',
+      status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
+      usuario_nome: currentUser?.nome || null, data_hora: agora,
+    }]);
+    // Atualiza status local sem fechar o modal
+    setOpl((o: any) => ({ ...o, status_geral: 'Aguarda Emissao NF' }));
+    setLogs(prev => [{
+      id: 'tmp', setor: 'Comercial', evento: 'OPL liberada para emissão de NF pelo Fiscal.',
+      status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
+      usuario_nome: currentUser?.nome || '—', data_hora: agora,
+    }, ...prev]);
+    setLiberando(false);
+  };
 
   const fmtDt  = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
   const fmtDtH = (d: any) => d
@@ -411,6 +442,28 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
         </div>
+
+        {/* ── Botão LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) ── */}
+        {(opl.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||
+          opl.status_geral === 'Aguardando Liberacao Comercial') && (
+          <div style={{ margin: '12px 0 0', padding: '12px 16px', background: '#f0fdf4',
+            border: '2px solid #22c55e', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d' }}>✅ APROVADO PELO CQ — AGUARDANDO LIBERAÇÃO COMERCIAL</div>
+              <div style={{ fontSize: 10, color: '#166534', marginTop: 2 }}>
+                Esta OP está pronta. Libere para o Fiscal emitir a Nota Fiscal.
+              </div>
+            </div>
+            <button
+              onClick={liberarParaFiscal}
+              disabled={liberando}
+              style={{ background: liberando ? '#94a3b8' : '#f59e0b', color: '#fff', border: 'none',
+                borderRadius: 7, padding: '9px 18px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {liberando ? 'Liberando...' : '🟡 LIBERAR PARA FISCAL'}
+            </button>
+          </div>
+        )}
 
         {/* Alerta serviço de terceiro */}
         {temServTerceiro && (

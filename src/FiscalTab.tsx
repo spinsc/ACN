@@ -131,7 +131,7 @@ export default function FiscalTab({ currentUser }) {
       <OplMovimentadas setor="Fiscal" />
       <DemandaFooter setor="Fiscal" />
 
-      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
     </div>
   );
 }

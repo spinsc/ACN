@@ -146,7 +146,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
       <OplMovimentadas setor="Almoxarifado" />
       <DemandaFooter setor="Almoxarifado" />
 
-      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
       {/* MODAL FALTA */}
       {modalFalta && (

@@ -353,7 +353,7 @@ export default function PCPTab({ currentUser }) {
       <OplMovimentadas setor="PCP" />
       <DemandaFooter setor="PCP" />
 
-      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
       {/* MODAL DEMANDA SETOR */}
       {modalDemanda !== null && (

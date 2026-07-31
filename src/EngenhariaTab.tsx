@@ -323,7 +323,7 @@ export default function EngenhariaTab({ currentUser }) {
       <OplMovimentadas setor="Engenharia" />
       <DemandaFooter setor="Engenharia" />
 
-      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
       {/* MODAL INICIAR ENGENHARIA */}
       {modalIniciar && (

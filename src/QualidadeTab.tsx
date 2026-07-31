@@ -204,7 +204,7 @@ export default function QualidadeTab({ currentUser }) {
       <OplMovimentadas setor="CQ" />
       <DemandaFooter setor="Controle de Qualidade" />
 
-      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
       {/* MODAL AUDITORIA */}
       {modalAudit && (

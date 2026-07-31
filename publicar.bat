@@ -131,6 +131,12 @@ git add sql/fluxo_comercial.sql
 git add src/NovaOpOsModal.tsx
 git add src/AcnTabShared.tsx
 git add src/CrmTab.tsx
+:: feat: botao LIBERAR PARA FISCAL em todos os tabs via OplDetalheModal
+git add src/EngenhariaTab.tsx
+git add src/PCPTab.tsx
+git add src/QualidadeTab.tsx
+git add src/FiscalTab.tsx
+git add src/AlmoxarifadoTab.tsx
 
 :: Verificar
 echo.
@@ -139,7 +145,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: multi-servico-terceiro checkbox; documentos na OP desde registro (step2+viewer); resumo_servicos no CRM converter; fix fluxo comercial; telecom em permissoes"
+git commit -m "feat: botao LIBERAR FISCAL em todos os tabs; multi-servico-terceiro; docs desde registro; resumo CRM; fix fluxo comercial; telecom permissoes"
 
 :: Push
 echo.

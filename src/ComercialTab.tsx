@@ -1191,7 +1191,7 @@ export default function ComercialTab({ currentUser }) {
       <OplMovimentadas setor="Comercial" />
       <DemandaFooter setor="Comercial" />
 
-      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} />}
+      {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
       {/* MODAL ACOMPANHAMENTO DA OP */}
       {modalAcomp && (
