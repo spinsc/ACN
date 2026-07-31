@@ -3,10 +3,67 @@
 // NovaOpOsModal — criação centralizada de OP (Ordem de Produção) ou OS
 // Pode ser chamado de qualquer aba: Comercial/CRM, card CRM, SAC, etc.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ClienteAutocomplete } from './ClienteUtils';
 import { ColaboradorSelect } from './ColaboradorSelect';
+
+// ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
+function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
+  const [arquivos, setArquivos] = useState<{nome:string;url:string}[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+
+  const upload = async (files: FileList) => {
+    setUploading(true);
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const safe = oplNumero.replace(/[^a-zA-Z0-9-]/g, '_');
+      const safeName = f.name.replace(/[^a-zA-Z0-9_\-\.]/g, '_').slice(0, 100);
+      const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
+      const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
+      const ct = officeExts.test(f.name) ? 'application/octet-stream' : f.type;
+      const { data: up, error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: ct });
+      if (!error && up) {
+        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+        await supabase.from('opl_anexos').insert({
+          opl_id: oplId, opl_numero: oplNumero, setor: 'Comercial',
+          tipo: f.type.startsWith('image/') ? 'foto' : 'documento',
+          nome: f.name, url: pub?.publicUrl || '', criado_por: currentUser?.nome,
+        });
+        setArquivos(prev => [...prev, { nome: f.name, url: pub?.publicUrl || '' }]);
+      }
+    }
+    if (ref.current) ref.current.value = '';
+    setUploading(false);
+  };
+
+  return (
+    <div>
+      <label style={{ display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer',
+        background: uploading ? '#94a3b8' : '#2563eb', color:'#fff', borderRadius:6,
+        padding:'7px 16px', fontSize:11, fontWeight:700, marginBottom:10 }}>
+        {uploading ? 'Enviando...' : '📎 Selecionar Arquivos'}
+        <input ref={ref} type="file" multiple disabled={uploading}
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+          onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
+          style={{ display:'none' }} />
+      </label>
+      {arquivos.length > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+          {arquivos.map((a,i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px',
+              background:'#f0fdf4', border:'1px solid #86efac', borderRadius:5, fontSize:10 }}>
+              <span>✅</span>
+              <a href={a.url} target="_blank" rel="noreferrer"
+                style={{ color:'#16a34a', fontWeight:600, textDecoration:'none' }}>{a.nome}</a>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const TIPOS_PROJETO = [
   { emoji:'🚔', label:'Transformacao Veicular Ostensiva' },
@@ -53,9 +110,9 @@ const VAZIO = {
   observacoes:            '',
 
   // ── Serviço de Terceiro ───────────────────────────────────────────────────
-  servico_terceiro:       false,
-  tipo_servico_terceiro:  'Película',
-  obs_servico_terceiro:   '',
+  servico_terceiro:        false,
+  tipos_servico_terceiro:  [] as string[], // múltiplos tipos
+  obs_servico_terceiro:    '',
 
   // ── Resumo dos Serviços ───────────────────────────────────────────────────
   resumo_servicos:        '',
@@ -85,10 +142,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const [form, setForm]       = useState({ ...VAZIO });
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState('');
+  const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos
 
   // Pré-preenche quando crmCard muda
   useEffect(() => {
     if (!isOpen) return;
+    setSavedOp(null);
     if (crmCard) {
       setForm(f => ({
         ...f,
@@ -143,15 +202,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    crmCard?.id || null,
-          // Serviço de terceiro
-          servico_terceiro:       !!form.servico_terceiro,
-          tipo_servico_terceiro:  form.servico_terceiro ? form.tipo_servico_terceiro : null,
-          obs_servico_terceiro:   (form.servico_terceiro && form.tipo_servico_terceiro === 'Outro') ? (form.obs_servico_terceiro || null) : null,
-          resumo_servicos:        form.resumo_servicos || null,
+          // Serviço de terceiro (multi)
+          servico_terceiro:        !!form.servico_terceiro,
+          tipos_servico_terceiro:  form.servico_terceiro ? form.tipos_servico_terceiro : [],
+          tipo_servico_terceiro:   form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
+          obs_servico_terceiro:    (form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
+          resumo_servicos:         form.resumo_servicos || null,
         };
         const { data, error } = await supabase.from('oples').insert([payload]).select().single();
         if (error) throw error;
         onSaved?.(data, 'op');
+        setSavedOp(data);
+        return; // vai para o passo 2 (documentos) em vez de fechar
       } else {
         const payload: any = {
           tipo_servico:         form.tipo_servico,
@@ -183,6 +245,39 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   };
 
   if (!isOpen) return null;
+
+  // ── Passo 2: documentos após OP criada ──────────────────────────────────────
+  if (savedOp) {
+    return (
+      <div style={{ position:'fixed', inset:0, background:'#0009', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ background:'#fff', borderRadius:10, width:'min(520px,96vw)', boxShadow:'0 20px 60px #0003', overflow:'hidden' }}>
+          <div style={{ padding:'12px 18px', background:'#0f172a', color:'#fff', display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ fontSize:20 }}>📎</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:9, opacity:.7, fontWeight:700, letterSpacing:.5 }}>OP CRIADA COM SUCESSO</div>
+              <div style={{ fontSize:14, fontWeight:700 }}>Anexar Documentos — {savedOp.opl}</div>
+            </div>
+          </div>
+          <div style={{ padding:'20px 18px' }}>
+            <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:7, padding:'10px 14px', marginBottom:16, fontSize:11, color:'#15803d' }}>
+              ✅ OP <strong>{savedOp.opl}</strong> criada! Agora você pode anexar documentos (proposta, orçamento, fotos) que acompanharão esta OP em todos os setores.
+            </div>
+            <UploadAnexosInline oplId={savedOp.id} oplNumero={savedOp.opl} currentUser={currentUser} />
+          </div>
+          <div style={{ padding:'10px 18px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={onClose}
+              style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:6, padding:'7px 16px', fontSize:11, cursor:'pointer' }}>
+              Pular
+            </button>
+            <button onClick={onClose}
+              style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:6, padding:'7px 20px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+              ✅ Concluir
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isOP = form.tipo === 'OP';
 
@@ -326,25 +421,30 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
                 {form.servico_terceiro && (
                   <div style={{ marginTop:10 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:6 }}>Tipo de Serviço de Terceiro *</div>
-                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
-                      {TIPOS_SERVICO_TERCEIRO.map(t => (
-                        <label key={t} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10,
-                          background: form.tipo_servico_terceiro===t ? '#f59e0b' : '#fff',
-                          color: form.tipo_servico_terceiro===t ? '#fff' : '#475569',
-                          padding:'4px 10px', borderRadius:6, cursor:'pointer', fontWeight:700,
-                          border: `1.5px solid ${form.tipo_servico_terceiro===t ? '#f59e0b' : '#d1d5db'}` }}>
-                          <input type="radio" name="tipo_servico_terceiro" value={t}
-                            checked={form.tipo_servico_terceiro===t}
-                            onChange={() => setF('tipo_servico_terceiro', t)}
-                            style={{ display:'none' }} />
-                          {t}
-                        </label>
-                      ))}
+                    <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:6 }}>
+                      Tipos de Serviço de Terceiro * <span style={{ fontWeight:400, color:'#b45309' }}>(marque todos que se aplicam)</span>
                     </div>
-                    {form.tipo_servico_terceiro === 'Outro' && (
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                      {TIPOS_SERVICO_TERCEIRO.map(t => {
+                        const sel = form.tipos_servico_terceiro.includes(t);
+                        return (
+                          <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10,
+                            background: sel ? '#f59e0b' : '#fff', color: sel ? '#fff' : '#475569',
+                            padding:'4px 10px', borderRadius:6, cursor:'pointer', fontWeight:700,
+                            border: `1.5px solid ${sel ? '#f59e0b' : '#d1d5db'}` }}>
+                            <input type="checkbox" checked={sel}
+                              onChange={() => setF('tipos_servico_terceiro',
+                                sel ? form.tipos_servico_terceiro.filter(x => x !== t)
+                                    : [...form.tipos_servico_terceiro, t])}
+                              style={{ accentColor:'#f59e0b', cursor:'pointer' }} />
+                            {t}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {form.tipos_servico_terceiro.includes('Outro') && (
                       <input className="acn-input" style={{ width:'100%' }}
-                        placeholder="Descreva o serviço de terceiro..."
+                        placeholder="Descreva o(s) serviço(s) de terceiro..."
                         value={form.obs_servico_terceiro}
                         onChange={e => setF('obs_servico_terceiro', e.target.value)} />
                     )}

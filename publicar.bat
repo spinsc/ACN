@@ -127,6 +127,10 @@ git add sql/resumo_servicos.sql
 git add src/AdminTab.tsx
 git add src/ComercialTab.tsx
 git add sql/fluxo_comercial.sql
+:: feat: multi-servico-terceiro; documentos na OP desde registro; resumo_servicos CRM
+git add src/NovaOpOsModal.tsx
+git add src/AcnTabShared.tsx
+git add src/CrmTab.tsx
 
 :: Verificar
 echo.
@@ -135,7 +139,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "fix: telecom em permissoes; fluxo comercial OP aprovada CQ agora aparece; secoes sempre visiveis; erro no liberarFaturamento tratado"
+git commit -m "feat: multi-servico-terceiro checkbox; documentos na OP desde registro (step2+viewer); resumo_servicos no CRM converter; fix fluxo comercial; telecom em permissoes"
 
 :: Push
 echo.
@@ -160,6 +164,7 @@ echo [NOVO] sql/fluxo_comercial.sql - RODAR NO SUPABASE:
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS data_liberacao_comercial timestamptz;
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS cliente_recebeu_nome text;
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS data_entrega timestamptz;
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS tipos_servico_terceiro jsonb DEFAULT '[]'::jsonb;
 echo.
 echo [NOVO] acn_novas_colunas.sql - EXECUTE NO SUPABASE SQL EDITOR:
 echo  - ALTER TABLE oples ADD COLUMN valor_mao_de_obra_serralheria numeric(12,2)

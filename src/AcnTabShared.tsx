@@ -5,6 +5,44 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 
+// ─── Lista inline de anexos (para OplDetalheModal) ───────────────────────────
+function AnexosOPSection({ oplId }: { oplId: string }) {
+  const [anexos, setAnexos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const TIPO_ICONE: Record<string, string> = { proposta:'📋', orcamento:'💰', documento:'📄', foto:'🖼️', checklist_entrega:'✅' };
+  const TIPO_COR:   Record<string, string> = { proposta:'#0891b2', orcamento:'#059669', documento:'#2563eb', foto:'#7c3aed', checklist_entrega:'#16a34a' };
+
+  useEffect(() => {
+    if (!oplId) return;
+    supabase.from('opl_anexos').select('*').eq('opl_id', oplId).order('criado_em', { ascending: false })
+      .then(({ data }) => { setAnexos(data || []); setLoading(false); });
+  }, [oplId]);
+
+  if (loading) return <div style={{ fontSize:10, color:'#94a3b8', padding:'6px 0' }}>Carregando documentos...</div>;
+  if (anexos.length === 0) return <div style={{ fontSize:10, color:'#94a3b8', padding:'6px 0' }}>Nenhum documento anexado.</div>;
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+      {anexos.map(a => (
+        <div key={a.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
+          background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6 }}>
+          <span style={{ fontSize:15 }}>{TIPO_ICONE[a.tipo] || '📄'}</span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <a href={a.url} target="_blank" rel="noreferrer"
+              style={{ fontSize:11, color: TIPO_COR[a.tipo] || '#2563eb', fontWeight:600, textDecoration:'none', wordBreak:'break-all' }}>
+              {a.nome}
+            </a>
+            <div style={{ fontSize:9, color:'#9ca3af', marginTop:1 }}>
+              {a.setor && <span style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:8, padding:'0 5px', marginRight:4 }}>{a.setor}</span>}
+              {a.criado_por && <span>{a.criado_por}</span>}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 // ─── Botão de Pendências por OPL ─────────────────────────────────────────────
 export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) {
@@ -348,8 +386,11 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
     ) : null;
 
   const temServTerceiro = !!opl.servico_terceiro;
-  const tipoServTerceiro = opl.tipo_servico_terceiro || '';
-  const obsServTerceiro  = opl.obs_servico_terceiro  || '';
+  // Suporte a múltiplos tipos (novo) e fallback ao campo único (legado)
+  const tiposServ: string[] = Array.isArray(opl.tipos_servico_terceiro) && opl.tipos_servico_terceiro.length
+    ? opl.tipos_servico_terceiro
+    : (opl.tipo_servico_terceiro ? [opl.tipo_servico_terceiro] : []);
+  const obsServTerceiro = opl.obs_servico_terceiro || '';
 
   return (
     <div className="modal-overlay">
@@ -374,16 +415,19 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
         {/* Alerta serviço de terceiro */}
         {temServTerceiro && (
           <div style={{ margin: '12px 0 0', padding: '10px 14px', background: '#fffbeb',
-            border: '2px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 22 }}>⚠️</span>
+            border: '2px solid #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <span style={{ fontSize: 22, flexShrink: 0 }}>⚠️</span>
             <div>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#b45309' }}>NECESSITA SERVIÇO DE TERCEIRO</div>
-              <div style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>
-                <strong>Tipo:</strong> {tipoServTerceiro}
-                {tipoServTerceiro === 'Outro' && obsServTerceiro && (
-                  <> — {obsServTerceiro}</>
-                )}
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginTop:5 }}>
+                {tiposServ.map(t => (
+                  <span key={t} style={{ background:'#f59e0b', color:'#fff', fontSize:10,
+                    fontWeight:700, padding:'2px 8px', borderRadius:8 }}>{t}</span>
+                ))}
               </div>
+              {obsServTerceiro && (
+                <div style={{ fontSize: 10, color: '#92400e', marginTop: 4 }}>Obs: {obsServTerceiro}</div>
+              )}
             </div>
           </div>
         )}
@@ -514,6 +558,10 @@ export function OplDetalheModal({ opl, onClose }: { opl: any; onClose: () => voi
             </table>
           </div>
         )}
+
+        {/* ── Documentos / Anexos ── */}
+        <Sec title="📎 Documentos Anexados" />
+        <AnexosOPSection oplId={opl.id} />
 
         <button className="acn-btn" style={{ background: '#94a3b8', width: '100%', marginTop: 14 }} onClick={onClose}>
           Fechar

@@ -123,6 +123,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
+  const [resumoConv, setResumoConv]         = useState('');
   // ── compras ──
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
   const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
@@ -748,6 +749,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           data_entrada:          agora.slice(0, 10),
           criado_por_nome:       currentUser?.nome,
           criado_por:            currentUser?.email,
+          crm_oportunidade_id:   op.id,
+          resumo_servicos:       resumoConv.trim() || null,
         }).select().single();
         if (error) throw error;
         if (novaOp) {
@@ -794,6 +797,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       }
       setModalConverter(null);
       setNumOp('');
+      setResumoConv('');
       alert(`OP ${numOp.trim()} criada! Acesse a aba Engenharia para acompanhar.`);
     } catch (e: any) {
       alert('Erro ao criar: ' + (e?.message || 'Verifique o console.'));
@@ -1975,6 +1979,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               </div>
             )}
 
+            {tipoConverter === 'op' && (
+              <div style={{ marginBottom:10 }}>
+                <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
+                  Resumo dos Serviços a serem executados
+                </label>
+                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', fontSize:10 }}
+                  placeholder="Descreva os serviços que serão executados nesta OP..."
+                  value={resumoConv} onChange={e => setResumoConv(e.target.value)} />
+              </div>
+            )}
+
             <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
               {tipoConverter === 'op'
                 ? 'Título → Modelo, Órgão → Cliente. Status: Em Espera Engenharia.'
@@ -1982,7 +1997,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); }}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); setResumoConv(''); }}>Cancelar</button>
               <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
                 background: tipoConverter==='op' ? '#2563eb' : '#ea580c', opacity: salvando?.5:1 }}
                 onClick={converterGanho} disabled={salvando}>
