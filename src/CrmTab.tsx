@@ -1464,17 +1464,36 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       {abaInterna === 'faturamentos' && renderFaturamentos()}
       {abaInterna === 'opls' && (() => {
         const STATUS_COR: Record<string,string> = {
-          'Em Espera Engenharia':           '#7c3aed',
-          'Em Analise Engenharia':          '#7c3aed',
-          'Devolvida para Engenharia':      '#dc2626',
-          'Devolvida Comercial':            '#dc2626',
-          'Em Espera PCP':                  '#0891b2',
-          'Em Analise PCP':                 '#0891b2',
-          'Em Producao':                    '#d97706',
-          'Aguarda Emissao NF':             '#16a34a',
-          'Faturado e Disponivel para Entrega': '#166534',
-          'Aguardando Agendamento Manutenção': '#ea580c',
-          'Manutenção Agendada':            '#ea580c',
+          'Em Espera Engenharia':                        '#7c3aed',
+          'Em Analise Engenharia':                       '#7c3aed',
+          'Devolvida para Engenharia':                   '#dc2626',
+          'Devolvida Comercial':                         '#dc2626',
+          'Em Espera PCP':                               '#0891b2',
+          'Em Analise PCP':                              '#0891b2',
+          'Em Producao':                                 '#d97706',
+          'Aprovado CQ - Aguardando Liberacao Comercial':'#16a34a',
+          'Aguardando Liberacao Comercial':              '#16a34a',
+          'Aguarda Emissao NF':                          '#0ea5e9',
+          'Faturado e Disponivel para Entrega':          '#0284c7',
+          'Aguardando Agendamento Manutenção':           '#ea580c',
+          'Manutenção Agendada':                         '#ea580c',
+        };
+
+        const liberarFiscalCrm = async (o: any) => {
+          if (!window.confirm(`Liberar OP ${o.opl} para o Fiscal emitir a NF?`)) return;
+          const agora = new Date().toISOString();
+          const { error } = await supabase.from('oples').update({
+            status_geral: 'Aguarda Emissao NF',
+            data_liberacao_comercial: agora,
+          }).eq('id', o.id);
+          if (error) { alert('Erro: ' + error.message); return; }
+          await supabase.from('logs_movimentacao_opl').insert([{
+            opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
+            evento: 'OPL liberada para emissão de NF pelo Fiscal.',
+            status_anterior: o.status_geral, status_novo: 'Aguarda Emissao NF',
+            usuario_nome: currentUser?.nome || null, data_hora: agora,
+          }]);
+          fetchOplsEmAberto();
         };
         const oplsFiltradas = oplsEmAberto.filter(o => {
           if (oplsFiltro === 'crm')     return !!o.crm_oportunidade_id;
@@ -1561,7 +1580,16 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                             )}
                           </td>
                           <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                            <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                            <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
+                              {/* Botão de liberação para Fiscal — aparece somente quando Aprovado CQ */}
+                              {(o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||
+                                o.status_geral === 'Aguardando Liberacao Comercial') && (
+                                <button
+                                  onClick={() => liberarFiscalCrm(o)}
+                                  style={{ fontSize:9, padding:'3px 9px', background:'#f59e0b', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
+                                  🟡 LIBERAR FISCAL
+                                </button>
+                              )}
                               <button title="Editar OPL"
                                 onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
                                 style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
