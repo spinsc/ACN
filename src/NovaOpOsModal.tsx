@@ -204,7 +204,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           crm_oportunidade_id:    crmCard?.id || null,
           // Serviço de terceiro (multi)
           servico_terceiro:        !!form.servico_terceiro,
-          tipos_servico_terceiro:  form.servico_terceiro ? form.tipos_servico_terceiro : [],
+          // tipos_servico_terceiro só é incluído quando a coluna existir no DB
+          // (rodar: ALTER TABLE oples ADD COLUMN IF NOT EXISTS tipos_servico_terceiro jsonb DEFAULT '[]'::jsonb)
+          ...(form.servico_terceiro && form.tipos_servico_terceiro.length > 0
+            ? { tipos_servico_terceiro: form.tipos_servico_terceiro }
+            : {}),
           tipo_servico_terceiro:   form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
           obs_servico_terceiro:    (form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
           resumo_servicos:         form.resumo_servicos || null,
