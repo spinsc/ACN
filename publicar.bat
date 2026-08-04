@@ -147,6 +147,9 @@ git add src/EngenhariaTab.tsx
 git add src/QualidadeTab.tsx
 git add src/FiscalTab.tsx
 git add src/ChatWidget.tsx
+:: feat: ChatWidget canais completos + CRM Relatorio cards Perdidas e Ganhas
+git add src/ChatWidget.tsx
+git add src/CrmTab.tsx
 
 :: Verificar
 echo.
@@ -158,7 +161,7 @@ echo.
 git add src/AdminTab.tsx
 git add src/CrmTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "feat: OPL como link Ver (LinkOpl); busca em todos os tabs (Eng/PCP/Almox/CQ/Fiscal); seriais equipamentos no FiscalTab; Chat UX melhorado (busca + conversas sempre visiveis); Plataformas Admin CRUD; Formacao Precos ACN/DETECH + imposto por linha + visao Vendedor; Kanban data sessao + Atualizar Desistencia/Perdida"
+git commit -m "feat: OPL como link Ver (LinkOpl); busca em todos os tabs; seriais FiscalTab; Chat canais completos (Licitacoes/RH/Fiscal/etc) + cores; CRM Relatorio cards Perdidas+Ganhas; Formacao Precos; Kanban data sessao"
 
 :: Push
 echo.
@@ -486,6 +489,29 @@ echo ALTER TABLE cotacoes_precos DISABLE ROW LEVEL SECURITY;
 echo -- Adicionar colunas novas se tabela ja existir:
 echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS empresa text DEFAULT 'ACN';
 echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS plataforma_id uuid;
+echo.
+echo -- [NOVO] Canais do chat (Licitacoes e demais departamentos):
+echo INSERT INTO public.chat_salas (tipo, nome, membros) VALUES
+echo   ('canal', 'Geral',        '[]'::jsonb),
+echo   ('canal', 'Comercial',    '[]'::jsonb),
+echo   ('canal', 'Licitacoes',   '[]'::jsonb),
+echo   ('canal', 'CRM',          '[]'::jsonb),
+echo   ('canal', 'Engenharia',   '[]'::jsonb),
+echo   ('canal', 'PCP',          '[]'::jsonb),
+echo   ('canal', 'Almoxarifado', '[]'::jsonb),
+echo   ('canal', 'Producao',     '[]'::jsonb),
+echo   ('canal', 'Serralheria',  '[]'::jsonb),
+echo   ('canal', 'Chicotes',     '[]'::jsonb),
+echo   ('canal', 'Laboratorio',  '[]'::jsonb),
+echo   ('canal', 'Qualidade',    '[]'::jsonb),
+echo   ('canal', 'Logistica',    '[]'::jsonb),
+echo   ('canal', 'Fiscal',       '[]'::jsonb),
+echo   ('canal', 'Compras',      '[]'::jsonb),
+echo   ('canal', 'RH',           '[]'::jsonb),
+echo   ('canal', 'SAC',          '[]'::jsonb),
+echo   ('canal', 'Marketing',    '[]'::jsonb),
+echo   ('canal', 'Telecom',      '[]'::jsonb)
+echo ON CONFLICT DO NOTHING;
 echo.
 echo -- [NOVO] Plataformas de licitacao (NEO, QFrotas, Prime...):
 echo CREATE TABLE IF NOT EXISTS plataformas_licitacao (

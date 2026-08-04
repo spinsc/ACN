@@ -5,14 +5,24 @@ import { supabase } from './supabaseClient';
 const CANAL_COR: Record<string, string> = {
   'Geral':        '#0f766e',
   'Comercial':    '#2563eb',
-  'Engenharia':   '#7c3aed',
+  'Licitações':   '#7c3aed',
+  'CRM':          '#db2777',
+  'Engenharia':   '#6d28d9',
   'PCP':          '#0891b2',
   'Laboratorio':  '#0d9488',
   'Producao':     '#ea580c',
+  'Serralheria':  '#b45309',
+  'Chicotes':     '#92400e',
   'Almoxarifado': '#16a34a',
+  'Qualidade':    '#dc2626',
   'CQ':           '#dc2626',
   'Logistica':    '#d97706',
+  'Fiscal':       '#059669',
+  'Compras':      '#0369a1',
+  'RH':           '#be185d',
   'SAC':          '#9333ea',
+  'Marketing':    '#e11d48',
+  'Telecom':      '#0284c7',
 };
 
 const BROADCAST_CH = 'acn-chat-v1';

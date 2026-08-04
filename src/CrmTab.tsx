@@ -1187,8 +1187,11 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // RELATÓRIO POR ESTÁGIO
   // ─────────────────────────────────────────────────────────────────────────
   const renderRelatorio = () => {
-    const opsAtivas  = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
+    const opsAtivas   = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
+    const opsPerdidas = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)));
+    const opsGanhas   = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)));
     const totalPipeline = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const totalPerdido  = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const podeVer = podeVerTotais && currentUser?.ver_valores !== false;
 
     return (
@@ -1202,6 +1205,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
             <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
             <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
+          </div>
+          <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PERDIDAS</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{opsPerdidas.length}</div>
+            {podeVer && totalPerdido > 0 && (
+              <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
+            )}
+          </div>
+          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 GANHAS</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
           </div>
           {podeVer && (
             <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
