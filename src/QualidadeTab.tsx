@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -51,6 +51,7 @@ export default function QualidadeTab({ currentUser }) {
   const [modalAudit, setModalAudit] = useState(null);
   const [modalVer, setModalVer] = useState(null);
   const [checkStates, setCheckStates] = useState({});
+  const [busca, setBusca] = useState('');
   const [obsAudit, setObsAudit] = useState('');
   const [signData, setSignData] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -167,7 +168,8 @@ export default function QualidadeTab({ currentUser }) {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr"><span>Controle de Qualidade — OPLs para Auditoria ({opls.length})</span></div>
+        <div className="sec-hdr"><span>Controle de Qualidade — OPLs para Auditoria ({filtrarOpls(opls, busca).length})</span></div>
+        <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             <div className="acn-empty">Nenhuma OPL aguardando auditoria de qualidade.</div>
@@ -177,9 +179,9 @@ export default function QualidadeTab({ currentUser }) {
                 <th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Producao por</th><th>Tempo Producao</th><th>Acao</th>
               </tr></thead>
               <tbody>
-                {opls.map(o => (
+                {filtrarOpls(opls, busca).map(o => (
                   <tr key={o.id}>
-                    <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                     <td>{o.chassi || '—'}</td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>

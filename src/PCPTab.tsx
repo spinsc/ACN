@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -14,6 +14,7 @@ export default function PCPTab({ currentUser }) {
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVer, setModalVer] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
+  const [busca, setBusca] = useState('');
   const [modalDemanda, setModalDemanda] = useState(null); // null=fechado, false=avulsa, obj=com opl
   const [descDemanda, setDescDemanda] = useState('');
   const [setorDemanda, setSetorDemanda] = useState('Chicotes');
@@ -278,7 +279,8 @@ export default function PCPTab({ currentUser }) {
 
       {/* TRIAGEM OPLs */}
       <div className="sec-card">
-        <div className="sec-hdr"><span>Triagem de OPLs — PCP ({opls.length})</span></div>
+        <div className="sec-hdr"><span>Triagem de OPLs — PCP ({filtrarOpls(opls, busca).length})</span></div>
+        <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             <div className="acn-empty">Nenhuma OPL em triagem PCP.</div>
@@ -289,10 +291,10 @@ export default function PCPTab({ currentUser }) {
                 <th>Kit Almox</th><th>Pendencia/Falta</th><th>Status</th><th>Prev. Entrega</th><th>Acoes</th>
               </tr></thead>
               <tbody>
-                {opls.map(o => (
+                {filtrarOpls(opls, busca).map(o => (
                   <tr key={o.id} style={isEnvioDireto(o)?{background:'#fffbeb',borderLeft:'3px solid #f59e0b'}:{}}>
                     <td>{fmtDt(o.data_entrada)}</td>
-                    <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                     <td>{o.chassi || '—'}</td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>

@@ -139,6 +139,14 @@ git add src/PCPTab.tsx
 git add src/QualidadeTab.tsx
 git add src/FiscalTab.tsx
 git add src/AlmoxarifadoTab.tsx
+:: feat: LinkOpl + BuscaOplInput + seriais FiscalTab + ChatWidget UX
+git add src/AcnTabShared.tsx
+git add src/AlmoxarifadoTab.tsx
+git add src/PCPTab.tsx
+git add src/EngenhariaTab.tsx
+git add src/QualidadeTab.tsx
+git add src/FiscalTab.tsx
+git add src/ChatWidget.tsx
 
 :: Verificar
 echo.
@@ -150,7 +158,7 @@ echo.
 git add src/AdminTab.tsx
 git add src/CrmTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "feat: Plataformas Admin CRUD; Formacao Precos - empresa ACN/DETECH + seletor plataforma + imposto por linha + visao Vendedor; Kanban - data sessao card + botao Atualizar Desistencia/Perdida"
+git commit -m "feat: OPL como link Ver (LinkOpl); busca em todos os tabs (Eng/PCP/Almox/CQ/Fiscal); seriais equipamentos no FiscalTab; Chat UX melhorado (busca + conversas sempre visiveis); Plataformas Admin CRUD; Formacao Precos ACN/DETECH + imposto por linha + visao Vendedor; Kanban data sessao + Atualizar Desistencia/Perdida"
 
 :: Push
 echo.
@@ -170,6 +178,9 @@ echo.
 echo =============================================
 echo  SQLS NECESSARIOS - RODAR NO SUPABASE:
 echo =============================================
+echo.
+echo [NOVO] Seriais de equipamentos - RODAR NO SUPABASE:
+echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS seriais_equipamentos text;
 echo.
 echo [NOVO] sql/fluxo_comercial.sql - RODAR NO SUPABASE:
 echo  ALTER TABLE oples ADD COLUMN IF NOT EXISTS data_liberacao_comercial timestamptz;

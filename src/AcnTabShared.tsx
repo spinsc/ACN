@@ -549,6 +549,16 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Qualidade"    value={opl.responsavel_qualidade} />
         </div>
 
+        {/* ── Seriais de Equipamentos ── */}
+        {opl.seriais_equipamentos && (
+          <>
+            <Sec title="🔢 Seriais dos Equipamentos" />
+            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: '#1e3a8a', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{opl.seriais_equipamentos}</div>
+            </div>
+          </>
+        )}
+
         {/* ── Resumo dos Serviços ── */}
         {opl.resumo_servicos && (
           <>
@@ -627,6 +637,66 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           Fechar
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Link Clicável de OPL ────────────────────────────────────────────────────
+// Usar em qualquer lugar onde o número da OP aparece como texto.
+// Recebe o objeto OPL completo — abre OplDetalheModal ao clicar.
+export function LinkOpl({ opl, currentUser, color }: { opl: any; currentUser?: any; color?: string }) {
+  const [open, setOpen] = useState(false);
+  if (!opl) return null;
+  const numero = typeof opl === 'string' ? opl : opl?.opl;
+  const obj    = typeof opl === 'object' ? opl : null;
+  return (
+    <>
+      <span
+        onClick={e => { e.stopPropagation(); if (obj) setOpen(true); }}
+        style={{
+          color: color || '#2563eb', fontWeight: 700,
+          cursor: obj ? 'pointer' : 'default',
+          textDecoration: obj ? 'underline dotted' : 'none',
+          textUnderlineOffset: 2,
+        }}
+        title={obj ? 'Abrir detalhes da OPL' : undefined}
+      >
+        {numero}
+      </span>
+      {open && obj && (
+        <OplDetalheModal opl={obj} onClose={() => setOpen(false)} currentUser={currentUser} />
+      )}
+    </>
+  );
+}
+
+// ─── Busca padrão de OPLs ─────────────────────────────────────────────────────
+// Filtro comum: OPL, chassi, cliente, tipo_projeto
+export function filtrarOpls(opls: any[], busca: string): any[] {
+  if (!busca) return opls;
+  const q = busca.toLowerCase();
+  return opls.filter(o =>
+    (o.opl            || '').toLowerCase().includes(q) ||
+    (o.chassi         || '').toLowerCase().includes(q) ||
+    (o.cliente_nome   || '').toLowerCase().includes(q) ||
+    (o.tipo_projeto   || '').toLowerCase().includes(q)
+  );
+}
+
+// ─── Input de busca padrão ────────────────────────────────────────────────────
+export function BuscaOplInput({ busca, setBusca }: { busca: string; setBusca: (v: string) => void }) {
+  return (
+    <div style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+      <span style={{ fontSize: 12, color: '#94a3b8' }}>🔍</span>
+      <input
+        value={busca}
+        onChange={e => setBusca(e.target.value)}
+        placeholder="Buscar por OPL, chassi, cliente ou projeto..."
+        style={{ flex: 1, border: 'none', outline: 'none', fontSize: 11, background: 'transparent', color: '#1e293b' }}
+      />
+      {busca && (
+        <button onClick={() => setBusca('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+      )}
     </div>
   );
 }

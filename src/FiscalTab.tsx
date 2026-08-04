@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
@@ -9,7 +9,9 @@ export default function FiscalTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [nfs, setNfs] = useState({});
+  const [seriais, setSeriais] = useState({});   // serial numbers por opl.id
   const [modalVer, setModalVer] = useState(null);
+  const [busca, setBusca] = useState('');
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
@@ -28,11 +30,13 @@ export default function FiscalTab({ currentUser }) {
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
     const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
+    const serialTxt = (seriais[opl.id] || '').trim();
     await supabase.from('oples').update({
       status_geral: 'Faturado e Disponivel para Entrega',
       numero_nf: nf.trim(),
       data_emissao_nf: agora,
       responsavel_fiscal: currentUser?.nome,
+      ...(serialTxt ? { seriais_equipamentos: serialTxt } : {}),
       ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -43,6 +47,7 @@ export default function FiscalTab({ currentUser }) {
     }]);
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, nf.trim(), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
+    setSeriais(prev => { const n={...prev}; delete n[opl.id]; return n; });
     fetchAll();
   };
 
@@ -56,25 +61,37 @@ export default function FiscalTab({ currentUser }) {
       {/* AGUARDANDO EMISSAO */}
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
-          <span style={{color:'#92400e'}}>OPLs Aguardando Emissao de NF-e ({aguardando.length})</span>
+          <span style={{color:'#92400e'}}>OPLs Aguardando Emissao de NF-e ({filtrarOpls(aguardando, busca).length})</span>
         </div>
+        <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : aguardando.length === 0 ? (
             <div className="acn-empty">Nenhuma OPL aguardando emissao de NF-e.</div>
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th><th>Numero NF-e</th><th>Acao</th>
+                <th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
+                <th>Seriais / Nº Equipamentos</th><th>Numero NF-e</th><th>Acao</th>
               </tr></thead>
               <tbody>
-                {aguardando.map(o => (
+                {filtrarOpls(aguardando, busca).map(o => (
                   <tr key={o.id}>
-                    <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                     <td>{o.chassi || '—'}</td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>{fmtDt(o.data_liberacao_comercial)}</td>
+                    <td>
+                      <textarea
+                        className="acn-input"
+                        style={{width:180,minHeight:42,resize:'vertical',fontSize:10,padding:'4px 7px'}}
+                        placeholder="Ex: SN-001, SN-002 (opcional)"
+                        value={seriais[o.id] || ''}
+                        onChange={e => setSeriais(prev => ({...prev,[o.id]:e.target.value}))}
+                        title="Números de série dos equipamentos desta OP"
+                      />
+                    </td>
                     <td>
                       <input className="acn-input" style={{width:120}}
                         placeholder="NF-e 000000000"
@@ -113,7 +130,7 @@ export default function FiscalTab({ currentUser }) {
               <tbody>
                 {faturados.map(o => (
                   <tr key={o.id}>
-                    <td><strong style={{color:'#22c55e'}}>{o.opl}</strong></td>
+                    <td><LinkOpl opl={o} currentUser={currentUser} color="#22c55e" /></td>
                     <td>{o.chassi || '—'}</td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>

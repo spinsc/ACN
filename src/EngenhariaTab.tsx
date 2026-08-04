@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -26,6 +26,7 @@ export default function EngenhariaTab({ currentUser }) {
   const [modalObsAcomp, setModalObsAcomp] = useState(null);
   const [modalVer, setModalVer] = useState(null);
   const [novaObsAcomp, setNovaObsAcomp] = useState('');
+  const [busca, setBusca] = useState('');
 
   useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(true); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
 
@@ -139,13 +140,14 @@ export default function EngenhariaTab({ currentUser }) {
       {/* OPLs em Espera ou Devolvidas */}
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>OPLs Aguardando Engenharia ({opls.length})</span>
+          <span>OPLs Aguardando Engenharia ({filtrarOpls(opls, busca).length})</span>
           {opls.filter(isEnvioDireto).length > 0 && (
             <span style={{fontSize:10,background:'#fef3c7',color:'#92400e',padding:'3px 8px',borderRadius:10,border:'1px solid #fde68a',fontWeight:700}}>
               📤 {opls.filter(isEnvioDireto).length} envio(s) direto(s) — sem producao
             </span>
           )}
         </div>
+        <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             <div className="acn-empty">Nenhuma OPL aguardando Engenharia.</div>
@@ -156,7 +158,7 @@ export default function EngenhariaTab({ currentUser }) {
                 <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Arquivos</th><th>Acoes</th>
               </tr></thead>
               <tbody>
-                {opls.map(o => {
+                {filtrarOpls(opls, busca).map(o => {
                   const emAndamento = o.status_geral === 'Em Analise Engenharia';
                   const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
                   const tempo = inicio ? ((new Date() - inicio) / 3600000) : null;
@@ -174,7 +176,7 @@ export default function EngenhariaTab({ currentUser }) {
                     <tr key={o.id} style={rowStyle}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td>
-                        <strong style={{color:'#2563eb'}}>{o.opl}</strong>
+                        <LinkOpl opl={o} currentUser={currentUser} />
                         {envioDireto && (
                           <div style={{marginTop:2}}>
                             <span style={{fontSize:9,fontWeight:700,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10,letterSpacing:'0.5px'}}>
