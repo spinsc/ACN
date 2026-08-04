@@ -1686,10 +1686,171 @@ function PainelLixeira() {
   );
 }
 
+// ---- PAINEL DE PLATAFORMAS ----
+function PainelPlataformas() {
+  const [plataformas, setPlataformas] = useState([]);
+  const [loading, setLoading]         = useState(false);
+  const [form, setForm]               = useState({ nome:'', desconto_pct:0, retencao_pct:0 });
+  const [editando, setEditando]       = useState(null);
+  const [showForm, setShowForm]       = useState(false);
+  const [salvando, setSalvando]       = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('plataformas_licitacao').select('*').order('nome');
+    setPlataformas(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const salvar = async () => {
+    if (!form.nome.trim()) { alert('Informe o nome da plataforma.'); return; }
+    setSalvando(true);
+    if (editando) {
+      await supabase.from('plataformas_licitacao').update({
+        nome: form.nome.trim(),
+        desconto_pct: Number(form.desconto_pct) || 0,
+        retencao_pct: Number(form.retencao_pct) || 0,
+      }).eq('id', editando.id);
+    } else {
+      await supabase.from('plataformas_licitacao').insert([{
+        nome: form.nome.trim(),
+        desconto_pct: Number(form.desconto_pct) || 0,
+        retencao_pct: Number(form.retencao_pct) || 0,
+      }]);
+    }
+    setForm({ nome:'', desconto_pct:0, retencao_pct:0 });
+    setEditando(null); setShowForm(false); setSalvando(false);
+    load();
+  };
+
+  const excluir = async (id) => {
+    if (!confirm('Excluir esta plataforma?')) return;
+    await supabase.from('plataformas_licitacao').delete().eq('id', id);
+    load();
+  };
+
+  const toggleAtivo = async (p) => {
+    await supabase.from('plataformas_licitacao').update({ ativo: !p.ativo }).eq('id', p.id);
+    load();
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span>🏪 Plataformas de Licitação</span>
+        <button className="acn-btn" style={{ background:'#0891b2', fontSize:10 }}
+          onClick={() => { setForm({ nome:'', desconto_pct:0, retencao_pct:0 }); setEditando(null); setShowForm(true); }}>
+          + Nova Plataforma
+        </button>
+      </div>
+      <div className="sec-body">
+        <p style={{ fontSize:10, color:'#64748b', marginBottom:12 }}>
+          Plataformas homologadas pelos órgãos públicos para gestão de contratação (NEO, QFrotas, Prime...).
+          O desconto e a retenção são aplicados automaticamente na Formação de Preços quando a plataforma é selecionada.
+        </p>
+
+        {showForm && (
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
+              {editando ? '✏️ Editar Plataforma' : '+ Nova Plataforma'}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8, marginBottom:10 }}>
+              <div>
+                <label className="acn-label">Nome da Plataforma *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Ex: NEO, QFrotas, Prime"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  autoFocus />
+              </div>
+              <div>
+                <label className="acn-label">Desconto (%)</label>
+                <input type="number" className="acn-input" style={{ width:'100%' }}
+                  min={0} max={100} step={0.01}
+                  value={form.desconto_pct}
+                  onChange={e => setForm(f => ({ ...f, desconto_pct: e.target.value }))} />
+              </div>
+              <div>
+                <label className="acn-label">Retenção (%)</label>
+                <input type="number" className="acn-input" style={{ width:'100%' }}
+                  min={0} max={100} step={0.01}
+                  value={form.retencao_pct}
+                  onChange={e => setForm(f => ({ ...f, retencao_pct: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'SALVAR'}
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setShowForm(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {loading && <div style={{ textAlign:'center', padding:20, color:'#64748b', fontSize:11 }}>Carregando...</div>}
+        {!loading && plataformas.length === 0 && (
+          <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11 }}>
+            Nenhuma plataforma cadastrada. Clique em <strong>+ Nova Plataforma</strong> para começar.
+          </div>
+        )}
+
+        {plataformas.length > 0 && (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Plataforma</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Desconto</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Retenção</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Status</th>
+                <th style={{ padding:'6px 8px', borderBottom:'1px solid #e2e8f0' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {plataformas.map(p => (
+                <tr key={p.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: p.ativo ? 1 : 0.45 }}>
+                  <td style={{ padding:'8px 8px', fontWeight:700 }}>{p.nome}</td>
+                  <td style={{ padding:'8px 8px', textAlign:'center', color:'#059669', fontWeight:700 }}>{Number(p.desconto_pct||0).toFixed(2)}%</td>
+                  <td style={{ padding:'8px 8px', textAlign:'center', color:'#dc2626', fontWeight:700 }}>{Number(p.retencao_pct||0).toFixed(2)}%</td>
+                  <td style={{ padding:'8px 8px', textAlign:'center' }}>
+                    <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10,
+                      background: p.ativo ? '#dcfce7' : '#f1f5f9',
+                      color:      p.ativo ? '#16a34a'  : '#94a3b8' }}>
+                      {p.ativo ? 'Ativa' : 'Inativa'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'8px 6px' }}>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                      <button className="acn-btn" style={{ background: p.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => toggleAtivo(p)}>
+                        {p.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => { setForm({ nome:p.nome, desconto_pct:p.desconto_pct||0, retencao_pct:p.retencao_pct||0 }); setEditando(p); setShowForm(true); }}>
+                        ✏️
+                      </button>
+                      <button style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'2px 7px', fontSize:9, cursor:'pointer' }}
+                        onClick={() => excluir(p.id)}>
+                        ✕
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---- ADMINTAB PRINCIPAL ----
 const ABAS_ADMIN = [
   { id:'usuarios',       label:'Usuários' },
   { id:'perfis',         label:'🔐 Perfis de Acesso' },
+  { id:'plataformas',    label:'🏪 Plataformas' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
@@ -1957,6 +2118,7 @@ export default function AdminTab() {
 
       {abaAtiva === 'usuarios'     && <PainelUsuarios />}
       {abaAtiva === 'perfis'       && <PainelPerfis />}
+      {abaAtiva === 'plataformas'  && <PainelPlataformas />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}

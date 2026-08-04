@@ -147,7 +147,10 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: ContatoAlertWidget (alerta 2d + popup 15min CRM); hora_prox_contato no CRM; fix modal licitacao nao fecha no backdrop"
+git add src/AdminTab.tsx
+git add src/CrmTab.tsx
+git add src/FormacaoPrecosTab.tsx
+git commit -m "feat: Plataformas Admin CRUD; Formacao Precos - empresa ACN/DETECH + seletor plataforma + imposto por linha + visao Vendedor; Kanban - data sessao card + botao Atualizar Desistencia/Perdida"
 
 :: Push
 echo.
@@ -445,17 +448,48 @@ echo.
 echo -- [4] Hora do proximo contato no CRM (alerta 15 min):
 echo ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS hora_prox_contato time;
 echo.
+echo -- [5] Kanban 5 colunas + hora sessao licitacao:
+echo ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS sub_status text DEFAULT 'andamento';
+echo ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS empresa_vencedora text;
+echo ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS hora_sessao time;
+echo.
+echo -- [6] Estagio "Finalizada" no CRM (rodar para cada funil usado):
+echo INSERT INTO crm_estagios_funil (nome, funil, is_final, cor, ordem) VALUES
+echo   ('Finalizada', 'licitacao',   true, '#0f766e', 99),
+echo   ('Finalizada', 'venda_direta',true, '#0f766e', 99)
+echo ON CONFLICT DO NOTHING;
+echo.
 echo -- [3] Tabela de cotacoes/modelos de formacao de precos:
 echo CREATE TABLE IF NOT EXISTS cotacoes_precos (
 echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 echo   nome text NOT NULL,
 echo   tipo text DEFAULT 'licitacao',
+echo   empresa text DEFAULT 'ACN',
+echo   plataforma_id uuid,
 echo   parametros_globais jsonb DEFAULT '{}',
 echo   itens jsonb DEFAULT '[]',
 echo   criado_por text,
 echo   criado_em timestamptz DEFAULT now()
 echo );
 echo ALTER TABLE cotacoes_precos DISABLE ROW LEVEL SECURITY;
+echo -- Adicionar colunas novas se tabela ja existir:
+echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS empresa text DEFAULT 'ACN';
+echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS plataforma_id uuid;
+echo.
+echo -- [NOVO] Plataformas de licitacao (NEO, QFrotas, Prime...):
+echo CREATE TABLE IF NOT EXISTS plataformas_licitacao (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   nome text NOT NULL,
+echo   desconto_pct numeric DEFAULT 0,
+echo   retencao_pct numeric DEFAULT 0,
+echo   ativo boolean DEFAULT true,
+echo   criado_em timestamptz DEFAULT now()
+echo );
+echo ALTER TABLE plataformas_licitacao DISABLE ROW LEVEL SECURITY;
+echo -- Inserir plataformas padrao (ignorar se ja existirem):
+echo INSERT INTO plataformas_licitacao (nome, desconto_pct, retencao_pct) VALUES
+echo   ('NEO', 0, 0), ('QFrotas', 0, 0), ('Prime', 0, 0)
+echo ON CONFLICT DO NOTHING;
 echo.
 echo ==============================================
 echo  WHATSAPP (EVOLUTION API) - PASSOS:

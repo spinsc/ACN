@@ -247,19 +247,11 @@ function CalcImpostoReverso() {
 }
 
 // ─── LINHA DE ITEM ────────────────────────────────────────────────────────────
-function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params }) {
+function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params, isVendedor }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct } = result;
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
-
-  const inp = (k, w=70, type='text') => (
-    <input
-      type={type}
-      className="acn-input"
-      style={{ width:w, fontSize:9, padding:'2px 4px', textAlign:'right' }}
-      value={item[k]}
-      onChange={e => onSet(k, type === 'number' ? e.target.value : e.target.value)}
-    />
-  );
+  // Estilo de ocultar colunas sensíveis para vendedor
+  const H = isVendedor ? { display:'none' } : {};
 
   return (
     <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
@@ -285,39 +277,51 @@ function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params }) {
           {MOEDAS.map(m=><option key={m}>{m}</option>)}
         </select>
       </td>
-      {/* Custo Unit */}
-      <td style={{ padding:'4px 4px', minWidth:80 }}>
+      {/* Custo Unit — OCULTO para vendedor */}
+      <td style={{ padding:'4px 4px', minWidth:80, ...H }}>
         <input type="number" className="acn-input" style={{ width:76, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
       </td>
-      {/* IPI% */}
-      <td style={{ padding:'4px 4px', minWidth:55 }}>
+      {/* IPI% — OCULTO para vendedor */}
+      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
         <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
       </td>
-      {/* ST% */}
-      <td style={{ padding:'4px 4px', minWidth:55 }}>
+      {/* ST% — OCULTO para vendedor */}
+      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
         <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
       </td>
-      {/* Markup% */}
-      <td style={{ padding:'4px 4px', minWidth:60 }}>
+      {/* Markup% — OCULTO para vendedor */}
+      <td style={{ padding:'4px 4px', minWidth:60, ...H }}>
         <input type="number" className="acn-input" style={{ width:56, fontSize:9, padding:'2px 4px', textAlign:'right', background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
           step="0.1" value={item.markup_pct} onChange={e=>onSet('markup_pct', e.target.value)} />
       </td>
-      {/* DIFAL% — se usar globais, cinza */}
-      <td style={{ padding:'4px 4px', minWidth:55 }}>
+      {/* DIFAL% — se usar globais, cinza; OCULTO para vendedor */}
+      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
         <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right', background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
           step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct} onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }} readOnly={usarParamsGlobais} />
       </td>
+      {/* Imposto% por linha — se usar globais, cinza; OCULTO para vendedor */}
+      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
+        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right', background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
+          step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct} onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }} readOnly={usarParamsGlobais} />
+      </td>
       {/* ── CALCULADOS ── */}
-      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', fontWeight:600 }}>{fmtR(custoUnitBrl)}</td>
-      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e' }}>{fmtR(custoTotal)}</td>
+      {/* Custo c/Imp. Unit — OCULTO para vendedor */}
+      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', fontWeight:600, ...H }}>{fmtR(custoUnitBrl)}</td>
+      {/* Custo Total — OCULTO para vendedor */}
+      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', ...H }}>{fmtR(custoTotal)}</td>
+      {/* Valor Unit. — visível para todos */}
       <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
+      {/* Valor Total — visível para todos */}
       <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#1d4ed8', fontWeight:700 }}>{fmtR(valorTotal)}</td>
-      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#b45309' }}>{fmtR(totalDifal)}</td>
-      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#9d174d' }}>{fmtR(totalImposto)}</td>
-      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, fontWeight:800, color: lucroColor }}>{fmtPct(lucroPct)}</td>
+      {/* DIFAL Total — OCULTO para vendedor */}
+      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#b45309', ...H }}>{fmtR(totalDifal)}</td>
+      {/* Imposto — OCULTO para vendedor */}
+      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#9d174d', ...H }}>{fmtR(totalImposto)}</td>
+      {/* Lucro% — OCULTO para vendedor */}
+      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, fontWeight:800, color: lucroColor, ...H }}>{fmtPct(lucroPct)}</td>
       {/* Remover */}
       <td style={{ padding:'4px 4px', textAlign:'center' }}>
         <button onClick={onRemove}
@@ -340,8 +344,20 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const [salvando, setSalvando]   = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [nomeCotacao, setNomeCotacao] = useState('');
+  const [empresa, setEmpresa]             = useState('ACN');
+  const [plataformas, setPlataformas]     = useState([]);
+  const [plataformaSelecionada, setPlataformaSelecionada] = useState(null);
+
+  // Perfil vendedor — vê versão simplificada (sem custos, markup, margem)
+  const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
 
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
+
+  // Carrega plataformas ativas da tabela plataformas_licitacao
+  useEffect(() => {
+    supabase.from('plataformas_licitacao').select('*').eq('ativo', true).order('nome')
+      .then(({ data }) => setPlataformas(data || []));
+  }, []);
 
   // Computed results per item (apply global DIFAL/Imposto when usarGlobais=true)
   const paramEfetivo = (item) => usarGlobais
@@ -359,6 +375,13 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const totMargem  = results.reduce((s, r) => s + r.margem,        0);
   const lucroGeral = (totVendas - totDifal) > 0 ? totMargem / (totVendas - totDifal) * 100 : 0;
 
+  // Plataforma
+  const descontoPlatPct  = Number(plataformaSelecionada?.desconto_pct) || 0;
+  const retencaoPlatPct  = Number(plataformaSelecionada?.retencao_pct) || 0;
+  const descontoPlat     = totVendas * descontoPlatPct / 100;
+  const retencaoPlat     = totVendas * retencaoPlatPct / 100;
+  const totalLiquidoPlat = totVendas - descontoPlat - retencaoPlat;
+
   const addItem  = () => setItens(p => [...p, novoItem()]);
   const remItem  = (id) => setItens(p => p.filter(x => x._id !== id));
   const setItem  = (id, k, v) => setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
@@ -375,6 +398,8 @@ export default function FormacaoPrecosTab({ currentUser }) {
     const { error } = await supabase.from('cotacoes_precos').insert([{
       nome,
       tipo,
+      empresa,
+      plataforma_id: plataformaSelecionada?.id || null,
       parametros_globais: params,
       itens: itens.map(({ _id, ...rest }) => rest),
       criado_por: currentUser?.nome || 'Sistema',
@@ -392,6 +417,12 @@ export default function FormacaoPrecosTab({ currentUser }) {
     setParams(m.parametros_globais || { ...PARAMS_PADRAO });
     setItens((m.itens || []).map(x => ({ ...x, _id: Math.random().toString(36).slice(2) })));
     setNomeCotacao(m.nome);
+    if (m.empresa) setEmpresa(m.empresa);
+    if (m.plataforma_id && plataformas.length > 0) {
+      setPlataformaSelecionada(plataformas.find(x => x.id === m.plataforma_id) || null);
+    } else {
+      setPlataformaSelecionada(null);
+    }
     setModalCarregar(false);
   };
 
@@ -406,6 +437,8 @@ export default function FormacaoPrecosTab({ currentUser }) {
     setParams({ ...PARAMS_PADRAO });
     setItens([novoItem()]);
     setNomeCotacao('');
+    setEmpresa('ACN');
+    setPlataformaSelecionada(null);
   };
 
   const duplicarItem = (id) => {
@@ -452,6 +485,45 @@ export default function FormacaoPrecosTab({ currentUser }) {
         </div>
       </div>
 
+      {/* ── EMPRESA + PLATAFORMA ── */}
+      <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+        {/* Empresa (ACN / DETECH) */}
+        <div>
+          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
+          <div style={{ display:'flex', gap:4 }}>
+            {['ACN', 'DETECH'].map(emp => (
+              <button key={emp} className="acn-btn"
+                style={{ background: empresa===emp ? '#1e293b' : '#e2e8f0', color: empresa===emp ? '#fff' : '#374151', fontSize:10, minWidth:64 }}
+                onClick={() => setEmpresa(emp)}>
+                {emp}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Plataforma */}
+        <div>
+          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏪 Plataforma</div>
+          <select className="acn-input" style={{ minWidth:200, fontSize:10 }}
+            value={plataformaSelecionada?.id || ''}
+            onChange={e => setPlataformaSelecionada(plataformas.find(x => x.id === e.target.value) || null)}>
+            <option value="">— Sem Plataforma —</option>
+            {plataformas.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.nome}{p.desconto_pct ? ` (desc: ${p.desconto_pct}%)` : ''}{p.retencao_pct ? ` (ret: ${p.retencao_pct}%)` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        {/* Resumo plataforma selecionada */}
+        {plataformaSelecionada && (
+          <div style={{ fontSize:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 12px', display:'flex', gap:12 }}>
+            <span style={{ color:'#059669', fontWeight:700 }}>Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
+            <span style={{ color:'#dc2626', fontWeight:700 }}>Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
+            <span style={{ color:'#0f766e', fontWeight:800 }}>Líquido: {fmtR(totalLiquidoPlat)}</span>
+          </div>
+        )}
+      </div>
+
       {/* ── PARÂMETROS GLOBAIS ── */}
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
         <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>
@@ -492,25 +564,26 @@ export default function FormacaoPrecosTab({ currentUser }) {
               <th style={{...thStyle, minWidth:80}}>Marca</th>
               <th style={{...thStyle, minWidth:50}}>Qt</th>
               <th style={{...thStyle, minWidth:68}}>Moeda</th>
-              <th style={{...thStyle, minWidth:76}}>Custo Unit.</th>
-              <th style={{...thStyle, minWidth:50}}>IPI%</th>
-              <th style={{...thStyle, minWidth:50}}>ST%</th>
-              <th style={{...thStyle, minWidth:56}}>Markup%</th>
-              <th style={{...thStyle, minWidth:50, background: usarGlobais ? '#334155' : '#1e293b'}}>DIFAL%</th>
-              <th style={{...thStyle, minWidth:100, background:'#065f46'}}>Custo c/Imp. Unit</th>
-              <th style={{...thStyle, minWidth:100, background:'#065f46'}}>Custo Total</th>
+              <th style={{...thStyle, minWidth:76, display: isVendedor ? 'none' : undefined}}>Custo Unit.</th>
+              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>IPI%</th>
+              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>ST%</th>
+              <th style={{...thStyle, minWidth:56, display: isVendedor ? 'none' : undefined}}>Markup%</th>
+              <th style={{...thStyle, minWidth:50, background: usarGlobais ? '#334155' : '#1e293b', display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
+              <th style={{...thStyle, minWidth:50, background: usarGlobais ? '#334155' : '#1e293b', display: isVendedor ? 'none' : undefined}}>Imposto%</th>
+              <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
+              <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
               <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Unit.</th>
               <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Total</th>
-              <th style={{...thStyle, minWidth:80, background:'#92400e'}}>DIFAL Total</th>
-              <th style={{...thStyle, minWidth:80, background:'#831843'}}>Imposto</th>
-              <th style={{...thStyle, minWidth:70}}>Lucro%</th>
+              <th style={{...thStyle, minWidth:80, background:'#92400e', display: isVendedor ? 'none' : undefined}}>DIFAL Total</th>
+              <th style={{...thStyle, minWidth:80, background:'#831843', display: isVendedor ? 'none' : undefined}}>Imposto</th>
+              <th style={{...thStyle, minWidth:70, display: isVendedor ? 'none' : undefined}}>Lucro%</th>
               <th style={{...thStyle, minWidth:36}}>✕</th>
             </tr>
           </thead>
           <tbody>
             {itens.length === 0 && (
               <tr>
-                <td colSpan={17} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+                <td colSpan={isVendedor ? 7 : 18} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
                   Nenhum item. Clique em <strong>+ Adicionar Item</strong>.
                 </td>
               </tr>
@@ -524,6 +597,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
                 onRemove={() => remItem(item._id)}
                 usarParamsGlobais={usarGlobais}
                 params={params}
+                isVendedor={isVendedor}
               />
             ))}
           </tbody>
@@ -534,13 +608,18 @@ export default function FormacaoPrecosTab({ currentUser }) {
       {itens.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:12 }}>
           {[
-            { label:'Total de Vendas',   value: fmtR(totVendas),   bg:'#1e40af', color:'#fff' },
-            { label:'Total de Custos',   value: fmtR(totCustos),   bg:'#065f46', color:'#fff' },
-            { label:'Total DIFAL',       value: fmtR(totDifal),    bg:'#92400e', color:'#fff' },
-            { label:'Total Impostos',    value: fmtR(totImposto),  bg:'#831843', color:'#fff' },
-            { label:'Margem Real Total', value: fmtR(totMargem),   bg: totMargem >= 0 ? '#166534' : '#991b1b', color:'#fff' },
-            { label:'Lucro % Geral',     value: fmtPct(lucroGeral), bg: lucroGeralColor, color:'#fff' },
-          ].map(({ label, value, bg, color }) => (
+            { label:'Total de Vendas',                        value: fmtR(totVendas),    bg:'#1e40af', color:'#fff', hide: false },
+            { label:'Total de Custos',                        value: fmtR(totCustos),    bg:'#065f46', color:'#fff', hide: isVendedor },
+            { label:'Total DIFAL',                            value: fmtR(totDifal),     bg:'#92400e', color:'#fff', hide: isVendedor },
+            { label:'Total Impostos',                         value: fmtR(totImposto),   bg:'#831843', color:'#fff', hide: false },
+            { label:'Margem Real Total',                      value: fmtR(totMargem),    bg: totMargem >= 0 ? '#166534' : '#991b1b', color:'#fff', hide: isVendedor },
+            { label:'Lucro % Geral',                          value: fmtPct(lucroGeral), bg: lucroGeralColor, color:'#fff', hide: isVendedor },
+            ...(plataformaSelecionada ? [
+              { label:`Desconto ${plataformaSelecionada.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     bg:'#0891b2', color:'#fff', hide: false },
+              { label:`Retenção ${plataformaSelecionada.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     bg:'#7c3aed', color:'#fff', hide: false },
+              { label:'Valor Líquido c/ Plataforma',                                  value: fmtR(totalLiquidoPlat), bg:'#0f766e', color:'#fff', hide: false },
+            ] : []),
+          ].filter(x => !x.hide).map(({ label, value, bg, color }) => (
             <div key={label} style={{ background:bg, color, borderRadius:8, padding:'10px 14px' }}>
               <div style={{ fontSize:9, opacity:.85, marginBottom:3 }}>{label}</div>
               <div style={{ fontSize:14, fontWeight:800 }}>{value}</div>

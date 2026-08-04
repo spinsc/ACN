@@ -400,25 +400,26 @@ export default function AnaliseWidget({ setor, currentUser }: { setor: string; c
     load();
   };
 
-  const uploadAnexo = async (solicitacaoId: string, file: File) => {
+  const uploadAnexo = async (solicitacaoId: string, files: FileList | File[]) => {
     setUploadando(solicitacaoId);
-    const path = `analise/${solicitacaoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-    const { data: up, error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
-    if (up) {
-      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      await supabase.from('analise_anexos').insert({
-        solicitacao_id: solicitacaoId,
-        nome: file.name,
-        url: pub?.publicUrl || '',
-        criado_por: currentUser?.nome || 'Sistema',
-        setor,
-      });
-      // reload anexos
-      const { data: anx } = await supabase.from('analise_anexos').select('*').eq('solicitacao_id', solicitacaoId);
-      setAnexos(prev => ({ ...prev, [solicitacaoId]: anx || [] }));
-    } else if (error) {
-      alert('Erro ao enviar arquivo: ' + error.message);
+    const lista = Array.from(files);
+    for (const file of lista) {
+      const path = `analise/${solicitacaoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+      const { data: up } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
+      if (up) {
+        const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        await supabase.from('analise_anexos').insert({
+          solicitacao_id: solicitacaoId,
+          nome: file.name,
+          url: pub?.publicUrl || '',
+          criado_por: currentUser?.nome || 'Sistema',
+          setor,
+        });
+      }
     }
+    // reload anexos após enviar todos
+    const { data: anx } = await supabase.from('analise_anexos').select('*').eq('solicitacao_id', solicitacaoId);
+    setAnexos(prev => ({ ...prev, [solicitacaoId]: anx || [] }));
     setUploadando(null);
   };
 
@@ -512,8 +513,8 @@ export default function AnaliseWidget({ setor, currentUser }: { setor: string; c
                           <label style={{ fontSize:10, color:cor, cursor:'pointer', fontWeight:600,
                             opacity: uploadando===solId ? .5 : 1 }}>
                             {uploadando===solId ? '⏳ Enviando...' : '+ Adicionar arquivo'}
-                            <input type="file" hidden disabled={uploadando===solId}
-                              onChange={e => { if (e.target.files?.[0] && solId) uploadAnexo(solId, e.target.files[0]); e.target.value=''; }} />
+                            <input type="file" hidden multiple disabled={uploadando===solId}
+                              onChange={e => { if (e.target.files?.length && solId) uploadAnexo(solId, e.target.files); e.target.value=''; }} />
                           </label>
                         </div>
 

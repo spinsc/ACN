@@ -24,7 +24,8 @@ const diasAte = (v: string | null) => {
 };
 const isGanho       = (e: any) => e?.nome?.toLowerCase().includes('vencida') || e?.nome?.toLowerCase().includes('convertida');
 const isDesistencia = (e: any) => e?.nome?.toLowerCase().includes('desist');
-const isPerdido     = (e: any) => e?.is_final && !isGanho(e) && !isDesistencia(e);
+const isFinalizada  = (e: any) => e?.nome?.toLowerCase().includes('finaliz');
+const isPerdido     = (e: any) => e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e);
 
 const VAZIO_OP: any = {
   funil: 'licitacao',
@@ -33,7 +34,10 @@ const VAZIO_OP: any = {
   numero_edital: '',
   orgao: '',
   data_sessao: '',
+  hora_sessao: '',
   data_validade_ata: '',
+  sub_status: 'andamento',
+  empresa_vencedora: '',
   valor_registrado: '',
   cliente_id: null,
   _cliente_nome: '',   // campo temporário — não vai para o banco
@@ -118,9 +122,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [modalGate, setModalGate]           = useState<any|null>(null);
   const [modalConverter, setModalConverter] = useState<any|null>(null);
   const [modalConverterLicit, setModalConverterLicit] = useState<any|null>(null); // converter venda direta → licitação/ATA
-  const [modalMotivo, setModalMotivo]       = useState<any|null>(null);
-  const [modalDesist, setModalDesist]       = useState<any|null>(null);
-  const [desistTexto, setDesistTexto]       = useState('');
+  const [modalMotivo, setModalMotivo]         = useState<any|null>(null);
+  const [modalDesist, setModalDesist]         = useState<any|null>(null);
+  const [modalEmpresaVenc, setModalEmpresaVenc] = useState<any|null>(null);
+  const [desistTexto, setDesistTexto]         = useState('');
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
@@ -269,6 +274,11 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
     const estDest = getEst(estagioDestId);
     setDragging(null);
+
+    if (isGanho(estDest)) {
+      setModalEmpresaVenc({ op, estagioDestId });
+      return;
+    }
 
     if (isDesistencia(estDest)) {
       setModalDesist({ op, estagioDestId });
@@ -440,6 +450,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       numero_edital:     limpar(formOp.numero_edital),
       orgao:             limpar(formOp.orgao),
       data_sessao:       limpar(formOp.data_sessao),
+      hora_sessao:       limpar(formOp.hora_sessao) || null,
+      sub_status:        formOp.sub_status || 'andamento',
+      empresa_vencedora: limpar(formOp.empresa_vencedora) || null,
       data_validade_ata: limpar(formOp.data_validade_ata),
       data_prev_fechamento: limpar(formOp.data_prev_fechamento),
       valor_registrado:  formOp.valor_registrado
@@ -678,6 +691,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       numero_edital:     limpar(formOp.numero_edital),
       orgao:             limpar(formOp.orgao),
       data_sessao:       limpar(formOp.data_sessao),
+      hora_sessao:       limpar(formOp.hora_sessao) || null,
+      sub_status:        formOp.sub_status || 'andamento',
+      empresa_vencedora: limpar(formOp.empresa_vencedora) || null,
       data_validade_ata: limpar(formOp.data_validade_ata),
       data_prev_fechamento: limpar(formOp.data_prev_fechamento),
       valor_registrado:  formOp.valor_registrado
@@ -972,6 +988,38 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </span>
         </div>
 
+        {/* ── Sub-linha sempre visível: data sessão + motivo + botão atualizar ── */}
+        {(op.data_sessao || desistiu || perdido) && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:3, gap:4 }}>
+            <div style={{ minWidth:0, flex:1, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+              {op.data_sessao && (
+                <span style={{ fontSize:8, color:'#475569', fontWeight:600, flexShrink:0 }}>
+                  📅 {fmtData(op.data_sessao)}{op.hora_sessao ? ` · ⏰${String(op.hora_sessao).slice(0,5)}` : ''}
+                </span>
+              )}
+              {desistiu && op.motivo_desistencia && (
+                <span style={{ fontSize:7, color:'#92400e', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
+                  title={op.motivo_desistencia}>
+                  ✋ {op.motivo_desistencia}
+                </span>
+              )}
+              {perdido && op.motivo_perda && (
+                <span style={{ fontSize:7, color:'#991b1b', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
+                  title={op.motivo_perda}>
+                  ❌ {op.motivo_perda}
+                </span>
+              )}
+            </div>
+            {(desistiu || perdido) && (
+              <button
+                onClick={e => { e.stopPropagation(); abrirAndamento(op); }}
+                style={{ background:'none', border:'1px solid #d1d5db', borderRadius:3, padding:'1px 5px', fontSize:8, cursor:'pointer', color:'#475569', flexShrink:0 }}>
+                📝 Atualizar
+              </button>
+            )}
+          </div>
+        )}
+
         {/* ── Corpo (visível só quando expandido) ── */}
         {expandido && (<>
         <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
@@ -1012,15 +1060,20 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
           <span style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</span>
-          {dias !== null && !ganho && !perdido && (
-            <span style={{
-              fontSize:8, padding:'1px 5px', borderRadius:3, fontWeight:700,
-              background: dias < 0 ? '#fee2e2' : dias <= 3 ? '#fef9c3' : '#dcfce7',
-              color:      dias < 0 ? '#991b1b' : dias <= 3 ? '#854d0e' : '#166534',
-            }}>
-              {dias < 0 ? `${Math.abs(dias)}d atraso` : dias === 0 ? 'Hoje' : `+${dias}d`}
-            </span>
-          )}
+          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+            {op.hora_sessao && (
+              <span style={{ fontSize:8, color:'#64748b' }}>⏰ {String(op.hora_sessao).slice(0,5)}</span>
+            )}
+            {dias !== null && !ganho && !perdido && (
+              <span style={{
+                fontSize:8, padding:'1px 5px', borderRadius:3, fontWeight:700,
+                background: dias < 0 ? '#fee2e2' : dias <= 3 ? '#fef9c3' : '#dcfce7',
+                color:      dias < 0 ? '#991b1b' : dias <= 3 ? '#854d0e' : '#166534',
+              }}>
+                {dias < 0 ? `${Math.abs(dias)}d atraso` : dias === 0 ? 'Hoje' : `+${dias}d`}
+              </span>
+            )}
+          </div>
         </div>
 
         {chk && !ganho && !perdido && (
@@ -1231,42 +1284,134 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // KANBAN
+  // KANBAN — 5 super-colunas
   // ─────────────────────────────────────────────────────────────────────────
+  const SUB_STATUS_LABEL: Record<string,string> = {
+    andamento: '🟢 Andamento',
+    suspenso:  '🔴 Suspenso',
+    aguardando:'🟡 Aguardando',
+  };
+  const SUB_STATUS_COR: Record<string,string> = {
+    andamento: '#16a34a',
+    suspenso:  '#dc2626',
+    aguardando:'#d97706',
+  };
+
+  const atualizarSubStatus = async (opId: string, novoStatus: string) => {
+    await supabase.from('crm_oportunidades').update({ sub_status: novoStatus }).eq('id', opId);
+    await load();
+  };
+
+  const SUPER_COLS = [
+    { id:'aberto',      label:'Aberto',      bg:'#1e3a5f', dropBg:'#e8ecf0',   terminal:false,
+      match: (o: any) => { const e = getEst(o.estagio_id); return !isGanho(e) && !isPerdido(e) && !isDesistencia(e) && !isFinalizada(e); },
+      estDrop: () => estagiosFunil.find(e => !isGanho(e) && !isPerdido(e) && !isDesistencia(e) && !isFinalizada(e))?.id,
+    },
+    { id:'vencidas',    label:'Vencidas',    bg:'#166534', dropBg:'#dcfce760', terminal:true,
+      match: (o: any) => isGanho(getEst(o.estagio_id)),
+      estDrop: () => estagiosFunil.find(e => isGanho(e))?.id,
+    },
+    { id:'perdidas',    label:'Perdidas',    bg:'#991b1b', dropBg:'#fee2e260', terminal:true,
+      match: (o: any) => isPerdido(getEst(o.estagio_id)),
+      estDrop: () => estagiosFunil.find(e => isPerdido(e))?.id,
+    },
+    { id:'desistencias',label:'Desistências',bg:'#92400e', dropBg:'#fef3c760', terminal:true,
+      match: (o: any) => isDesistencia(getEst(o.estagio_id)),
+      estDrop: () => estagiosFunil.find(e => isDesistencia(e))?.id,
+    },
+    { id:'finalizadas', label:'Finalizadas', bg:'#0f766e', dropBg:'#ccfbf160', terminal:true,
+      match: (o: any) => isFinalizada(getEst(o.estagio_id)),
+      estDrop: () => estagiosFunil.find(e => isFinalizada(e))?.id,
+    },
+  ];
+
   const renderKanban = () => (
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
-      {estagiosFunil.map(est => {
-        const cards   = opsFiltradas.filter(o => o.estagio_id === est.id);
-        const ganho      = isGanho(est);
-        const perdido    = isPerdido(est);
-        const desistiu   = isDesistencia(est);
-        const hdrBg      = perdido ? '#991b1b' : ganho ? '#166534' : desistiu ? '#92400e' : (est.cor || '#1e293b');
+      {SUPER_COLS.map(col => {
+        const cards = opsFiltradas.filter(col.match);
+        const estId = col.estDrop();
+        const isDragOver = dragOver === col.id;
 
         return (
-          <div key={est.id} style={{ width:200, flexShrink:0 }}>
-            <div style={{ background:hdrBg, color:'white', padding:'4px 8px', borderRadius:'5px 5px 0 0',
+          <div key={col.id} style={{ width: col.id === 'aberto' ? 240 : 195, flexShrink:0 }}>
+            {/* Header */}
+            <div style={{ background:col.bg, color:'white', padding:'5px 8px', borderRadius:'5px 5px 0 0',
               fontSize:9, fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center',
               textTransform:'uppercase', letterSpacing:'.4px' }}>
-              <span>{est.nome}</span>
-              <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 6px', fontSize:8 }}>
-                {cards.length}
-              </span>
+              <span>{col.label}</span>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                {col.id === 'vencidas' && (
+                  <span style={{ fontSize:7, opacity:.8 }}>
+                    ACN:{cards.filter(o=>o.empresa_vencedora==='ACN').length} · DTC:{cards.filter(o=>o.empresa_vencedora==='DETECH').length}
+                  </span>
+                )}
+                {col.id === 'aberto' && (
+                  <span style={{ fontSize:7, opacity:.8 }}>
+                    🟢{cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} 🔴{cards.filter(o=>o.sub_status==='suspenso').length} 🟡{cards.filter(o=>o.sub_status==='aguardando').length}
+                  </span>
+                )}
+                <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 6px', fontSize:8 }}>
+                  {cards.length}
+                </span>
+              </div>
             </div>
 
+            {/* Drop zone */}
             <div
-              onDragOver={e => { e.preventDefault(); setDragOver(est.id); }}
+              onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
               onDragLeave={() => setDragOver(null)}
-              onDrop={() => handleDrop(est.id)}
+              onDrop={() => estId && handleDrop(estId)}
               style={{
-                background: dragOver === est.id ? '#dbeafe' : perdido ? '#fee2e260' : ganho ? '#dcfce760' : desistiu ? '#fef3c760' : '#e8ecf0',
-                borderRadius:'0 0 5px 5px', padding:5, minHeight:100, transition:'background .15s',
-                border: dragOver === est.id ? '2px dashed #3b82f6' : '2px solid transparent',
+                background: isDragOver ? '#dbeafe' : col.dropBg,
+                borderRadius:'0 0 5px 5px', padding:5, minHeight:120, transition:'background .15s',
+                border: isDragOver ? '2px dashed #3b82f6' : '2px solid transparent',
               }}
             >
-              {cards.map(op => renderCard(op))}
-              {!perdido && !ganho && !desistiu && (
-                <div
-                  onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: est.id }); setModalOp({}); }}
+              {cards.map(op => (
+                <div key={op.id}>
+                  {/* Badge do estágio real dentro de Aberto */}
+                  {col.id === 'aberto' && (
+                    <div style={{ fontSize:7, color:'#64748b', marginBottom:1, paddingLeft:2 }}>
+                      {getEst(op.estagio_id)?.nome}
+                    </div>
+                  )}
+
+                  {renderCard(op)}
+
+                  {/* Sub-status chips — coluna Aberto */}
+                  {col.id === 'aberto' && (
+                    <div style={{ display:'flex', gap:2, marginTop:1, marginBottom:5, paddingLeft:2 }}>
+                      {(['andamento','suspenso','aguardando'] as const).map(s => {
+                        const ativo = (op.sub_status || 'andamento') === s;
+                        return (
+                          <button key={s} onClick={() => atualizarSubStatus(op.id, s)}
+                            style={{ fontSize:7, padding:'1px 5px', borderRadius:10, border:'none', cursor:'pointer',
+                              background: ativo ? SUB_STATUS_COR[s] : '#e2e8f0',
+                              color: ativo ? 'white' : '#64748b',
+                              fontWeight: ativo ? 700 : 400 }}>
+                            {SUB_STATUS_LABEL[s]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Badge empresa vencedora — coluna Vencidas */}
+                  {col.id === 'vencidas' && (
+                    <div style={{ marginTop:2, marginBottom:5, paddingLeft:2 }}>
+                      <span style={{ fontSize:8, fontWeight:700, padding:'1px 7px', borderRadius:8,
+                        background: op.empresa_vencedora === 'ACN' ? '#dbeafe' : op.empresa_vencedora === 'DETECH' ? '#f3e8ff' : '#f1f5f9',
+                        color:      op.empresa_vencedora === 'ACN' ? '#1e40af' : op.empresa_vencedora === 'DETECH' ? '#7c3aed'  : '#94a3b8' }}>
+                        {op.empresa_vencedora || '— empresa'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Botão Adicionar (só em Aberto) */}
+              {!col.terminal && estId && (
+                <div onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: estId }); setModalOp({}); }}
                   style={{ background:'white', border:'1px dashed #cbd5e1', borderRadius:5, padding:'5px 8px',
                     textAlign:'center', color:'#94a3b8', fontSize:9, cursor:'pointer', marginTop: cards.length ? 4 : 0 }}>
                   + Adicionar
@@ -1754,6 +1899,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 { label:'Número do Edital', key:'numero_edital', placeholder:'2025/041' },
                 { label:'Órgão', key:'orgao', placeholder:'Secretaria de Segurança Pública' },
                 { label:'Data da Sessão', key:'data_sessao', type:'date' },
+                { label:'Hora da Sessão', key:'hora_sessao', type:'time' },
                 ...(formOp.tipo_licitacao==='ata' ? [{ label:'Validade da Ata', key:'data_validade_ata', type:'date' }] : []),
               ] : []),
               { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
@@ -1877,6 +2023,41 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL EMPRESA VENCEDORA ══════ */}
+      {modalEmpresaVenc && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(360px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:13, color:'#166534', marginBottom:4 }}>🏆 Licitação Vencida!</div>
+            <div style={{ fontSize:11, color:'#475569', marginBottom:16 }}>
+              <strong>{modalEmpresaVenc.op.titulo}</strong><br/>
+              Qual empresa venceu esta licitação?
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              {(['ACN','DETECH'] as const).map(emp => (
+                <button key={emp} onClick={async () => {
+                  await moverCard(modalEmpresaVenc.op.id, modalEmpresaVenc.estagioDestId);
+                  await supabase.from('crm_oportunidades').update({ empresa_vencedora: emp }).eq('id', modalEmpresaVenc.op.id);
+                  setModalEmpresaVenc(null);
+                  await load();
+                }} style={{
+                  flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
+                  cursor:'pointer',
+                  background: emp === 'ACN' ? '#dbeafe' : '#f3e8ff',
+                  color:      emp === 'ACN' ? '#1e40af' : '#7c3aed',
+                  borderColor:emp === 'ACN' ? '#3b82f6' : '#a855f7',
+                }}>
+                  {emp}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setModalEmpresaVenc(null)}
+              style={{ marginTop:12, width:'100%', background:'none', border:'1px solid #e2e8f0', borderRadius:6, padding:'6px', fontSize:10, cursor:'pointer', color:'#64748b' }}>
+              Cancelar
+            </button>
           </div>
         </div>
       )}
