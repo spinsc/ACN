@@ -17,6 +17,7 @@ import SetorDemandaTab from './SetorDemandaTab';
 import ComprasTab from './ComprasTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
+import FormacaoPrecosTab from './FormacaoPrecosTab';
 import SacTab from './SacTab';
 import LicitacoesTab from './LicitacoesTab';
 import CrmTab from './CrmTab';
@@ -87,7 +88,8 @@ const SIDEBAR_GROUPS = [
       { id: 'compras',    label: 'Compras' },
       { id: 'rh',         label: 'RH' },
       { id: 'fiscal',     label: 'Fiscal' },
-      { id: 'relatorios', label: 'Relatórios' },
+      { id: 'relatorios',      label: 'Relatórios' },
+      { id: 'formacao_precos', label: 'Formação de Preços' },
     ],
   },
   {
@@ -766,8 +768,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'crm':          return <CrmTab currentUser={currentUser} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
-      case 'relatorios':   return <RelatoriosTab currentUser={currentUser} />;
-      case 'admin':        return <AdminTab />;
+      case 'relatorios':      return <RelatoriosTab currentUser={currentUser} />;
+      case 'formacao_precos': return <FormacaoPrecosTab currentUser={currentUser} />;
+      case 'admin':           return <AdminTab />;
       default: return null;
     }
   };

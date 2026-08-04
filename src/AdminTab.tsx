@@ -35,8 +35,9 @@ const TODAS_ABAS = [
   { id:'crm',          label:'CRM' },
   { id:'licitacoes',   label:'Licitações' },
   { id:'rh',           label:'RH' },
-  { id:'relatorios',   label:'Relatorios' },
-  { id:'admin',        label:'Admin' },
+  { id:'relatorios',      label:'Relatorios' },
+  { id:'formacao_precos', label:'Formação de Preços' },
+  { id:'admin',           label:'Admin' },
 ];
 
 // ---- PERMISSÕES PADRÃO POR PERFIL ----
@@ -138,7 +139,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false, pode_enviar_avisos: false });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true });
   const [perfisDB, setPerfisDB] = useState([]);
 
   // Perfis disponíveis = padrão + qualquer extra criado no banco
@@ -178,7 +179,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, ver_valores: u.ver_valores !== false });
     setModalEditar(u);
   };
 
@@ -201,6 +202,7 @@ function PainelUsuarios() {
       pode_enviar_avisos: editForm.pode_enviar_avisos,
       permissoes_crm: editForm.permissoes_crm,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
+      ver_valores: editForm.ver_valores,
     };
     if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
@@ -386,6 +388,16 @@ function PainelUsuarios() {
                     onChange={e=>setEditForm(f=>({...f,pode_deletar_anexos:e.target.checked}))}
                     style={{accentColor:'#0891b2'}} />
                   <span>🗑️ Pode excluir anexos em Licitações</span>
+                </label>
+              </div>
+              {/* Visualização de valores financeiros */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.ver_valores !== false}
+                    onChange={e=>setEditForm(f=>({...f,ver_valores:e.target.checked}))}
+                    style={{accentColor:'#16a34a'}} />
+                  <span>💰 Pode visualizar valores financeiros (Valor Total, M.O., etc.)</span>
                 </label>
               </div>
             </div>

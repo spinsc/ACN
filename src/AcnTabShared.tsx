@@ -513,14 +513,21 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         </div>
 
         {/* ── Financeiro ── */}
-        {(opl.valor_total != null || opl.valor_mao_de_obra != null) && (
+        {(opl.valor_total != null || opl.valor_mao_de_obra != null || opl.valor_mao_de_obra_serralheria != null) && (
           <>
             <Sec title="💰 Financeiro" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-              <Campo label="Valor Total"     value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} />
-              <Campo label="Valor M.O."      value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} />
-              <Campo label="Faturamento"     value={opl.faturamento_empresa} />
-            </div>
+            {currentUser?.ver_valores === false ? (
+              <div style={{ padding:'8px 12px', background:'#f1f5f9', borderRadius:6, fontSize:11, color:'#64748b', marginBottom:8 }}>
+                🔒 Valores financeiros restritos — sem permissão de visualização.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+                <Campo label="Valor Total"           value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} />
+                <Campo label="Valor M.O."            value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} />
+                <Campo label="Valor M.O. Serralheria" value={opl.valor_mao_de_obra_serralheria != null ? fmtR$(opl.valor_mao_de_obra_serralheria) : null} />
+                <Campo label="Faturamento"           value={opl.faturamento_empresa} />
+              </div>
+            )}
           </>
         )}
 

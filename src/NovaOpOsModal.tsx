@@ -105,6 +105,7 @@ const VAZIO = {
   quantidade:             1,
   valor_total:            '',
   valor_mao_de_obra:      '',
+  valor_mao_de_obra_serralheria: '',
   prazo_entrega:          '',
   data_chegada_veiculo:   '',
   observacoes:            '',
@@ -192,6 +193,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           quantidade:             Number(form.quantidade) || 1,
           valor_total:            form.valor_total ? parseFloat(String(form.valor_total).replace(/\./g,'').replace(',','.')) : null,
           valor_mao_de_obra:      form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(/\./g,'').replace(',','.')) : null,
+          valor_mao_de_obra_serralheria: form.valor_mao_de_obra_serralheria ? parseFloat(String(form.valor_mao_de_obra_serralheria).replace(/\./g,'').replace(',','.')) : null,
           data_entrada:           form.data_entrada,
           data_prevista_entrega:  form.prazo_entrega || null,
           data_chegada_veiculo:   form.data_chegada_veiculo || null,
@@ -398,6 +400,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 12000"
                     value={form.valor_mao_de_obra} onChange={e => setF('valor_mao_de_obra', e.target.value)} />
                 </div>
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor M.O. Serralheria (R$)</div>
+                <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 5000"
+                  value={form.valor_mao_de_obra_serralheria} onChange={e => setF('valor_mao_de_obra_serralheria', e.target.value)} />
               </div>
 
               <div style={{ marginBottom:10 }}>

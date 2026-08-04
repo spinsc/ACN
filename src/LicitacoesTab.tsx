@@ -1407,6 +1407,137 @@ function LicitCard({ l, onClick }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RELATÓRIO DE STATUS
+// ─────────────────────────────────────────────────────────────────────────────
+const fmtDtRel = (v) => v ? new Date(v).toLocaleDateString('pt-BR') : '—';
+const fmtValRel = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+
+const GRUPOS_RELATORIO = [
+  { label:'🟢 Em Andamento', key:'Em Andamento', cor:'#059669', bgCor:'#ecfdf5' },
+  { label:'🏆 Vencidas',     key:'Vencida',      cor:'#16a34a', bgCor:'#f0fdf4' },
+  { label:'📋 Adesões a ATA', key:'__adesao',    cor:'#0891b2', bgCor:'#f0f9ff' },
+  { label:'❌ Perdidas',     key:'Perdida',       cor:'#dc2626', bgCor:'#fef2f2' },
+  { label:'🚫 Descartadas',  key:'Descartada',   cor:'#6b7280', bgCor:'#f9fafb' },
+];
+
+function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
+  const [anoFiltro, setAnoFiltro] = useState('');
+
+  const anos = [...new Set(
+    licitacoes.map(l => l.data_disputa ? new Date(l.data_disputa).getFullYear() : null).filter(Boolean)
+  )].sort((a,b) => b - a);
+
+  const filtradas = anoFiltro
+    ? licitacoes.filter(l => l.data_disputa && new Date(l.data_disputa).getFullYear() === Number(anoFiltro))
+    : licitacoes;
+
+  // Montar grupos
+  const getGrupo = (key) => {
+    if (key === '__adesao') return filtradas.filter(l => l.classificacao === 'Adesão a ATA');
+    return filtradas.filter(l => l.status === key);
+  };
+
+  if (loading) return <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#9ca3af' }}>Carregando...</div>;
+
+  return (
+    <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+      {/* Filtro de ano */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+        <span style={{ fontSize:11, fontWeight:700, color:'#475569' }}>Filtrar por ano:</span>
+        <select value={anoFiltro} onChange={e=>setAnoFiltro(e.target.value)}
+          style={{ padding:'4px 10px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+          <option value="">Todos os anos</option>
+          {anos.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <span style={{ fontSize:10, color:'#94a3b8' }}>{filtradas.length} licitações{anoFiltro ? ` em ${anoFiltro}` : ''}</span>
+      </div>
+
+      {/* Cards de resumo */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:8, marginBottom:16 }}>
+        {GRUPOS_RELATORIO.map(g => {
+          const grupo = getGrupo(g.key);
+          return (
+            <div key={g.key} style={{ background:g.bgCor, border:`1.5px solid ${g.cor}30`, borderRadius:8, padding:'10px 14px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:g.cor, marginBottom:4 }}>{g.label}</div>
+              <div style={{ fontSize:22, fontWeight:800, color:g.cor }}>{grupo.length}</div>
+              <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
+                {grupo.filter(l => l.valor_proposta || l.valor_estimado).length > 0
+                  ? fmtValRel(grupo.reduce((s,l) => s + (Number(l.valor_proposta) || Number(l.valor_estimado) || 0), 0))
+                  : 'sem valores'}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tabelas por grupo */}
+      {GRUPOS_RELATORIO.map(g => {
+        const grupo = getGrupo(g.key);
+        if (grupo.length === 0) return null;
+        return (
+          <div key={g.key} style={{ marginBottom:20 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <div style={{ width:4, height:18, background:g.cor, borderRadius:2 }} />
+              <span style={{ fontWeight:800, fontSize:12, color:g.cor }}>{g.label}</span>
+              <span style={{ fontSize:10, color:'#94a3b8' }}>({grupo.length})</span>
+            </div>
+            <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+                <thead>
+                  <tr style={{ background:'#f8fafc' }}>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Nº</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Projeto / Órgão</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Tipo</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Operador</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'right', color:'#64748b' }}>Valor</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Disputa</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Status</th>
+                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'center', color:'#64748b' }}>Abrir</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grupo.map((l, idx) => (
+                    <tr key={l.id}
+                      style={{ borderTop:'1px solid #f1f5f9', background: idx%2===0 ? '#fff' : '#fafafa', cursor:'pointer' }}
+                      onClick={() => onOpenLicit(l)}>
+                      <td style={{ padding:'6px 10px', fontWeight:700, color:'#1e293b', whiteSpace:'nowrap' }}>{l.numero || '—'}</td>
+                      <td style={{ padding:'6px 10px', maxWidth:220 }}>
+                        <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.nome_projeto || '—'}</div>
+                        <div style={{ fontSize:9, color:'#94a3b8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.orgao || ''}</div>
+                      </td>
+                      <td style={{ padding:'6px 10px', color:'#475569' }}>{l.classificacao || '—'}</td>
+                      <td style={{ padding:'6px 10px', color:'#475569' }}>{l.operador || l.analista_nome || '—'}</td>
+                      <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color:'#0f766e' }}>
+                        {fmtValRel(l.valor_proposta || l.valor_estimado)}
+                      </td>
+                      <td style={{ padding:'6px 10px', color:'#475569', whiteSpace:'nowrap' }}>{fmtDtRel(l.data_disputa)}</td>
+                      <td style={{ padding:'6px 10px' }}>
+                        <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:10,
+                          background:(STATUS_COR[l.status]||'#94a3b8')+'20',
+                          color: STATUS_COR[l.status]||'#64748b' }}>
+                          {l.status}
+                        </span>
+                      </td>
+                      <td style={{ padding:'6px 10px', textAlign:'center' }}>
+                        <button onClick={e => { e.stopPropagation(); onOpenLicit(l); }}
+                          style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:4,
+                            padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+                          Ver
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser }) {
@@ -1420,6 +1551,7 @@ export default function LicitacoesTab({ currentUser }) {
   const [sortBy, setSortBy] = useState('data_disputa');
   const [modalNova, setModalNova] = useState(false);
   const [selected, setSelected] = useState<any|null>(null);
+  const [vistaRelatorio, setVistaRelatorio] = useState(false);
 
   const isAdmin = true;
   const isAnalista = true;
@@ -1481,6 +1613,10 @@ export default function LicitacoesTab({ currentUser }) {
           <div style={{ fontSize:15, fontWeight:700 }}>🏛️ Licitações</div>
           <div style={{ fontSize:10, opacity:.75 }}>{licitacoes.length} total · {lista.length} exibindo</div>
         </div>
+        <button onClick={() => setVistaRelatorio(v => !v)}
+          style={{ background: vistaRelatorio ? '#f59e0b' : '#334155', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+          {vistaRelatorio ? '← Voltar à Lista' : '📊 Relatório de Status'}
+        </button>
         {isAnalista && (
           <button onClick={() => setModalNova(true)}
             style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
@@ -1550,18 +1686,22 @@ export default function LicitacoesTab({ currentUser }) {
         )}
       </div>
 
-      {/* LISTA */}
-      <div style={{ flex:1, overflowY:'auto', padding:16 }}>
-        {loading ? (
-          <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
-        ) : !lista.length ? (
-          <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>
-            {filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
-          </div>
-        ) : (
-          lista.map(l => <LicitCard key={l.id} l={l} onClick={() => setSelected(l)} />)
-        )}
-      </div>
+      {/* LISTA ou RELATÓRIO */}
+      {vistaRelatorio ? (
+        <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} />
+      ) : (
+        <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+          {loading ? (
+            <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
+          ) : !lista.length ? (
+            <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>
+              {filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
+            </div>
+          ) : (
+            lista.map(l => <LicitCard key={l.id} l={l} onClick={() => setSelected(l)} />)
+          )}
+        </div>
+      )}
 
       {/* MODAIS */}
       {modalNova && (

@@ -945,6 +945,166 @@ function RelCentroCusto() {
   );
 }
 
+// ── RELATÓRIO DE COMISSÕES ──
+function RelComissoes() {
+  const hoje = new Date();
+  const [mes, setMes] = useState(`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`);
+  const [funcionarios, setFuncionarios] = useState([]);
+  const [ops, setOps] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fmtR = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
+
+  useEffect(() => {
+    const carregar = async () => {
+      setLoading(true);
+      const [{ data: funcs }, { data: opsData }] = await Promise.all([
+        supabase.from('rh_funcionarios').select('id,nome,cargo,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
+        supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf')
+          .eq('status_geral','Faturado')
+          .gte('data_emissao_nf', `${mes}-01`)
+          .lte('data_emissao_nf', `${mes}-31`),
+      ]);
+      setFuncionarios(funcs || []);
+      setOps(opsData || []);
+      setLoading(false);
+    };
+    carregar();
+  }, [mes]);
+
+  // Calcular comissão por vendedor
+  const comissoes = funcionarios.map(f => {
+    const opsVendedor = ops.filter(o =>
+      (o.responsavel_comercial || '').toLowerCase().trim() === (f.nome || '').toLowerCase().trim()
+    );
+    const baseTotal = opsVendedor.reduce((s, o) => s + (Number(o.valor_total) || 0), 0);
+    const comissao  = baseTotal * ((Number(f.percentual_comissao) || 0) / 100);
+    return { ...f, opsVendedor, baseTotal, comissao };
+  });
+
+  // Vendedores com OPs faturadas mas sem cadastro no RH (aviso)
+  const vendedoresOps = [...new Set(ops.map(o => o.responsavel_comercial).filter(Boolean))];
+  const semCadastro   = vendedoresOps.filter(v =>
+    !funcionarios.some(f => f.nome.toLowerCase().trim() === v.toLowerCase().trim())
+  );
+
+  const totalComissoes = comissoes.reduce((s, c) => s + c.comissao, 0);
+  const totalBase      = comissoes.reduce((s, c) => s + c.baseTotal, 0);
+
+  const [mesLabel] = mes.split('-').reverse();
+  const [anoLabel, mesNumLabel] = mes.split('-');
+  const nomesMes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const labelMes = `${nomesMes[Number(mesNumLabel)-1]}/${anoLabel}`;
+
+  return (
+    <div style={{ padding:4 }}>
+      {/* Seletor de mês */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
+        <div>
+          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Mês de Referência</div>
+          <input type="month" value={mes} onChange={e=>setMes(e.target.value)}
+            style={{ padding:'5px 10px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }} />
+        </div>
+        {!loading && (
+          <div style={{ fontSize:10, color:'#64748b' }}>
+            {ops.length} OP(s) faturada(s) em {labelMes} · {funcionarios.length} vendedor(es) com comissão cadastrada
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', color:'#94a3b8', padding:40 }}>Carregando...</div>
+      ) : (
+        <>
+          {/* Cards de resumo */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:16 }}>
+            <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px' }}>
+              <div style={{ fontSize:9, color:'#2563eb', fontWeight:700, marginBottom:3 }}>Total Faturado (Base)</div>
+              <div style={{ fontSize:14, fontWeight:800, color:'#1d4ed8' }}>{fmtR(totalBase)}</div>
+            </div>
+            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px' }}>
+              <div style={{ fontSize:9, color:'#16a34a', fontWeight:700, marginBottom:3 }}>Total Comissões</div>
+              <div style={{ fontSize:14, fontWeight:800, color:'#15803d' }}>{fmtR(totalComissoes)}</div>
+            </div>
+            <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px' }}>
+              <div style={{ fontSize:9, color:'#475569', fontWeight:700, marginBottom:3 }}>OPs Faturadas</div>
+              <div style={{ fontSize:14, fontWeight:800, color:'#1e293b' }}>{ops.length}</div>
+            </div>
+          </div>
+
+          {/* Aviso de vendedores sem cadastro */}
+          {semCadastro.length > 0 && (
+            <div style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'8px 12px', marginBottom:12, fontSize:10, color:'#92400e' }}>
+              ⚠️ <strong>Vendedores com OPs faturadas mas sem comissão cadastrada no RH:</strong>{' '}
+              {semCadastro.join(', ')}
+            </div>
+          )}
+
+          {/* Tabela de comissões */}
+          {comissoes.length === 0 ? (
+            <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:11 }}>
+              Nenhum vendedor com comissão cadastrada encontrado. Configure em RH → Funcionários → Recebe Comissão.
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {comissoes.map(c => (
+                <div key={c.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
+                  {/* Cabeçalho vendedor */}
+                  <div style={{ background:'#f8fafc', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                    <div>
+                      <span style={{ fontWeight:800, fontSize:13, color:'#1e293b' }}>{c.nome}</span>
+                      {c.cargo && <span style={{ fontSize:9, color:'#64748b', marginLeft:8 }}>{c.cargo}</span>}
+                      <span style={{ marginLeft:10, fontSize:9, fontWeight:700, background:'#dbeafe', color:'#1d4ed8', borderRadius:10, padding:'1px 8px' }}>
+                        {c.percentual_comissao}% sobre {c.incide_em || 'Faturamento'}
+                      </span>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:10, color:'#64748b' }}>Base: <strong>{fmtR(c.baseTotal)}</strong></div>
+                      <div style={{ fontSize:14, fontWeight:800, color:'#15803d' }}>Comissão: {fmtR(c.comissao)}</div>
+                    </div>
+                  </div>
+                  {/* OPs do vendedor */}
+                  {c.opsVendedor.length === 0 ? (
+                    <div style={{ padding:'8px 14px', fontSize:10, color:'#94a3b8' }}>Nenhuma OP faturada em {labelMes}.</div>
+                  ) : (
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+                      <thead>
+                        <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
+                          <th style={{ padding:'5px 14px', textAlign:'left', fontWeight:700, color:'#64748b' }}>OP</th>
+                          <th style={{ padding:'5px 14px', textAlign:'left', fontWeight:700, color:'#64748b' }}>Cliente</th>
+                          <th style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#64748b' }}>Valor Total</th>
+                          <th style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#16a34a' }}>Comissão</th>
+                          <th style={{ padding:'5px 14px', textAlign:'left', fontWeight:700, color:'#64748b' }}>NF em</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {c.opsVendedor.map((o, idx) => {
+                          const comOp = (Number(o.valor_total)||0) * ((Number(c.percentual_comissao)||0)/100);
+                          return (
+                            <tr key={o.id} style={{ borderTop:'1px solid #f8fafc', background: idx%2===0?'#fff':'#fafafa' }}>
+                              <td style={{ padding:'5px 14px', fontWeight:700, color:'#1e293b' }}>{o.opl}</td>
+                              <td style={{ padding:'5px 14px', color:'#475569' }}>{o.cliente_nome || '—'}</td>
+                              <td style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#1d4ed8' }}>{fmtR(o.valor_total)}</td>
+                              <td style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#15803d' }}>{fmtR(comOp)}</td>
+                              <td style={{ padding:'5px 14px', color:'#64748b' }}>
+                                {o.data_emissao_nf ? new Date(o.data_emissao_nf).toLocaleDateString('pt-BR') : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── MAIN ──
 export default function RelatoriosTab({ currentUser }) {
   const [aba, setAba] = useState('opls');
@@ -959,6 +1119,7 @@ export default function RelatoriosTab({ currentUser }) {
     {id:'area',       label:'Por Área'},
     {id:'producao',   label:'Produção'},
     {id:'centrocusto',label:'Centro Custo'},
+    {id:'comissoes',  label:'Comissões'},
   ];
 
   return (
@@ -983,6 +1144,7 @@ export default function RelatoriosTab({ currentUser }) {
       {aba==='area'        && <RelAreaDemandas />}
       {aba==='producao'    && <RelProducao />}
       {aba==='centrocusto' && <RelCentroCusto />}
+      {aba==='comissoes'   && <RelComissoes />}
     </div>
   );
 }

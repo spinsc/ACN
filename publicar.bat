@@ -89,6 +89,7 @@ git add supabase/functions/whatsapp-webhook/index.ts
 git add supabase/functions/transcrever-audio/index.ts
 git add supabase/sql/
 :: Novos arquivos desta release
+git add src/FormacaoPrecosTab.tsx
 git add acn_novas_colunas.sql
 git add avisos_sistema.sql
 git add src/AvisoSistemaWidget.tsx
@@ -145,7 +146,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: botao LIBERAR FISCAL em todos os tabs; multi-servico-terceiro; docs desde registro; resumo CRM; fix fluxo comercial; telecom permissoes; docs visiveis na aba Adaptacao"
+git commit -m "feat: FormacaoPrecosTab (calculadora PMSC); relatorio comissoes; relatorio licitacoes por status; campo valor serralheria na OP; permissao ver_valores; fix schema tipos_servico_terceiro; docs na aba Adaptacao"
 
 :: Push
 echo.
@@ -429,6 +430,28 @@ echo  supabase functions deploy transcrever-audio
 echo  Secret: OPENAI_API_KEY = sk-...
 echo  (Supabase ^> Settings ^> Edge Functions ^> Secrets)
 echo ==============================================
+echo.
+echo ==============================================
+echo  NOVOS SQLs DESTA RELEASE - RODAR NO SUPABASE:
+echo ==============================================
+echo.
+echo -- [1] Permissao de visualizacao de valores financeiros:
+echo ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS ver_valores boolean DEFAULT true;
+echo.
+echo -- [2] Coluna tipos_servico_terceiro na tabela oples (se ainda nao rodou):
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS tipos_servico_terceiro jsonb DEFAULT '[]'::jsonb;
+echo.
+echo -- [3] Tabela de cotacoes/modelos de formacao de precos:
+echo CREATE TABLE IF NOT EXISTS cotacoes_precos (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   nome text NOT NULL,
+echo   tipo text DEFAULT 'licitacao',
+echo   parametros_globais jsonb DEFAULT '{}',
+echo   itens jsonb DEFAULT '[]',
+echo   criado_por text,
+echo   criado_em timestamptz DEFAULT now()
+echo );
+echo ALTER TABLE cotacoes_precos DISABLE ROW LEVEL SECURITY;
 echo.
 echo ==============================================
 echo  WHATSAPP (EVOLUTION API) - PASSOS:

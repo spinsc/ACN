@@ -1249,7 +1249,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   <td style={{ padding:'5px 7px' }}>{v.orgao_aderente || opv?.orgao || '—'}</td>
                   <td style={{ padding:'5px 7px' }}>{v.operador_nome || '—'}</td>
                   <td style={{ padding:'5px 7px', textAlign:'center' }}>{v.quantidade || '—'}</td>
-                  <td style={{ padding:'5px 7px', fontWeight:700, color:'#0f766e' }}>{fmtMoeda(v.valor_total)}</td>
+                  <td style={{ padding:'5px 7px', fontWeight:700, color:'#0f766e' }}>{currentUser?.ver_valores === false ? '***' : fmtMoeda(v.valor_total)}</td>
                   <td style={{ padding:'5px 7px' }}>{v.numero_nf || <span style={{ color:'#f59e0b' }}>Pendente</span>}</td>
                   <td style={{ padding:'5px 7px' }}>{fmtData(v.data_faturamento)}</td>
                   <td style={{ padding:'5px 7px' }}>
@@ -1273,7 +1273,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         {vendasFiltradas.length > 0 && (
           <div style={{ padding:'5px 10px', background:'#f8fafc', borderTop:'1px solid #e2e8f0', display:'flex', gap:12, fontSize:9, color:'#64748b' }}>
             <span>{vendasFiltradas.length} registros</span>
-            {podeVerTotais && (
+            {podeVerTotais && currentUser?.ver_valores !== false && (
               <span>Total: <strong style={{ color:'#0f766e' }}>
                 {fmtMoeda(vendasFiltradas.reduce((s,v)=>s+(v.valor_total||0),0))}
               </strong></span>
