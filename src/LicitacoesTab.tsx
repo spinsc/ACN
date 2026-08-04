@@ -1613,10 +1613,6 @@ export default function LicitacoesTab({ currentUser }) {
           <div style={{ fontSize:15, fontWeight:700 }}>🏛️ Licitações</div>
           <div style={{ fontSize:10, opacity:.75 }}>{licitacoes.length} total · {lista.length} exibindo</div>
         </div>
-        <button onClick={() => setVistaRelatorio(v => !v)}
-          style={{ background: vistaRelatorio ? '#f59e0b' : '#334155', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-          {vistaRelatorio ? '← Voltar à Lista' : '📊 Relatório de Status'}
-        </button>
         {isAnalista && (
           <button onClick={() => setModalNova(true)}
             style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
@@ -1625,8 +1621,15 @@ export default function LicitacoesTab({ currentUser }) {
         )}
       </div>
 
-      {/* STATUS CHIPS */}
-      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:6, flexWrap:'wrap', flexShrink:0 }}>
+      {/* STATUS CHIPS + BOTÃO RELATÓRIO */}
+      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', flexShrink:0 }}>
+        {/* Botão Relatório — destaque laranja */}
+        <button onClick={() => setVistaRelatorio(v => !v)}
+          style={{ background: vistaRelatorio ? '#1e3a5f' : '#f59e0b', color:'#fff', border:'none', borderRadius:20,
+            padding:'3px 14px', fontSize:10, fontWeight:800, cursor:'pointer', marginRight:6 }}>
+          {vistaRelatorio ? '← Lista' : '📊 Relatório'}
+        </button>
+        <div style={{ width:1, height:18, background:'#e2e8f0', marginRight:6 }} />
         <button onClick={() => setFiltroStatus('todas')}
           style={{ border:'none', borderRadius:20, padding:'3px 12px', fontSize:10, fontWeight:700,
             background: filtroStatus==='todas'?'#1e3a5f':'#f1f5f9', color: filtroStatus==='todas'?'#fff':'#374151', cursor:'pointer' }}>

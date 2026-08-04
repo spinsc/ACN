@@ -202,11 +202,13 @@ function PainelUsuarios() {
       pode_enviar_avisos: editForm.pode_enviar_avisos,
       permissoes_crm: editForm.permissoes_crm,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
-      ver_valores: editForm.ver_valores,
     };
     if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
     if (error) { alert('Erro: ' + error.message); return; }
+    // ver_valores salvo separadamente — requer coluna no BD:
+    // ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS ver_valores boolean DEFAULT true;
+    await supabase.from('auth_usuarios').update({ ver_valores: editForm.ver_valores }).eq('id', modalEditar.id);
     setModalEditar(null); fetchUsuarios();
   };
 
