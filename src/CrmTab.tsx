@@ -1726,8 +1726,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
       {/* ══════ MODAL CRIAR/EDITAR OP ══════ */}
       {modalOp !== null && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-          onClick={e => { if (e.target===e.currentTarget) setModalOp(null); }}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <div style={{ background:'white', borderRadius:8, width:'min(540px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
             <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#1e293b' }}>
               {modalOp?.id ? '✏️ Editar' : '+ Nova'} {funil==='licitacao' ? 'Licitação' : 'Venda Direta'}
