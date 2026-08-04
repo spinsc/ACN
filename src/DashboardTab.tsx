@@ -27,6 +27,7 @@ import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel from './AnaliseInboxPanel';
 import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
+import ContatoAlertWidget from './ContatoAlertWidget';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -1043,6 +1044,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       )}
 
       <AvisoSistemaWidget currentUser={currentUser} />
+      <ContatoAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} />
 
       {/* Painel lateral de Análises Orçamentárias */}

@@ -1251,8 +1251,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
   );
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ background:'#fff', borderRadius:8, width:'min(660px,95vw)', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
         <div style={{ padding:'14px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, color:'#1f2937', display:'flex', justifyContent:'space-between' }}>
           <span>+ Nova Licitação</span>

@@ -45,7 +45,8 @@ const VAZIO_OP: any = {
   nome_contato:   '',
   contato:        '',  // telefone
   contato_email:  '',
-  prox_contato:   '',
+  prox_contato:      '',
+  hora_prox_contato: '',
 };
 
 const VAZIO_VENDA: any = {
@@ -99,7 +100,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [vendas, setVendas]         = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
-  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'>('kanban');
+  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'>('kanban');
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
@@ -453,6 +454,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       contato:           limpar(formOp.contato),
       contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
+      hora_prox_contato: limpar(formOp.hora_prox_contato) || null,
     };
     if (!p.estagio_id) {
       const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e));
@@ -689,6 +691,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       contato:           limpar(formOp.contato),
       contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
+      hora_prox_contato: limpar(formOp.hora_prox_contato) || null,
     };
     await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
     setSalvando(false);
@@ -1002,6 +1005,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             color: op.prox_contato === hoje ? '#92400e' : op.prox_contato < hoje ? '#dc2626' : '#0369a1',
           }}>
             📅 {op.prox_contato === hoje ? '⚡ HOJE' : op.prox_contato < hoje ? '⚠️ ATRASADO' : ''} {op.prox_contato}
+            {op.hora_prox_contato && <span style={{ marginLeft:3 }}>⏰ {op.hora_prox_contato}</span>}
             {op.nome_contato && <span style={{ fontWeight:400 }}> · {op.nome_contato}</span>}
           </div>
         )}
@@ -1122,6 +1126,106 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         </div>
         </div>{/* fecha wrapper expandido */}
         </>)}{/* fecha {expandido && } */}
+      </div>
+    );
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RELATÓRIO POR ESTÁGIO
+  // ─────────────────────────────────────────────────────────────────────────
+  const renderRelatorio = () => {
+    const opsAtivas  = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
+    const totalPipeline = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const podeVer = podeVerTotais && currentUser?.ver_valores !== false;
+
+    return (
+      <div style={{ padding: '12px 0' }}>
+        {/* ── Cards de resumo ── */}
+        <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>EM ANDAMENTO</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsAtivas.length}</div>
+          </div>
+          <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
+          </div>
+          {podeVer && (
+            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
+              <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>PIPELINE (ativos)</div>
+              <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{fmtMoeda(totalPipeline)}</div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Por estágio ── */}
+        {estagiosFunil.map(est => {
+          const items   = opsFiltradas.filter(o => o.estagio_id === est.id);
+          if (items.length === 0) return null;
+          const ganho    = isGanho(est);
+          const perdido  = isPerdido(est);
+          const desistiu = isDesistencia(est);
+          const hdrBg    = perdido ? '#991b1b' : ganho ? '#166534' : desistiu ? '#92400e' : (est.cor || '#1e293b');
+          const totalEst = items.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+          const hoje2    = new Date().toISOString().slice(0, 10);
+
+          return (
+            <div key={est.id} style={{ marginBottom:10, background:'white', borderRadius:6, overflow:'hidden', boxShadow:'0 1px 3px #0001' }}>
+              {/* Header do estágio */}
+              <div style={{ background:hdrBg, color:'white', padding:'6px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontWeight:800, fontSize:10, textTransform:'uppercase', letterSpacing:'.4px' }}>
+                  {est.nome}
+                  <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 7px', fontSize:8, marginLeft:7 }}>
+                    {items.length}
+                  </span>
+                </div>
+                {podeVer && totalEst > 0 && (
+                  <div style={{ fontSize:10, fontWeight:700, opacity:.9 }}>{fmtMoeda(totalEst)}</div>
+                )}
+              </div>
+
+              {/* Linhas de ops */}
+              {items.map((op, i) => (
+                <div key={op.id}
+                  onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                  style={{ padding:'7px 12px', borderBottom: i < items.length - 1 ? '1px solid #f1f5f9' : 'none',
+                    display:'flex', alignItems:'center', gap:8, cursor:'pointer', transition:'background .1s' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                >
+                  {/* Cor funil */}
+                  <span style={{ width:4, height:32, borderRadius:2, flexShrink:0,
+                    background: op.funil === 'licitacao' ? '#7c3aed' : '#0891b2' }} />
+
+                  {/* Info principal */}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {op.titulo}
+                    </div>
+                    <div style={{ fontSize:9, color:'#64748b', marginTop:1, display:'flex', gap:8, flexWrap:'wrap' }}>
+                      {op.orgao && <span>🏛️ {op.orgao}</span>}
+                      {op.responsavel_nome && <span>👤 {op.responsavel_nome}</span>}
+                      {op.tipo_licitacao === 'ata' && <span style={{ color:'#7c3aed', fontWeight:700 }}>ATA</span>}
+                    </div>
+                  </div>
+
+                  {/* Coluna direita */}
+                  <div style={{ flexShrink:0, textAlign:'right' }}>
+                    {podeVer && (op.valor_registrado || 0) > 0 && (
+                      <div style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</div>
+                    )}
+                    {op.prox_contato && (
+                      <div style={{ fontSize:8, color: op.prox_contato <= hoje2 ? '#dc2626' : '#64748b', marginTop:1 }}>
+                        📅 {op.prox_contato}
+                        {op.hora_prox_contato && <span> ⏰ {String(op.hora_prox_contato).slice(0,5)}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -1375,6 +1479,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
             {([
               ['kanban',       '📋 Kanban'],
+              ['relatorio',    '📊 Relatório'],
               ['opls',         '🔧 OPLs em Aberto'],
               ...(podeVerFaturamentos ? [['faturamentos', '💰 Faturamentos']] : []),
             ] as [string,string][]).map(([a, label]) => (
@@ -1460,6 +1565,9 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       {/* ── Conteúdo ── */}
       {abaInterna === 'kanban' && (
         <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
+      )}
+      {abaInterna === 'relatorio' && (
+        <div style={{ overflowY:'auto', padding:'0 4px 16px' }}>{renderRelatorio()}</div>
       )}
       {abaInterna === 'faturamentos' && renderFaturamentos()}
       {abaInterna === 'opls' && (() => {
@@ -1704,10 +1812,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                     value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
                 </div>
               </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Próximo Contato</div>
-                <input type="date" className="acn-input" style={{ width:'100%' }}
-                  value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                <div>
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>📅 Próximo Contato</div>
+                  <input type="date" className="acn-input" style={{ width:'100%' }}
+                    value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+                </div>
+                <div>
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>⏰ Hora do Contato</div>
+                  <input type="time" className="acn-input" style={{ width:'100%' }}
+                    value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
+                </div>
               </div>
             </div>
 
@@ -2315,10 +2430,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                         value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
                     </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Próximo Contato</div>
-                    <input type="date" className="acn-input" style={{ width:'100%' }}
-                      value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                    <div>
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>📅 Próximo Contato</div>
+                      <input type="date" className="acn-input" style={{ width:'100%' }}
+                        value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>⏰ Hora do Contato</div>
+                      <input type="time" className="acn-input" style={{ width:'100%' }}
+                        value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
+                    </div>
                   </div>
                 </div>
               </div>

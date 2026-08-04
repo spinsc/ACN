@@ -90,6 +90,7 @@ git add supabase/functions/transcrever-audio/index.ts
 git add supabase/sql/
 :: Novos arquivos desta release
 git add src/FormacaoPrecosTab.tsx
+git add src/ContatoAlertWidget.tsx
 git add acn_novas_colunas.sql
 git add avisos_sistema.sql
 git add src/AvisoSistemaWidget.tsx
@@ -146,7 +147,7 @@ git diff --cached --name-only
 
 :: Commit
 echo.
-git commit -m "feat: FormacaoPrecosTab (calculadora PMSC); relatorio comissoes; relatorio licitacoes por status; campo valor serralheria na OP; permissao ver_valores; fix schema tipos_servico_terceiro; docs na aba Adaptacao"
+git commit -m "feat: ContatoAlertWidget (alerta 2d + popup 15min CRM); hora_prox_contato no CRM; fix modal licitacao nao fecha no backdrop"
 
 :: Push
 echo.
@@ -440,6 +441,9 @@ echo ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS ver_valores boolean DEFA
 echo.
 echo -- [2] Coluna tipos_servico_terceiro na tabela oples (se ainda nao rodou):
 echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS tipos_servico_terceiro jsonb DEFAULT '[]'::jsonb;
+echo.
+echo -- [4] Hora do proximo contato no CRM (alerta 15 min):
+echo ALTER TABLE crm_oportunidades ADD COLUMN IF NOT EXISTS hora_prox_contato time;
 echo.
 echo -- [3] Tabela de cotacoes/modelos de formacao de precos:
 echo CREATE TABLE IF NOT EXISTS cotacoes_precos (
