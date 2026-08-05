@@ -552,7 +552,14 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
                           background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff' }}>
                           {isLicit ? '🏛️ Licitação' : '🤝 CRM'}
                         </span>
-                        <span style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>
+                        {/* Título clicável abre o processo correspondente */}
+                        <span
+                          onClick={e => { e.stopPropagation(); onAbrirOrigem && sol?.origem_id && onAbrirOrigem(sol.origem, sol.origem_id); }}
+                          style={{ fontSize:11, fontWeight:700,
+                            color: onAbrirOrigem && sol?.origem_id ? '#1d4ed8' : '#1e293b',
+                            textDecoration: onAbrirOrigem && sol?.origem_id ? 'underline' : 'none',
+                            cursor: onAbrirOrigem && sol?.origem_id ? 'pointer' : 'default',
+                          }}>
                           {sol?.origem_numero && <span style={{ color:'#6b7280', marginRight:4 }}>{sol.origem_numero}</span>}
                           {sol?.origem_titulo || '—'}
                         </span>

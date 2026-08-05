@@ -40,6 +40,8 @@ const VAZIO_OP: any = {
   sub_status: 'andamento',
   empresa_vencedora: '',
   valor_registrado: '',
+  valor_acn: '',
+  faturamento_empresa: 'ACN',
   cliente_id: null,
   _cliente_nome: '',   // campo temporário — não vai para o banco
   estagio_id: '',
@@ -117,6 +119,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ── drag & drop ──
   const [dragging, setDragging]     = useState<string|null>(null);
   const [dragOver, setDragOver]     = useState<string|null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string|null>(null); // card sob o cursor (reorder)
 
   // ── modais ──
   const [modalOp, setModalOp]               = useState<any|null>(null);
@@ -183,7 +186,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
     if (!silent) setLoading(true);
     const [r1, r2, r3, r4, r5] = await Promise.all([
       supabase.from('crm_estagios_funil').select('*').order('ordem'),
-      supabase.from('crm_oportunidades').select('*').order('criado_em', { ascending: false }),
+      supabase.from('crm_oportunidades').select('*').order('posicao', { ascending: true }).order('criado_em', { ascending: false }),
       supabase.from('crm_checklist_itens').select('*').order('ordem'),
       supabase.from('crm_checklist_progresso').select('*'),
       supabase.from('crm_vendas').select('*').order('criado_em', { ascending: false }),
@@ -265,7 +268,34 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // DRAG & DROP
   // ─────────────────────────────────────────────────────────────────────────
   const handleDragStart = (id: string) => setDragging(id);
-  const handleDragEnd   = () => { setDragging(null); setDragOver(null); };
+  const handleDragEnd   = () => { setDragging(null); setDragOver(null); setDragOverItem(null); };
+
+  // Reordenar dentro da mesma SUPER_COL
+  const handleReorderInColumn = async (colMatch: (o: any) => boolean) => {
+    if (!dragging || !dragOverItem || dragging === dragOverItem) {
+      setDragging(null); setDragOver(null); setDragOverItem(null); return;
+    }
+    const draggingOp = ops.find(o => o.id === dragging);
+    const targetOp   = ops.find(o => o.id === dragOverItem);
+    if (!draggingOp || !targetOp || !colMatch(draggingOp) || !colMatch(targetOp)) return;
+
+    // Reordena localmente
+    const colCards = ops.filter(colMatch).sort((a, b) => (a.posicao ?? 0) - (b.posicao ?? 0) || new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+    const fromIdx  = colCards.findIndex(c => c.id === dragging);
+    const toIdx    = colCards.findIndex(c => c.id === dragOverItem);
+    if (fromIdx === -1 || toIdx === -1) { setDragging(null); setDragOver(null); setDragOverItem(null); return; }
+    const reordered = [...colCards];
+    const [moved]   = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+
+    setDragging(null); setDragOver(null); setDragOverItem(null);
+
+    // Salva novas posições no DB
+    await Promise.all(
+      reordered.map((c, i) => supabase.from('crm_oportunidades').update({ posicao: i + 1 }).eq('id', c.id))
+    );
+    await load(true);
+  };
 
   const handleDrop = async (estagioDestId: string) => {
     setDragOver(null);
@@ -459,6 +489,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       valor_registrado:  formOp.valor_registrado
         ? parseFloat(String(formOp.valor_registrado).replace(/\./g,'').replace(',','.'))
         : null,
+      valor_acn:         formOp.valor_acn
+        ? parseFloat(String(formOp.valor_acn).replace(/\./g,'').replace(',','.'))
+        : null,
+      faturamento_empresa: formOp.faturamento_empresa || 'ACN',
       cliente_id:        limpar(formOp.cliente_id),
       estagio_id:        limpar(formOp.estagio_id),
       responsavel_id:    limpar(formOp.responsavel_id),
@@ -972,14 +1006,18 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         draggable
         onDragStart={() => handleDragStart(op.id)}
         onDragEnd={handleDragEnd}
+        onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (dragging && dragging !== op.id) setDragOverItem(op.id); }}
+        onDragLeave={() => setDragOverItem(null)}
         style={{
           background: dragging === op.id ? '#e0f2fe' : 'white',
           borderRadius: 5, padding: '6px 8px',
           boxShadow: '0 1px 3px rgba(0,0,0,.1)',
           cursor: 'grab', marginBottom: 5,
           borderLeft: `3px solid ${accent}`,
+          borderTop: dragOverItem === op.id && dragging !== op.id ? '2px dashed #3b82f6' : '2px solid transparent',
           opacity: dragging === op.id ? .6 : 1,
           userSelect: 'none',
+          transition: 'border-top .1s',
         }}
       >
         {/* ── Linha do título (sempre visível) ── */}
@@ -989,6 +1027,20 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             color:      op.funil === 'licitacao' ? '#7c3aed'  : '#0e7490' }}>
             {op.funil === 'licitacao' ? '🏛️' : '💼'}
           </span>
+          {/* Badge ACN vs Detech */}
+          {(() => {
+            const fat = op.faturamento_empresa || 'ACN';
+            const isDetech = fat === 'Detech';
+            return (
+              <span style={{ fontSize:7, fontWeight:800, padding:'1px 5px', borderRadius:3, flexShrink:0,
+                background: isDetech ? '#fef3c7' : '#dbeafe',
+                color:      isDetech ? '#92400e' : '#1d4ed8',
+                border: `1px solid ${isDetech ? '#fde68a' : '#93c5fd'}`,
+              }}>
+                {isDetech ? 'DETECH' : 'ACN'}
+              </span>
+            );
+          })()}
           <span style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, flex:1, cursor:'pointer' }}>
             {op.titulo}
           </span>
@@ -1191,13 +1243,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // ─────────────────────────────────────────────────────────────────────────
   // RELATÓRIO POR ESTÁGIO
   // ─────────────────────────────────────────────────────────────────────────
+  // Receita efetiva ACN: usa valor_acn quando é parceiro/Detech, senão valor_registrado
+  const receitaEfetiva = (o: any): number => {
+    const comParceiro = o.faturamento_empresa === 'Detech' || o.classificacao === 'Parceiro';
+    if (comParceiro && o.valor_acn != null) return o.valor_acn;
+    return o.valor_registrado || 0;
+  };
+
   const renderRelatorio = () => {
     const opsAtivas      = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
     const opsPerdidas    = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)));
     const opsGanhas      = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)));
     const opsDesistencias = opsFiltradas.filter(o => isDesistencia(getEst(o.estagio_id)));
-    const totalPipeline  = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
-    const totalPerdido   = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const totalPipeline      = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const totalPipelineACN   = opsAtivas.reduce((s, o) => s + receitaEfetiva(o), 0);
+    const totalPerdido       = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const podeVer = podeVerTotais && currentUser?.ver_valores !== false;
 
     return (
@@ -1229,8 +1289,15 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
           {podeVer && (
             <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
-              <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>PIPELINE (ativos)</div>
+              <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>PIPELINE — TOTAL</div>
               <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{fmtMoeda(totalPipeline)}</div>
+            </div>
+          )}
+          {podeVer && totalPipelineACN !== totalPipeline && (
+            <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
+              <div style={{ fontSize:8, color:'#1d4ed8', fontWeight:700, marginBottom:2 }}>PIPELINE — RECEITA ACN</div>
+              <div style={{ fontSize:15, fontWeight:800, color:'#1d4ed8', lineHeight:1 }}>{fmtMoeda(totalPipelineACN)}</div>
+              <div style={{ fontSize:7, color:'#64748b', marginTop:2 }}>apenas valor ACN/Detech em processos com parceiro</div>
             </div>
           )}
         </div>
@@ -1243,7 +1310,8 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           const perdido  = isPerdido(est);
           const desistiu = isDesistencia(est);
           const hdrBg    = perdido ? '#991b1b' : ganho ? '#166534' : desistiu ? '#92400e' : (est.cor || '#1e293b');
-          const totalEst = items.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+          const totalEst    = items.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+          const totalEstACN = items.reduce((s, o) => s + receitaEfetiva(o), 0);
           const hoje2    = new Date().toISOString().slice(0, 10);
 
           return (
@@ -1257,7 +1325,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   </span>
                 </div>
                 {podeVer && totalEst > 0 && (
-                  <div style={{ fontSize:10, fontWeight:700, opacity:.9 }}>{fmtMoeda(totalEst)}</div>
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
+                    <div style={{ fontSize:10, fontWeight:700, opacity:.9 }}>{fmtMoeda(totalEst)}</div>
+                    {totalEstACN !== totalEst && (
+                      <div style={{ fontSize:8, opacity:.75 }}>ACN: {fmtMoeda(totalEstACN)}</div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -1289,7 +1362,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                   {/* Coluna direita */}
                   <div style={{ flexShrink:0, textAlign:'right' }}>
                     {podeVer && (op.valor_registrado || 0) > 0 && (
-                      <div style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</div>
+                      <>
+                        <div style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</div>
+                        {(op.faturamento_empresa==='Detech' || op.classificacao==='Parceiro') && op.valor_acn != null && (
+                          <div style={{ fontSize:8, color:'#1d4ed8', fontWeight:700 }}>ACN: {fmtMoeda(op.valor_acn)}</div>
+                        )}
+                      </>
                     )}
                     {op.prox_contato && (
                       <div style={{ fontSize:8, color: op.prox_contato <= hoje2 ? '#dc2626' : '#64748b', marginTop:1 }}>
@@ -1382,9 +1460,17 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
             {/* Drop zone */}
             <div
-              onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
+              onDragOver={e => { e.preventDefault(); if (!dragOverItem) setDragOver(col.id); }}
               onDragLeave={() => setDragOver(null)}
-              onDrop={() => estId && handleDrop(estId)}
+              onDrop={() => {
+                const draggingOp = ops.find(o => o.id === dragging);
+                // Se está no mesmo super-col e há um card-alvo → reorder
+                if (draggingOp && col.match(draggingOp) && dragOverItem) {
+                  handleReorderInColumn(col.match);
+                } else {
+                  estId && handleDrop(estId);
+                }
+              }}
               style={{
                 background: isDragOver ? '#dbeafe' : col.dropBg,
                 borderRadius:'0 0 5px 5px', padding:5, minHeight:120, transition:'background .15s',
@@ -1995,6 +2081,37 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                     value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
                 </div>
               </div>
+            </div>
+
+            {/* ── Empresa / Faturamento ── */}
+            <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:5, padding:'8px 10px', marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#92400e', marginBottom:6 }}>🏢 EMPRESA / FATURAMENTO</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <div>
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Empresa Faturante</div>
+                  <select className="acn-input" style={{ width:'100%' }}
+                    value={formOp.faturamento_empresa||'ACN'}
+                    onChange={e => setFormOp((f:any) => ({ ...f, faturamento_empresa: e.target.value }))}>
+                    <option value="ACN">ACN</option>
+                    <option value="Detech">Detech</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>
+                    Valor ACN/Detech (R$)
+                    <span style={{ color:'#94a3b8', fontWeight:400, marginLeft:4 }}>parceiro</span>
+                  </div>
+                  <input className="acn-input" style={{ width:'100%' }} type="text"
+                    placeholder="Valor que entra como receita"
+                    value={formOp.valor_acn||''}
+                    onChange={e => setFormOp((f:any) => ({ ...f, valor_acn: e.target.value }))} />
+                </div>
+              </div>
+              {(formOp.faturamento_empresa==='Detech' || formOp.classificacao==='Parceiro') && !formOp.valor_acn && (
+                <div style={{ fontSize:8, color:'#92400e', marginTop:4 }}>
+                  ⚠️ Preencha o Valor ACN/Detech para que o relatório contabilize corretamente a receita real.
+                </div>
+              )}
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>

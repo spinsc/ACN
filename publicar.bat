@@ -182,12 +182,17 @@ echo.
 echo Arquivos no commit:
 git diff --cached --name-only
 
-:: Commit
-echo.
-git add src/AdminTab.tsx
+:: Tasks #41-45: drag-reorder kanban, badge ACN/Detech, relatorio financeiro, Telecom links
 git add src/CrmTab.tsx
+git add src/AnaliseWidget.tsx
+git add acn_fix_crm_campos_4144.sql
+git add acn_fix_crm_rls.sql
+git add src/AdminTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "feat: Telecom link abrir licitacao + AnaliseStatusPanel finalizavel por setor + log analise_logs + botao Atualizar em todos os kanban cards CRM"
+
+:: IMPORTANTE: rodar acn_fix_crm_rls.sql e acn_fix_crm_campos_4144.sql no Supabase SQL Editor!
+
+git commit -m "feat: kanban drag-reorder + badge ACN/Detech + relatorio receita real + Telecom links + fix CRM colunas DB"
 
 :: Push
 echo.
