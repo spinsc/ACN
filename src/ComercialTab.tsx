@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import OplAnexosWidget from './OplAnexosWidget';
@@ -994,7 +994,7 @@ export default function ComercialTab({ currentUser }) {
             </tr></thead><tbody>
               {oplsManutAgendada.map(o=>(
                 <tr key={o.id}>
-                  <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
+                  <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                   <td>{o.chassi||'—'}</td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td>{o.modelo||'—'}</td>
@@ -1022,7 +1022,7 @@ export default function ComercialTab({ currentUser }) {
           ) : (
             <table><thead><tr><th>OPL</th><th>Chassi</th><th>Tipo</th><th>Prev. Entrega</th><th>Acao</th></tr></thead>
             <tbody>{oplsFaturar.map(o=>(
-              <tr key={o.id}><td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td><td>{o.chassi||'—'}</td><td>{o.tipo_projeto}</td>
+              <tr key={o.id}><td><LinkOpl opl={o} currentUser={currentUser} /></td><td>{o.chassi||'—'}</td><td>{o.tipo_projeto}</td>
               <td>{fmtDt(o.data_prevista_entrega)}</td>
               <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>
@@ -1044,7 +1044,7 @@ export default function ComercialTab({ currentUser }) {
           ) : (
             <table><thead><tr><th>OPL</th><th>Chassi</th><th>NF</th><th>Cliente</th><th>Checklist/Arquivos</th><th>Acao</th></tr></thead>
             <tbody>{oplsEntrega.map(o=>(
-              <tr key={o.id}><td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td><td>{o.chassi||'—'}</td>
+              <tr key={o.id}><td><LinkOpl opl={o} currentUser={currentUser} /></td><td>{o.chassi||'—'}</td>
               <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td><td>{o.cliente_nome||'—'}</td>
               <td>
                 <div style={{display:'flex',gap:4}}>
@@ -1157,7 +1157,7 @@ export default function ComercialTab({ currentUser }) {
                   return (
                     <tr key={o.id} style={{background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : ''}}>
                       <td>{fmtDt(o.data_entrada)}</td>
-                      <td><strong style={{color:'#2563eb',cursor:'pointer'}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);}}>{o.opl}</strong></td>
+                      <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                       <td>{o.chassi||'—'}</td>
                       <td><span style={{fontWeight:700,color: (o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>

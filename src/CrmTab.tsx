@@ -10,7 +10,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
-import { OplDetalheModal } from './AcnTabShared';
+import { OplDetalheModal, LinkOpl } from './AcnTabShared';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -112,7 +112,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const [oplEditando, setOplEditando]   = useState<any|null>(null);   // OPL sendo editada
   const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
   const [oplFormEdit, setOplFormEdit]   = useState<any>({});
-  const [oplVerModal, setOplVerModal]   = useState<any|null>(null);   // OPL visualização completa
   const [oplSalvando, setOplSalvando]   = useState(false);
 
   // ── drag & drop ──
@@ -1815,10 +1814,7 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
                       return (
                         <tr key={o.id} style={{ background: i%2===0 ? 'white' : '#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
                           <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
-                            <span onClick={() => setOplVerModal(o)}
-                              style={{ color:'#2563eb', cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted' }}>
-                              {o.opl}
-                            </span>
+                            <LinkOpl opl={o} currentUser={currentUser} />
                           </td>
                           <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome||'—'}</td>
                           <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
@@ -2860,11 +2856,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
           </div>
         </div>
       </div>
-    )}
-
-    {/* ── Modal Visualização Completa OPL ── */}
-    {oplVerModal && (
-      <OplDetalheModal opl={oplVerModal} onClose={() => setOplVerModal(null)} currentUser={currentUser} />
     )}
 
     {/* ── Modal Acompanhamentos/Notas OPL ── */}

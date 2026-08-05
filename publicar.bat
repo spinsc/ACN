@@ -153,9 +153,16 @@ git add src/CrmTab.tsx
 :: fix: ComercialTab botoes acao visiveis (sticky) + botoes em secoes Aprovado CQ e Faturado
 :: fix: MencoesInboxPanel busca por id OU nome (fallback para usuario recriado)
 :: fix: FormacaoPrecosTab edicao por linha preservando usar-globais + botao copiar globais
+:: feat: LinkOpl como link clicavel em TODAS as abas (ProducaoTab, Serralheria, Chicotes, Marketing, CrmTab, ComercialTab)
+:: feat: LinkOpl aceita string (busca no banco) alem do objeto completo
 git add src/ComercialTab.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/FormacaoPrecosTab.tsx
+git add src/AcnTabShared.tsx
+git add src/ProducaoTab.tsx
+git add src/SerralheriaTab.tsx
+git add src/ChicotesTab.tsx
+git add src/MarketingTab.tsx
 
 :: Verificar
 echo.
@@ -167,7 +174,7 @@ echo.
 git add src/AdminTab.tsx
 git add src/CrmTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "fix: Comercial botoes acao sticky+secoes; Mencoes inbox fallback por nome; FormacaoPrecos edicao por linha+usar-globais; Chat canais completos; CRM Perdidas+Ganhas"
+git commit -m "feat: LinkOpl clicavel em todas as abas (Producao/Serralheria/Chicotes/Marketing/CRM/Comercial); fix: Comercial sticky+botoes secoes; Mencoes fallback nome; FormacaoPrecos usar-globais; CRM Desistencias+Perdidas+Ganhas"
 
 :: Push
 echo.

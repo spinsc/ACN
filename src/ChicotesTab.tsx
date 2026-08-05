@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import { LinkOpl } from './AcnTabShared';
 
 
 export default function ChicotesTab({ currentUser }) {
@@ -216,7 +217,7 @@ export default function ChicotesTab({ currentUser }) {
                   {pedidosVinculados.map((pedido) => (
                     <tr key={pedido.id} style={styles.tableRow}>
                       <td style={styles.tableCell}><strong>{pedido.numero_pedido}</strong></td>
-                      <td style={styles.tableCell}>{pedido.opl}</td>
+                      <td style={styles.tableCell}><LinkOpl opl={pedido.opl} currentUser={currentUser} /></td>
                       <td style={styles.tableCell}>—</td>
                       <td style={styles.tableCell}>{pedido.descricao_chicote?.substring(0, 30)}</td>
                       <td style={styles.tableCell}>{pedido.quantidade}</td>

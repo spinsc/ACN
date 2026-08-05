@@ -643,25 +643,41 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
 // ─── Link Clicável de OPL ────────────────────────────────────────────────────
 // Usar em qualquer lugar onde o número da OP aparece como texto.
-// Recebe o objeto OPL completo — abre OplDetalheModal ao clicar.
+// Recebe o objeto OPL completo OU apenas o número (string) — abre OplDetalheModal ao clicar.
+// Quando recebe string, busca o objeto completo no banco ao clicar.
 export function LinkOpl({ opl, currentUser, color }: { opl: any; currentUser?: any; color?: string }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]       = useState(false);
+  const [fetched, setFetched] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   if (!opl) return null;
   const numero = typeof opl === 'string' ? opl : opl?.opl;
-  const obj    = typeof opl === 'object' ? opl : null;
+  const obj    = fetched || (typeof opl === 'object' ? opl : null);
+
+  const handleClick = async (e: any) => {
+    e.stopPropagation();
+    if (obj) { setOpen(true); return; }
+    // string-only: busca o objeto no banco
+    if (!numero) return;
+    setLoading(true);
+    const { data } = await supabase.from('oples').select('*').eq('opl', numero).maybeSingle();
+    setLoading(false);
+    if (data) { setFetched(data); setOpen(true); }
+  };
+
   return (
     <>
       <span
-        onClick={e => { e.stopPropagation(); if (obj) setOpen(true); }}
+        onClick={handleClick}
         style={{
           color: color || '#2563eb', fontWeight: 700,
-          cursor: obj ? 'pointer' : 'default',
-          textDecoration: obj ? 'underline dotted' : 'none',
+          cursor: 'pointer',
+          textDecoration: 'underline dotted',
           textUnderlineOffset: 2,
+          opacity: loading ? 0.6 : 1,
         }}
-        title={obj ? 'Abrir detalhes da OPL' : undefined}
+        title="Abrir detalhes da OPL"
       >
-        {numero}
+        {loading ? '...' : numero}
       </span>
       {open && obj && (
         <OplDetalheModal opl={obj} onClose={() => setOpen(false)} currentUser={currentUser} />

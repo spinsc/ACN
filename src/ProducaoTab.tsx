@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl } from './AcnTabShared';
 import OplAnexosWidget from './OplAnexosWidget';
 import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
@@ -43,7 +43,7 @@ function OplRow({ o, onAction, currentUser }) {
     <>
       <tr style={rowStyle}>
         <td>
-          <strong style={{ color: retrabalho || emRetrab ? '#dc2626' : '#2563eb' }}>{o.opl}</strong>
+          <LinkOpl opl={o} currentUser={currentUser} color={retrabalho || emRetrab ? '#dc2626' : '#2563eb'} />
           {o.liberado_divulgacao && !retrabalho && !emRetrab && (
             <div><span style={{fontSize:9,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>📸 MKT</span></div>
           )}
@@ -251,7 +251,7 @@ function CalendarioManutencao({ currentUser }) {
             {aguardandoNovos.map(o=>(
               <div key={o.id} style={{background:'white',borderRadius:6,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap',border:'1px solid #fed7aa'}}>
                 <div>
-                  <strong style={{color:'#2563eb'}}>{o.opl}</strong>
+                  <LinkOpl opl={o} currentUser={currentUser} />
                   <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
                   {o.chassi||'—'}
                   <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>

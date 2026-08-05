@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import { LinkOpl } from './AcnTabShared';
 
 
 const CATEGORIAS = ['Producao em Linha','Acabamento e Detalhes','Antes e Depois','Entrega ao Cliente','Equipe de Trabalho','Equipamento Instalado','Teste e Demonstracao','Evento ou Feira','Geral'];
@@ -99,7 +100,7 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
         onClick={()=>setExpanded(!expanded)}>
         <div style={{flex:1}}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <strong style={{color:'#2563eb',fontSize:12}}>OPL {opl.opl}</strong>
+            <LinkOpl opl={opl} currentUser={currentUser} />
             <span style={{fontSize:10,color:'#64748b'}}>{opl.cliente_nome || '—'}</span>
             <span style={{fontSize:9,background:corStatus(opl.status_geral),color:'white',padding:'1px 6px',borderRadius:10,fontWeight:700}}>
               {opl.status_geral}
