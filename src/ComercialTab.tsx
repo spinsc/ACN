@@ -1024,7 +1024,12 @@ export default function ComercialTab({ currentUser }) {
             <tbody>{oplsFaturar.map(o=>(
               <tr key={o.id}><td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td><td>{o.chassi||'—'}</td><td>{o.tipo_projeto}</td>
               <td>{fmtDt(o.data_prevista_entrega)}</td>
-              <td><button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button></td></tr>
+              <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                <button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>
+                <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);window.scrollTo({top:0,behavior:'smooth'});}}>✏️ Editar</button>
+                <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬</button>
+              </div></td></tr>
             ))}</tbody></table>
           )}
         </div>
@@ -1047,7 +1052,12 @@ export default function ComercialTab({ currentUser }) {
                   <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} compact={true} />
                 </div>
               </td>
-              <td><button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button></td></tr>
+              <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>
+                <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);window.scrollTo({top:0,behavior:'smooth'});}}>✏️ Editar</button>
+                <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬</button>
+              </div></td></tr>
             ))}</tbody></table>
           )}
         </div>
@@ -1137,7 +1147,7 @@ export default function ComercialTab({ currentUser }) {
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : (
             <table>
-              <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Operador</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Proposta</th><th>Acao</th></tr></thead>
+              <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Operador</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Proposta</th><th style={{position:'sticky',right:0,background:'#1e293b',zIndex:2,whiteSpace:'nowrap'}}>Acao</th></tr></thead>
               <tbody>
                 {oplsFiltrados.length === 0 ? <tr><td colSpan={11} className="acn-empty">Nenhuma OP encontrada.</td></tr>
                 : oplsFiltrados.map(o => {
@@ -1161,7 +1171,7 @@ export default function ComercialTab({ currentUser }) {
                       <td>
                         <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} tipoFixo="proposta" compact={true} />
                       </td>
-                      <td>
+                      <td style={{position:'sticky',right:0,background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : 'white',zIndex:1}}>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                           <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{
                             setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});
@@ -1169,10 +1179,10 @@ export default function ComercialTab({ currentUser }) {
                           }}>✏️ EDITAR</button>
                           {o.status_geral === 'Devolvida Comercial' && (
                             <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}} onClick={()=>enviarParaEngenharia(o)}>
-                              ↩ ENVIAR ENGENHARIA
+                              ↩ ENGENHARIA
                             </button>
                           )}
-                          {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>LIBERAR FATURAMENTO</button>}
+                          {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>}
                           {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
                           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                           <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬 ACOMP.</button>

@@ -297,15 +297,21 @@ function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params, isV
         <input type="number" className="acn-input" style={{ width:56, fontSize:9, padding:'2px 4px', textAlign:'right', background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
           step="0.1" value={item.markup_pct} onChange={e=>onSet('markup_pct', e.target.value)} />
       </td>
-      {/* DIFAL% — se usar globais, cinza; OCULTO para vendedor */}
+      {/* DIFAL% — editável quando globais OFF; OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right', background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
-          step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct} onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }} readOnly={usarParamsGlobais} />
+        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
+            background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
+          step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+          onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+          readOnly={usarParamsGlobais} />
       </td>
-      {/* Imposto% por linha — se usar globais, cinza; OCULTO para vendedor */}
+      {/* Imposto% — editável quando globais OFF; OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right', background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
-          step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct} onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }} readOnly={usarParamsGlobais} />
+        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
+            background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
+          step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
+          onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
+          readOnly={usarParamsGlobais} />
       </td>
       {/* ── CALCULADOS ── */}
       {/* Custo c/Imp. Unit — OCULTO para vendedor */}
@@ -359,11 +365,10 @@ export default function FormacaoPrecosTab({ currentUser }) {
       .then(({ data }) => setPlataformas(data || []));
   }, []);
 
-  // Computed results per item (apply global DIFAL/Imposto when usarGlobais=true)
+  // Quando "Usar globais" está ativo, DIFAL/Imposto/CF são sobrescritos pelo global na calc
   const paramEfetivo = (item) => usarGlobais
     ? { ...item, difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct }
     : item;
-
   const results = itens.map(it => calcItem(paramEfetivo(it), params));
 
   // Totals
@@ -382,7 +387,13 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const retencaoPlat     = totVendas * retencaoPlatPct / 100;
   const totalLiquidoPlat = totVendas - descontoPlat - retencaoPlat;
 
-  const addItem  = () => setItens(p => [...p, novoItem()]);
+  // Novo item herda os parâmetros globais atuais como ponto de partida
+  const addItem  = () => setItens(p => [...p, {
+    ...novoItem(),
+    difal_pct:      params.difal_pct,
+    imposto_pct:    params.imposto_pct,
+    custo_fixo_pct: params.custo_fixo_pct,
+  }]);
   const remItem  = (id) => setItens(p => p.filter(x => x._id !== id));
   const setItem  = (id, k, v) => setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
 
@@ -545,12 +556,24 @@ export default function FormacaoPrecosTab({ currentUser }) {
                 onChange={e => setP(k, parseFloat(e.target.value) || 0)} />
             </div>
           ))}
-          <div style={{ display:'flex', alignItems:'flex-end', paddingBottom:2 }}>
+          <div style={{ display:'flex', alignItems:'flex-end', gap:8, paddingBottom:2 }}>
             <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
               <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
                 style={{ accentColor:'#0891b2' }} />
-              Aplicar DIFAL/Imposto/CF globais a todos
+              Usar globais (DIFAL/Imp/CF)
             </label>
+            <button
+              onClick={() => { setItens(p => p.map(x => ({
+                ...x,
+                difal_pct:      params.difal_pct,
+                imposto_pct:    params.imposto_pct,
+                custo_fixo_pct: params.custo_fixo_pct,
+              }))); setUsarGlobais(false); }}
+              style={{ fontSize:9, fontWeight:700, padding:'4px 10px', background:'#0891b2', color:'#fff',
+                border:'none', borderRadius:4, cursor:'pointer' }}
+              title="Copia os globais para cada linha e desbloqueia edição individual">
+              ↻ Copiar globais → linhas
+            </button>
           </div>
         </div>
       </div>
@@ -568,8 +591,8 @@ export default function FormacaoPrecosTab({ currentUser }) {
               <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>IPI%</th>
               <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>ST%</th>
               <th style={{...thStyle, minWidth:56, display: isVendedor ? 'none' : undefined}}>Markup%</th>
-              <th style={{...thStyle, minWidth:50, background: usarGlobais ? '#334155' : '#1e293b', display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
-              <th style={{...thStyle, minWidth:50, background: usarGlobais ? '#334155' : '#1e293b', display: isVendedor ? 'none' : undefined}}>Imposto%</th>
+              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
+              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>Imposto%</th>
               <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
               <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
               <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Unit.</th>

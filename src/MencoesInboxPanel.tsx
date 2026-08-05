@@ -59,14 +59,20 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const uid = String(currentUser?.id || '');
-      const q = supabase
+      const uid  = String(currentUser?.id   || '');
+      const nome = String(currentUser?.nome || '');
+
+      // Busca por id E por nome (fallback para usuários com id trocado após recriação)
+      let orFilter = `mencionado_id.eq.${uid}`;
+      if (nome) orFilter += `,mencionado_nome.ilike.%${nome}%`;
+
+      let q = supabase
         .from('mencoes')
         .select('*')
-        .eq('mencionado_id', uid)
+        .or(orFilter)
         .order('criado_em', { ascending: false })
         .limit(100);
-      if (filtro === 'nao_lidas') q.eq('lida', false);
+      if (filtro === 'nao_lidas') q = q.eq('lida', false);
       const { data, error } = await q;
       if (error) {
         console.error('[MencoesInbox] erro ao carregar:', error.message);
@@ -79,7 +85,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       console.error('[MencoesInbox] exceção:', e);
     }
     setLoading(false);
-  }, [currentUser?.id, filtro]);
+  }, [currentUser?.id, currentUser?.nome, filtro]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -150,6 +150,12 @@ git add src/ChatWidget.tsx
 :: feat: ChatWidget canais completos + CRM Relatorio cards Perdidas e Ganhas
 git add src/ChatWidget.tsx
 git add src/CrmTab.tsx
+:: fix: ComercialTab botoes acao visiveis (sticky) + botoes em secoes Aprovado CQ e Faturado
+:: fix: MencoesInboxPanel busca por id OU nome (fallback para usuario recriado)
+:: fix: FormacaoPrecosTab edicao por linha preservando usar-globais + botao copiar globais
+git add src/ComercialTab.tsx
+git add src/MencoesInboxPanel.tsx
+git add src/FormacaoPrecosTab.tsx
 
 :: Verificar
 echo.
@@ -161,7 +167,7 @@ echo.
 git add src/AdminTab.tsx
 git add src/CrmTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "feat: OPL como link Ver (LinkOpl); busca em todos os tabs; seriais FiscalTab; Chat canais completos (Licitacoes/RH/Fiscal/etc) + cores; CRM Relatorio cards Perdidas+Ganhas; Formacao Precos; Kanban data sessao"
+git commit -m "fix: Comercial botoes acao sticky+secoes; Mencoes inbox fallback por nome; FormacaoPrecos edicao por linha+usar-globais; Chat canais completos; CRM Perdidas+Ganhas"
 
 :: Push
 echo.
