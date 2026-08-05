@@ -545,6 +545,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);
+  const [pendingOpenCrmId, setPendingOpenCrmId]     = useState<string|null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
@@ -617,11 +618,17 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return () => window.removeEventListener('crm:navegar-sac', handler);
   }, []);
 
-  // Navegação cross-tab: Telecom → Licitações (abre card específico)
+  // Navegação cross-tab: Telecom → Licitações ou CRM (abre card específico)
   useEffect(() => {
     const handler = (e: any) => {
       const { origem, origemId } = e.detail || {};
-      if (origem === 'licitacao' && origemId) {
+      if (!origemId) return;
+      if (origem === 'crm') {
+        // Processos novos ficam em crm_oportunidades (funil = 'licitacao' ou 'venda_direta')
+        setPendingOpenCrmId(origemId);
+        setActiveTab('crm');
+      } else if (origem === 'licitacao') {
+        // Compatibilidade com processos antigos na tabela licitacoes
         setPendingOpenLicitId(origemId);
         setActiveTab('licitacoes');
       }
@@ -781,7 +788,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'marketing':    return <MarketingTab currentUser={currentUser} />;
       case 'sac':          return <SacTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
-      case 'crm':          return <CrmTab currentUser={currentUser} />;
+      case 'crm':          return <CrmTab currentUser={currentUser} autoOpenOpId={pendingOpenCrmId} onAutoOpenConsumed={() => setPendingOpenCrmId(null)} />;
       case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} autoOpenLicitId={pendingOpenLicitId} onAutoOpenConsumed={() => setPendingOpenLicitId(null)} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;

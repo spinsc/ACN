@@ -90,7 +90,7 @@ function mascaraOp(valor: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CrmTab({ currentUser }: { currentUser: any }) {
+export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }: { currentUser: any; autoOpenOpId?: string|null; onAutoOpenConsumed?: () => void }) {
   // ── permissões ──
   const pcrm = currentUser?.permissoes_crm || [];
   const podeVerTotais       = pcrm.includes('totais_vendas')        || currentUser?.perfil === 'Admin';
@@ -217,6 +217,19 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
 
   useEffect(() => { setAbaInterna('kanban'); }, [funil]);
 
+  // Auto-abrir card quando navegado da aba Telecom (ou outro setor) via analise:abrir-origem
+  useEffect(() => {
+    if (!autoOpenOpId || loading || ops.length === 0) return;
+    const op = ops.find((o: any) => o.id === autoOpenOpId);
+    if (op) {
+      setFormOp({ ...VAZIO_OP, ...op });
+      setModalAbrir(op);
+      setAbrirTabDir('analise');  // abre direto na aba de Análise
+      setAbrirNovoText('');
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpenOpId, loading, ops]);
+
   // Carrega nome do cliente ao abrir modal de edição
   useEffect(() => {
     if (modalOp?.cliente_id) {
@@ -270,27 +283,26 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   const handleDragStart = (id: string) => setDragging(id);
   const handleDragEnd   = () => { setDragging(null); setDragOver(null); setDragOverItem(null); };
 
-  // Reordenar dentro da mesma SUPER_COL
-  const handleReorderInColumn = async (colMatch: (o: any) => boolean) => {
-    if (!dragging || !dragOverItem || dragging === dragOverItem) {
-      setDragging(null); setDragOver(null); setDragOverItem(null); return;
-    }
-    const draggingOp = ops.find(o => o.id === dragging);
-    const targetOp   = ops.find(o => o.id === dragOverItem);
+  // Reordenar dentro da mesma SUPER_COL — targetId recebido diretamente do onDrop do card wrapper
+  const handleReorderWithTarget = async (colMatch: (o: any) => boolean, targetId: string) => {
+    const fromId = dragging;
+    setDragging(null); setDragOver(null); setDragOverItem(null);
+    if (!fromId || fromId === targetId) return;
+    const draggingOp = ops.find(o => o.id === fromId);
+    const targetOp   = ops.find(o => o.id === targetId);
     if (!draggingOp || !targetOp || !colMatch(draggingOp) || !colMatch(targetOp)) return;
 
-    // Reordena localmente
-    const colCards = ops.filter(colMatch).sort((a, b) => (a.posicao ?? 0) - (b.posicao ?? 0) || new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
-    const fromIdx  = colCards.findIndex(c => c.id === dragging);
-    const toIdx    = colCards.findIndex(c => c.id === dragOverItem);
-    if (fromIdx === -1 || toIdx === -1) { setDragging(null); setDragOver(null); setDragOverItem(null); return; }
+    const colCards = ops
+      .filter(colMatch)
+      .sort((a, b) => (a.posicao ?? 0) - (b.posicao ?? 0) || new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+    const fromIdx = colCards.findIndex(c => c.id === fromId);
+    const toIdx   = colCards.findIndex(c => c.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
     const reordered = [...colCards];
     const [moved]   = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
 
-    setDragging(null); setDragOver(null); setDragOverItem(null);
-
-    // Salva novas posições no DB
     await Promise.all(
       reordered.map((c, i) => supabase.from('crm_oportunidades').update({ posicao: i + 1 }).eq('id', c.id))
     );
@@ -1006,8 +1018,6 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         draggable
         onDragStart={() => handleDragStart(op.id)}
         onDragEnd={handleDragEnd}
-        onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (dragging && dragging !== op.id) setDragOverItem(op.id); }}
-        onDragLeave={() => setDragOverItem(null)}
         style={{
           background: dragging === op.id ? '#e0f2fe' : 'white',
           borderRadius: 5, padding: '6px 8px',
@@ -1458,19 +1468,11 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               </div>
             </div>
 
-            {/* Drop zone */}
+            {/* Drop zone — só recebe drops de FORA da coluna (cross-col move) */}
             <div
-              onDragOver={e => { e.preventDefault(); if (!dragOverItem) setDragOver(col.id); }}
+              onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
               onDragLeave={() => setDragOver(null)}
-              onDrop={() => {
-                const draggingOp = ops.find(o => o.id === dragging);
-                // Se está no mesmo super-col e há um card-alvo → reorder
-                if (draggingOp && col.match(draggingOp) && dragOverItem) {
-                  handleReorderInColumn(col.match);
-                } else {
-                  estId && handleDrop(estId);
-                }
-              }}
+              onDrop={() => { setDragOver(null); estId && handleDrop(estId); }}
               style={{
                 background: isDragOver ? '#dbeafe' : col.dropBg,
                 borderRadius:'0 0 5px 5px', padding:5, minHeight:120, transition:'background .15s',
@@ -1478,7 +1480,21 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
               }}
             >
               {cards.map(op => (
-                <div key={op.id}>
+                <div key={op.id}
+                  onDragEnter={e => { e.preventDefault(); if (dragging && dragging !== op.id) setDragOverItem(op.id); }}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                  onDragLeave={e => { const rel = e.nativeEvent.relatedTarget as Node; if (!e.currentTarget.contains(rel)) setDragOverItem(p => p === op.id ? null : p); }}
+                  onDrop={e => {
+                    e.stopPropagation(); // impede o drop zone de também processar
+                    const draggingOp = ops.find(o => o.id === dragging);
+                    if (draggingOp && col.match(draggingOp)) {
+                      handleReorderWithTarget(col.match, op.id); // mesmo super-col → reorder
+                    } else {
+                      setDragOverItem(null);
+                      estId && handleDrop(estId); // cross-col move
+                    }
+                  }}
+                >
                   {/* Badge do estágio real dentro de Aberto */}
                   {col.id === 'aberto' && (
                     <div style={{ fontSize:7, color:'#64748b', marginBottom:1, paddingLeft:2 }}>
