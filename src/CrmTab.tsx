@@ -1399,14 +1399,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // KANBAN — 5 super-colunas
   // ─────────────────────────────────────────────────────────────────────────
   const SUB_STATUS_LABEL: Record<string,string> = {
-    andamento: '🟢 Andamento',
-    suspenso:  '🔴 Suspenso',
-    aguardando:'🟡 Aguardando',
+    andamento: '📐 Técnica',
+    suspenso:  '📄 Documental',
+    aguardando:'💰 Orçamentária',
   };
   const SUB_STATUS_COR: Record<string,string> = {
-    andamento: '#16a34a',
-    suspenso:  '#dc2626',
-    aguardando:'#d97706',
+    andamento: '#2563eb',
+    suspenso:  '#7c3aed',
+    aguardando:'#0891b2',
   };
 
   const atualizarSubStatus = async (opId: string, novoStatus: string) => {
@@ -1459,7 +1459,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 )}
                 {col.id === 'aberto' && (
                   <span style={{ fontSize:7, opacity:.8 }}>
-                    🟢{cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} 🔴{cards.filter(o=>o.sub_status==='suspenso').length} 🟡{cards.filter(o=>o.sub_status==='aguardando').length}
+                    📐{cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} 📄{cards.filter(o=>o.sub_status==='suspenso').length} 💰{cards.filter(o=>o.sub_status==='aguardando').length}
                   </span>
                 )}
                 <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 6px', fontSize:8 }}>
