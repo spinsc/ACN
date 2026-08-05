@@ -622,7 +622,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         .select('*').eq('oportunidade_id', op.id).eq('tipo', 'observacao')
         .order('criado_em', { ascending: false });
       setAbrirAndamentoHist(data || []);
-    } else if (tab !== 'analise') {
+    } else {
       const { data } = await supabase.from('licitacao_documentos')
         .select('*').eq('licitacao_id', op.id).eq('categoria', tab)
         .order('criado_em', { ascending: false });
@@ -2836,11 +2836,86 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 {/* ── ANÁLISE ── */}
                 {abrirTabDir === 'analise' && (
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <AnaliseStatusBadge origemId={modalAbrir.id} />
-                    <button className="acn-btn" style={{ background:'#7c3aed', alignSelf:'flex-start' }}
-                      onClick={() => setModalSolicitarAnalise(modalAbrir)}>
-                      🔬 Solicitar / Ver Análise
-                    </button>
+
+                    {/* Status + botão solicitar */}
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <AnaliseStatusBadge origemId={modalAbrir.id} />
+                      <button className="acn-btn" style={{ background:'#7c3aed' }}
+                        onClick={() => setModalSolicitarAnalise(modalAbrir)}>
+                        🔬 Solicitar / Ver Análise
+                      </button>
+                    </div>
+
+                    <hr style={{ border:'none', borderTop:'1px solid #e2e8f0', margin:'2px 0' }} />
+
+                    {/* Área livre — nota + anexos */}
+                    <div style={{ background:'#faf5ff', border:'1px solid #d8b4fe', borderRadius:6, padding:10 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#7c3aed', marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>
+                        📝 Notas / Observações
+                      </div>
+                      <textarea
+                        value={abrirUploadDesc}
+                        onChange={e => setAbrirUploadDesc(e.target.value)}
+                        placeholder="Adicione observações da sua análise..."
+                        rows={4}
+                        style={{ width:'100%', padding:'7px 9px', border:'1px solid #d8b4fe', borderRadius:4,
+                          fontSize:11, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit',
+                          background:'#fff', marginBottom:6 }}
+                      />
+                      <div style={{ marginBottom:6 }}>
+                        <label style={{ fontSize:10, color:'#6b7280', display:'block', marginBottom:3 }}>📎 Anexar arquivo (opcional)</label>
+                        <input ref={abrirUploadRef} type="file"
+                          onChange={e => setAbrirUploadFile(e.target.files?.[0]||null)}
+                          style={{ fontSize:10, width:'100%' }} />
+                      </div>
+                      <button onClick={salvarAbrirDoc}
+                        disabled={abrirSalvandoDoc || (!abrirUploadFile && !abrirUploadDesc.trim())}
+                        style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4,
+                          padding:'5px 16px', fontWeight:700, fontSize:10, cursor:'pointer',
+                          opacity:(!abrirUploadFile&&!abrirUploadDesc.trim())?.5:1 }}>
+                        {abrirSalvandoDoc ? 'Salvando...' : '💾 Salvar Análise'}
+                      </button>
+                    </div>
+
+                    {/* Lista de registros salvos */}
+                    {abrirDocs.length > 0 && (
+                      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                        <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:.4 }}>
+                          Histórico ({abrirDocs.length})
+                        </div>
+                        {abrirDocs.map((d,i) => (
+                          <div key={d.id||i} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:5,
+                            padding:'8px 10px', borderLeft:'3px solid #7c3aed' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:6 }}>
+                              <div style={{ flex:1 }}>
+                                {d.conteudo && (
+                                  <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', marginBottom: d.url ? 4 : 0 }}>
+                                    {d.conteudo}
+                                  </div>
+                                )}
+                                {d.url && (
+                                  <a href={d.url} target="_blank" rel="noopener noreferrer"
+                                    style={{ fontSize:10, color:'#7c3aed', wordBreak:'break-all', display:'flex', alignItems:'center', gap:3 }}>
+                                    📎 {d.nome || 'Arquivo'}
+                                  </a>
+                                )}
+                              </div>
+                              {currentUser?.perfil==='Admin' && (
+                                <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos')}
+                                  style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', flexShrink:0 }}>✕</button>
+                              )}
+                            </div>
+                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                              <span>👤 {d.criado_por_nome||'—'}</span>
+                              <span>🕒 {d.criado_em ? new Date(d.criado_em).toLocaleString('pt-BR') : '—'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Área livre (rich text persistido) */}
+                    {NotaLivreEditor}
                   </div>
                 )}
 
