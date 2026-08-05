@@ -234,6 +234,8 @@ export function AnaliseStatusBadge({ origemId }: { origemId: string }) {
 export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, origem, currentUser, onSolicitarNova }: any) {
   const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [obsSetor, setObsSetor] = useState<Record<string, string>>({});
+  const [finalizando, setFinalizando] = useState<string|null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -247,6 +249,49 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
   }, [origemId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const concluirSetor = async (setor: any, sol: any) => {
+    setFinalizando(setor.id);
+    const agora = new Date().toISOString();
+    const notas = obsSetor[setor.id] || null;
+    const usuario = currentUser?.nome || currentUser?.email || 'Sistema';
+
+    // Atualiza setor
+    await supabase.from('analise_setores').update({
+      status: 'analisado',
+      analisado_por: usuario,
+      analisado_em: agora,
+      notas,
+    }).eq('id', setor.id);
+
+    // Verifica se todos os setores da solicitação estão analisados
+    const { data: todos } = await supabase.from('analise_setores')
+      .select('status').eq('solicitacao_id', sol.id);
+    const todosOk = (todos || []).every((s: any) => s.status === 'analisado' || s.id === setor.id);
+    if (todosOk) {
+      await supabase.from('analise_solicitacoes').update({ status: 'finalizada' }).eq('id', sol.id);
+    }
+
+    // Log
+    try {
+      await supabase.from('analise_logs').insert([{
+        solicitacao_id: sol.id,
+        setor_id: setor.id,
+        setor: setor.setor,
+        origem: sol.origem,
+        origem_titulo: sol.origem_titulo,
+        origem_numero: sol.origem_numero,
+        acao: 'analise_finalizada',
+        usuario,
+        notas,
+        criado_em: agora,
+      }]);
+    } catch(_) { /* tabela pode não existir ainda */ }
+
+    setFinalizando(null);
+    setObsSetor(p => { const n = { ...p }; delete n[setor.id]; return n; });
+    load();
+  };
 
   if (loading) return <div style={{ color:'#9ca3af', fontSize:11, padding:20, textAlign:'center' }}>Carregando...</div>;
 
@@ -286,19 +331,49 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                 </div>
               </div>
             </div>
-            <div style={{ padding:'8px 12px', display:'flex', gap:8, flexWrap:'wrap' }}>
+
+            {/* Setores com botão de finalizar para os pendentes */}
+            <div style={{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:6 }}>
               {setores.map((s:any) => (
                 <div key={s.id} style={{
-                  display:'flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:20,
-                  background: s.status==='analisado' ? '#dcfce7' : '#fef9c3',
                   border: `1px solid ${s.status==='analisado' ? '#86efac' : '#fde047'}`,
+                  borderRadius:6, padding:'6px 10px',
+                  background: s.status==='analisado' ? '#dcfce7' : '#fffdf0',
                 }}>
-                  <span style={{ fontSize:9 }}>{s.status==='analisado' ? '✅' : '⏳'}</span>
-                  <span style={{ fontSize:10, fontWeight:700, color: s.status==='analisado'?'#166534':'#92400e' }}>
-                    {SETOR_LABEL[s.setor] || s.setor}
-                  </span>
-                  {s.status==='analisado' && s.analisado_por && (
-                    <span style={{ fontSize:8, color:'#4ade80' }}>· {s.analisado_por}</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:10 }}>{s.status==='analisado' ? '✅' : '⏳'}</span>
+                    <span style={{ fontSize:10, fontWeight:700, color: s.status==='analisado'?'#166534':'#92400e', flex:1 }}>
+                      {SETOR_LABEL[s.setor] || s.setor}
+                    </span>
+                    {s.status==='analisado' && s.analisado_por && (
+                      <span style={{ fontSize:8, color:'#166534' }}>✓ {s.analisado_por}</span>
+                    )}
+                    {s.status==='analisado' && s.analisado_em && (
+                      <span style={{ fontSize:8, color:'#4ade80' }}>{fmtDT(s.analisado_em)}</span>
+                    )}
+                  </div>
+                  {s.status==='analisado' && s.notas && (
+                    <div style={{ fontSize:9, color:'#4b5563', marginTop:4, fontStyle:'italic' }}>📝 {s.notas}</div>
+                  )}
+                  {s.status !== 'analisado' && (
+                    <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
+                      <textarea
+                        value={obsSetor[s.id] || ''}
+                        onChange={e => setObsSetor(p => ({ ...p, [s.id]: e.target.value }))}
+                        placeholder="Observações da análise (opcional)..."
+                        rows={2}
+                        style={{ width:'100%', boxSizing:'border-box', padding:'4px 7px', border:'1px solid #fde047',
+                          borderRadius:4, fontSize:10, resize:'none', fontFamily:'inherit' }}
+                      />
+                      <button
+                        onClick={() => concluirSetor(s, sol)}
+                        disabled={finalizando === s.id}
+                        style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4,
+                          padding:'5px 12px', fontWeight:700, fontSize:10, cursor:'pointer',
+                          opacity: finalizando === s.id ? .6 : 1, alignSelf:'flex-start' }}>
+                        {finalizando === s.id ? '⏳ Salvando...' : '✅ Análise Finalizada'}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -320,6 +395,7 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                 {(sol.analise_setores||[]).map((s:any) => (
                   <span key={s.id} style={{ fontSize:9, background:'#dcfce7', color:'#166534', borderRadius:10, padding:'1px 7px', border:'1px solid #86efac' }}>
                     ✅ {SETOR_LABEL[s.setor]||s.setor}
+                    {s.notas && <span style={{ fontStyle:'italic' }}> — {s.notas.slice(0,40)}</span>}
                   </span>
                 ))}
               </div>
@@ -340,7 +416,7 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
 // ─────────────────────────────────────────────────────────────────────────────
 // ANALISE WIDGET  (embutido nas abas de destino — Comercial, Engenharia, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
-export default function AnaliseWidget({ setor, currentUser }: { setor: string; currentUser: any }) {
+export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { setor: string; currentUser: any; onAbrirOrigem?: (origem: string, origemId: string) => void }) {
   const [analises, setAnalises]     = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [expandido, setExpandido]   = useState<string|null>(null);
@@ -469,10 +545,9 @@ export default function AnaliseWidget({ setor, currentUser }: { setor: string; c
                 return (
                   <div key={item.id} style={{ border:`1px solid ${cor}30`, borderRadius:5, overflow:'hidden' }}>
                     {/* Card header */}
-                    <div onClick={()=>setExpandido(isExp ? null : item.id)}
-                      style={{ background:`${cor}08`, padding:'8px 12px', cursor:'pointer',
+                    <div style={{ background:`${cor}08`, padding:'8px 12px',
                         display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                      <div style={{ minWidth:0 }}>
+                      <div style={{ minWidth:0, flex:1, cursor:'pointer' }} onClick={()=>setExpandido(isExp ? null : item.id)}>
                         <span style={{ fontSize:9, fontWeight:800, padding:'1px 6px', borderRadius:3, marginRight:6,
                           background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff' }}>
                           {isLicit ? '🏛️ Licitação' : '🤝 CRM'}
@@ -486,7 +561,15 @@ export default function AnaliseWidget({ setor, currentUser }: { setor: string; c
                         <span style={{ fontSize:9, color:'#9ca3af' }}>
                           {sol?.criado_em ? new Date(sol.criado_em).toLocaleDateString('pt-BR') : ''}
                         </span>
-                        <span style={{ fontSize:11, color:'#94a3b8' }}>{isExp ? '▲' : '▼'}</span>
+                        {onAbrirOrigem && sol?.origem_id && (
+                          <button
+                            onClick={e => { e.stopPropagation(); onAbrirOrigem(sol.origem, sol.origem_id); }}
+                            style={{ background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff', border:'none',
+                              borderRadius:3, padding:'2px 7px', fontSize:8, cursor:'pointer', fontWeight:700, flexShrink:0 }}>
+                            🔗 Abrir
+                          </button>
+                        )}
+                        <span style={{ fontSize:11, color:'#94a3b8', cursor:'pointer' }} onClick={()=>setExpandido(isExp ? null : item.id)}>{isExp ? '▲' : '▼'}</span>
                       </div>
                     </div>
 

@@ -990,36 +990,32 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
         </div>
 
         {/* ── Sub-linha sempre visível: data sessão + motivo + botão atualizar ── */}
-        {(op.data_sessao || desistiu || perdido) && (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:3, gap:4 }}>
-            <div style={{ minWidth:0, flex:1, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-              {op.data_sessao && (
-                <span style={{ fontSize:8, color:'#475569', fontWeight:600, flexShrink:0 }}>
-                  📅 {fmtData(op.data_sessao)}{op.hora_sessao ? ` · ⏰${String(op.hora_sessao).slice(0,5)}` : ''}
-                </span>
-              )}
-              {desistiu && op.motivo_desistencia && (
-                <span style={{ fontSize:7, color:'#92400e', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
-                  title={op.motivo_desistencia}>
-                  ✋ {op.motivo_desistencia}
-                </span>
-              )}
-              {perdido && op.motivo_perda && (
-                <span style={{ fontSize:7, color:'#991b1b', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
-                  title={op.motivo_perda}>
-                  ❌ {op.motivo_perda}
-                </span>
-              )}
-            </div>
-            {(desistiu || perdido) && (
-              <button
-                onClick={e => { e.stopPropagation(); abrirAndamento(op); }}
-                style={{ background:'none', border:'1px solid #d1d5db', borderRadius:3, padding:'1px 5px', fontSize:8, cursor:'pointer', color:'#475569', flexShrink:0 }}>
-                📝 Atualizar
-              </button>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:3, gap:4 }}>
+          <div style={{ minWidth:0, flex:1, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+            {op.data_sessao && (
+              <span style={{ fontSize:8, color:'#475569', fontWeight:600, flexShrink:0 }}>
+                📅 {fmtData(op.data_sessao)}{op.hora_sessao ? ` · ⏰${String(op.hora_sessao).slice(0,5)}` : ''}
+              </span>
+            )}
+            {desistiu && op.motivo_desistencia && (
+              <span style={{ fontSize:7, color:'#92400e', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
+                title={op.motivo_desistencia}>
+                ✋ {op.motivo_desistencia}
+              </span>
+            )}
+            {perdido && op.motivo_perda && (
+              <span style={{ fontSize:7, color:'#991b1b', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
+                title={op.motivo_perda}>
+                ❌ {op.motivo_perda}
+              </span>
             )}
           </div>
-        )}
+          <button
+            onClick={e => { e.stopPropagation(); abrirAndamento(op); }}
+            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 7px', fontSize:8, cursor:'pointer', flexShrink:0, fontWeight:700 }}>
+            ⬆ Atualizar
+          </button>
+        </div>
 
         {/* ── Corpo (visível só quando expandido) ── */}
         {expandido && (<>

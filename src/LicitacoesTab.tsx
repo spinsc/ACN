@@ -1399,7 +1399,13 @@ function LicitCard({ l, onClick }) {
         <span style={{ fontSize:9, color:'#9ca3af' }}>
           {l.operador || l.analista_nome ? `👤 ${l.operador || l.analista_nome}` : ''}
         </span>
-        <AnaliseStatusBadge origemId={l.id} />
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <AnaliseStatusBadge origemId={l.id} />
+          <button onClick={e => { e.stopPropagation(); onClick(); }}
+            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 8px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
+            ⬆ Atualizar
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1539,7 +1545,7 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function LicitacoesTab({ currentUser }) {
+export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
@@ -1554,6 +1560,16 @@ export default function LicitacoesTab({ currentUser }) {
 
   const isAdmin = true;
   const isAnalista = true;
+
+  // Auto-abre licitação quando navegado via Telecom (analise:abrir-origem)
+  useEffect(() => {
+    if (!autoOpenLicitId || loading || licitacoes.length === 0) return;
+    const l = licitacoes.find(x => x.id === autoOpenLicitId);
+    if (l) {
+      setSelected(l);
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpenLicitId, loading, licitacoes]);
 
   const excluirLicitacao = async (l: any) => {
     if (!confirm(`Excluir "${l.numero} — ${l.nome_projeto}"?\n\nEsta ação não pode ser desfeita.`)) return;

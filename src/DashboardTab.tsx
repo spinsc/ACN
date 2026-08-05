@@ -56,7 +56,8 @@ const SIDEBAR_GROUPS = [
   {
     section: 'Comercial',
     items: [
-      { id: 'crm',       label: 'Comercial/CRM' },
+      { id: 'crm',        label: 'Comercial/CRM' },
+      { id: 'licitacoes', label: 'Licitações' },
       { id: 'clientes',  label: 'Clientes' },
       { id: 'marketing', label: 'Marketing' },
     ],
@@ -543,6 +544,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   }, [currentUserProp?.id]);
 
   const [activeTab, setActiveTab]       = useState('dashboard');
+  const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
@@ -613,6 +615,19 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const handler = () => setActiveTab('sac');
     window.addEventListener('crm:navegar-sac', handler);
     return () => window.removeEventListener('crm:navegar-sac', handler);
+  }, []);
+
+  // Navegação cross-tab: Telecom → Licitações (abre card específico)
+  useEffect(() => {
+    const handler = (e: any) => {
+      const { origem, origemId } = e.detail || {};
+      if (origem === 'licitacao' && origemId) {
+        setPendingOpenLicitId(origemId);
+        setActiveTab('licitacoes');
+      }
+    };
+    window.addEventListener('analise:abrir-origem', handler);
+    return () => window.removeEventListener('analise:abrir-origem', handler);
   }, []);
 
   // Trocar senha
@@ -767,6 +782,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'sac':          return <SacTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
       case 'crm':          return <CrmTab currentUser={currentUser} />;
+      case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} autoOpenLicitId={pendingOpenLicitId} onAutoOpenConsumed={() => setPendingOpenLicitId(null)} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':      return <RelatoriosTab currentUser={currentUser} />;

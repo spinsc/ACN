@@ -96,6 +96,12 @@ git add avisos_sistema.sql
 git add src/AvisoSistemaWidget.tsx
 git add src/RHTab.tsx
 git add publicar.bat
+:: feat: Telecom link→licitacao + AnaliseStatusPanel finalizavel + log
+git add src/AnaliseWidget.tsx
+git add src/SetorDemandaTab.tsx
+git add src/DashboardTab.tsx
+git add src/LicitacoesTab.tsx
+git add src/CrmTab.tsx
 git add index.html
 git add vite.config.ts
 git add src/supabaseClient.ts
@@ -179,7 +185,7 @@ echo.
 git add src/AdminTab.tsx
 git add src/CrmTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "feat: FormacaoPrecosTab — vincular OP, desconto maximo, PDF com jsPDF, aba Precos Formados com simulacao de desconto e propostas"
+git commit -m "feat: Telecom link abrir licitacao + AnaliseStatusPanel finalizavel por setor + log analise_logs + botao Atualizar em todos os kanban cards CRM"
 
 :: Push
 echo.
@@ -530,6 +536,22 @@ echo   ('canal', 'SAC',          '[]'::jsonb),
 echo   ('canal', 'Marketing',    '[]'::jsonb),
 echo   ('canal', 'Telecom',      '[]'::jsonb)
 echo ON CONFLICT DO NOTHING;
+echo.
+echo -- [NOVO] Tabela de logs de analise (Task #40):
+echo CREATE TABLE IF NOT EXISTS analise_logs (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   solicitacao_id uuid REFERENCES analise_solicitacoes(id) ON DELETE SET NULL,
+echo   setor_id uuid REFERENCES analise_setores(id) ON DELETE SET NULL,
+echo   setor text,
+echo   origem text,
+echo   origem_titulo text,
+echo   origem_numero text,
+echo   acao text NOT NULL,
+echo   usuario text,
+echo   notas text,
+echo   criado_em timestamptz DEFAULT now()
+echo );
+echo ALTER TABLE analise_logs DISABLE ROW LEVEL SECURITY;
 echo.
 echo -- [NOVO] FormacaoPrecosTab - colunas na cotacoes_precos + tabela propostas:
 echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS opl_id uuid;

@@ -650,7 +650,13 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             </div>
           </div>
 
-          <AnaliseWidget setor={setor} currentUser={currentUser} />
+          <AnaliseWidget
+            setor={setor}
+            currentUser={currentUser}
+            onAbrirOrigem={(origem, origemId) => {
+              window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem, origemId } }));
+            }}
+          />
           <OplMovimentadas setor={setor} />
           <DemandaFooter setor={setor} />
         </>
