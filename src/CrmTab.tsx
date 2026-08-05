@@ -474,12 +474,20 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
       const first = estagiosFunil.find(e => !isGanho(e) && !isPerdido(e));
       if (first) p.estagio_id = first.id;
     }
+    let saveError = null;
     if (modalOp?.id) {
-      await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalOp.id);
+      const { error } = await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalOp.id);
+      saveError = error;
     } else {
-      await supabase.from('crm_oportunidades').insert(p);
+      const { error } = await supabase.from('crm_oportunidades').insert(p);
+      saveError = error;
     }
     setSalvando(false);
+    if (saveError) {
+      console.error('[CRM] Erro ao salvar oportunidade:', saveError);
+      alert('Erro ao salvar: ' + (saveError.message || JSON.stringify(saveError)));
+      return;
+    }
     setModalOp(null);
     await load();
   };

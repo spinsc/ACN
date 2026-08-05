@@ -97,11 +97,13 @@ git add src/AvisoSistemaWidget.tsx
 git add src/RHTab.tsx
 git add publicar.bat
 :: feat: Telecom link→licitacao + AnaliseStatusPanel finalizavel + log
+:: fix: CRM salvarOportunidade — erro de RLS/insert agora exibe alerta
 git add src/AnaliseWidget.tsx
 git add src/SetorDemandaTab.tsx
 git add src/DashboardTab.tsx
 git add src/LicitacoesTab.tsx
 git add src/CrmTab.tsx
+git add acn_fix_crm_rls.sql
 git add index.html
 git add vite.config.ts
 git add src/supabaseClient.ts
@@ -403,6 +405,17 @@ echo   criado_em timestamptz DEFAULT now(),
 echo   atualizado_em timestamptz DEFAULT now()
 echo );
 echo ALTER TABLE clientes DISABLE ROW LEVEL SECURITY;
+echo.
+echo ==============================================
+echo  [CRITICO] FIX CRM RLS — RODAR AGORA NO SUPABASE (acn_fix_crm_rls.sql):
+echo  ALTER TABLE crm_oportunidades       DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE crm_estagios_funil      DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE crm_historico           DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE crm_checklist_itens     DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE crm_checklist_progresso DISABLE ROW LEVEL SECURITY;
+echo  ALTER TABLE crm_vendas              DISABLE ROW LEVEL SECURITY;
+echo  (Sem isso, inserts no CRM falham silenciosamente sem mostrar erro)
+echo ==============================================
 echo.
 echo ==============================================
 echo  CRM - SQL JA EXECUTADO NO SUPABASE:
