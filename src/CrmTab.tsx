@@ -1187,11 +1187,12 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
   // RELATÓRIO POR ESTÁGIO
   // ─────────────────────────────────────────────────────────────────────────
   const renderRelatorio = () => {
-    const opsAtivas   = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
-    const opsPerdidas = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)));
-    const opsGanhas   = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)));
-    const totalPipeline = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
-    const totalPerdido  = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const opsAtivas      = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
+    const opsPerdidas    = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)));
+    const opsGanhas      = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)));
+    const opsDesistencias = opsFiltradas.filter(o => isDesistencia(getEst(o.estagio_id)));
+    const totalPipeline  = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const totalPerdido   = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const podeVer = podeVerTotais && currentUser?.ver_valores !== false;
 
     return (
@@ -1212,6 +1213,10 @@ export default function CrmTab({ currentUser }: { currentUser: any }) {
             {podeVer && totalPerdido > 0 && (
               <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
             )}
+          </div>
+          <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#92400e', fontWeight:700, marginBottom:2 }}>🚫 DESISTÊNCIAS</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#92400e', lineHeight:1 }}>{opsDesistencias.length}</div>
           </div>
           <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
             <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 GANHAS</div>
