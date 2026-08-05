@@ -548,8 +548,12 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
                     <div style={{ background:`${cor}08`, padding:'8px 12px',
                         display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                       <div style={{ minWidth:0, flex:1, cursor:'pointer' }} onClick={()=>setExpandido(isExp ? null : item.id)}>
-                        <span style={{ fontSize:9, fontWeight:800, padding:'1px 6px', borderRadius:3, marginRight:6,
-                          background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff' }}>
+                        <span
+                          onClick={e => { e.stopPropagation(); onAbrirOrigem && sol?.origem_id && onAbrirOrigem(sol.origem, sol.origem_id); }}
+                          style={{ fontSize:9, fontWeight:800, padding:'1px 6px', borderRadius:3, marginRight:6,
+                            background: isLicit ? '#1e3a5f' : '#7c3aed', color:'#fff',
+                            cursor: onAbrirOrigem && sol?.origem_id ? 'pointer' : 'default',
+                            textDecoration: onAbrirOrigem && sol?.origem_id ? 'underline' : 'none' }}>
                           {isLicit ? '🏛️ Licitação' : '🤝 CRM'}
                         </span>
                         {/* Título clicável abre o processo correspondente */}
