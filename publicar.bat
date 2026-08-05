@@ -164,6 +164,11 @@ git add src/SerralheriaTab.tsx
 git add src/ChicotesTab.tsx
 git add src/MarketingTab.tsx
 
+:: feat: FormacaoPrecosTab — OP/OS autocomplete + desconto maximo + PDF + aba Precos Formados
+git add src/FormacaoPrecosTab.tsx
+git add package.json
+git add package-lock.json
+
 :: Verificar
 echo.
 echo Arquivos no commit:
@@ -174,7 +179,7 @@ echo.
 git add src/AdminTab.tsx
 git add src/CrmTab.tsx
 git add src/FormacaoPrecosTab.tsx
-git commit -m "feat: LinkOpl clicavel em todas as abas (Producao/Serralheria/Chicotes/Marketing/CRM/Comercial); fix: Comercial sticky+botoes secoes; Mencoes fallback nome; FormacaoPrecos usar-globais; CRM Desistencias+Perdidas+Ganhas"
+git commit -m "feat: FormacaoPrecosTab — vincular OP, desconto maximo, PDF com jsPDF, aba Precos Formados com simulacao de desconto e propostas"
 
 :: Push
 echo.
@@ -525,6 +530,25 @@ echo   ('canal', 'SAC',          '[]'::jsonb),
 echo   ('canal', 'Marketing',    '[]'::jsonb),
 echo   ('canal', 'Telecom',      '[]'::jsonb)
 echo ON CONFLICT DO NOTHING;
+echo.
+echo -- [NOVO] FormacaoPrecosTab - colunas na cotacoes_precos + tabela propostas:
+echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS opl_id uuid;
+echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS opl_numero text;
+echo ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS desconto_maximo_pct numeric DEFAULT 0;
+echo.
+echo CREATE TABLE IF NOT EXISTS cotacoes_propostas (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   cotacao_id uuid REFERENCES cotacoes_precos(id) ON DELETE CASCADE,
+echo   cotacao_nome text,
+echo   opl_numero text,
+echo   desconto_pct numeric DEFAULT 0,
+echo   valor_total numeric,
+echo   valor_com_desconto numeric,
+echo   criado_por text,
+echo   criado_em timestamptz DEFAULT now(),
+echo   observacoes text
+echo );
+echo ALTER TABLE cotacoes_propostas DISABLE ROW LEVEL SECURITY;
 echo.
 echo -- [NOVO] Plataformas de licitacao (NEO, QFrotas, Prime...):
 echo CREATE TABLE IF NOT EXISTS plataformas_licitacao (

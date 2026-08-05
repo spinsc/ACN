@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -47,32 +47,17 @@ function calcItem(item, params) {
            : item.moeda === 'EURO'  ? (Number(params.ptax_euro)  || 6.40)
            : 1;
 
-  // 1. Custo unitário BRL (com IPI + ST + câmbio)
   const custoUnitBrl = custo_unit * (1 + ipi_pct / 100) * (1 + st_pct / 100) * fx;
-
-  // 2. Custo total
-  const custoTotal = custoUnitBrl * qt;
-
-  // 3. Valor unitário de venda (markup + recuperação de DIFAL)
-  const valorUnit = difal_pct < 100
+  const custoTotal   = custoUnitBrl * qt;
+  const valorUnit    = difal_pct < 100
     ? custoUnitBrl * (1 + markup_pct / 100) / (1 - difal_pct / 100)
     : 0;
-
-  // 4. Valor total de venda
-  const valorTotal = valorUnit * qt;
-
-  // 5. DIFAL total
-  const totalDifal = valorTotal * (difal_pct / 100);
-
-  // 6. Receita bruta (antes de DIFAL)
+  const valorTotal   = valorUnit * qt;
+  const totalDifal   = valorTotal * (difal_pct / 100);
   const receitaBruta = custoUnitBrl * (1 + markup_pct / 100) * qt;
-
-  // 7. Imposto total
   const totalImposto = receitaBruta * (imposto_pct / 100);
-
-  // 8. Margem real e lucro %
-  const margem   = receitaBruta - totalImposto - (custo_fixo_pct / 100 * receitaBruta) - custoTotal;
-  const lucroPct = (valorTotal - totalDifal) > 0 ? (margem / (valorTotal - totalDifal)) * 100 : 0;
+  const margem       = receitaBruta - totalImposto - (custo_fixo_pct / 100 * receitaBruta) - custoTotal;
+  const lucroPct     = (valorTotal - totalDifal) > 0 ? (margem / (valorTotal - totalDifal)) * 100 : 0;
 
   return { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct };
 }
@@ -86,6 +71,87 @@ const fmtPct = (v) => {
   if (v == null || !isFinite(v) || isNaN(v)) return '—';
   return `${Number(v).toFixed(1)}%`;
 };
+
+// ─── OP AUTOCOMPLETE ──────────────────────────────────────────────────────────
+function OplAutocomplete({ value, onSelect }) {
+  const [query, setQuery]       = useState(value?.opl || '');
+  const [resultados, setRes]    = useState([]);
+  const [buscando, setBuscando] = useState(false);
+  const [aberto, setAberto]     = useState(false);
+  const timerRef                = useRef(null);
+
+  useEffect(() => {
+    if (value) setQuery(value.opl);
+    else setQuery('');
+  }, [value]);
+
+  const buscar = (texto) => {
+    setQuery(texto);
+    clearTimeout(timerRef.current);
+    if (!texto || texto.length < 2) { setRes([]); setAberto(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true);
+      const { data } = await supabase.from('oples')
+        .select('id, opl, cliente_nome, status_geral')
+        .or(`opl.ilike.%${texto}%,cliente_nome.ilike.%${texto}%`)
+        .limit(8);
+      setRes(data || []);
+      setBuscando(false);
+      setAberto(true);
+    }, 300);
+  };
+
+  const selecionar = (op) => {
+    setQuery(op.opl);
+    setAberto(false);
+    setRes([]);
+    onSelect(op);
+  };
+
+  const limpar = () => {
+    setQuery('');
+    setRes([]);
+    setAberto(false);
+    onSelect(null);
+  };
+
+  return (
+    <div style={{ position:'relative' }}>
+      <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+        <input className="acn-input" style={{ fontSize:10, width:200 }}
+          placeholder="Buscar OP/OS por número ou cliente..."
+          value={query}
+          onChange={e => buscar(e.target.value)}
+          onFocus={() => resultados.length > 0 && setAberto(true)}
+          onBlur={() => setTimeout(() => setAberto(false), 180)} />
+        {value && (
+          <button onClick={limpar}
+            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'2px 6px', fontSize:9, cursor:'pointer' }}>
+            ✕
+          </button>
+        )}
+        {buscando && <span style={{ fontSize:9, color:'#64748b' }}>...</span>}
+      </div>
+      {aberto && resultados.length > 0 && (
+        <div style={{ position:'absolute', top:'100%', left:0, zIndex:500, background:'#fff',
+          border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 4px 12px #0002',
+          minWidth:280, maxHeight:220, overflowY:'auto' }}>
+          {resultados.map(op => (
+            <div key={op.id}
+              onMouseDown={() => selecionar(op)}
+              style={{ padding:'6px 10px', cursor:'pointer', borderBottom:'1px solid #f1f5f9', fontSize:10 }}
+              onMouseOver={e => (e.currentTarget.style.background = '#f0f9ff')}
+              onMouseOut={e  => (e.currentTarget.style.background = '')}>
+              <strong style={{ color:'#2563eb' }}>{op.opl}</strong>
+              <span style={{ marginLeft:8, color:'#475569' }}>{op.cliente_nome}</span>
+              <span style={{ marginLeft:6, fontSize:9, color:'#94a3b8' }}>{op.status_geral}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── MODAL DE SALVAR TEMPLATE ─────────────────────────────────────────────────
 function ModalSalvar({ onSalvar, onClose, salvando }) {
@@ -143,6 +209,8 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
                 <div style={{ fontWeight:700, fontSize:11 }}>{m.nome}</div>
                 <div style={{ fontSize:9, color:'#64748b' }}>
                   {m.tipo} · {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                  {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
+                  {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
                 </div>
               </div>
               <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'3px 10px' }}
@@ -174,8 +242,6 @@ function CalcMarkupReverso() {
     const cf = parseFloat(custoFob) || 0;
     const d  = parseFloat(difal) / 100 || 0;
     if (pv <= 0 || cf <= 0) { alert('Informe preço de venda e custo.'); return; }
-    // precoVenda = custo * (1 + markup) / (1 - difal)
-    // markup = precoVenda * (1 - difal) / custo - 1
     const markup = pv * (1 - d) / cf - 1;
     setResultado(markup * 100);
   };
@@ -217,8 +283,7 @@ function CalcImpostoReverso() {
     const p = parseFloat(precoComImposto) || 0;
     const i = parseFloat(imposto) / 100 || 0;
     if (p <= 0) { alert('Informe o preço com imposto.'); return; }
-    // precoSemImposto = p / (1 + i)
-    const semImposto = p / (1 + i);
+    const semImposto  = p / (1 + i);
     const valorImposto = p - semImposto;
     setResultado({ semImposto, valorImposto });
   };
@@ -250,85 +315,68 @@ function CalcImpostoReverso() {
 function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params, isVendedor }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct } = result;
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
-  // Estilo de ocultar colunas sensíveis para vendedor
   const H = isVendedor ? { display:'none' } : {};
 
   return (
     <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
-      {/* Produto */}
       <td style={{ padding:'4px 6px', minWidth:140 }}>
         <input className="acn-input" style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
           placeholder="Descrição do item" value={item.produto} onChange={e=>onSet('produto',e.target.value)} />
       </td>
-      {/* Marca */}
       <td style={{ padding:'4px 6px', minWidth:80 }}>
         <input className="acn-input" style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
           placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
       </td>
-      {/* Qt */}
       <td style={{ padding:'4px 4px', minWidth:55 }}>
         <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
       </td>
-      {/* Moeda */}
       <td style={{ padding:'4px 4px', minWidth:70 }}>
         <select className="acn-input" style={{ width:68, fontSize:9, padding:'2px 3px' }}
           value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
           {MOEDAS.map(m=><option key={m}>{m}</option>)}
         </select>
       </td>
-      {/* Custo Unit — OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:80, ...H }}>
         <input type="number" className="acn-input" style={{ width:76, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
       </td>
-      {/* IPI% — OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
         <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
       </td>
-      {/* ST% — OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
         <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
           min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
       </td>
-      {/* Markup% — OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:60, ...H }}>
-        <input type="number" className="acn-input" style={{ width:56, fontSize:9, padding:'2px 4px', textAlign:'right', background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
+        <input type="number" className="acn-input"
+          style={{ width:56, fontSize:9, padding:'2px 4px', textAlign:'right', background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
           step="0.1" value={item.markup_pct} onChange={e=>onSet('markup_pct', e.target.value)} />
       </td>
-      {/* DIFAL% — editável quando globais OFF; OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
+        <input type="number" className="acn-input"
+          style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
             background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
           step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
           onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
           readOnly={usarParamsGlobais} />
       </td>
-      {/* Imposto% — editável quando globais OFF; OCULTO para vendedor */}
       <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
+        <input type="number" className="acn-input"
+          style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
             background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
           step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
           onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
           readOnly={usarParamsGlobais} />
       </td>
-      {/* ── CALCULADOS ── */}
-      {/* Custo c/Imp. Unit — OCULTO para vendedor */}
       <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', fontWeight:600, ...H }}>{fmtR(custoUnitBrl)}</td>
-      {/* Custo Total — OCULTO para vendedor */}
       <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', ...H }}>{fmtR(custoTotal)}</td>
-      {/* Valor Unit. — visível para todos */}
       <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
-      {/* Valor Total — visível para todos */}
       <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#1d4ed8', fontWeight:700 }}>{fmtR(valorTotal)}</td>
-      {/* DIFAL Total — OCULTO para vendedor */}
       <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#b45309', ...H }}>{fmtR(totalDifal)}</td>
-      {/* Imposto — OCULTO para vendedor */}
       <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#9d174d', ...H }}>{fmtR(totalImposto)}</td>
-      {/* Lucro% — OCULTO para vendedor */}
       <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, fontWeight:800, color: lucroColor, ...H }}>{fmtPct(lucroPct)}</td>
-      {/* Remover */}
       <td style={{ padding:'4px 4px', textAlign:'center' }}>
         <button onClick={onRemove}
           style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'2px 6px', fontSize:9, cursor:'pointer' }}>
@@ -339,39 +387,290 @@ function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params, isV
   );
 }
 
+// ─── ABA PREÇOS FORMADOS (Vendedores + Todos) ─────────────────────────────────
+function AbaPrecoFormados({ currentUser, isVendedor }) {
+  const [cotacoes, setCotacoes]         = useState([]);
+  const [carregando, setCarregando]     = useState(true);
+  const [cotacaoAberta, setAberta]      = useState(null);
+  const [desconto, setDesconto]         = useState(0);
+  const [obs, setObs]                   = useState('');
+  const [salvando, setSalvando]         = useState(false);
+  const [propostas, setPropostas]       = useState([]);
+
+  const carregarCotacoes = useCallback(async () => {
+    setCarregando(true);
+    const { data } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
+    setCotacoes(data || []);
+    setCarregando(false);
+  }, []);
+
+  useEffect(() => { carregarCotacoes(); }, [carregarCotacoes]);
+
+  const abrirCotacao = async (m) => {
+    setAberta(m);
+    setDesconto(0);
+    setObs('');
+    const { data } = await supabase.from('cotacoes_propostas')
+      .select('*').eq('cotacao_id', m.id).order('criado_em', { ascending: false });
+    setPropostas(data || []);
+  };
+
+  const salvarProposta = async () => {
+    if (!cotacaoAberta) return;
+    const maxDesc = Number(cotacaoAberta.desconto_maximo_pct) || 0;
+    if (desconto > maxDesc) { alert(`Desconto máximo permitido é ${maxDesc}%.`); return; }
+    setSalvando(true);
+    const prms  = cotacaoAberta.parametros_globais || {};
+    const items = (cotacaoAberta.itens || []);
+    const results = items.map(it => calcItem(it, prms));
+    const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
+    const valorComDesconto = totVendas * (1 - desconto / 100);
+    const { error } = await supabase.from('cotacoes_propostas').insert([{
+      cotacao_id:          cotacaoAberta.id,
+      cotacao_nome:        cotacaoAberta.nome,
+      opl_numero:          cotacaoAberta.opl_numero || null,
+      desconto_pct:        desconto,
+      valor_total:         totVendas,
+      valor_com_desconto:  valorComDesconto,
+      criado_por:          currentUser?.nome,
+      observacoes:         obs,
+    }]);
+    if (error) { alert('Erro: ' + error.message); }
+    else {
+      alert('✅ Proposta salva!');
+      const { data } = await supabase.from('cotacoes_propostas')
+        .select('*').eq('cotacao_id', cotacaoAberta.id).order('criado_em', { ascending: false });
+      setPropostas(data || []);
+    }
+    setSalvando(false);
+  };
+
+  // ── Detalhe de cotação aberta ──
+  if (cotacaoAberta) {
+    const prms  = cotacaoAberta.parametros_globais || {};
+    const items = (cotacaoAberta.itens || []).map(it => ({ ...it, _id: Math.random().toString(36).slice(2) }));
+    const results  = items.map(it => calcItem(it, prms));
+    const totVendas  = results.reduce((s, r) => s + r.valorTotal, 0);
+    const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
+    const totDifal   = results.reduce((s, r) => s + r.totalDifal, 0);
+    const maxDesc    = Number(cotacaoAberta.desconto_maximo_pct) || 0;
+    const descontoValor    = totVendas * desconto / 100;
+    const valorComDesconto = totVendas * (1 - desconto / 100);
+
+    return (
+      <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+          <button className="acn-btn" style={{ background:'#64748b', fontSize:10 }} onClick={() => setAberta(null)}>← Voltar</button>
+          <div>
+            <div style={{ fontWeight:800, fontSize:14, color:'#1e293b' }}>{cotacaoAberta.nome}</div>
+            <div style={{ fontSize:10, color:'#64748b' }}>
+              {cotacaoAberta.tipo} · {cotacaoAberta.empresa}
+              {cotacaoAberta.opl_numero ? ` · OP: ${cotacaoAberta.opl_numero}` : ''}
+              {' '}· por {cotacaoAberta.criado_por}
+              {maxDesc > 0 ? <span style={{ marginLeft:8, color:'#dc2626', fontWeight:700 }}>Desc.máx: {maxDesc}%</span> : ''}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabela de itens */}
+        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'left' }}>Produto / Descrição</th>
+                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'center' }}>Qt</th>
+                {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Unit.</th>}
+                {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Total</th>}
+                {!isVendedor && <th style={{ padding:'5px 8px', background:'#92400e', color:'#fff', fontSize:9, textAlign:'right' }}>DIFAL</th>}
+                <th style={{ padding:'5px 8px', background:'#1e40af', color:'#fff', fontSize:9, textAlign:'right' }}>Valor Unit.</th>
+                <th style={{ padding:'5px 8px', background:'#1e40af', color:'#fff', fontSize:9, textAlign:'right' }}>Valor Total</th>
+                <th style={{ padding:'5px 8px', background:'#831843', color:'#fff', fontSize:9, textAlign:'right' }}>Imposto</th>
+                {!isVendedor && <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'right' }}>Lucro%</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => {
+                const r = results[idx];
+                const lucroColor = r.lucroPct >= 10 ? '#16a34a' : r.lucroPct >= 5 ? '#d97706' : '#dc2626';
+                return (
+                  <tr key={item._id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                    <td style={{ padding:'5px 8px', fontSize:10 }}>
+                      {item.produto || '—'}{item.marca ? <span style={{ color:'#94a3b8' }}> ({item.marca})</span> : ''}
+                    </td>
+                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'center' }}>{item.qt}</td>
+                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#0f766e' }}>{fmtR(r.custoUnitBrl)}</td>}
+                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#0f766e' }}>{fmtR(r.custoTotal)}</td>}
+                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#b45309' }}>{fmtR(r.totalDifal)}</td>}
+                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#1d4ed8', fontWeight:600 }}>{fmtR(r.valorUnit)}</td>
+                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#1d4ed8', fontWeight:700 }}>{fmtR(r.valorTotal)}</td>
+                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#9d174d' }}>{fmtR(r.totalImposto)}</td>
+                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', fontWeight:800, color:lucroColor }}>{fmtPct(r.lucroPct)}</td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totais + simulação de desconto */}
+        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:14, marginBottom:12 }}>
+          <div style={{ fontWeight:700, fontSize:11, color:'#475569', marginBottom:10, textTransform:'uppercase' }}>💰 Simulação de Desconto</div>
+          <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+            <div>
+              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total de Vendas</div>
+              <div style={{ fontSize:18, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total Impostos</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#831843' }}>{fmtR(totImposto)}</div>
+            </div>
+            {!isVendedor && (
+              <div>
+                <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total DIFAL</div>
+                <div style={{ fontSize:14, fontWeight:700, color:'#92400e' }}>{fmtR(totDifal)}</div>
+              </div>
+            )}
+            <div style={{ borderLeft:'1px solid #e2e8f0', paddingLeft:20 }}>
+              <div style={{ fontSize:9, color:'#64748b', marginBottom:4 }}>
+                Desconto % &nbsp;
+                {maxDesc > 0
+                  ? <span>(máx autorizado: <strong style={{ color:'#dc2626' }}>{maxDesc}%</strong>)</span>
+                  : <span style={{ color:'#94a3b8' }}>(sem desconto definido)</span>}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <input type="number" className="acn-input" style={{ width:80, fontSize:12, textAlign:'right' }}
+                  min={0} max={maxDesc > 0 ? maxDesc : 100} step="0.1" value={desconto}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value) || 0;
+                    setDesconto(maxDesc > 0 ? Math.min(v, maxDesc) : v);
+                  }} />
+                <span style={{ fontSize:11, color:'#64748b' }}>%</span>
+              </div>
+            </div>
+            {desconto > 0 && (
+              <>
+                <div>
+                  <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Desconto (R$)</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:'#dc2626' }}>- {fmtR(descontoValor)}</div>
+                </div>
+                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'8px 14px' }}>
+                  <div style={{ fontSize:9, color:'#166534', marginBottom:2 }}>Total c/ Desconto</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#16a34a' }}>{fmtR(valorComDesconto)}</div>
+                </div>
+              </>
+            )}
+          </div>
+          <div style={{ marginTop:12 }}>
+            <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Observações da proposta</div>
+            <textarea className="acn-input" style={{ width:'100%', height:60, resize:'vertical', fontSize:10 }}
+              placeholder="Condições especiais, validade da proposta, notas..."
+              value={obs} onChange={e => setObs(e.target.value)} />
+          </div>
+          <div style={{ marginTop:8 }}>
+            <button className="acn-btn" style={{ background:'#16a34a' }} onClick={salvarProposta} disabled={salvando}>
+              {salvando ? 'Salvando...' : '💾 Salvar Proposta'}
+            </button>
+          </div>
+        </div>
+
+        {/* Histórico de propostas */}
+        {propostas.length > 0 && (
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:14 }}>
+            <div style={{ fontWeight:700, fontSize:11, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>📋 Propostas Salvas</div>
+            {propostas.map(p => (
+              <div key={p.id} style={{ display:'flex', gap:12, alignItems:'center', padding:'6px 0',
+                borderBottom:'1px solid #f1f5f9', flexWrap:'wrap', fontSize:10 }}>
+                <span style={{ color:'#64748b' }}>{new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>
+                <span>Desc.: <strong>{p.desconto_pct}%</strong></span>
+                <span>Total: <strong style={{ color:'#1e40af' }}>{fmtR(p.valor_total)}</strong></span>
+                <span>c/ Desc.: <strong style={{ color:'#16a34a' }}>{fmtR(p.valor_com_desconto)}</strong></span>
+                <span style={{ color:'#64748b' }}>por {p.criado_por}</span>
+                {p.observacoes && <span style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic' }}>{p.observacoes}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Lista de cotações ──
+  return (
+    <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
+      <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', marginBottom:14 }}>📋 Preços Formados</div>
+      {carregando && <div style={{ textAlign:'center', color:'#64748b', padding:30 }}>Carregando...</div>}
+      {!carregando && cotacoes.length === 0 && (
+        <div style={{ textAlign:'center', color:'#9ca3af', fontSize:12, padding:40 }}>Nenhuma cotação salva.</div>
+      )}
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {cotacoes.map(m => {
+          const prms    = m.parametros_globais || {};
+          const items   = m.itens || [];
+          const results = items.map(it => calcItem(it, prms));
+          const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
+          return (
+            <div key={m.id}
+              style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px',
+                display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:12 }}>{m.nome}</div>
+                <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
+                  {m.tipo} · {m.empresa} · {items.length} {items.length === 1 ? 'item' : 'itens'}
+                  {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
+                  {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
+                  {' '}· por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                </div>
+              </div>
+              <div style={{ textAlign:'right', minWidth:100 }}>
+                <div style={{ fontSize:9, color:'#64748b' }}>Total de Vendas</div>
+                <div style={{ fontSize:13, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
+              </div>
+              <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
+                onClick={() => abrirCotacao(m)}>
+                Abrir →
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export default function FormacaoPrecosTab({ currentUser }) {
-  const [params, setParams]       = useState({ ...PARAMS_PADRAO });
-  const [itens, setItens]         = useState([novoItem()]);
+  const [params, setParams]           = useState({ ...PARAMS_PADRAO });
+  const [itens, setItens]             = useState([novoItem()]);
   const [usarGlobais, setUsarGlobais] = useState(true);
-  const [modelos, setModelos]     = useState([]);
+  const [modelos, setModelos]         = useState([]);
   const [modalSalvar, setModalSalvar]     = useState(false);
   const [modalCarregar, setModalCarregar] = useState(false);
-  const [salvando, setSalvando]   = useState(false);
-  const [carregando, setCarregando] = useState(false);
+  const [salvando, setSalvando]       = useState(false);
+  const [carregando, setCarregando]   = useState(false);
   const [nomeCotacao, setNomeCotacao] = useState('');
-  const [empresa, setEmpresa]             = useState('ACN');
-  const [plataformas, setPlataformas]     = useState([]);
+  const [empresa, setEmpresa]         = useState('ACN');
+  const [plataformas, setPlataformas]                 = useState([]);
   const [plataformaSelecionada, setPlataformaSelecionada] = useState(null);
 
-  // Perfil vendedor — vê versão simplificada (sem custos, markup, margem)
-  const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
+  // Novos estados
+  const [abaAtiva, setAbaAtiva]             = useState('formacao');
+  const [oplVinculada, setOplVinculada]     = useState(null);
+  const [descontoMaximoPct, setDescontoMax] = useState(0);
+  const [finalizando, setFinalizando]       = useState(false);
 
+  const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
 
-  // Carrega plataformas ativas da tabela plataformas_licitacao
   useEffect(() => {
     supabase.from('plataformas_licitacao').select('*').eq('ativo', true).order('nome')
       .then(({ data }) => setPlataformas(data || []));
   }, []);
 
-  // Quando "Usar globais" está ativo, DIFAL/Imposto/CF são sobrescritos pelo global na calc
   const paramEfetivo = (item) => usarGlobais
     ? { ...item, difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct }
     : item;
-  const results = itens.map(it => calcItem(paramEfetivo(it), params));
 
-  // Totals
+  const results    = itens.map(it => calcItem(paramEfetivo(it), params));
   const lote       = Number(params.lote_qtd) || 1;
   const totVendas  = results.reduce((s, r) => s + r.valorTotal,    0);
   const totCustos  = results.reduce((s, r) => s + r.custoTotal,    0);
@@ -380,14 +679,12 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const totMargem  = results.reduce((s, r) => s + r.margem,        0);
   const lucroGeral = (totVendas - totDifal) > 0 ? totMargem / (totVendas - totDifal) * 100 : 0;
 
-  // Plataforma
   const descontoPlatPct  = Number(plataformaSelecionada?.desconto_pct) || 0;
   const retencaoPlatPct  = Number(plataformaSelecionada?.retencao_pct) || 0;
   const descontoPlat     = totVendas * descontoPlatPct / 100;
   const retencaoPlat     = totVendas * retencaoPlatPct / 100;
   const totalLiquidoPlat = totVendas - descontoPlat - retencaoPlat;
 
-  // Novo item herda os parâmetros globais atuais como ponto de partida
   const addItem  = () => setItens(p => [...p, {
     ...novoItem(),
     difal_pct:      params.difal_pct,
@@ -410,10 +707,13 @@ export default function FormacaoPrecosTab({ currentUser }) {
       nome,
       tipo,
       empresa,
-      plataforma_id: plataformaSelecionada?.id || null,
-      parametros_globais: params,
-      itens: itens.map(({ _id, ...rest }) => rest),
-      criado_por: currentUser?.nome || 'Sistema',
+      plataforma_id:       plataformaSelecionada?.id || null,
+      parametros_globais:  params,
+      itens:               itens.map(({ _id, ...rest }) => rest),
+      criado_por:          currentUser?.nome || 'Sistema',
+      opl_id:              oplVinculada?.id   || null,
+      opl_numero:          oplVinculada?.opl  || null,
+      desconto_maximo_pct: descontoMaximoPct  || 0,
     }]);
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
@@ -434,6 +734,16 @@ export default function FormacaoPrecosTab({ currentUser }) {
     } else {
       setPlataformaSelecionada(null);
     }
+    // Restaurar campos novos
+    setDescontoMax(Number(m.desconto_maximo_pct) || 0);
+    if (m.opl_numero) {
+      // Busca o objeto completo da OP para vincular
+      supabase.from('oples').select('id, opl, cliente_nome, status_geral')
+        .eq('opl', m.opl_numero).maybeSingle()
+        .then(({ data }) => setOplVinculada(data || null));
+    } else {
+      setOplVinculada(null);
+    }
     setModalCarregar(false);
   };
 
@@ -450,15 +760,137 @@ export default function FormacaoPrecosTab({ currentUser }) {
     setNomeCotacao('');
     setEmpresa('ACN');
     setPlataformaSelecionada(null);
+    setOplVinculada(null);
+    setDescontoMax(0);
   };
 
-  const duplicarItem = (id) => {
-    const idx = itens.findIndex(x => x._id === id);
-    if (idx === -1) return;
-    const clone = { ...itens[idx], _id: Math.random().toString(36).slice(2) };
-    const novos = [...itens];
-    novos.splice(idx + 1, 0, clone);
-    setItens(novos);
+  // ─── FINALIZAR: gerar PDF e anexar na OP ───────────────────────────────────
+  const finalizar = async () => {
+    if (!oplVinculada) { alert('Vincule uma OP/OS primeiro para gerar o PDF.'); return; }
+    if (itens.length === 0) { alert('Adicione itens antes de finalizar.'); return; }
+    setFinalizando(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const autoTable  = (await import('jspdf-autotable')).default;
+
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      // ── Cabeçalho ──
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FORMAÇÃO DE PREÇOS', 105, 18, { align: 'center' });
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const linhas = [
+        [`Empresa: ${empresa}`,  `Data: ${new Date().toLocaleDateString('pt-BR')}`],
+        [`OP/OS: ${oplVinculada.opl}`,  `Cliente: ${oplVinculada.cliente_nome || '—'}`],
+        [`Modelo: ${nomeCotacao || '—'}`, plataformaSelecionada ? `Plataforma: ${plataformaSelecionada.nome}` : ''],
+      ];
+      let y = 28;
+      linhas.forEach(([esq, dir]) => {
+        doc.text(esq, 14, y);
+        if (dir) doc.text(dir, 130, y);
+        y += 6;
+      });
+
+      // ── Tabela de itens ──
+      const head = [isVendedor
+        ? ['Produto / Descrição', 'Marca', 'Qt', 'Valor Unit.', 'Valor Total', 'Imposto']
+        : ['Produto / Descrição', 'Marca', 'Qt', 'Custo Unit.', 'Valor Unit.', 'Valor Total', 'DIFAL', 'Imposto', 'Lucro%']
+      ];
+      const body = itens.map((item, idx) => {
+        const r = results[idx];
+        if (isVendedor) {
+          return [item.produto || '—', item.marca || '—', item.qt, fmtR(r.valorUnit), fmtR(r.valorTotal), fmtR(r.totalImposto)];
+        }
+        return [
+          item.produto || '—', item.marca || '—', item.qt,
+          fmtR(r.custoUnitBrl), fmtR(r.valorUnit), fmtR(r.valorTotal),
+          fmtR(r.totalDifal), fmtR(r.totalImposto), fmtPct(r.lucroPct),
+        ];
+      });
+
+      autoTable(doc, {
+        head,
+        body,
+        startY: y + 4,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 41, 59], fontSize: 7, textColor: 255 },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: isVendedor
+          ? { 0: { cellWidth: 60 }, 4: { halign: 'right' }, 5: { halign: 'right' } }
+          : { 0: { cellWidth: 50 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
+      });
+
+      const finalY = (doc as any).lastAutoTable.finalY + 8;
+
+      // ── Resumo financeiro ──
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('RESUMO FINANCEIRO', 14, finalY);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let ry = finalY + 6;
+      doc.text(`Total de Vendas: ${fmtR(totVendas)}`, 14, ry); ry += 5;
+      doc.text(`Total Impostos: ${fmtR(totImposto)}`, 14, ry); ry += 5;
+      if (!isVendedor) {
+        doc.text(`Total DIFAL: ${fmtR(totDifal)}`, 14, ry); ry += 5;
+        doc.text(`Margem Real: ${fmtR(totMargem)}`, 14, ry); ry += 5;
+        doc.text(`Lucro % Geral: ${fmtPct(lucroGeral)}`, 14, ry); ry += 5;
+      }
+      if (plataformaSelecionada) {
+        doc.text(`Desconto Plataforma (${descontoPlatPct}%): ${fmtR(descontoPlat)}`, 14, ry); ry += 5;
+        doc.text(`Retenção Plataforma (${retencaoPlatPct}%): ${fmtR(retencaoPlat)}`, 14, ry); ry += 5;
+        doc.text(`Líquido c/ Plataforma: ${fmtR(totalLiquidoPlat)}`, 14, ry); ry += 5;
+      }
+
+      // ── Campo de desconto máximo ──
+      ry += 4;
+      doc.setDrawColor(220, 38, 38);
+      doc.setLineWidth(0.5);
+      doc.rect(12, ry - 4, 186, 14);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(220, 38, 38);
+      doc.text(`Desconto máximo autorizado para negociação: ${descontoMaximoPct}%`, 15, ry + 2);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(150, 60, 60);
+      doc.text('Referência para o vendedor durante a negociação. Não ultrapassar este percentual.', 15, ry + 7);
+      doc.setTextColor(0, 0, 0);
+
+      // ── Upload para Supabase Storage ──
+      const pdfBlob = doc.output('blob');
+      const safeOpl  = (oplVinculada.opl || '').replace(/[^a-zA-Z0-9-]/g, '_');
+      const safeName = `formacao-precos_${(nomeCotacao || 'sem-nome').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`;
+      const path     = `opl-anexos/${safeOpl}/${safeName}`;
+
+      const { data: upData, error: upErr } = await supabase.storage
+        .from('acn-media')
+        .upload(path, pdfBlob, { upsert: true, contentType: 'application/pdf' });
+
+      if (upErr || !upData) throw new Error('Erro no upload: ' + (upErr?.message || 'desconhecido'));
+
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+
+      await supabase.from('opl_anexos').insert([{
+        opl_id:     oplVinculada.id,
+        opl_numero: oplVinculada.opl,
+        setor:      'Preços',
+        tipo:       'documento',
+        nome:       safeName,
+        url:        pub?.publicUrl || '',
+        criado_por: currentUser?.nome,
+      }]);
+
+      alert(`✅ PDF gerado e anexado à OP ${oplVinculada.opl}!\n\nO arquivo está disponível nos anexos da OP.`);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao finalizar: ' + err.message);
+    } finally {
+      setFinalizando(false);
+    }
   };
 
   const thStyle = {
@@ -467,238 +899,297 @@ export default function FormacaoPrecosTab({ currentUser }) {
   };
   const lucroGeralColor = lucroGeral >= 10 ? '#16a34a' : lucroGeral >= 5 ? '#d97706' : '#dc2626';
 
+  // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
+    <div style={{ fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
 
-      {/* ── HEADER ── */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
-        <div>
-          <div style={{ fontWeight:800, fontSize:16, color:'#1e293b' }}>📊 Formação de Preços</div>
-          {nomeCotacao && <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>Modelo: <strong>{nomeCotacao}</strong></div>}
-        </div>
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-          <button className="acn-btn" style={{ background:'#0891b2', fontSize:10 }}
-            onClick={() => { setModalCarregar(true); carregarModelos(); }}>
-            📂 Carregar Modelo
+      {/* ── NAVEGAÇÃO DE ABAS ── */}
+      <div style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#fff', paddingLeft:14, paddingTop:8 }}>
+        {[
+          { id:'formacao',       label:'📊 Formação de Preços' },
+          { id:'precos_formados', label:'📋 Preços Formados' },
+        ].map(tab => (
+          <button key={tab.id}
+            onClick={() => setAbaAtiva(tab.id)}
+            style={{
+              padding:'8px 18px', fontSize:11, fontWeight: abaAtiva === tab.id ? 800 : 500,
+              border:'none', borderBottom: abaAtiva === tab.id ? '3px solid #2563eb' : '3px solid transparent',
+              background:'none', cursor:'pointer',
+              color: abaAtiva === tab.id ? '#2563eb' : '#64748b',
+              marginBottom:-2,
+            }}>
+            {tab.label}
           </button>
-          <button className="acn-btn" style={{ background:'#16a34a', fontSize:10 }}
-            onClick={() => setModalSalvar(true)}>
-            💾 Salvar Modelo
-          </button>
-          <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10 }}
-            onClick={addItem}>
-            + Adicionar Item
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10 }}
-            onClick={novaQuotacao}>
-            🗒️ Nova Cotação
-          </button>
-        </div>
+        ))}
       </div>
 
-      {/* ── EMPRESA + PLATAFORMA ── */}
-      <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
-        {/* Empresa (ACN / DETECH) */}
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
-          <div style={{ display:'flex', gap:4 }}>
-            {['ACN', 'DETECH'].map(emp => (
-              <button key={emp} className="acn-btn"
-                style={{ background: empresa===emp ? '#1e293b' : '#e2e8f0', color: empresa===emp ? '#fff' : '#374151', fontSize:10, minWidth:64 }}
-                onClick={() => setEmpresa(emp)}>
-                {emp}
+      {/* ── ABA PREÇOS FORMADOS ── */}
+      {abaAtiva === 'precos_formados' && (
+        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} />
+      )}
+
+      {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
+      {abaAtiva === 'formacao' && (
+        <div style={{ padding:14 }}>
+
+          {/* ── HEADER ── */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
+            <div>
+              <div style={{ fontWeight:800, fontSize:16, color:'#1e293b' }}>📊 Formação de Preços</div>
+              {nomeCotacao && <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>Modelo: <strong>{nomeCotacao}</strong></div>}
+            </div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              <button className="acn-btn" style={{ background:'#0891b2', fontSize:10 }}
+                onClick={() => { setModalCarregar(true); carregarModelos(); }}>
+                📂 Carregar Modelo
               </button>
-            ))}
-          </div>
-        </div>
-        {/* Plataforma */}
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏪 Plataforma</div>
-          <select className="acn-input" style={{ minWidth:200, fontSize:10 }}
-            value={plataformaSelecionada?.id || ''}
-            onChange={e => setPlataformaSelecionada(plataformas.find(x => x.id === e.target.value) || null)}>
-            <option value="">— Sem Plataforma —</option>
-            {plataformas.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.nome}{p.desconto_pct ? ` (desc: ${p.desconto_pct}%)` : ''}{p.retencao_pct ? ` (ret: ${p.retencao_pct}%)` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        {/* Resumo plataforma selecionada */}
-        {plataformaSelecionada && (
-          <div style={{ fontSize:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 12px', display:'flex', gap:12 }}>
-            <span style={{ color:'#059669', fontWeight:700 }}>Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
-            <span style={{ color:'#dc2626', fontWeight:700 }}>Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
-            <span style={{ color:'#0f766e', fontWeight:800 }}>Líquido: {fmtR(totalLiquidoPlat)}</span>
-          </div>
-        )}
-      </div>
-
-      {/* ── PARÂMETROS GLOBAIS ── */}
-      <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
-        <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>
-          ⚙️ Parâmetros Globais
-        </div>
-        <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end' }}>
-          {[
-            { label:'PTAX USD (R$)',  k:'ptax_dolar',     w:90,  step:'0.0001' },
-            { label:'PTAX EUR (R$)',  k:'ptax_euro',      w:90,  step:'0.0001' },
-            { label:'DIFAL %',        k:'difal_pct',      w:70,  step:'0.1' },
-            { label:'Imposto %',      k:'imposto_pct',    w:70,  step:'0.1' },
-            { label:'Custo Fixo %',  k:'custo_fixo_pct', w:80,  step:'0.1' },
-            { label:'Qtd. Lote',      k:'lote_qtd',       w:70,  step:'1' },
-          ].map(({ label, k, w, step }) => (
-            <div key={k}>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>{label}</div>
-              <input type="number" className="acn-input" style={{ width:w, fontSize:10, textAlign:'right' }}
-                step={step} value={params[k]}
-                onChange={e => setP(k, parseFloat(e.target.value) || 0)} />
+              <button className="acn-btn" style={{ background:'#16a34a', fontSize:10 }}
+                onClick={() => setModalSalvar(true)}>
+                💾 Salvar Modelo
+              </button>
+              <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10 }}
+                onClick={addItem}>
+                + Adicionar Item
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10 }}
+                onClick={novaQuotacao}>
+                🗒️ Nova Cotação
+              </button>
+              {oplVinculada && (
+                <button className="acn-btn"
+                  style={{ background: finalizando ? '#94a3b8' : '#dc2626', fontSize:10 }}
+                  onClick={finalizar}
+                  disabled={finalizando}>
+                  {finalizando ? '⏳ Gerando PDF...' : '📎 Finalizar & Anexar PDF'}
+                </button>
+              )}
             </div>
-          ))}
-          <div style={{ display:'flex', alignItems:'flex-end', gap:8, paddingBottom:2 }}>
-            <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
-              <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
-                style={{ accentColor:'#0891b2' }} />
-              Usar globais (DIFAL/Imp/CF)
-            </label>
-            <button
-              onClick={() => { setItens(p => p.map(x => ({
-                ...x,
-                difal_pct:      params.difal_pct,
-                imposto_pct:    params.imposto_pct,
-                custo_fixo_pct: params.custo_fixo_pct,
-              }))); setUsarGlobais(false); }}
-              style={{ fontSize:9, fontWeight:700, padding:'4px 10px', background:'#0891b2', color:'#fff',
-                border:'none', borderRadius:4, cursor:'pointer' }}
-              title="Copia os globais para cada linha e desbloqueia edição individual">
-              ↻ Copiar globais → linhas
-            </button>
           </div>
-        </div>
-      </div>
 
-      {/* ── TABELA DE ITENS ── */}
-      <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1100 }}>
-          <thead>
-            <tr>
-              <th style={{...thStyle, textAlign:'left', minWidth:140}}>Produto / Descrição</th>
-              <th style={{...thStyle, minWidth:80}}>Marca</th>
-              <th style={{...thStyle, minWidth:50}}>Qt</th>
-              <th style={{...thStyle, minWidth:68}}>Moeda</th>
-              <th style={{...thStyle, minWidth:76, display: isVendedor ? 'none' : undefined}}>Custo Unit.</th>
-              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>IPI%</th>
-              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>ST%</th>
-              <th style={{...thStyle, minWidth:56, display: isVendedor ? 'none' : undefined}}>Markup%</th>
-              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
-              <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>Imposto%</th>
-              <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
-              <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
-              <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Unit.</th>
-              <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Total</th>
-              <th style={{...thStyle, minWidth:80, background:'#92400e', display: isVendedor ? 'none' : undefined}}>DIFAL Total</th>
-              <th style={{...thStyle, minWidth:80, background:'#831843', display: isVendedor ? 'none' : undefined}}>Imposto</th>
-              <th style={{...thStyle, minWidth:70, display: isVendedor ? 'none' : undefined}}>Lucro%</th>
-              <th style={{...thStyle, minWidth:36}}>✕</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itens.length === 0 && (
-              <tr>
-                <td colSpan={isVendedor ? 7 : 18} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
-                  Nenhum item. Clique em <strong>+ Adicionar Item</strong>.
-                </td>
-              </tr>
+          {/* ── OP/OS + DESCONTO MÁXIMO ── */}
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12,
+            display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+            {/* OP Vinculada */}
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔗 OP/OS Vinculada</div>
+              <OplAutocomplete value={oplVinculada} onSelect={setOplVinculada} />
+              {oplVinculada && (
+                <div style={{ fontSize:9, color:'#16a34a', marginTop:3 }}>
+                  ✓ {oplVinculada.opl} — {oplVinculada.cliente_nome}
+                </div>
+              )}
+            </div>
+            {/* Desconto máximo */}
+            {!isVendedor && (
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔒 Desconto Máx. (%)</div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <input type="number" className="acn-input" style={{ width:80, fontSize:11, textAlign:'right' }}
+                    min={0} max={100} step="0.5" value={descontoMaximoPct}
+                    onChange={e => setDescontoMax(parseFloat(e.target.value) || 0)} />
+                  <span style={{ fontSize:10, color:'#64748b' }}>%</span>
+                </div>
+                <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>Limite para o vendedor negociar</div>
+              </div>
             )}
-            {itens.map((item, idx) => (
-              <ItemRow
-                key={item._id}
-                item={paramEfetivo(item)}
-                result={results[idx]}
-                onSet={(k, v) => setItem(item._id, k, v)}
-                onRemove={() => remItem(item._id)}
-                usarParamsGlobais={usarGlobais}
-                params={params}
-                isVendedor={isVendedor}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
 
-      {/* ── PAINEL DE TOTAIS ── */}
-      {itens.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:12 }}>
-          {[
-            { label:'Total de Vendas',                        value: fmtR(totVendas),    bg:'#1e40af', color:'#fff', hide: false },
-            { label:'Total de Custos',                        value: fmtR(totCustos),    bg:'#065f46', color:'#fff', hide: isVendedor },
-            { label:'Total DIFAL',                            value: fmtR(totDifal),     bg:'#92400e', color:'#fff', hide: isVendedor },
-            { label:'Total Impostos',                         value: fmtR(totImposto),   bg:'#831843', color:'#fff', hide: false },
-            { label:'Margem Real Total',                      value: fmtR(totMargem),    bg: totMargem >= 0 ? '#166534' : '#991b1b', color:'#fff', hide: isVendedor },
-            { label:'Lucro % Geral',                          value: fmtPct(lucroGeral), bg: lucroGeralColor, color:'#fff', hide: isVendedor },
-            ...(plataformaSelecionada ? [
-              { label:`Desconto ${plataformaSelecionada.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     bg:'#0891b2', color:'#fff', hide: false },
-              { label:`Retenção ${plataformaSelecionada.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     bg:'#7c3aed', color:'#fff', hide: false },
-              { label:'Valor Líquido c/ Plataforma',                                  value: fmtR(totalLiquidoPlat), bg:'#0f766e', color:'#fff', hide: false },
-            ] : []),
-          ].filter(x => !x.hide).map(({ label, value, bg, color }) => (
-            <div key={label} style={{ background:bg, color, borderRadius:8, padding:'10px 14px' }}>
-              <div style={{ fontSize:9, opacity:.85, marginBottom:3 }}>{label}</div>
-              <div style={{ fontSize:14, fontWeight:800 }}>{value}</div>
+          {/* ── EMPRESA + PLATAFORMA ── */}
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
+              <div style={{ display:'flex', gap:4 }}>
+                {['ACN', 'DETECH'].map(emp => (
+                  <button key={emp} className="acn-btn"
+                    style={{ background: empresa===emp ? '#1e293b' : '#e2e8f0', color: empresa===emp ? '#fff' : '#374151', fontSize:10, minWidth:64 }}
+                    onClick={() => setEmpresa(emp)}>
+                    {emp}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── TOTAIS POR LOTE ── */}
-      {itens.length > 0 && lote > 1 && (
-        <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:12, marginBottom:12 }}>
-          <div style={{ fontWeight:700, fontSize:11, color:'#0369a1', marginBottom:6 }}>
-            📦 Totais para {lote} unidade{lote !== 1 ? 's' : ''} (Lote)
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏪 Plataforma</div>
+              <select className="acn-input" style={{ minWidth:200, fontSize:10 }}
+                value={plataformaSelecionada?.id || ''}
+                onChange={e => setPlataformaSelecionada(plataformas.find(x => x.id === e.target.value) || null)}>
+                <option value="">— Sem Plataforma —</option>
+                {plataformas.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}{p.desconto_pct ? ` (desc: ${p.desconto_pct}%)` : ''}{p.retencao_pct ? ` (ret: ${p.retencao_pct}%)` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {plataformaSelecionada && (
+              <div style={{ fontSize:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 12px', display:'flex', gap:12 }}>
+                <span style={{ color:'#059669', fontWeight:700 }}>Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
+                <span style={{ color:'#dc2626', fontWeight:700 }}>Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
+                <span style={{ color:'#0f766e', fontWeight:800 }}>Líquido: {fmtR(totalLiquidoPlat)}</span>
+              </div>
+            )}
           </div>
-          <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-            <span style={{ fontSize:11 }}>Vendas: <strong>{fmtR(totVendas * lote)}</strong></span>
-            <span style={{ fontSize:11 }}>Custos: <strong>{fmtR(totCustos * lote)}</strong></span>
-            <span style={{ fontSize:11 }}>DIFAL: <strong>{fmtR(totDifal * lote)}</strong></span>
-            <span style={{ fontSize:11 }}>Margem: <strong style={{ color: totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(totMargem * lote)}</strong></span>
+
+          {/* ── PARÂMETROS GLOBAIS ── */}
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>
+              ⚙️ Parâmetros Globais
+            </div>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end' }}>
+              {[
+                { label:'PTAX USD (R$)',  k:'ptax_dolar',     w:90,  step:'0.0001' },
+                { label:'PTAX EUR (R$)',  k:'ptax_euro',      w:90,  step:'0.0001' },
+                { label:'DIFAL %',        k:'difal_pct',      w:70,  step:'0.1' },
+                { label:'Imposto %',      k:'imposto_pct',    w:70,  step:'0.1' },
+                { label:'Custo Fixo %',  k:'custo_fixo_pct', w:80,  step:'0.1' },
+                { label:'Qtd. Lote',      k:'lote_qtd',       w:70,  step:'1' },
+              ].map(({ label, k, w, step }) => (
+                <div key={k}>
+                  <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>{label}</div>
+                  <input type="number" className="acn-input" style={{ width:w, fontSize:10, textAlign:'right' }}
+                    step={step} value={params[k]}
+                    onChange={e => setP(k, parseFloat(e.target.value) || 0)} />
+                </div>
+              ))}
+              <div style={{ display:'flex', alignItems:'flex-end', gap:8, paddingBottom:2 }}>
+                <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                  <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
+                    style={{ accentColor:'#0891b2' }} />
+                  Usar globais (DIFAL/Imp/CF)
+                </label>
+                <button
+                  onClick={() => { setItens(p => p.map(x => ({
+                    ...x,
+                    difal_pct:      params.difal_pct,
+                    imposto_pct:    params.imposto_pct,
+                    custo_fixo_pct: params.custo_fixo_pct,
+                  }))); setUsarGlobais(false); }}
+                  style={{ fontSize:9, fontWeight:700, padding:'4px 10px', background:'#0891b2', color:'#fff',
+                    border:'none', borderRadius:4, cursor:'pointer' }}
+                  title="Copia os globais para cada linha e desbloqueia edição individual">
+                  ↻ Copiar globais → linhas
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* ── TABELA DE ITENS ── */}
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1100 }}>
+              <thead>
+                <tr>
+                  <th style={{...thStyle, textAlign:'left', minWidth:140}}>Produto / Descrição</th>
+                  <th style={{...thStyle, minWidth:80}}>Marca</th>
+                  <th style={{...thStyle, minWidth:50}}>Qt</th>
+                  <th style={{...thStyle, minWidth:68}}>Moeda</th>
+                  <th style={{...thStyle, minWidth:76, display: isVendedor ? 'none' : undefined}}>Custo Unit.</th>
+                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>IPI%</th>
+                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>ST%</th>
+                  <th style={{...thStyle, minWidth:56, display: isVendedor ? 'none' : undefined}}>Markup%</th>
+                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
+                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>Imposto%</th>
+                  <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
+                  <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
+                  <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Unit.</th>
+                  <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Total</th>
+                  <th style={{...thStyle, minWidth:80, background:'#92400e', display: isVendedor ? 'none' : undefined}}>DIFAL Total</th>
+                  <th style={{...thStyle, minWidth:80, background:'#831843', display: isVendedor ? 'none' : undefined}}>Imposto</th>
+                  <th style={{...thStyle, minWidth:70, display: isVendedor ? 'none' : undefined}}>Lucro%</th>
+                  <th style={{...thStyle, minWidth:36}}>✕</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.length === 0 && (
+                  <tr>
+                    <td colSpan={isVendedor ? 7 : 18} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+                      Nenhum item. Clique em <strong>+ Adicionar Item</strong>.
+                    </td>
+                  </tr>
+                )}
+                {itens.map((item, idx) => (
+                  <ItemRow
+                    key={item._id}
+                    item={paramEfetivo(item)}
+                    result={results[idx]}
+                    onSet={(k, v) => setItem(item._id, k, v)}
+                    onRemove={() => remItem(item._id)}
+                    usarParamsGlobais={usarGlobais}
+                    params={params}
+                    isVendedor={isVendedor}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── PAINEL DE TOTAIS ── */}
+          {itens.length > 0 && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:12 }}>
+              {[
+                { label:'Total de Vendas',    value: fmtR(totVendas),    bg:'#1e40af', color:'#fff', hide: false },
+                { label:'Total de Custos',    value: fmtR(totCustos),    bg:'#065f46', color:'#fff', hide: isVendedor },
+                { label:'Total DIFAL',        value: fmtR(totDifal),     bg:'#92400e', color:'#fff', hide: isVendedor },
+                { label:'Total Impostos',     value: fmtR(totImposto),   bg:'#831843', color:'#fff', hide: false },
+                { label:'Margem Real Total',  value: fmtR(totMargem),    bg: totMargem >= 0 ? '#166534' : '#991b1b', color:'#fff', hide: isVendedor },
+                { label:'Lucro % Geral',      value: fmtPct(lucroGeral), bg: lucroGeralColor, color:'#fff', hide: isVendedor },
+                ...(plataformaSelecionada ? [
+                  { label:`Desconto ${plataformaSelecionada.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     bg:'#0891b2', color:'#fff', hide: false },
+                  { label:`Retenção ${plataformaSelecionada.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     bg:'#7c3aed', color:'#fff', hide: false },
+                  { label:'Valor Líquido c/ Plataforma',                                  value: fmtR(totalLiquidoPlat), bg:'#0f766e', color:'#fff', hide: false },
+                ] : []),
+              ].filter(x => !x.hide).map(({ label, value, bg, color }) => (
+                <div key={label} style={{ background:bg, color, borderRadius:8, padding:'10px 14px' }}>
+                  <div style={{ fontSize:9, opacity:.85, marginBottom:3 }}>{label}</div>
+                  <div style={{ fontSize:14, fontWeight:800 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── TOTAIS POR LOTE ── */}
+          {itens.length > 0 && lote > 1 && (
+            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:12, marginBottom:12 }}>
+              <div style={{ fontWeight:700, fontSize:11, color:'#0369a1', marginBottom:6 }}>
+                📦 Totais para {lote} unidade{lote !== 1 ? 's' : ''} (Lote)
+              </div>
+              <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+                <span style={{ fontSize:11 }}>Vendas: <strong>{fmtR(totVendas * lote)}</strong></span>
+                <span style={{ fontSize:11 }}>Custos: <strong>{fmtR(totCustos * lote)}</strong></span>
+                <span style={{ fontSize:11 }}>DIFAL: <strong>{fmtR(totDifal * lote)}</strong></span>
+                <span style={{ fontSize:11 }}>Margem: <strong style={{ color: totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(totMargem * lote)}</strong></span>
+              </div>
+            </div>
+          )}
+
+          {/* ── CALCULADORAS ── */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+            <CalcMarkupReverso />
+            <CalcImpostoReverso />
+          </div>
+
+          {/* ── OBSERVAÇÕES ── */}
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:6, textTransform:'uppercase' }}>
+              📝 Observações da Cotação
+            </div>
+            <textarea className="acn-input" style={{ width:'100%', height:80, resize:'vertical', fontSize:10 }}
+              placeholder="Condições comerciais, validade da proposta, notas sobre o lote..." />
+          </div>
+
+          {/* ── MODAIS ── */}
+          {modalSalvar && (
+            <ModalSalvar onSalvar={salvarModelo} onClose={() => setModalSalvar(false)} salvando={salvando} />
+          )}
+          {modalCarregar && (
+            <ModalCarregar
+              modelos={modelos}
+              carregando={carregando}
+              onCarregar={carregarModelo}
+              onExcluir={excluirModelo}
+              onClose={() => setModalCarregar(false)}
+            />
+          )}
         </div>
-      )}
-
-      {/* ── CALCULADORAS ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-        <CalcMarkupReverso />
-        <CalcImpostoReverso />
-      </div>
-
-      {/* ── OBSERVAÇÕES / NOTAS DA COTAÇÃO ── */}
-      <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12 }}>
-        <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:6, textTransform:'uppercase' }}>
-          📝 Observações da Cotação
-        </div>
-        <textarea className="acn-input" style={{ width:'100%', height:80, resize:'vertical', fontSize:10 }}
-          placeholder="Condições comerciais, validade da proposta, notas sobre o lote..."
-          value={nomeCotacao !== '' ? '' : ''}
-        />
-      </div>
-
-      {/* ── MODAIS ── */}
-      {modalSalvar && (
-        <ModalSalvar
-          onSalvar={salvarModelo}
-          onClose={() => setModalSalvar(false)}
-          salvando={salvando}
-        />
-      )}
-      {modalCarregar && (
-        <ModalCarregar
-          modelos={modelos}
-          carregando={carregando}
-          onCarregar={carregarModelo}
-          onExcluir={excluirModelo}
-          onClose={() => setModalCarregar(false)}
-        />
       )}
     </div>
   );
