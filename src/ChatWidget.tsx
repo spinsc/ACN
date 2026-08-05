@@ -250,10 +250,19 @@ export default function ChatWidget({ currentUser }: any) {
   // ── Inicialização ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
-    fetchCanais();
-    fetchUsuarios();
-    fetchDiretos();
-    contarNaoLidas().then(n => { prevCountRef.current = n; });
+
+    // Inicializa: carrega salas, marca salas nunca abertas como "já lidas"
+    // para evitar que mensagens antigas apareçam como não-lidas
+    const init = async () => {
+      const [todosCanais, todosDiretos] = await Promise.all([fetchCanais(), fetchDiretos()]);
+      fetchUsuarios();
+      for (const s of [...todosCanais, ...todosDiretos]) {
+        if (!localStorage.getItem(lrKey(s.id))) markRead(s.id);
+      }
+      const n = await contarNaoLidas();
+      prevCountRef.current = n;
+    };
+    init();
 
     broadcastRef.current = supabase.channel(BROADCAST_CH)
       .on('broadcast', { event: 'nova_msg' }, ({ payload }: any) => {
@@ -320,12 +329,14 @@ export default function ChatWidget({ currentUser }: any) {
   }, [salaAtiva?.id, aberto]);
 
   // ── Fetches ───────────────────────────────────────────────────────────────
-  const fetchCanais = async () => {
+  const fetchCanais = async (): Promise<any[]> => {
     const { data } = await supabase.from('chat_salas').select('*').eq('tipo', 'canal').order('nome');
-    setCanais(data || []);
+    const list = data || [];
+    setCanais(list);
+    return list;
   };
 
-  const fetchDiretos = async () => {
+  const fetchDiretos = async (): Promise<any[]> => {
     const { data } = await supabase.from('chat_salas').select('*').eq('tipo', 'direto');
     const isAdmin = currentUser?.perfil === 'Admin';
     const lista = isAdmin
@@ -338,7 +349,9 @@ export default function ChatWidget({ currentUser }: any) {
       const atual = seen.get(outroId);
       if (!atual || (d.criado_em || '') > (atual.criado_em || '')) seen.set(outroId, d);
     }
-    setDiretos([...seen.values()]);
+    const finalList = [...seen.values()];
+    setDiretos(finalList);
+    return finalList;
   };
 
   const fetchUsuarios = async () => {

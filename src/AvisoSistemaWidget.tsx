@@ -31,7 +31,8 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   const [salvando, setSalvando]       = useState(false);
   const [pos, setPos]                 = useState<{ x: number; y: number } | null>(null);
   const [podePublicar, setPodePublicar] = useState(false);
-  const drag = useRef<any>({ on: false });
+  const drag        = useRef<any>({ on: false });
+  const dragMoved   = useRef(false);
 
   const user = currentUser || JSON.parse(localStorage.getItem('user') || '{}')
 
@@ -95,9 +96,13 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   // ── drag ──────────────────────────────────────────────────────────────────
   const onHeaderMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    dragMoved.current = false;
     drag.current = { on: true, sx: e.clientX, sy: e.clientY, px: pos!.x, py: pos!.y };
     const move = (me: MouseEvent) => {
       if (!drag.current.on) return;
+      if (Math.abs(me.clientX - drag.current.sx) > 4 || Math.abs(me.clientY - drag.current.sy) > 4) {
+        dragMoved.current = true;
+      }
       setPos({ x: Math.max(0, drag.current.px + me.clientX - drag.current.sx), y: Math.max(0, drag.current.py + me.clientY - drag.current.sy) });
     };
     const up = () => { drag.current.on = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
@@ -154,13 +159,14 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
         {/* ── MINIMIZADO ── */}
         {minimizado ? (
           <button
-            onClick={() => setMinimizado(false)}
+            onMouseDown={onHeaderMouseDown}
+            onClick={() => { if (!dragMoved.current) setMinimizado(false); }}
             className={pulsar ? 'aviso-pulse' : ''}
-            title={avisos.length > 0 ? `${avisos.length} aviso(s) do sistema` : 'Avisos do Sistema'}
+            title={avisos.length > 0 ? `${avisos.length} aviso(s) — arraste para mover` : 'Avisos do Sistema — arraste para mover'}
             style={{
               width: 46, height: 46, borderRadius: '50%',
               border: `2.5px solid ${cor.border}`, background: cor.bg,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 20, boxShadow: '0 2px 10px rgba(0,0,0,.25)', position: 'relative',
             }}
           >
