@@ -431,7 +431,7 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
     // busca setores pendentes para este setor, com join na solicitacao
     const { data } = await supabase
       .from('analise_setores')
-      .select('*, analise_solicitacoes(id, origem, origem_titulo, origem_numero, criado_por, criado_em, status)')
+      .select('*, analise_solicitacoes(id, origem, origem_id, origem_titulo, origem_numero, criado_por, criado_em, status)')
       .eq('setor', setor)
       .eq('status', 'pendente')
       .order('id', { ascending: false });
