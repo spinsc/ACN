@@ -251,6 +251,10 @@ git add public/veiculo.html
 git add sql/veiculos_nfc.sql
 git commit -m "feat: Modulo NFC Dossie Veicular — pagina publica standalone + gestao interna + chamados SAC + config admin"
 
+:: feat: NFC — OPL Autocomplete + Modal Gravar Tag
+git add src/VeiculosNfcTab.tsx
+git commit -m "feat: NFC — autocomplete OP/OS no cadastro do veiculo + modal Gravar Tag NFC (Web NFC API + NFC Tools)"
+
 :: Push
 echo.
 echo Enviando para GitHub...
