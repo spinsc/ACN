@@ -482,15 +482,42 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
 
 // ─── Painel de Detalhe do Veículo ─────────────────────────────────────────────
 
-function PainelDetalhe({ veiculo, baseUrl, onEditar, onClose, carregarVeiculos }) {
+function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, onEditar, onClose, carregarVeiculos }) {
   const [servicos, setServicos] = useState([]);
   const [chamados, setChamados] = useState([]);
   const [novoServ, setNovoServ] = useState({ item_servico:'', descricao_tecnica:'', categoria:'' });
   const [addingServ, setAddingServ] = useState(false);
   const [salvServ,  setSalvServ]  = useState(false);
   const [modalTag, setModalTag] = useState(false);
+  const [copiadoPortal, setCopiadoPortal] = useState(false);
+  const [regenerando, setRegenerando] = useState(false);
+  const [portalToken, setPortalToken] = useState(veiculo.portal_token || '');
 
-  const urlPublica = `${baseUrl}?chassi=${encodeURIComponent(veiculo.chassi)}`;
+  const urlPublica  = `${baseUrl}?chassi=${encodeURIComponent(veiculo.chassi)}`;
+  const urlPortal   = portalToken ? `${portalBaseUrl}?token=${portalToken}` : null;
+
+  const copiarPortal = () => {
+    if (!urlPortal) return;
+    navigator.clipboard.writeText(urlPortal).then(() => {
+      setCopiadoPortal(true);
+      setTimeout(() => setCopiadoPortal(false), 2000);
+    });
+  };
+
+  const regenerarToken = async () => {
+    if (!confirm('Regenerar o token invalida o link antigo. Confirma?')) return;
+    setRegenerando(true);
+    const novoToken = crypto.randomUUID();
+    const { error } = await supabase.from('veiculos_nfc')
+      .update({ portal_token: novoToken }).eq('id', veiculo.id);
+    if (!error) {
+      setPortalToken(novoToken);
+      alert('Novo link gerado! Copie e envie ao cliente.');
+    } else {
+      alert('Erro ao regenerar token: ' + error.message);
+    }
+    setRegenerando(false);
+  };
 
   const carregarServicos = useCallback(async () => {
     const { data } = await supabase.from('servicos_executados_nfc')
@@ -630,6 +657,49 @@ function PainelDetalhe({ veiculo, baseUrl, onEditar, onClose, carregarVeiculos }
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Portal do Cliente */}
+          <div style={{ background:'#ede9fe', border:'1px solid #c4b5fd', borderRadius:8,
+            padding:'12px 14px', marginBottom:14 }}>
+            <div style={{ fontSize:9, fontWeight:700, color:'#7c3aed', marginBottom:6 }}>
+              🔗 PORTAL DO CLIENTE — Link de Acesso Direto
+            </div>
+            {urlPortal ? (
+              <>
+                <div style={{ fontSize:9, color:'#374151', wordBreak:'break-all',
+                  background:'#fff', borderRadius:4, padding:'4px 8px',
+                  border:'1px solid #c4b5fd', marginBottom:8 }}>
+                  {urlPortal}
+                </div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  <button onClick={copiarPortal}
+                    style={{ background: copiadoPortal ? '#7c3aed' : '#6d28d9', color:'#fff',
+                      border:'none', borderRadius:4, padding:'5px 10px', fontSize:9,
+                      fontWeight:700, cursor:'pointer', transition:'background .2s' }}>
+                    {copiadoPortal ? '✅ Copiado!' : '📋 Copiar Link'}
+                  </button>
+                  <a href={urlPortal} target="_blank" rel="noreferrer"
+                    style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4,
+                      padding:'5px 10px', fontSize:9, fontWeight:700, textDecoration:'none' }}>
+                    🔍 Abrir Portal
+                  </a>
+                  <button onClick={regenerarToken} disabled={regenerando}
+                    style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #d1d5db',
+                      borderRadius:4, padding:'5px 10px', fontSize:9,
+                      fontWeight:700, cursor:'pointer', opacity: regenerando ? .5 : 1 }}>
+                    {regenerando ? 'Aguarde...' : '🔄 Novo Link'}
+                  </button>
+                </div>
+                <div style={{ fontSize:8, color:'#7c3aed', marginTop:6 }}>
+                  💡 Envie este link ao cliente — ele dá acesso a chamados, manual e status do veículo sem precisar ler a tag NFC.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize:10, color:'#64748b' }}>
+                Token de portal não encontrado. Execute o SQL <code>portal_cliente.sql</code> no Supabase para gerar automaticamente.
+              </div>
+            )}
           </div>
 
           {/* Serviços Instalados */}
@@ -775,6 +845,7 @@ export default function VeiculosNfcTab({ currentUser }) {
   const [detalhe,     setDetalhe]     = useState(null);
   const [modalForm,   setModalForm]   = useState(null); // null | {} (novo) | {...veiculo} (editar)
   const [baseUrl,     setBaseUrl]     = useState('https://seudominio.com.br/veiculo.html');
+  const [portalUrl,   setPortalUrl]   = useState('https://seudominio.com.br/portal.html');
   const isAdmin = ['Admin', 'Gerente', 'Gerente Comercial'].includes(currentUser?.perfil);
 
   const carregarVeiculos = useCallback(async () => {
@@ -787,8 +858,12 @@ export default function VeiculosNfcTab({ currentUser }) {
 
   const carregarConfig = useCallback(async () => {
     const { data } = await supabase.from('configuracoes_sistema')
-      .select('chave,valor').eq('chave', 'nfc_base_url').single();
-    if (data?.valor) setBaseUrl(data.valor);
+      .select('chave,valor')
+      .in('chave', ['nfc_base_url', 'nfc_portal_url']);
+    (data || []).forEach(r => {
+      if (r.chave === 'nfc_base_url'   && r.valor) setBaseUrl(r.valor);
+      if (r.chave === 'nfc_portal_url' && r.valor) setPortalUrl(r.valor);
+    });
   }, []);
 
   useEffect(() => { carregarVeiculos(); carregarConfig(); }, [carregarVeiculos, carregarConfig]);
@@ -943,6 +1018,7 @@ export default function VeiculosNfcTab({ currentUser }) {
         <PainelDetalhe
           veiculo={detalhe}
           baseUrl={baseUrl}
+          portalBaseUrl={portalUrl}
           onEditar={(v) => { setDetalhe(null); setModalForm(v); }}
           onClose={() => setDetalhe(null)}
           carregarVeiculos={carregarVeiculos}
