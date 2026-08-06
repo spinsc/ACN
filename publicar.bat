@@ -221,6 +221,10 @@ git commit -m "fix: FormacaoPrecosTab tabela itens maior — inputs 11px, paddin
 git add src/FormacaoPrecosTab.tsx
 git commit -m "feat: FormacaoPrecosTab tabela redimensionavel — arrastar borda + header sticky"
 
+:: feat: FormacaoPrecosTab — botão Editar em Preços Formados (UPDATE em vez de INSERT)
+git add src/FormacaoPrecosTab.tsx
+git commit -m "feat: FormacaoPrecosTab botao Editar — carrega cotacao no form e salva como UPDATE"
+
 :: feat: Cotações para Vendedores — aba cotações, painel admin, aba no card CRM
 git add src/CotacoesTab.tsx
 git add src/AdminTab.tsx

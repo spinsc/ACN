@@ -154,14 +154,16 @@ function OplAutocomplete({ value, onSelect }) {
 }
 
 // ─── MODAL DE SALVAR TEMPLATE ─────────────────────────────────────────────────
-function ModalSalvar({ onSalvar, onClose, salvando }) {
-  const [nome, setNome] = useState('');
-  const [tipo, setTipo] = useState('licitacao');
+function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, editando }) {
+  const [nome, setNome] = useState(nomeInicial || '');
+  const [tipo, setTipo] = useState(tipoInicial || 'licitacao');
   return (
     <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background:'#fff', borderRadius:8, width:360, padding:20, boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ fontWeight:800, fontSize:13, marginBottom:12 }}>💾 Salvar Modelo de Cotação</div>
+        <div style={{ fontWeight:800, fontSize:13, marginBottom:12 }}>
+          {editando ? '✏️ Atualizar Cotação' : '💾 Salvar Modelo de Cotação'}
+        </div>
         <div style={{ marginBottom:8 }}>
           <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Nome do Modelo *</div>
           <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: PMSC Lote 3 – Nov/2026"
@@ -176,10 +178,10 @@ function ModalSalvar({ onSalvar, onClose, salvando }) {
           </select>
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }}
+          <button className="acn-btn" style={{ background: editando ? '#f59e0b' : '#16a34a', flex:1 }}
             onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } onSalvar(nome.trim(), tipo); }}
             disabled={salvando}>
-            {salvando ? 'Salvando...' : 'SALVAR'}
+            {salvando ? 'Salvando...' : editando ? 'ATUALIZAR' : 'SALVAR'}
           </button>
           <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
         </div>
@@ -690,7 +692,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 }
 
 // ─── ABA PREÇOS FORMADOS (Vendedores + Todos) ─────────────────────────────────
-function AbaPrecoFormados({ currentUser, isVendedor }) {
+function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   const [cotacoes, setCotacoes]         = useState([]);
   const [carregando, setCarregando]     = useState(true);
   const [cotacaoAberta, setAberta]      = useState(null);
@@ -927,10 +929,24 @@ function AbaPrecoFormados({ currentUser, isVendedor }) {
                 <div style={{ fontSize:9, color:'#64748b' }}>Total de Vendas</div>
                 <div style={{ fontSize:13, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
               </div>
-              <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
-                onClick={() => abrirCotacao(m)}>
-                Abrir →
-              </button>
+              <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                {!isVendedor && onEditar && (
+                  <button className="acn-btn" style={{ background:'#f59e0b', fontSize:9 }}
+                    onClick={() => onEditar(m)}>
+                    ✏️ Editar
+                  </button>
+                )}
+                {!isVendedor && onClonar && (
+                  <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9 }}
+                    onClick={() => onClonar(m)}>
+                    ⎘ Clonar
+                  </button>
+                )}
+                <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
+                  onClick={() => abrirCotacao(m)}>
+                  Abrir →
+                </button>
+              </div>
             </div>
           );
         })}
@@ -959,6 +975,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const [oplVinculada, setOplVinculada]     = useState(null);
   const [descontoMaximoPct, setDescontoMax] = useState(0);
   const [finalizando, setFinalizando]       = useState(false);
+  const [editandoId, setEditandoId]         = useState(null); // id da cotação em edição
 
   const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
@@ -1034,22 +1051,30 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
   const salvarModelo = async (nome, tipo) => {
     setSalvando(true);
-    const { error } = await supabase.from('cotacoes_precos').insert([{
+    const payload = {
       nome,
       tipo,
       empresa,
       plataforma_id:       plataformaSelecionada?.id || null,
       parametros_globais:  params,
       itens:               itens.map(({ _id, ...rest }) => rest),
-      criado_por:          currentUser?.nome || 'Sistema',
       opl_id:              oplVinculada?.id   || null,
       opl_numero:          oplVinculada?.opl  || null,
       desconto_maximo_pct: descontoMaximoPct  || 0,
-    }]);
+    };
+    let error;
+    if (editandoId) {
+      // Atualiza a cotação existente
+      ({ error } = await supabase.from('cotacoes_precos').update(payload).eq('id', editandoId));
+    } else {
+      // Cria nova cotação
+      ({ error } = await supabase.from('cotacoes_precos').insert([{ ...payload, criado_por: currentUser?.nome || 'Sistema' }]));
+    }
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
-      alert('✅ Modelo salvo!');
+      alert(editandoId ? '✅ Cotação atualizada!' : '✅ Modelo salvo!');
       setModalSalvar(false);
+      setEditandoId(null);
       carregarModelos();
     }
     setSalvando(false);
@@ -1093,6 +1118,36 @@ export default function FormacaoPrecosTab({ currentUser }) {
     setPlataformaSelecionada(null);
     setOplVinculada(null);
     setDescontoMax(0);
+    setEditandoId(null);
+  };
+
+  // Carrega cotação para edição e muda para a aba de formação
+  const editarCotacao = (m) => {
+    carregarModelo(m);
+    setEditandoId(m.id);
+    setAbaAtiva('formacao');
+  };
+
+  // Clona cotação: salva nova cópia no banco (sem OP vinculada) e abre para edição
+  const clonarCotacao = async (m) => {
+    const novoNome = `Cópia de ${m.nome}`;
+    const { data, error } = await supabase.from('cotacoes_precos').insert([{
+      nome:                novoNome,
+      tipo:                m.tipo,
+      empresa:             m.empresa,
+      plataforma_id:       m.plataforma_id || null,
+      parametros_globais:  m.parametros_globais,
+      itens:               m.itens,
+      criado_por:          currentUser?.nome || currentUser?.email || 'Sistema',
+      desconto_maximo_pct: m.desconto_maximo_pct || 0,
+      // Sem opl_id / opl_numero — para vincular na nova OP após editar
+    }]).select().single();
+    if (error) { alert('Erro ao clonar: ' + error.message); return; }
+    // Carrega o clone no formulário para edição imediata
+    carregarModelo({ ...m, nome: novoNome, id: data.id });
+    setEditandoId(data.id);
+    setAbaAtiva('formacao');
+    carregarModelos();
   };
 
   // ─── FINALIZAR: gerar PDF e anexar na OP ───────────────────────────────────
@@ -1257,7 +1312,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
       {/* ── ABA PREÇOS FORMADOS ── */}
       {abaAtiva === 'precos_formados' && (
-        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} />
+        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} />
       )}
 
       {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
@@ -1268,16 +1323,23 @@ export default function FormacaoPrecosTab({ currentUser }) {
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
             <div>
               <div style={{ fontWeight:800, fontSize:16, color:'#1e293b' }}>📊 Formação de Preços</div>
-              {nomeCotacao && <div style={{ fontSize:10, color:'#64748b', marginTop:2 }}>Modelo: <strong>{nomeCotacao}</strong></div>}
+              {nomeCotacao && (
+                <div style={{ fontSize:10, color:'#64748b', marginTop:2, display:'flex', alignItems:'center', gap:6 }}>
+                  {editandoId
+                    ? <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>✏️ EDITANDO</span>
+                    : null}
+                  Modelo: <strong>{nomeCotacao}</strong>
+                </div>
+              )}
             </div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
               <button className="acn-btn" style={{ background:'#0891b2', fontSize:10 }}
                 onClick={() => { setModalCarregar(true); carregarModelos(); }}>
                 📂 Carregar Modelo
               </button>
-              <button className="acn-btn" style={{ background:'#16a34a', fontSize:10 }}
+              <button className="acn-btn" style={{ background: editandoId ? '#f59e0b' : '#16a34a', fontSize:10 }}
                 onClick={() => setModalSalvar(true)}>
-                💾 Salvar Modelo
+                {editandoId ? '✏️ Atualizar Cotação' : '💾 Salvar Modelo'}
               </button>
               <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10 }}
                 onClick={addItem}>
@@ -1545,7 +1607,14 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
           {/* ── MODAIS ── */}
           {modalSalvar && (
-            <ModalSalvar onSalvar={salvarModelo} onClose={() => setModalSalvar(false)} salvando={salvando} />
+            <ModalSalvar
+              onSalvar={salvarModelo}
+              onClose={() => setModalSalvar(false)}
+              salvando={salvando}
+              nomeInicial={nomeCotacao}
+              tipoInicial={undefined}
+              editando={!!editandoId}
+            />
           )}
           {modalCarregar && (
             <ModalCarregar
