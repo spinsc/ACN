@@ -199,7 +199,12 @@ git add src/AvisoSistemaWidget.tsx
 
 :: IMPORTANTE: rodar acn_fix_crm_rls.sql e acn_fix_crm_campos_4144.sql no Supabase SQL Editor!
 
-git commit -m "feat: busca global unificada + highlight + kanban fix + chat badge + pin avisos + analise area livre"
+:: feat: Cadastro de Itens — catálogo base para formação de preços e compras
+git add src/CadastroItensTab.tsx
+git add src/DashboardTab.tsx
+git add sql/cadastro_itens.sql
+
+git commit -m "feat: Cadastro de Itens — catalogo base com CRUD, impostos, markup e integracao com cotacoes"
 
 :: Push
 echo.
@@ -611,6 +616,22 @@ echo -- Inserir plataformas padrao (ignorar se ja existirem):
 echo INSERT INTO plataformas_licitacao (nome, desconto_pct, retencao_pct) VALUES
 echo   ('NEO', 0, 0), ('QFrotas', 0, 0), ('Prime', 0, 0)
 echo ON CONFLICT DO NOTHING;
+echo.
+echo ==============================================
+echo  [NOVO] CADASTRO DE ITENS - RODAR NO SUPABASE (arquivo: sql/cadastro_itens.sql):
+echo  CREATE TABLE IF NOT EXISTS cadastro_itens (
+echo    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo    codigo text, nome text NOT NULL, descricao text, unidade text DEFAULT 'UN',
+echo    categoria text, ncm text, marca text DEFAULT '', fornecedor text DEFAULT '',
+echo    moeda text DEFAULT 'REAL', custo_unit numeric DEFAULT 0,
+echo    ipi_pct numeric DEFAULT 0, st_pct numeric DEFAULT 0,
+echo    difal_pct numeric DEFAULT 16, imposto_pct numeric DEFAULT 16,
+echo    markup_pct numeric DEFAULT 30, custo_fixo_pct numeric DEFAULT 3,
+echo    ativo boolean DEFAULT true, criado_por text,
+echo    criado_em timestamptz DEFAULT now(), atualizado_em timestamptz DEFAULT now()
+echo  );
+echo  ALTER TABLE cadastro_itens DISABLE ROW LEVEL SECURITY;
+echo ==============================================
 echo.
 echo ==============================================
 echo  WHATSAPP (EVOLUTION API) - PASSOS:
