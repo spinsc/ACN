@@ -60,6 +60,246 @@ function StatusBadge({ status }) {
 }
 
 // ─── Modal de Desconto / Proposta ────────────────────────────────────────────
+// ─── GERADOR DE HTML DA PROPOSTA FINAL ───────────────────────────────────────
+function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato }) {
+  const prms     = cotacao.parametros_globais || {};
+  const itens    = cotacao.itens || [];
+  const results  = itens.map(it => calcItem(it, prms));
+  const totalBruto = results.reduce((s, r) => s + r.valorTotal, 0);
+  const descPct  = proposta?.desconto_pct || 0;
+  const totalLiq = proposta?.valor_com_desconto ?? (totalBruto * (1 - descPct/100));
+  const descVal  = totalBruto - totalLiq;
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
+  const empresa  = cotacao.empresa || 'ACN';
+  const logoBase = 'https://spinsc.github.io/ACN/';
+  const apl = window.location.hostname === 'localhost' ? '/' : logoBase;
+
+  const fmtBRL = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+  const linhasItens = itens.map((it, i) => {
+    const r = results[i];
+    const codigo = it.codigo || it.codproduto || it.coditem || '';
+    return `
+      <tr>
+        <td>${codigo ? `<strong>${codigo}</strong><br>` : ''}${it.produto || it.nome || '—'}</td>
+        <td style="text-align:center">${it.qt || 1}</td>
+        <td style="text-align:center">${it.unidade || 'UN'}</td>
+        <td style="text-align:right">${fmtBRL(r.valorUnit)}</td>
+        <td style="text-align:right"><strong>${fmtBRL(r.valorTotal)}</strong></td>
+      </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Proposta Comercial — ${cotacao.numero_cotacao || ''}</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Segoe UI',Arial,sans-serif; color:#1e293b; font-size:11pt; }
+    .page { max-width:780px; margin:0 auto; padding:32px 28px; }
+    .header { display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #1e3a5f; padding-bottom:16px; margin-bottom:22px; }
+    .logos { display:flex; align-items:center; gap:16px; }
+    .logos img { height:44px; object-fit:contain; }
+    .header-info { text-align:right; }
+    .header-info h1 { font-size:17pt; font-weight:800; color:#1e3a5f; }
+    .header-info p { font-size:9pt; color:#475569; }
+    .bloco { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:16px; }
+    .bloco h2 { font-size:9pt; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+    .grade { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    .grade .campo label { font-size:8pt; color:#94a3b8; font-weight:700; }
+    .grade .campo p { font-size:11pt; font-weight:600; color:#1e293b; }
+    table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+    thead { background:#1e3a5f; color:#fff; }
+    thead th { padding:8px 10px; font-size:9pt; font-weight:600; }
+    tbody tr:nth-child(even) { background:#f1f5f9; }
+    tbody td { padding:7px 10px; font-size:10pt; border-bottom:1px solid #e2e8f0; }
+    .total-row { background:#1e3a5f !important; color:#fff; }
+    .total-row td { padding:9px 10px; font-weight:800; font-size:11pt; }
+    .financeiro { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+    .fin-card { border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; text-align:center; }
+    .fin-card.destaque { background:#1e3a5f; color:#fff; border-color:#1e3a5f; }
+    .fin-card label { font-size:8pt; font-weight:700; opacity:.7; display:block; margin-bottom:4px; }
+    .fin-card span { font-size:16pt; font-weight:800; }
+    .rodape { border-top:2px solid #e2e8f0; padding-top:16px; margin-top:8px; font-size:9pt; color:#64748b; display:flex; justify-content:space-between; align-items:flex-end; }
+    .assinatura { border-top:1px solid #94a3b8; width:200px; text-align:center; padding-top:6px; font-size:9pt; }
+    @media print {
+      body { font-size:10pt; }
+      .page { padding:18px 14px; }
+      @page { size:A4; margin:15mm; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logos">
+      <img src="${apl}logo.png" alt="${empresa}" onerror="this.style.display='none'" />
+    </div>
+    <div class="header-info">
+      <h1>PROPOSTA COMERCIAL</h1>
+      <p>Nº ${cotacao.numero_cotacao || '—'} · ${dataHoje}</p>
+      <p>${empresa}</p>
+    </div>
+  </div>
+
+  <!-- DADOS DO CLIENTE -->
+  <div class="bloco">
+    <h2>📋 Dados do Cliente</h2>
+    <div class="grade">
+      <div class="campo">
+        <label>ÓRGÃO / CLIENTE</label>
+        <p>${orgaoCliente || cotacao.orgao_cliente || '—'}</p>
+      </div>
+      <div class="campo">
+        <label>REFERÊNCIA</label>
+        <p>${cotacao.opl_numero || refPv || '—'}</p>
+      </div>
+      <div class="campo">
+        <label>VALIDADE DA PROPOSTA</label>
+        <p>${validade || '30'} dias</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUTOS -->
+  <div class="bloco">
+    <h2>📦 Produtos e Serviços</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left">Descrição</th>
+          <th style="text-align:center">Qtd</th>
+          <th style="text-align:center">Unid.</th>
+          <th style="text-align:right">Valor Unit.</th>
+          <th style="text-align:right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${linhasItens}
+        ${descPct > 0 ? `
+        <tr>
+          <td colspan="4" style="text-align:right;color:#475569;">Subtotal</td>
+          <td style="text-align:right;font-weight:600">${fmtBRL(totalBruto)}</td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align:right;color:#dc2626;">Desconto (${descPct}%)</td>
+          <td style="text-align:right;color:#dc2626;font-weight:600">- ${fmtBRL(descVal)}</td>
+        </tr>` : ''}
+        <tr class="total-row">
+          <td colspan="4" style="text-align:right">TOTAL</td>
+          <td style="text-align:right">${fmtBRL(totalLiq)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- FINANCEIRO -->
+  <div class="financeiro">
+    <div class="fin-card">
+      <label>VALOR SEM DESCONTO</label>
+      <span>${fmtBRL(totalBruto)}</span>
+    </div>
+    <div class="fin-card destaque">
+      <label>VALOR FINAL COM DESCONTO</label>
+      <span>${fmtBRL(totalLiq)}</span>
+    </div>
+  </div>
+
+  <!-- RODAPÉ -->
+  <div class="rodape">
+    <div>
+      <p>⏳ Proposta válida por <strong>${validade || '30'} dias</strong> a partir de ${dataHoje}.</p>
+      <p style="margin-top:4px">Preços sujeitos a alteração após o prazo de validade.</p>
+    </div>
+    <div class="assinatura">
+      <p>${cotacao.criado_por || ''}</p>
+      <p>Responsável Comercial</p>
+    </div>
+  </div>
+</div>
+${formato === 'pdf' ? '<script>window.onload=()=>{window.print();}<\/script>' : ''}
+</body>
+</html>`;
+}
+
+// ─── Modal para emitir proposta final (HTML / PDF) ────────────────────────────
+function ModalEmitirProposta({ cotacao, proposta, onClose }) {
+  const [orgaoCliente, setOrgaoCliente] = useState(cotacao.orgao_cliente || '');
+  const [validade,     setValidade]     = useState('30');
+  const [refPv,        setRefPv]        = useState(cotacao.opl_numero || '');
+  const [formato,      setFormato]      = useState<'html'|'pdf'>('html');
+
+  const emitir = () => {
+    const html = gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato });
+    const win = window.open('', '_blank');
+    if (!win) { alert('Permita pop-ups para gerar a proposta.'); return; }
+    win.document.write(html);
+    win.document.close();
+    onClose();
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:3000,
+      display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:'#fff', borderRadius:10, width:'min(500px,95vw)',
+        boxShadow:'0 8px 32px rgba(0,0,0,.3)', overflow:'hidden' }}>
+        <div style={{ background:'#1e3a5f', color:'#fff', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ fontWeight:800, fontSize:13 }}>📄 Emitir Proposta Final ao Cliente</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
+        </div>
+        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+          <div>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>ÓRGÃO / CLIENTE</label>
+            <input value={orgaoCliente} onChange={e=>setOrgaoCliente(e.target.value)}
+              placeholder="Nome do órgão ou cliente..."
+              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>VALIDADE (DIAS)</label>
+              <input type="number" min={1} value={validade} onChange={e=>setValidade(e.target.value)}
+                style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+            </div>
+            <div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>REF. OP/OS/PV</label>
+              <input value={refPv} onChange={e=>setRefPv(e.target.value)}
+                placeholder="Número da OP, OS ou PV..."
+                style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+            </div>
+          </div>
+          <div>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:6 }}>FORMATO DE SAÍDA</label>
+            <div style={{ display:'flex', gap:10 }}>
+              {([['html','🌐 HTML (salvar/compartilhar)'],['pdf','🖨️ PDF (imprimir / baixar)']] as const).map(([val,lbl])=>(
+                <label key={val} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, cursor:'pointer',
+                  padding:'8px 14px', border:`2px solid ${formato===val?'#1e3a5f':'#e2e8f0'}`,
+                  borderRadius:6, background: formato===val?'#f0f4ff':'#fff', flex:1, justifyContent:'center' }}>
+                  <input type="radio" name="formato" value={val} checked={formato===val}
+                    onChange={()=>setFormato(val)} style={{ display:'none' }} />
+                  {lbl}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:4 }}>
+            <button onClick={onClose}
+              style={{ padding:'8px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
+              Cancelar
+            </button>
+            <button onClick={emitir}
+              style={{ padding:'8px 24px', background:'#1e3a5f', color:'#fff', border:'none',
+                borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
+              {formato === 'pdf' ? '🖨️ Gerar PDF' : '🌐 Gerar HTML'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verMarkup, pedirAprovacao }) {
   const [desconto, setDesconto] = useState(0);
   const [obs,      setObs]      = useState('');
@@ -217,6 +457,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const [opOpts,      setOpOpts]      = useState([]);
   const [buscandoOp,  setBuscandoOp]  = useState(false);
   const [vinculando,  setVinculando]  = useState(false);
+  const [emitindoProposta, setEmitindoProposta] = useState<any>(null);
   const timerRef = useRef(null);
 
   const isAdmin  = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
@@ -465,7 +706,14 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
                         <span style={{ fontSize:9, color:'#dc2626', marginLeft:8 }}>({p.desconto_pct}% de desconto)</span>
                       )}
                     </div>
-                    <span style={{ fontSize:9, color:'#9ca3af' }}>{new Date(p.criado_em).toLocaleString('pt-BR')}</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:9, color:'#9ca3af' }}>{new Date(p.criado_em).toLocaleString('pt-BR')}</span>
+                      <button onClick={() => setEmitindoProposta(p)}
+                        style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:4,
+                          padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+                        📄 Emitir
+                      </button>
+                    </div>
                   </div>
                   <div style={{ fontSize:9, color:'#475569', marginTop:3 }}>
                     Total sem desconto: {fmtR(p.valor_total)} · por {p.criado_por}
@@ -474,6 +722,14 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
                 </div>
               ))}
             </div>
+          )}
+
+          {emitindoProposta && (
+            <ModalEmitirProposta
+              cotacao={cotacao}
+              proposta={emitindoProposta}
+              onClose={() => setEmitindoProposta(null)}
+            />
           )}
         </div>
 
@@ -572,6 +828,129 @@ function PainelAprovacoes({ currentUser, onClose }) {
   );
 }
 
+// ─── MODAL: Combinar múltiplas formações em uma proposta ─────────────────────
+function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
+  const [nome,     setNome]     = useState(`Proposta Combinada — ${new Date().toLocaleDateString('pt-BR')}`);
+  const [desconto, setDesconto] = useState(0);
+  const [salvando, setSalvando] = useState(false);
+
+  // Agrega todos os itens de todas as cotações selecionadas (apenas produtos)
+  const todosItens = cotacoes.flatMap(c => (c.itens || []).map(it => ({ ...it, _origem_cotacao: c.numero_cotacao || c.id })));
+  const todosResults = cotacoes.flatMap(c => {
+    const prms = c.parametros_globais || {};
+    return (c.itens || []).map(it => calcItem(it, prms));
+  });
+  const totalBruto = todosResults.reduce((s, r) => s + r.valorTotal, 0);
+  const totalImpostos = todosResults.reduce((s, r) => s + r.totalImposto, 0);
+  const descVal = totalBruto * (desconto / 100);
+  const totalLiquido = totalBruto - descVal;
+
+  const salvar = async () => {
+    if (!nome.trim()) { alert('Informe o nome da proposta.'); return; }
+    setSalvando(true);
+    // Salva proposta combinada no primeiro cotação como referência, ou como avulsa
+    const { error } = await supabase.from('cotacoes_propostas').insert([{
+      cotacao_id:          cotacoes[0].id,
+      nome_proposta:       nome.trim(),
+      desconto_pct:        desconto,
+      valor_total:         totalBruto,
+      valor_com_desconto:  totalLiquido,
+      criado_por:          currentUser?.email,
+      observacoes:         `Proposta combinada de ${cotacoes.length} formações: ${cotacoes.map(c=>c.numero_cotacao||c.nome).join(', ')}`,
+    }]);
+    setSalvando(false);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    alert('✅ Proposta combinada salva!');
+    onSalvo();
+    onClose();
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:9999,
+      display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:'#fff', borderRadius:10, width:'min(720px,96vw)', maxHeight:'88vh',
+        overflowY:'auto', boxShadow:'0 8px 32px rgba(0,0,0,.25)', display:'flex', flexDirection:'column' }}>
+        <div style={{ background:'#7c3aed', color:'#fff', padding:'14px 18px', borderRadius:'10px 10px 0 0',
+          display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:14 }}>🔗 Combinar Formações em Proposta</div>
+            <div style={{ fontSize:10, opacity:.85 }}>{cotacoes.length} formações selecionadas (apenas produtos)</div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:14 }}>
+          {/* Resumo das formações */}
+          <div style={{ background:'#f5f3ff', border:'1px solid #ddd6fe', borderRadius:8, padding:12 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#6d28d9', marginBottom:8 }}>📦 Formações incluídas</div>
+            {cotacoes.map(c => {
+              const prms = c.parametros_globais || {};
+              const res  = (c.itens||[]).map(it => calcItem(it, prms));
+              const tot  = res.reduce((s,r)=>s+r.valorTotal,0);
+              return (
+                <div key={c.id} style={{ display:'flex', justifyContent:'space-between', fontSize:10, padding:'4px 0',
+                  borderBottom:'1px solid #ede9fe' }}>
+                  <span style={{ fontWeight:600 }}>{c.numero_cotacao || '—'} · {c.nome}</span>
+                  <span style={{ color:'#15803d', fontWeight:700 }}>{fmtR(tot)}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Nome da proposta */}
+          <div>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:4 }}>
+              NOME DA PROPOSTA COMBINADA
+            </label>
+            <input value={nome} onChange={e=>setNome(e.target.value)}
+              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+          </div>
+
+          {/* Desconto */}
+          <div>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:4 }}>
+              DESCONTO GLOBAL %
+            </label>
+            <input type="number" min={0} max={100} step="0.5" value={desconto}
+              onChange={e=>setDesconto(parseFloat(e.target.value)||0)}
+              style={{ width:100, border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+          </div>
+
+          {/* Resumo financeiro */}
+          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px',
+            display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:9, color:'#6b7280' }}>Total Bruto</div>
+              <div style={{ fontWeight:800, fontSize:14, color:'#1e293b' }}>{fmtR(totalBruto)}</div>
+            </div>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:9, color:'#6b7280' }}>Impostos ({((totalImpostos/totalBruto)*100||0).toFixed(1)}%)</div>
+              <div style={{ fontWeight:700, fontSize:13, color:'#dc2626' }}>{fmtR(totalImpostos)}</div>
+            </div>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:9, color:'#6b7280' }}>Líquido c/ {desconto}% desc.</div>
+              <div style={{ fontWeight:800, fontSize:14, color:'#15803d' }}>{fmtR(totalLiquido)}</div>
+            </div>
+          </div>
+
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <button onClick={onClose}
+              style={{ padding:'8px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff',
+                fontSize:11, cursor:'pointer' }}>
+              Cancelar
+            </button>
+            <button onClick={salvar} disabled={salvando}
+              style={{ padding:'8px 22px', background:'#7c3aed', color:'#fff', border:'none',
+                borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
+              {salvando ? 'Salvando...' : '💾 Salvar Proposta Combinada'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN: CotacoesTab ────────────────────────────────────────────────────────
 export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [cotacoes,    setCotacoes]    = useState([]);
@@ -583,6 +962,9 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [modalDesc,   setModalDesc]   = useState(null);
   const [modalAprovs, setModalAprovs] = useState(false);
   const [pendCount,   setPendCount]   = useState(0);
+  const [simplificada, setSimplificada] = useState(false);
+  const [selecionadas,  setSelecionadas]  = useState<string[]>([]);
+  const [modalCombinar, setModalCombinar] = useState(false);
 
   // Visibilidade controlada pelo admin
   const [cfg, setCfg] = useState({
@@ -676,6 +1058,20 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                 </span>
               </button>
             )}
+            {selecionadas.length >= 2 && (
+              <button onClick={() => setModalCombinar(true)}
+                style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:5,
+                  padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                🔗 Combinar em Proposta ({selecionadas.length})
+              </button>
+            )}
+            <button onClick={() => setSimplificada(v => !v)}
+              style={{ background: simplificada ? '#0369a1' : '#f1f5f9',
+                border: simplificada ? 'none' : '1px solid #e2e8f0', borderRadius:5,
+                padding:'6px 12px', fontSize:9,
+                color: simplificada ? '#fff' : '#475569', cursor:'pointer', fontWeight:700 }}>
+              {simplificada ? '📋 Completo' : '📊 Simplificado'}
+            </button>
             <button onClick={() => { carregarCotacoes(); carregarPendentes(); }}
               style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:5,
                 padding:'6px 12px', fontSize:9, color:'#475569', cursor:'pointer' }}>
@@ -744,14 +1140,21 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
               <thead>
                 <tr style={{ background:'#1e293b', color:'#cbd5e1' }}>
+                  <th style={{ padding:'8px 6px', width:28 }}>
+                    <input type="checkbox"
+                      checked={selecionadas.length === cotacoesFiltradas.length && cotacoesFiltradas.length > 0}
+                      onChange={e => setSelecionadas(e.target.checked ? cotacoesFiltradas.map(c=>c.id) : [])}
+                      style={{ accentColor:'#7c3aed' }} />
+                  </th>
                   <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Número</th>
                   <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Nome</th>
                   <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Status</th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Tipo</th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Empresa</th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>OP</th>
+                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Tipo</th>}
+                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Empresa</th>}
+                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>OP</th>}
                   <th style={{ padding:'8px 10px', textAlign:'right', fontWeight:600 }}>Valor Total</th>
-                  <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Criado em</th>
+                  <th style={{ padding:'8px 10px', textAlign:'right', fontWeight:600 }}>% Impostos</th>
+                  {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Criado em</th>}
                   <th style={{ padding:'8px 10px', textAlign:'center', fontWeight:600 }}>Ação</th>
                 </tr>
               </thead>
@@ -760,13 +1163,21 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                   const itens   = c.itens || [];
                   const prms    = c.parametros_globais || {};
                   const results = itens.map(it => calcItem(it, prms));
-                  const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
+                  const totVendas  = results.reduce((s, r) => s + r.valorTotal, 0);
+                  const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
+                  const impostoPct = totVendas > 0 ? (totImposto / totVendas * 100) : (prms.imposto_pct || 0);
+                  const sel = selecionadas.includes(c.id);
 
                   return (
-                    <tr key={c.id} style={{ background: i%2===0?'#fff':'#f8fafc',
+                    <tr key={c.id} style={{ background: sel ? '#f5f3ff' : i%2===0?'#fff':'#f8fafc',
                       cursor:'pointer', transition:'background .1s' }}
-                      onMouseEnter={e => e.currentTarget.style.background='#f0fdf4'}
-                      onMouseLeave={e => e.currentTarget.style.background=i%2===0?'#fff':'#f8fafc'}>
+                      onMouseEnter={e => { if(!sel) e.currentTarget.style.background='#f0fdf4'; }}
+                      onMouseLeave={e => { if(!sel) e.currentTarget.style.background=i%2===0?'#fff':'#f8fafc'; }}>
+                      <td style={{ padding:'7px 6px', textAlign:'center' }}>
+                        <input type="checkbox" checked={sel}
+                          onChange={e => setSelecionadas(p => e.target.checked ? [...p, c.id] : p.filter(x=>x!==c.id))}
+                          style={{ accentColor:'#7c3aed' }} />
+                      </td>
                       <td style={{ padding:'7px 10px', fontWeight:700, color:'#0369a1' }}>
                         {c.crm_oportunidade_id && onAbrirCrmCard ? (
                           <button onClick={() => onAbrirCrmCard(c.crm_oportunidade_id)}
@@ -780,22 +1191,25 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                       </td>
                       <td style={{ padding:'7px 10px', maxWidth:200, wordBreak:'break-word' }}>
                         <div style={{ fontWeight:600, color:'#1e293b' }}>{c.nome}</div>
-                        {c.criado_por && <div style={{ fontSize:8, color:'#9ca3af' }}>{c.criado_por}</div>}
+                        {!simplificada && c.criado_por && <div style={{ fontSize:8, color:'#9ca3af' }}>{c.criado_por}</div>}
                       </td>
                       <td style={{ padding:'7px 10px' }}><StatusBadge status={c.status} /></td>
-                      <td style={{ padding:'7px 10px', color:'#475569' }}>{c.tipo || '—'}</td>
-                      <td style={{ padding:'7px 10px', color:'#475569' }}>{c.empresa || '—'}</td>
-                      <td style={{ padding:'7px 10px' }}>
+                      {!simplificada && <td style={{ padding:'7px 10px', color:'#475569' }}>{c.tipo || '—'}</td>}
+                      {!simplificada && <td style={{ padding:'7px 10px', color:'#475569' }}>{c.empresa || '—'}</td>}
+                      {!simplificada && <td style={{ padding:'7px 10px' }}>
                         {c.opl_numero
                           ? <span style={{ fontWeight:700, color:'#16a34a' }}>🔗 {c.opl_numero}</span>
                           : <span style={{ color:'#9ca3af', fontSize:9 }}>—</span>}
-                      </td>
+                      </td>}
                       <td style={{ padding:'7px 10px', textAlign:'right', fontWeight:700, color:'#15803d' }}>
                         {totVendas > 0 ? fmtR(totVendas) : '—'}
                       </td>
-                      <td style={{ padding:'7px 10px', color:'#6b7280', fontSize:9 }}>
-                        {c.criado_em ? new Date(c.criado_em).toLocaleString('pt-BR') : '—'}
+                      <td style={{ padding:'7px 10px', textAlign:'right', color:'#dc2626', fontWeight:600 }}>
+                        {impostoPct > 0 ? `${impostoPct.toFixed(1)}%` : '—'}
                       </td>
+                      {!simplificada && <td style={{ padding:'7px 10px', color:'#6b7280', fontSize:9 }}>
+                        {c.criado_em ? new Date(c.criado_em).toLocaleString('pt-BR') : '—'}
+                      </td>}
                       <td style={{ padding:'7px 10px', textAlign:'center' }}>
                         <button onClick={() => setModalDetalhe(c)}
                           style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:4,
@@ -845,6 +1259,15 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
         <PainelAprovacoes
           currentUser={currentUser}
           onClose={() => { setModalAprovs(false); carregarPendentes(); carregarCotacoes(); }}
+        />
+      )}
+
+      {modalCombinar && selecionadas.length >= 2 && (
+        <ModalCombinarPropostas
+          cotacoes={cotacoes.filter(c => selecionadas.includes(c.id))}
+          currentUser={currentUser}
+          onClose={() => setModalCombinar(false)}
+          onSalvo={() => { setSelecionadas([]); carregarCotacoes(); }}
         />
       )}
     </div>
