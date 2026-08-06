@@ -104,12 +104,12 @@ function CotacoesCrmPanelCrm({ oportunidadeId, currentUser }) {
         if (data) {
           const m = Object.fromEntries(data.map(r => [r.chave, r.valor === 'true']));
           setCfg({
-            verCustos: isAdmin || m['cotacoes_ver_custos_margens'] || false,
-            verFornec: isAdmin || m['cotacoes_ver_fornecedores']   || false,
-            verMarkup: isAdmin || m['cotacoes_ver_markup']         || false,
+            verCustos: m['cotacoes_ver_custos_margens'] || false,
+            verFornec: m['cotacoes_ver_fornecedores']   || false,
+            verMarkup: m['cotacoes_ver_markup']         || false,
           });
         } else {
-          setCfg({ verCustos: isAdmin, verFornec: isAdmin, verMarkup: isAdmin });
+          setCfg({ verCustos: false, verFornec: false, verMarkup: false });
         }
       });
   }, [isAdmin]);
