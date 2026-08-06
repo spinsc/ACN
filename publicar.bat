@@ -221,6 +221,14 @@ git commit -m "fix: FormacaoPrecosTab tabela itens maior — inputs 11px, paddin
 git add src/FormacaoPrecosTab.tsx
 git commit -m "feat: FormacaoPrecosTab tabela redimensionavel — arrastar borda + header sticky"
 
+:: feat: Cotações para Vendedores — aba cotações, painel admin, aba no card CRM
+git add src/CotacoesTab.tsx
+git add src/AdminTab.tsx
+git add src/CrmTab.tsx
+git add src/DashboardTab.tsx
+git add sql/cotacoes_vendedor.sql
+git commit -m "feat: Cotações para Vendedores — aba cotacoes + config admin + aba no card CRM + aprovacoes"
+
 :: Push
 echo.
 echo Enviando para GitHub...
@@ -631,6 +639,24 @@ echo -- Inserir plataformas padrao (ignorar se ja existirem):
 echo INSERT INTO plataformas_licitacao (nome, desconto_pct, retencao_pct) VALUES
 echo   ('NEO', 0, 0), ('QFrotas', 0, 0), ('Prime', 0, 0)
 echo ON CONFLICT DO NOTHING;
+echo.
+echo ==============================================
+echo  [NOVO] COTAÇÕES PARA VENDEDORES - RODAR NO SUPABASE (arquivo: sql/cotacoes_vendedor.sql):
+echo.
+echo  1. Novas colunas em cotacoes_precos:
+echo     ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS status text DEFAULT 'rascunho';
+echo     ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS numero_cotacao text;
+echo     ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS crm_oportunidade_id uuid;
+echo.
+echo  2. Sequencia e trigger para numero_cotacao automatico: COT-AAAA-NNNN
+echo     CREATE SEQUENCE IF NOT EXISTS cotacao_seq START 1;
+echo     (ver sql/cotacoes_vendedor.sql para trigger completo)
+echo.
+echo  3. Tabela cotacoes_aprovacoes (fluxo de aprovação de descontos)
+echo  4. Tabela configuracoes_sistema (toggles de visibilidade para admin)
+echo.
+echo  IMPORTANTE: Rodar sql/cotacoes_vendedor.sql COMPLETO no Supabase SQL Editor
+echo ==============================================
 echo.
 echo ==============================================
 echo  [NOVO] CADASTRO DE PRODUTOS (BOM) - RODAR NO SUPABASE (arquivo: sql/cadastro_produtos.sql):

@@ -17,6 +17,7 @@ import SetorDemandaTab from './SetorDemandaTab';
 import ComprasTab from './ComprasTab';
 import CadastroItensTab from './CadastroItensTab';
 import CadastroProdutosTab from './CadastroProdutosTab';
+import CotacoesTab from './CotacoesTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
@@ -61,6 +62,7 @@ const SIDEBAR_GROUPS = [
     items: [
       { id: 'crm',        label: 'Comercial/CRM' },
       { id: 'licitacoes', label: 'Licitações' },
+      { id: 'cotacoes',   label: 'Cotações' },
       { id: 'clientes',  label: 'Clientes' },
       { id: 'marketing', label: 'Marketing' },
     ],
@@ -816,6 +818,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'sac':          return <SacTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
       case 'crm':          return <CrmTab currentUser={currentUser} autoOpenOpId={pendingOpenCrmId} onAutoOpenConsumed={() => setPendingOpenCrmId(null)} />;
+      case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { setPendingOpenCrmId(id); setActiveTab('crm'); }} />;
       case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} autoOpenLicitId={pendingOpenLicitId} onAutoOpenConsumed={() => setPendingOpenLicitId(null)} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;

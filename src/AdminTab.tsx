@@ -34,6 +34,7 @@ const TODAS_ABAS = [
   { id:'telecom',      label:'Telecom' },
   { id:'crm',          label:'CRM' },
   { id:'licitacoes',   label:'Licitações' },
+  { id:'cotacoes',     label:'Cotações' },
   { id:'rh',           label:'RH' },
   { id:'relatorios',      label:'Relatorios' },
   { id:'formacao_precos', label:'Formação de Preços' },
@@ -1851,6 +1852,7 @@ const ABAS_ADMIN = [
   { id:'usuarios',       label:'Usuários' },
   { id:'perfis',         label:'🔐 Perfis de Acesso' },
   { id:'plataformas',    label:'🏪 Plataformas' },
+  { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
@@ -1874,6 +1876,128 @@ const COR_CRIT: Record<string, { bg: string; border: string }> = {
   alta:  { bg: '#fee2e2', border: '#dc2626' },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL CONFIGURAÇÕES COTAÇÕES
+// ─────────────────────────────────────────────────────────────────────────────
+const COTACOES_CFG_KEYS = [
+  { chave: 'cotacoes_ver_custos_margens', label: 'Vendedores podem ver Custos e Margens',    desc: 'Exibe colunas de custo e margem de lucro nas cotações' },
+  { chave: 'cotacoes_ver_fornecedores',   label: 'Vendedores podem ver Fornecedores e Marcas', desc: 'Exibe colunas de fornecedor e marca nas cotações' },
+  { chave: 'cotacoes_ver_markup',         label: 'Vendedores podem ver o Markup',            desc: 'Exibe a coluna de markup aplicado nas cotações' },
+];
+
+function PainelCotacoesCfg() {
+  const [config,    setConfig]    = useState<Record<string, string>>({});
+  const [salvando,  setSalvando]  = useState(false);
+  const [msg,       setMsg]       = useState('');
+  const [maxDesc,   setMaxDesc]   = useState('0');
+
+  useEffect(() => {
+    supabase.from('configuracoes_sistema')
+      .select('chave,valor')
+      .in('chave', [...COTACOES_CFG_KEYS.map(k => k.chave), 'cotacoes_desconto_maximo_global'])
+      .then(({ data }) => {
+        if (data) {
+          const m = Object.fromEntries(data.map(r => [r.chave, r.valor]));
+          setConfig(m);
+          setMaxDesc(m['cotacoes_desconto_maximo_global'] || '0');
+        }
+      });
+  }, []);
+
+  const salvar = async () => {
+    setSalvando(true);
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const upserts = [
+      ...COTACOES_CFG_KEYS.map(k => ({
+        chave: k.chave,
+        valor: config[k.chave] || 'false',
+        descricao: k.desc,
+        atualizado_por: currentUser?.email,
+        atualizado_em: new Date().toISOString(),
+      })),
+      {
+        chave: 'cotacoes_desconto_maximo_global',
+        valor: maxDesc,
+        descricao: 'Desconto máximo global para vendedores (%)',
+        atualizado_por: currentUser?.email,
+        atualizado_em: new Date().toISOString(),
+      },
+    ];
+    const { error } = await supabase.from('configuracoes_sistema').upsert(upserts, { onConflict: 'chave' });
+    setSalvando(false);
+    setMsg(error ? '❌ Erro: ' + error.message : '✅ Configurações salvas!');
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  return (
+    <div>
+      <div className="sec-card" style={{ marginBottom:12 }}>
+        <div className="sec-hdr no-collapse">📋 Visibilidade de Dados nas Cotações (para Vendedores)</div>
+        <div className="sec-body" style={{ padding:'14px 16px' }}>
+          <div style={{ fontSize:10, color:'#475569', marginBottom:14 }}>
+            Controle quais campos sensíveis ficam visíveis para usuários com perfil de vendedor
+            ao visualizarem cotações na aba de Cotações.
+          </div>
+
+          {COTACOES_CFG_KEYS.map(k => {
+            const ativo = config[k.chave] === 'true';
+            return (
+              <div key={k.chave} style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'10px 12px', background: ativo ? '#f0fdf4' : '#f8fafc',
+                border:`1px solid ${ativo ? '#86efac' : '#e2e8f0'}`,
+                borderRadius:7, marginBottom:8, gap:12 }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{k.label}</div>
+                  <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>{k.desc}</div>
+                </div>
+                <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', flexShrink:0 }}>
+                  <span style={{ fontSize:9, color: ativo ? '#16a34a' : '#64748b', fontWeight:700 }}>
+                    {ativo ? 'Visível' : 'Oculto'}
+                  </span>
+                  <div onClick={() => setConfig(c => ({ ...c, [k.chave]: ativo ? 'false' : 'true' }))}
+                    style={{ width:36, height:20, background: ativo ? '#16a34a' : '#d1d5db',
+                      borderRadius:10, position:'relative', cursor:'pointer', transition:'background .2s', flexShrink:0 }}>
+                    <div style={{ position:'absolute', top:3, left: ativo ? 18 : 3,
+                      width:14, height:14, background:'#fff', borderRadius:'50%', transition:'left .2s',
+                      boxShadow:'0 1px 3px #0004' }} />
+                  </div>
+                </label>
+              </div>
+            );
+          })}
+
+          <div style={{ marginTop:12, marginBottom:14, padding:'10px 12px', background:'#f0f9ff',
+            border:'1px solid #bae6fd', borderRadius:7 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#0369a1', marginBottom:6 }}>
+              Desconto Máximo Global (%)
+            </div>
+            <div style={{ fontSize:9, color:'#475569', marginBottom:8 }}>
+              Vendedores podem conceder até este % de desconto sem precisar de aprovação.
+              (Será sobrescrito pelo desconto máximo configurado individualmente em cada cotação, se maior.)
+            </div>
+            <input type="number" min={0} max={100} step={0.5} value={maxDesc}
+              onChange={e => setMaxDesc(e.target.value)}
+              style={{ width:100, border:'1px solid #bae6fd', borderRadius:5, padding:'5px 8px', fontSize:11 }} />
+            <span style={{ fontSize:9, color:'#475569', marginLeft:8 }}>%</span>
+          </div>
+
+          <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+            <button onClick={salvar} disabled={salvando}
+              className="acn-btn"
+              style={{ background:'#0f766e', fontSize:10, padding:'6px 20px' }}>
+              {salvando ? 'Salvando...' : '💾 Salvar Configurações'}
+            </button>
+            {msg && <span style={{ fontSize:10, color: msg.startsWith('✅') ? '#16a34a' : '#dc2626', fontWeight:700 }}>{msg}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL AVISOS DO SISTEMA
+// ─────────────────────────────────────────────────────────────────────────────
 function PainelAvisos() {
   const currentUser                = JSON.parse(localStorage.getItem('user') || '{}');
   const podeGerenciar              = !!(currentUser?.pode_enviar_avisos) || currentUser?.perfil === 'Admin';
@@ -2119,6 +2243,7 @@ export default function AdminTab() {
       {abaAtiva === 'usuarios'     && <PainelUsuarios />}
       {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
+      {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}

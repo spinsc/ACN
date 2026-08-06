@@ -11,6 +11,7 @@ import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl } from './AcnTabShared';
+import { CotacoesCrmPanel } from './CotacoesTab';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -85,6 +86,43 @@ function mascaraOp(valor: string): string {
   const num = valor.replace(/\D/g, '').slice(0, 8);
   if (num.length <= 4) return num;
   return num.slice(0, 4) + '.' + num.slice(4);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL COTAÇÕES DENTRO DO CARD CRM
+// Wrapper local que carrega config de visibilidade e delega ao CotacoesCrmPanel
+// ─────────────────────────────────────────────────────────────────────────────
+function CotacoesCrmPanelCrm({ oportunidadeId, currentUser }) {
+  const [cfg, setCfg] = React.useState({ verCustos: false, verFornec: false, verMarkup: false });
+  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
+
+  React.useEffect(() => {
+    supabase.from('configuracoes_sistema')
+      .select('chave,valor')
+      .in('chave', ['cotacoes_ver_custos_margens','cotacoes_ver_fornecedores','cotacoes_ver_markup'])
+      .then(({ data }) => {
+        if (data) {
+          const m = Object.fromEntries(data.map(r => [r.chave, r.valor === 'true']));
+          setCfg({
+            verCustos: isAdmin || m['cotacoes_ver_custos_margens'] || false,
+            verFornec: isAdmin || m['cotacoes_ver_fornecedores']   || false,
+            verMarkup: isAdmin || m['cotacoes_ver_markup']         || false,
+          });
+        } else {
+          setCfg({ verCustos: isAdmin, verFornec: isAdmin, verMarkup: isAdmin });
+        }
+      });
+  }, [isAdmin]);
+
+  return (
+    <CotacoesCrmPanel
+      oportunidadeId={oportunidadeId}
+      currentUser={currentUser}
+      verCustos={cfg.verCustos}
+      verFornec={cfg.verFornec}
+      verMarkup={cfg.verMarkup}
+    />
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -543,6 +581,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   const TABS_CRM = [
     { key:'andamento',    label:'📝 Andamento' },
+    { key:'cotacoes',     label:'💰 Cotações' },
     { key:'processo',     label:'📂 Arquivos de Licitação' },
     { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
     { key:'custos',       label:'💰 Custos e Docs Técnicos' },
@@ -2833,6 +2872,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {/* Conteúdo */}
               <div style={{ flex:1, overflowY:'auto', padding:14 }}>
 
+                {/* ── COTAÇÕES ── */}
+                {abrirTabDir === 'cotacoes' && (
+                  <CotacoesCrmPanelCrm
+                    oportunidadeId={modalAbrir.id}
+                    currentUser={currentUser}
+                  />
+                )}
+
                 {/* ── ANÁLISE ── */}
                 {abrirTabDir === 'analise' && (
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -2959,7 +3006,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 )}
 
                 {/* ── DEMAIS ABAS (documentos) ── */}
-                {abrirTabDir !== 'andamento' && abrirTabDir !== 'analise' && (
+                {abrirTabDir !== 'andamento' && abrirTabDir !== 'analise' && abrirTabDir !== 'cotacoes' && (
                   <div>
                     <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:10 }}>
                       <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:6 }}>
