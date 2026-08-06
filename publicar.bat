@@ -267,6 +267,20 @@ git add src/LicitacoesTab.tsx
 git add src/CrmTab.tsx
 git commit -m "feat: Pipeline CRM Licitacoes migrado para LicitacoesTab — aba Processos preservada + aba Pipeline CRM com kanban"
 
+:: feat: Renomear Produto → Produto e Mercadorias + CODITEM/CODPRODUTO
+git add src/DashboardTab.tsx
+git add src/CadastroProdutosTab.tsx
+git add src/CadastroItensTab.tsx
+git commit -m "feat: renomear Produto e Mercadorias + labels CODITEM/CODPRODUTO nos cadastros"
+
+:: feat: FormacaoPrecosTab — markup global independente de impostos
+git add src/FormacaoPrecosTab.tsx
+git commit -m "feat: FormacaoPrecosTab markup global — checkbox independente, campo Markup Global%, visualmente destacado nas linhas"
+
+:: feat: CotacoesTab — visao simplificada + multi-formacao por proposta
+git add src/CotacoesTab.tsx
+git commit -m "feat: CotacoesTab visao simplificada (Nome/Valor/Impostos) + checkboxes + combinar multiplas formacoes em proposta + emitir proposta HTML/PDF"
+
 :: Push
 echo.
 echo Enviando para GitHub...

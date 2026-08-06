@@ -150,7 +150,7 @@ function ItemModal({
 
           <Section title="📦 Identificação" />
           <Row>
-            <Field label="Código" flex={0.5}>
+            <Field label="CODITEM" flex={0.5}>
               <input style={inp} value={form.codigo} onChange={e => set('codigo', e.target.value)} placeholder="Ex: ELT-001" />
             </Field>
             <Field label="Nome / Produto *" flex={2}>
@@ -403,7 +403,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
       }}>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>📦 Cadastro de Itens</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>📦 Cadastro de Itens (CODITEM)</div>
           <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
             Base de itens para composição de preços, compras e orçamentos
           </div>

@@ -268,7 +268,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
             </div>
 
             {[
-              { label: 'Código', k: 'codigo', ph: 'Ex: PROD-001' },
+              { label: 'CODPRODUTO', k: 'codigo', ph: 'Ex: PROD-001' },
               { label: 'Nome do Produto *', k: 'nome', ph: 'Nome do produto final' },
             ].map(f => (
               <div key={f.k} style={{ marginBottom: 8 }}>
@@ -647,7 +647,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
       {/* Cabeçalho */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>🏭 Cadastro de Produtos</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>🏭 Produto e Mercadorias</div>
           <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>Produtos compostos de itens do catálogo (BOM — Bill of Materials)</div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

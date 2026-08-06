@@ -12,6 +12,7 @@ const PARAMS_PADRAO = {
   imposto_pct:    16,
   custo_fixo_pct: 3,
   lote_qtd:       1,
+  markup_pct:     30,
 };
 
 function novoItem() {
@@ -594,7 +595,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 }
 
 // ─── LINHA DE ITEM ────────────────────────────────────────────────────────────
-function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, params, isVendedor }) {
+function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct } = result;
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
   const H = isVendedor ? { display:'none' } : {};
@@ -654,8 +655,12 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
       {/* Markup */}
       <td style={{ padding:'6px 6px', minWidth:76, ...H }}>
         <input type="number" className="acn-input"
-          style={{ width:68, ...inp11r, background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
-          step="0.1" value={item.markup_pct} onChange={e=>onSet('markup_pct', e.target.value)} />
+          style={{ width:68, ...inp11r,
+            background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
+            color: usarMarkupGlobal ? '#7c3aed' : undefined }}
+          step="0.1" value={item.markup_pct}
+          onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+          readOnly={!!usarMarkupGlobal} />
       </td>
       {/* DIFAL */}
       <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
@@ -959,7 +964,8 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
 export default function FormacaoPrecosTab({ currentUser }) {
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
-  const [usarGlobais, setUsarGlobais] = useState(true);
+  const [usarGlobais, setUsarGlobais]             = useState(true);
+  const [usarMarkupGlobal, setUsarMarkupGlobal]   = useState(false);
   const [modelos, setModelos]         = useState([]);
   const [modalSalvar, setModalSalvar]     = useState(false);
   const [modalCarregar, setModalCarregar] = useState(false);
@@ -997,9 +1003,12 @@ export default function FormacaoPrecosTab({ currentUser }) {
       .then(({ data }) => setPlataformas(data || []));
   }, []);
 
-  const paramEfetivo = (item) => usarGlobais
-    ? { ...item, difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct }
-    : item;
+  const paramEfetivo = (item) => {
+    let it = { ...item };
+    if (usarGlobais)       { it.difal_pct = params.difal_pct; it.imposto_pct = params.imposto_pct; it.custo_fixo_pct = params.custo_fixo_pct; }
+    if (usarMarkupGlobal)  { it.markup_pct = params.markup_pct; }
+    return it;
+  };
 
   const results    = itens.map(it => calcItem(paramEfetivo(it), params));
   const lote       = Number(params.lote_qtd) || 1;
@@ -1436,6 +1445,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
                 { label:'DIFAL %',        k:'difal_pct',      w:70,  step:'0.1' },
                 { label:'Imposto %',      k:'imposto_pct',    w:70,  step:'0.1' },
                 { label:'Custo Fixo %',  k:'custo_fixo_pct', w:80,  step:'0.1' },
+                { label:'Markup Global %',k:'markup_pct',     w:80,  step:'0.1' },
                 { label:'Qtd. Lote',      k:'lote_qtd',       w:70,  step:'1' },
               ].map(({ label, k, w, step }) => (
                 <div key={k}>
@@ -1445,11 +1455,18 @@ export default function FormacaoPrecosTab({ currentUser }) {
                     onChange={e => setP(k, parseFloat(e.target.value) || 0)} />
                 </div>
               ))}
-              <div style={{ display:'flex', alignItems:'flex-end', gap:8, paddingBottom:2 }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:2 }}>
                 <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
                   <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
                     style={{ accentColor:'#0891b2' }} />
                   Usar globais (DIFAL/Imp/CF)
+                </label>
+                <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                  <input type="checkbox" checked={usarMarkupGlobal} onChange={e=>setUsarMarkupGlobal(e.target.checked)}
+                    style={{ accentColor:'#7c3aed' }} />
+                  <span style={{ color: usarMarkupGlobal ? '#7c3aed' : undefined, fontWeight: usarMarkupGlobal ? 700 : undefined }}>
+                    Markup Global (sem impostos)
+                  </span>
                 </label>
                 <button
                   onClick={() => { setItens(p => p.map(x => ({
@@ -1515,6 +1532,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
                     onExpand={(linhas) => expandItem(item._id, linhas)}
                     onRemove={() => remItem(item._id)}
                     usarParamsGlobais={usarGlobais}
+                    usarMarkupGlobal={usarMarkupGlobal}
                     params={params}
                     isVendedor={isVendedor}
                   />

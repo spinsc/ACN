@@ -95,7 +95,7 @@ const SIDEBAR_GROUPS = [
       { id: 'ajustes',    label: 'Demandas Gerais' },
       { id: 'compras',         label: 'Compras' },
       { id: 'cadastro_itens',    label: 'Cadastro de Itens' },
-      { id: 'cadastro_produtos', label: 'Cadastro de Produtos' },
+      { id: 'cadastro_produtos', label: 'Produto e Mercadorias' },
       { id: 'rh',                label: 'RH' },
       { id: 'fiscal',     label: 'Fiscal' },
       { id: 'relatorios',      label: 'Relatórios' },
