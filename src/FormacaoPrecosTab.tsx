@@ -311,17 +311,301 @@ function CalcImpostoReverso() {
   );
 }
 
+// ─── MODAL RÁPIDO: CRIAR NOVO ITEM NO CATÁLOGO ───────────────────────────────
+function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
+  const [form, setForm] = useState({
+    nome: nomeInicial || '', marca: '', fornecedor: '', moeda: 'REAL',
+    custo_unit: 0, ipi_pct: 0, st_pct: 0, markup_pct: 30,
+    difal_pct: 16, imposto_pct: 16, custo_fixo_pct: 3, unidade: 'UN', ativo: true,
+  });
+  const [salvando, setSalvando] = useState(false);
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const inp = { width:'100%', padding:'4px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' };
+  const lbl = { display:'block', fontSize:8, fontWeight:700, color:'#6b7280', marginBottom:2, textTransform:'uppercase' };
+
+  const salvar = async () => {
+    if (!form.nome?.trim()) return;
+    setSalvando(true);
+    const { data } = await supabase.from('cadastro_itens').insert([{
+      nome: form.nome.trim(), marca: form.marca?.trim() || '', fornecedor: form.fornecedor?.trim() || '',
+      moeda: form.moeda || 'REAL', custo_unit: Number(form.custo_unit) || 0,
+      ipi_pct: Number(form.ipi_pct) || 0, st_pct: Number(form.st_pct) || 0,
+      markup_pct: Number(form.markup_pct) || 30, difal_pct: Number(form.difal_pct) || 16,
+      imposto_pct: Number(form.imposto_pct) || 16, custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
+      unidade: form.unidade || 'UN', ativo: true,
+    }]).select().single();
+    setSalvando(false);
+    if (data) onSalvo(data);
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:3000 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background:'#fff', borderRadius:10, width:480, maxWidth:'96vw', boxShadow:'0 16px 48px rgba(0,0,0,.28)', overflow:'hidden' }}>
+        <div style={{ background:'#0f766e', color:'#fff', padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ fontWeight:800, fontSize:12 }}>➕ Novo Item no Catálogo</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer' }}>✕</button>
+        </div>
+        <div style={{ padding:'14px 16px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+            <div style={{ gridColumn:'1/-1' }}>
+              <span style={lbl}>Nome / Produto *</span>
+              <input style={{ ...inp, borderColor: !form.nome ? '#f87171' : '#d1d5db' }}
+                value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome do item" autoFocus />
+            </div>
+            <div><span style={lbl}>Marca</span><input style={inp} value={form.marca} onChange={e=>set('marca',e.target.value)} placeholder="Ex: Schneider" /></div>
+            <div><span style={lbl}>Fornecedor</span><input style={inp} value={form.fornecedor} onChange={e=>set('fornecedor',e.target.value)} placeholder="Fornecedor" /></div>
+            <div>
+              <span style={lbl}>Moeda</span>
+              <select style={inp} value={form.moeda} onChange={e=>set('moeda',e.target.value)}>
+                {['REAL','DOLAR','EURO'].map(m=><option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div><span style={lbl}>Custo Unitário</span><input style={inp} type="number" min={0} step="0.01" value={form.custo_unit} onChange={e=>set('custo_unit',e.target.value)} /></div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6 }}>
+            {[['IPI%','ipi_pct'],['ST%','st_pct'],['Markup%','markup_pct'],['DIFAL%','difal_pct'],['Imposto%','imposto_pct']].map(([l,k])=>(
+              <div key={k}><span style={lbl}>{l}</span><input style={inp} type="number" min={0} step="0.5" value={form[k]} onChange={e=>set(k,e.target.value)} /></div>
+            ))}
+          </div>
+        </div>
+        <div style={{ padding:'8px 16px 12px', display:'flex', justifyContent:'flex-end', gap:8, borderTop:'1px solid #f1f5f9' }}>
+          <button onClick={onClose} style={{ padding:'5px 12px', border:'1px solid #d1d5db', borderRadius:5, background:'#fff', cursor:'pointer', fontSize:10 }}>Cancelar</button>
+          <button onClick={salvar} disabled={salvando || !form.nome?.trim()}
+            style={{ padding:'5px 14px', border:'none', borderRadius:5, background: form.nome?.trim() ? '#0f766e' : '#9ca3af', color:'#fff', cursor: form.nome?.trim() ? 'pointer' : 'not-allowed', fontSize:10, fontWeight:700, opacity: salvando ? .6 : 1 }}>
+            {salvando ? 'Salvando...' : '✅ Salvar e Usar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AUTOCOMPLETE: BUSCA EM CADASTRO_ITENS + CADASTRO_PRODUTOS ────────────────
+function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
+  const [q, setQ]           = useState(value || '');
+  const [res, setRes]       = useState({ itens: [], produtos: [] });
+  const [open, setOpen]     = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [criando, setCriando]   = useState(false);
+  const ref   = useRef(null);
+  const deb   = useRef(null);
+
+  // mantém o campo sincronizado quando o item é preenchido externamente (load de modelo)
+  useEffect(() => { setQ(value || ''); }, [value]);
+
+  const buscar = (termo) => {
+    clearTimeout(deb.current);
+    if (!termo.trim()) { setRes({ itens:[], produtos:[] }); setOpen(false); return; }
+    deb.current = setTimeout(async () => {
+      setBuscando(true);
+      const [{ data: itens }, { data: produtos }] = await Promise.all([
+        supabase.from('cadastro_itens')
+          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
+          .eq('ativo', true).ilike('nome', `%${termo}%`).limit(8),
+        supabase.from('cadastro_produtos')
+          .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
+          .eq('ativo', true).ilike('nome', `%${termo}%`).limit(5),
+      ]);
+      setRes({ itens: itens || [], produtos: produtos || [] });
+      setOpen(true);
+      setBuscando(false);
+    }, 260);
+  };
+
+  useEffect(() => {
+    const fn = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, []);
+
+  // normaliza moeda do catálogo (USD/EUR) para o padrão do FormacaoPrecos (DOLAR/EURO)
+  const normMoeda = (m) => m === 'USD' ? 'DOLAR' : m === 'EUR' ? 'EURO' : m || 'REAL';
+
+  const selecionarItem = (it) => {
+    onFill({
+      produto: it.nome, marca: it.marca || '', fornecedor: it.fornecedor || '',
+      moeda: normMoeda(it.moeda), custo_unit: it.custo_unit || 0,
+      ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
+      markup_pct: it.markup_pct ?? 30, difal_pct: it.difal_pct ?? 16,
+      imposto_pct: it.imposto_pct ?? 16, custo_fixo_pct: it.custo_fixo_pct ?? 3,
+    });
+    setQ(it.nome); setOpen(false);
+  };
+
+  const selecionarProdutoKit = (p) => {
+    onFill({
+      produto: p.nome, marca: '', fornecedor: '', moeda: 'REAL',
+      custo_unit: p.preco_venda || 0, ipi_pct: 0, st_pct: 0,
+      markup_pct: 0, difal_pct: p.difal_pct ?? 16,
+      imposto_pct: p.imposto_pct ?? 16, custo_fixo_pct: p.custo_fixo_pct ?? 3,
+    });
+    setQ(p.nome); setOpen(false);
+  };
+
+  const expandirBom = async (p) => {
+    const { data: bom } = await supabase
+      .from('cadastro_produtos_itens')
+      .select('*, cadastro_itens(nome,marca,fornecedor,moeda,custo_unit,ipi_pct,st_pct,markup_pct,difal_pct,imposto_pct,custo_fixo_pct)')
+      .eq('produto_id', p.id).order('ordem');
+    setOpen(false);
+    if (!bom || bom.length === 0) { selecionarProdutoKit(p); return; }
+    const linhas = bom.map(l => {
+      const it = l.cadastro_itens || {};
+      return {
+        produto: l.item_nome || it.nome || '', marca: it.marca || '', fornecedor: it.fornecedor || '',
+        moeda: normMoeda(it.moeda), qt: Number(l.quantidade) || 1,
+        custo_unit: it.custo_unit || 0, ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
+        markup_pct: it.markup_pct ?? p.markup_pct ?? 30,
+        difal_pct: it.difal_pct ?? p.difal_pct ?? 16,
+        imposto_pct: it.imposto_pct ?? p.imposto_pct ?? 16,
+        custo_fixo_pct: it.custo_fixo_pct ?? p.custo_fixo_pct ?? 3,
+      };
+    });
+    onExpand(linhas);
+  };
+
+  const temResultados = res.itens.length > 0 || res.produtos.length > 0;
+
+  return (
+    <div ref={ref} style={{ position:'relative', width:'100%' }}>
+      <input
+        className="acn-input"
+        style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
+        placeholder="Descrição do item"
+        value={q}
+        onChange={e => { setQ(e.target.value); onFill({ produto: e.target.value }); buscar(e.target.value); }}
+        onFocus={() => { if (temResultados) setOpen(true); }}
+      />
+      {buscando && (
+        <div style={{ position:'absolute', right:4, top:'50%', transform:'translateY(-50%)', fontSize:8, color:'#9ca3af' }}>⏳</div>
+      )}
+      {open && (
+        <div style={{
+          position:'absolute', top:'100%', left:0, zIndex:2000, minWidth:320, maxWidth:420,
+          background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
+          boxShadow:'0 8px 28px rgba(0,0,0,.18)', maxHeight:320, overflowY:'auto',
+        }}>
+          {/* ── Itens do catálogo ── */}
+          {res.itens.length > 0 && (
+            <>
+              <div style={{ padding:'4px 8px', fontSize:8, fontWeight:800, color:'#0f766e', background:'#f0fdf4', textTransform:'uppercase', letterSpacing:'.5px' }}>
+                📦 Itens do Catálogo
+              </div>
+              {res.itens.map(it => (
+                <div key={it.id}
+                  onClick={() => selecionarItem(it)}
+                  style={{ padding:'6px 10px', cursor:'pointer', borderBottom:'1px solid #f8fafc', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}
+                  onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
+                  onMouseLeave={e=>e.currentTarget.style.background='#fff'}
+                >
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:10 }}>{it.nome}</div>
+                    <div style={{ fontSize:8, color:'#9ca3af' }}>
+                      {[it.marca, it.fornecedor].filter(Boolean).join(' · ')} {it.codigo ? `· ${it.codigo}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>
+                      R$ {Number(it.custo_unit||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                    </div>
+                    <div style={{ fontSize:8, color:'#9ca3af' }}>{it.moeda} · {it.unidade}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ── Produtos compostos ── */}
+          {res.produtos.length > 0 && (
+            <>
+              <div style={{ padding:'4px 8px', fontSize:8, fontWeight:800, color:'#7c3aed', background:'#faf5ff', textTransform:'uppercase', letterSpacing:'.5px' }}>
+                🏭 Produtos Compostos (BOM)
+              </div>
+              {res.produtos.map(p => (
+                <div key={p.id} style={{ borderBottom:'1px solid #f8fafc' }}>
+                  <div style={{ padding:'6px 10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:10 }}>{p.nome}</div>
+                      <div style={{ fontSize:8, color:'#9ca3af' }}>{p.categoria || ''} {p.codigo ? `· ${p.codigo}` : ''}</div>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      {p.preco_venda > 0 && (
+                        <div style={{ fontSize:10, fontWeight:700, color:'#7c3aed' }}>
+                          R$ {Number(p.preco_venda||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* botões de ação para produto */}
+                  <div style={{ display:'flex', gap:0, borderTop:'1px solid #f3f4f6' }}>
+                    <button
+                      onClick={() => selecionarProdutoKit(p)}
+                      style={{ flex:1, padding:'4px 6px', border:'none', background:'#faf5ff', cursor:'pointer', fontSize:8, fontWeight:700, color:'#7c3aed', borderRight:'1px solid #ede9fe' }}
+                    >
+                      📦 Inserir como kit (1 linha)
+                    </button>
+                    <button
+                      onClick={() => expandirBom(p)}
+                      style={{ flex:1, padding:'4px 6px', border:'none', background:'#faf5ff', cursor:'pointer', fontSize:8, fontWeight:700, color:'#6d28d9' }}
+                    >
+                      🔩 Expandir componentes BOM
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ── Nenhum resultado ── */}
+          {!buscando && !temResultados && q.trim() && (
+            <div style={{ padding:'8px 10px', fontSize:9, color:'#9ca3af', textAlign:'center' }}>
+              Nenhum item encontrado para "{q}"
+            </div>
+          )}
+
+          {/* ── Criar novo ── */}
+          <div
+            onClick={() => { setOpen(false); setCriando(true); }}
+            style={{ padding:'7px 10px', cursor:'pointer', borderTop:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:6, background:'#fafafa' }}
+            onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
+            onMouseLeave={e=>e.currentTarget.style.background='#fafafa'}
+          >
+            <span style={{ fontSize:12 }}>➕</span>
+            <span style={{ fontSize:9, fontWeight:700, color:'#0f766e' }}>
+              Criar "{q.trim() || 'novo item'}" no catálogo
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Modal criar novo item */}
+      {criando && (
+        <CriarItemModal
+          nomeInicial={q}
+          onSalvo={(item) => { selecionarItem(item); setCriando(false); }}
+          onClose={() => setCriando(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── LINHA DE ITEM ────────────────────────────────────────────────────────────
-function ItemRow({ item, result, onSet, onRemove, usarParamsGlobais, params, isVendedor }) {
+function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, params, isVendedor }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct } = result;
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
   const H = isVendedor ? { display:'none' } : {};
 
   return (
     <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
-      <td style={{ padding:'4px 6px', minWidth:140 }}>
-        <input className="acn-input" style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
-          placeholder="Descrição do item" value={item.produto} onChange={e=>onSet('produto',e.target.value)} />
+      <td style={{ padding:'4px 6px', minWidth:160, position:'relative' }}>
+        <ProdutoAutocomplete
+          value={item.produto}
+          params={params}
+          onFill={dados => onFill(dados)}
+          onExpand={linhas => onExpand(linhas)}
+        />
       </td>
       <td style={{ padding:'4px 6px', minWidth:80 }}>
         <input className="acn-input" style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
@@ -693,6 +977,23 @@ export default function FormacaoPrecosTab({ currentUser }) {
   }]);
   const remItem  = (id) => setItens(p => p.filter(x => x._id !== id));
   const setItem  = (id, k, v) => setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
+
+  // Preenche múltiplos campos de uma só vez (ao selecionar do catálogo)
+  const fillItem = (id, dados) => setItens(p => p.map(x => x._id === id ? { ...x, ...dados } : x));
+
+  // Expande produto BOM: substitui a linha atual por todas as linhas do BOM
+  const expandItem = (id, linhas) => setItens(prev => {
+    const idx = prev.findIndex(x => x._id === id);
+    if (idx < 0) return prev;
+    const novas = linhas.map(l => ({
+      ...novoItem(),
+      difal_pct:      params.difal_pct,
+      imposto_pct:    params.imposto_pct,
+      custo_fixo_pct: params.custo_fixo_pct,
+      ...l,
+    }));
+    return [...prev.slice(0, idx), ...novas, ...prev.slice(idx + 1)];
+  });
 
   const carregarModelos = useCallback(async () => {
     setCarregando(true);
@@ -1112,6 +1413,8 @@ export default function FormacaoPrecosTab({ currentUser }) {
                     item={paramEfetivo(item)}
                     result={results[idx]}
                     onSet={(k, v) => setItem(item._id, k, v)}
+                    onFill={(dados) => fillItem(item._id, dados)}
+                    onExpand={(linhas) => expandItem(item._id, linhas)}
                     onRemove={() => remItem(item._id)}
                     usarParamsGlobais={usarGlobais}
                     params={params}

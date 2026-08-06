@@ -209,6 +209,10 @@ git add sql/migrar_itens_cotacoes.sql
 
 git commit -m "feat: Cadastro de Itens e Produtos com BOM — catalogo base + migracao de cotacoes"
 
+:: feat: FormacaoPrecosTab — autocomplete de catálogo de itens e produtos com BOM
+git add src/FormacaoPrecosTab.tsx
+git commit -m "feat: FormacaoPrecosTab autocomplete catalogo — busca itens+produtos, expandir BOM, criar novo"
+
 :: Push
 echo.
 echo Enviando para GitHub...
