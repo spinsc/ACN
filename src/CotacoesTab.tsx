@@ -606,14 +606,15 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
       .in('chave', ['cotacoes_ver_custos_margens','cotacoes_ver_fornecedores','cotacoes_ver_markup']);
     if (data) {
       const m = Object.fromEntries(data.map(r => [r.chave, r.valor === 'true']));
+      // Respeita o config para TODOS — admin controla via painel, não por perfil
       setCfg({
-        verCustos: isAdmin || m['cotacoes_ver_custos_margens'] || false,
-        verFornec: isAdmin || m['cotacoes_ver_fornecedores']   || false,
-        verMarkup: isAdmin || m['cotacoes_ver_markup']         || false,
+        verCustos: m['cotacoes_ver_custos_margens'] || false,
+        verFornec: m['cotacoes_ver_fornecedores']   || false,
+        verMarkup: m['cotacoes_ver_markup']         || false,
       });
     } else {
-      // Se tabela não existe ainda, admin vê tudo
-      setCfg({ verCustos: isAdmin, verFornec: isAdmin, verMarkup: isAdmin });
+      // Se tabela não existe ainda, ninguém vê dados sensíveis
+      setCfg({ verCustos: false, verFornec: false, verMarkup: false });
     }
   }, [isAdmin]);
 
