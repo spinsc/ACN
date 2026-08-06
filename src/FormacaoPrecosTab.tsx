@@ -963,6 +963,18 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
 
+  // ── Resize da tabela de itens ─────────────────────────────────────────────
+  const [tableHeight, setTableHeight] = useState(320);
+  const startResize = (e) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = tableHeight;
+    const onMove = (me) => setTableHeight(Math.max(160, startH + me.clientY - startY));
+    const onUp   = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
   useEffect(() => {
     supabase.from('plataformas_licitacao').select('*').eq('ativo', true).order('nome')
       .then(({ data }) => setPlataformas(data || []));
@@ -1213,8 +1225,9 @@ export default function FormacaoPrecosTab({ currentUser }) {
   };
 
   const thStyle = {
-    padding: '5px 6px', background: '#1e293b', color: '#fff',
-    fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center',
+    padding: '7px 8px', background: '#1e293b', color: '#fff',
+    fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center',
+    position: 'sticky' as const, top: 0, zIndex: 2,
   };
   const lucroGeralColor = lucroGeral >= 10 ? '#16a34a' : lucroGeral >= 5 ? '#d97706' : '#dc2626';
 
@@ -1393,11 +1406,16 @@ export default function FormacaoPrecosTab({ currentUser }) {
           </div>
 
           {/* ── TABELA DE ITENS ── */}
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
+          <div style={{ marginBottom:12 }}>
+            {/* Container redimensionável */}
+            <div style={{
+              background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
+              overflowX:'auto', overflowY:'auto', height: tableHeight,
+            }}>
             <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1400 }}>
               <thead>
                 <tr>
-                  <th style={{...thStyle, textAlign:'left', minWidth:200, fontSize:10}}>Produto / Descrição</th>
+                  <th style={{...thStyle, textAlign:'left', minWidth:200}}>Produto / Descrição</th>
                   <th style={{...thStyle, minWidth:110, fontSize:10}}>Marca</th>
                   <th style={{...thStyle, minWidth:68, fontSize:10}}>Qt</th>
                   <th style={{...thStyle, minWidth:82, fontSize:10}}>Moeda</th>
@@ -1441,7 +1459,35 @@ export default function FormacaoPrecosTab({ currentUser }) {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>{/* fim scroll */}
+
+            {/* ── Alça de resize ── */}
+            <div
+              onMouseDown={startResize}
+              title="Arraste para redimensionar"
+              style={{
+                height: 12, background: '#e8ecf0',
+                borderRadius: '0 0 8px 8px',
+                border: '1px solid #e2e8f0', borderTop: 'none',
+                cursor: 'ns-resize',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                userSelect: 'none',
+              }}
+            >
+              <div style={{ display:'flex', gap:3 }}>
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} style={{ width:20, height:2, background:'#94a3b8', borderRadius:2 }} />
+                ))}
+              </div>
+            </div>
+
+            {/* Contador + botão add abaixo da alça */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4, marginBottom:6 }}>
+              <span style={{ fontSize:9, color:'#9ca3af' }}>
+                {itens.length} item{itens.length !== 1 ? 'ns' : ''} · arraste a barra cinza para redimensionar
+              </span>
+            </div>
+          </div>{/* fim wrapper resize */}
 
           {/* ── PAINEL DE TOTAIS ── */}
           {itens.length > 0 && (

@@ -217,6 +217,10 @@ git commit -m "feat: FormacaoPrecosTab autocomplete catalogo — busca itens+pro
 git add src/FormacaoPrecosTab.tsx
 git commit -m "fix: FormacaoPrecosTab tabela itens maior — inputs 11px, padding 6px, colunas alargadas"
 
+:: feat: FormacaoPrecosTab — tabela de itens redimensionável (arrastar borda inferior)
+git add src/FormacaoPrecosTab.tsx
+git commit -m "feat: FormacaoPrecosTab tabela redimensionavel — arrastar borda + header sticky"
+
 :: Push
 echo.
 echo Enviando para GitHub...
