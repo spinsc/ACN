@@ -482,7 +482,7 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
 
 // ─── Painel de Detalhe do Veículo ─────────────────────────────────────────────
 
-function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, onEditar, onClose, carregarVeiculos }) {
+function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onDeletar, onClose, carregarVeiculos }) {
   const [servicos, setServicos] = useState([]);
   const [chamados, setChamados] = useState([]);
   const [novoServ, setNovoServ] = useState({ item_servico:'', descricao_tecnica:'', categoria:'' });
@@ -589,6 +589,14 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, onEditar, onClose, car
                 padding:'5px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
               ✏️ Editar
             </button>
+            {isAdmin && (
+              <button onClick={() => onDeletar(veiculo)}
+                style={{ background:'#dc2626', color:'#fff', border:'none', borderRadius:5,
+                  padding:'5px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}
+                title="Excluir veículo e invalidar portal do cliente">
+                🗑️ Excluir
+              </button>
+            )}
             <button onClick={onClose}
               style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>✕</button>
           </div>
@@ -856,6 +864,34 @@ export default function VeiculosNfcTab({ currentUser }) {
     setCarregando(false);
   }, []);
 
+  const deletarVeiculo = async (v) => {
+    const confirm1 = window.confirm(
+      `⚠️ Excluir o veículo "${v.chassi}"?\n\n` +
+      `Isso também irá:\n` +
+      `• Excluir todos os serviços cadastrados\n` +
+      `• Excluir todos os chamados de suporte\n` +
+      `• Invalidar o link do Portal do Cliente\n\n` +
+      `Esta ação não pode ser desfeita.`
+    );
+    if (!confirm1) return;
+    const confirm2 = window.confirm(`Confirmar exclusão definitiva do chassi ${v.chassi}?`);
+    if (!confirm2) return;
+
+    // Excluir chamados (SET NULL não exclui — apagamos manualmente)
+    await supabase.from('chamados_suporte').delete().eq('veiculo_id', v.id);
+    // Excluir veículo (cascata para servicos_executados_nfc)
+    const { error } = await supabase.from('veiculos_nfc').delete().eq('id', v.id);
+
+    if (error) {
+      alert('Erro ao excluir: ' + error.message);
+      return;
+    }
+
+    // Fechar painel de detalhe se estiver aberto para esse veículo
+    setDetalhe(d => (d?.id === v.id ? null : d));
+    carregarVeiculos();
+  };
+
   const carregarConfig = useCallback(async () => {
     const { data } = await supabase.from('configuracoes_sistema')
       .select('chave,valor')
@@ -1003,6 +1039,14 @@ export default function VeiculosNfcTab({ currentUser }) {
                             ✏️
                           </button>
                         )}
+                        {isAdmin && (
+                          <button onClick={() => deletarVeiculo(v)}
+                            style={{ background:'#dc2626', color:'#fff', border:'none', borderRadius:4,
+                              padding:'4px 8px', fontSize:8, fontWeight:700, cursor:'pointer' }}
+                            title="Excluir veículo e invalidar portal">
+                            🗑️
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1019,7 +1063,9 @@ export default function VeiculosNfcTab({ currentUser }) {
           veiculo={detalhe}
           baseUrl={baseUrl}
           portalBaseUrl={portalUrl}
+          isAdmin={isAdmin}
           onEditar={(v) => { setDetalhe(null); setModalForm(v); }}
+          onDeletar={(v) => { setDetalhe(null); deletarVeiculo(v); }}
           onClose={() => setDetalhe(null)}
           carregarVeiculos={carregarVeiculos}
         />
