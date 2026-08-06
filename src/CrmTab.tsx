@@ -137,7 +137,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   // ── estado principal ──
   const [secaoCrm, setSecaoCrm]     = useState<'funil'|'contatos'>('funil');
-  const [funil, setFunil]           = useState<'licitacao'|'venda_direta'>('licitacao');
+  const [funil, setFunil]           = useState<'licitacao'|'venda_direta'>('venda_direta');
   const [estagios, setEstagios]     = useState<any[]>([]);
   const [ops, setOps]               = useState<any[]>([]);
   const [itens, setItens]           = useState<any[]>([]);
@@ -1770,13 +1770,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       {/* ── Navegação principal CRM ── */}
       <div style={{ display:'flex', background:'#0f172a', margin:'-8px -12px 0', padding:'0 12px' }}>
         {/* Funis */}
-        {([['licitacao','🏛️ Licitações'],['venda_direta','💼 Vendas Diretas']] as const).map(([f, label]) => (
-          <div key={f} onClick={() => { setFunil(f); setSecaoCrm('funil'); }} style={{
-            padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
-            color: secaoCrm==='funil' && funil===f ? (f==='licitacao'?'#a78bfa':'#38bdf8') : '#64748b',
-            borderBottom: secaoCrm==='funil' && funil===f ? `3px solid ${f==='licitacao'?'#7c3aed':'#0891b2'}` : '3px solid transparent',
-          }}>{label}</div>
-        ))}
+        <div onClick={() => setSecaoCrm('funil')} style={{
+          padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
+          color: secaoCrm==='funil' ? '#38bdf8' : '#64748b',
+          borderBottom: secaoCrm==='funil' ? '3px solid #0891b2' : '3px solid transparent',
+        }}>💼 Vendas Diretas</div>
         {/* Contatos */}
         <div onClick={() => setSecaoCrm('contatos')} style={{
           padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
@@ -1843,7 +1841,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       <div style={{ display:'flex', gap:6, alignItems:'center', margin:'8px 0', flexWrap:'wrap' }}>
         <button className="acn-btn" style={{ background:'#0f766e', fontSize:9, padding:'3px 10px' }}
           onClick={() => { setFormOp({ ...VAZIO_OP, funil }); setModalOp({}); }}>
-          + Nova {funil==='licitacao' ? 'Licitação' : 'Venda Direta'}
+          + Nova Venda Direta
         </button>
         <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9, padding:'3px 10px' }}
           onClick={() => setModalNovaOpOs({})}>
@@ -2041,7 +2039,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
           <div style={{ background:'white', borderRadius:8, width:'min(540px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
             <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#1e293b' }}>
-              {modalOp?.id ? '✏️ Editar' : '+ Nova'} {funil==='licitacao' ? 'Licitação' : 'Venda Direta'}
+              {modalOp?.id ? '✏️ Editar' : '+ Nova'} Venda Direta
             </div>
 
             {funil === 'licitacao' && (

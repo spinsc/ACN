@@ -262,6 +262,11 @@ git add public/portal.html
 git add sql/portal_cliente.sql
 git commit -m "feat: Portal do Cliente — pagina standalone por token unico, chamados, acompanhamento e manual por veiculo"
 
+:: feat: Migrar Pipeline CRM Licitacoes para LicitacoesTab + remover do CrmTab
+git add src/LicitacoesTab.tsx
+git add src/CrmTab.tsx
+git commit -m "feat: Pipeline CRM Licitacoes migrado para LicitacoesTab — aba Processos preservada + aba Pipeline CRM com kanban"
+
 :: Push
 echo.
 echo Enviando para GitHub...

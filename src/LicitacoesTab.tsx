@@ -1543,9 +1543,173 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PIPELINE CRM — kanban de crm_oportunidades (funil licitacao)
+// ─────────────────────────────────────────────────────────────────────────────
+function PipelineCrmLicitacoes({ currentUser }) {
+  const [estagios, setEstagios] = useState<any[]>([]);
+  const [ops,      setOps]      = useState<any[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [busca,    setBusca]    = useState('');
+
+  const carregar = useCallback(async () => {
+    const [{ data: est }, { data: oportunidades }] = await Promise.all([
+      supabase.from('crm_estagios_funil').select('*').order('ordem'),
+      supabase.from('crm_oportunidades')
+        .select('*').eq('funil', 'licitacao')
+        .order('posicao', { ascending: true })
+        .order('criado_em', { ascending: false }),
+    ]);
+    setEstagios(est || []);
+    setOps(oportunidades || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const fmtValor = (v: any) => v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits:2 })}` : null;
+
+  const STATUS_COR_FUNIL: Record<string,string> = {
+    'Aberto':      '#2563eb',
+    'Ganho':       '#16a34a',
+    'Perdido':     '#dc2626',
+    'Desistência': '#d97706',
+    'Vencida':     '#7c3aed',
+  };
+
+  const opsFiltradas = busca
+    ? ops.filter(o =>
+        (o.titulo||'').toLowerCase().includes(busca.toLowerCase()) ||
+        (o.orgao||'').toLowerCase().includes(busca.toLowerCase()) ||
+        (o.responsavel_nome||'').toLowerCase().includes(busca.toLowerCase())
+      )
+    : ops;
+
+  const abrirNoCrm = (op: any) => {
+    window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: 'crm', origemId: op.id } }));
+  };
+
+  if (loading) return (
+    <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#94a3b8', fontSize:13 }}>
+      Carregando pipeline...
+    </div>
+  );
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
+      {/* Barra superior */}
+      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px',
+        display:'flex', gap:10, alignItems:'center', flexShrink:0 }}>
+        <input
+          value={busca} onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar por título, órgão ou responsável..."
+          style={{ flex:1, border:'1px solid #d1d5db', borderRadius:6, padding:'6px 10px', fontSize:11, outline:'none' }} />
+        <div style={{ fontSize:11, color:'#64748b', whiteSpace:'nowrap' }}>
+          {opsFiltradas.length} oportunidade{opsFiltradas.length !== 1 ? 's' : ''}
+        </div>
+        <button onClick={carregar}
+          style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:5,
+            padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+          ↺ Atualizar
+        </button>
+      </div>
+
+      {/* Info */}
+      <div style={{ background:'#f0fdf4', borderBottom:'1px solid #bbf7d0', padding:'6px 16px',
+        fontSize:9, color:'#16a34a', fontWeight:700, flexShrink:0 }}>
+        💡 Clique em qualquer card para abrir e editar no módulo Comercial/CRM
+      </div>
+
+      {/* Kanban */}
+      <div style={{ flex:1, overflowX:'auto', display:'flex', gap:12, padding:16, alignItems:'flex-start' }}>
+        {estagios.map(est => {
+          const cards = opsFiltradas.filter(o => o.estagio_id === est.id);
+          const corEst = est.cor || '#64748b';
+          return (
+            <div key={est.id} style={{ minWidth:220, maxWidth:240, flexShrink:0 }}>
+              {/* Cabeçalho coluna */}
+              <div style={{ background: corEst + '15', border:`1.5px solid ${corEst}40`,
+                borderRadius:'8px 8px 0 0', padding:'8px 10px',
+                display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ fontWeight:800, fontSize:10, color: corEst }}>{est.nome}</div>
+                <span style={{ background: corEst, color:'#fff', borderRadius:10,
+                  padding:'1px 7px', fontSize:9, fontWeight:700 }}>{cards.length}</span>
+              </div>
+
+              {/* Cards */}
+              <div style={{ background:'#f8fafc', border:`1px solid ${corEst}30`,
+                borderRadius:'0 0 8px 8px', minHeight:80, padding:6 }}>
+                {cards.length === 0 ? (
+                  <div style={{ color:'#cbd5e1', fontSize:9, textAlign:'center', padding:'16px 0' }}>
+                    Sem oportunidades
+                  </div>
+                ) : cards.map(op => (
+                  <div key={op.id} onClick={() => abrirNoCrm(op)}
+                    style={{ background:'#fff', border:'1.5px solid #e2e8f0',
+                      borderLeft:`4px solid #7c3aed`,
+                      borderRadius:6, padding:'8px 10px', marginBottom:6,
+                      cursor:'pointer', transition:'box-shadow .15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px #7c3aed20')}
+                    onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>
+                    {/* Badges */}
+                    <div style={{ display:'flex', gap:4, marginBottom:4, flexWrap:'wrap' }}>
+                      {op.tipo_licitacao === 'ata' && (
+                        <span style={{ background:'#fdf4ff', color:'#a21caf',
+                          fontSize:7, fontWeight:700, padding:'1px 5px', borderRadius:3 }}>
+                          ATA
+                        </span>
+                      )}
+                      {op.empresa_faturamento && (
+                        <span style={{ background: op.empresa_faturamento === 'ACN' ? '#dbeafe' : '#fce7f3',
+                          color: op.empresa_faturamento === 'ACN' ? '#1e40af' : '#9d174d',
+                          fontSize:7, fontWeight:700, padding:'1px 5px', borderRadius:3 }}>
+                          {op.empresa_faturamento}
+                        </span>
+                      )}
+                    </div>
+                    {/* Título */}
+                    <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3 }}>
+                      {op.titulo || '(sem título)'}
+                    </div>
+                    {/* Órgão */}
+                    {op.orgao && (
+                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>
+                        🏛️ {op.orgao}
+                      </div>
+                    )}
+                    {/* Valor */}
+                    {op.valor_estimado && (
+                      <div style={{ fontSize:9, fontWeight:700, color:'#16a34a' }}>
+                        {fmtValor(op.valor_estimado)}
+                      </div>
+                    )}
+                    {/* Responsável */}
+                    {op.responsavel_nome && (
+                      <div style={{ fontSize:8, color:'#94a3b8', marginTop:3 }}>
+                        👤 {op.responsavel_nome}
+                      </div>
+                    )}
+                    {/* Data */}
+                    {op.data_abertura && (
+                      <div style={{ fontSize:8, color:'#94a3b8' }}>
+                        📅 {new Date(op.data_abertura).toLocaleDateString('pt-BR')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
+  const [abaPrincipal, setAbaPrincipal] = useState<'licitacoes'|'pipeline'>('licitacoes');
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
@@ -1628,7 +1792,18 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           <div style={{ fontSize:15, fontWeight:700 }}>🏛️ Licitações</div>
           <div style={{ fontSize:10, opacity:.75 }}>{licitacoes.length} total · {lista.length} exibindo</div>
         </div>
-        {isAnalista && (
+        {/* Seletor de aba principal */}
+        <div style={{ display:'flex', background:'#0f2942', borderRadius:6, overflow:'hidden' }}>
+          {([['licitacoes','📋 Processos'],['pipeline','📊 Pipeline CRM']] as const).map(([aba, label]) => (
+            <button key={aba} onClick={() => setAbaPrincipal(aba)}
+              style={{ background: abaPrincipal===aba ? '#2563eb' : 'transparent',
+                color: abaPrincipal===aba ? '#fff' : '#94a3b8',
+                border:'none', padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {abaPrincipal === 'licitacoes' && isAnalista && (
           <button onClick={() => setModalNova(true)}
             style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
             + Nova Licitação
@@ -1636,6 +1811,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
         )}
       </div>
 
+      {abaPrincipal === 'pipeline' && <PipelineCrmLicitacoes currentUser={currentUser} />}
+
+      {abaPrincipal === 'licitacoes' && <>
       {/* STATUS CHIPS + BOTÃO RELATÓRIO */}
       <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', flexShrink:0 }}>
         {/* Botão Relatório — destaque laranja */}
@@ -1720,6 +1898,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           )}
         </div>
       )}
+
+      </>}
 
       {/* MODAIS */}
       {modalNova && (
