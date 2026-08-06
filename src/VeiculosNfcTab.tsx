@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -34,6 +34,305 @@ function GarantiaBadge({ dataFim }) {
     }}>
       {ativa ? '✅ Ativa' : '⚠️ Expirada'}
     </span>
+  );
+}
+
+// ─── Autocomplete de OP/OS ───────────────────────────────────────────────────
+
+const STATUS_COR = {
+  'Faturado':           { bg:'#dcfce7', color:'#16a34a' },
+  'Aguarda Emissao NF': { bg:'#fef9c3', color:'#92400e' },
+  'Em Producao':        { bg:'#dbeafe', color:'#1e40af' },
+  'Finalizado':         { bg:'#dcfce7', color:'#16a34a' },
+};
+
+function OplAutocomplete({ oplNumero, oplId, onChange }) {
+  // onChange(numero, id) — preenche ambos os campos
+  const [busca,     setBusca]     = useState(oplNumero || '');
+  const [resultados,setResultados]= useState([]);
+  const [aberto,    setAberto]    = useState(false);
+  const [buscando,  setBuscando]  = useState(false);
+  const timerRef = useRef(null);
+  const wrapRef  = useRef(null);
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setAberto(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const pesquisar = (texto) => {
+    setBusca(texto);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!texto || texto.length < 2) { setResultados([]); setAberto(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true);
+      const { data } = await supabase.from('oples')
+        .select('id, opl, cliente_nome, status_geral')
+        .not('status_geral', 'eq', 'Cancelado')
+        .or(`opl.ilike.%${texto}%,cliente_nome.ilike.%${texto}%`)
+        .order('opl', { ascending: false })
+        .limit(10);
+      setResultados(data || []);
+      setAberto(true);
+      setBuscando(false);
+    }, 300);
+  };
+
+  const selecionar = (item) => {
+    setBusca(item.opl);
+    setAberto(false);
+    onChange(item.opl, item.id);
+  };
+
+  const limpar = () => {
+    setBusca('');
+    setResultados([]);
+    setAberto(false);
+    onChange('', '');
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position:'relative', marginBottom:10 }}>
+      <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>
+        Vincular OP / OS (busca por número ou cliente)
+      </label>
+      <div style={{ position:'relative' }}>
+        <input
+          value={busca}
+          onChange={e => pesquisar(e.target.value)}
+          onFocus={() => busca.length >= 2 && resultados.length > 0 && setAberto(true)}
+          placeholder="Ex: OPL-2024-0042 ou Polícia Civil..."
+          style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
+            padding:'6px 28px 6px 8px', fontSize:10, boxSizing:'border-box', outline:'none' }} />
+        {busca && (
+          <button onClick={limpar}
+            style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)',
+              background:'none', border:'none', color:'#9ca3af', cursor:'pointer', fontSize:14, lineHeight:1 }}>
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Seleção atual */}
+      {oplId && oplNumero && (
+        <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginTop:3 }}>
+          ✅ Vinculado: {oplNumero} (ID: {oplId.slice(0,8)}...)
+        </div>
+      )}
+
+      {/* Dropdown */}
+      {aberto && (
+        <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:999,
+          background:'#fff', border:'1px solid #e2e8f0', borderRadius:6,
+          boxShadow:'0 4px 16px #0002', maxHeight:240, overflowY:'auto' }}>
+          {buscando ? (
+            <div style={{ padding:'10px 12px', fontSize:10, color:'#9ca3af' }}>Buscando...</div>
+          ) : resultados.length === 0 ? (
+            <div style={{ padding:'10px 12px', fontSize:10, color:'#9ca3af' }}>Nenhuma OP encontrada.</div>
+          ) : resultados.map(r => {
+            const cor = STATUS_COR[r.status_geral] || { bg:'#f1f5f9', color:'#475569' };
+            return (
+              <div key={r.id} onClick={() => selecionar(r)}
+                style={{ padding:'8px 12px', cursor:'pointer', borderBottom:'1px solid #f1f5f9',
+                  display:'flex', justifyContent:'space-between', alignItems:'center' }}
+                onMouseEnter={e => e.currentTarget.style.background='#f0fdf4'}
+                onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:10, color:'#1e293b' }}>{r.opl}</div>
+                  <div style={{ fontSize:9, color:'#64748b' }}>{r.cliente_nome}</div>
+                </div>
+                <span style={{ background:cor.bg, color:cor.color,
+                  borderRadius:8, padding:'2px 7px', fontSize:8, fontWeight:700, flexShrink:0, marginLeft:8 }}>
+                  {r.status_geral}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Modal: Gravar Tag NFC ────────────────────────────────────────────────────
+
+function ModalGravarTag({ url, chassi, onClose }) {
+  const [gravando,  setGravando]  = useState(false);
+  const [resultado, setResultado] = useState(null); // null | 'ok' | 'erro' | 'unsupported'
+  const [erroMsg,   setErroMsg]   = useState('');
+  const [copiado,   setCopiado]   = useState(false);
+
+  const copiarUrl = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    });
+  };
+
+  const gravarViaNfc = async () => {
+    if (!('NDEFReader' in window)) {
+      setResultado('unsupported');
+      return;
+    }
+    try {
+      setGravando(true);
+      setResultado(null);
+      const ndef = new (window as any).NDEFReader();
+      await ndef.write({ records: [{ recordType: 'url', data: url }] });
+      setResultado('ok');
+    } catch (err) {
+      setErroMsg(err?.message || 'Erro desconhecido');
+      setResultado('erro');
+    } finally {
+      setGravando(false);
+    }
+  };
+
+  const passos = [
+    { n:1, txt: 'Abra o app NFC Tools no celular' },
+    { n:2, txt: 'Toque em "Escrever" (Write)' },
+    { n:3, txt: 'Toque em "Adicionar um registro"' },
+    { n:4, txt: 'Selecione "URL / URI"' },
+    { n:5, txt: 'Cole a URL abaixo no campo' },
+    { n:6, txt: 'Toque em "Escrever / Write"' },
+    { n:7, txt: 'Aproxime a etiqueta NFC da parte traseira do celular' },
+  ];
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#0009', zIndex:3000,
+      display:'flex', alignItems:'center', justifyContent:'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background:'#fff', borderRadius:10, width:500, maxWidth:'97vw',
+        maxHeight:'92vh', overflowY:'auto', boxShadow:'0 8px 32px #0004' }}>
+
+        {/* Header */}
+        <div style={{ background:'linear-gradient(135deg,#14532d 0%,#16a34a 100%)',
+          padding:'14px 16px', borderRadius:'10px 10px 0 0',
+          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ color:'#86efac', fontSize:9, fontWeight:700 }}>MÓDULO NFC</div>
+            <div style={{ color:'#fff', fontWeight:800, fontSize:14 }}>🏷️ Gravar Tag NFC</div>
+            <div style={{ color:'#bbf7d0', fontSize:9, marginTop:2 }}>Chassi: {chassi}</div>
+          </div>
+          <button onClick={onClose}
+            style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ padding:16 }}>
+
+          {/* URL + QR */}
+          <div style={{ background:'#f0fdf4', border:'2px solid #86efac', borderRadius:8,
+            padding:'12px 14px', marginBottom:14, display:'flex', gap:12, alignItems:'center' }}>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(url)}`}
+              alt="QR Code" width={100} height={100}
+              style={{ borderRadius:6, border:'3px solid #16a34a', flexShrink:0 }} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:8, fontWeight:700, color:'#16a34a', marginBottom:4 }}>
+                URL A GRAVAR NA ETIQUETA
+              </div>
+              <div style={{ fontSize:9, color:'#1e293b', wordBreak:'break-all',
+                background:'#fff', border:'1px solid #bbf7d0', borderRadius:4, padding:'6px 8px',
+                marginBottom:8, fontFamily:'monospace' }}>
+                {url}
+              </div>
+              <button onClick={copiarUrl}
+                style={{ background: copiado ? '#16a34a' : '#0369a1', color:'#fff',
+                  border:'none', borderRadius:5, padding:'6px 14px', fontSize:9,
+                  fontWeight:700, cursor:'pointer', transition:'background .2s' }}>
+                {copiado ? '✅ Copiado!' : '📋 Copiar URL'}
+              </button>
+            </div>
+          </div>
+
+          {/* Botão Web NFC API */}
+          <div style={{ background:'#1e293b', borderRadius:8, padding:'12px 14px', marginBottom:14 }}>
+            <div style={{ color:'#94a3b8', fontSize:9, fontWeight:700, marginBottom:6 }}>
+              OPÇÃO 1 — GRAVAR DIRETAMENTE (Chrome Android)
+            </div>
+            <button onClick={gravarViaNfc} disabled={gravando}
+              style={{ width:'100%', background: gravando ? '#475569' : '#16a34a',
+                color:'#fff', border:'none', borderRadius:6, padding:'12px',
+                fontSize:12, fontWeight:800, cursor: gravando ? 'not-allowed' : 'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              {gravando
+                ? <><span style={{ fontSize:18 }}>📡</span> Aproxime a tag NFC agora...</>
+                : <><span style={{ fontSize:18 }}>🏷️</span> Gravar Tag Agora</>}
+            </button>
+            <div style={{ fontSize:8, color:'#64748b', marginTop:6, textAlign:'center' }}>
+              Requer Chrome 89+ no Android · HTTPS · Permissão NFC ativada nas configurações
+            </div>
+
+            {resultado === 'ok' && (
+              <div style={{ background:'#dcfce7', border:'1px solid #86efac', borderRadius:6,
+                padding:'8px 12px', marginTop:8, color:'#16a34a', fontWeight:700, fontSize:10 }}>
+                ✅ Tag gravada com sucesso! Teste a leitura com o celular.
+              </div>
+            )}
+            {resultado === 'erro' && (
+              <div style={{ background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:6,
+                padding:'8px 12px', marginTop:8, color:'#dc2626', fontSize:10 }}>
+                ❌ {erroMsg || 'Erro ao gravar. Verifique se o NFC está ativado e tente novamente.'}
+              </div>
+            )}
+            {resultado === 'unsupported' && (
+              <div style={{ background:'#fef9c3', border:'1px solid #fde68a', borderRadius:6,
+                padding:'8px 12px', marginTop:8, color:'#92400e', fontSize:10 }}>
+                ⚠️ Web NFC não disponível neste navegador. Use o método via NFC Tools abaixo.
+              </div>
+            )}
+          </div>
+
+          {/* Instruções NFC Tools */}
+          <div style={{ border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
+            <div style={{ background:'#f8fafc', padding:'10px 14px', borderBottom:'1px solid #e2e8f0',
+              fontWeight:700, fontSize:11, color:'#1e293b' }}>
+              OPÇÃO 2 — Via App NFC Tools (iOS ou Android)
+              <span style={{ marginLeft:8, fontSize:9, color:'#64748b', fontWeight:400 }}>
+                Download gratuito na App Store / Play Store
+              </span>
+            </div>
+            <div style={{ padding:'12px 14px' }}>
+              {passos.map((p, i) => (
+                <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start',
+                  marginBottom: i < passos.length - 1 ? 10 : 0 }}>
+                  <div style={{ width:20, height:20, background:'#16a34a', borderRadius:'50%',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    color:'#fff', fontSize:9, fontWeight:800, flexShrink:0, marginTop:1 }}>
+                    {p.n}
+                  </div>
+                  <div style={{ fontSize:10, color:'#374151', lineHeight:1.4 }}>
+                    {p.n === 5
+                      ? <><span>{p.txt}:</span><br/>
+                          <span style={{ fontFamily:'monospace', fontSize:8, color:'#0369a1',
+                            wordBreak:'break-all', background:'#eff6ff', padding:'2px 6px',
+                            borderRadius:3, display:'inline-block', marginTop:2 }}>
+                            {url}
+                          </span></>
+                      : p.txt}
+                  </div>
+                </div>
+              ))}
+              <div style={{ marginTop:12, background:'#fef9c3', border:'1px solid #fde68a',
+                borderRadius:5, padding:'6px 10px', fontSize:9, color:'#78350f' }}>
+                💡 Dica: Use etiquetas NFC tipo NTAG213 ou NTAG215 — comuns e baratas.
+                Capacidade mínima recomendada: 144 bytes (suficiente para a URL).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding:'0 16px 16px', textAlign:'right' }}>
+          <button onClick={onClose}
+            style={{ background:'#f1f5f9', border:'none', borderRadius:5,
+              padding:'8px 20px', fontSize:10, fontWeight:600, color:'#475569', cursor:'pointer' }}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -125,10 +424,11 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
           </div>
           {campo('Modelo / Descrição', 'modelo', 'text', { placeholder:'Ex: Viatura Policial — Ford Ranger 2024' })}
           {campo('Órgão / Cliente', 'orgao_cliente', 'text', { placeholder:'Ex: Polícia Civil SC' })}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
-            <div>{campo('OPL Número (texto)', 'opl_numero', 'text', { placeholder:'Ex: OPL-2024-0042' })}</div>
-            <div>{campo('OPL ID (UUID — opcional)', 'opl_id', 'text', { placeholder:'Colar UUID da OP vinculada' })}</div>
-          </div>
+          <OplAutocomplete
+            oplNumero={form.opl_numero}
+            oplId={form.opl_id}
+            onChange={(numero, id) => setForm(f => ({ ...f, opl_numero: numero, opl_id: id }))}
+          />
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
             <div>{campo('Data de Entrega', 'data_entrega', 'date')}</div>
             <div>{campo('Fim da Garantia', 'data_fim_garantia', 'date')}</div>
@@ -174,6 +474,7 @@ function PainelDetalhe({ veiculo, baseUrl, onEditar, onClose, carregarVeiculos }
   const [novoServ, setNovoServ] = useState({ item_servico:'', descricao_tecnica:'', categoria:'' });
   const [addingServ, setAddingServ] = useState(false);
   const [salvServ,  setSalvServ]  = useState(false);
+  const [modalTag, setModalTag] = useState(false);
 
   const urlPublica = `${baseUrl}?chassi=${encodeURIComponent(veiculo.chassi)}`;
 
@@ -220,6 +521,7 @@ function PainelDetalhe({ veiculo, baseUrl, onEditar, onClose, carregarVeiculos }
   const garantiaAtiva = calcGarantia(veiculo.data_fim_garantia);
 
   return (
+    <>
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1900,
       display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -300,6 +602,11 @@ function PainelDetalhe({ veiculo, baseUrl, onEditar, onClose, carregarVeiculos }
                     padding:'5px 10px', fontSize:9, fontWeight:700, textDecoration:'none' }}>
                   🔍 Abrir Página
                 </a>
+                <button onClick={() => setModalTag(true)}
+                  style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4,
+                    padding:'5px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+                  🏷️ Gravar Tag NFC
+                </button>
                 {veiculo.manual_pdf_url && (
                   <a href={veiculo.manual_pdf_url} target="_blank" rel="noreferrer"
                     style={{ background:'#dc2626', color:'#fff', border:'none', borderRadius:4,
@@ -431,6 +738,16 @@ function PainelDetalhe({ veiculo, baseUrl, onEditar, onClose, carregarVeiculos }
         </div>
       </div>
     </div>
+
+    {/* Modal Gravar Tag NFC */}
+    {modalTag && (
+      <ModalGravarTag
+        url={urlPublica}
+        chassi={veiculo.chassi}
+        onClose={() => setModalTag(false)}
+      />
+    )}
+    </>
   );
 }
 
