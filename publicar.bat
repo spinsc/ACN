@@ -233,6 +233,24 @@ git add src/DashboardTab.tsx
 git add sql/cotacoes_vendedor.sql
 git commit -m "feat: Cotações para Vendedores — aba cotacoes + config admin + aba no card CRM + aprovacoes"
 
+:: fix: CotacoesTab — slider desconto limitado ao maxDesc + remover custo/markup do modal proposta
+git add src/CotacoesTab.tsx
+git commit -m "fix: CotacoesTab — slider desconto limitado ao maxDesc configurado + ocultar custo/markup da modal de proposta"
+
+:: feat: CotacoesTab — tabs Todas/Avulsas + visibilidade respeita config para todos os perfis
+git add src/CotacoesTab.tsx
+git add src/CrmTab.tsx
+git commit -m "feat: CotacoesTab — aba Avulsas (sem vinculo CRM) + visibilidade config-driven para todos os perfis"
+
+:: feat: Modulo NFC — Dossie Veicular Digital
+git add src/VeiculosNfcTab.tsx
+git add src/SacTab.tsx
+git add src/AdminTab.tsx
+git add src/DashboardTab.tsx
+git add public/veiculo.html
+git add sql/veiculos_nfc.sql
+git commit -m "feat: Modulo NFC Dossie Veicular — pagina publica standalone + gestao interna + chamados SAC + config admin"
+
 :: Push
 echo.
 echo Enviando para GitHub...
