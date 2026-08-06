@@ -16,6 +16,7 @@ import MarketingTab from './MarketingTab';
 import SetorDemandaTab from './SetorDemandaTab';
 import ComprasTab from './ComprasTab';
 import CadastroItensTab from './CadastroItensTab';
+import CadastroProdutosTab from './CadastroProdutosTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
@@ -90,8 +91,9 @@ const SIDEBAR_GROUPS = [
       { id: 'vistorias',  label: 'Vistorias de Pátio' },
       { id: 'ajustes',    label: 'Demandas Gerais' },
       { id: 'compras',         label: 'Compras' },
-      { id: 'cadastro_itens', label: 'Cadastro de Itens' },
-      { id: 'rh',             label: 'RH' },
+      { id: 'cadastro_itens',    label: 'Cadastro de Itens' },
+      { id: 'cadastro_produtos', label: 'Cadastro de Produtos' },
+      { id: 'rh',                label: 'RH' },
       { id: 'fiscal',     label: 'Fiscal' },
       { id: 'relatorios',      label: 'Relatórios' },
       { id: 'formacao_precos', label: 'Formação de Preços' },
@@ -803,7 +805,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" />;
       case 'laboratorio':  return <SetorDemandaTab currentUser={currentUser} setor="Laboratorio" cor="#0891b2" />;
       case 'compras':         return <><SetorDemandaTab currentUser={currentUser} setor="Compras" cor="#16a34a" /><ComprasTab currentUser={currentUser} /></>;
-      case 'cadastro_itens':  return <CadastroItensTab currentUser={currentUser} />;
+      case 'cadastro_itens':    return <CadastroItensTab currentUser={currentUser} />;
+      case 'cadastro_produtos': return <CadastroProdutosTab currentUser={currentUser} />;
       case 'almoxarifado': return <AlmoxarifadoTab currentUser={currentUser} />;
       case 'producao':     return <ProducaoTab currentUser={currentUser} />;
       case 'qualidade':    return <QualidadeTab currentUser={currentUser} />;

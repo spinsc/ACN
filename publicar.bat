@@ -199,12 +199,15 @@ git add src/AvisoSistemaWidget.tsx
 
 :: IMPORTANTE: rodar acn_fix_crm_rls.sql e acn_fix_crm_campos_4144.sql no Supabase SQL Editor!
 
-:: feat: Cadastro de Itens — catálogo base para formação de preços e compras
+:: feat: Cadastro de Itens + Cadastro de Produtos (BOM) + migração de cotacoes
 git add src/CadastroItensTab.tsx
+git add src/CadastroProdutosTab.tsx
 git add src/DashboardTab.tsx
 git add sql/cadastro_itens.sql
+git add sql/cadastro_produtos.sql
+git add sql/migrar_itens_cotacoes.sql
 
-git commit -m "feat: Cadastro de Itens — catalogo base com CRUD, impostos, markup e integracao com cotacoes"
+git commit -m "feat: Cadastro de Itens e Produtos com BOM — catalogo base + migracao de cotacoes"
 
 :: Push
 echo.
@@ -618,6 +621,14 @@ echo   ('NEO', 0, 0), ('QFrotas', 0, 0), ('Prime', 0, 0)
 echo ON CONFLICT DO NOTHING;
 echo.
 echo ==============================================
+echo  [NOVO] CADASTRO DE PRODUTOS (BOM) - RODAR NO SUPABASE (arquivo: sql/cadastro_produtos.sql):
+echo  CREATE TABLE cadastro_produtos (...) + CREATE TABLE cadastro_produtos_itens (...) + trigger
+echo  (rodar DEPOIS do cadastro_itens.sql)
+echo.
+echo  [MIGRACAO] ITENS DAS COTACOES → CATALOGO - RODAR NO SUPABASE (arquivo: sql/migrar_itens_cotacoes.sql):
+echo  Extrai itens únicos de cotacoes_precos.itens e insere em cadastro_itens
+echo  (rodar DEPOIS do cadastro_itens.sql)
+echo.
 echo  [NOVO] CADASTRO DE ITENS - RODAR NO SUPABASE (arquivo: sql/cadastro_itens.sql):
 echo  CREATE TABLE IF NOT EXISTS cadastro_itens (
 echo    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
