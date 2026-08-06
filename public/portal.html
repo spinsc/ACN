@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal do Cliente — ACN Sinal Verde</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0fdf4;
+      color: #1e293b;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: linear-gradient(135deg, #14532d 0%, #16a34a 100%);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 8px #0003;
+    }
+    #logo-img { width: 48px; height: 48px; border-radius: 8px; object-fit: contain; background: #fff; padding: 4px; }
+    #logo-txt { color: #fff; font-size: 18px; font-weight: 800; }
+    #logo-sub { color: #bbf7d0; font-size: 11px; margin-top: 2px; }
+
+    /* ── Container ── */
+    .container { max-width: 520px; margin: 0 auto; padding: 20px 16px 40px; }
+
+    /* ── Loading / Error ── */
+    #loading, #error {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    #loading { color: #16a34a; font-size: 15px; font-weight: 600; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #bbf7d0;
+      border-top-color: #16a34a;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #error { color: #dc2626; }
+    #error h2 { font-size: 20px; margin-bottom: 8px; }
+    #error p { font-size: 14px; color: #64748b; }
+
+    /* ── Card veículo ── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px #0001;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .card-header {
+      background: #14532d;
+      padding: 14px 16px;
+      color: #fff;
+    }
+    .card-header .label { font-size: 9px; font-weight: 700; color: #86efac; text-transform: uppercase; letter-spacing: .6px; }
+    .card-header .titulo { font-size: 16px; font-weight: 800; margin-top: 2px; }
+    .card-header .sub { font-size: 11px; color: #bbf7d0; margin-top: 2px; }
+    .card-body { padding: 14px 16px; }
+
+    /* ── Garantia badge ── */
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .badge-ok  { background: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
+    .badge-exp { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+    .badge-nd  { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+    /* ── Grid info ── */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .info-item label { display: block; font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 2px; }
+    .info-item span  { font-size: 12px; color: #1e293b; font-weight: 600; }
+
+    /* ── Botões de ação ── */
+    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .btn-acao {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 14px 8px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn-acao:active { transform: scale(.97); opacity: .85; }
+    .btn-acao .icon { font-size: 22px; }
+    .btn-verde  { background: #dcfce7; color: #16a34a; }
+    .btn-roxo   { background: #ede9fe; color: #7c3aed; }
+    .btn-azul   { background: #dbeafe; color: #1e40af; }
+    .btn-cinza  { background: #f1f5f9; color: #475569; }
+
+    /* ── Seção chamados ── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #1e293b;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chamado-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+    .chamado-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+    .chamado-data { font-size: 9px; color: #94a3b8; }
+    .chamado-desc { font-size: 11px; color: #475569; }
+    .chamado-nota { font-size: 10px; color: #16a34a; margin-top: 4px; font-style: italic; }
+
+    .status-badge {
+      border-radius: 10px;
+      padding: 2px 8px;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .s-aberto   { background: #fee2e2; color: #dc2626; }
+    .s-em       { background: #fef9c3; color: #92400e; }
+    .s-concluido{ background: #dcfce7; color: #16a34a; }
+    .s-cancelado{ background: #f1f5f9; color: #64748b; }
+
+    .vazio { text-align: center; padding: 20px; color: #94a3b8; font-size: 12px; }
+
+    /* ── Modal chamado ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0009;
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 460px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px #0004;
+    }
+    .modal-header {
+      background: #7c3aed;
+      padding: 14px 16px;
+      border-radius: 12px 12px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header .titulo { color: #fff; font-weight: 800; font-size: 14px; }
+    .modal-header .sub    { color: #ede9fe; font-size: 10px; margin-top: 2px; }
+    .btn-fechar {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .modal-body { padding: 16px; }
+
+    .campo { margin-bottom: 12px; }
+    .campo label { display: block; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 4px; }
+    .campo input, .campo textarea, .campo select {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      outline: none;
+      font-family: inherit;
+    }
+    .campo input:focus, .campo textarea:focus { border-color: #7c3aed; }
+    .campo textarea { resize: vertical; min-height: 80px; }
+
+    .btn-enviar {
+      width: 100%;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-enviar:disabled { background: #a78bfa; cursor: not-allowed; }
+
+    .msg-ok  { background: #dcfce7; border: 1px solid #86efac; border-radius: 6px; padding: 10px 12px; color: #16a34a; font-size: 12px; font-weight: 700; margin-top: 10px; }
+    .msg-err { background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 12px; color: #dc2626; font-size: 12px; margin-top: 10px; }
+
+    /* ── Footer ── */
+    footer { text-align: center; color: #94a3b8; font-size: 10px; padding: 20px 0 10px; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <img id="logo-img" src="" alt="Logo" style="display:none" />
+  <div>
+    <div id="logo-txt">ACN Sinal Verde</div>
+    <div id="logo-sub">Portal do Cliente</div>
+  </div>
+</div>
+
+<!-- Conteúdo principal -->
+<div class="container">
+  <div id="loading">
+    <div class="spinner"></div>
+    Carregando informações do veículo...
+  </div>
+
+  <div id="error" style="display:none">
+    <h2>🔒 Link inválido</h2>
+    <p>Este link não corresponde a nenhum veículo cadastrado ou pode ter expirado.<br>
+    Entre em contato com a empresa para obter um novo link de acesso.</p>
+  </div>
+
+  <div id="conteudo" style="display:none">
+
+    <!-- Card do Veículo -->
+    <div class="card">
+      <div class="card-header">
+        <div class="label">Veículo</div>
+        <div class="titulo" id="v-modelo">—</div>
+        <div class="sub" id="v-orgao">—</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span id="badge-garantia" class="badge badge-nd">Sem data de garantia</span>
+          <span id="v-placa" style="font-size:11px;color:#475569;"></span>
+        </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <label>Chassi</label>
+            <span id="v-chassi">—</span>
+          </div>
+          <div class="info-item">
+            <label>Data de Entrega</label>
+            <span id="v-entrega">—</span>
+          </div>
+          <div class="info-item">
+            <label>Fim da Garantia</label>
+            <span id="v-garantia">—</span>
+          </div>
+          <div class="info-item">
+            <label>OP / Referência</label>
+            <span id="v-opl">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botões de ação -->
+    <div class="btn-grid" style="margin-bottom:20px;">
+      <button class="btn-acao btn-roxo" onclick="abrirModal()">
+        <span class="icon">📋</span>
+        Abrir Chamado
+      </button>
+      <a id="btn-manual" class="btn-acao btn-azul" href="#" target="_blank" style="display:none;">
+        <span class="icon">📄</span>
+        Manual do Veículo
+      </a>
+      <a id="btn-whats" class="btn-acao btn-verde" href="#" target="_blank">
+        <span class="icon">💬</span>
+        WhatsApp SAC
+      </a>
+      <a id="btn-maps" class="btn-acao btn-cinza" href="#" target="_blank">
+        <span class="icon">📍</span>
+        Nossa Localização
+      </a>
+    </div>
+
+    <!-- Chamados -->
+    <div class="card">
+      <div class="card-body">
+        <div class="section-title">📞 Seus Chamados</div>
+        <div id="lista-chamados">
+          <div class="vazio">Nenhum chamado registrado ainda.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /conteudo -->
+</div><!-- /container -->
+
+<!-- Modal Abrir Chamado -->
+<div class="modal-overlay" id="modal-overlay" onclick="fecharModalFora(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="titulo">📋 Abrir Chamado de Suporte</div>
+        <div class="sub" id="modal-veiculo-sub">—</div>
+      </div>
+      <button class="btn-fechar" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="campo">
+        <label>Seu nome *</label>
+        <input id="f-nome" type="text" placeholder="Nome do solicitante" />
+      </div>
+      <div class="campo">
+        <label>Telefone / WhatsApp *</label>
+        <input id="f-tel" type="tel" placeholder="(48) 99999-9999" />
+      </div>
+      <div class="campo">
+        <label>Descreva o problema / solicitação *</label>
+        <textarea id="f-desc" placeholder="Descreva com detalhes o defeito ou solicitação de manutenção..."></textarea>
+      </div>
+      <button class="btn-enviar" id="btn-enviar" onclick="enviarChamado()">Enviar Solicitação</button>
+      <div id="msg-form"></div>
+    </div>
+  </div>
+</div>
+
+<footer>ACN Sinal Verde · Portal do Cliente · Powered by ACN</footer>
+
+<script>
+  const SUPA_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
+  const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
+
+  const HDR = {
+    'apikey': SUPA_KEY,
+    'Authorization': 'Bearer ' + SUPA_KEY,
+    'Content-Type': 'application/json'
+  };
+
+  async function supa(path) {
+    const r = await fetch(SUPA_URL + '/rest/v1/' + path, { headers: HDR });
+    return r.json();
+  }
+
+  async function supaPost(path, body) {
+    const r = await fetch(SUPA_URL + '/rest/v1/' + path, {
+      method: 'POST',
+      headers: { ...HDR, 'Prefer': 'return=minimal' },
+      body: JSON.stringify(body)
+    });
+    return r;
+  }
+
+  // ── Estado global ─────────────────────────────────────────
+  let VEICULO  = null;
+  let CONFIG   = {};
+
+  // ── Helpers ───────────────────────────────────────────────
+  function fmtData(d) {
+    if (!d) return '—';
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  }
+
+  function calcGarantia(dataFim) {
+    if (!dataFim) return null;
+    return new Date(dataFim + 'T23:59:59') >= new Date();
+  }
+
+  function setGarantiaBadge(dataFim) {
+    const el = document.getElementById('badge-garantia');
+    const ok = calcGarantia(dataFim);
+    if (ok === null) {
+      el.className = 'badge badge-nd';
+      el.textContent = 'Sem data de garantia';
+    } else if (ok) {
+      el.className = 'badge badge-ok';
+      el.textContent = '✅ Garantia Ativa';
+    } else {
+      el.className = 'badge badge-exp';
+      el.textContent = '⚠️ Garantia Expirada';
+    }
+  }
+
+  function statusClass(s) {
+    if (s === 'Aberto')        return 's-aberto';
+    if (s === 'Em Atendimento') return 's-em';
+    if (s === 'Concluído')      return 's-concluido';
+    return 's-cancelado';
+  }
+
+  // ── Carregar dados ────────────────────────────────────────
+  async function carregar() {
+    const params = new URLSearchParams(location.search);
+    const token  = params.get('token');
+
+    if (!token) { mostrarErro(); return; }
+
+    // Config
+    const cfgRaw = await supa('configuracoes_sistema?select=chave,valor&chave=in.(nfc_nome_empresa,nfc_logo_url,nfc_whatsapp_numero,nfc_endereco_maps)');
+    (cfgRaw || []).forEach(c => CONFIG[c.chave] = c.valor);
+
+    // Atualizar header com nome/logo da empresa
+    if (CONFIG['nfc_nome_empresa']) {
+      document.getElementById('logo-txt').textContent = CONFIG['nfc_nome_empresa'];
+      document.title = 'Portal do Cliente — ' + CONFIG['nfc_nome_empresa'];
+    }
+    if (CONFIG['nfc_logo_url']) {
+      const img = document.getElementById('logo-img');
+      img.src = CONFIG['nfc_logo_url'];
+      img.style.display = '';
+    }
+
+    // Veículo por token
+    const veiculos = await supa(`veiculos_nfc?portal_token=eq.${encodeURIComponent(token)}&ativo=eq.true&limit=1`);
+    if (!veiculos || veiculos.length === 0) { mostrarErro(); return; }
+    VEICULO = veiculos[0];
+
+    // Preencher UI
+    document.getElementById('v-modelo').textContent  = VEICULO.modelo    || 'Veículo sem descrição';
+    document.getElementById('v-orgao').textContent   = VEICULO.orgao_cliente || '—';
+    document.getElementById('v-chassi').textContent  = VEICULO.chassi    || '—';
+    document.getElementById('v-entrega').textContent = fmtData(VEICULO.data_entrega);
+    document.getElementById('v-garantia').textContent= fmtData(VEICULO.data_fim_garantia);
+    document.getElementById('v-opl').textContent     = VEICULO.opl_numero || '—';
+
+    if (VEICULO.placa) {
+      document.getElementById('v-placa').textContent = '🚗 ' + VEICULO.placa;
+    }
+
+    setGarantiaBadge(VEICULO.data_fim_garantia);
+
+    // Manual PDF
+    if (VEICULO.manual_pdf_url) {
+      const btnManual = document.getElementById('btn-manual');
+      btnManual.href = VEICULO.manual_pdf_url;
+      btnManual.style.display = '';
+    }
+
+    // WhatsApp
+    const whats = CONFIG['nfc_whatsapp_numero'] || '5548999999999';
+    const waMsg = encodeURIComponent(
+      `Olá! Sou do ${VEICULO.orgao_cliente || 'órgão cliente'} e preciso de suporte para o veículo:\n` +
+      `Modelo: ${VEICULO.modelo || '—'}\nChassi: ${VEICULO.chassi}\n\nDescrição do problema:`
+    );
+    document.getElementById('btn-whats').href = `https://wa.me/${whats}?text=${waMsg}`;
+
+    // Maps
+    const maps = CONFIG['nfc_endereco_maps'] || 'ACN+Sinal+Verde';
+    document.getElementById('btn-maps').href = `https://www.google.com/maps/search/?api=1&query=${maps}`;
+
+    // Subtítulo modal
+    document.getElementById('modal-veiculo-sub').textContent =
+      (VEICULO.modelo || 'Veículo') + ' · Chassi: ' + VEICULO.chassi;
+
+    // Chamados
+    await carregarChamados();
+
+    // Mostrar conteúdo
+    document.getElementById('loading').style.display  = 'none';
+    document.getElementById('conteudo').style.display = '';
+  }
+
+  async function carregarChamados() {
+    const dados = await supa(
+      `chamados_suporte?veiculo_id=eq.${VEICULO.id}&order=created_at.desc&limit=20`
+    );
+    const lista = document.getElementById('lista-chamados');
+
+    if (!dados || dados.length === 0) {
+      lista.innerHTML = '<div class="vazio">Nenhum chamado registrado ainda.<br>Use o botão acima para abrir uma solicitação.</div>';
+      return;
+    }
+
+    lista.innerHTML = dados.map(c => {
+      const data = new Date(c.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      return `
+        <div class="chamado-card">
+          <div class="chamado-top">
+            <div>
+              <div style="font-size:11px;font-weight:700;color:#1e293b;">${esc(c.nome_solicitante || 'Solicitante não informado')}</div>
+              <div class="chamado-data">${data}</div>
+            </div>
+            <span class="status-badge ${statusClass(c.status)}">${esc(c.status)}</span>
+          </div>
+          <div class="chamado-desc">${esc(c.descricao_defeito || '—')}</div>
+          ${c.notas_atendimento ? `<div class="chamado-nota">💬 ${esc(c.notas_atendimento)}</div>` : ''}
+          ${c.atendido_por ? `<div style="font-size:9px;color:#94a3b8;margin-top:4px;">Atendido por: ${esc(c.atendido_por)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function mostrarErro() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display   = '';
+  }
+
+  // ── Modal ─────────────────────────────────────────────────
+  function abrirModal() {
+    document.getElementById('modal-overlay').classList.add('open');
+    document.getElementById('msg-form').innerHTML = '';
+    document.getElementById('f-nome').value = '';
+    document.getElementById('f-tel').value  = '';
+    document.getElementById('f-desc').value = '';
+  }
+
+  function fecharModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+
+  function fecharModalFora(e) {
+    if (e.target === document.getElementById('modal-overlay')) fecharModal();
+  }
+
+  async function enviarChamado() {
+    const nome = document.getElementById('f-nome').value.trim();
+    const tel  = document.getElementById('f-tel').value.trim();
+    const desc = document.getElementById('f-desc').value.trim();
+    const msg  = document.getElementById('msg-form');
+
+    if (!nome || !tel || !desc) {
+      msg.innerHTML = '<div class="msg-err">⚠️ Preencha todos os campos obrigatórios.</div>';
+      return;
+    }
+
+    const btn = document.getElementById('btn-enviar');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+    msg.innerHTML = '';
+
+    const payload = {
+      veiculo_id:       VEICULO.id,
+      chassi:           VEICULO.chassi,
+      placa:            VEICULO.placa         || null,
+      modelo:           VEICULO.modelo        || null,
+      orgao_cliente:    VEICULO.orgao_cliente  || null,
+      nome_solicitante: nome,
+      contato_telefone: tel,
+      descricao_defeito: desc,
+      status: 'Aberto'
+    };
+
+    const r = await supaPost('chamados_suporte', payload);
+
+    if (r.ok || r.status === 201) {
+      msg.innerHTML = '<div class="msg-ok">✅ Chamado enviado! Nossa equipe entrará em contato em breve.</div>';
+      btn.textContent = 'Enviado ✅';
+      // Atualizar lista de chamados após 1.5s e fechar modal após 3s
+      setTimeout(() => carregarChamados(), 1500);
+      setTimeout(() => { fecharModal(); btn.disabled = false; btn.textContent = 'Enviar Solicitação'; }, 3000);
+    } else {
+      const errBody = await r.text().catch(() => '');
+      msg.innerHTML = `<div class="msg-err">❌ Erro ao enviar. Tente novamente ou entre em contato pelo WhatsApp.</div>`;
+      btn.disabled = false;
+      btn.textContent = 'Enviar Solicitação';
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────
+  carregar();
+</script>
+</body>
+</html>
