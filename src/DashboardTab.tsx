@@ -28,6 +28,7 @@ import AnaliseInboxPanel from './AnaliseInboxPanel';
 import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
 import ContatoAlertWidget from './ContatoAlertWidget';
+import { OplDetalheModal } from './AcnTabShared';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -546,6 +547,15 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [activeTab, setActiveTab]       = useState('dashboard');
   const [pendingOpenLicitId, setPendingOpenLicitId] = useState<string|null>(null);
   const [pendingOpenCrmId, setPendingOpenCrmId]     = useState<string|null>(null);
+
+  // ── Busca Global ──────────────────────────────────────────────────────────
+  const [globalBusca, setGlobalBusca]           = useState('');
+  const [globalResultados, setGlobalResultados] = useState<any[]>([]);
+  const [globalBuscando, setGlobalBuscando]     = useState(false);
+  const [showGlobalRes, setShowGlobalRes]       = useState(false);
+  const [globalOplAberto, setGlobalOplAberto]   = useState<any|null>(null);
+  const globalDebounce = useRef<any>(null);
+  const globalBarRef   = useRef<any>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
@@ -554,6 +564,17 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);
   const [mencoesCount, setMencoesCount]         = useState(0);
   const [showMencoesPanel, setShowMencoesPanel] = useState(false);
+
+  // Fecha dropdown de busca ao clicar fora
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (globalBarRef.current && !globalBarRef.current.contains(e.target as Node)) {
+        setShowGlobalRes(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // Escuta contagem de msgs WA não lidas emitida pelo ContactosSection
   useEffect(() => {
@@ -799,6 +820,93 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     }
   };
 
+  // ── Helpers busca global ──────────────────────────────────────────────────
+  const hilite = (text: string, termo: string) => {
+    if (!text || !termo) return text || '—';
+    const s = String(text);
+    const idx = s.toLowerCase().indexOf(termo.toLowerCase());
+    if (idx === -1) return s;
+    return (
+      <>{s.slice(0, idx)}<mark style={{ background:'#fef08a', padding:0, borderRadius:2, fontWeight:700 }}>{s.slice(idx, idx + termo.length)}</mark>{s.slice(idx + termo.length)}</>
+    );
+  };
+
+  const getContexto = (r: any, termo: string): { campo: string; valor: string } | null => {
+    const t = termo.toLowerCase();
+    const chk = (v: string) => v && v.toLowerCase().includes(t);
+    if (r._tipo === 'crm') {
+      if (chk(r.numero_edital)) return { campo: 'Edital', valor: r.numero_edital };
+      if (chk(r.orgao))         return { campo: 'Órgão',  valor: r.orgao };
+      if (chk(r.responsavel_nome)) return { campo: 'Responsável', valor: r.responsavel_nome };
+    } else if (r._tipo === 'opl') {
+      if (chk(r.cliente_nome)) return { campo: 'Cliente', valor: r.cliente_nome };
+      if (chk(r.veiculo))      return { campo: 'Veículo', valor: r.veiculo };
+      if (chk(r.modelo))       return { campo: 'Modelo',  valor: r.modelo };
+    } else if (r._tipo === 'os') {
+      if (chk(r.cliente_nome)) return { campo: 'Cliente', valor: r.cliente_nome };
+      if (chk(r.veiculo))      return { campo: 'Veículo', valor: r.veiculo };
+      if (chk(r.modelo))       return { campo: 'Modelo',  valor: r.modelo };
+    }
+    return null;
+  };
+
+  const buscarGlobal = async (termo: string) => {
+    if (!termo.trim() || termo.length < 2) { setGlobalResultados([]); setGlobalBuscando(false); return; }
+    setGlobalBuscando(true);
+    const t = termo.trim();
+    const [r1, r2, r3] = await Promise.all([
+      supabase.from('crm_oportunidades')
+        .select('id,titulo,numero_edital,orgao,responsavel_nome,funil')
+        .or(`titulo.ilike.%${t}%,numero_edital.ilike.%${t}%,orgao.ilike.%${t}%,responsavel_nome.ilike.%${t}%`)
+        .limit(6),
+      supabase.from('oples')
+        .select('id,opl,cliente_nome,modelo,veiculo,status_geral,tipo_projeto')
+        .or(`opl.ilike.%${t}%,cliente_nome.ilike.%${t}%,modelo.ilike.%${t}%,veiculo.ilike.%${t}%`)
+        .limit(6),
+      supabase.from('sac_ordens_servico')
+        .select('id,numero_os,cliente_nome,veiculo,modelo,status_os')
+        .or(`numero_os.ilike.%${t}%,cliente_nome.ilike.%${t}%,veiculo.ilike.%${t}%,modelo.ilike.%${t}%`)
+        .limit(6),
+    ]);
+    const res = [
+      ...(r1.data||[]).map(r => ({ _tipo:'crm', ...r })),
+      ...(r2.data||[]).map(r => ({ _tipo:'opl', ...r })),
+      ...(r3.data||[]).map(r => ({ _tipo:'os',  ...r })),
+    ];
+    setGlobalResultados(res);
+    setGlobalBuscando(false);
+    setShowGlobalRes(true);
+  };
+
+  const onGlobalInput = (v: string) => {
+    setGlobalBusca(v);
+    clearTimeout(globalDebounce.current);
+    if (!v.trim()) { setGlobalResultados([]); setShowGlobalRes(false); return; }
+    globalDebounce.current = setTimeout(() => buscarGlobal(v), 320);
+  };
+
+  const abrirResultado = async (r: any) => {
+    setShowGlobalRes(false);
+    setGlobalBusca('');
+    setGlobalResultados([]);
+    if (r._tipo === 'crm') {
+      setPendingOpenCrmId(r.id);
+      setActiveTab('crm');
+    } else if (r._tipo === 'opl') {
+      const { data } = await supabase.from('oples').select('*').eq('id', r.id).single();
+      if (data) setGlobalOplAberto(data);
+    } else if (r._tipo === 'os') {
+      setActiveTab('sac');
+      setTimeout(() => window.dispatchEvent(new CustomEvent('os:abrir-global', { detail: { id: r.id } })), 400);
+    }
+  };
+
+  const TIPO_META: Record<string, { icon: string; cor: string; label: string }> = {
+    crm: { icon:'🤝', cor:'#7c3aed', label:'Processo CRM' },
+    opl: { icon:'🏭', cor:'#0891b2', label:'OP / OPL' },
+    os:  { icon:'🔧', cor:'#0f766e', label:'OS' },
+  };
+
   return (
     <>
       <style>{CSS}</style>
@@ -847,6 +955,99 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             title="Menu">
             {sidebarOpen ? '✕' : '☰'}
           </button>
+
+          {/* ── BUSCA GLOBAL ── */}
+          <div ref={globalBarRef} style={{ position:'relative', flex:'1 1 0', maxWidth:380, minWidth:160, margin:'0 8px' }}>
+            <div style={{ display:'flex', alignItems:'center', background:'rgba(255,255,255,.13)',
+              border:'1px solid rgba(255,255,255,.25)', borderRadius:7, padding:'0 10px', height:32 }}>
+              <span style={{ fontSize:13, marginRight:6, opacity:.7 }}>🔍</span>
+              <input
+                value={globalBusca}
+                onChange={e => onGlobalInput(e.target.value)}
+                onFocus={() => globalResultados.length > 0 && setShowGlobalRes(true)}
+                placeholder="Buscar OP, OS, processo, cliente, órgão..."
+                style={{ flex:1, background:'none', border:'none', outline:'none', color:'#fff',
+                  fontSize:11, '::placeholder':{ color:'rgba(255,255,255,.55)' } } as any}
+              />
+              {globalBuscando && <span style={{ fontSize:10, color:'rgba(255,255,255,.6)', marginLeft:4 }}>⏳</span>}
+              {globalBusca && !globalBuscando && (
+                <button onClick={() => { setGlobalBusca(''); setGlobalResultados([]); setShowGlobalRes(false); }}
+                  style={{ background:'none', border:'none', color:'rgba(255,255,255,.6)', cursor:'pointer', fontSize:13, padding:0, marginLeft:4 }}>✕</button>
+              )}
+            </div>
+
+            {/* Dropdown de resultados */}
+            {showGlobalRes && (
+              <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, right:0,
+                background:'#fff', borderRadius:8, boxShadow:'0 8px 32px rgba(0,0,0,.22)',
+                zIndex:9999, maxHeight:420, overflowY:'auto', border:'1px solid #e2e8f0' }}>
+
+                {globalResultados.length === 0 && !globalBuscando && (
+                  <div style={{ padding:'16px 14px', color:'#9ca3af', fontSize:11, textAlign:'center' }}>
+                    Nenhum resultado para "{globalBusca}"
+                  </div>
+                )}
+
+                {/* Agrupar por tipo */}
+                {(['crm','opl','os'] as const).map(tipo => {
+                  const grupo = globalResultados.filter(r => r._tipo === tipo);
+                  if (!grupo.length) return null;
+                  const meta = TIPO_META[tipo];
+                  return (
+                    <div key={tipo}>
+                      {/* Header do grupo */}
+                      <div style={{ padding:'6px 12px 4px', fontSize:9, fontWeight:800, color:meta.cor,
+                        textTransform:'uppercase', letterSpacing:.5, borderBottom:'1px solid #f1f5f9',
+                        background:'#fafafa', position:'sticky', top:0 }}>
+                        {meta.icon} {meta.label}
+                      </div>
+                      {grupo.map((r, i) => {
+                        const titulo = r._tipo==='crm' ? r.titulo
+                                     : r._tipo==='opl' ? `${r.opl || ''} — ${r.cliente_nome || ''}`
+                                     : `OS ${r.numero_os || ''} — ${r.cliente_nome || ''}`;
+                        const ctx = getContexto(r, globalBusca);
+                        const status = r.status_geral || r.status_os || r.funil || '';
+                        return (
+                          <div key={r.id||i}
+                            onClick={() => abrirResultado(r)}
+                            style={{ padding:'9px 14px', cursor:'pointer', borderBottom:'1px solid #f8fafc',
+                              transition:'background .1s' }}
+                            onMouseEnter={e => (e.currentTarget.style.background='#f0f9ff')}
+                            onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+
+                            {/* Título principal com highlight */}
+                            <div style={{ fontSize:12, fontWeight:600, color:'#1e293b', marginBottom: ctx ? 3 : 0, lineHeight:1.4 }}>
+                              {hilite(titulo, globalBusca)}
+                            </div>
+
+                            {/* Contexto: campo onde a busca bateu */}
+                            {ctx && (
+                              <div style={{ fontSize:10, color:'#64748b', display:'flex', alignItems:'center', gap:4 }}>
+                                <span style={{ fontWeight:600, color:meta.cor }}>{ctx.campo}:</span>
+                                <span>{hilite(ctx.valor, globalBusca)}</span>
+                              </div>
+                            )}
+
+                            {/* Badge de status */}
+                            {status && (
+                              <span style={{ display:'inline-block', marginTop:3, fontSize:8, fontWeight:700,
+                                background: meta.cor + '18', color: meta.cor, borderRadius:4, padding:'1px 6px' }}>
+                                {status}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                <div style={{ padding:'6px 12px', fontSize:9, color:'#94a3b8', borderTop:'1px solid #f1f5f9', textAlign:'center' }}>
+                  {globalResultados.length} resultado(s) — clique para abrir
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="acn-right">
             <div className="acn-motorola">
@@ -1069,6 +1270,15 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <AvisoSistemaWidget currentUser={currentUser} />
       <ContatoAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} />
+
+      {/* ── OPL aberto via busca global (modal flutuante) ── */}
+      {globalOplAberto && (
+        <OplDetalheModal
+          opl={globalOplAberto}
+          onClose={() => setGlobalOplAberto(null)}
+          currentUser={currentUser}
+        />
+      )}
 
       {/* Painel lateral de Análises Orçamentárias */}
       {showAnalisePanel && (

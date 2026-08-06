@@ -190,9 +190,16 @@ git add acn_fix_crm_rls.sql
 git add src/AdminTab.tsx
 git add src/FormacaoPrecosTab.tsx
 
+:: feat: busca global + highlight + sub-status Técnica/Documental/Orçamentária + chat badge fix + pin avisos arrastável + analise area livre
+git add src/DashboardTab.tsx
+git add src/CrmTab.tsx
+git add src/AnaliseWidget.tsx
+git add src/ChatWidget.tsx
+git add src/AvisoSistemaWidget.tsx
+
 :: IMPORTANTE: rodar acn_fix_crm_rls.sql e acn_fix_crm_campos_4144.sql no Supabase SQL Editor!
 
-git commit -m "feat: kanban drag-reorder + badge ACN/Detech + relatorio receita real + Telecom links + fix CRM colunas DB"
+git commit -m "feat: busca global unificada + highlight + kanban fix + chat badge + pin avisos + analise area livre"
 
 :: Push
 echo.
