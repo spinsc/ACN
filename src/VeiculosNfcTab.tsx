@@ -69,9 +69,9 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
     timerRef.current = setTimeout(async () => {
       setBuscando(true);
       const { data } = await supabase.from('oples')
-        .select('id, opl, cliente_nome, status_geral')
+        .select('id, opl, cliente_nome, status_geral, chassi, modelo, data_prevista_entrega')
         .not('status_geral', 'eq', 'Cancelado')
-        .or(`opl.ilike.%${texto}%,cliente_nome.ilike.%${texto}%`)
+        .or(`opl.ilike.%${texto}%,cliente_nome.ilike.%${texto}%,chassi.ilike.%${texto}%`)
         .order('opl', { ascending: false })
         .limit(10);
       setResultados(data || []);
@@ -83,7 +83,7 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
   const selecionar = (item) => {
     setBusca(item.opl);
     setAberto(false);
-    onChange(item.opl, item.id);
+    onChange(item); // passa objeto completo
   };
 
   const limpar = () => {
@@ -118,7 +118,7 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
       {/* Seleção atual */}
       {oplId && oplNumero && (
         <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginTop:3 }}>
-          ✅ Vinculado: {oplNumero} (ID: {oplId.slice(0,8)}...)
+          ✅ Vinculado: {oplNumero} — campos preenchidos automaticamente ↓
         </div>
       )}
 
@@ -142,6 +142,11 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
                 <div>
                   <div style={{ fontWeight:700, fontSize:10, color:'#1e293b' }}>{r.opl}</div>
                   <div style={{ fontSize:9, color:'#64748b' }}>{r.cliente_nome}</div>
+                  {(r.chassi || r.modelo) && (
+                    <div style={{ fontSize:8, color:'#94a3b8', marginTop:1 }}>
+                      {[r.chassi && `Chassi: ${r.chassi}`, r.modelo].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
                 </div>
                 <span style={{ background:cor.bg, color:cor.color,
                   borderRadius:8, padding:'2px 7px', fontSize:8, fontWeight:700, flexShrink:0, marginLeft:8 }}>
@@ -427,7 +432,16 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
           <OplAutocomplete
             oplNumero={form.opl_numero}
             oplId={form.opl_id}
-            onChange={(numero, id) => setForm(f => ({ ...f, opl_numero: numero, opl_id: id }))}
+            onChange={(item) => setForm(f => ({
+              ...f,
+              opl_numero: item.opl,
+              opl_id:     item.id,
+              // Auto-preenche apenas campos ainda vazios
+              chassi:           f.chassi           || item.chassi  || '',
+              modelo:           f.modelo           || item.modelo  || '',
+              orgao_cliente:    f.orgao_cliente    || item.cliente_nome || '',
+              data_entrega:     f.data_entrega     || item.data_prevista_entrega || '',
+            }))}
           />
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
             <div>{campo('Data de Entrega', 'data_entrega', 'date')}</div>
