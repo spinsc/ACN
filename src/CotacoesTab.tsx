@@ -139,12 +139,6 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
               <span style={{ fontSize:10, color:'#64748b' }}>Impostos</span>
               <span style={{ fontSize:11, fontWeight:700, color:'#b45309' }}>{fmtR(totImposto)}</span>
             </div>
-            {maxDesc > 0 && (
-              <div style={{ fontSize:9, color:'#0369a1', fontWeight:700, marginTop:8,
-                background:'#e0f2fe', borderRadius:4, padding:'4px 8px', display:'inline-block' }}>
-                🔒 Desconto máximo permitido: {maxDesc}%
-              </div>
-            )}
           </div>
 
           {/* Slider de desconto — limitado ao maxDesc configurado */}
@@ -584,6 +578,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [carregando,  setCarregando]  = useState(true);
   const [busca,       setBusca]       = useState('');
   const [filtroStatus,setFiltroStatus]= useState('');
+  const [abaLista,    setAbaLista]    = useState('todas'); // 'todas' | 'avulsas'
   const [modalDetalhe,setModalDetalhe]= useState(null);
   const [modalDesc,   setModalDesc]   = useState(null);
   const [modalAprovs, setModalAprovs] = useState(false);
@@ -650,8 +645,11 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
       (c.opl_numero || '').toLowerCase().includes(busca.toLowerCase()) ||
       (c.criado_por || '').toLowerCase().includes(busca.toLowerCase());
     const ok_status = !filtroStatus || c.status === filtroStatus;
-    return ok_busca && ok_status;
+    const ok_aba    = abaLista === 'todas' || !c.crm_oportunidade_id;
+    return ok_busca && ok_status && ok_aba;
   });
+
+  const qtdAvulsas = cotacoes.filter(c => !c.crm_oportunidade_id).length;
 
   const statusOpcoes = [...new Set(cotacoes.map(c => c.status).filter(Boolean))];
 
@@ -684,6 +682,29 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
               🔄 Atualizar
             </button>
           </div>
+        </div>
+
+        {/* Tabs: Todas / Avulsas */}
+        <div style={{ marginTop:12, display:'flex', gap:0, borderBottom:'2px solid #e2e8f0' }}>
+          {[
+            { id:'todas',   label:'📋 Todas',  count: cotacoes.length },
+            { id:'avulsas', label:'📁 Avulsas', count: qtdAvulsas,
+              title:'Cotações sem vínculo com oportunidade CRM' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setAbaLista(tab.id)} title={tab.title}
+              style={{ background:'none', border:'none', borderBottom: abaLista===tab.id
+                ? '2px solid #0369a1' : '2px solid transparent',
+                marginBottom:-2, padding:'7px 16px', fontSize:10, fontWeight:700, cursor:'pointer',
+                color: abaLista===tab.id ? '#0369a1' : '#64748b',
+                display:'flex', alignItems:'center', gap:5 }}>
+              {tab.label}
+              <span style={{ background: abaLista===tab.id ? '#0369a1' : '#e2e8f0',
+                color: abaLista===tab.id ? '#fff' : '#64748b',
+                borderRadius:10, padding:'0 6px', fontSize:9, fontWeight:800 }}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Filtros */}
