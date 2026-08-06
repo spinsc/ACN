@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dossiê Veicular — ACN Sinal Verde</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;min-height:100vh;color:#1e293b}
+  .container{max-width:480px;margin:0 auto;padding:0 0 40px}
+  .header{background:linear-gradient(135deg,#14532d 0%,#16a34a 100%);padding:24px 20px 20px;text-align:center;position:relative}
+  .header-logo{font-size:26px;font-weight:900;color:#fff;letter-spacing:1px;line-height:1.1}
+  .header-sub{font-size:11px;color:#86efac;font-weight:600;margin-top:2px;letter-spacing:2px;text-transform:uppercase}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:11px;font-weight:800;margin-top:14px;letter-spacing:.5px}
+  .badge-ok{background:#dcfce7;color:#16a34a;border:2px solid #86efac}
+  .badge-exp{background:#fee2e2;color:#dc2626;border:2px solid #fca5a5}
+  .card{background:#fff;border-radius:14px;margin:14px 16px;padding:18px;box-shadow:0 2px 12px #00000010;border:1px solid #e2e8f0}
+  .card-title{font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #f0fdf4}
+  .info-row{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f1f5f9}
+  .info-row:last-child{border-bottom:none}
+  .info-label{font-size:10px;color:#64748b;font-weight:600}
+  .info-val{font-size:11px;color:#1e293b;font-weight:700;text-align:right;max-width:60%}
+  .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px}
+  .btn-action{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:18px 8px;background:#fff;border:2px solid #e2e8f0;border-radius:14px;cursor:pointer;text-decoration:none;color:#1e293b;transition:all .15s;box-shadow:0 1px 4px #00000008;min-height:80px}
+  .btn-action:active{transform:scale(.97)}
+  .btn-action .icon{font-size:26px}
+  .btn-action .label{font-size:10px;font-weight:700;text-align:center;line-height:1.3}
+  .btn-whatsapp{border-color:#25d366;color:#128c7e}
+  .btn-maps{border-color:#4285f4;color:#1a73e8}
+  .btn-manual{border-color:#dc2626;color:#dc2626}
+  .btn-chamado{border-color:#f59e0b;color:#b45309}
+  .btn-restrita{display:block;width:calc(100% - 32px);margin:16px;padding:10px;background:none;border:1px dashed #cbd5e1;border-radius:8px;color:#94a3b8;font-size:10px;font-weight:600;cursor:pointer;text-align:center}
+  .section-title{margin:20px 16px 8px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1.5px}
+
+  /* Modal */
+  .modal-overlay{display:none;position:fixed;inset:0;background:#000a;z-index:1000;align-items:flex-end;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal-box{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;padding:24px 20px 32px;animation:slideUp .25s ease}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .modal-title{font-size:14px;font-weight:800;color:#1e293b;margin-bottom:4px}
+  .modal-sub{font-size:10px;color:#64748b;margin-bottom:18px}
+  .field-label{font-size:10px;font-weight:700;color:#475569;display:block;margin-bottom:4px;margin-top:12px}
+  .field-input{width:100%;border:1.5px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;color:#1e293b}
+  .field-input:focus{border-color:#16a34a}
+  textarea.field-input{resize:vertical;min-height:80px}
+  .btn-submit{width:100%;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:14px;font-size:13px;font-weight:800;cursor:pointer;margin-top:18px;letter-spacing:.5px}
+  .btn-submit:disabled{opacity:.5}
+  .btn-cancel{width:100%;background:#f1f5f9;color:#475569;border:none;border-radius:10px;padding:12px;font-size:12px;font-weight:700;cursor:pointer;margin-top:8px}
+
+  /* Área restrita */
+  .restricted{display:none}
+  .servico-item{padding:10px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px;border-left:3px solid #16a34a}
+  .servico-nome{font-size:11px;font-weight:700;color:#1e293b}
+  .servico-cat{display:inline-block;margin-left:6px;background:#dbeafe;color:#1e40af;border-radius:10px;padding:1px 7px;font-size:8px;font-weight:700}
+  .servico-desc{font-size:9px;color:#64748b;margin-top:3px}
+  .chamado-item{padding:10px 12px;background:#fff7ed;border-radius:8px;margin-bottom:6px;border-left:3px solid #f59e0b}
+  .pin-box{background:#f0fdf4;border-radius:12px;padding:20px;text-align:center;margin:16px;border:2px solid #86efac}
+  .pin-input{text-align:center;font-size:22px;font-weight:900;letter-spacing:8px;width:180px;border:2px solid #d1d5db;border-radius:10px;padding:10px;font-family:monospace;color:#16a34a}
+  .pin-input:focus{border-color:#16a34a;outline:none}
+
+  .loader{text-align:center;padding:40px 20px;color:#64748b;font-size:13px}
+  .error-card{background:#fee2e2;border-radius:14px;margin:20px 16px;padding:20px;text-align:center;color:#dc2626;font-weight:700}
+  .footer{text-align:center;font-size:9px;color:#94a3b8;padding:16px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="loader" id="loader">⏳ Carregando dossiê do veículo...</div>
+</div>
+
+<!-- MODAL: Abrir Chamado -->
+<div class="modal-overlay" id="modal-chamado">
+  <div class="modal-box">
+    <div class="modal-title">🛠️ Abrir Chamado de Garantia</div>
+    <div class="modal-sub" id="modal-chamado-sub">Informe seus dados para abrirmos seu atendimento.</div>
+    <label class="field-label">Seu nome *</label>
+    <input class="field-input" id="inp-nome" placeholder="Ex: João Silva"/>
+    <label class="field-label">Telefone / WhatsApp *</label>
+    <input class="field-input" id="inp-tel" type="tel" placeholder="(48) 99999-9999"/>
+    <label class="field-label">Descreva o problema *</label>
+    <textarea class="field-input" id="inp-desc" placeholder="Ex: Sinalizador dianteiro esquerdo não liga..."></textarea>
+    <button class="btn-submit" id="btn-enviar-chamado">📤 Enviar Chamado</button>
+    <button class="btn-cancel" onclick="fecharModal('modal-chamado')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL: PIN Área Restrita -->
+<div class="modal-overlay" id="modal-pin">
+  <div class="modal-box">
+    <div class="modal-title">🔒 Área Restrita ACN</div>
+    <div class="modal-sub">Digite o PIN de acesso técnico para visualizar os detalhes completos.</div>
+    <div class="pin-box">
+      <input class="pin-input" id="inp-pin" type="password" maxlength="10"
+        placeholder="••••••" inputmode="numeric"/>
+      <div id="pin-erro" style="color:#dc2626;font-size:10px;margin-top:8px;min-height:16px"></div>
+    </div>
+    <button class="btn-submit" onclick="verificarPin()">🔓 Acessar</button>
+    <button class="btn-cancel" onclick="fecharModal('modal-pin')">Cancelar</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
+
+const headers = { 'apikey': ANON_KEY, 'Authorization': 'Bearer ' + ANON_KEY, 'Content-Type': 'application/json' };
+
+let VEICULO  = null;
+let CONFIG   = {};
+let SERVICOS = [];
+let CHAMADOS = [];
+
+// ── Busca params ──────────────────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const CHASSI = params.get('chassi') || params.get('id') || '';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+async function sb(path) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, { headers });
+  return r.json();
+}
+async function sbPost(table, body) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
+    method:'POST', headers: { ...headers, 'Prefer':'return=minimal' },
+    body: JSON.stringify(body)
+  });
+  return r.ok;
+}
+
+function fmtData(d) {
+  if (!d) return '—';
+  const [y,m,day] = d.split('-');
+  return day+'/'+m+'/'+y;
+}
+function garantiaAtiva(dataFim) {
+  if (!dataFim) return null;
+  return new Date(dataFim + 'T23:59:59') >= new Date();
+}
+
+function abrirModal(id)  { document.getElementById(id).classList.add('open'); }
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const v    = VEICULO;
+  const nome = CONFIG['nfc_nome_empresa'] || 'ACN Sinal Verde';
+  const logo = CONFIG['nfc_logo_url'] || '';
+  const ativa = garantiaAtiva(v.data_fim_garantia);
+  const whats = CONFIG['nfc_whatsapp_numero'] || '5500000000000';
+  const maps  = CONFIG['nfc_endereco_maps']   || 'ACN+Sinal+Verde';
+  const waMsg = encodeURIComponent(`Olá ${nome}, preciso de atendimento para o veículo Chassi: ${v.chassi}${v.placa ? ', Placa: ' + v.placa : ''}.`);
+
+  document.getElementById('app').innerHTML = `
+    <div class="container">
+      <div class="header">
+        ${logo ? `<img src="${logo}" alt="Logo" style="height:48px;margin-bottom:8px;border-radius:6px"/>` :
+          `<div class="header-logo">${nome}</div>`}
+        <div class="header-sub">Dossiê Digital Veicular</div>
+        <div>
+          <span class="badge ${ativa === true ? 'badge-ok' : ativa === false ? 'badge-exp' : ''}">
+            ${ativa === true ? '✅ Garantia Ativa' : ativa === false ? '⚠️ Garantia Expirada' : '📋 Sem Informação de Garantia'}
+          </span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Informações do Veículo</div>
+        ${v.modelo ? `<div class="info-row"><span class="info-label">Modelo</span><span class="info-val">${v.modelo}</span></div>` : ''}
+        ${v.placa   ? `<div class="info-row"><span class="info-label">Placa</span><span class="info-val">${v.placa}</span></div>` : ''}
+        ${v.orgao_cliente ? `<div class="info-row"><span class="info-label">Órgão</span><span class="info-val">${v.orgao_cliente}</span></div>` : ''}
+        <div class="info-row"><span class="info-label">Data de Entrega</span><span class="info-val">${fmtData(v.data_entrega)}</span></div>
+        <div class="info-row"><span class="info-label">Fim da Garantia</span><span class="info-val">${fmtData(v.data_fim_garantia)}</span></div>
+      </div>
+
+      <div class="section-title">Central de Ajuda</div>
+      <div class="btn-grid">
+        ${v.manual_pdf_url ? `
+          <a class="btn-action btn-manual" href="${v.manual_pdf_url}" target="_blank">
+            <span class="icon">📄</span>
+            <span class="label">Manual do Usuário</span>
+          </a>` : `
+          <div class="btn-action" style="opacity:.4;cursor:not-allowed">
+            <span class="icon">📄</span>
+            <span class="label">Manual</span>
+            <span style="font-size:8px;color:#9ca3af">Não disponível</span>
+          </div>`}
+        <a class="btn-action btn-whatsapp" href="https://wa.me/${whats}?text=${waMsg}" target="_blank">
+          <span class="icon">💬</span>
+          <span class="label">WhatsApp SAC</span>
+        </a>
+        <a class="btn-action btn-maps" href="https://www.google.com/maps/search/${maps}" target="_blank">
+          <span class="icon">📍</span>
+          <span class="label">Localização ACN</span>
+        </a>
+        <button class="btn-action btn-chamado" onclick="abrirChamadoModal()">
+          <span class="icon">🛠️</span>
+          <span class="label">Abrir Chamado de Garantia</span>
+        </button>
+      </div>
+
+      <button class="btn-restrita" onclick="abrirModal('modal-pin')">
+        🔒 Área Restrita ACN — Login Técnico
+      </button>
+
+      <!-- Área restrita (oculta até PIN correto) -->
+      <div class="restricted" id="area-restrita">
+        <div class="section-title">🔒 ÁREA RESTRITA</div>
+        <div class="card">
+          <div class="card-title">📦 Serviços / Componentes Instalados</div>
+          <div id="lista-servicos">
+            ${SERVICOS.length === 0
+              ? '<p style="font-size:10px;color:#9ca3af;text-align:center;padding:12px">Nenhum serviço cadastrado.</p>'
+              : SERVICOS.map(s => `
+                <div class="servico-item">
+                  <div class="servico-nome">${s.item_servico}${s.categoria ? `<span class="servico-cat">${s.categoria}</span>` : ''}</div>
+                  ${s.descricao_tecnica ? `<div class="servico-desc">${s.descricao_tecnica}</div>` : ''}
+                </div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📞 Histórico de Chamados</div>
+          <div id="lista-chamados">
+            ${CHAMADOS.length === 0
+              ? '<p style="font-size:10px;color:#9ca3af;text-align:center;padding:12px">Nenhum chamado registrado.</p>'
+              : CHAMADOS.map(c => `
+                <div class="chamado-item">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                    <strong style="font-size:10px">${c.nome_solicitante || 'Anônimo'}</strong>
+                    <span style="font-size:8px;font-weight:700;color:${c.status==='Concluído'?'#16a34a':c.status==='Em Atendimento'?'#92400e':'#dc2626'}">${c.status}</span>
+                  </div>
+                  ${c.contato_telefone ? `<div style="font-size:9px;color:#64748b">${c.contato_telefone}</div>` : ''}
+                  ${c.descricao_defeito ? `<div style="font-size:9px;color:#475569;margin-top:3px">${c.descricao_defeito.slice(0,120)}${c.descricao_defeito.length>120?'...':''}</div>` : ''}
+                  <div style="font-size:8px;color:#9ca3af;margin-top:4px">${new Date(c.created_at).toLocaleString('pt-BR')}</div>
+                </div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚙️ Dados Técnicos</div>
+          ${v.opl_numero ? `<div class="info-row"><span class="info-label">OPL</span><span class="info-val">${v.opl_numero}</span></div>` : ''}
+          <div class="info-row"><span class="info-label">Chassi</span><span class="info-val" style="font-family:monospace;font-size:10px">${v.chassi}</span></div>
+        </div>
+      </div>
+
+      <div class="footer">
+        ${nome} · Página gerada automaticamente via etiqueta NFC<br>
+        Chassi: <strong>${v.chassi}</strong>
+      </div>
+    </div>
+  `;
+
+  // rebind modal do chamado
+  document.getElementById('btn-enviar-chamado').onclick = enviarChamado;
+}
+
+function abrirChamadoModal() {
+  document.getElementById('modal-chamado-sub').textContent =
+    `Chassi: ${VEICULO.chassi}${VEICULO.placa ? ' · Placa: ' + VEICULO.placa : ''}`;
+  abrirModal('modal-chamado');
+}
+
+// ── PIN ───────────────────────────────────────────────────────────────────────
+function verificarPin() {
+  const inp = document.getElementById('inp-pin').value.trim();
+  const pinV = VEICULO.pin_acesso || '123456';
+  const pinG = CONFIG['nfc_pin_global'] || '123456';
+  if (inp === pinV || inp === pinG) {
+    fecharModal('modal-pin');
+    document.getElementById('area-restrita').style.display = 'block';
+    document.getElementById('inp-pin').value = '';
+    document.getElementById('pin-erro').textContent = '';
+  } else {
+    document.getElementById('pin-erro').textContent = '❌ PIN incorreto. Tente novamente.';
+    document.getElementById('inp-pin').value = '';
+  }
+}
+document.getElementById('inp-pin').addEventListener('keydown', e => {
+  if (e.key === 'Enter') verificarPin();
+});
+
+// ── Chamado ───────────────────────────────────────────────────────────────────
+async function enviarChamado() {
+  const nome = document.getElementById('inp-nome').value.trim();
+  const tel  = document.getElementById('inp-tel').value.trim();
+  const desc = document.getElementById('inp-desc').value.trim();
+  if (!nome || !tel || !desc) { alert('Preencha todos os campos obrigatórios.'); return; }
+  const btn = document.getElementById('btn-enviar-chamado');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  const ok = await sbPost('chamados_suporte', {
+    veiculo_id:       VEICULO.id,
+    chassi:           VEICULO.chassi,
+    placa:            VEICULO.placa || null,
+    modelo:           VEICULO.modelo || null,
+    orgao_cliente:    VEICULO.orgao_cliente || null,
+    nome_solicitante: nome,
+    contato_telefone: tel,
+    descricao_defeito: desc,
+    status:           'Aberto',
+    created_at:       new Date().toISOString(),
+    atualizado_em:    new Date().toISOString(),
+  });
+  btn.disabled = false;
+  btn.textContent = '📤 Enviar Chamado';
+  if (ok) {
+    fecharModal('modal-chamado');
+    document.getElementById('inp-nome').value = '';
+    document.getElementById('inp-tel').value  = '';
+    document.getElementById('inp-desc').value = '';
+    alert('✅ Chamado enviado com sucesso!\nNossa equipe entrará em contato em breve.');
+  } else {
+    alert('❌ Erro ao enviar chamado. Tente novamente.');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  if (!CHASSI) {
+    document.getElementById('app').innerHTML =
+      '<div class="error-card">⚠️ Código de veículo não encontrado.<br><small>Verifique se a etiqueta NFC está ativa.</small></div>';
+    return;
+  }
+
+  try {
+    // Carregar configurações + veículo em paralelo
+    const [cfgData, veicData] = await Promise.all([
+      sb('configuracoes_sistema?chave=in.(nfc_whatsapp_numero,nfc_endereco_maps,nfc_pin_global,nfc_nome_empresa,nfc_logo_url)&select=chave,valor'),
+      sb(`veiculos_nfc?chassi=eq.${encodeURIComponent(CHASSI)}&ativo=eq.true&select=*&limit=1`),
+    ]);
+
+    if (Array.isArray(cfgData)) {
+      cfgData.forEach(r => { CONFIG[r.chave] = r.valor; });
+    }
+
+    if (!veicData || veicData.length === 0) {
+      document.getElementById('app').innerHTML =
+        `<div class="error-card">🚗 Veículo não encontrado.<br><small>Chassi: ${CHASSI}</small></div>`;
+      return;
+    }
+
+    VEICULO = veicData[0];
+
+    // Carregar serviços e chamados
+    const [servData, chamData] = await Promise.all([
+      sb(`servicos_executados_nfc?veiculo_id=eq.${VEICULO.id}&order=ordem,criado_em`),
+      sb(`chamados_suporte?veiculo_id=eq.${VEICULO.id}&order=created_at.desc&limit=10`),
+    ]);
+
+    SERVICOS = servData || [];
+    CHAMADOS = chamData || [];
+
+    render();
+  } catch (err) {
+    document.getElementById('app').innerHTML =
+      '<div class="error-card">❌ Erro ao carregar dados.<br><small>Verifique sua conexão e tente novamente.</small></div>';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
