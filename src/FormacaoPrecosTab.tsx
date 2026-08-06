@@ -597,9 +597,19 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
   const H = isVendedor ? { display:'none' } : {};
 
+  // estilos base reutilizáveis
+  const inp11 = { fontSize:11, padding:'5px 7px' };
+  const inp11r = { ...inp11, textAlign:'right' as const };
+  const globStyle = (extra={}) => ({
+    ...inp11r, ...extra,
+    background: usarParamsGlobais ? '#f1f5f9' : undefined,
+    color:      usarParamsGlobais ? '#94a3b8' : undefined,
+  });
+
   return (
-    <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
-      <td style={{ padding:'4px 6px', minWidth:160, position:'relative' }}>
+    <tr style={{ borderBottom:'1px solid #e8ecf0' }}>
+      {/* Produto */}
+      <td style={{ padding:'6px 8px', minWidth:200, position:'relative' }}>
         <ProdutoAutocomplete
           value={item.produto}
           params={params}
@@ -607,63 +617,71 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           onExpand={linhas => onExpand(linhas)}
         />
       </td>
-      <td style={{ padding:'4px 6px', minWidth:80 }}>
-        <input className="acn-input" style={{ width:'100%', fontSize:9, padding:'2px 4px' }}
+      {/* Marca */}
+      <td style={{ padding:'6px 6px', minWidth:110 }}>
+        <input className="acn-input" style={{ width:'100%', ...inp11 }}
           placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:55 }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
+      {/* Qt */}
+      <td style={{ padding:'6px 6px', minWidth:68 }}>
+        <input type="number" className="acn-input" style={{ width:62, ...inp11r }}
           min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:70 }}>
-        <select className="acn-input" style={{ width:68, fontSize:9, padding:'2px 3px' }}
+      {/* Moeda */}
+      <td style={{ padding:'6px 6px', minWidth:82 }}>
+        <select className="acn-input" style={{ width:78, ...inp11 }}
           value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
           {MOEDAS.map(m=><option key={m}>{m}</option>)}
         </select>
       </td>
-      <td style={{ padding:'4px 4px', minWidth:80, ...H }}>
-        <input type="number" className="acn-input" style={{ width:76, fontSize:9, padding:'2px 4px', textAlign:'right' }}
+      {/* Custo Unit */}
+      <td style={{ padding:'6px 6px', minWidth:96, ...H }}>
+        <input type="number" className="acn-input" style={{ width:88, ...inp11r }}
           min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
+      {/* IPI */}
+      <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
+        <input type="number" className="acn-input" style={{ width:62, ...inp11r }}
           min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
-        <input type="number" className="acn-input" style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right' }}
+      {/* ST */}
+      <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
+        <input type="number" className="acn-input" style={{ width:62, ...inp11r }}
           min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:60, ...H }}>
+      {/* Markup */}
+      <td style={{ padding:'6px 6px', minWidth:76, ...H }}>
         <input type="number" className="acn-input"
-          style={{ width:56, fontSize:9, padding:'2px 4px', textAlign:'right', background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
+          style={{ width:68, ...inp11r, background: item.markup_pct < 0 ? '#fee2e2' : undefined }}
           step="0.1" value={item.markup_pct} onChange={e=>onSet('markup_pct', e.target.value)} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
+      {/* DIFAL */}
+      <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
         <input type="number" className="acn-input"
-          style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
-            background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
+          style={{ width:62, ...globStyle() }}
           step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
           onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
           readOnly={usarParamsGlobais} />
       </td>
-      <td style={{ padding:'4px 4px', minWidth:55, ...H }}>
+      {/* Imposto */}
+      <td style={{ padding:'6px 6px', minWidth:76, ...H }}>
         <input type="number" className="acn-input"
-          style={{ width:50, fontSize:9, padding:'2px 4px', textAlign:'right',
-            background: usarParamsGlobais ? '#f1f5f9' : undefined, color: usarParamsGlobais ? '#94a3b8' : undefined }}
+          style={{ width:68, ...globStyle() }}
           step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
           onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
           readOnly={usarParamsGlobais} />
       </td>
-      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', fontWeight:600, ...H }}>{fmtR(custoUnitBrl)}</td>
-      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#0f766e', ...H }}>{fmtR(custoTotal)}</td>
-      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
-      <td style={{ padding:'4px 6px', minWidth:100, textAlign:'right', fontSize:9, color:'#1d4ed8', fontWeight:700 }}>{fmtR(valorTotal)}</td>
-      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#b45309', ...H }}>{fmtR(totalDifal)}</td>
-      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, color:'#9d174d', ...H }}>{fmtR(totalImposto)}</td>
-      <td style={{ padding:'4px 6px', minWidth:80, textAlign:'right', fontSize:9, fontWeight:800, color: lucroColor, ...H }}>{fmtPct(lucroPct)}</td>
-      <td style={{ padding:'4px 4px', textAlign:'center' }}>
+      {/* Calculados */}
+      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:11, color:'#0f766e', fontWeight:600, ...H }}>{fmtR(custoUnitBrl)}</td>
+      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:11, color:'#0f766e', ...H }}>{fmtR(custoTotal)}</td>
+      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:11, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
+      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:12, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</td>
+      <td style={{ padding:'6px 8px', minWidth:90, textAlign:'right', fontSize:11, color:'#b45309', ...H }}>{fmtR(totalDifal)}</td>
+      <td style={{ padding:'6px 8px', minWidth:90, textAlign:'right', fontSize:11, color:'#9d174d', ...H }}>{fmtR(totalImposto)}</td>
+      <td style={{ padding:'6px 8px', minWidth:80, textAlign:'right', fontSize:12, fontWeight:800, color: lucroColor, ...H }}>{fmtPct(lucroPct)}</td>
+      <td style={{ padding:'6px 6px', textAlign:'center' }}>
         <button onClick={onRemove}
-          style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'2px 6px', fontSize:9, cursor:'pointer' }}>
+          style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
           ✕
         </button>
       </td>
@@ -1376,27 +1394,27 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
           {/* ── TABELA DE ITENS ── */}
           <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1100 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1400 }}>
               <thead>
                 <tr>
-                  <th style={{...thStyle, textAlign:'left', minWidth:140}}>Produto / Descrição</th>
-                  <th style={{...thStyle, minWidth:80}}>Marca</th>
-                  <th style={{...thStyle, minWidth:50}}>Qt</th>
-                  <th style={{...thStyle, minWidth:68}}>Moeda</th>
-                  <th style={{...thStyle, minWidth:76, display: isVendedor ? 'none' : undefined}}>Custo Unit.</th>
-                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>IPI%</th>
-                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>ST%</th>
-                  <th style={{...thStyle, minWidth:56, display: isVendedor ? 'none' : undefined}}>Markup%</th>
-                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
-                  <th style={{...thStyle, minWidth:50, display: isVendedor ? 'none' : undefined}}>Imposto%</th>
-                  <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
-                  <th style={{...thStyle, minWidth:100, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
-                  <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Unit.</th>
-                  <th style={{...thStyle, minWidth:100, background:'#1e40af'}}>Valor Total</th>
-                  <th style={{...thStyle, minWidth:80, background:'#92400e', display: isVendedor ? 'none' : undefined}}>DIFAL Total</th>
-                  <th style={{...thStyle, minWidth:80, background:'#831843', display: isVendedor ? 'none' : undefined}}>Imposto</th>
-                  <th style={{...thStyle, minWidth:70, display: isVendedor ? 'none' : undefined}}>Lucro%</th>
-                  <th style={{...thStyle, minWidth:36}}>✕</th>
+                  <th style={{...thStyle, textAlign:'left', minWidth:200, fontSize:10}}>Produto / Descrição</th>
+                  <th style={{...thStyle, minWidth:110, fontSize:10}}>Marca</th>
+                  <th style={{...thStyle, minWidth:68, fontSize:10}}>Qt</th>
+                  <th style={{...thStyle, minWidth:82, fontSize:10}}>Moeda</th>
+                  <th style={{...thStyle, minWidth:96, fontSize:10, display: isVendedor ? 'none' : undefined}}>Custo Unit.</th>
+                  <th style={{...thStyle, minWidth:68, fontSize:10, display: isVendedor ? 'none' : undefined}}>IPI%</th>
+                  <th style={{...thStyle, minWidth:68, fontSize:10, display: isVendedor ? 'none' : undefined}}>ST%</th>
+                  <th style={{...thStyle, minWidth:76, fontSize:10, display: isVendedor ? 'none' : undefined}}>Markup%</th>
+                  <th style={{...thStyle, minWidth:68, fontSize:10, display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
+                  <th style={{...thStyle, minWidth:76, fontSize:10, display: isVendedor ? 'none' : undefined}}>Imposto%</th>
+                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
+                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
+                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#1e40af'}}>Valor Unit.</th>
+                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#1e40af'}}>Valor Total</th>
+                  <th style={{...thStyle, minWidth:90, fontSize:10, background:'#92400e', display: isVendedor ? 'none' : undefined}}>DIFAL Total</th>
+                  <th style={{...thStyle, minWidth:90, fontSize:10, background:'#831843', display: isVendedor ? 'none' : undefined}}>Imposto</th>
+                  <th style={{...thStyle, minWidth:80, fontSize:10, display: isVendedor ? 'none' : undefined}}>Lucro%</th>
+                  <th style={{...thStyle, minWidth:42, fontSize:10}}>✕</th>
                 </tr>
               </thead>
               <tbody>

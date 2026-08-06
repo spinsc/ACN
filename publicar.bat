@@ -213,6 +213,10 @@ git commit -m "feat: Cadastro de Itens e Produtos com BOM — catalogo base + mi
 git add src/FormacaoPrecosTab.tsx
 git commit -m "feat: FormacaoPrecosTab autocomplete catalogo — busca itens+produtos, expandir BOM, criar novo"
 
+:: fix: FormacaoPrecosTab — tabela de itens expandida com inputs maiores (11px, padding 6px)
+git add src/FormacaoPrecosTab.tsx
+git commit -m "fix: FormacaoPrecosTab tabela itens maior — inputs 11px, padding 6px, colunas alargadas"
+
 :: Push
 echo.
 echo Enviando para GitHub...
