@@ -22,6 +22,7 @@ import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import SacTab from './SacTab';
+import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
@@ -105,6 +106,7 @@ const SIDEBAR_GROUPS = [
     section: 'SAC',
     items: [
       { id: 'sac', label: 'SAC' },
+      { id: 'nfc', label: '📱 Dossiê NFC' },
     ],
   },
   {
@@ -816,6 +818,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'vistorias':    return <VistoriasPatio currentUser={currentUser} />;
       case 'marketing':    return <MarketingTab currentUser={currentUser} />;
       case 'sac':          return <SacTab currentUser={currentUser} />;
+      case 'nfc':          return <VeiculosNfcTab currentUser={currentUser} />;
       case 'clientes':     return <ClientesTab currentUser={currentUser} />;
       case 'crm':          return <CrmTab currentUser={currentUser} autoOpenOpId={pendingOpenCrmId} onAutoOpenConsumed={() => setPendingOpenCrmId(null)} />;
       case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { setPendingOpenCrmId(id); setActiveTab('crm'); }} />;
@@ -937,7 +940,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 'Controle de Produção': '#0891b2',
                 'Produção': '#d97706',
                 'Administrativo': '#475569',
-                'SAC': '#0f766e',
+                'SAC': '#14532d',
                 'Admin': '#dc2626',
               };
               for (const g of SIDEBAR_GROUPS) {

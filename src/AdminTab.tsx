@@ -31,6 +31,7 @@ const TODAS_ABAS = [
   { id:'fiscal',       label:'12. Fiscal' },
   { id:'marketing',    label:'Marketing' },
   { id:'sac',          label:'SAC' },
+  { id:'nfc',          label:'📱 Dossiê NFC' },
   { id:'telecom',      label:'Telecom' },
   { id:'crm',          label:'CRM' },
   { id:'licitacoes',   label:'Licitações' },
@@ -1853,6 +1854,7 @@ const ABAS_ADMIN = [
   { id:'perfis',         label:'🔐 Perfis de Acesso' },
   { id:'plataformas',    label:'🏪 Plataformas' },
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
+  { id:'nfc_cfg',        label:'📱 Config. NFC' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
@@ -1875,6 +1877,80 @@ const COR_CRIT: Record<string, { bg: string; border: string }> = {
   media: { bg: '#ffedd5', border: '#ea580c' },
   alta:  { bg: '#fee2e2', border: '#dc2626' },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL CONFIGURAÇÕES NFC
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelNfcCfg() {
+  const [cfg,      setCfg]      = useState<Record<string,string>>({});
+  const [salvando, setSalvando] = useState(false);
+  const [msg,      setMsg]      = useState('');
+
+  const NFC_KEYS = [
+    { chave:'nfc_whatsapp_numero', label:'Número WhatsApp SAC', tipo:'text',
+      desc:'Com DDI, sem espaços ou + (ex: 5548999999999)' },
+    { chave:'nfc_endereco_maps',   label:'Endereço Google Maps', tipo:'text',
+      desc:'Parâmetro de busca (ex: Rua+das+Flores,123+Florianópolis+SC)' },
+    { chave:'nfc_pin_global',      label:'PIN Global Área Restrita', tipo:'text',
+      desc:'PIN padrão quando o veículo não tem PIN próprio' },
+    { chave:'nfc_base_url',        label:'URL Base da Página NFC', tipo:'url',
+      desc:'URL onde veiculo.html está hospedado (sem ?chassi=)' },
+    { chave:'nfc_nome_empresa',    label:'Nome da Empresa', tipo:'text',
+      desc:'Exibido no cabeçalho da página pública' },
+    { chave:'nfc_logo_url',        label:'URL do Logotipo', tipo:'url',
+      desc:'PNG ou SVG. Deixe vazio para exibir o nome em texto.' },
+  ];
+
+  useEffect(() => {
+    supabase.from('configuracoes_sistema').select('chave,valor')
+      .in('chave', NFC_KEYS.map(k => k.chave))
+      .then(({ data }) => {
+        if (data) setCfg(Object.fromEntries(data.map(r => [r.chave, r.valor])));
+      });
+  }, []);
+
+  const salvar = async () => {
+    setSalvando(true); setMsg('');
+    for (const k of NFC_KEYS) {
+      await supabase.from('configuracoes_sistema').upsert({
+        chave: k.chave, valor: cfg[k.chave] || '',
+        descricao: k.desc, atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'chave' });
+    }
+    setSalvando(false); setMsg('✅ Configurações NFC salvas com sucesso!');
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header">📱 Configurações do Módulo NFC</div>
+      <div className="sec-body">
+        <p style={{fontSize:10,color:'#64748b',marginBottom:14}}>
+          Parametrize os dados que aparecem na página pública do veículo (acessada via etiqueta NFC).
+        </p>
+        {NFC_KEYS.map(k => (
+          <div key={k.chave} style={{marginBottom:12}}>
+            <label style={{fontSize:9,fontWeight:700,color:'#475569',display:'block',marginBottom:3}}>
+              {k.label}
+            </label>
+            <input type={k.tipo} value={cfg[k.chave]||''} onChange={e=>setCfg(c=>({...c,[k.chave]:e.target.value}))}
+              placeholder={k.desc}
+              style={{width:'100%',border:'1px solid #d1d5db',borderRadius:5,padding:'6px 8px',fontSize:10,boxSizing:'border-box'}} />
+            <div style={{fontSize:8,color:'#9ca3af',marginTop:2}}>{k.desc}</div>
+          </div>
+        ))}
+        <div style={{display:'flex',gap:10,alignItems:'center',marginTop:14}}>
+          <button onClick={salvar} disabled={salvando}
+            style={{background:'#14532d',color:'#fff',border:'none',borderRadius:5,
+              padding:'7px 18px',fontSize:10,fontWeight:700,cursor:'pointer',opacity:salvando?.5:1}}>
+            {salvando?'Salvando...':'💾 Salvar Configurações NFC'}
+          </button>
+          {msg && <span style={{fontSize:10,color:'#16a34a',fontWeight:700}}>{msg}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL CONFIGURAÇÕES COTAÇÕES
@@ -2244,6 +2320,7 @@ export default function AdminTab() {
       {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
+      {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}

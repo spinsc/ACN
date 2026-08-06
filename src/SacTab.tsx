@@ -143,7 +143,11 @@ const FORM_VAZIO = {
 };
 
 export default function SacTab({ currentUser }) {
-  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'>('os');
+  const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'>('os');
+  const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
+  const [loadNfc,      setLoadNfc]      = useState(false);
+  const [nfcStatus,    setNfcStatus]    = useState('');
+  const [modalNfc,     setModalNfc]     = useState<any>(null);
   const [ordens, setOrdens]             = useState([]);
   const [equipamentos, setEquipamentos] = useState([]);
   const [categorias, setCategorias]     = useState<any[]>([]);
@@ -1083,6 +1087,27 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
     fetchCategorias();
   };
 
+  // ── Chamados NFC ──────────────────────────────────────────────────────────
+  const carregarChamadosNfc = async () => {
+    setLoadNfc(true);
+    let q = supabase.from('chamados_suporte').select('*').order('created_at', { ascending: false });
+    if (nfcStatus) q = q.eq('status', nfcStatus);
+    const { data } = await q;
+    setChamadosNfc(data || []);
+    setLoadNfc(false);
+  };
+
+  const atualizarStatusNfc = async (id, novoStatus, notas?) => {
+    const payload: any = { status: novoStatus, atualizado_em: new Date().toISOString() };
+    if (novoStatus === 'Em Atendimento' || novoStatus === 'Concluído') {
+      payload.atendido_por = currentUser?.nome || currentUser?.email || 'Sistema';
+    }
+    if (notas !== undefined) payload.notas_atendimento = notas;
+    await supabase.from('chamados_suporte').update(payload).eq('id', id);
+    carregarChamadosNfc();
+    if (modalNfc?.id === id) setModalNfc(prev => ({ ...prev, status: novoStatus, ...payload }));
+  };
+
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div>
@@ -1090,9 +1115,184 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
       <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #0f766e'}}>
         <button style={{flex:1,padding:'8px',background:abaAtiva==='os'?'#0f766e':'white',color:abaAtiva==='os'?'white':'#0f766e',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaAtiva('os')}>Ordens de Serviço</button>
+        <button style={{flex:1,padding:'8px',background:abaAtiva==='chamados_nfc'?'#14532d':'white',color:abaAtiva==='chamados_nfc'?'white':'#14532d',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>{ setAbaAtiva('chamados_nfc'); carregarChamadosNfc(); }}>
+          📱 Chamados NFC
+        </button>
         <button style={{flex:1,padding:'8px',background:abaAtiva==='cadastros'?'#0f766e':'white',color:abaAtiva==='cadastros'?'white':'#0f766e',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaAtiva('cadastros')}>⚙️ Cadastros</button>
       </div>
+
+      {/* ── ABA CHAMADOS NFC ── */}
+      {abaAtiva === 'chamados_nfc' && (
+        <div>
+          {/* Header + filtro */}
+          <div style={{background:'#14532d',borderRadius:8,padding:'12px 14px',marginBottom:10,
+            display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+            <div>
+              <div style={{color:'#86efac',fontSize:9,fontWeight:700}}>MÓDULO NFC</div>
+              <div style={{color:'#fff',fontWeight:800,fontSize:13}}>📱 Chamados de Suporte (NFC)</div>
+              <div style={{color:'#bbf7d0',fontSize:9}}>
+                {chamadosNfc.length} chamado(s) · {chamadosNfc.filter(c=>c.status==='Aberto').length} aberto(s)
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+              <select value={nfcStatus} onChange={e=>{setNfcStatus(e.target.value);}}
+                style={{border:'1px solid #166534',borderRadius:5,padding:'5px 8px',fontSize:10,background:'#166534',color:'#fff'}}>
+                <option value="">Todos os status</option>
+                <option value="Aberto">🔴 Aberto</option>
+                <option value="Em Atendimento">🟡 Em Atendimento</option>
+                <option value="Concluído">🟢 Concluído</option>
+                <option value="Cancelado">⚫ Cancelado</option>
+              </select>
+              <button onClick={carregarChamadosNfc}
+                style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:5,
+                  padding:'6px 12px',fontSize:9,fontWeight:700,cursor:'pointer'}}>
+                🔄 Carregar
+              </button>
+            </div>
+          </div>
+
+          {/* Lista */}
+          {loadNfc ? (
+            <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
+          ) : chamadosNfc.length === 0 ? (
+            <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:11}}>
+              Nenhum chamado encontrado. Clique em "Carregar" para atualizar.
+            </div>
+          ) : (
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {chamadosNfc.map(c => {
+                const corStatus = c.status==='Concluído'?'#16a34a':c.status==='Em Atendimento'?'#92400e':c.status==='Cancelado'?'#475569':'#dc2626';
+                const bgStatus  = c.status==='Concluído'?'#dcfce7':c.status==='Em Atendimento'?'#fef9c3':c.status==='Cancelado'?'#f1f5f9':'#fee2e2';
+                return (
+                  <div key={c.id} style={{background:'#fff',border:'1px solid #e2e8f0',
+                    borderLeft:`4px solid ${corStatus}`,borderRadius:6,padding:'10px 12px'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                      <div style={{flex:1}}>
+                        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap',marginBottom:4}}>
+                          <span style={{fontWeight:800,fontSize:11,color:'#1e293b'}}>
+                            {c.nome_solicitante || 'Anônimo'}
+                          </span>
+                          {c.contato_telefone && (
+                            <a href={`tel:${c.contato_telefone}`}
+                              style={{fontSize:9,color:'#0369a1',textDecoration:'none'}}>
+                              📞 {c.contato_telefone}
+                            </a>
+                          )}
+                          <span style={{background:bgStatus,color:corStatus,
+                            borderRadius:8,padding:'1px 8px',fontSize:8,fontWeight:800}}>
+                            {c.status}
+                          </span>
+                        </div>
+                        <div style={{fontSize:10,color:'#374151',marginBottom:3}}>
+                          <strong>{c.chassi}</strong>
+                          {c.placa && ` · ${c.placa}`}
+                          {c.modelo && <span style={{color:'#64748b'}}> · {c.modelo}</span>}
+                        </div>
+                        {c.orgao_cliente && (
+                          <div style={{fontSize:9,color:'#0369a1',fontWeight:600,marginBottom:3}}>
+                            🏛 {c.orgao_cliente}
+                          </div>
+                        )}
+                        {c.descricao_defeito && (
+                          <div style={{fontSize:9,color:'#475569',background:'#f8fafc',
+                            borderRadius:4,padding:'4px 8px',marginTop:4}}>
+                            {c.descricao_defeito.slice(0,180)}{c.descricao_defeito.length>180?'...':''}
+                          </div>
+                        )}
+                        <div style={{fontSize:8,color:'#9ca3af',marginTop:4}}>
+                          Aberto: {new Date(c.created_at).toLocaleString('pt-BR')}
+                          {c.atendido_por && ` · Atendente: ${c.atendido_por}`}
+                        </div>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}}>
+                        {c.status === 'Aberto' && (
+                          <button onClick={()=>atualizarStatusNfc(c.id,'Em Atendimento')}
+                            style={{background:'#f59e0b',color:'#fff',border:'none',borderRadius:4,
+                              padding:'4px 8px',fontSize:8,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
+                            ▶ Atender
+                          </button>
+                        )}
+                        {c.status === 'Em Atendimento' && (
+                          <button onClick={()=>atualizarStatusNfc(c.id,'Concluído')}
+                            style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:4,
+                              padding:'4px 8px',fontSize:8,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
+                            ✅ Concluir
+                          </button>
+                        )}
+                        <button onClick={()=>setModalNfc(c)}
+                          style={{background:'#0369a1',color:'#fff',border:'none',borderRadius:4,
+                            padding:'4px 8px',fontSize:8,fontWeight:700,cursor:'pointer'}}>
+                          📝 Notas
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Modal de notas */}
+          {modalNfc && (
+            <div style={{position:'fixed',inset:0,background:'#0008',zIndex:2000,
+              display:'flex',alignItems:'center',justifyContent:'center'}}
+              onClick={e=>{if(e.target===e.currentTarget)setModalNfc(null)}}>
+              <div style={{background:'#fff',borderRadius:10,width:460,maxWidth:'95vw',
+                maxHeight:'85vh',overflowY:'auto',boxShadow:'0 8px 32px #0003'}}>
+                <div style={{padding:'12px 14px',borderBottom:'1px solid #e2e8f0',
+                  background:'#14532d',borderRadius:'10px 10px 0 0',
+                  display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div style={{color:'#fff',fontWeight:800,fontSize:12}}>
+                    📞 Chamado NFC — {modalNfc.chassi}
+                  </div>
+                  <button onClick={()=>setModalNfc(null)}
+                    style={{background:'none',border:'none',color:'#fff',fontSize:18,cursor:'pointer'}}>✕</button>
+                </div>
+                <div style={{padding:14}}>
+                  <div style={{fontSize:10,color:'#374151',marginBottom:8}}>
+                    <strong>{modalNfc.nome_solicitante}</strong>
+                    {modalNfc.contato_telefone && ` · ${modalNfc.contato_telefone}`}
+                    {modalNfc.orgao_cliente && ` · ${modalNfc.orgao_cliente}`}
+                  </div>
+                  {modalNfc.descricao_defeito && (
+                    <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,
+                      padding:'8px 10px',fontSize:10,color:'#374151',marginBottom:12}}>
+                      {modalNfc.descricao_defeito}
+                    </div>
+                  )}
+                  <label style={{fontSize:9,fontWeight:700,color:'#475569',display:'block',marginBottom:4}}>
+                    Notas de Atendimento
+                  </label>
+                  <textarea defaultValue={modalNfc.notas_atendimento||''}
+                    id="nfc-notas-input" rows={4}
+                    placeholder="Registre aqui as ações tomadas..."
+                    style={{width:'100%',border:'1px solid #d1d5db',borderRadius:5,
+                      padding:'6px 8px',fontSize:10,fontFamily:'inherit',
+                      resize:'vertical',boxSizing:'border-box',outline:'none'}} />
+                  <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}}>
+                    <button onClick={()=>setModalNfc(null)}
+                      style={{background:'#f1f5f9',border:'none',borderRadius:5,
+                        padding:'6px 14px',fontSize:10,fontWeight:600,cursor:'pointer',color:'#475569'}}>
+                      Fechar
+                    </button>
+                    <button onClick={async()=>{
+                      const notas=(document.getElementById('nfc-notas-input') as HTMLTextAreaElement)?.value||'';
+                      await atualizarStatusNfc(modalNfc.id, modalNfc.status, notas);
+                      alert('Notas salvas!');
+                    }}
+                      style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:5,
+                        padding:'6px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
+                      💾 Salvar Notas
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── ABA CADASTROS ── */}
       {abaAtiva === 'cadastros' && (
