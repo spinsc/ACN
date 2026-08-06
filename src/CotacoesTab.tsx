@@ -69,10 +69,10 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
   const prms      = cotacao.parametros_globais || {};
   const itens     = cotacao.itens || [];
   const results   = itens.map(it => calcItem(it, prms));
-  const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
-  const totCusto  = results.reduce((s, r) => s + r.custoTotal, 0);
-  const maxDesc   = Number(cotacao.desconto_maximo_pct) || 0;
-  const valorDesc = totVendas * desconto / 100;
+  const totVendas  = results.reduce((s, r) => s + r.valorTotal,   0);
+  const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
+  const maxDesc    = Number(cotacao.desconto_maximo_pct) || 0;
+  const valorDesc  = totVendas * desconto / 100;
   const valorFinal = totVendas - valorDesc;
 
   const precisaAprovacao = desconto > maxDesc && maxDesc > 0;
@@ -129,36 +129,41 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:18, color:'#6b7280', cursor:'pointer' }}>✕</button>
         </div>
         <div style={{ padding:16 }}>
-          {/* Resumo de valor */}
+          {/* Resumo de valor — valor de venda + impostos */}
           <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 14px', marginBottom:14 }}>
             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-              <span style={{ fontSize:10, color:'#64748b' }}>Total de Venda</span>
-              <span style={{ fontSize:12, fontWeight:700, color:'#1e293b' }}>{fmtR(totVendas)}</span>
+              <span style={{ fontSize:10, color:'#64748b' }}>Valor de Venda</span>
+              <span style={{ fontSize:13, fontWeight:800, color:'#1e293b' }}>{fmtR(totVendas)}</span>
             </div>
-            {verCustos && (
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                <span style={{ fontSize:9, color:'#64748b' }}>Custo Total</span>
-                <span style={{ fontSize:10, color:'#475569' }}>{fmtR(totCusto)}</span>
-              </div>
-            )}
+            <div style={{ display:'flex', justifyContent:'space-between', paddingTop:6, borderTop:'1px solid #bae6fd' }}>
+              <span style={{ fontSize:10, color:'#64748b' }}>Impostos</span>
+              <span style={{ fontSize:11, fontWeight:700, color:'#b45309' }}>{fmtR(totImposto)}</span>
+            </div>
             {maxDesc > 0 && (
-              <div style={{ fontSize:9, color:'#dc2626', fontWeight:700, marginTop:4 }}>
-                ⚠️ Desconto máximo autorizado: {maxDesc}%
+              <div style={{ fontSize:9, color:'#0369a1', fontWeight:700, marginTop:8,
+                background:'#e0f2fe', borderRadius:4, padding:'4px 8px', display:'inline-block' }}>
+                🔒 Desconto máximo permitido: {maxDesc}%
               </div>
             )}
           </div>
 
-          {/* Slider de desconto */}
+          {/* Slider de desconto — limitado ao maxDesc configurado */}
           <div style={{ marginBottom:14 }}>
             <div style={{ fontSize:10, fontWeight:700, color:'#475569', marginBottom:6, display:'flex', justifyContent:'space-between' }}>
               <span>Desconto (%)</span>
-              <span style={{ color: precisaAprovacao ? '#dc2626' : '#16a34a', fontWeight:800 }}>{desconto}%</span>
+              <span style={{ color:'#0f766e', fontWeight:800 }}>{desconto}%</span>
             </div>
-            <input type="range" min={0} max={50} step={0.5} value={desconto}
+            <input type="range" min={0}
+              max={maxDesc > 0 ? maxDesc : 50}
+              step={maxDesc > 0 ? Math.min(0.5, maxDesc / 10) : 0.5}
+              value={desconto}
               onChange={e => setDesconto(Number(e.target.value))}
-              style={{ width:'100%', accentColor: precisaAprovacao ? '#dc2626' : '#0f766e' }} />
+              style={{ width:'100%', accentColor:'#0f766e' }} />
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#9ca3af' }}>
-              <span>0%</span><span>25%</span><span>50%</span>
+              <span>0%</span>
+              {maxDesc > 0
+                ? <><span>{(maxDesc / 2).toFixed(1)}%</span><span>{maxDesc}%</span></>
+                : <><span>25%</span><span>50%</span></>}
             </div>
           </div>
 
