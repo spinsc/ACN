@@ -98,11 +98,14 @@ const VAZIO = {
   empresa:       'ACN',  // 'ACN' | 'Detech'
 
   // ── Campos OP ────────────────────────────────────────────────────────────
-  opl:                    '',
+  pedido_venda:           '',   // 4 dígitos — gera o número da OP automaticamente
+  opl:                    '',   // derivado: PPPP.YYMMM  (ou PPPP.YYMMM/01, /02...)
   tipo_projeto:           'Transformacao Veicular Ostensiva',
   chassi:                 '',
+  placa:                  '',   // sempre ativo
   modelo:                 '',
   quantidade:             1,
+  veiculos:               [] as {chassi:string, placa:string}[], // para desmembramento
   valor_total:            '',
   valor_mao_de_obra:      '',
   valor_mao_de_obra_serralheria: '',
@@ -163,7 +166,25 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     setErro('');
   }, [isOpen, crmCard?.id]);
 
-  const setF = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const setF = (k: string, v: any) => setForm(f => {
+    const next = { ...f, [k]: v };
+    // Ao digitar pedido_venda, deriva o número da OP automaticamente
+    if (k === 'pedido_venda') {
+      const pv = String(v).replace(/\D/g,'').slice(0,4);
+      const now = new Date();
+      const yy = String(now.getFullYear()).slice(-2);
+      const mm = String(now.getMonth() + 1).padStart(2,'0');
+      next.opl = pv ? `${pv.padStart(4,'0')}.${yy}${mm}` : '';
+    }
+    // Ao mudar quantidade, ajusta o array veiculos
+    if (k === 'quantidade') {
+      const qty = Math.max(1, parseInt(v) || 1);
+      const prev = f.veiculos || [];
+      const veiculos = Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'' });
+      next.veiculos = veiculos;
+    }
+    return next;
+  });
 
   const salvar = async () => {
     setErro('');
@@ -176,21 +197,27 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     setSalvando(true);
     try {
       if (form.tipo === 'OP') {
-        // Verificar duplicata
-        const { data: existente } = await supabase.from('oples').select('id').eq('opl', form.opl.trim()).maybeSingle();
+        const baseOpl = form.opl.trim();
+        const qty = Math.max(1, parseInt(String(form.quantidade)) || 1);
+        const desmembrar = qty > 1;
+
+        // Verificar duplicata da base
+        const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
         if (existente) {
-          alert(`OP "${form.opl.trim()}" já está cadastrada. Use um número diferente.`);
+          alert(`OP "${desmembrar ? baseOpl+'/01' : baseOpl}" já está cadastrada. Use um número diferente.`);
           setSalvando(false);
           return;
         }
-        const payload: any = {
-          opl:                    form.opl.trim(),
+
+        const makePayload = (oplNum: string, veiculo?: {chassi:string, placa:string}) => ({
+          opl:                    oplNum,
           tipo_op:                'OPL',
           faturamento_empresa:    form.empresa,
           tipo_projeto:           form.tipo_projeto,
-          chassi:                 form.chassi || null,
+          chassi:                 (veiculo?.chassi || form.chassi) || null,
+          placa:                  (veiculo?.placa  || form.placa)  || null,
           modelo:                 form.modelo || null,
-          quantidade:             Number(form.quantidade) || 1,
+          quantidade:             1,
           valor_total:            form.valor_total ? parseFloat(String(form.valor_total).replace(/\./g,'').replace(',','.')) : null,
           valor_mao_de_obra:      form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(/\./g,'').replace(',','.')) : null,
           valor_mao_de_obra_serralheria: form.valor_mao_de_obra_serralheria ? parseFloat(String(form.valor_mao_de_obra_serralheria).replace(/\./g,'').replace(',','.')) : null,
@@ -204,22 +231,38 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    crmCard?.id || null,
-          // Serviço de terceiro (multi)
-          servico_terceiro:        !!form.servico_terceiro,
-          // tipos_servico_terceiro só é incluído quando a coluna existir no DB
-          // (rodar: ALTER TABLE oples ADD COLUMN IF NOT EXISTS tipos_servico_terceiro jsonb DEFAULT '[]'::jsonb)
+          servico_terceiro:       !!form.servico_terceiro,
           ...(form.servico_terceiro && form.tipos_servico_terceiro.length > 0
             ? { tipos_servico_terceiro: form.tipos_servico_terceiro }
             : {}),
-          tipo_servico_terceiro:   form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
-          obs_servico_terceiro:    (form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
-          resumo_servicos:         form.resumo_servicos || null,
-        };
-        const { data, error } = await supabase.from('oples').insert([payload]).select().single();
-        if (error) throw error;
-        onSaved?.(data, 'op');
-        setSavedOp(data);
-        return; // vai para o passo 2 (documentos) em vez de fechar
+          tipo_servico_terceiro:  form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
+          obs_servico_terceiro:   (form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
+          resumo_servicos:        form.resumo_servicos || null,
+        });
+
+        let firstData: any;
+        if (desmembrar) {
+          // Criar uma OP por veículo com sufixo /01, /02...
+          const veiculos = form.veiculos || [];
+          for (let i = 0; i < qty; i++) {
+            const suf = String(i + 1).padStart(2, '0');
+            const { data, error } = await supabase.from('oples')
+              .insert([makePayload(`${baseOpl}/${suf}`, veiculos[i])])
+              .select().single();
+            if (error) throw error;
+            if (i === 0) firstData = data;
+          }
+          onSaved?.(firstData, 'op');
+          alert(`✅ ${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`);
+          onClose();
+          return;
+        } else {
+          const { data, error } = await supabase.from('oples').insert([makePayload(baseOpl)]).select().single();
+          if (error) throw error;
+          onSaved?.(data, 'op');
+          setSavedOp(data);
+          return; // vai para o passo 2 (documentos) em vez de fechar
+        }
       } else {
         const payload: any = {
           tipo_servico:         form.tipo_servico,
@@ -356,12 +399,30 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           {/* Campos OP */}
           {isOP && (
             <>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:10, marginBottom:10 }}>
+              {/* Número OP: Pedido de Venda → PPPP.YYMMM */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número da OP *</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 2025.001"
-                    value={form.opl} onChange={e => setF('opl', e.target.value)} />
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>N° Pedido de Venda * (4 dígitos)</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 1212" maxLength={4}
+                    value={form.pedido_venda} onChange={e => setF('pedido_venda', e.target.value.replace(/\D/g,''))} />
                 </div>
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número OP gerado</div>
+                  <div style={{ background: form.opl ? '#f0fdf4' : '#f8fafc',
+                    border:`1px solid ${form.opl ? '#86efac' : '#e2e8f0'}`,
+                    borderRadius:5, padding:'6px 10px', fontSize:11, fontWeight:800,
+                    color: form.opl ? '#166534' : '#9ca3af', letterSpacing:1, minHeight:30,
+                    display:'flex', alignItems:'center' }}>
+                    {form.opl || 'PPPP.AAММ'}
+                    {form.opl && Number(form.quantidade) > 1 && (
+                      <span style={{ fontSize:9, marginLeft:6, color:'#7c3aed', fontWeight:700 }}>
+                        → /01…/{String(form.quantidade).padStart(2,'0')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo de Projeto *</div>
                   <select className="acn-input" style={{ width:'100%' }} value={form.tipo_projeto}
@@ -371,12 +432,47 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     ))}
                   </select>
                 </div>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Qtd. Veículos</div>
-                  <input className="acn-input" style={{ width:'100%' }} type="number" min={1}
+                  <input className="acn-input" style={{ width:'100%' }} type="number" min={1} max={99}
                     value={form.quantidade} onChange={e => setF('quantidade', e.target.value)} />
+                </div>
+              </div>
+
+              {/* Veículos individuais quando qty > 1 */}
+              {Number(form.quantidade) > 1 && (
+                <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:7,
+                  padding:10, marginBottom:10 }}>
+                  <div style={{ fontSize:9, fontWeight:800, color:'#7c3aed', marginBottom:8, textTransform:'uppercase' }}>
+                    🚗 Dados por Veículo (desmembramento)
+                  </div>
+                  {(form.veiculos || []).map((v, i) => (
+                    <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:6, marginBottom:6, alignItems:'center' }}>
+                      <span style={{ fontSize:10, fontWeight:800, color:'#7c3aed', width:28 }}>
+                        {String(i+1).padStart(2,'0')}
+                      </span>
+                      <input className="acn-input" placeholder="Chassi" value={v.chassi}
+                        onChange={e => {
+                          const veiculos = [...(form.veiculos||[])];
+                          veiculos[i] = { ...veiculos[i], chassi: e.target.value };
+                          setF('veiculos', veiculos);
+                        }} />
+                      <input className="acn-input" placeholder="Placa" value={v.placa}
+                        onChange={e => {
+                          const veiculos = [...(form.veiculos||[])];
+                          veiculos[i] = { ...veiculos[i], placa: e.target.value.toUpperCase() };
+                          setF('veiculos', veiculos);
+                        }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Placa</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: ABC-1234"
+                    value={form.placa} onChange={e => setF('placa', e.target.value.toUpperCase())} />
                 </div>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Chassi</div>

@@ -118,12 +118,51 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
   const [form, setForm] = useState<any>({
     codigo: '', nome: '', descricao: '', categoria: '', unidade: 'UN', ncm: '',
     markup_pct: 30, custo_fixo_pct: 3, imposto_pct: 16, difal_pct: 16,
+    garantia_meses: 12,
     preco_manual: false, preco_venda: 0, observacoes: '', ativo: true,
     ...produto,
   });
   const [linhas, setLinhas]       = useState<any[]>([]);
   const [salvando, setSalvando]   = useState(false);
   const [loadingBom, setLoadingBom] = useState(false);
+  // Fotos e catálogo
+  const [fotos, setFotos]         = useState<string[]>(produto?.fotos || []);
+  const [catalogoUrl, setCatalogoUrl] = useState<string>(produto?.catalogo_url || '');
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [uploadingCatalogo, setUploadingCatalogo] = useState(false);
+
+  // ID pré-gerado para novos produtos (permite upload antes do save)
+  const [produtoIdLocal] = useState<string>(() => produto?.id || crypto.randomUUID());
+
+  const uploadFoto = async (file: File) => {
+    setUploadingFoto(true);
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `produtos/${produtoIdLocal}/fotos/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: false });
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
+      setFotos(prev => [...prev, urlData.publicUrl]);
+    } else {
+      alert('Erro ao enviar foto: ' + error.message);
+    }
+    setUploadingFoto(false);
+  };
+
+  const removeFoto = (idx: number) => setFotos(prev => prev.filter((_, i) => i !== idx));
+
+  const uploadCatalogo = async (file: File) => {
+    setUploadingCatalogo(true);
+    const ext = file.name.split('.').pop() || 'pdf';
+    const path = `produtos/${produtoIdLocal}/catalogo/catalogo.${ext}`;
+    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
+      setCatalogoUrl(urlData.publicUrl);
+    } else {
+      alert('Erro ao enviar catálogo: ' + error.message);
+    }
+    setUploadingCatalogo(false);
+  };
 
   const set = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
 
@@ -183,19 +222,22 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
       custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
       imposto_pct:   Number(form.imposto_pct) || 16,
       difal_pct:     Number(form.difal_pct) || 16,
+      garantia_meses: Number(form.garantia_meses) || 12,
+      fotos:         fotos,
+      catalogo_url:  catalogoUrl || null,
       preco_manual:  !!form.preco_manual,
       preco_venda:   form.preco_manual ? (Number(form.preco_venda) || 0) : precoVenda,
       observacoes:   form.observacoes?.trim() || null,
       ativo:         form.ativo !== false,
     };
 
-    let produtoId = produto?.id;
+    let produtoId = produtoIdLocal;
     if (isEdit) {
       await supabase.from('cadastro_produtos').update(payload).eq('id', produtoId);
     } else {
+      payload.id = produtoIdLocal;
       payload.criado_por = currentUser?.email;
-      const { data } = await supabase.from('cadastro_produtos').insert([payload]).select().single();
-      produtoId = data?.id;
+      await supabase.from('cadastro_produtos').insert([payload]);
     }
 
     if (produtoId) {
@@ -325,6 +367,18 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
               ))}
             </div>
 
+            {/* Garantia */}
+            <div style={{ marginBottom: 10 }}>
+              <span style={lbl}>🛡️ Garantia Padrão</span>
+              <select style={{ ...inp, cursor: 'pointer' }}
+                value={form.garantia_meses} onChange={e => set('garantia_meses', Number(e.target.value))}>
+                <option value={6}>6 meses</option>
+                <option value={12}>12 meses</option>
+                <option value={24}>24 meses</option>
+                <option value={60}>60 meses</option>
+              </select>
+            </div>
+
             {/* Resumo financeiro */}
             <div style={{
               background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6,
@@ -374,6 +428,71 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
               <textarea style={{ ...inp, resize: 'vertical', minHeight: 40 }}
                 value={form.observacoes} onChange={e => set('observacoes', e.target.value)}
                 placeholder="Notas adicionais..." />
+            </div>
+
+            {/* ── Fotos e Catálogo ── */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '.6px', borderBottom: '1px solid #e2e8f0', paddingBottom: 3, marginBottom: 10 }}>
+                📸 Fotos e Catálogo
+              </div>
+
+              {/* Fotos */}
+              <span style={lbl}>Fotos do Produto</span>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
+                padding: '6px 9px', border: '1px dashed #c4b5fd', borderRadius: 5,
+                cursor: uploadingFoto ? 'wait' : 'pointer', background: '#faf5ff', fontSize: 10, color: '#7c3aed',
+              }}>
+                <input type="file" accept="image/*" multiple style={{ display: 'none' }}
+                  disabled={uploadingFoto}
+                  onChange={async e => {
+                    const files = Array.from(e.target.files || []);
+                    for (const f of files) await uploadFoto(f);
+                    e.target.value = '';
+                  }} />
+                {uploadingFoto ? '⏳ Enviando...' : '📎 Selecionar fotos (múltiplas)'}
+              </label>
+
+              {fotos.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                  {fotos.map((url, i) => (
+                    <div key={i} style={{ position: 'relative', width: 56, height: 56 }}>
+                      <img src={url} alt={`foto-${i}`} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 5, border: '1px solid #d1d5db' }} />
+                      <button onClick={() => removeFoto(i)} title="Remover"
+                        style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, background: '#ef4444', border: 'none', borderRadius: '50%', color: '#fff', fontSize: 9, cursor: 'pointer', lineHeight: '16px', textAlign: 'center', padding: 0 }}>
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Catálogo PDF */}
+              <span style={{ ...lbl, marginTop: 6 }}>Catálogo PDF</span>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 9px', border: '1px dashed #c4b5fd', borderRadius: 5,
+                cursor: uploadingCatalogo ? 'wait' : 'pointer', background: '#faf5ff', fontSize: 10, color: '#7c3aed',
+              }}>
+                <input type="file" accept=".pdf,application/pdf" style={{ display: 'none' }}
+                  disabled={uploadingCatalogo}
+                  onChange={async e => {
+                    const f = e.target.files?.[0];
+                    if (f) await uploadCatalogo(f);
+                    e.target.value = '';
+                  }} />
+                {uploadingCatalogo ? '⏳ Enviando...' : '📄 Selecionar PDF'}
+              </label>
+              {catalogoUrl && (
+                <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
+                  <a href={catalogoUrl} target="_blank" rel="noreferrer"
+                    style={{ color: '#7c3aed', textDecoration: 'underline', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    📄 Ver catálogo
+                  </a>
+                  <button onClick={() => setCatalogoUrl('')}
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, padding: 0 }}>✕</button>
+                </div>
+              )}
             </div>
           </div>
 

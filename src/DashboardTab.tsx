@@ -24,9 +24,11 @@ import FormacaoPrecosTab from './FormacaoPrecosTab';
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
+import CalendarioTab from './CalendarioTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
 import RHTab from './RHTab';
+import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel from './AnaliseInboxPanel';
 import MencoesInboxPanel from './MencoesInboxPanel';
@@ -56,6 +58,7 @@ const SIDEBAR_GROUPS = [
     section: 'Dashboard',
     items: [
       { id: 'dashboard', label: 'Dashboard' },
+      { id: 'calendario', label: '📅 Calendário' },
     ],
   },
   {
@@ -94,6 +97,7 @@ const SIDEBAR_GROUPS = [
       { id: 'vistorias',  label: 'Vistorias de Pátio' },
       { id: 'ajustes',    label: 'Demandas Gerais' },
       { id: 'compras',         label: 'Compras' },
+      { id: 'financeiro',      label: 'Financeiro' },
       { id: 'cadastro_itens',    label: 'Cadastro de Itens' },
       { id: 'cadastro_produtos', label: 'Produto e Mercadorias' },
       { id: 'rh',                label: 'RH' },
@@ -801,6 +805,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'calendario':   return <CalendarioTab currentUser={currentUser} />;
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
@@ -809,6 +814,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" />;
       case 'laboratorio':  return <SetorDemandaTab currentUser={currentUser} setor="Laboratorio" cor="#0891b2" />;
       case 'compras':         return <><SetorDemandaTab currentUser={currentUser} setor="Compras" cor="#16a34a" /><ComprasTab currentUser={currentUser} /></>;
+      case 'financeiro':      return <FinanceiroTab currentUser={currentUser} />;
       case 'cadastro_itens':    return <CadastroItensTab currentUser={currentUser} />;
       case 'cadastro_produtos': return <CadastroProdutosTab currentUser={currentUser} />;
       case 'almoxarifado': return <AlmoxarifadoTab currentUser={currentUser} />;

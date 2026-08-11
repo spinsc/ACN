@@ -6,6 +6,7 @@ import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './Cliente
 import MencaoTextarea from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import AgendaWidget from './AgendaWidget';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -1111,6 +1112,10 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div>
+      {/* AGENDA */}
+      <div style={{ padding:'12px 12px 0' }}>
+        <AgendaWidget setor="sac" currentUser={currentUser} />
+      </div>
       {/* ── SELETOR DE ABA ── */}
       <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #0f766e'}}>
         <button style={{flex:1,padding:'8px',background:abaAtiva==='os'?'#0f766e':'white',color:abaAtiva==='os'?'white':'#0f766e',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}

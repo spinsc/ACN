@@ -9,6 +9,8 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
+import AgendaWidget from './AgendaWidget';
+import { useUnread, UnreadBadge } from './useUnread';
 
 
 const TIPOS_PROJETO = [
@@ -188,6 +190,10 @@ function _UNUSED_CRMSection({ currentUser }) {
 
   return (
     <div>
+      {/* AGENDA */}
+      <div style={{ padding:'12px 12px 0' }}>
+        <AgendaWidget setor="comercial" currentUser={currentUser} />
+      </div>
       {/* ALERTA ATRASADOS */}
       {overdue.length > 0 && (
         <div style={{background:'#fef2f2',border:'2px solid #ef4444',borderRadius:6,padding:'8px 12px',marginBottom:10,display:'flex',alignItems:'center',gap:10}}>
@@ -550,6 +556,7 @@ function _UNUSED_CRMSection({ currentUser }) {
 export default function ComercialTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { isUnread: isOplUnread, marcarLido: marcarOplLido } = useUnread('oples', opls, currentUser?.email, 'atualizado_em');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(FORM_VAZIO);
   const [editId, setEditId] = useState(null);
@@ -1027,7 +1034,7 @@ export default function ComercialTab({ currentUser }) {
               <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>
                 <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);window.scrollTo({top:0,behavior:'smooth'});}}>✏️ Editar</button>
-                <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬</button>
               </div></td></tr>
             ))}</tbody></table>
@@ -1055,7 +1062,7 @@ export default function ComercialTab({ currentUser }) {
               <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>
                 <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);window.scrollTo({top:0,behavior:'smooth'});}}>✏️ Editar</button>
-                <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬</button>
               </div></td></tr>
             ))}</tbody></table>
@@ -1184,7 +1191,7 @@ export default function ComercialTab({ currentUser }) {
                           )}
                           {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>}
                           {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
-                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
                           <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬 ACOMP.</button>
                         </div>
                       </td>

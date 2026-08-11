@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
+import AgendaWidget from './AgendaWidget';
+import { useUnread, UnreadBadge } from './useUnread';
 import MencaoTextarea from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1202,6 +1204,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL NOVA LICITAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
+// Definido FORA de ModalNova: se ficasse dentro, uma nova função seria criada a
+// cada re-render (cada tecla digitada), fazendo o React desmontar e remontar o
+// <input>, o que tira o foco do campo a cada caractere digitado.
+function ModalNovaInput({ label, field, value, onChange, type='text', required=false }: any) {
+  return (
+    <div>
+      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}{required?' *':''}</label>
+      <input type={type} value={value||''} onChange={e=>onChange(field,e.target.value)}
+        style={{ width:'100%', padding:'5px 8px', border:`1px solid ${required&&!value?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+    </div>
+  );
+}
+
 function ModalNova({ currentUser, onClose, onSaved }) {
   const [form, setForm] = useState({
     ...LICIT_VAZIO,
@@ -1242,14 +1257,6 @@ function ModalNova({ currentUser, onClose, onSaved }) {
     onClose();
   };
 
-  const Input = ({ label, field, type='text', required=false }) => (
-    <div>
-      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}{required?' *':''}</label>
-      <input type={type} value={form[field]||''} onChange={e=>set(field,e.target.value)}
-        style={{ width:'100%', padding:'5px 8px', border:`1px solid ${required&&!form[field]?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-    </div>
-  );
-
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
       <div style={{ background:'#fff', borderRadius:8, width:'min(660px,95vw)', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
@@ -1277,7 +1284,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <Input label="Número da Licitação" field="numero" required />
+            <ModalNovaInput label="Número da Licitação" field="numero" value={form.numero} onChange={set} required />
             <div>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação *</label>
               <select value={form.classificacao} onChange={e=>set('classificacao',e.target.value)}
@@ -1289,11 +1296,11 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             </div>
           </div>
 
-          <Input label="Nome do Projeto" field="nome_projeto" required />
-          <Input label="Órgão" field="orgao" required />
-          <Input label="Objeto Principal" field="objeto_principal" />
-          <Input label="Valor Estimado (R$) — opcional" field="valor_estimado" type="number" />
-          <Input label="Operador" field="operador" />
+          <ModalNovaInput label="Nome do Projeto" field="nome_projeto" value={form.nome_projeto} onChange={set} required />
+          <ModalNovaInput label="Órgão" field="orgao" value={form.orgao} onChange={set} required />
+          <ModalNovaInput label="Objeto Principal" field="objeto_principal" value={form.objeto_principal} onChange={set} />
+          <ModalNovaInput label="Valor Estimado (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="number" />
+          <ModalNovaInput label="Operador" field="operador" value={form.operador} onChange={set} />
 
           <div>
             <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Prioridade</label>
@@ -1313,21 +1320,21 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
             <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:8 }}>PRAZOS</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-              <Input label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" type="datetime-local" />
-              <Input label="Limite Cadastro da Proposta" field="data_limite_proposta" type="datetime-local" />
-              <Input label="Data/Hora de Disputa" field="data_disputa" type="datetime-local" />
-              <Input label="Horário da Sessão" field="horario_sessao" type="time" />
-              <Input label="Limite Análise Técnica" field="data_limite_analise_tecnica" type="datetime-local" />
+              <ModalNovaInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" value={form.data_limite_esclarecimentos} onChange={set} type="datetime-local" />
+              <ModalNovaInput label="Limite Cadastro da Proposta" field="data_limite_proposta" value={form.data_limite_proposta} onChange={set} type="datetime-local" />
+              <ModalNovaInput label="Data/Hora de Disputa" field="data_disputa" value={form.data_disputa} onChange={set} type="datetime-local" />
+              <ModalNovaInput label="Horário da Sessão" field="horario_sessao" value={form.horario_sessao} onChange={set} type="time" />
+              <ModalNovaInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" value={form.data_limite_analise_tecnica} onChange={set} type="datetime-local" />
             </div>
           </div>
 
           <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
             <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:8 }}>OPERADORES</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-              <Input label="Analista de Licitações" field="analista_nome" />
-              <Input label="E-mail do Analista" field="analista_email" type="email" />
-              <Input label="Analista Técnico" field="coordenador_nome" />
-              <Input label="E-mail do Analista Técnico" field="coordenador_email" type="email" />
+              <ModalNovaInput label="Analista de Licitações" field="analista_nome" value={form.analista_nome} onChange={set} />
+              <ModalNovaInput label="E-mail do Analista" field="analista_email" value={form.analista_email} onChange={set} type="email" />
+              <ModalNovaInput label="Analista Técnico" field="coordenador_nome" value={form.coordenador_nome} onChange={set} />
+              <ModalNovaInput label="E-mail do Analista Técnico" field="coordenador_email" value={form.coordenador_email} onChange={set} type="email" />
             </div>
           </div>
         </div>
@@ -1347,22 +1354,25 @@ function ModalNova({ currentUser, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE LICITAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
-function LicitCard({ l, onClick }) {
+function LicitCard({ l, onClick, unread = false }) {
   const marcadores: string[] = l.marcadores || [];
   const dias = diasRestantes(l.data_disputa);
   const urgente = dias !== null && dias >= 0 && dias <= 5;
   const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Análise','Analisada','Em Andamento'].includes(l.status);
 
   return (
-    <div onClick={onClick} style={{ background:'#fff', border:`1.5px solid ${STATUS_COR[l.status]||'#e2e8f0'}20`,
-      borderLeft:`4px solid ${STATUS_COR[l.status]||'#e2e8f0'}`,
+    <div onClick={onClick} style={{ background: unread ? '#fefce8' : '#fff',
+      border:`1.5px solid ${STATUS_COR[l.status]||'#e2e8f0'}20`,
+      borderLeft:`4px solid ${unread ? '#f59e0b' : (STATUS_COR[l.status]||'#e2e8f0')}`,
       borderRadius:6, padding:'10px 12px', cursor:'pointer', marginBottom:8,
-      boxShadow:'0 1px 3px #0001', transition:'box-shadow .15s' }}
+      boxShadow: unread ? '0 0 0 1px #fcd34d40' : '0 1px 3px #0001',
+      transition:'box-shadow .15s' }}
       onMouseEnter={e=>(e.currentTarget.style.boxShadow='0 3px 8px #0002')}
-      onMouseLeave={e=>(e.currentTarget.style.boxShadow='0 1px 3px #0001')}>
+      onMouseLeave={e=>(e.currentTarget.style.boxShadow=unread?'0 0 0 1px #fcd34d40':'0 1px 3px #0001')}>
       <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginBottom:3 }}>
+            {unread && <UnreadBadge show />}
             <span style={{ background:STATUS_COR[l.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{l.status}</span>
             <span style={{ background:PRIO_COR[l.prioridade]+'18', color:PRIO_COR[l.prioridade], border:`1px solid ${PRIO_COR[l.prioridade]}40`, borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>{l.prioridade}</span>
             <span style={{ background:'#f1f5f9', color:'#475569', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:600 }}>{l.classificacao}</span>
@@ -1543,173 +1553,9 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PIPELINE CRM — kanban de crm_oportunidades (funil licitacao)
-// ─────────────────────────────────────────────────────────────────────────────
-function PipelineCrmLicitacoes({ currentUser }) {
-  const [estagios, setEstagios] = useState<any[]>([]);
-  const [ops,      setOps]      = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [busca,    setBusca]    = useState('');
-
-  const carregar = useCallback(async () => {
-    const [{ data: est }, { data: oportunidades }] = await Promise.all([
-      supabase.from('crm_estagios_funil').select('*').order('ordem'),
-      supabase.from('crm_oportunidades')
-        .select('*').eq('funil', 'licitacao')
-        .order('posicao', { ascending: true })
-        .order('criado_em', { ascending: false }),
-    ]);
-    setEstagios(est || []);
-    setOps(oportunidades || []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { carregar(); }, [carregar]);
-
-  const fmtValor = (v: any) => v ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits:2 })}` : null;
-
-  const STATUS_COR_FUNIL: Record<string,string> = {
-    'Aberto':      '#2563eb',
-    'Ganho':       '#16a34a',
-    'Perdido':     '#dc2626',
-    'Desistência': '#d97706',
-    'Vencida':     '#7c3aed',
-  };
-
-  const opsFiltradas = busca
-    ? ops.filter(o =>
-        (o.titulo||'').toLowerCase().includes(busca.toLowerCase()) ||
-        (o.orgao||'').toLowerCase().includes(busca.toLowerCase()) ||
-        (o.responsavel_nome||'').toLowerCase().includes(busca.toLowerCase())
-      )
-    : ops;
-
-  const abrirNoCrm = (op: any) => {
-    window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: 'crm', origemId: op.id } }));
-  };
-
-  if (loading) return (
-    <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#94a3b8', fontSize:13 }}>
-      Carregando pipeline...
-    </div>
-  );
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
-      {/* Barra superior */}
-      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px',
-        display:'flex', gap:10, alignItems:'center', flexShrink:0 }}>
-        <input
-          value={busca} onChange={e => setBusca(e.target.value)}
-          placeholder="Buscar por título, órgão ou responsável..."
-          style={{ flex:1, border:'1px solid #d1d5db', borderRadius:6, padding:'6px 10px', fontSize:11, outline:'none' }} />
-        <div style={{ fontSize:11, color:'#64748b', whiteSpace:'nowrap' }}>
-          {opsFiltradas.length} oportunidade{opsFiltradas.length !== 1 ? 's' : ''}
-        </div>
-        <button onClick={carregar}
-          style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:5,
-            padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-          ↺ Atualizar
-        </button>
-      </div>
-
-      {/* Info */}
-      <div style={{ background:'#f0fdf4', borderBottom:'1px solid #bbf7d0', padding:'6px 16px',
-        fontSize:9, color:'#16a34a', fontWeight:700, flexShrink:0 }}>
-        💡 Clique em qualquer card para abrir e editar no módulo Comercial/CRM
-      </div>
-
-      {/* Kanban */}
-      <div style={{ flex:1, overflowX:'auto', display:'flex', gap:12, padding:16, alignItems:'flex-start' }}>
-        {estagios.map(est => {
-          const cards = opsFiltradas.filter(o => o.estagio_id === est.id);
-          const corEst = est.cor || '#64748b';
-          return (
-            <div key={est.id} style={{ minWidth:220, maxWidth:240, flexShrink:0 }}>
-              {/* Cabeçalho coluna */}
-              <div style={{ background: corEst + '15', border:`1.5px solid ${corEst}40`,
-                borderRadius:'8px 8px 0 0', padding:'8px 10px',
-                display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div style={{ fontWeight:800, fontSize:10, color: corEst }}>{est.nome}</div>
-                <span style={{ background: corEst, color:'#fff', borderRadius:10,
-                  padding:'1px 7px', fontSize:9, fontWeight:700 }}>{cards.length}</span>
-              </div>
-
-              {/* Cards */}
-              <div style={{ background:'#f8fafc', border:`1px solid ${corEst}30`,
-                borderRadius:'0 0 8px 8px', minHeight:80, padding:6 }}>
-                {cards.length === 0 ? (
-                  <div style={{ color:'#cbd5e1', fontSize:9, textAlign:'center', padding:'16px 0' }}>
-                    Sem oportunidades
-                  </div>
-                ) : cards.map(op => (
-                  <div key={op.id} onClick={() => abrirNoCrm(op)}
-                    style={{ background:'#fff', border:'1.5px solid #e2e8f0',
-                      borderLeft:`4px solid #7c3aed`,
-                      borderRadius:6, padding:'8px 10px', marginBottom:6,
-                      cursor:'pointer', transition:'box-shadow .15s' }}
-                    onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px #7c3aed20')}
-                    onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>
-                    {/* Badges */}
-                    <div style={{ display:'flex', gap:4, marginBottom:4, flexWrap:'wrap' }}>
-                      {op.tipo_licitacao === 'ata' && (
-                        <span style={{ background:'#fdf4ff', color:'#a21caf',
-                          fontSize:7, fontWeight:700, padding:'1px 5px', borderRadius:3 }}>
-                          ATA
-                        </span>
-                      )}
-                      {op.empresa_faturamento && (
-                        <span style={{ background: op.empresa_faturamento === 'ACN' ? '#dbeafe' : '#fce7f3',
-                          color: op.empresa_faturamento === 'ACN' ? '#1e40af' : '#9d174d',
-                          fontSize:7, fontWeight:700, padding:'1px 5px', borderRadius:3 }}>
-                          {op.empresa_faturamento}
-                        </span>
-                      )}
-                    </div>
-                    {/* Título */}
-                    <div style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, marginBottom:3 }}>
-                      {op.titulo || '(sem título)'}
-                    </div>
-                    {/* Órgão */}
-                    {op.orgao && (
-                      <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>
-                        🏛️ {op.orgao}
-                      </div>
-                    )}
-                    {/* Valor */}
-                    {op.valor_estimado && (
-                      <div style={{ fontSize:9, fontWeight:700, color:'#16a34a' }}>
-                        {fmtValor(op.valor_estimado)}
-                      </div>
-                    )}
-                    {/* Responsável */}
-                    {op.responsavel_nome && (
-                      <div style={{ fontSize:8, color:'#94a3b8', marginTop:3 }}>
-                        👤 {op.responsavel_nome}
-                      </div>
-                    )}
-                    {/* Data */}
-                    {op.data_abertura && (
-                      <div style={{ fontSize:8, color:'#94a3b8' }}>
-                        📅 {new Date(op.data_abertura).toLocaleDateString('pt-BR')}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
-  const [abaPrincipal, setAbaPrincipal] = useState<'licitacoes'|'pipeline'>('licitacoes');
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
@@ -1724,6 +1570,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   const isAdmin = true;
   const isAnalista = true;
+
+  // Rastreamento de não lidos
+  const { isUnread, marcarLido } = useUnread('licitacoes', licitacoes, currentUser?.email, 'atualizado_em');
 
   // Auto-abre licitação quando navegado via Telecom (analise:abrir-origem)
   useEffect(() => {
@@ -1792,18 +1641,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           <div style={{ fontSize:15, fontWeight:700 }}>🏛️ Licitações</div>
           <div style={{ fontSize:10, opacity:.75 }}>{licitacoes.length} total · {lista.length} exibindo</div>
         </div>
-        {/* Seletor de aba principal */}
-        <div style={{ display:'flex', background:'#0f2942', borderRadius:6, overflow:'hidden' }}>
-          {([['licitacoes','📋 Processos'],['pipeline','📊 Pipeline CRM']] as const).map(([aba, label]) => (
-            <button key={aba} onClick={() => setAbaPrincipal(aba)}
-              style={{ background: abaPrincipal===aba ? '#2563eb' : 'transparent',
-                color: abaPrincipal===aba ? '#fff' : '#94a3b8',
-                border:'none', padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-        {abaPrincipal === 'licitacoes' && isAnalista && (
+        {isAnalista && (
           <button onClick={() => setModalNova(true)}
             style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
             + Nova Licitação
@@ -1811,9 +1649,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
         )}
       </div>
 
-      {abaPrincipal === 'pipeline' && <PipelineCrmLicitacoes currentUser={currentUser} />}
+      {/* AGENDA */}
+      <div style={{ padding:'12px 16px 0', flexShrink:0 }}>
+        <AgendaWidget setor="licitacoes" currentUser={currentUser} />
+      </div>
 
-      {abaPrincipal === 'licitacoes' && <>
       {/* STATUS CHIPS + BOTÃO RELATÓRIO */}
       <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', flexShrink:0 }}>
         {/* Botão Relatório — destaque laranja */}
@@ -1894,12 +1734,10 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
               {filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
             </div>
           ) : (
-            lista.map(l => <LicitCard key={l.id} l={l} onClick={() => setSelected(l)} />)
+            lista.map(l => <LicitCard key={l.id} l={l} unread={isUnread(l)} onClick={() => { setSelected(l); marcarLido(String(l.id)); }} />)
           )}
         </div>
       )}
-
-      </>}
 
       {/* MODAIS */}
       {modalNova && (

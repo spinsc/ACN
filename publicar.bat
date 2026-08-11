@@ -4,8 +4,10 @@ echo =============================================
 echo  ACN Sinal Verde - Publicar atualizacoes
 echo =============================================
 
-:: Remove locks se existirem
+:: Remove locks se existirem (evita "fatal: cannot lock ref 'HEAD'")
 if exist ".git\index.lock" del /f ".git\index.lock"
+if exist ".git\index2.lock" del /f ".git\index2.lock"
+if exist ".git\HEAD.lock" del /f ".git\HEAD.lock"
 if exist ".git\refs\heads\main.lock" del /f ".git\refs\heads\main.lock"
 
 :: Instalar dependencias novas (plugin legacy para iOS antigo)
@@ -280,6 +282,43 @@ git commit -m "feat: FormacaoPrecosTab markup global — checkbox independente, 
 :: feat: CotacoesTab — visao simplificada + multi-formacao por proposta
 git add src/CotacoesTab.tsx
 git commit -m "feat: CotacoesTab visao simplificada (Nome/Valor/Impostos) + checkboxes + combinar multiplas formacoes em proposta + emitir proposta HTML/PDF"
+
+:: docs: Sugestoes avancadas de uso TAG NFC na producao
+git add NFC_Sugestoes_Avancadas.docx
+git commit -m "docs: Guia de Sugestoes Avancadas de Automacao com NFC"
+
+:: ── RELEASE: Tasks #73-#81 ─────────────────────────────────────────────────
+:: #73 LicitacoesTab: eliminar aba Pipeline, manter so Processos
+:: #74 NFC garantia: config de garantia por produto + calculo automatico
+:: #75 Padronizar numero OP/OS: formato PPPP.YYММ + desmembramento /01 /02
+:: #76 Agenda com alertas visuais: Licitacoes, Engenharia, Comercial, SAC
+:: #77 Destaque visual de atualizacoes nao lidas em cards/processos
+:: #78 CotacoesTab: Nova Cotacao do catalogo + proposta com email/WhatsApp
+:: #79 CadastroProdutosTab: fotos multiplas + catalogo PDF (bucket acn-media)
+:: #80 FinanceiroTab: centro de custos com indicadores de compras
+git add src/LicitacoesTab.tsx
+git add src/VeiculosNfcTab.tsx
+git add src/CadastroProdutosTab.tsx
+git add src/NovaOpOsModal.tsx
+git add src/AgendaWidget.tsx
+git add src/useUnread.tsx
+git add src/EngenhariaTab.tsx
+git add src/ComercialTab.tsx
+git add src/SacTab.tsx
+git add src/CotacoesTab.tsx
+git add src/FinanceiroTab.tsx
+git add src/DashboardTab.tsx
+git add sql/agenda_compromissos.sql
+git add sql/registro_leituras.sql
+git add publicar.bat
+git commit -m "feat: Agenda alertas, NFC garantia, OP/OS desmembrado, nova cotacao, fotos produto, financeiro/centro-custos"
+
+:: fix: ModalNovaInput fora do componente (input perdia foco a cada tecla)
+:: feat: CalendarioTab — agenda mensal/semanal (agenda_compromissos + prox_contato CRM)
+git add src/LicitacoesTab.tsx
+git add src/CalendarioTab.tsx
+git add src/DashboardTab.tsx
+git commit -m "feat: CalendarioTab (mes/semana) + fix: input perdia foco no modal Nova Licitacao"
 
 :: Push
 echo.
@@ -733,6 +772,55 @@ echo    criado_em timestamptz DEFAULT now(), atualizado_em timestamptz DEFAULT n
 echo  );
 echo  ALTER TABLE cadastro_itens DISABLE ROW LEVEL SECURITY;
 echo ==============================================
+echo.
+echo ==============================================
+echo  [NOVO] RELEASE Tasks 73-81 - RODAR NO SUPABASE:
+echo ==============================================
+echo.
+echo -- [#74] NFC: garantia por produto instalado
+echo ALTER TABLE veiculos_nfc ADD COLUMN IF NOT EXISTS produtos_instalados jsonb DEFAULT '[]'::jsonb;
+echo.
+echo -- [#75] OP/OS: campo placa na tabela oples
+echo ALTER TABLE oples ADD COLUMN IF NOT EXISTS placa text;
+echo.
+echo -- [#74] Cadastro Produtos: garantia padrao, fotos e catalogo
+echo ALTER TABLE cadastro_produtos ADD COLUMN IF NOT EXISTS garantia_meses integer DEFAULT 12;
+echo ALTER TABLE cadastro_produtos ADD COLUMN IF NOT EXISTS fotos jsonb DEFAULT '[]'::jsonb;
+echo ALTER TABLE cadastro_produtos ADD COLUMN IF NOT EXISTS catalogo_url text;
+echo.
+echo -- [#76] Agenda de compromissos por setor (arquivo: sql/agenda_compromissos.sql):
+echo CREATE TABLE IF NOT EXISTS agenda_compromissos (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   setor text NOT NULL,
+echo   usuario_email text NOT NULL,
+echo   usuario_nome text,
+echo   titulo text NOT NULL,
+echo   descricao text,
+echo   data_hora timestamptz NOT NULL,
+echo   criado_em timestamptz DEFAULT now(),
+echo   concluido boolean DEFAULT false,
+echo   concluido_em timestamptz
+echo );
+echo ALTER TABLE agenda_compromissos DISABLE ROW LEVEL SECURITY;
+echo -- Coluna para habilitar/desabilitar agenda por setor (no configuracoes_sistema):
+echo ALTER TABLE configuracoes_sistema
+echo   ADD COLUMN IF NOT EXISTS agendas_setores jsonb
+echo   DEFAULT '{"licitacoes":true,"engenharia":true,"comercial":true,"sac":true}'::jsonb;
+echo.
+echo -- [#77] Rastreamento de leituras nao lidas (arquivo: sql/registro_leituras.sql):
+echo CREATE TABLE IF NOT EXISTS registro_leituras (
+echo   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+echo   tabela text NOT NULL,
+echo   registro_id text NOT NULL,
+echo   usuario_email text NOT NULL,
+echo   lido_em timestamptz DEFAULT now(),
+echo   UNIQUE(tabela, registro_id, usuario_email)
+echo );
+echo ALTER TABLE registro_leituras DISABLE ROW LEVEL SECURITY;
+echo CREATE INDEX IF NOT EXISTS idx_leituras_usuario ON registro_leituras(usuario_email, tabela);
+echo.
+echo -- [#79] Storage: criar bucket acn-media (se ainda nao existe) e habilitar publico
+echo -- Supabase Dashboard ^> Storage ^> New bucket: "acn-media" (public: ON)
 echo.
 echo ==============================================
 echo  WHATSAPP (EVOLUTION API) - PASSOS:

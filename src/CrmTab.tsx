@@ -30,7 +30,7 @@ const isFinalizada  = (e: any) => e?.nome?.toLowerCase().includes('finaliz');
 const isPerdido     = (e: any) => e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e);
 
 const VAZIO_OP: any = {
-  funil: 'licitacao',
+  funil: 'venda_direta',
   tipo_licitacao: 'ordinaria',
   titulo: '',
   numero_edital: '',
@@ -281,12 +281,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // DERIVADOS
   // ─────────────────────────────────────────────────────────────────────────
-  const estagiosFunil  = estagios.filter(e => e.funil === funil);
-  const opsFunil       = ops.filter(o => o.funil === funil);
+  const estagiosFunil  = estagios.filter(e => e.funil === 'venda_direta');
+  const opsFunil       = ops.filter(o => o.funil === 'venda_direta');
   const respUnicos     = [...new Set(opsFunil.map(o => o.responsavel_nome).filter(Boolean))].sort();
   // Contatos agendados para hoje (qualquer funil)
   const hoje           = new Date().toISOString().slice(0, 10);
-  const contatosHoje   = ops.filter(o => o.prox_contato === hoje);
+  const contatosHoje   = ops.filter(o =>
+    o.prox_contato === hoje &&
+    o.funil === 'venda_direta' &&
+    o.responsavel_nome === currentUser?.nome
+  );
   const opsFiltradas   = opsFunil.filter(o => {
     if (filtResp && o.responsavel_nome !== filtResp) return false;
     if (!busca) return true;
@@ -2042,31 +2046,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {modalOp?.id ? '✏️ Editar' : '+ Nova'} Venda Direta
             </div>
 
-            {funil === 'licitacao' && (
-              <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Tipo de Licitação</div>
-                <div style={{ display:'flex', gap:12 }}>
-                  {([['ordinaria','📄 Licitação Ordinária'],['ata','📋 Ata de Registro de Preços']] as const).map(([t,label]) => (
-                    <label key={t} style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
-                      <input type="radio" checked={formOp.tipo_licitacao===t}
-                        onChange={() => setFormOp(f => ({...f, tipo_licitacao:t}))} />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Campos texto */}
             {([
-              { label:'Título *', key:'titulo', placeholder:'Ex: Pregão SESP 2025/041' },
-              ...(funil==='licitacao' ? [
-                { label:'Número do Edital', key:'numero_edital', placeholder:'2025/041' },
-                { label:'Órgão', key:'orgao', placeholder:'Secretaria de Segurança Pública' },
-                { label:'Data da Sessão', key:'data_sessao', type:'date' },
-                { label:'Hora da Sessão', key:'hora_sessao', type:'time' },
-                ...(formOp.tipo_licitacao==='ata' ? [{ label:'Validade da Ata', key:'data_validade_ata', type:'date' }] : []),
-              ] : []),
+              { label:'Título *', key:'titulo', placeholder:'Ex: Projeto Rádios SESP 2025' },
               { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
             ] as any[]).map(({ label, key, placeholder, type }) => (
               <div key={key} style={{ marginBottom:8 }}>

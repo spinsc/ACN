@@ -7,6 +7,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
+import AgendaWidget from './AgendaWidget';
 
 
 export default function EngenhariaTab({ currentUser }) {
@@ -137,6 +138,10 @@ export default function EngenhariaTab({ currentUser }) {
 
   return (
     <div>
+      {/* AGENDA */}
+      <div style={{ padding:'12px 12px 0' }}>
+        <AgendaWidget setor="engenharia" currentUser={currentUser} />
+      </div>
       {/* OPLs em Espera ou Devolvidas */}
       <div className="sec-card">
         <div className="sec-hdr">
