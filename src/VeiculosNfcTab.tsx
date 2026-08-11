@@ -365,7 +365,58 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
   } : { ...FORM_VAZIO });
   const [salvando, setSalvando] = useState(false);
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Garantia por produto
+  const [prodGar, setProdGar] = useState<any[]>(veiculo?.produtos_instalados || []);
+  const [prodSearch, setProdSearch] = useState('');
+  const [prodResults, setProdResults] = useState<any[]>([]);
+
+  const calcFimGarantia = (dataEntrega: string, meses: number) => {
+    if (!dataEntrega) return '';
+    const d = new Date(dataEntrega);
+    d.setMonth(d.getMonth() + Number(meses));
+    return d.toISOString().slice(0, 10);
+  };
+
+  const buscarProdutos = async (q: string) => {
+    if (q.length < 2) { setProdResults([]); return; }
+    const { data } = await supabase.from('cadastro_produtos')
+      .select('id, nome, garantia_meses, codigo')
+      .ilike('nome', `%${q}%`)
+      .eq('ativo', true)
+      .limit(8);
+    setProdResults(data || []);
+  };
+
+  const addProduto = (prod: any) => {
+    const meses = prod.garantia_meses || 12;
+    setProdGar(g => [...g, {
+      produto_id: prod.id,
+      produto_nome: prod.nome,
+      garantia_meses: meses,
+      data_fim_garantia: calcFimGarantia(form.data_entrega, meses),
+    }]);
+    setProdSearch(''); setProdResults([]);
+  };
+
+  const updateProdGar = (idx: number, meses: number) => {
+    setProdGar(g => g.map((p, i) => i !== idx ? p : {
+      ...p, garantia_meses: meses,
+      data_fim_garantia: calcFimGarantia(form.data_entrega, meses),
+    }));
+  };
+
+  const set = (k, v) => {
+    setForm(f => {
+      const next = { ...f, [k]: v };
+      // Recalcular datas de garantia quando data_entrega muda
+      if (k === 'data_entrega') {
+        setProdGar(g => g.map(p => ({
+          ...p, data_fim_garantia: calcFimGarantia(v, p.garantia_meses),
+        })));
+      }
+      return next;
+    });
+  };
 
   const salvar = async () => {
     if (!form.chassi.trim()) { alert('Chassi obrigatório.'); return; }
@@ -377,9 +428,10 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
       orgao_cliente:     form.orgao_cliente.trim() || null,
       opl_numero:        form.opl_numero.trim() || null,
       opl_id:            form.opl_id.trim() || null,
-      data_entrega:      form.data_entrega || null,
-      data_fim_garantia: form.data_fim_garantia || null,
-      manual_pdf_url:    form.manual_pdf_url.trim() || null,
+      data_entrega:       form.data_entrega || null,
+      data_fim_garantia:  form.data_fim_garantia || null,
+      produtos_instalados: prodGar,
+      manual_pdf_url:     form.manual_pdf_url.trim() || null,
       pin_acesso:        form.pin_acesso.trim() || '123456',
       atualizado_em:     new Date().toISOString(),
     };
@@ -445,8 +497,87 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
           />
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
             <div>{campo('Data de Entrega', 'data_entrega', 'date')}</div>
-            <div>{campo('Fim da Garantia', 'data_fim_garantia', 'date')}</div>
+            <div>{campo('Fim da Garantia (geral)', 'data_fim_garantia', 'date')}</div>
           </div>
+
+          {/* Garantia por produto */}
+          <div style={{ marginBottom:12, background:'#f0fdf4', border:'1px solid #86efac', borderRadius:7, padding:10 }}>
+            <div style={{ fontSize:9, fontWeight:800, color:'#166534', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:8 }}>
+              🛡️ Produtos e Garantias Individuais
+            </div>
+            {/* Busca de produto */}
+            <div style={{ position:'relative', marginBottom:8 }}>
+              <input
+                value={prodSearch}
+                onChange={e => { setProdSearch(e.target.value); buscarProdutos(e.target.value); }}
+                placeholder="Buscar produto para adicionar..."
+                style={{ width:'100%', border:'1px solid #86efac', borderRadius:5,
+                  padding:'5px 8px', fontSize:10, boxSizing:'border-box', outline:'none' }}
+              />
+              {prodResults.length > 0 && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff',
+                  border:'1px solid #d1d5db', borderRadius:5, zIndex:10, boxShadow:'0 4px 12px #0002', maxHeight:160, overflowY:'auto' }}>
+                  {prodResults.map(p => (
+                    <div key={p.id} onClick={() => addProduto(p)}
+                      style={{ padding:'6px 10px', fontSize:10, cursor:'pointer', borderBottom:'1px solid #f1f5f9',
+                        display:'flex', justifyContent:'space-between', alignItems:'center' }}
+                      onMouseEnter={e => e.currentTarget.style.background='#f0fdf4'}
+                      onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                      <span>{p.nome}</span>
+                      <span style={{ color:'#16a34a', fontWeight:700, fontSize:9 }}>{p.garantia_meses || 12} meses</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Lista de produtos com garantia */}
+            {prodGar.length === 0 ? (
+              <div style={{ fontSize:9, color:'#86efac', textAlign:'center', padding:'6px 0' }}>
+                Nenhum produto adicionado ainda
+              </div>
+            ) : (
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:9 }}>
+                <thead>
+                  <tr style={{ background:'#dcfce7' }}>
+                    <th style={{ padding:'4px 6px', textAlign:'left', fontWeight:700, color:'#166534' }}>Produto</th>
+                    <th style={{ padding:'4px 6px', textAlign:'center', fontWeight:700, color:'#166534', width:90 }}>Garantia</th>
+                    <th style={{ padding:'4px 6px', textAlign:'center', fontWeight:700, color:'#166534', width:90 }}>Vence em</th>
+                    <th style={{ width:24 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prodGar.map((p, i) => (
+                    <tr key={i} style={{ borderBottom:'1px solid #d1fae5' }}>
+                      <td style={{ padding:'4px 6px', color:'#166534' }}>{p.produto_nome}</td>
+                      <td style={{ padding:'4px 6px', textAlign:'center' }}>
+                        <select value={p.garantia_meses}
+                          onChange={e => updateProdGar(i, Number(e.target.value))}
+                          style={{ border:'1px solid #86efac', borderRadius:4, padding:'2px 4px', fontSize:9, color:'#166534', background:'#fff' }}>
+                          <option value={6}>6 meses</option>
+                          <option value={12}>12 meses</option>
+                          <option value={24}>24 meses</option>
+                          <option value={60}>60 meses</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:'4px 6px', textAlign:'center', fontWeight:700, color: p.data_fim_garantia ? '#166534' : '#9ca3af' }}>
+                        {p.data_fim_garantia ? new Date(p.data_fim_garantia).toLocaleDateString('pt-BR') : '—'}
+                      </td>
+                      <td style={{ padding:'2px' }}>
+                        <button onClick={() => setProdGar(g => g.filter((_, j) => j !== i))}
+                          style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, lineHeight:1 }}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {!form.data_entrega && prodGar.length > 0 && (
+              <div style={{ fontSize:9, color:'#d97706', marginTop:6 }}>
+                ⚠️ Defina a Data de Entrega para calcular os vencimentos automaticamente
+              </div>
+            )}
+          </div>
+
           {campo('URL do Manual PDF', 'manual_pdf_url', 'url', { placeholder:'https://...' })}
           <div style={{ marginBottom:10 }}>
             <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>
@@ -623,6 +754,45 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
               </div>
             ))}
           </div>
+
+          {/* Garantias por produto */}
+          {(veiculo.produtos_instalados || []).length > 0 && (
+            <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8,
+              padding:'10px 14px', marginBottom:14 }}>
+              <div style={{ fontSize:9, fontWeight:800, color:'#166534', textTransform:'uppercase',
+                letterSpacing:'.5px', marginBottom:8 }}>🛡️ Garantias por Produto</div>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:9 }}>
+                <thead>
+                  <tr style={{ background:'#dcfce7' }}>
+                    <th style={{ padding:'3px 6px', textAlign:'left', color:'#166534', fontWeight:700 }}>Produto</th>
+                    <th style={{ padding:'3px 6px', textAlign:'center', color:'#166534', fontWeight:700, width:70 }}>Meses</th>
+                    <th style={{ padding:'3px 6px', textAlign:'center', color:'#166534', fontWeight:700, width:90 }}>Vence em</th>
+                    <th style={{ padding:'3px 6px', textAlign:'center', color:'#166534', fontWeight:700, width:70 }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(veiculo.produtos_instalados || []).map((p, i) => {
+                    const ativa = p.data_fim_garantia ? new Date(p.data_fim_garantia) > new Date() : null;
+                    return (
+                      <tr key={i} style={{ borderBottom:'1px solid #d1fae5' }}>
+                        <td style={{ padding:'4px 6px', color:'#1e293b' }}>{p.produto_nome}</td>
+                        <td style={{ padding:'4px 6px', textAlign:'center', color:'#64748b' }}>{p.garantia_meses}m</td>
+                        <td style={{ padding:'4px 6px', textAlign:'center', fontWeight:700,
+                          color: ativa === false ? '#dc2626' : '#166534' }}>
+                          {p.data_fim_garantia ? new Date(p.data_fim_garantia).toLocaleDateString('pt-BR') : '—'}
+                        </td>
+                        <td style={{ padding:'4px 6px', textAlign:'center' }}>
+                          {ativa === true && <span style={{ background:'#dcfce7', color:'#166534', fontWeight:700, fontSize:8, padding:'1px 6px', borderRadius:10 }}>✅ Ativa</span>}
+                          {ativa === false && <span style={{ background:'#fee2e2', color:'#dc2626', fontWeight:700, fontSize:8, padding:'1px 6px', borderRadius:10 }}>⚠️ Expirada</span>}
+                          {ativa === null && <span style={{ color:'#9ca3af', fontSize:8 }}>—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* QR Code + URL */}
           <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8,
