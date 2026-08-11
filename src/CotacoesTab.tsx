@@ -61,7 +61,7 @@ function StatusBadge({ status }) {
 
 // ─── Modal de Desconto / Proposta ────────────────────────────────────────────
 // ─── GERADOR DE HTML DA PROPOSTA FINAL ───────────────────────────────────────
-function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato }) {
+function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato, prazoEntrega }) {
   const prms     = cotacao.parametros_globais || {};
   const itens    = cotacao.itens || [];
   const results  = itens.map(it => calcItem(it, prms));
@@ -88,6 +88,17 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
         <td style="text-align:right"><strong>${fmtBRL(r.valorTotal)}</strong></td>
       </tr>`;
   }).join('');
+
+  // Fotos dos produtos (uso interno para proposta)
+  const todasFotos = itens.flatMap(it => Array.isArray(it.fotos) ? it.fotos : []).slice(0, 6);
+  const fotosHTML = todasFotos.length > 0 ? `
+  <div class="bloco">
+    <h2>&#128247; Fotos do Produto</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">
+      ${todasFotos.map(url => `<img src="${url}" style="height:120px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0" />`).join('')}
+    </div>
+    ${itens.some(it => it.catalogo_url) ? `<p style="margin-top:8px;font-size:9pt"><a href="${itens.find(it=>it.catalogo_url)?.catalogo_url}" target="_blank" style="color:#1e3a5f">&#128196; Ver cat\u00e1logo completo do produto</a></p>` : ''}
+  </div>` : '';
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -160,6 +171,7 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
         <label>VALIDADE DA PROPOSTA</label>
         <p>${validade || '30'} dias</p>
       </div>
+      ${prazoEntrega ? `<div class="campo"><label>PRAZO DE ENTREGA</label><p>${prazoEntrega}</p></div>` : ''}
     </div>
   </div>
 
@@ -178,31 +190,21 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
       </thead>
       <tbody>
         ${linhasItens}
-        ${descPct > 0 ? `
-        <tr>
-          <td colspan="4" style="text-align:right;color:#475569;">Subtotal</td>
-          <td style="text-align:right;font-weight:600">${fmtBRL(totalBruto)}</td>
-        </tr>
-        <tr>
-          <td colspan="4" style="text-align:right;color:#dc2626;">Desconto (${descPct}%)</td>
-          <td style="text-align:right;color:#dc2626;font-weight:600">- ${fmtBRL(descVal)}</td>
-        </tr>` : ''}
         <tr class="total-row">
-          <td colspan="4" style="text-align:right">TOTAL</td>
+          <td colspan="4" style="text-align:right">VALOR TOTAL</td>
           <td style="text-align:right">${fmtBRL(totalLiq)}</td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  <!-- FINANCEIRO -->
+  <!-- FOTOS -->
+  ${fotosHTML}
+
+  <!-- VALOR FINAL -->
   <div class="financeiro">
-    <div class="fin-card">
-      <label>VALOR SEM DESCONTO</label>
-      <span>${fmtBRL(totalBruto)}</span>
-    </div>
-    <div class="fin-card destaque">
-      <label>VALOR FINAL COM DESCONTO</label>
+    <div class="fin-card destaque" style="grid-column:span 2">
+      <label>VALOR DA PROPOSTA</label>
       <span>${fmtBRL(totalLiq)}</span>
     </div>
   </div>
@@ -211,6 +213,7 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
   <div class="rodape">
     <div>
       <p>⏳ Proposta válida por <strong>${validade || '30'} dias</strong> a partir de ${dataHoje}.</p>
+      ${prazoEntrega ? `<p style="margin-top:4px">Prazo de entrega: <strong>${prazoEntrega}</strong>.</p>` : ''}
       <p style="margin-top:4px">Preços sujeitos a alteração após o prazo de validade.</p>
     </div>
     <div class="assinatura">
@@ -230,9 +233,15 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
   const [validade,     setValidade]     = useState('30');
   const [refPv,        setRefPv]        = useState(cotacao.opl_numero || '');
   const [formato,      setFormato]      = useState<'html'|'pdf'>('html');
+  const [prazoEntrega, setPrazoEntrega] = useState('');
+  const [emailCliente, setEmailCliente] = useState('');
+  const [whatsapp,     setWhatsapp]     = useState('');
+
+  const getHTML = (fmt = formato) =>
+    gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato: fmt, prazoEntrega });
 
   const emitir = () => {
-    const html = gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato });
+    const html = getHTML();
     const win = window.open('', '_blank');
     if (!win) { alert('Permita pop-ups para gerar a proposta.'); return; }
     win.document.write(html);
@@ -240,39 +249,77 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
     onClose();
   };
 
+  const prms = cotacao.parametros_globais || {};
+  const itens = cotacao.itens || [];
+  const results = itens.map(it => calcItem(it, prms));
+  const totalLiq = proposta?.valor_com_desconto
+    ?? results.reduce((s, r) => s + r.valorTotal, 0) * (1 - (proposta?.desconto_pct || 0) / 100);
+
+  const enviarEmail = () => {
+    if (!emailCliente.trim()) { alert('Informe o e-mail do cliente.'); return; }
+    const assunto = encodeURIComponent(`Proposta Comercial ${cotacao.numero_cotacao || ''} — ACN`);
+    const corpo = encodeURIComponent(
+      `Prezado(a),
+
+Segue nossa proposta comercial.
+
+Número: ${cotacao.numero_cotacao || ''}
+Valor: ${Number(totalLiq).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+Validade: ${validade} dias
+
+Atenciosamente,
+${cotacao.criado_por || 'ACN'}`
+    );
+    window.open(`mailto:${emailCliente.trim()}?subject=${assunto}&body=${corpo}`, '_blank');
+  };
+
+  const enviarWhatsApp = () => {
+    const num = whatsapp.replace(/\D/g, '');
+    if (!num) { alert('Informe o telefone WhatsApp.'); return; }
+    const msg = encodeURIComponent(
+      `Olá! Segue nossa proposta comercial.\n\n📋 Nº ${cotacao.numero_cotacao || ''}\n💰 Valor: ${Number(totalLiq).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}\n⏳ Validade: ${validade} dias\n\nQualquer dúvida, estamos à disposição!`
+    );
+    window.open(`https://wa.me/55${num}?text=${msg}`, '_blank');
+  };
+
+  const inp11: React.CSSProperties = { width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 };
+
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:3000,
       display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(500px,95vw)',
+      <div style={{ background:'#fff', borderRadius:10, width:'min(560px,95vw)',
         boxShadow:'0 8px 32px rgba(0,0,0,.3)', overflow:'hidden' }}>
         <div style={{ background:'#1e3a5f', color:'#fff', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ fontWeight:800, fontSize:13 }}>📄 Emitir Proposta Final ao Cliente</div>
           <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
         </div>
-        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12, maxHeight:'80vh', overflowY:'auto' }}>
           <div>
             <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>ÓRGÃO / CLIENTE</label>
             <input value={orgaoCliente} onChange={e=>setOrgaoCliente(e.target.value)}
-              placeholder="Nome do órgão ou cliente..."
-              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+              placeholder="Nome do órgão ou cliente..." style={inp11} />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>VALIDADE (DIAS)</label>
-              <input type="number" min={1} value={validade} onChange={e=>setValidade(e.target.value)}
-                style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+              <input type="number" min={1} value={validade} onChange={e=>setValidade(e.target.value)} style={inp11} />
             </div>
             <div>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>REF. OP/OS/PV</label>
               <input value={refPv} onChange={e=>setRefPv(e.target.value)}
-                placeholder="Número da OP, OS ou PV..."
-                style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'8px 10px', fontSize:11 }} />
+                placeholder="Número da OP, OS ou PV..." style={inp11} />
+            </div>
+            <div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>PRAZO DE ENTREGA</label>
+              <input value={prazoEntrega} onChange={e=>setPrazoEntrega(e.target.value)}
+                placeholder="Ex: 15 dias úteis" style={inp11} />
             </div>
           </div>
+
           <div>
             <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:6 }}>FORMATO DE SAÍDA</label>
             <div style={{ display:'flex', gap:10 }}>
-              {([['html','🌐 HTML (salvar/compartilhar)'],['pdf','🖨️ PDF (imprimir / baixar)']] as const).map(([val,lbl])=>(
+              {([['html','🌐 HTML'],['pdf','🖨️ PDF']] as const).map(([val,lbl])=>(
                 <label key={val} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, cursor:'pointer',
                   padding:'8px 14px', border:`2px solid ${formato===val?'#1e3a5f':'#e2e8f0'}`,
                   borderRadius:6, background: formato===val?'#f0f4ff':'#fff', flex:1, justifyContent:'center' }}>
@@ -283,6 +330,37 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
               ))}
             </div>
           </div>
+
+          {/* Envio por e-mail */}
+          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 14px' }}>
+            <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:8 }}>📧 Enviar por E-mail</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={emailCliente} onChange={e=>setEmailCliente(e.target.value)}
+                placeholder="email@cliente.com.br" type="email"
+                style={{ ...inp11, flex:1 }} />
+              <button onClick={enviarEmail}
+                style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:6,
+                  padding:'8px 14px', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Enviar
+              </button>
+            </div>
+          </div>
+
+          {/* Envio por WhatsApp */}
+          <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, padding:'10px 14px' }}>
+            <div style={{ fontSize:9, fontWeight:700, color:'#15803d', marginBottom:8 }}>💬 Enviar por WhatsApp</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={whatsapp} onChange={e=>setWhatsapp(e.target.value)}
+                placeholder="11999998888" type="tel"
+                style={{ ...inp11, flex:1 }} />
+              <button onClick={enviarWhatsApp}
+                style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6,
+                  padding:'8px 14px', fontSize:10, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Enviar
+              </button>
+            </div>
+          </div>
+
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:4 }}>
             <button onClick={onClose}
               style={{ padding:'8px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
@@ -951,6 +1029,239 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
   );
 }
 
+// ─── Modal: Nova Cotação a partir do Catálogo de Produtos ────────────────────
+function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
+  const [nomeCliente,  setNomeCliente]  = useState('');
+  const [opNumero,     setOpNumero]     = useState('');
+  const [busca,        setBusca]        = useState('');
+  const [resultados,   setResultados]   = useState([]);
+  const [selecionados, setSelecionados] = useState([]); // {produto, qt}
+  const [salvando,     setSalvando]     = useState(false);
+  const busRef = useRef(null);
+
+  useEffect(() => {
+    if (!busca.trim()) { setResultados([]); return; }
+    clearTimeout(busRef.current);
+    busRef.current = setTimeout(async () => {
+      const { data } = await supabase.from('cadastro_produtos')
+        .select('id,codigo,nome,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,fotos,catalogo_url,garantia_meses')
+        .eq('ativo', true)
+        .ilike('nome', `%${busca.trim()}%`)
+        .limit(10);
+      setResultados(data || []);
+    }, 250);
+    return () => clearTimeout(busRef.current);
+  }, [busca]);
+
+  const addProduto = (prod) => {
+    if (selecionados.find(s => s.produto.id === prod.id)) return;
+    setSelecionados(prev => [...prev, { produto: prod, qt: 1 }]);
+    setBusca('');
+    setResultados([]);
+  };
+
+  const removeItem = (id) => setSelecionados(prev => prev.filter(s => s.produto.id !== id));
+  const setQt = (id, qt) =>
+    setSelecionados(prev => prev.map(s => s.produto.id === id ? { ...s, qt: Math.max(1, Number(qt)||1) } : s));
+
+  const salvar = async () => {
+    if (!nomeCliente.trim() || selecionados.length === 0) return;
+    setSalvando(true);
+
+    // Para cada produto, busca custo do BOM
+    const itensComCusto = await Promise.all(selecionados.map(async ({ produto, qt }) => {
+      const { data: bom } = await supabase
+        .from('cadastro_produtos_itens')
+        .select('quantidade, cadastro_itens(custo_unit, ipi_pct, st_pct)')
+        .eq('produto_id', produto.id);
+      const custoUnit = (bom || []).reduce((acc, l) => {
+        const item = l.cadastro_itens || {};
+        const cu = Number(item.custo_unit) || 0;
+        const cu_c = cu * (1 + (Number(item.ipi_pct)||0)/100) * (1 + (Number(item.st_pct)||0)/100);
+        return acc + cu_c * (Number(l.quantidade)||1);
+      }, 0);
+      return {
+        produto:        produto.nome,
+        produto_id:     produto.id,
+        codigo:         produto.codigo || '',
+        qt,
+        unidade:        produto.unidade || 'UN',
+        custo_unit:     custoUnit,
+        ipi_pct:        0,
+        st_pct:         0,
+        markup_pct:     Number(produto.markup_pct) || 30,
+        difal_pct:      Number(produto.difal_pct) || 16,
+        imposto_pct:    Number(produto.imposto_pct) || 16,
+        custo_fixo_pct: Number(produto.custo_fixo_pct) || 3,
+        moeda:          'BRL',
+        fotos:          produto.fotos || [],
+        catalogo_url:   produto.catalogo_url || null,
+        garantia_meses: produto.garantia_meses || 12,
+      };
+    }));
+
+    const now = new Date();
+    const nn = `COT-${String(now.getFullYear()).slice(-2)}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
+
+    const { error } = await supabase.from('cotacoes_precos').insert([{
+      numero_cotacao:     nn,
+      nome:               `${nomeCliente.trim()} — ${selecionados.map(s=>s.produto.nome).join(', ')}`,
+      tipo:               'Produto',
+      empresa:            'ACN',
+      status:             'rascunho',
+      itens:              itensComCusto,
+      parametros_globais: { ptax_dolar: 5.85, ptax_euro: 6.40 },
+      desconto_maximo_pct: 10,
+      opl_numero:         opNumero.trim() || null,
+      orgao_cliente:      nomeCliente.trim(),
+      criado_por:         currentUser?.email,
+    }]);
+
+    setSalvando(false);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    onSalvo();
+    onClose();
+  };
+
+  const prms = { ptax_dolar: 5.85, ptax_euro: 6.40 };
+  const totalEstimado = selecionados.reduce(({ produto, qt }) => {
+    // simplified: use preco_venda directly
+    return (Number(produto.preco_venda) || 0) * qt;
+  }, 0);
+
+  const inp: React.CSSProperties = {
+    width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'7px 10px', fontSize:11, boxSizing:'border-box',
+  };
+  const lbl: React.CSSProperties = { display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:2500,
+      display:'flex', alignItems:'center', justifyContent:'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background:'#fff', borderRadius:10, width:'min(660px,95vw)', maxHeight:'88vh',
+        boxShadow:'0 8px 32px rgba(0,0,0,.3)', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+        <div style={{ background:'#0f766e', color:'#fff', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:13 }}>📋 Nova Cotação — Catálogo de Produtos</div>
+            <div style={{ fontSize:9, opacity:.85, marginTop:1 }}>Selecione produtos do catálogo configurado</div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ padding:16, flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
+          {/* Dados da cotação */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <label style={lbl}>CLIENTE / ÓRGÃO *</label>
+              <input value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)}
+                placeholder="Nome do cliente..." style={inp} />
+            </div>
+            <div>
+              <label style={lbl}>OP/OS (opcional)</label>
+              <input value={opNumero} onChange={e=>setOpNumero(e.target.value)}
+                placeholder="Ex: 1212.2608" style={inp} />
+            </div>
+          </div>
+
+          {/* Busca de produtos */}
+          <div style={{ position:'relative' }}>
+            <label style={lbl}>🔍 BUSCAR PRODUTO DO CATÁLOGO</label>
+            <input value={busca} onChange={e=>setBusca(e.target.value)}
+              placeholder="Digite o nome do produto..."
+              style={inp} />
+            {resultados.length > 0 && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff',
+                border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 8px 24px rgba(0,0,0,.15)',
+                zIndex:10, maxHeight:220, overflowY:'auto' }}>
+                {resultados.map(p => (
+                  <div key={p.id} onClick={() => addProduto(p)}
+                    style={{ padding:'8px 12px', cursor:'pointer', borderBottom:'1px solid #f1f5f9',
+                      display:'flex', justifyContent:'space-between', alignItems:'center' }}
+                    onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
+                    onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:11 }}>{p.nome}</div>
+                      <div style={{ fontSize:9, color:'#9ca3af' }}>
+                        {p.codigo ? `${p.codigo} · ` : ''}{p.unidade} · Garantia: {p.garantia_meses}m
+                      </div>
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:700, color:'#15803d', whiteSpace:'nowrap', marginLeft:12 }}>
+                      {p.preco_venda ? `R$ ${Number(p.preco_venda).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Produtos selecionados */}
+          {selecionados.length > 0 && (
+            <div style={{ border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
+              <div style={{ background:'#1e293b', color:'#cbd5e1', padding:'6px 10px', fontSize:9, fontWeight:700 }}>
+                📦 PRODUTOS SELECIONADOS ({selecionados.length})
+              </div>
+              {selecionados.map(({ produto, qt }) => (
+                <div key={produto.id} style={{ display:'flex', alignItems:'center', gap:10,
+                  padding:'8px 10px', borderBottom:'1px solid #f1f5f9' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600, fontSize:11 }}>{produto.nome}</div>
+                    <div style={{ fontSize:9, color:'#9ca3af' }}>
+                      {produto.unidade} · markup {produto.markup_pct}% · garantia {produto.garantia_meses}m
+                      {Array.isArray(produto.fotos) && produto.fotos.length > 0 && ` · 📸 ${produto.fotos.length} foto(s)`}
+                      {produto.catalogo_url && ' · 📄 catálogo'}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <label style={{ fontSize:9, color:'#64748b' }}>Qtd:</label>
+                    <input type="number" min={1} value={qt} onChange={e=>setQt(produto.id, e.target.value)}
+                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:11, textAlign:'right' }} />
+                  </div>
+                  <div style={{ fontSize:11, fontWeight:700, color:'#15803d', minWidth:80, textAlign:'right' }}>
+                    {produto.preco_venda
+                      ? `R$ ${(Number(produto.preco_venda)*qt).toLocaleString('pt-BR',{minimumFractionDigits:2})}`
+                      : '—'}
+                  </div>
+                  <button onClick={() => removeItem(produto.id)}
+                    style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:14 }}>✕</button>
+                </div>
+              ))}
+              <div style={{ padding:'8px 10px', background:'#f0fdf4', display:'flex', justifyContent:'flex-end' }}>
+                <div style={{ fontWeight:800, fontSize:12, color:'#15803d' }}>
+                  Total estimado: R$ {selecionados.reduce((acc, {produto, qt}) => acc + (Number(produto.preco_venda)||0)*qt, 0)
+                    .toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selecionados.length === 0 && (
+            <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11,
+              border:'2px dashed #e2e8f0', borderRadius:8, fontStyle:'italic' }}>
+              Nenhum produto selecionado. Busque acima para adicionar.
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'flex-end', gap:8, flexShrink:0, background:'#fafafa' }}>
+          <button onClick={onClose}
+            style={{ padding:'7px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
+            Cancelar
+          </button>
+          <button onClick={salvar}
+            disabled={salvando || !nomeCliente.trim() || selecionados.length === 0}
+            style={{ padding:'7px 22px', background: (!nomeCliente.trim()||selecionados.length===0) ? '#9ca3af' : '#0f766e',
+              color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11,
+              cursor: (!nomeCliente.trim()||selecionados.length===0) ? 'not-allowed' : 'pointer',
+              opacity: salvando ? .6 : 1 }}>
+            {salvando ? 'Criando...' : '✅ Criar Cotação'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN: CotacoesTab ────────────────────────────────────────────────────────
 export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [cotacoes,    setCotacoes]    = useState([]);
@@ -965,6 +1276,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [simplificada, setSimplificada] = useState(false);
   const [selecionadas,  setSelecionadas]  = useState<string[]>([]);
   const [modalCombinar, setModalCombinar] = useState(false);
+  const [modalNovaCotacao, setModalNovaCotacao] = useState(false);
 
   // Visibilidade controlada pelo admin
   const [cfg, setCfg] = useState({
@@ -1071,6 +1383,11 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                 padding:'6px 12px', fontSize:9,
                 color: simplificada ? '#fff' : '#475569', cursor:'pointer', fontWeight:700 }}>
               {simplificada ? '📋 Completo' : '📊 Simplificado'}
+            </button>
+            <button onClick={() => setModalNovaCotacao(true)}
+              style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:5,
+                padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              ➕ Nova Cotação
             </button>
             <button onClick={() => { carregarCotacoes(); carregarPendentes(); }}
               style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:5,
@@ -1268,6 +1585,14 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
           currentUser={currentUser}
           onClose={() => setModalCombinar(false)}
           onSalvo={() => { setSelecionadas([]); carregarCotacoes(); }}
+        />
+      )}
+
+      {modalNovaCotacao && (
+        <ModalNovaCotacao
+          currentUser={currentUser}
+          onClose={() => setModalNovaCotacao(false)}
+          onSalvo={() => { setModalNovaCotacao(false); carregarCotacoes(); }}
         />
       )}
     </div>
