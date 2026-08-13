@@ -1,0 +1,115 @@
+-- =============================================================
+-- ACN Sinal Verde — Migrations completas (tasks #73–#81)
+-- Rodar no Supabase SQL Editor (pode rodar tudo de uma vez)
+-- =============================================================
+
+-- ─────────────────────────────────────────────────────────────
+-- #74 · NFC + Garantia de produtos
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE veiculos_nfc
+  ADD COLUMN IF NOT EXISTS produtos_instalados jsonb DEFAULT '[]'::jsonb;
+
+ALTER TABLE cadastro_produtos
+  ADD COLUMN IF NOT EXISTS garantia_meses integer DEFAULT 12;
+
+-- ─────────────────────────────────────────────────────────────
+-- #75 · OP/OS — campo placa
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE oples
+  ADD COLUMN IF NOT EXISTS placa text;
+
+-- ─────────────────────────────────────────────────────────────
+-- #76 · Agenda de compromissos
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS agenda_compromissos (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  setor         text        NOT NULL,   -- 'licitacoes' | 'engenharia' | 'comercial' | 'sac'
+  usuario_email text        NOT NULL,
+  usuario_nome  text,
+  titulo        text        NOT NULL,
+  descricao     text,
+  data_hora     timestamptz NOT NULL,
+  criado_em     timestamptz DEFAULT now(),
+  concluido     boolean     DEFAULT false,
+  concluido_em  timestamptz
+);
+ALTER TABLE agenda_compromissos DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_agenda_usuario ON agenda_compromissos(usuario_email, setor);
+CREATE INDEX IF NOT EXISTS idx_agenda_data    ON agenda_compromissos(data_hora);
+
+ALTER TABLE configuracoes_sistema
+  ADD COLUMN IF NOT EXISTS agendas_setores jsonb
+  DEFAULT '{"licitacoes":true,"engenharia":true,"comercial":true,"sac":true}'::jsonb;
+
+-- ─────────────────────────────────────────────────────────────
+-- #77 · Rastreamento de leituras (badges de não lido)
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS registro_leituras (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tabela        text NOT NULL,   -- 'licitacoes' | 'oples' | 'crm_oportunidades' | etc.
+  registro_id   text NOT NULL,
+  usuario_email text NOT NULL,
+  lido_em       timestamptz DEFAULT now(),
+  UNIQUE(tabela, registro_id, usuario_email)
+);
+ALTER TABLE registro_leituras DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_leituras_usuario ON registro_leituras(usuario_email, tabela);
+
+-- ─────────────────────────────────────────────────────────────
+-- #78 · Cotações — tabelas de propostas
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS cotacoes_precos (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  numero       text        NOT NULL UNIQUE,   -- ex: COT-2608-1234
+  cliente      text,
+  status       text        DEFAULT 'rascunho', -- rascunho | orcamento | proposta | fechado
+  itens        jsonb       DEFAULT '[]'::jsonb,
+  criado_por   text,
+  criado_em    timestamptz DEFAULT now(),
+  atualizado_em timestamptz DEFAULT now()
+);
+ALTER TABLE cotacoes_precos DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_cotacoes_status ON cotacoes_precos(status);
+
+CREATE TABLE IF NOT EXISTS cotacoes_propostas (
+  id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  cotacao_id     uuid        REFERENCES cotacoes_precos(id) ON DELETE CASCADE,
+  numero_proposta text,
+  html           text,
+  email_cliente  text,
+  whatsapp       text,
+  prazo_entrega  text,
+  enviado_em     timestamptz,
+  criado_em      timestamptz DEFAULT now()
+);
+ALTER TABLE cotacoes_propostas DISABLE ROW LEVEL SECURITY;
+
+-- ─────────────────────────────────────────────────────────────
+-- #79 · Catálogo de produtos — fotos e PDF
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE cadastro_produtos
+  ADD COLUMN IF NOT EXISTS fotos       jsonb DEFAULT '[]'::jsonb;
+
+ALTER TABLE cadastro_produtos
+  ADD COLUMN IF NOT EXISTS catalogo_url text;
+
+-- ─────────────────────────────────────────────────────────────
+-- #80 · Financeiro — centro de custos
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS centros_custo (
+  id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  codigo    text NOT NULL UNIQUE,
+  nome      text NOT NULL,
+  ativo     boolean DEFAULT true,
+  criado_em timestamptz DEFAULT now()
+);
+ALTER TABLE centros_custo DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE pcp_pedidos_compra
+  ADD COLUMN IF NOT EXISTS centro_custo text;
+
+-- ─────────────────────────────────────────────────────────────
+-- Storage (fazer pelo Dashboard se ainda não existir)
+-- ─────────────────────────────────────────────────────────────
+-- Storage → New bucket → nome: acn-media → Public: ON
+-- Usado para: produtos/{id}/fotos/* e produtos/{id}/catalogo/*
