@@ -1848,11 +1848,167 @@ function PainelPlataformas() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL CENTROS DE CUSTO
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelCentrosCusto() {
+  const [centros, setCentros]   = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [form, setForm]         = useState({ codigo:'', nome:'', descricao:'' });
+  const [editando, setEditando] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('centros_custo').select('*').order('codigo');
+    setCentros(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const salvar = async () => {
+    if (!form.codigo.trim() || !form.nome.trim()) { alert('Informe código e nome.'); return; }
+    setSalvando(true);
+    if (editando) {
+      await supabase.from('centros_custo').update({
+        codigo: form.codigo.trim().toUpperCase(),
+        nome: form.nome.trim(),
+        descricao: form.descricao.trim() || null,
+      }).eq('id', editando.id);
+    } else {
+      await supabase.from('centros_custo').insert([{
+        codigo: form.codigo.trim().toUpperCase(),
+        nome: form.nome.trim(),
+        descricao: form.descricao.trim() || null,
+        ativo: true,
+      }]);
+    }
+    setForm({ codigo:'', nome:'', descricao:'' });
+    setEditando(null); setShowForm(false); setSalvando(false);
+    load();
+  };
+
+  const toggleAtivo = async (c) => {
+    await supabase.from('centros_custo').update({ ativo: !c.ativo }).eq('id', c.id);
+    load();
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span>🏷️ Centros de Custo</span>
+        <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
+          onClick={() => { setForm({ codigo:'', nome:'', descricao:'' }); setEditando(null); setShowForm(true); }}>
+          + Novo Centro de Custo
+        </button>
+      </div>
+      <div className="sec-body">
+        <p style={{ fontSize:10, color:'#64748b', marginBottom:12 }}>
+          Usados para classificar pedidos de compra e, futuramente, formar o custo de cada OP/OS.
+          O código é o valor referenciado em outras telas (ex: Compras).
+        </p>
+
+        {showForm && (
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
+              {editando ? '✏️ Editar Centro de Custo' : '+ Novo Centro de Custo'}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8, marginBottom:8 }}>
+              <div>
+                <label className="acn-label">Código *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Ex: RH, TI, PROD"
+                  value={form.codigo}
+                  onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
+                  autoFocus />
+              </div>
+              <div>
+                <label className="acn-label">Nome *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Nome completo do centro"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label className="acn-label">Descrição</label>
+              <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical' }}
+                placeholder="Observações sobre o uso deste centro de custo (opcional)"
+                value={form.descricao}
+                onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'SALVAR'}
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setShowForm(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {loading && <div style={{ textAlign:'center', padding:20, color:'#64748b', fontSize:11 }}>Carregando...</div>}
+        {!loading && centros.length === 0 && (
+          <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11 }}>
+            Nenhum centro de custo cadastrado. Clique em <strong>+ Novo Centro de Custo</strong> para começar.
+          </div>
+        )}
+
+        {centros.length > 0 && (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Código</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Nome</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Descrição</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Status</th>
+                <th style={{ padding:'6px 8px', borderBottom:'1px solid #e2e8f0' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {centros.map(c => (
+                <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: c.ativo ? 1 : 0.45 }}>
+                  <td style={{ padding:'8px 8px', fontWeight:700, fontFamily:'monospace', color:'#0f766e' }}>{c.codigo}</td>
+                  <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
+                  <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={c.descricao || ''}>
+                    {c.descricao || '—'}
+                  </td>
+                  <td style={{ padding:'8px 8px', textAlign:'center' }}>
+                    <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10,
+                      background: c.ativo ? '#dcfce7' : '#f1f5f9',
+                      color:      c.ativo ? '#16a34a'  : '#94a3b8' }}>
+                      {c.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'8px 6px' }}>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                      <button className="acn-btn" style={{ background: c.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => toggleAtivo(c)}>
+                        {c.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => { setForm({ codigo:c.codigo, nome:c.nome, descricao:c.descricao||'' }); setEditando(c); setShowForm(true); }}>
+                        ✏️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---- ADMINTAB PRINCIPAL ----
 const ABAS_ADMIN = [
   { id:'usuarios',       label:'Usuários' },
   { id:'perfis',         label:'🔐 Perfis de Acesso' },
   { id:'plataformas',    label:'🏪 Plataformas' },
+  { id:'centros_custo',  label:'🏷️ Centros de Custo' },
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
@@ -2321,6 +2477,7 @@ export default function AdminTab() {
       {abaAtiva === 'usuarios'     && <PainelUsuarios />}
       {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
+      {abaAtiva === 'centros_custo' && <PainelCentrosCusto />}
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
