@@ -52,6 +52,8 @@ function OplRow({ o, onAction, currentUser }) {
           )}
         </td>
         <td>{o.chassi || '—'}</td>
+        <td>{o.cliente_nome || '—'}</td>
+        <td>{o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
         <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
         <td>
@@ -106,7 +108,7 @@ function OplRow({ o, onAction, currentUser }) {
       {/* Linha extra: motivo da reprovação CQ */}
       {(retrabalho || emRetrab) && o.obs_reprovacao_cq && (
         <tr style={{background:'#fef2f2'}}>
-          <td colSpan={7} style={{padding:'4px 10px'}}>
+          <td colSpan={10} style={{padding:'4px 10px'}}>
             <div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'5px 8px',background:'#fee2e2',borderRadius:4,border:'1px solid #fca5a5'}}>
               <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
               <div style={{flex:1}}>
@@ -1456,6 +1458,14 @@ export default function ProducaoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
   const { list: colaboradoresList } = useColaboradores();
+
+  // Filtros da lista de Produção
+  const [filtroBusca, setFiltroBusca]     = useState('');
+  const [filtroStatus, setFiltroStatus]   = useState('Todos');
+  const [filtroTecnico, setFiltroTecnico] = useState('Todos');
+  const [filtroCliente, setFiltroCliente] = useState('');
+  const [filtroEntregaDe, setFiltroEntregaDe]   = useState('');
+  const [filtroEntregaAte, setFiltroEntregaAte] = useState('');
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
   const [modalAcomp,  setModalAcomp]      = useState<any>(null);
@@ -1667,6 +1677,33 @@ export default function ProducaoTab({ currentUser }) {
   const [abaProducao, setAbaProducao] = useState('producao');
   const emRetrabalho = opls.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho');
 
+  // Técnicos únicos presentes na lista atual, para popular o filtro
+  const tecnicosDisponiveis = [...new Set(
+    opls.map(o => o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao).filter(Boolean)
+  )].sort();
+
+  const oplsFiltradas = opls.filter(o => {
+    if (filtroStatus !== 'Todos' && o.status_geral !== filtroStatus) return false;
+    if (filtroTecnico !== 'Todos') {
+      const tec = o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao;
+      if (tec !== filtroTecnico) return false;
+    }
+    if (filtroCliente.trim() && !o.cliente_nome?.toLowerCase().includes(filtroCliente.trim().toLowerCase())) return false;
+    if (filtroEntregaDe && (!o.data_prevista_entrega || o.data_prevista_entrega < filtroEntregaDe)) return false;
+    if (filtroEntregaAte && (!o.data_prevista_entrega || o.data_prevista_entrega > filtroEntregaAte)) return false;
+    if (filtroBusca.trim()) {
+      const t = filtroBusca.trim().toLowerCase();
+      if (!(o.opl?.toLowerCase().includes(t) || o.chassi?.toLowerCase().includes(t) || o.cliente_nome?.toLowerCase().includes(t))) return false;
+    }
+    return true;
+  });
+
+  const filtrosAtivos = filtroBusca || filtroStatus !== 'Todos' || filtroTecnico !== 'Todos' || filtroCliente || filtroEntregaDe || filtroEntregaAte;
+  const limparFiltros = () => {
+    setFiltroBusca(''); setFiltroStatus('Todos'); setFiltroTecnico('Todos');
+    setFiltroCliente(''); setFiltroEntregaDe(''); setFiltroEntregaAte('');
+  };
+
   return (
     <div>
       {/* TABS */}
@@ -1718,7 +1755,53 @@ export default function ProducaoTab({ currentUser }) {
 
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>OPLs em Producao / Retrabalho ({opls.length})</span>
+          <span>Filtros</span>
+          {filtrosAtivos && (
+            <button className="acn-btn" style={{background:'#94a3b8',fontSize:10,padding:'3px 8px'}} onClick={limparFiltros}>✕ Limpar filtros</button>
+          )}
+        </div>
+        <div className="sec-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="acn-label">Buscar (OPL, chassi, cliente)</label>
+              <input className="acn-input" style={{width:'100%'}} value={filtroBusca} onChange={e=>setFiltroBusca(e.target.value)} placeholder="Digite para buscar..." />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Status</label>
+              <select className="acn-input" style={{width:'100%'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+                <option value="Todos">Todos</option>
+                <option value="Aguardando Inicio Producao">Aguardando Início Produção</option>
+                <option value="Em Producao">Em Produção</option>
+                <option value="Retrabalho">Retrabalho</option>
+                <option value="Em Retrabalho">Em Retrabalho</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Técnico / Equipe</label>
+              <select className="acn-input" style={{width:'100%'}} value={filtroTecnico} onChange={e=>setFiltroTecnico(e.target.value)}>
+                <option value="Todos">Todos</option>
+                {tecnicosDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Cliente</label>
+              <input className="acn-input" style={{width:'100%'}} value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Nome do cliente..." />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Entrega prevista — de</label>
+              <input className="acn-input" type="date" style={{width:'100%'}} value={filtroEntregaDe} onChange={e=>setFiltroEntregaDe(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Entrega prevista — até</label>
+              <input className="acn-input" type="date" style={{width:'100%'}} value={filtroEntregaAte} onChange={e=>setFiltroEntregaAte(e.target.value)} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>OPLs em Producao / Retrabalho ({oplsFiltradas.length}{oplsFiltradas.length !== opls.length ? ` de ${opls.length}` : ''})</span>
           {emRetrabalho.length > 0 && (
             <span style={{fontSize:10,background:'#ef4444',color:'white',padding:'2px 8px',borderRadius:10,fontWeight:700}}>
               🔁 {emRetrabalho.length} em retrabalho
@@ -1726,15 +1809,15 @@ export default function ProducaoTab({ currentUser }) {
           )}
         </div>
         <div className="sec-body" style={{overflowX:'auto'}}>
-          {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OPL em producao no momento.</div>
+          {loading ? <div className="acn-empty">Carregando...</div> : oplsFiltradas.length === 0 ? (
+            <div className="acn-empty">{opls.length === 0 ? 'Nenhuma OPL em producao no momento.' : 'Nenhuma OPL encontrada para os filtros aplicados.'}</div>
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
+                <th>OPL</th><th>Chassi</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
               </tr></thead>
               <tbody>
-                {opls.map(o => <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} />)}
+                {oplsFiltradas.map(o => <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} />)}
               </tbody>
             </table>
           )}

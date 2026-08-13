@@ -226,7 +226,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
   const [demandas, setDemandas]       = useState([]);
   const [sacOrdensMap, setSacOrdensMap] = useState<Record<string,any>>({});
   const [loading, setLoading]         = useState(false);
-  const [filtro, setFiltro]           = useState('Pendente');
+  const [filtro, setFiltro]           = useState('Todos');
   const [abaAtiva, setAbaAtiva]       = useState('demandas');
   const [tick, setTick]               = useState(0);
 
