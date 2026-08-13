@@ -148,3 +148,28 @@ CREATE TABLE IF NOT EXISTS public.engenharia_desenvolvimento (
 ALTER TABLE public.engenharia_desenvolvimento DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS engenharia_desenvolvimento_opl_idx ON public.engenharia_desenvolvimento (opl_id);
 CREATE INDEX IF NOT EXISTS engenharia_desenvolvimento_concluida_idx ON public.engenharia_desenvolvimento (concluida);
+
+-- =============================================================
+-- 2026-08-13 · feat: sub-aba Horas/Tarefas (Engenharia)
+-- =============================================================
+-- Ja executado em producao em 2026-08-13.
+CREATE TABLE IF NOT EXISTS public.engenharia_horas_tarefas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  opl_id uuid REFERENCES public.oples(id) ON DELETE SET NULL,
+  numero_opl text,
+  titulo text NOT NULL,
+  responsavel_nome text,
+  status text NOT NULL DEFAULT 'nao_iniciada',
+  data_inicio timestamptz,
+  data_conclusao timestamptz,
+  tempo_pausado_segundos numeric NOT NULL DEFAULT 0,
+  tempo_total_segundos numeric,
+  pausas jsonb NOT NULL DEFAULT '[]'::jsonb,
+  criado_por text,
+  criado_por_nome text,
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  atualizado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.engenharia_horas_tarefas DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS engenharia_horas_tarefas_status_idx ON public.engenharia_horas_tarefas (status);
+CREATE INDEX IF NOT EXISTS engenharia_horas_tarefas_opl_idx ON public.engenharia_horas_tarefas (opl_id);

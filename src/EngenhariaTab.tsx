@@ -9,6 +9,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
 import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
+import HorasTarefasTab from './HorasTarefasTab';
 
 
 export default function EngenhariaTab({ currentUser }) {
@@ -154,11 +155,17 @@ export default function EngenhariaTab({ currentUser }) {
           onClick={()=>setAbaEng('analise')}>📐 Análise</button>
         <button style={{flex:1,padding:'8px',background:abaEng==='desenvolvimento'?'#7c3aed':'white',color:abaEng==='desenvolvimento'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaEng('desenvolvimento')}>🔩 Desenvolvimento</button>
+        <button style={{flex:1,padding:'8px',background:abaEng==='horas'?'#0891b2':'white',color:abaEng==='horas'?'white':'#0891b2',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaEng('horas')}>⏱️ Horas/Tarefas</button>
       </div>
 
       {abaEng === 'desenvolvimento' ? (
         <div style={{ padding:'0 12px' }}>
           <DesenvolvimentoPecasTab currentUser={currentUser} />
+        </div>
+      ) : abaEng === 'horas' ? (
+        <div style={{ padding:'0 12px' }}>
+          <HorasTarefasTab currentUser={currentUser} />
         </div>
       ) : <>
       {/* AGENDA */}
