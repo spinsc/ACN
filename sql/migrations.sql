@@ -113,3 +113,13 @@ ALTER TABLE pcp_pedidos_compra
 -- ─────────────────────────────────────────────────────────────
 -- Storage → New bucket → nome: acn-media → Public: ON
 -- Usado para: produtos/{id}/fotos/* e produtos/{id}/catalogo/*
+
+-- =============================================================
+-- 2026-08-13 · fix: desmembramento de OP/OS falhava silenciosamente
+-- =============================================================
+-- oples.modelo tinha NOT NULL, mas o campo "Modelo" no NovaOpOsModal.tsx
+-- é opcional (placeholder "Opcional") — toda criação de OP sem modelo
+-- preenchido (incluindo o desmembramento por veículo) quebrava com
+-- 23502 "null value in column modelo violates not-null constraint".
+-- Já executado em produção em 2026-08-13.
+ALTER TABLE public.oples ALTER COLUMN modelo DROP NOT NULL;
