@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -30,6 +31,102 @@ function fmtMoeda(v: number, moeda = 'REAL') {
 
 function fmtPct(v: number) {
   return `${Number(v || 0).toFixed(2)}%`;
+}
+
+// ─── Import/Export XLSX ────────────────────────────────────────────────────────
+// Template único: exportar sempre gera essas colunas, importar sempre espera essas colunas.
+const TEMPLATE_COLS: { label: string; key: string }[] = [
+  { label: 'Código',          key: 'codigo' },
+  { label: 'Nome',            key: 'nome' },
+  { label: 'Descrição',       key: 'descricao' },
+  { label: 'Unidade',         key: 'unidade' },
+  { label: 'Categoria',       key: 'categoria' },
+  { label: 'NCM',             key: 'ncm' },
+  { label: 'Marca',           key: 'marca' },
+  { label: 'Fornecedor',      key: 'fornecedor' },
+  { label: 'Moeda',           key: 'moeda' },
+  { label: 'Custo Unitário',  key: 'custo_unit' },
+  { label: 'IPI %',           key: 'ipi_pct' },
+  { label: 'ST %',            key: 'st_pct' },
+  { label: 'DIFAL %',         key: 'difal_pct' },
+  { label: 'Impostos %',      key: 'imposto_pct' },
+  { label: 'Markup %',        key: 'markup_pct' },
+  { label: 'Custo Fixo %',    key: 'custo_fixo_pct' },
+  { label: 'Ativo',           key: 'ativo' },
+];
+
+function normalizarCabecalho(s: string) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos (marcas diacriticas combinantes pos-NFD)
+    .toLowerCase().replace(/[^a-z0-9]/g, ''); // remove espaços, %, etc.
+}
+
+// mapa "cabecalhonormalizado" -> chave do campo, construído a partir do template
+const MAPA_IMPORT: Record<string, string> = {};
+TEMPLATE_COLS.forEach(c => { MAPA_IMPORT[normalizarCabecalho(c.label)] = c.key; });
+// aliases adicionais aceitos na importação
+MAPA_IMPORT[normalizarCabecalho('CODITEM')]      = 'codigo';
+MAPA_IMPORT[normalizarCabecalho('Cod Item')]     = 'codigo';
+MAPA_IMPORT[normalizarCabecalho('Nome/Produto')] = 'nome';
+MAPA_IMPORT[normalizarCabecalho('Custo Unit.')]  = 'custo_unit';
+MAPA_IMPORT[normalizarCabecalho('Custo Unitario')] = 'custo_unit';
+
+function itemParaLinhaExport(it: any) {
+  const linha: Record<string, any> = {};
+  TEMPLATE_COLS.forEach(c => {
+    if (c.key === 'ativo') { linha[c.label] = it.ativo ? 'Sim' : 'Não'; return; }
+    linha[c.label] = it[c.key] ?? '';
+  });
+  return linha;
+}
+
+function exportarItens(itens: any[], nomeArquivo: string) {
+  const linhas = itens.map(itemParaLinhaExport);
+  const ws = XLSX.utils.json_to_sheet(linhas, { header: TEMPLATE_COLS.map(c => c.label) });
+  ws['!cols'] = TEMPLATE_COLS.map(() => ({ wch: 16 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Itens');
+  XLSX.writeFile(wb, nomeArquivo);
+}
+
+function parseValorBool(v: any) {
+  const s = String(v ?? '').trim().toLowerCase();
+  return !(s === 'não' || s === 'nao' || s === 'n' || s === 'false' || s === '0' || s === 'inativo');
+}
+
+function parseNumero(v: any) {
+  if (v === '' || v == null) return 0;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Lê um arquivo .xlsx/.xls/.csv e retorna os itens já mapeados para o schema de cadastro_itens
+async function lerArquivoItens(file: File): Promise<any[]> {
+  const ehCsv = /\.csv$/i.test(file.name);
+  // CSV é texto puro sem metadado de encoding — decodifica como UTF-8 explicitamente
+  // (o parser binário do XLSX assume codepage 1252 para CSV e corrompe acentos/cabeçalhos).
+  const wb = ehCsv
+    ? XLSX.read(await file.text(), { type: 'string' })
+    : XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  const primeiraAba = wb.SheetNames[0];
+  const linhas: any[] = XLSX.utils.sheet_to_json(wb.Sheets[primeiraAba], { defval: '' });
+
+  return linhas.map(linha => {
+    const item: any = { codigo: null, nome: '', unidade: 'UN', moeda: 'REAL', ativo: true };
+    for (const [cabecalho, valor] of Object.entries(linha)) {
+      const chave = MAPA_IMPORT[normalizarCabecalho(cabecalho)];
+      if (!chave) continue;
+      if (chave === 'ativo') item[chave] = parseValorBool(valor);
+      else if (['custo_unit', 'ipi_pct', 'st_pct', 'difal_pct', 'imposto_pct', 'markup_pct', 'custo_fixo_pct'].includes(chave)) {
+        item[chave] = parseNumero(valor);
+      } else if (chave === 'codigo') {
+        item.codigo = String(valor ?? '').trim() || null; // '' vira null (índice único não aceita duplicar '')
+      } else {
+        item[chave] = String(valor ?? '').trim();
+      }
+    }
+    return item;
+  }).filter(it => it.nome); // ignora linhas sem nome (obrigatório)
 }
 
 // ─── Modal de criação/edição ──────────────────────────────────────────────────
@@ -292,16 +389,28 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   const [categorias, setCategorias] = useState<string[]>([...CATEGORIAS_DEFAULT]);
   const [ordenar, setOrdenar]       = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'nome', dir: 'asc' });
   const [pagina, setPagina]         = useState(0);
+  const [importando, setImportando] = useState(false);
+  const [resultadoImport, setResultadoImport] = useState<{ novos: number; atualizados: number; ignorados: number; erro?: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const POR_PAG = 50;
 
   // ── Carregar itens ──────────────────────────────────────────────────────────
   const carregar = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('cadastro_itens')
-      .select('*')
-      .order(ordenar.col, { ascending: ordenar.dir === 'asc' });
-    const lista = data || [];
+    // Supabase limita a 1000 linhas por requisição — pagina até esgotar
+    // (necessário desde a importação em massa que passou de 4.000 itens).
+    const PAGINA_SUPABASE = 1000;
+    let lista: any[] = [];
+    for (let offset = 0; ; offset += PAGINA_SUPABASE) {
+      const { data } = await supabase
+        .from('cadastro_itens')
+        .select('*')
+        .order(ordenar.col, { ascending: ordenar.dir === 'asc' })
+        .range(offset, offset + PAGINA_SUPABASE - 1);
+      const pagina = data || [];
+      lista = lista.concat(pagina);
+      if (pagina.length < PAGINA_SUPABASE) break;
+    }
     setItens(lista);
 
     // Extrair categorias únicas (merge com default)
@@ -360,6 +469,63 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
     await supabase.from('cadastro_itens').delete().eq('id', id);
     setItens(prev => prev.filter(i => i.id !== id));
     setDeletando(null);
+  };
+
+  // ── Import/Export ──────────────────────────────────────────────────────────
+  const handleExportar = () => {
+    const nomeArquivo = `cadastro_itens_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    exportarItens(filtrados, nomeArquivo);
+  };
+
+  const handleBaixarModelo = () => {
+    exportarItens([], 'modelo_cadastro_itens.xlsx');
+  };
+
+  const handleArquivoSelecionado = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+
+    setImportando(true);
+    setResultadoImport(null);
+    try {
+      const linhas = await lerArquivoItens(file);
+      if (linhas.length === 0) {
+        setResultadoImport({ novos: 0, atualizados: 0, ignorados: 0, erro: 'Nenhuma linha válida encontrada (verifique se a coluna "Nome" está preenchida).' });
+        return;
+      }
+
+      const comCodigo = linhas.filter(l => l.codigo);
+      const semCodigo = linhas.filter(l => !l.codigo);
+      let atualizados = 0, novos = 0;
+      const TAM_LOTE = 500;
+
+      // Itens com código: upsert (atualiza se já existir, cria se não existir)
+      for (let i = 0; i < comCodigo.length; i += TAM_LOTE) {
+        const lote = comCodigo.slice(i, i + TAM_LOTE).map(it => ({ ...it, criado_por: currentUser?.email || '' }));
+        const { data: existentes } = await supabase
+          .from('cadastro_itens').select('codigo').in('codigo', lote.map(it => it.codigo));
+        const codigosExistentes = new Set((existentes || []).map((e: any) => e.codigo));
+        const { error } = await supabase.from('cadastro_itens').upsert(lote, { onConflict: 'codigo' });
+        if (error) throw error;
+        lote.forEach(it => codigosExistentes.has(it.codigo) ? atualizados++ : novos++);
+      }
+
+      // Itens sem código: sempre insert (não há como identificar duplicata)
+      for (let i = 0; i < semCodigo.length; i += TAM_LOTE) {
+        const lote = semCodigo.slice(i, i + TAM_LOTE).map(it => ({ ...it, criado_por: currentUser?.email || '' }));
+        const { error } = await supabase.from('cadastro_itens').insert(lote);
+        if (error) throw error;
+        novos += lote.length;
+      }
+
+      setResultadoImport({ novos, atualizados, ignorados: 0 });
+      await carregar();
+    } catch (err: any) {
+      setResultadoImport({ novos: 0, atualizados: 0, ignorados: 0, erro: err?.message || 'Erro ao importar arquivo.' });
+    } finally {
+      setImportando(false);
+    }
   };
 
   // ── Ordenação ───────────────────────────────────────────────────────────────
@@ -423,6 +589,35 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
               <div style={{ fontSize: 8, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{s.label}</div>
             </div>
           ))}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleArquivoSelecionado}
+            style={{ display: 'none' }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importando}
+            title="Importar itens de planilha Excel (.xlsx) ou CSV"
+            style={{
+              padding: '7px 12px', background: '#fff', color: '#0f766e', border: '1px solid #0f766e',
+              borderRadius: 6, cursor: importando ? 'wait' : 'pointer', fontWeight: 700, fontSize: 11,
+              opacity: importando ? .6 : 1,
+            }}
+          >
+            {importando ? '⏳ Importando...' : '📥 Importar'}
+          </button>
+          <button
+            onClick={handleExportar}
+            title="Exportar itens filtrados para Excel (.xlsx)"
+            style={{
+              padding: '7px 12px', background: '#fff', color: '#0f766e', border: '1px solid #0f766e',
+              borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 11,
+            }}
+          >
+            📤 Exportar ({filtrados.length})
+          </button>
           <button
             onClick={() => setModal({})}
             style={{
@@ -434,6 +629,26 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
           </button>
         </div>
       </div>
+
+      {/* ── Resultado da importação ── */}
+      {resultadoImport && (
+        <div style={{
+          background: resultadoImport.erro ? '#fef2f2' : '#f0fdf4',
+          border: `1px solid ${resultadoImport.erro ? '#fca5a5' : '#86efac'}`,
+          borderRadius: 8, padding: '8px 14px', marginBottom: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          fontSize: 11, color: resultadoImport.erro ? '#991b1b' : '#15803d', fontWeight: 600,
+        }}>
+          <span>
+            {resultadoImport.erro
+              ? `❌ ${resultadoImport.erro}`
+              : `✅ Importação concluída — ${resultadoImport.novos} novo(s), ${resultadoImport.atualizados} atualizado(s).`}
+          </span>
+          <button onClick={() => setResultadoImport(null)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'inherit',
+          }}>✕</button>
+        </div>
+      )}
 
       {/* ── Filtros ── */}
       <div style={{
@@ -480,7 +695,17 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
             ✕ Limpar
           </button>
         )}
-        <span style={{ fontSize: 10, color: '#64748b', marginLeft: 'auto' }}>
+        <button
+          onClick={handleBaixarModelo}
+          title="Baixar planilha modelo com as colunas esperadas na importação"
+          style={{
+            padding: '4px 8px', border: '1px dashed #94a3b8', background: '#f8fafc',
+            color: '#475569', borderRadius: 5, fontSize: 10, cursor: 'pointer', marginLeft: 'auto',
+          }}
+        >
+          📄 Baixar modelo
+        </button>
+        <span style={{ fontSize: 10, color: '#64748b' }}>
           {total} item{total !== 1 ? 'ns' : ''}
         </span>
       </div>
