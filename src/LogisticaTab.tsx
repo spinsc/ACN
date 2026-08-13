@@ -14,7 +14,150 @@ const FORM_VAZIO = {
   pedido_compra_id: '',
 };
 
+// ─── Relatório de Movimentação (IN/OUT) por Período e Tipo ───────────────────
+function RelatorioLogistica() {
+  const [de, setDe]     = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().split('T')[0]; });
+  const [ate, setAte]   = useState(() => new Date().toISOString().split('T')[0]);
+  const [tipo, setTipo] = useState('Todos');
+  const [dados, setDados] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => { buscar(); }, []);
+
+  const buscar = async () => {
+    setCarregando(true);
+    let q = supabase.from('logistica_manifestos').select('*')
+      .gte('data', de).lte('data', ate).order('data', { ascending: false });
+    if (tipo !== 'Todos') q = q.eq('tipo', tipo);
+    const { data } = await q;
+    setDados(data || []);
+    setCarregando(false);
+  };
+
+  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const corTipo = (t) => ({ Recebimento:'#22c55e', Envio:'#3b82f6', Transferencia:'#f59e0b' })[t] || '#94a3b8';
+
+  const recebimentos   = dados.filter(m => m.tipo === 'Recebimento');
+  const envios         = dados.filter(m => m.tipo === 'Envio');
+  const transferencias = dados.filter(m => m.tipo === 'Transferencia');
+  const somaQtd  = (lista) => lista.reduce((a,m)=>a+(Number(m.quantidade)||0),0);
+  const somaPeso = (lista) => lista.reduce((a,m)=>a+(Number(m.peso)||0),0);
+  const saldoQtd = somaQtd(recebimentos) - somaQtd(envios);
+
+  // Agrupado por tipo de mercadoria
+  const porMercadoria = dados.reduce((acc,m) => {
+    const k = m.tipo_mercadoria || 'Outros';
+    if (!acc[k]) acc[k] = { in:0, out:0, transf:0, qtdIn:0, qtdOut:0 };
+    if (m.tipo === 'Recebimento')       { acc[k].in++;    acc[k].qtdIn  += Number(m.quantidade)||0; }
+    else if (m.tipo === 'Envio')        { acc[k].out++;   acc[k].qtdOut += Number(m.quantidade)||0; }
+    else if (m.tipo === 'Transferencia') acc[k].transf++;
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr"><span>Filtros do Relatório</span></div>
+        <div className="sec-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="acn-label">De</label>
+              <input type="date" className="acn-input" style={{width:'100%'}} value={de} onChange={e=>setDe(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Até</label>
+              <input type="date" className="acn-input" style={{width:'100%'}} value={ate} onChange={e=>setAte(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Tipo</label>
+              <select className="acn-input" style={{width:'100%'}} value={tipo} onChange={e=>setTipo(e.target.value)}>
+                <option value="Todos">Todos</option>
+                {TIPOS_MANIFESTO.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{display:'flex',alignItems:'flex-end'}}>
+              <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="sec-card">
+        <div className="sec-hdr"><span>Totais do Período</span></div>
+        <div className="sec-body">
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {[
+              {label:'Recebimentos (IN)',    val:recebimentos.length,   sub:`${somaQtd(recebimentos)} un. · ${somaPeso(recebimentos).toFixed(1)} kg`, cor:'#22c55e'},
+              {label:'Envios (OUT)',         val:envios.length,         sub:`${somaQtd(envios)} un. · ${somaPeso(envios).toFixed(1)} kg`,             cor:'#3b82f6'},
+              {label:'Transferências',       val:transferencias.length, sub:`${somaQtd(transferencias)} un.`,                                          cor:'#f59e0b'},
+              {label:'Saldo (IN − OUT)',     val:`${saldoQtd>=0?'+':''}${saldoQtd}`, sub:'unidades',                                                    cor:saldoQtd>=0?'#16a34a':'#dc2626'},
+              {label:'Total de Movimentos',  val:dados.length,          sub:`${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}`, cor:'#1e293b'},
+            ].map(c => (
+              <div key={c.label} style={{flex:'1 1 160px',minWidth:140,background:'white',border:'1px solid #e2e8f0',borderTop:`3px solid ${c.cor}`,borderRadius:4,padding:'8px 10px'}}>
+                <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>{c.label}</div>
+                <div style={{fontSize:20,fontWeight:700,color:c.cor}}>{carregando?'...':c.val}</div>
+                <div style={{fontSize:9,color:'#94a3b8',marginTop:2}}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="sec-card">
+        <div className="sec-hdr"><span>Por Tipo de Mercadoria</span></div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando ? <div className="acn-empty">Carregando...</div> : Object.keys(porMercadoria).length === 0 ? (
+            <div className="acn-empty">Nenhuma movimentação no período.</div>
+          ) : (
+            <table>
+              <thead><tr><th>Mercadoria</th><th>Recebimentos</th><th>Qtd. Recebida</th><th>Envios</th><th>Qtd. Enviada</th><th>Transferências</th></tr></thead>
+              <tbody>
+                {Object.entries(porMercadoria).map(([k,v]) => (
+                  <tr key={k}>
+                    <td>{k}</td>
+                    <td style={{color:'#22c55e',fontWeight:700}}>{v.in}</td>
+                    <td>{v.qtdIn} un.</td>
+                    <td style={{color:'#3b82f6',fontWeight:700}}>{v.out}</td>
+                    <td>{v.qtdOut} un.</td>
+                    <td style={{color:'#f59e0b',fontWeight:700}}>{v.transf}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div className="sec-card">
+        <div className="sec-hdr"><span>Movimentos do Período ({dados.length})</span></div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando ? <div className="acn-empty">Carregando...</div> : dados.length === 0 ? (
+            <div className="acn-empty">Nenhuma movimentação no período.</div>
+          ) : (
+            <table>
+              <thead><tr><th>Data</th><th>Tipo</th><th>Remetente</th><th>Destinatário</th><th>Mercadoria</th><th>Qtd</th></tr></thead>
+              <tbody>
+                {dados.map(m => (
+                  <tr key={m.id}>
+                    <td>{fmtDt(m.data)}</td>
+                    <td><span className="acn-badge" style={{background:corTipo(m.tipo)}}>{m.tipo}</span></td>
+                    <td>{m.remetente}</td>
+                    <td>{m.destinatario || '—'}</td>
+                    <td>{m.tipo_mercadoria}: {m.descricao}</td>
+                    <td>{m.quantidade || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LogisticaTab({ currentUser }) {
+  const [abaLog, setAbaLog] = useState('historico');
   const [manifestos, setManifestos] = useState([]);
   const [pedidosCompra, setPedidosCompra] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -235,6 +378,14 @@ export default function LogisticaTab({ currentUser }) {
 
   return (
     <div>
+      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
+        <button style={{flex:1,padding:'8px',background:abaLog==='historico'?'#1e293b':'white',color:abaLog==='historico'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaLog('historico')}>📦 Histórico / Novo Registro</button>
+        <button style={{flex:1,padding:'8px',background:abaLog==='relatorio'?'#1e293b':'white',color:abaLog==='relatorio'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaLog('relatorio')}>📊 Relatório IN/OUT</button>
+      </div>
+
+      {abaLog === 'relatorio' ? <RelatorioLogistica /> : <>
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Logistica — Controle de Envio e Recebimento de Mercadorias</span>
@@ -392,6 +543,7 @@ export default function LogisticaTab({ currentUser }) {
           )}
         </div>
       </div>
+      </>}
 
       <DemandaFooter setor="Logistica" />
 
