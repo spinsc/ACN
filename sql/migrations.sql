@@ -123,3 +123,28 @@ ALTER TABLE pcp_pedidos_compra
 -- 23502 "null value in column modelo violates not-null constraint".
 -- Já executado em produção em 2026-08-13.
 ALTER TABLE public.oples ALTER COLUMN modelo DROP NOT NULL;
+
+-- =============================================================
+-- 2026-08-13 · feat: sub-aba Desenvolvimento (Engenharia)
+-- =============================================================
+-- Ja executado em producao em 2026-08-13.
+CREATE TABLE IF NOT EXISTS public.engenharia_desenvolvimento (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  opl_id uuid REFERENCES public.oples(id) ON DELETE SET NULL,
+  numero_opl text,
+  cliente_nome text,
+  titulo text NOT NULL,
+  descricao text,
+  etapas jsonb NOT NULL DEFAULT '[]'::jsonb,
+  anexos jsonb NOT NULL DEFAULT '[]'::jsonb,
+  area_livre text,
+  origem text NOT NULL DEFAULT 'manual',
+  concluida boolean NOT NULL DEFAULT false,
+  criado_por text,
+  criado_por_nome text,
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  atualizado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.engenharia_desenvolvimento DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS engenharia_desenvolvimento_opl_idx ON public.engenharia_desenvolvimento (opl_id);
+CREATE INDEX IF NOT EXISTS engenharia_desenvolvimento_concluida_idx ON public.engenharia_desenvolvimento (concluida);

@@ -8,9 +8,11 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
+import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
 
 
 export default function EngenhariaTab({ currentUser }) {
+  const [abaEng, setAbaEng] = useState('analise');
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
@@ -21,6 +23,8 @@ export default function EngenhariaTab({ currentUser }) {
   const [obsDevolver, setObsDevolver] = useState('');
   const [modalIniciar, setModalIniciar] = useState(null);
   const [responsavelEng, setResponsavelEng] = useState('');
+  const [precisaDesenvolvimento, setPrecisaDesenvolvimento] = useState(false);
+  const [descDesenvolvimento, setDescDesenvolvimento] = useState('');
 
   // Acompanhamento SAC Veicular
   const [osAcomp, setOsAcomp] = useState([]);
@@ -60,10 +64,13 @@ export default function EngenhariaTab({ currentUser }) {
   const abrirIniciarEng = (opl) => {
     setModalIniciar(opl);
     setResponsavelEng(currentUser?.nome || '');
+    setPrecisaDesenvolvimento(false);
+    setDescDesenvolvimento('');
   };
 
   const confirmarIniciarEng = async () => {
     if (!responsavelEng.trim()) { alert('Informe o responsavel pela execucao!'); return; }
+    if (precisaDesenvolvimento && !descDesenvolvimento.trim()) { alert('Descreva o que precisa ser desenvolvido!'); return; }
     const opl = modalIniciar;
     const agora = new Date().toISOString();
     await supabase.from('oples').update({
@@ -77,7 +84,10 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Em Analise Engenharia',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    setModalIniciar(null); setResponsavelEng('');
+    if (precisaDesenvolvimento) {
+      await criarDemandaDesenvolvimento({ opl, descricao: descDesenvolvimento.trim(), currentUser });
+    }
+    setModalIniciar(null); setResponsavelEng(''); setPrecisaDesenvolvimento(false); setDescDesenvolvimento('');
     fetchAll();
   };
 
@@ -138,6 +148,19 @@ export default function EngenhariaTab({ currentUser }) {
 
   return (
     <div>
+      {/* SELETOR DE SUB-ABAS */}
+      <div style={{display:'flex',gap:0,margin:'12px 12px 0',borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
+        <button style={{flex:1,padding:'8px',background:abaEng==='analise'?'#1e293b':'white',color:abaEng==='analise'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaEng('analise')}>📐 Análise</button>
+        <button style={{flex:1,padding:'8px',background:abaEng==='desenvolvimento'?'#7c3aed':'white',color:abaEng==='desenvolvimento'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaEng('desenvolvimento')}>🔩 Desenvolvimento</button>
+      </div>
+
+      {abaEng === 'desenvolvimento' ? (
+        <div style={{ padding:'0 12px' }}>
+          <DesenvolvimentoPecasTab currentUser={currentUser} />
+        </div>
+      ) : <>
       {/* AGENDA */}
       <div style={{ padding:'12px 12px 0' }}>
         <AgendaWidget setor="engenharia" currentUser={currentUser} />
@@ -355,6 +378,23 @@ export default function EngenhariaTab({ currentUser }) {
             <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>
               Pre-preenchido com seu nome. Altere se outra pessoa vai executar.
             </div>
+
+            <div style={{background: precisaDesenvolvimento ? '#f5f3ff' : '#f8fafc', border:`1.5px solid ${precisaDesenvolvimento ? '#c4b5fd' : '#e2e8f0'}`, borderRadius:6, padding:'8px 10px', marginBottom:12}}>
+              <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',userSelect:'none'}}>
+                <input type="checkbox" checked={precisaDesenvolvimento}
+                  onChange={e=>setPrecisaDesenvolvimento(e.target.checked)}
+                  style={{width:15,height:15,cursor:'pointer',accentColor:'#7c3aed'}} />
+                <span style={{fontSize:11,fontWeight:700,color: precisaDesenvolvimento ? '#6d28d9' : '#475569'}}>
+                  🔩 Precisa de Desenvolvimento
+                </span>
+              </label>
+              {precisaDesenvolvimento && (
+                <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical',marginTop:8}}
+                  placeholder="O que precisa ser desenvolvido? (gera demanda automática na aba Desenvolvimento)"
+                  value={descDesenvolvimento} onChange={e=>setDescDesenvolvimento(e.target.value)} />
+              )}
+            </div>
+
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#2563eb',flex:1,padding:'9px'}} onClick={confirmarIniciarEng}>
                 CONFIRMAR INICIO
@@ -435,6 +475,7 @@ export default function EngenhariaTab({ currentUser }) {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }
