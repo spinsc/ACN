@@ -2120,12 +2120,17 @@ function PainelCentrosCusto() {
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL CONTRATOS PADRÃO PARA TERCEIROS
 // ─────────────────────────────────────────────────────────────────────────────
-async function uploadContratoArquivo(file: File): Promise<{ url: string; nome: string } | null> {
-  const path = `contratos-padrao/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+async function uploadContratoArquivo(file: File): Promise<{ url: string; nome: string; error?: string }> {
+  // Nomes de arquivo com acentos/parênteses/etc quebram a key do storage —
+  // mantém só letras/números/ponto/traço/underscore, preservando a extensão.
+  const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  const path = `contratos-padrao/${Date.now()}_${nomeLimpo}`;
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
-  if (error || !data) return null;
+  if (error || !data) return { url: '', nome: '', error: error?.message || 'Falha desconhecida ao enviar.' };
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-  return pub?.publicUrl ? { url: pub.publicUrl, nome: file.name } : null;
+  if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
+  return { url: pub.publicUrl, nome: file.name };
 }
 
 const VAZIO_CONTRATO = { tipo: '', nome: '', descricao: '' };
@@ -2156,11 +2161,16 @@ function PainelContratosPadrao() {
   const salvar = async () => {
     if (!form.tipo.trim() || !form.nome.trim()) { alert('Informe tipo e nome do contrato.'); return; }
     if (!editando && !arquivo) { alert('Anexe o arquivo do contrato.'); return; }
+    if (arquivo && arquivo.size > 10 * 1024 * 1024) {
+      alert(`Arquivo muito grande (${(arquivo.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
+      return;
+    }
     setSalvando(true);
     let anexo: { url: string; nome: string } | null = null;
     if (arquivo) {
-      anexo = await uploadContratoArquivo(arquivo);
-      if (!anexo) { alert('Erro ao enviar o arquivo.'); setSalvando(false); return; }
+      const res = await uploadContratoArquivo(arquivo);
+      if (res.error) { alert('Erro ao enviar o arquivo: ' + res.error); setSalvando(false); return; }
+      anexo = res;
     }
     if (editando) {
       await supabase.from('contratos_padrao').update({
