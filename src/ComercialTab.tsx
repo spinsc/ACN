@@ -556,7 +556,7 @@ function _UNUSED_CRMSection({ currentUser }) {
 export default function ComercialTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { isUnread: isOplUnread, marcarLido: marcarOplLido } = useUnread('oples', opls, currentUser?.email, 'atualizado_em');
+  const { isUnread: isOplUnread, marcarLido: marcarOplLido } = useUnread('oples', opls, currentUser?.email, 'data_atualizacao');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(FORM_VAZIO);
   const [editId, setEditId] = useState(null);

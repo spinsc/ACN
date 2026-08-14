@@ -636,7 +636,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       responsavel_comercial: oplFormEdit.responsavel_comercial || null,
       observacoes_comercial: oplFormEdit.observacoes_comercial || null,
       faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
-      atualizado_em:         new Date().toISOString(),
+      data_atualizacao:      new Date().toISOString(),
     }).eq('id', oplEditando.id);
     setOplSalvando(false);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
