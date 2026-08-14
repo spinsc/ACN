@@ -686,12 +686,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       usuario_nome: currentUser?.nome,
       criado_em: agora,
     }]);
-    await salvarMencoes(abrirNovoText, {
-      mencionadoPor: String(currentUser?.id || ''),
-      mencionadoPorNome: currentUser?.nome || '',
+    await salvarMencoes({
+      texto: abrirNovoText,
+      mencionanteId: String(currentUser?.id || ''),
+      mencionanteNome: currentUser?.nome || 'Sistema',
+      contexto: 'crm',
       contextoId: String(modalAbrir.id),
       contextoDescricao: `CRM: ${modalAbrir.titulo || '—'}`,
       campo: 'andamento_crm',
+      abaDestino: 'crm',
     });
     setAbrirNovoText('');
     await fetchAbrirTabContent(modalAbrir, 'andamento');

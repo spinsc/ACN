@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
-import MencaoTextarea from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
@@ -395,6 +395,19 @@ export default function SacTab({ currentUser }) {
     }
 
     if (!osData) { alert('Não foi possível gerar número único. Tente novamente.'); setSalvando(false); return; }
+
+    if (form.observacoes) {
+      await salvarMencoes({
+        texto:             form.observacoes,
+        mencionanteId:     String(currentUser?.id || ''),
+        mencionanteNome:   currentUser?.nome || currentUser?.email || 'Usuário',
+        contexto:          'sac',
+        contextoId:        osData.id,
+        contextoDescricao: `OS ${numero} — ${form.equipamento_nome || ''}`,
+        campo:             'observacoes',
+        abaDestino:        'sac',
+      });
+    }
 
     // Auto-criar demanda para Laboratório (apenas OS não veiculares)
     if (!ehVeicular) {

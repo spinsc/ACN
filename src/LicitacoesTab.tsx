@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
 import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
-import MencaoTextarea from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -613,6 +613,16 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         }
         if (error) { alert('Erro: ' + error.message); }
         else {
+          await salvarMencoes({
+            texto:             novoText.trim(),
+            mencionanteId:     String(currentUser?.id || ''),
+            mencionanteNome:   autor,
+            contexto:          'licitacao',
+            contextoId:        licit.id,
+            contextoDescricao: licit.nome_projeto || licit.numero || '',
+            campo:             'andamento',
+            abaDestino:        'licitacoes',
+          });
           setNovoText('');
           setNovoAnexoFiles([]);
           if (novoAnexoRef.current) novoAnexoRef.current.value = '';
@@ -656,6 +666,16 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       .update({ conteudo: editandoDocTexto, atualizado_em: new Date().toISOString() })
       .eq('id', editandoDocId);
     if (error) { alert('Erro: ' + error.message); return; }
+    await salvarMencoes({
+      texto:             editandoDocTexto,
+      mencionanteId:     String(currentUser?.id || ''),
+      mencionanteNome:   currentUser?.nome || currentUser?.email || 'Usuário',
+      contexto:          'licitacao',
+      contextoId:        licit.id,
+      contextoDescricao: licit.nome_projeto || licit.numero || '',
+      campo:             'andamento',
+      abaDestino:        'licitacoes',
+    });
     setEditandoDocId(null);
     setEditandoDocTexto('');
     fetchDocs();

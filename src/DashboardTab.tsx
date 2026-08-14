@@ -617,10 +617,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (!currentUser?.id) return;
     const fetchMencoes = async () => {
       try {
+        // Busca por id E por nome (fallback p/ usuários com id trocado após recriação),
+        // mesmo critério usado no MencoesInboxPanel — mantém badge e painel consistentes.
+        const uid  = String(currentUser.id || '');
+        const nome = String(currentUser.nome || '');
+        let orFilter = `mencionado_id.eq.${uid}`;
+        if (nome) orFilter += `,mencionado_nome.ilike.%${nome}%`;
         const { count } = await supabase
           .from('mencoes')
           .select('id', { count: 'exact', head: true })
-          .eq('mencionado_id', currentUser.id)
+          .or(orFilter)
           .eq('lida', false);
         setMencoesCount(count || 0);
       } catch { /* mencoes table may not exist yet */ }

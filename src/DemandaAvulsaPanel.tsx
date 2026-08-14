@@ -315,6 +315,20 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const salvarEdicao = async () => {
     setSalvando(true);
     await supabase.from('demandas_avulsas').update({ ...editForm, atualizado_em: new Date().toISOString() }).eq('id', d.id);
+    for (const [campo, texto] of [['descricao', editForm.descricao], ['observacoes', editForm.observacoes]]) {
+      if (texto?.trim()) {
+        await salvarMencoes({
+          texto,
+          mencionanteId:     String(currentUser?.id || currentUser?.email || ''),
+          mencionanteNome:   currentUser?.nome || '',
+          contexto:          'demanda_avulsa',
+          contextoId:        String(d.id),
+          contextoDescricao: d.titulo || 'Demanda Avulsa',
+          campo,
+          abaDestino:        'engenharia',
+        });
+      }
+    }
     setEditando(false);
     await reload();
     setSalvando(false);
@@ -821,7 +835,19 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       payload.responsavel_email = etapas[0].responsavel_email || null;
       payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
     }
-    await supabase.from('demandas_avulsas').insert([payload]);
+    const { data: nova } = await supabase.from('demandas_avulsas').insert([payload]).select('id').single();
+    if (form.descricao?.trim() && nova?.id) {
+      await salvarMencoes({
+        texto:             form.descricao,
+        mencionanteId:     String(currentUser?.id || currentUser?.email || ''),
+        mencionanteNome:   currentUser?.nome || '',
+        contexto:          'demanda_avulsa',
+        contextoId:        String(nova.id),
+        contextoDescricao: form.titulo || 'Demanda Avulsa',
+        campo:             'descricao',
+        abaDestino:        'engenharia',
+      });
+    }
     setSalvando(false);
     onSaved();
     onClose();
