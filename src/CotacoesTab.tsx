@@ -67,7 +67,11 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
   const results  = itens.map(it => calcItem(it, prms));
   const totalBruto = results.reduce((s, r) => s + r.valorTotal, 0);
   const descPct  = proposta?.desconto_pct || 0;
-  const totalLiq = proposta?.valor_com_desconto ?? (totalBruto * (1 - descPct/100));
+  // Sempre recalcula a partir dos itens ATUAIS da cotação (não confia no
+  // valor_com_desconto salvo na proposta) — se a cotação foi corrigida depois
+  // de gerar a proposta, o valor exibido/cobrado reflete o preço certo, com
+  // o mesmo % de desconto que foi aprovado.
+  const totalLiq = totalBruto * (1 - descPct/100);
   const descVal  = totalBruto - totalLiq;
   const dataHoje = new Date().toLocaleDateString('pt-BR');
   const empresa  = cotacao.empresa || 'ACN';
@@ -278,8 +282,8 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
   const prms = cotacao.parametros_globais || {};
   const itens = cotacao.itens || [];
   const results = itens.map(it => calcItem(it, prms));
-  const totalLiq = proposta?.valor_com_desconto
-    ?? results.reduce((s, r) => s + r.valorTotal, 0) * (1 - (proposta?.desconto_pct || 0) / 100);
+  // Sempre recalculado a partir dos itens atuais — ver mesmo comentário em gerarPropostaHTML.
+  const totalLiq = results.reduce((s, r) => s + r.valorTotal, 0) * (1 - (proposta?.desconto_pct || 0) / 100);
 
   const enviarEmail = () => {
     if (!emailCliente.trim()) { alert('Informe o e-mail do cliente.'); return; }
@@ -427,7 +431,11 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
   const valorDesc  = totVendas * desconto / 100;
   const valorFinal = totVendas - valorDesc;
 
-  const precisaAprovacao = desconto > maxDesc && maxDesc > 0;
+  // Sem teto configurado (maxDesc <= 0) não significa "sem limite" — significa
+  // que nenhum desconto tem aprovação automática, então qualquer desconto > 0
+  // precisa passar por aprovação. Evita a brecha de dar até 50% de desconto
+  // sem ninguém saber quando o campo "Desconto Máximo" nunca foi preenchido.
+  const precisaAprovacao = desconto > 0 && (maxDesc <= 0 || desconto > maxDesc);
 
   const salvar = async () => {
     setSalvando(true);
@@ -641,9 +649,14 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const prms      = cotacao.parametros_globais || {};
   const itens     = cotacao.itens || [];
   const results   = itens.map(it => calcItem(it, prms));
-  const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
-  const totCusto  = results.reduce((s, r) => s + r.custoTotal, 0);
-  const margem    = totVendas - totCusto;
+  const totVendas = results.reduce((s, r) => s + r.valorTotal,   0);
+  const totCusto  = results.reduce((s, r) => s + r.custoTotal,   0);
+  const totDifal  = results.reduce((s, r) => s + r.totalDifal,   0);
+  // Mesma fórmula usada em FormacaoPrecosTab (totMargem/lucroGeral) e no
+  // calcItem de cada linha — soma a margem real (já líquida de imposto e
+  // custo fixo), não apenas venda-custo, que ficava artificialmente alta.
+  const margem    = results.reduce((s, r) => s + r.margem, 0);
+  const margemPct = (totVendas - totDifal) > 0 ? margem / (totVendas - totDifal) * 100 : 0;
 
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1900, display:'flex', alignItems:'center', justifyContent:'center' }}
@@ -693,7 +706,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
                 </div>
                 <div style={{ background:'#ede9fe', border:'1px solid #c4b5fd', borderRadius:8, padding:'10px 14px', textAlign:'center' }}>
                   <div style={{ fontSize:9, color:'#6d28d9', fontWeight:700, marginBottom:3 }}>MARGEM</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#5b21b6' }}>{fmtR(margem)} ({fmtPct(totVendas > 0 ? margem/totVendas*100 : 0)})</div>
+                  <div style={{ fontSize:16, fontWeight:800, color:'#5b21b6' }}>{fmtR(margem)} ({fmtPct(margemPct)})</div>
                 </div>
               </>
             )}
@@ -1137,7 +1150,7 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
         difal_pct:      Number(produto.difal_pct) || 16,
         imposto_pct:    Number(produto.imposto_pct) || 16,
         custo_fixo_pct: Number(produto.custo_fixo_pct) || 3,
-        moeda:          'BRL',
+        moeda:          'REAL',
         fotos:          produto.fotos || [],
         catalogo_url:   produto.catalogo_url || null,
         garantia_meses: produto.garantia_meses || 12,
@@ -1168,10 +1181,6 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
   };
 
   const prms = { ptax_dolar: 5.85, ptax_euro: 6.40 };
-  const totalEstimado = selecionados.reduce(({ produto, qt }) => {
-    // simplified: use preco_venda directly
-    return (Number(produto.preco_venda) || 0) * qt;
-  }, 0);
 
   const inp: React.CSSProperties = {
     width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'7px 10px', fontSize:11, boxSizing:'border-box',

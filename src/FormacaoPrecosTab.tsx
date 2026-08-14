@@ -233,6 +233,11 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
   );
 }
 
+// Aceita tanto "15000" quanto o formato brasileiro "15.000,50" — sem isso,
+// parseFloat("15.000") vira 15 (trunca no ponto de milhar) e o resultado
+// sai errado por um fator de 1000, sem nenhum aviso ao usuário.
+const parseNumBr = (v) => parseFloat(String(v).trim().replace(/\./g, '').replace(',', '.')) || 0;
+
 // ─── CALCULADORA MARKUP REVERSO ───────────────────────────────────────────────
 function CalcMarkupReverso() {
   const [precoVenda, setPrecoVenda] = useState('');
@@ -241,9 +246,9 @@ function CalcMarkupReverso() {
   const [resultado, setResultado]   = useState(null);
 
   const calcular = () => {
-    const pv = parseFloat(precoVenda) || 0;
-    const cf = parseFloat(custoFob) || 0;
-    const d  = parseFloat(difal) / 100 || 0;
+    const pv = parseNumBr(precoVenda);
+    const cf = parseNumBr(custoFob);
+    const d  = parseNumBr(difal) / 100;
     if (pv <= 0 || cf <= 0) { alert('Informe preço de venda e custo.'); return; }
     const markup = pv * (1 - d) / cf - 1;
     setResultado(markup * 100);
@@ -283,8 +288,8 @@ function CalcImpostoReverso() {
   const [resultado, setResultado]             = useState(null);
 
   const calcular = () => {
-    const p = parseFloat(precoComImposto) || 0;
-    const i = parseFloat(imposto) / 100 || 0;
+    const p = parseNumBr(precoComImposto);
+    const i = parseNumBr(imposto) / 100;
     if (p <= 0) { alert('Informe o preço com imposto.'); return; }
     const semImposto  = p / (1 + i);
     const valorImposto = p - semImposto;
