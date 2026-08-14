@@ -82,6 +82,9 @@ function etapaVencida(e: any) {
 function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const [obsExec, setObsExec] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [mostrarReprog, setMostrarReprog] = useState(false);
+  const [reprogData, setReprogData] = useState('');
+  const [reprogMotivo, setReprogMotivo] = useState('');
   const al = etapaVencida(etapa);
   const diasV = diasParaVencer(etapa.prazo);
   const corBorda = al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : STATUS_COR[etapa.status] || '#e2e8f0';
@@ -90,6 +93,23 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
     if (!confirm(`Iniciar Etapa ${idx + 1}?`)) return;
     setSalvando(true);
     await onUpdate(idx, { status: 'Em Andamento', data_inicio: new Date().toISOString() });
+    setSalvando(false);
+  };
+  const reprogramar = async () => {
+    if (!reprogData) { alert('Informe a nova data!'); return; }
+    if (!reprogMotivo.trim()) { alert('Informe o motivo da reprogramação!'); return; }
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const entrada = {
+      prazo_anterior: etapa.prazo || null,
+      novo_prazo: dateToISO(reprogData),
+      motivo: reprogMotivo.trim(),
+      usuario: currentUser?.nome || '',
+      data: agora,
+    };
+    const reprogramacoes = [...(etapa.reprogramacoes || []), entrada];
+    await onUpdate(idx, { prazo: dateToISO(reprogData), reprogramacoes });
+    setReprogData(''); setReprogMotivo(''); setMostrarReprog(false);
     setSalvando(false);
   };
   const concluir = async () => {
@@ -151,8 +171,38 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
               ✓ Concluir
             </button>
           )}
+          {etapa.status !== 'Concluída' && (
+            <button onClick={() => setMostrarReprog(v => !v)} disabled={salvando}
+              style={{ background: mostrarReprog ? '#6b7280' : '#f97316', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+              📅 Reprogramar
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Reprogramar prazo da etapa */}
+      {mostrarReprog && (
+        <div style={{ padding:'8px 12px', background:'#fff7ed', borderBottom:'1px solid #fed7aa', display:'flex', gap:6, alignItems:'flex-end', flexWrap:'wrap' }}>
+          <div>
+            <div style={{ fontSize:8, color:'#9a3412', fontWeight:700, textTransform:'uppercase' }}>Novo Prazo *</div>
+            <input type="date" value={reprogData} onChange={e=>setReprogData(e.target.value)}
+              style={{ padding:'4px 6px', border:'1px solid #fed7aa', borderRadius:4, fontSize:10 }} />
+          </div>
+          <div style={{ flex:1, minWidth:160 }}>
+            <div style={{ fontSize:8, color:'#9a3412', fontWeight:700, textTransform:'uppercase' }}>Motivo da Reprogramação *</div>
+            <input value={reprogMotivo} onChange={e=>setReprogMotivo(e.target.value)} placeholder="Por que o prazo mudou?"
+              style={{ width:'100%', padding:'4px 6px', border:'1px solid #fed7aa', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+          </div>
+          <button onClick={reprogramar} disabled={salvando}
+            style={{ background:'#f97316', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            Confirmar
+          </button>
+          <button onClick={() => setMostrarReprog(false)}
+            style={{ background:'#e5e7eb', color:'#374151', border:'none', borderRadius:4, padding:'5px 12px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      )}
 
       {/* Body da etapa */}
       <div style={{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:6 }}>
@@ -180,6 +230,20 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
         {etapa.obs_criacao && (
           <div style={{ fontSize:10, color:'#6b7280', background:'#f8fafc', borderRadius:4, padding:'4px 8px' }}>
             {etapa.obs_criacao}
+          </div>
+        )}
+
+        {/* Histórico de reprogramações da etapa */}
+        {(etapa.reprogramacoes || []).length > 0 && (
+          <div style={{ borderLeft:'2px solid #f97316', paddingLeft:8 }}>
+            {[...(etapa.reprogramacoes || [])].reverse().map((r: any, i: number) => (
+              <div key={i} style={{ marginBottom:4 }}>
+                <span style={{ fontSize:8, color:'#9ca3af' }}>{r.usuario} · {fmtDT(r.data)}</span>
+                <div style={{ fontSize:10, color:'#9a3412' }}>
+                  📅 {fmtDate(r.prazo_anterior)} → {fmtDate(r.novo_prazo)} — {r.motivo}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

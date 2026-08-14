@@ -348,24 +348,31 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
     if (el.innerHTML !== html) el.innerHTML = html;
   }, [tabKey, licitacaoId]);
 
+  const salvarConteudo = async () => {
+    const el = editorRef.current;
+    if (!el) return;
+    const html = el.innerHTML;
+    setSalvando(true);
+    const novasAreas = { ...(areasLivres || {}), [tabKey]: html };
+    const { error } = await supabase.from('licitacoes')
+      .update({ areas_livres: novasAreas, atualizado_em: new Date().toISOString() })
+      .eq('id', licitacaoId);
+    setSalvando(false);
+    if (!error) {
+      onAreasLivresChange(novasAreas);
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 2000);
+    }
+  };
+
   const autosave = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
-      const el = editorRef.current;
-      if (!el) return;
-      const html = el.innerHTML;
-      setSalvando(true);
-      const novasAreas = { ...(areasLivres || {}), [tabKey]: html };
-      const { error } = await supabase.from('licitacoes')
-        .update({ areas_livres: novasAreas, atualizado_em: new Date().toISOString() })
-        .eq('id', licitacaoId);
-      setSalvando(false);
-      if (!error) {
-        onAreasLivresChange(novasAreas);
-        setSalvo(true);
-        setTimeout(() => setSalvo(false), 2000);
-      }
-    }, 1500);
+    timerRef.current = setTimeout(salvarConteudo, 1500);
+  };
+
+  const salvarAgora = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    salvarConteudo();
   };
 
   const inserirImagem = async (file: File) => {
@@ -431,6 +438,11 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
         <div style={{ flex:1 }} />
         {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
         {salvo && !salvando && <span style={{ fontSize:9, color:'#16a34a' }}>✓ Salvo</span>}
+        <button onClick={salvarAgora} disabled={salvando} title="Salvar agora"
+          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:3,
+            padding:'2px 10px', fontSize:9, fontWeight:700, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
+          💾 Salvar
+        </button>
       </div>
       {/* Editor */}
       <div

@@ -1303,7 +1303,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     return o.valor_registrado || 0;
   };
 
-  const renderRelatorio = () => {
+  const renderResumoCards = () => {
     const opsAtivas      = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
     const opsPerdidas    = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)));
     const opsGanhas      = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)));
@@ -1314,46 +1314,51 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const podeVer = podeVerTotais && currentUser?.ver_valores !== false;
 
     return (
-      <div style={{ padding: '12px 0' }}>
-        {/* ── Cards de resumo ── */}
-        <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
-          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>EM ANDAMENTO</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsAtivas.length}</div>
-          </div>
-          <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
-          </div>
-          <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PERDIDAS</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{opsPerdidas.length}</div>
-            {podeVer && totalPerdido > 0 && (
-              <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
-            )}
-          </div>
-          <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#92400e', fontWeight:700, marginBottom:2 }}>🚫 DESISTÊNCIAS</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#92400e', lineHeight:1 }}>{opsDesistencias.length}</div>
-          </div>
-          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 GANHAS</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
-          </div>
-          {podeVer && (
-            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
-              <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>PIPELINE — TOTAL</div>
-              <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{fmtMoeda(totalPipeline)}</div>
-            </div>
-          )}
-          {podeVer && totalPipelineACN !== totalPipeline && (
-            <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
-              <div style={{ fontSize:8, color:'#1d4ed8', fontWeight:700, marginBottom:2 }}>PIPELINE — RECEITA ACN</div>
-              <div style={{ fontSize:15, fontWeight:800, color:'#1d4ed8', lineHeight:1 }}>{fmtMoeda(totalPipelineACN)}</div>
-              <div style={{ fontSize:7, color:'#64748b', marginTop:2 }}>apenas valor ACN/Detech em processos com parceiro</div>
-            </div>
+      <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+        <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+          <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>ABERTO</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsAtivas.length}</div>
+        </div>
+        <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+          <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
+        </div>
+        <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+          <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PERDIDAS</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{opsPerdidas.length}</div>
+          {podeVer && totalPerdido > 0 && (
+            <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
           )}
         </div>
+        <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+          <div style={{ fontSize:8, color:'#92400e', fontWeight:700, marginBottom:2 }}>🚫 DESISTÊNCIAS</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#92400e', lineHeight:1 }}>{opsDesistencias.length}</div>
+        </div>
+        <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+          <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 GANHAS</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
+        </div>
+        {podeVer && (
+          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
+            <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>PIPELINE — TOTAL</div>
+            <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{fmtMoeda(totalPipeline)}</div>
+          </div>
+        )}
+        {podeVer && totalPipelineACN !== totalPipeline && (
+          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
+            <div style={{ fontSize:8, color:'#1d4ed8', fontWeight:700, marginBottom:2 }}>PIPELINE — RECEITA ACN</div>
+            <div style={{ fontSize:15, fontWeight:800, color:'#1d4ed8', lineHeight:1 }}>{fmtMoeda(totalPipelineACN)}</div>
+            <div style={{ fontSize:7, color:'#64748b', marginTop:2 }}>apenas valor ACN/Detech em processos com parceiro</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderRelatorio = () => {
+    return (
+      <div style={{ padding: '12px 0' }}>
+        {renderResumoCards()}
 
         {/* ── Por estágio ── */}
         {estagiosFunil.map(est => {
@@ -1876,7 +1881,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
       {/* ── Conteúdo ── */}
       {abaInterna === 'kanban' && (
-        <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
+        <div>
+          <div style={{ padding:'10px 4px 0' }}>{renderResumoCards()}</div>
+          <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
+        </div>
       )}
       {abaInterna === 'relatorio' && (
         <div style={{ overflowY:'auto', padding:'0 4px 16px' }}>{renderRelatorio()}</div>

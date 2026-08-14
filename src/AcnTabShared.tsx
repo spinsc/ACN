@@ -5,6 +5,47 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 
+// ─── Progresso da OP/OS ao longo do pipeline (Comercial → Faturado) ──────────
+const OPL_PIPELINE: { match: string[]; pct: number; label: string; retrabalho?: boolean }[] = [
+  { match: ['Em Espera Engenharia'], pct: 10, label: 'Aguardando Engenharia' },
+  { match: ['Devolvida Comercial', 'Rejeitada - Análise Requerida'], pct: 10, label: 'Devolvida ao Comercial', retrabalho: true },
+  { match: ['Em Analise Engenharia'], pct: 20, label: 'Em Análise — Engenharia' },
+  { match: ['Devolvida para Engenharia'], pct: 20, label: 'Devolvida à Engenharia', retrabalho: true },
+  { match: ['Em Espera PCP'], pct: 35, label: 'Aguardando PCP' },
+  { match: ['Devolvida PCP'], pct: 35, label: 'Devolvida ao PCP', retrabalho: true },
+  { match: ['Kit OK - Aguardando PCP', 'Aguardando Almox'], pct: 45, label: 'Almoxarifado' },
+  { match: ['Aguardando Inicio Producao', 'Aguardando Agendamento Manutenção', 'Manutenção Agendada'], pct: 55, label: 'Aguardando Produção' },
+  { match: ['Em Producao'], pct: 70, label: 'Em Produção' },
+  { match: ['Em Retrabalho', 'Retrabalho'], pct: 70, label: 'Em Retrabalho', retrabalho: true },
+  { match: ['Aguardando CQ'], pct: 80, label: 'Controle de Qualidade' },
+  { match: ['Aprovado CQ - Aguardando Liberacao Comercial', 'Aguardando Liberacao Comercial'], pct: 90, label: 'Aguardando Liberação Comercial' },
+  { match: ['Aguarda Emissao NF'], pct: 95, label: 'Fiscal — Emissão de NF' },
+  { match: ['Faturado', 'Faturado e Disponivel para Entrega'], pct: 100, label: 'Faturado' },
+];
+
+function progressoOpl(status: string) {
+  const found = OPL_PIPELINE.find(s => s.match.includes(status));
+  return found || { pct: 5, label: status || 'Iniciado', retrabalho: false };
+}
+
+export function OplProgressBar({ status }: { status: string }) {
+  const { pct, label, retrabalho } = progressoOpl(status);
+  const cor = retrabalho ? '#f59e0b' : pct >= 100 ? '#16a34a' : '#2563eb';
+  return (
+    <div style={{ margin: '10px 0 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
+          {retrabalho && '⚠️ '}Progresso — {label}
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 800, color: cor }}>{pct}%</span>
+      </div>
+      <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: cor, transition: 'width .4s' }} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Lista inline de anexos (para OplDetalheModal) ───────────────────────────
 function AnexosOPSection({ oplId }: { oplId: string }) {
   const [anexos, setAnexos] = useState<any[]>([]);
@@ -442,6 +483,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
         </div>
+
+        {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
 
         {/* ── Botão LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) ── */}
         {(opl.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||

@@ -5,6 +5,7 @@
 // horas e tarefas por período.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 
@@ -235,9 +236,10 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
           </td>
         </tr>
       )}
-      {modalPausar && (
+      {modalPausar && createPortal(
         <ModalPausar tarefa={tarefa} onClose={() => setModalPausar(false)}
-          onPausado={() => { setModalPausar(false); onAtualizado(); }} />
+          onPausado={() => { setModalPausar(false); onAtualizado(); }} />,
+        document.body,
       )}
     </>
   );
