@@ -214,3 +214,10 @@ ALTER TABLE public.demandas_setoriais ADD COLUMN IF NOT EXISTS tipo_solicitacao 
 ALTER TABLE public.demandas_setoriais ADD COLUMN IF NOT EXISTS centro_custo text;
 ALTER TABLE public.demandas_setoriais ADD COLUMN IF NOT EXISTS anexos jsonb DEFAULT '[]'::jsonb;
 UPDATE public.demandas_setoriais SET tipo_solicitacao = NULL WHERE setor_destino <> 'Compras' OR setor_destino IS NULL;
+
+-- =============================================================
+-- 2026-08-14 · feat: centro de custo direto na OP/OS (task #4)
+-- =============================================================
+-- Ja executado em producao em 2026-08-14. Editavel no formulario
+-- principal do Comercial e no modal "Editar OPL" (aba OPLs em Aberto).
+ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS centro_custo text;

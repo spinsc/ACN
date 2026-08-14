@@ -42,6 +42,7 @@ const FORM_VAZIO = {
   // ── DADOS DA VENDA ────────────────────────────────────────────────────────
   data_aceite_cliente:     '',
   faturamento_empresa:     'ACN',
+  centro_custo:            '',
   vendedor:                '',
   cliente_final:           '',
   edital:                  '',
@@ -571,6 +572,13 @@ export default function ComercialTab({ currentUser }) {
   const [mostraNovaCat, setMostraNovaCat] = useState(false);
   const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
 
+  // Centros de custo (cadastrados em Admin > Centros de Custo)
+  const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
+  useEffect(() => {
+    supabase.from('centros_custo').select('codigo,nome').eq('ativo', true).order('codigo')
+      .then(({ data }) => setCentrosCusto(data || []));
+  }, []);
+
   const fetchCategoriasExtra = async () => {
     const { data } = await supabase.from('sac_categorias').select('nome').eq('ativo', true).order('nome');
     const nomesBD = (data||[]).map(c=>c.nome);
@@ -882,6 +890,12 @@ export default function ComercialTab({ currentUser }) {
                   <select className="acn-input" style={{width:'100%'}} value={formData.faturamento_empresa||'ACN'} onChange={e=>setFormData({...formData,faturamento_empresa:e.target.value})}>
                     <option value="ACN">ACN</option>
                     <option value="DETECH">DETECH</option>
+                  </select>
+                </div>
+                <div className="form-group"><label className="acn-label">🏷️ Centro de Custo</label>
+                  <select className="acn-input" style={{width:'100%'}} value={formData.centro_custo||''} onChange={e=>setFormData({...formData,centro_custo:e.target.value})}>
+                    <option value="">— Não definido —</option>
+                    {centrosCusto.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
                   </select>
                 </div>
                 <div className="form-group"><label className="acn-label">Vendedor</label>

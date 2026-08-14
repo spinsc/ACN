@@ -177,6 +177,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ── compras ──
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
   const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
+  const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
   const [salvandoCompra, setSalvandoCompra] = useState(false);
   // ── solicitar análise ──
@@ -243,6 +244,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       .not('oportunidade_id','is',null);
     setPedidosCompra(pcData || []);
     if (!silent) setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    supabase.from('centros_custo').select('codigo,nome').eq('ativo', true).order('codigo')
+      .then(({ data }) => setCentrosCusto(data || []));
   }, []);
 
   useEffect(() => {
@@ -633,6 +639,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       modelo:                oplFormEdit.modelo || null,
       quantidade:            Number(oplFormEdit.quantidade) || 1,
       data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
+      centro_custo:          oplFormEdit.centro_custo || null,
       responsavel_comercial: oplFormEdit.responsavel_comercial || null,
       observacoes_comercial: oplFormEdit.observacoes_comercial || null,
       faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
@@ -3138,6 +3145,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             <div>
               <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Prazo de Entrega</div>
               <input className="acn-input" type="date" value={oplFormEdit.data_prevista_entrega||''} onChange={e=>setOplFormEdit((f:any)=>({...f,data_prevista_entrega:e.target.value}))} style={{ width:'100%' }} />
+            </div>
+            <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>🏷️ Centro de Custo</div>
+              <select className="acn-input" value={oplFormEdit.centro_custo||''} onChange={e=>setOplFormEdit((f:any)=>({...f,centro_custo:e.target.value}))} style={{ width:'100%' }}>
+                <option value="">— Não definido —</option>
+                {centrosCusto.map((c:any) => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+              </select>
             </div>
             <div>
               <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Empresa</div>
