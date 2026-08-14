@@ -221,3 +221,23 @@ UPDATE public.demandas_setoriais SET tipo_solicitacao = NULL WHERE setor_destino
 -- Ja executado em producao em 2026-08-14. Editavel no formulario
 -- principal do Comercial e no modal "Editar OPL" (aba OPLs em Aberto).
 ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS centro_custo text;
+
+-- =============================================================
+-- 2026-08-14 · feat: Contratos Padrão para Terceiros (task #2)
+-- =============================================================
+-- Ja executado em producao em 2026-08-14. Cadastro em Admin > Contratos
+-- Padrão. Tipo é livre (texto) para permitir varias categorias de
+-- contrato conforme a demanda. Arquivo vai para o bucket acn-media.
+CREATE TABLE IF NOT EXISTS public.contratos_padrao (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo text NOT NULL,
+  nome text NOT NULL,
+  descricao text,
+  arquivo_url text,
+  arquivo_nome text,
+  ativo boolean NOT NULL DEFAULT true,
+  criado_em timestamptz NOT NULL DEFAULT now(),
+  criado_por text
+);
+ALTER TABLE public.contratos_padrao DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS contratos_padrao_tipo_idx ON public.contratos_padrao (tipo);

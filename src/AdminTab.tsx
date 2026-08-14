@@ -2117,12 +2117,215 @@ function PainelCentrosCusto() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL CONTRATOS PADRÃO PARA TERCEIROS
+// ─────────────────────────────────────────────────────────────────────────────
+async function uploadContratoArquivo(file: File): Promise<{ url: string; nome: string } | null> {
+  const path = `contratos-padrao/${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+  if (error || !data) return null;
+  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+  return pub?.publicUrl ? { url: pub.publicUrl, nome: file.name } : null;
+}
+
+const VAZIO_CONTRATO = { tipo: '', nome: '', descricao: '' };
+
+function PainelContratosPadrao() {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const [contratos, setContratos] = useState<any[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [form, setForm]           = useState({ ...VAZIO_CONTRATO });
+  const [arquivo, setArquivo]     = useState<File | null>(null);
+  const [editando, setEditando]   = useState<any>(null);
+  const [showForm, setShowForm]   = useState(false);
+  const [salvando, setSalvando]   = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('contratos_padrao').select('*').order('tipo').order('nome');
+    setContratos(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const tipos = [...new Set(contratos.map(c => c.tipo))].sort();
+  const listados = contratos.filter(c => !filtroTipo || c.tipo === filtroTipo);
+
+  const salvar = async () => {
+    if (!form.tipo.trim() || !form.nome.trim()) { alert('Informe tipo e nome do contrato.'); return; }
+    if (!editando && !arquivo) { alert('Anexe o arquivo do contrato.'); return; }
+    setSalvando(true);
+    let anexo: { url: string; nome: string } | null = null;
+    if (arquivo) {
+      anexo = await uploadContratoArquivo(arquivo);
+      if (!anexo) { alert('Erro ao enviar o arquivo.'); setSalvando(false); return; }
+    }
+    if (editando) {
+      await supabase.from('contratos_padrao').update({
+        tipo: form.tipo.trim(), nome: form.nome.trim(), descricao: form.descricao.trim() || null,
+        ...(anexo ? { arquivo_url: anexo.url, arquivo_nome: anexo.nome } : {}),
+      }).eq('id', editando.id);
+    } else {
+      await supabase.from('contratos_padrao').insert([{
+        tipo: form.tipo.trim(), nome: form.nome.trim(), descricao: form.descricao.trim() || null,
+        arquivo_url: anexo!.url, arquivo_nome: anexo!.nome,
+        ativo: true, criado_por: currentUser?.email,
+      }]);
+    }
+    setForm({ ...VAZIO_CONTRATO }); setArquivo(null);
+    setEditando(null); setShowForm(false); setSalvando(false);
+    load();
+  };
+
+  const toggleAtivo = async (c: any) => {
+    await supabase.from('contratos_padrao').update({ ativo: !c.ativo }).eq('id', c.id);
+    load();
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span>📄 Contratos Padrão para Terceiros</span>
+        <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
+          onClick={() => { setForm({ ...VAZIO_CONTRATO }); setArquivo(null); setEditando(null); setShowForm(true); }}>
+          + Novo Contrato Padrão
+        </button>
+      </div>
+      <div className="sec-body">
+        <p style={{ fontSize:10, color:'#64748b', marginBottom:12 }}>
+          Modelos de contrato para usar conforme a demanda (prestação de serviço, comodato, confidencialidade, etc).
+          O campo Tipo é livre — crie quantas categorias precisar.
+        </p>
+
+        {showForm && (
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
+              {editando ? '✏️ Editar Contrato Padrão' : '+ Novo Contrato Padrão'}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8, marginBottom:8 }}>
+              <div>
+                <label className="acn-label">Tipo *</label>
+                <input className="acn-input" style={{ width:'100%' }} list="tipos-contrato-padrao"
+                  placeholder="Ex: Prestação de Serviço"
+                  value={form.tipo}
+                  onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+                  autoFocus />
+                <datalist id="tipos-contrato-padrao">
+                  {tipos.map(t => <option key={t} value={t} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="acn-label">Nome *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Nome/título do modelo"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label className="acn-label">Descrição</label>
+              <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical' }}
+                placeholder="Quando usar este modelo (opcional)"
+                value={form.descricao}
+                onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label className="acn-label">Arquivo {editando ? '(deixe em branco para manter o atual)' : '*'}</label>
+              <input type="file" accept=".pdf,.doc,.docx,.odt"
+                onChange={e => setArquivo(e.target.files?.[0] || null)} />
+              {editando?.arquivo_nome && !arquivo && (
+                <div style={{ fontSize:9, color:'#64748b', marginTop:3 }}>Atual: {editando.arquivo_nome}</div>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'SALVAR'}
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setShowForm(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {contratos.length > 0 && (
+          <div style={{ marginBottom:10, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+            <span style={{ fontSize:9, color:'#64748b', fontWeight:700 }}>Filtrar por tipo:</span>
+            <button className="acn-btn" style={{ fontSize:9, padding:'2px 8px', background: !filtroTipo ? '#0f766e' : '#e2e8f0', color: !filtroTipo ? '#fff' : '#374151' }}
+              onClick={() => setFiltroTipo('')}>Todos</button>
+            {tipos.map(t => (
+              <button key={t} className="acn-btn" style={{ fontSize:9, padding:'2px 8px', background: filtroTipo===t ? '#0f766e' : '#e2e8f0', color: filtroTipo===t ? '#fff' : '#374151' }}
+                onClick={() => setFiltroTipo(t)}>{t}</button>
+            ))}
+          </div>
+        )}
+
+        {loading && <div style={{ textAlign:'center', padding:20, color:'#64748b', fontSize:11 }}>Carregando...</div>}
+        {!loading && contratos.length === 0 && (
+          <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11 }}>
+            Nenhum contrato padrão cadastrado. Clique em <strong>+ Novo Contrato Padrão</strong> para começar.
+          </div>
+        )}
+
+        {listados.length > 0 && (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Tipo</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Nome</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Descrição</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Status</th>
+                <th style={{ padding:'6px 8px', borderBottom:'1px solid #e2e8f0' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {listados.map(c => (
+                <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: c.ativo ? 1 : 0.45 }}>
+                  <td style={{ padding:'8px 8px', fontWeight:700, color:'#0f766e' }}>{c.tipo}</td>
+                  <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
+                  <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={c.descricao || ''}>
+                    {c.descricao || '—'}
+                  </td>
+                  <td style={{ padding:'8px 8px', textAlign:'center' }}>
+                    <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10,
+                      background: c.ativo ? '#dcfce7' : '#f1f5f9',
+                      color:      c.ativo ? '#16a34a'  : '#94a3b8' }}>
+                      {c.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'8px 6px' }}>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                      {c.arquivo_url && (
+                        <a className="acn-btn" style={{ background:'#2563eb', fontSize:9, padding:'2px 8px', textDecoration:'none' }}
+                          href={c.arquivo_url} target="_blank" rel="noreferrer">⬇ Baixar</a>
+                      )}
+                      <button className="acn-btn" style={{ background: c.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => toggleAtivo(c)}>
+                        {c.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => { setForm({ tipo:c.tipo, nome:c.nome, descricao:c.descricao||'' }); setArquivo(null); setEditando(c); setShowForm(true); }}>
+                        ✏️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---- ADMINTAB PRINCIPAL ----
 const ABAS_ADMIN = [
   { id:'usuarios',       label:'Usuários' },
   { id:'perfis',         label:'🔐 Perfis de Acesso' },
   { id:'plataformas',    label:'🏪 Plataformas' },
   { id:'centros_custo',  label:'🏷️ Centros de Custo' },
+  { id:'contratos_padrao', label:'📄 Contratos Padrão' },
   { id:'email_cfg',      label:'📧 Config. Email' },
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
@@ -2593,6 +2796,7 @@ export default function AdminTab() {
       {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
       {abaAtiva === 'centros_custo' && <PainelCentrosCusto />}
+      {abaAtiva === 'contratos_padrao' && <PainelContratosPadrao />}
       {abaAtiva === 'email_cfg' && <PainelEmailCfg />}
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
