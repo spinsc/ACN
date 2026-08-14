@@ -15,6 +15,7 @@ export default function AjustesProjetoTab({ currentUser }) {
   const [form, setForm] = useState({
     opl_referencia: '', requerente: '', descricao: '',
     prioridade: 'Normal', data_limite: '', setor: 'Serralheria',
+    tipo_solicitacao: 'compra',
   });
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
@@ -58,6 +59,7 @@ export default function AjustesProjetoTab({ currentUser }) {
       status: 'Pendente',
       criado_por: currentUser?.email,
       criado_por_nome: requerente,
+      tipo_solicitacao: form.setor === 'Compras' ? form.tipo_solicitacao : null,
       data_abertura: agora,
       logs_demanda: [{
         texto: `Ajuste de Projeto registrado. Requerente: ${requerente}. Prioridade: ${form.prioridade}.${form.data_limite ? ' Data limite: ' + new Date(form.data_limite).toLocaleDateString('pt-BR') : ''}`,
@@ -75,7 +77,7 @@ export default function AjustesProjetoTab({ currentUser }) {
     const eventoNotif = form.setor === 'Compras' ? 'demanda_criada_compras' : 'demanda_criada_setor';
     const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
     notificarEvento(eventoNotif, mensagemNotif, form.setor);
-    setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria' });
+    setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra' });
     setShowForm(false);
     fetchAll();
   };
@@ -181,6 +183,27 @@ export default function AjustesProjetoTab({ currentUser }) {
                   value={form.data_limite}
                   onChange={e => setForm({ ...form, data_limite: e.target.value })} />
               </div>
+              {form.setor === 'Compras' && (
+                <div className="form-group">
+                  <label className="acn-label">Tipo de Solicitação</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {([['compra','🛒 Compra'],['cotacao','📋 Cotação']] as const).map(([val,lbl]) => (
+                      <label key={val} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, cursor:'pointer',
+                        padding:'5px 10px', border:`1.5px solid ${form.tipo_solicitacao===val?'#1e293b':'#e2e8f0'}`,
+                        borderRadius:5, background: form.tipo_solicitacao===val?'#f1f5f9':'#fff', flex:1, justifyContent:'center' }}>
+                        <input type="radio" name="tipoSolicitacao" checked={form.tipo_solicitacao===val}
+                          onChange={() => setForm({ ...form, tipo_solicitacao: val })} style={{ display:'none' }} />
+                        {lbl}
+                      </label>
+                    ))}
+                  </div>
+                  {form.tipo_solicitacao === 'cotacao' && (
+                    <div style={{ fontSize: 8, color: '#94a3b8', marginTop: 3 }}>
+                      Você será avisado quando o comprador finalizar a cotação com o valor.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="form-row">
               <div style={{ flex: 1 }}>
@@ -225,7 +248,14 @@ export default function AjustesProjetoTab({ currentUser }) {
                       <td>{a.numero_opl || '—'}</td>
                       <td>{a.criado_por_nome || '—'}</td>
                       <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={desc}>{desc}</td>
-                      <td>{a.setor_destino || '—'}</td>
+                      <td>
+                        {a.setor_destino || '—'}
+                        {a.setor_destino === 'Compras' && a.tipo_solicitacao && (
+                          <div style={{ fontSize: 8, fontWeight: 700, color: a.tipo_solicitacao === 'cotacao' ? '#7c3aed' : '#0891b2', marginTop: 1 }}>
+                            {a.tipo_solicitacao === 'cotacao' ? '📋 Cotação' : '🛒 Compra'}
+                          </div>
+                        )}
+                      </td>
                       <td><span className="acn-badge" style={{ background: corPrioridade(a.logs_demanda) }}>{prio}</span></td>
                       <td>
                         <span className="acn-badge" style={{ background: a.status === 'Em Andamento' ? '#3b82f6' : '#f59e0b' }}>

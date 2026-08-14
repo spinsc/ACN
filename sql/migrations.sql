@@ -179,3 +179,38 @@ CREATE INDEX IF NOT EXISTS engenharia_horas_tarefas_opl_idx ON public.engenharia
 -- =============================================================
 -- Ja executado em producao em 2026-08-13.
 ALTER TABLE public.cotacoes_propostas ADD COLUMN IF NOT EXISTS prazo_entrega text;
+
+-- =============================================================
+-- 2026-08-14 · feat: config. SMTP (Admin) + Compras (centro de
+-- custo, cotacao x compra, anexos) + Fiscal (devolucao Comercial)
+-- =============================================================
+-- Ja executado em producao em 2026-08-14.
+
+-- Config. SMTP (Admin > Config. Email). RLS sem policy de SELECT
+-- para anon/authenticated -- as credenciais nunca sao lidas de
+-- volta pelo bundle publico, so pela service_role (edge functions
+-- send-email e save-email-config). IMPORTANTE: por causa disso,
+-- UPDATE/DELETE diretos do cliente sao impossiveis sob RLS (o
+-- Postgres exige visibilidade de SELECT para localizar a linha
+-- alvo, mesmo com USING(true) na policy de UPDATE) -- so INSERT
+-- funciona direto do cliente. Toda gravacao (inclusive updates)
+-- passa pela edge function save-email-config.
+CREATE TABLE IF NOT EXISTS public.configuracoes_email_smtp (
+  chave          text PRIMARY KEY,
+  valor          text,
+  atualizado_em  timestamptz,
+  atualizado_por text
+);
+ALTER TABLE public.configuracoes_email_smtp ENABLE ROW LEVEL SECURITY;
+CREATE POLICY email_smtp_write_anon  ON public.configuracoes_email_smtp FOR INSERT TO public WITH CHECK (true);
+CREATE POLICY email_smtp_update_anon ON public.configuracoes_email_smtp FOR UPDATE TO public USING (true) WITH CHECK (true);
+
+-- Demandas Setoriais: compra x cotacao, centro de custo, anexos.
+-- Atencao: DEFAULT 'compra' preenche retroativamente TODAS as
+-- linhas existentes (comportamento padrao do Postgres em ADD
+-- COLUMN ... DEFAULT) -- por isso o UPDATE de limpeza abaixo,
+-- restringindo a badge/coluna a demandas de setor_destino='Compras'.
+ALTER TABLE public.demandas_setoriais ADD COLUMN IF NOT EXISTS tipo_solicitacao text DEFAULT 'compra';
+ALTER TABLE public.demandas_setoriais ADD COLUMN IF NOT EXISTS centro_custo text;
+ALTER TABLE public.demandas_setoriais ADD COLUMN IF NOT EXISTS anexos jsonb DEFAULT '[]'::jsonb;
+UPDATE public.demandas_setoriais SET tipo_solicitacao = NULL WHERE setor_destino <> 'Compras' OR setor_destino IS NULL;

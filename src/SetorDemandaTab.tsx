@@ -243,7 +243,12 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
 
   // Modal Concluir Compra (setor Compras)
   const [modalConcluirCompra, setModalConcluirCompra] = useState(null);
-  const [compraForm, setCompraForm] = useState({ valor:'', prazo:'' });
+  const [compraForm, setCompraForm] = useState({ valor:'', prazo:'', centro_custo:'', numero_opl:'' });
+  const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
+  const [opBuscaCompra, setOpBuscaCompra] = useState('');
+  const [opResultadosCompra, setOpResultadosCompra] = useState<any[]>([]);
+  const [anexosCotacao, setAnexosCotacao] = useState<{nome:string,url:string}[]>([]);
+  const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const canVerValorCompra = ['Admin','Gerente','Compras'].includes(currentUser?.perfil);
 
   useEffect(() => {
@@ -252,6 +257,29 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
     return () => clearInterval(t);
   }, [filtro, setor]);
   useEffect(() => { const t = setInterval(()=>setTick(p=>p+1), 1000); return ()=>clearInterval(t); }, []);
+  useEffect(() => {
+    if (setor !== 'Compras') return;
+    supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo').then(({ data }) => setCentrosCusto(data || []));
+  }, [setor]);
+
+  const buscarOpCompra = async (q: string) => {
+    setOpBuscaCompra(q);
+    if (!q.trim()) { setOpResultadosCompra([]); return; }
+    const { data } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q}%`).limit(8);
+    setOpResultadosCompra(data || []);
+  };
+
+  const uploadAnexoCotacao = async (file: File, demandaId: string) => {
+    setEnviandoAnexo(true);
+    const safeName = file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_').slice(0, 100);
+    const path = `demandas-cotacoes/${demandaId}/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType: file.type });
+    if (!error) {
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      setAnexosCotacao(prev => [...prev, { nome: file.name, url: pub?.publicUrl || '' }]);
+    }
+    setEnviandoAnexo(false);
+  };
 
   const fetchDemandas = async (silent=false) => {
     if (!silent) setLoading(true);
@@ -389,10 +417,12 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
     if (w) { w.document.write(html); w.document.close(); }
   };
 
-  // ── CONCLUIR COMPRA (modal com valor + prazo) ────────────────────────────
+  // ── CONCLUIR COMPRA (modal com valor + prazo + centro de custo) ──────────
   const confirmarConcluirCompra = async () => {
     if (!compraForm.prazo) { alert('Informe a previsão de recebimento.'); return; }
+    if (!compraForm.centro_custo) { alert('Informe o centro de custo.'); return; }
     const d = modalConcluirCompra;
+    const isCotacao = d.tipo_solicitacao === 'cotacao';
     const agora = new Date().toISOString();
     const inicio = d.data_inicio ? new Date(d.data_inicio) : new Date(d.data_abertura||agora);
     const tempo  = Math.max(0, horasUteis(inicio, new Date()) - (d.tempo_pausado_horas||0));
@@ -401,14 +431,38 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       data_conclusao: agora,
       tempo_execucao_horas: tempo,
       data_prevista_recebimento: compraForm.prazo,
+      centro_custo: compraForm.centro_custo,
+      ...(compraForm.numero_opl ? { numero_opl: compraForm.numero_opl } : {}),
+      ...(anexosCotacao.length ? { anexos: anexosCotacao } : {}),
       logs_demanda: [...(d.logs_demanda||[]), {
-        texto: `Compra concluída. Prev. recebimento: ${new Date(compraForm.prazo+'T00:00:00').toLocaleDateString('pt-BR')}${compraForm.valor ? `. Valor: R$ ${compraForm.valor}` : ''}. Tempo útil: ${tempo.toFixed(1)}h`,
+        texto: `${isCotacao ? 'Cotação' : 'Compra'} concluída. Centro de custo: ${compraForm.centro_custo}. Prev. recebimento: ${new Date(compraForm.prazo+'T00:00:00').toLocaleDateString('pt-BR')}${compraForm.valor ? `. Valor: R$ ${compraForm.valor}` : ''}. Tempo útil: ${tempo.toFixed(1)}h`,
         usuario: currentUser?.nome, hora: agora,
       }],
     };
     if (compraForm.valor) updates.valor_compra = parseFloat(compraForm.valor.replace(',','.'));
     await supabase.from('demandas_setoriais').update(updates).eq('id', d.id);
-    setModalConcluirCompra(null); setCompraForm({ valor:'', prazo:'' });
+
+    // Cotação: avisa quem solicitou que o valor foi lançado
+    if (isCotacao && compraForm.valor && d.criado_por) {
+      try {
+        const { data: solicitante } = await supabase.from('auth_usuarios')
+          .select('id, nome').eq('email', d.criado_por).maybeSingle();
+        if (solicitante) {
+          await supabase.from('mencoes').insert({
+            mencionado_id: String(solicitante.id), mencionado_nome: solicitante.nome,
+            mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+            contexto: 'demanda_cotacao', contexto_id: String(d.id),
+            contexto_descricao: d.descricao?.slice(0, 120) || 'Cotação de Compras',
+            campo: 'valor_cotado',
+            texto_trecho: `Sua cotação foi finalizada. Valor: R$ ${compraForm.valor}`,
+            aba_destino: 'demandas_gerais', lida: false, criado_em: new Date().toISOString(),
+          });
+        }
+      } catch (e) { console.warn('Falha ao notificar solicitante da cotação:', e); }
+    }
+
+    setModalConcluirCompra(null); setCompraForm({ valor:'', prazo:'', centro_custo:'', numero_opl:'' });
+    setAnexosCotacao([]); setOpBuscaCompra(''); setOpResultadosCompra([]);
     fetchDemandas();
   };
 
@@ -550,7 +604,17 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       return [
         <button key="obs"  className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setModalObs(d);setObsTexto('');}}>OBS</button>,
         <button key="conc" className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{
-          if (setor === 'Compras') { setModalConcluirCompra(d); setCompraForm({ valor: d.valor_compra ? String(d.valor_compra) : '', prazo: d.data_prevista_recebimento || '' }); }
+          if (setor === 'Compras') {
+            setModalConcluirCompra(d);
+            setCompraForm({
+              valor: d.valor_compra ? String(d.valor_compra) : '',
+              prazo: d.data_prevista_recebimento || '',
+              centro_custo: d.centro_custo || '',
+              numero_opl: d.numero_opl || '',
+            });
+            setOpBuscaCompra(d.numero_opl || ''); setOpResultadosCompra([]);
+            setAnexosCotacao(Array.isArray(d.anexos) ? d.anexos : []);
+          }
           else concluir(d);
         }}>CONCLUIR</button>,
         d.pausado
@@ -618,6 +682,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
                           <td>{d.numero_opl||'—'}</td>
                           <td style={{maxWidth:220}}>
                             {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
+                            {setor === 'Compras' && d.tipo_solicitacao && (
+                              <span style={{background: d.tipo_solicitacao==='cotacao' ? '#7c3aed' : '#0891b2', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
+                                {d.tipo_solicitacao==='cotacao' ? 'COTAÇÃO' : 'COMPRA'}
+                              </span>
+                            )}
                             {sacBadge(d)}
                             {sacFlagBadge(d)}
                             {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
@@ -774,13 +843,63 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
               </div>
             )}
 
-            <div style={{marginBottom:16}}>
+            <div style={{marginBottom:12}}>
               <label className="acn-label">📅 Previsão de recebimento *</label>
               <input className="acn-input" type="date"
                 value={compraForm.prazo}
                 onChange={e=>setCompraForm(f=>({...f,prazo:e.target.value}))}
                 style={{width:'100%'}} />
             </div>
+
+            <div style={{marginBottom:12}}>
+              <label className="acn-label">🏷️ Centro de Custo *</label>
+              <select className="acn-input" style={{width:'100%'}}
+                value={compraForm.centro_custo}
+                onChange={e=>setCompraForm(f=>({...f,centro_custo:e.target.value}))}>
+                <option value="">— Selecionar —</option>
+                {centrosCusto.map(c => <option key={c.id} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+              </select>
+            </div>
+
+            <div style={{marginBottom:16}}>
+              <label className="acn-label">🔗 Vincular a uma OP/OS (opcional)</label>
+              <input className="acn-input" style={{width:'100%'}}
+                placeholder="Buscar por número da OP..."
+                value={opBuscaCompra} onChange={e=>buscarOpCompra(e.target.value)} />
+              {opResultadosCompra.length > 0 && (
+                <div style={{border:'1px solid #e2e8f0',borderRadius:4,marginTop:4,maxHeight:110,overflowY:'auto'}}>
+                  {opResultadosCompra.map(o => (
+                    <div key={o.id} onClick={()=>{setCompraForm(f=>({...f,numero_opl:o.opl}));setOpBuscaCompra(o.opl);setOpResultadosCompra([]);}}
+                      style={{padding:'5px 8px',fontSize:11,cursor:'pointer',borderBottom:'1px solid #f1f5f9'}}>
+                      <strong>{o.opl}</strong> — {o.cliente_nome||'—'}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {modalConcluirCompra.tipo_solicitacao === 'cotacao' && (
+              <div style={{marginBottom:16,background:'#f5f3ff',border:'1px solid #c4b5fd',borderRadius:6,padding:'8px 10px'}}>
+                <label className="acn-label" style={{color:'#6d28d9'}}>📎 Anexar cotação (PDF, imagem, planilha)</label>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4,marginBottom:6}}>
+                  {anexosCotacao.map((a,i) => (
+                    <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{fontSize:9,background:'#fff',border:'1px solid #c4b5fd',color:'#6d28d9',borderRadius:4,padding:'3px 8px',textDecoration:'none',fontWeight:600}}>
+                      📎 {a.nome}
+                    </a>
+                  ))}
+                </div>
+                <input type="file" id="anexo-cotacao-input" style={{display:'none'}}
+                  onChange={e=>{const f=e.target.files?.[0]; if(f) uploadAnexoCotacao(f, modalConcluirCompra.id); e.target.value='';}} />
+                <button className="acn-btn" style={{background:'#7c3aed',fontSize:9,padding:'4px 10px',opacity:enviandoAnexo?.6:1}}
+                  disabled={enviandoAnexo}
+                  onClick={()=>document.getElementById('anexo-cotacao-input')?.click()}>
+                  {enviandoAnexo ? 'Enviando...' : '📎 Anexar Arquivo'}
+                </button>
+                <div style={{fontSize:8,color:'#6d28d9',marginTop:4}}>
+                  O solicitante será avisado automaticamente ao confirmar, com o valor cotado.
+                </div>
+              </div>
+            )}
 
             <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConcluirCompra(null)}>Cancelar</button>

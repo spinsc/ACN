@@ -1849,6 +1849,120 @@ function PainelPlataformas() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PAINEL CONFIGURAÇÕES DE EMAIL (SMTP)
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelEmailCfg() {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const [form, setForm] = useState({
+    smtp_host: '', smtp_porta: '587', smtp_usuario: '', smtp_senha: '',
+    smtp_from_nome: '', smtp_from_email: '',
+  });
+  const [destinatarioFiscal, setDestinatarioFiscal] = useState('fiscal@acn.com.br');
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [smtpConfigurado, setSmtpConfigurado] = useState(false);
+  const [testeEmail, setTesteEmail] = useState('');
+  const [testando, setTestando] = useState(false);
+
+  useEffect(() => {
+    // configuracoes_email_smtp tem RLS sem SELECT p/ anon — nunca conseguimos
+    // ler os valores de volta (propositalmente). Só lemos a flag pública.
+    supabase.from('configuracoes_sistema').select('chave,valor')
+      .in('chave', ['email_fiscal_destino', 'smtp_configurado'])
+      .then(({ data }) => {
+        const cfg = Object.fromEntries((data || []).map(r => [r.chave, r.valor]));
+        if (cfg.email_fiscal_destino) setDestinatarioFiscal(cfg.email_fiscal_destino);
+        setSmtpConfigurado(cfg.smtp_configurado === 'true');
+      });
+  }, []);
+
+  const salvar = async () => {
+    setSalvando(true); setMsg('');
+    // A tabela configuracoes_email_smtp tem RLS sem policy de SELECT para anon
+    // (propositalmente, para nunca expor os segredos de volta ao bundle público).
+    // No Postgres, UPDATE/DELETE sob RLS exigem que a linha alvo também seja
+    // visível via alguma policy de SELECT — mesmo com USING(true) na policy de
+    // UPDATE — então updates diretos do cliente são impossíveis aqui (só INSERT
+    // funciona). Por isso a gravação passa pela edge function save-email-config,
+    // que usa a service_role key (sempre ignora RLS).
+    const { error } = await supabase.functions.invoke('save-email-config', {
+      body: { ...form, email_fiscal_destino: destinatarioFiscal.trim(), atualizado_por: currentUser?.email },
+    });
+    if (error) { setMsg('❌ Erro ao salvar SMTP: ' + error.message); setSalvando(false); return; }
+    setSmtpConfigurado(true);
+    setForm(f => ({ ...f, smtp_senha: '' })); // nunca mantém a senha em memória após salvar
+    setSalvando(false);
+    setMsg('✅ Configurações salvas!');
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const enviarTeste = async () => {
+    if (!testeEmail.trim()) { alert('Informe um email para o teste.'); return; }
+    setTestando(true);
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: { to: testeEmail.trim(), subject: 'Teste — ACN Sinal Verde', html: '<p>Email de teste enviado pelo painel de Configurações de Email.</p>' },
+    });
+    setTestando(false);
+    if (error || data?.error) alert('❌ Falha no envio: ' + (data?.error || error?.message));
+    else alert('✅ Email de teste enviado!');
+  };
+
+  const inp = { width: '100%', border: '1px solid #d1d5db', borderRadius: 5, padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' as const };
+  const lbl = { fontSize: 9, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header">📧 Configurações de Email (SMTP)</div>
+      <div className="sec-body">
+        <p style={{ fontSize: 10, color: '#64748b', marginBottom: 12 }}>
+          Usado para o email automático ao Fiscal quando uma OP/OS é liberada para emissão de NF, e para futuros envios automáticos (contratos, etc).
+          {smtpConfigurado && <span style={{ color: '#16a34a', fontWeight: 700 }}> ✅ SMTP já configurado.</span>}
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={lbl}>Servidor SMTP (host)</label>
+            <input style={inp} placeholder="Ex: smtp.office365.com" value={form.smtp_host} onChange={e => setForm(f => ({ ...f, smtp_host: e.target.value }))} /></div>
+          <div><label style={lbl}>Porta</label>
+            <input style={inp} placeholder="587 (TLS) ou 465 (SSL)" value={form.smtp_porta} onChange={e => setForm(f => ({ ...f, smtp_porta: e.target.value }))} /></div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={lbl}>Usuário SMTP</label>
+            <input style={inp} placeholder="usuario@acn.com.br" value={form.smtp_usuario} onChange={e => setForm(f => ({ ...f, smtp_usuario: e.target.value }))} /></div>
+          <div><label style={lbl}>Senha SMTP {smtpConfigurado && '(deixe em branco para manter a atual)'}</label>
+            <input type="password" style={inp} placeholder={smtpConfigurado ? '••••••••' : 'Senha'} value={form.smtp_senha} onChange={e => setForm(f => ({ ...f, smtp_senha: e.target.value }))} /></div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={lbl}>Nome do Remetente</label>
+            <input style={inp} placeholder="ACN Sinal Verde" value={form.smtp_from_nome} onChange={e => setForm(f => ({ ...f, smtp_from_nome: e.target.value }))} /></div>
+          <div><label style={lbl}>Email do Remetente (opcional, padrão = usuário)</label>
+            <input style={inp} placeholder="sistema@acn.com.br" value={form.smtp_from_email} onChange={e => setForm(f => ({ ...f, smtp_from_email: e.target.value }))} /></div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Email do Fiscal (destinatário das liberações de NF)</label>
+          <input style={inp} placeholder="fiscal@acn.com.br" value={destinatarioFiscal} onChange={e => setDestinatarioFiscal(e.target.value)} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+          <button className="acn-btn" style={{ background: '#16a34a' }} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : '💾 SALVAR'}
+          </button>
+          {msg && <span style={{ fontSize: 10, fontWeight: 700 }}>{msg}</span>}
+        </div>
+
+        {smtpConfigurado && (
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input style={{ ...inp, width: 220 }} placeholder="seuemail@teste.com" value={testeEmail} onChange={e => setTesteEmail(e.target.value)} />
+            <button className="acn-btn" style={{ background: '#0891b2', fontSize: 10 }} onClick={enviarTeste} disabled={testando}>
+              {testando ? 'Enviando...' : '✉️ Enviar Teste'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAINEL CENTROS DE CUSTO
 // ─────────────────────────────────────────────────────────────────────────────
 function PainelCentrosCusto() {
@@ -2009,6 +2123,7 @@ const ABAS_ADMIN = [
   { id:'perfis',         label:'🔐 Perfis de Acesso' },
   { id:'plataformas',    label:'🏪 Plataformas' },
   { id:'centros_custo',  label:'🏷️ Centros de Custo' },
+  { id:'email_cfg',      label:'📧 Config. Email' },
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
@@ -2478,6 +2593,7 @@ export default function AdminTab() {
       {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
       {abaAtiva === 'centros_custo' && <PainelCentrosCusto />}
+      {abaAtiva === 'email_cfg' && <PainelEmailCfg />}
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}

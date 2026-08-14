@@ -172,6 +172,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
   const [resumoConv, setResumoConv]         = useState('');
+  const [qtdVeiculosConv, setQtdVeiculosConv] = useState(1);
+  const [veiculosConv, setVeiculosConv]     = useState<{chassi:string,placa:string}[]>([]);
   // ── compras ──
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
   const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
@@ -850,16 +852,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const agora = new Date().toISOString();
     try {
       if (tipoConverter === 'op') {
+        const baseOpl = numOp.trim();
+        const qty = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
+        const desmembrar = qty > 1;
+
         // Checa duplicata antes de inserir
-        const { data: existente } = await supabase.from('oples').select('id').eq('opl', numOp.trim()).maybeSingle();
+        const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
         if (existente) {
-          alert(`OP "${numOp.trim()}" já está cadastrada. Use outro número.`);
+          alert(`OP "${desmembrar ? baseOpl + '/01' : baseOpl}" já está cadastrada. Use outro número.`);
           setSalvando(false);
           return;
         }
-        const { data: novaOp, error } = await supabase.from('oples').insert({
-          opl:                   numOp.trim(),
+
+        const makePayload = (oplNum: string, veiculo?: {chassi:string,placa:string}) => ({
+          opl:                   oplNum,
           modelo:                op.titulo,
+          chassi:                veiculo?.chassi || null,
+          placa:                 veiculo?.placa || null,
           cliente_nome:          op.orgao || op.titulo,
           responsavel_comercial: op.responsavel_nome || null,
           status_geral:          'Em Espera Engenharia',
@@ -868,13 +877,27 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           criado_por:            currentUser?.email,
           crm_oportunidade_id:   op.id,
           resumo_servicos:       resumoConv.trim() || null,
-        }).select().single();
-        if (error) throw error;
-        if (novaOp) {
+        });
+
+        if (desmembrar) {
+          for (let i = 0; i < qty; i++) {
+            const suf = String(i + 1).padStart(2, '0');
+            const { error } = await supabase.from('oples').insert([makePayload(`${baseOpl}/${suf}`, veiculosConv[i])]);
+            if (error) throw error;
+          }
           await supabase.from('crm_historico').insert({
             oportunidade_id: op.id, tipo: 'conversao_op',
-            conteudo: `OP criada: ${numOp.trim()}`, usuario_nome: currentUser?.nome,
+            conteudo: `${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`, usuario_nome: currentUser?.nome,
           });
+        } else {
+          const { data: novaOp, error } = await supabase.from('oples').insert([makePayload(baseOpl)]).select().single();
+          if (error) throw error;
+          if (novaOp) {
+            await supabase.from('crm_historico').insert({
+              oportunidade_id: op.id, tipo: 'conversao_op',
+              conteudo: `OP criada: ${baseOpl}`, usuario_nome: currentUser?.nome,
+            });
+          }
         }
       } else {
         // OS: busca dados completos do cliente e redireciona para SAC
@@ -912,10 +935,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         setSalvando(false);
         return;
       }
+      const qtyFinal = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
       setModalConverter(null);
       setNumOp('');
       setResumoConv('');
-      alert(`OP ${numOp.trim()} criada! Acesse a aba Engenharia para acompanhar.`);
+      setQtdVeiculosConv(1);
+      setVeiculosConv([]);
+      alert(qtyFinal > 1
+        ? `${qtyFinal} OPs criadas: ${numOp.trim()}/01 até ${numOp.trim()}/${String(qtyFinal).padStart(2,'0')}! Acesse a aba Engenharia para acompanhar.`
+        : `OP ${numOp.trim()} criada! Acesse a aba Engenharia para acompanhar.`);
     } catch (e: any) {
       alert('Erro ao criar: ' + (e?.message || 'Verifique o console.'));
     }
@@ -2491,6 +2519,37 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             {tipoConverter === 'op' && (
               <div style={{ marginBottom:10 }}>
                 <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
+                  Qtd. Veículos
+                </label>
+                <input className="acn-input" style={{ width:'100%', fontSize:11 }} type="number" min={1} max={99}
+                  value={qtdVeiculosConv}
+                  onChange={e => {
+                    const qty = Math.max(1, parseInt(e.target.value) || 1);
+                    setQtdVeiculosConv(qty);
+                    setVeiculosConv(prev => Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'' }));
+                  }} />
+                {qtdVeiculosConv > 1 && (
+                  <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:8, marginTop:6 }}>
+                    <div style={{ fontSize:8, fontWeight:800, color:'#7c3aed', marginBottom:6, textTransform:'uppercase' }}>
+                      🚗 Dados por Veículo (desmembramento em {qtdVeiculosConv} OPs)
+                    </div>
+                    {veiculosConv.map((v, i) => (
+                      <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:5, marginBottom:5, alignItems:'center' }}>
+                        <span style={{ fontSize:9, fontWeight:800, color:'#7c3aed', width:24 }}>{String(i+1).padStart(2,'0')}</span>
+                        <input className="acn-input" style={{ fontSize:10 }} placeholder="Chassi" value={v.chassi}
+                          onChange={e => setVeiculosConv(prev => { const n=[...prev]; n[i]={...n[i],chassi:e.target.value}; return n; })} />
+                        <input className="acn-input" style={{ fontSize:10 }} placeholder="Placa" value={v.placa}
+                          onChange={e => setVeiculosConv(prev => { const n=[...prev]; n[i]={...n[i],placa:e.target.value.toUpperCase()}; return n; })} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tipoConverter === 'op' && (
+              <div style={{ marginBottom:10 }}>
+                <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
                   Resumo dos Serviços a serem executados
                 </label>
                 <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', fontSize:10 }}
@@ -2506,7 +2565,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); setResumoConv(''); }}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); setResumoConv(''); setQtdVeiculosConv(1); setVeiculosConv([]); }}>Cancelar</button>
               <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
                 background: tipoConverter==='op' ? '#2563eb' : '#ea580c', opacity: salvando?.5:1 }}
                 onClick={converterGanho} disabled={salvando}>
