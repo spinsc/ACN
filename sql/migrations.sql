@@ -173,3 +173,9 @@ CREATE TABLE IF NOT EXISTS public.engenharia_horas_tarefas (
 ALTER TABLE public.engenharia_horas_tarefas DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS engenharia_horas_tarefas_status_idx ON public.engenharia_horas_tarefas (status);
 CREATE INDEX IF NOT EXISTS engenharia_horas_tarefas_opl_idx ON public.engenharia_horas_tarefas (opl_id);
+
+-- =============================================================
+-- 2026-08-13 · feat: prazo de entrega na Proposta de Cotacoes
+-- =============================================================
+-- Ja executado em producao em 2026-08-13.
+ALTER TABLE public.cotacoes_propostas ADD COLUMN IF NOT EXISTS prazo_entrega text;

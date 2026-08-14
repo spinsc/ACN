@@ -61,7 +61,7 @@ function StatusBadge({ status }) {
 
 // ─── Modal de Desconto / Proposta ────────────────────────────────────────────
 // ─── GERADOR DE HTML DA PROPOSTA FINAL ───────────────────────────────────────
-function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato, prazoEntrega }) {
+function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato, prazoEntrega, incluirFotos = true }) {
   const prms     = cotacao.parametros_globais || {};
   const itens    = cotacao.itens || [];
   const results  = itens.map(it => calcItem(it, prms));
@@ -89,8 +89,8 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
       </tr>`;
   }).join('');
 
-  // Fotos dos produtos (uso interno para proposta)
-  const todasFotos = itens.flatMap(it => Array.isArray(it.fotos) ? it.fotos : []).slice(0, 6);
+  // Fotos dos produtos — inclusão opcional, escolhida pelo vendedor na emissão
+  const todasFotos = incluirFotos ? itens.flatMap(it => Array.isArray(it.fotos) ? it.fotos : []).slice(0, 6) : [];
   const fotosHTML = todasFotos.length > 0 ? `
   <div class="bloco">
     <h2>&#128247; Fotos do Produto</h2>
@@ -190,10 +190,23 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
       </thead>
       <tbody>
         ${linhasItens}
+        ${descVal > 0.005 ? `
+        <tr>
+          <td colspan="4" style="text-align:right">Valor Total</td>
+          <td style="text-align:right">${fmtBRL(totalBruto)}</td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align:right">Desconto</td>
+          <td style="text-align:right;color:#dc2626">- ${fmtBRL(descVal)}</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="4" style="text-align:right">VALOR TOTAL COM DESCONTO</td>
+          <td style="text-align:right">${fmtBRL(totalLiq)}</td>
+        </tr>` : `
         <tr class="total-row">
           <td colspan="4" style="text-align:right">VALOR TOTAL</td>
           <td style="text-align:right">${fmtBRL(totalLiq)}</td>
-        </tr>
+        </tr>`}
       </tbody>
     </table>
   </div>
@@ -203,10 +216,19 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
 
   <!-- VALOR FINAL -->
   <div class="financeiro">
+    ${descVal > 0.005 ? `
+    <div class="fin-card">
+      <label>VALOR TOTAL</label>
+      <span>${fmtBRL(totalBruto)}</span>
+    </div>
+    <div class="fin-card destaque">
+      <label>VALOR COM DESCONTO</label>
+      <span>${fmtBRL(totalLiq)}</span>
+    </div>` : `
     <div class="fin-card destaque" style="grid-column:span 2">
       <label>VALOR DA PROPOSTA</label>
       <span>${fmtBRL(totalLiq)}</span>
-    </div>
+    </div>`}
   </div>
 
   <!-- RODAPÉ -->
@@ -233,12 +255,13 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
   const [validade,     setValidade]     = useState('30');
   const [refPv,        setRefPv]        = useState(cotacao.opl_numero || '');
   const [formato,      setFormato]      = useState<'html'|'pdf'>('html');
-  const [prazoEntrega, setPrazoEntrega] = useState('');
+  const [prazoEntrega, setPrazoEntrega] = useState(proposta?.prazo_entrega || '');
+  const [incluirFotos, setIncluirFotos] = useState(true);
   const [emailCliente, setEmailCliente] = useState('');
   const [whatsapp,     setWhatsapp]     = useState('');
 
   const getHTML = (fmt = formato) =>
-    gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato: fmt, prazoEntrega });
+    gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato: fmt, prazoEntrega, incluirFotos });
 
   const emitir = () => {
     const html = getHTML();
@@ -246,6 +269,9 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
     if (!win) { alert('Permita pop-ups para gerar a proposta.'); return; }
     win.document.write(html);
     win.document.close();
+    if (proposta?.id && prazoEntrega !== (proposta?.prazo_entrega || '')) {
+      supabase.from('cotacoes_propostas').update({ prazo_entrega: prazoEntrega }).eq('id', proposta.id);
+    }
     onClose();
   };
 
@@ -331,6 +357,13 @@ ${cotacao.criado_por || 'ACN'}`
             </div>
           </div>
 
+          <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:11, color:'#374151', cursor:'pointer',
+            background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 12px' }}>
+            <input type="checkbox" checked={incluirFotos} onChange={e=>setIncluirFotos(e.target.checked)}
+              style={{ width:15, height:15, cursor:'pointer', accentColor:'#1e3a5f' }} />
+            📷 Incluir fotos do produto e link do catálogo na proposta
+          </label>
+
           {/* Envio por e-mail */}
           <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 14px' }}>
             <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:8 }}>📧 Enviar por E-mail</div>
@@ -381,6 +414,7 @@ ${cotacao.criado_por || 'ACN'}`
 function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verMarkup, pedirAprovacao }) {
   const [desconto, setDesconto] = useState(0);
   const [obs,      setObs]      = useState('');
+  const [prazoEntrega, setPrazoEntrega] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [modo, setModo]         = useState('proposta'); // 'proposta' | 'aprovacao'
 
@@ -422,6 +456,7 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
         desconto_pct:        desconto,
         valor_total:         totVendas,
         valor_com_desconto:  valorFinal,
+        prazo_entrega:       prazoEntrega.trim() || null,
         criado_por:          currentUser?.email,
         observacoes:         obs,
       }]);
@@ -496,6 +531,15 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
                 ⚠️ Desconto acima do limite. Esta proposta precisará de <strong>aprovação do gestor</strong>.
               </div>
             )}
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:4 }}>
+              Prazo de Entrega
+            </label>
+            <input value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)}
+              placeholder="Ex: 15 dias úteis"
+              style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5, padding:'6px 8px', fontSize:10, boxSizing:'border-box' }} />
           </div>
 
           <div style={{ marginBottom:14 }}>
