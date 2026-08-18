@@ -61,7 +61,7 @@ function StatusBadge({ status }) {
 
 // ─── Modal de Desconto / Proposta ────────────────────────────────────────────
 // ─── GERADOR DE HTML DA PROPOSTA FINAL ───────────────────────────────────────
-function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato, prazoEntrega, incluirFotos = true }) {
+function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato, prazoEntrega, incluirFotos = true, descricaoServico }) {
   const prms     = cotacao.parametros_globais || {};
   const itens    = cotacao.itens || [];
   const results  = itens.map(it => calcItem(it, prms));
@@ -80,18 +80,20 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
 
   const fmtBRL = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 
-  const linhasItens = itens.map((it, i) => {
-    const r = results[i];
-    const codigo = it.codigo || it.codproduto || it.coditem || '';
-    return `
+  // A proposta ao cliente mostra UMA linha consolidada (a descrição do
+  // serviço/produto, editável pelo vendedor na emissão) em vez do
+  // detalhamento interno de itens/insumos usado para compor o preço —
+  // esse detalhamento é informação de custo interna, não deve ir ao cliente.
+  const descricaoLinha = (descricaoServico || cotacao.nome || 'Serviço/Produto proposto')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const linhasItens = `
       <tr>
-        <td>${codigo ? `<strong>${codigo}</strong><br>` : ''}${it.produto || it.nome || '—'}</td>
-        <td style="text-align:center">${it.qt || 1}</td>
-        <td style="text-align:center">${it.unidade || 'UN'}</td>
-        <td style="text-align:right">${fmtBRL(r.valorUnit)}</td>
-        <td style="text-align:right"><strong>${fmtBRL(r.valorTotal)}</strong></td>
+        <td>${descricaoLinha}</td>
+        <td style="text-align:center">1</td>
+        <td style="text-align:center">—</td>
+        <td style="text-align:right">${fmtBRL(totalBruto)}</td>
+        <td style="text-align:right"><strong>${fmtBRL(totalBruto)}</strong></td>
       </tr>`;
-  }).join('');
 
   // Fotos dos produtos — inclusão opcional, escolhida pelo vendedor na emissão
   const todasFotos = incluirFotos ? itens.flatMap(it => Array.isArray(it.fotos) ? it.fotos : []).slice(0, 6) : [];
@@ -263,9 +265,12 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
   const [incluirFotos, setIncluirFotos] = useState(true);
   const [emailCliente, setEmailCliente] = useState('');
   const [whatsapp,     setWhatsapp]     = useState('');
+  // Descrição da linha do serviço/produto mostrada ao cliente — pré-preenchida
+  // com o título da cotação, mas o vendedor pode renomear antes de emitir.
+  const [descricaoServico, setDescricaoServico] = useState(cotacao.nome || '');
 
   const getHTML = (fmt = formato) =>
-    gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato: fmt, prazoEntrega, incluirFotos });
+    gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, formato: fmt, prazoEntrega, incluirFotos, descricaoServico });
 
   const emitir = () => {
     const html = getHTML();
@@ -328,6 +333,13 @@ ${cotacao.criado_por || 'ACN'}`
             <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>ÓRGÃO / CLIENTE</label>
             <input value={orgaoCliente} onChange={e=>setOrgaoCliente(e.target.value)}
               placeholder="Nome do órgão ou cliente..." style={inp11} />
+          </div>
+          <div>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 }}>
+              DESCRIÇÃO DO SERVIÇO/PRODUTO (como aparece na proposta)
+            </label>
+            <input value={descricaoServico} onChange={e=>setDescricaoServico(e.target.value)}
+              placeholder="Ex: Reforma cela PCSC Palhoça" style={inp11} />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>

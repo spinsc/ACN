@@ -565,9 +565,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           {isOP && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Resumo dos Serviços a serem executados</div>
-              <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+              <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', overflow: 'hidden', minHeight: 60 }}
                 placeholder="Descreva os serviços que serão executados nesta OP..."
-                value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)} />
+                value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)}
+                onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
             </div>
           )}
 
@@ -596,9 +597,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               </div>
               <div style={{ marginBottom:10 }}>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Resumo dos Serviços a serem executados</div>
-                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical' }}
+                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', overflow:'hidden', minHeight:60 }}
                   placeholder="Descreva os serviços que serão executados nesta OS..."
-                  value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)} />
+                  value={form.resumo_servicos} onChange={e => setF('resumo_servicos', e.target.value)}
+                  onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
               </div>
             </>
           )}
