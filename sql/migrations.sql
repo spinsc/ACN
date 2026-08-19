@@ -241,3 +241,40 @@ CREATE TABLE IF NOT EXISTS public.contratos_padrao (
 );
 ALTER TABLE public.contratos_padrao DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS contratos_padrao_tipo_idx ON public.contratos_padrao (tipo);
+
+-- =============================================================
+-- 2026-08-15 · feat: Mesa de Cotações + unificação do Compras (Fase 1)
+-- =============================================================
+-- Fase 1 da expansão Compras/Faturamento/Logística (ver plano completo
+-- salvo na sessão). Unifica os dois pipelines de compra que existiam
+-- (pcp_pedidos_compra e o branch Compras de demandas_setoriais) só em
+-- pcp_pedidos_compra — Demandas Gerais (AjustesProjetoTab) passa a
+-- inserir direto aqui para o setor Compras.
+ALTER TABLE public.pcp_pedidos_compra ADD COLUMN IF NOT EXISTS prazo_prometido_entrega date;
+ALTER TABLE public.pcp_pedidos_compra ADD COLUMN IF NOT EXISTS prazo_prometido_destino text; -- 'producao' | 'cliente'
+ALTER TABLE public.pcp_pedidos_compra ADD COLUMN IF NOT EXISTS vencedora_id uuid;
+ALTER TABLE public.pcp_pedidos_compra ADD COLUMN IF NOT EXISTS justificativa_vencedora text;
+
+-- Mesa de cotações — mínimo 3 fornecedores por pedido (validado no front-end)
+CREATE TABLE IF NOT EXISTS public.pcp_cotacoes_fornecedores (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pedido_id uuid NOT NULL REFERENCES public.pcp_pedidos_compra(id) ON DELETE CASCADE,
+  fornecedor_nome text NOT NULL,
+  valor numeric,
+  condicao_pagamento text,
+  prazo_entrega text,
+  anexo_url text,
+  anexo_nome text,
+  criado_por text,
+  criado_por_nome text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.pcp_cotacoes_fornecedores DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.pcp_pedidos_compra
+  ADD CONSTRAINT pcp_pedidos_compra_vencedora_fk
+  FOREIGN KEY (vencedora_id) REFERENCES public.pcp_cotacoes_fornecedores(id);
+
+-- Timeline/chat por pedido reaproveita a tabela op_acompanhamentos já
+-- existente (via OplAcompModal com referenciaType='compra') — sem
+-- migração nova para isso.

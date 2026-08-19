@@ -52,6 +52,35 @@ export default function AjustesProjetoTab({ currentUser }) {
     if (!form.descricao.trim()) { alert('Preencha a descricao!'); return; }
     const agora = new Date().toISOString();
     const requerente = form.requerente || currentUser?.nome || currentUser?.email || 'Usuario';
+
+    // Compras foi unificado na aba Compras (pcp_pedidos_compra) — não cria mais
+    // uma demanda paralela em demandas_setoriais para esse setor.
+    if (form.setor === 'Compras') {
+      const numero = `PC-AJ-${Date.now()}`;
+      const { error } = await supabase.from('pcp_pedidos_compra').insert([{
+        numero_pedido: numero,
+        opl: form.opl_referencia || null,
+        descricao_material: form.descricao.trim(),
+        quantidade: 1,
+        status_compra: 'Pendente',
+        criado_por: currentUser?.email,
+        criado_por_nome: requerente,
+        criado_por_setor: 'Demandas Gerais',
+        data_criacao: agora,
+      }]);
+      if (error) {
+        alert('Erro ao registrar pedido de compra: ' + error.message);
+        console.error('salvar pedido compra (ajuste) error:', error);
+        return;
+      }
+      const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
+      notificarEvento('demanda_criada_compras', mensagemNotif, form.setor);
+      setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra' });
+      setShowForm(false);
+      fetchAll();
+      return;
+    }
+
     const { error } = await supabase.from('demandas_setoriais').insert([{
       setor_destino: form.setor,
       descricao: `[AJUSTE] ${form.descricao.trim()}`,
@@ -59,7 +88,7 @@ export default function AjustesProjetoTab({ currentUser }) {
       status: 'Pendente',
       criado_por: currentUser?.email,
       criado_por_nome: requerente,
-      tipo_solicitacao: form.setor === 'Compras' ? form.tipo_solicitacao : null,
+      tipo_solicitacao: null,
       data_abertura: agora,
       logs_demanda: [{
         texto: `Ajuste de Projeto registrado. Requerente: ${requerente}. Prioridade: ${form.prioridade}.${form.data_limite ? ' Data limite: ' + new Date(form.data_limite).toLocaleDateString('pt-BR') : ''}`,
@@ -73,10 +102,9 @@ export default function AjustesProjetoTab({ currentUser }) {
       console.error('salvar ajuste error:', error);
       return;
     }
-    // Notifica o setor destino — evento específico para Compras, genérico para outros
-    const eventoNotif = form.setor === 'Compras' ? 'demanda_criada_compras' : 'demanda_criada_setor';
+    // Notifica o setor destino
     const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
-    notificarEvento(eventoNotif, mensagemNotif, form.setor);
+    notificarEvento('demanda_criada_setor', mensagemNotif, form.setor);
     setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra' });
     setShowForm(false);
     fetchAll();
@@ -185,23 +213,11 @@ export default function AjustesProjetoTab({ currentUser }) {
               </div>
               {form.setor === 'Compras' && (
                 <div className="form-group">
-                  <label className="acn-label">Tipo de Solicitação</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {([['compra','🛒 Compra'],['cotacao','📋 Cotação']] as const).map(([val,lbl]) => (
-                      <label key={val} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, cursor:'pointer',
-                        padding:'5px 10px', border:`1.5px solid ${form.tipo_solicitacao===val?'#1e293b':'#e2e8f0'}`,
-                        borderRadius:5, background: form.tipo_solicitacao===val?'#f1f5f9':'#fff', flex:1, justifyContent:'center' }}>
-                        <input type="radio" name="tipoSolicitacao" checked={form.tipo_solicitacao===val}
-                          onChange={() => setForm({ ...form, tipo_solicitacao: val })} style={{ display:'none' }} />
-                        {lbl}
-                      </label>
-                    ))}
+                  <div style={{ fontSize: 9, color: '#0f766e', background:'#f0fdfa', border:'1px solid #99f6e4',
+                    borderRadius: 5, padding: '6px 10px' }}>
+                    🛒 Este pedido será criado direto na aba <strong>Compras</strong>, onde o comprador monta a
+                    mesa de cotações com os fornecedores.
                   </div>
-                  {form.tipo_solicitacao === 'cotacao' && (
-                    <div style={{ fontSize: 8, color: '#94a3b8', marginTop: 3 }}>
-                      Você será avisado quando o comprador finalizar a cotação com o valor.
-                    </div>
-                  )}
                 </div>
               )}
             </div>

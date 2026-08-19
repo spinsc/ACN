@@ -2,6 +2,19 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import OplAcompModal from './OplAcompModal';
+
+const VAZIO_COTACAO = { fornecedor_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
+
+async function uploadCotacaoArquivo(file: File): Promise<{ url: string; nome: string; error?: string }> {
+  const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  const path = `pcp-cotacoes/${Date.now()}_${nomeLimpo}`;
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+  if (error || !data) return { url: '', nome: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+  if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
+  return { url: pub.publicUrl, nome: file.name };
+}
 
 function imprimirSolicitacao(p: any) {
   const fmt = (v: any) => v
@@ -62,6 +75,26 @@ export default function ComprasTab({ currentUser }) {
   const [novoCodigo, setNovoCodigo]             = useState('');
   const [novoNome, setNovoNome]                 = useState('');
   const [salvandoNovoCentro, setSalvandoNovoCentro] = useState(false);
+
+  // Mesa de Cotações (Fase 1)
+  const [modalCotacoes, setModalCotacoes]       = useState<any>(null); // pedido em cotação
+  const [cotacoes, setCotacoes]                 = useState<any[]>([]);
+  const [loadingCotacoes, setLoadingCotacoes]   = useState(false);
+  const [novaCotacao, setNovaCotacao]           = useState({ ...VAZIO_COTACAO });
+  const [novoAnexoCotacao, setNovoAnexoCotacao] = useState<File|null>(null);
+  const [enviandoCotacao, setEnviandoCotacao]   = useState(false);
+  const [vencedoraId, setVencedoraId]           = useState<string|null>(null);
+  const [justificativa, setJustificativa]       = useState('');
+  const [confirmandoCompra, setConfirmandoCompra] = useState(false);
+
+  // Prazo Prometido de Entrega (Fase 1)
+  const [modalPrazoProm, setModalPrazoProm]     = useState<any>(null);
+  const [prazoPromData, setPrazoPromData]       = useState('');
+  const [prazoPromDestino, setPrazoPromDestino] = useState<'producao'|'cliente'>('producao');
+  const [salvandoPrazoProm, setSalvandoPrazoProm] = useState(false);
+
+  // Acompanhamento (timeline) — reaproveita OplAcompModal
+  const [modalAcomp, setModalAcomp]             = useState<any>(null);
 
   // Valores inline por pedido: { [id]: { valor, prazo, salvando } }
   const [inline, setInline] = useState<Record<string,{valor:string,prazo:string,salvando:boolean}>>({});
@@ -219,6 +252,107 @@ export default function ComprasTab({ currentUser }) {
     load();
   };
 
+  // ── Mesa de Cotações ──────────────────────────────────────────────────────
+  const abrirModalCotacoes = async (p: any) => {
+    setModalCotacoes(p);
+    setNovaCotacao({ ...VAZIO_COTACAO });
+    setNovoAnexoCotacao(null);
+    setVencedoraId(p.vencedora_id || null);
+    setJustificativa(p.justificativa_vencedora || '');
+    setLoadingCotacoes(true);
+    const { data } = await supabase.from('pcp_cotacoes_fornecedores')
+      .select('*').eq('pedido_id', p.id).order('criado_em', { ascending: true });
+    setCotacoes(data || []);
+    setLoadingCotacoes(false);
+  };
+
+  const adicionarCotacao = async () => {
+    if (!modalCotacoes) return;
+    if (!novaCotacao.fornecedor_nome.trim() || !novaCotacao.valor) {
+      alert('Informe ao menos o nome do fornecedor e o valor.'); return;
+    }
+    if (novoAnexoCotacao && novoAnexoCotacao.size > 10 * 1024 * 1024) {
+      alert(`Anexo muito grande (${(novoAnexoCotacao.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
+      return;
+    }
+    setEnviandoCotacao(true);
+    let anexo: { url:string; nome:string } | null = null;
+    if (novoAnexoCotacao) {
+      const res = await uploadCotacaoArquivo(novoAnexoCotacao);
+      if (res.error) { alert('Erro ao enviar anexo: ' + res.error); setEnviandoCotacao(false); return; }
+      anexo = res;
+    }
+    const { error } = await supabase.from('pcp_cotacoes_fornecedores').insert([{
+      pedido_id: modalCotacoes.id,
+      fornecedor_nome: novaCotacao.fornecedor_nome.trim(),
+      valor: parseFloat(String(novaCotacao.valor).replace(/\./g,'').replace(',','.')) || null,
+      condicao_pagamento: novaCotacao.condicao_pagamento.trim() || null,
+      prazo_entrega: novaCotacao.prazo_entrega.trim() || null,
+      anexo_url: anexo?.url || null,
+      anexo_nome: anexo?.nome || null,
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+    }]);
+    setEnviandoCotacao(false);
+    if (error) { alert('Erro ao salvar cotação: ' + error.message); return; }
+    setNovaCotacao({ ...VAZIO_COTACAO });
+    setNovoAnexoCotacao(null);
+    abrirModalCotacoes(modalCotacoes);
+  };
+
+  const excluirCotacao = async (id: string) => {
+    if (!confirm('Remover esta cotação?')) return;
+    await supabase.from('pcp_cotacoes_fornecedores').delete().eq('id', id);
+    if (vencedoraId === id) setVencedoraId(null);
+    abrirModalCotacoes(modalCotacoes);
+  };
+
+  const confirmarCompraComVencedora = async () => {
+    if (!modalCotacoes) return;
+    if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de fornecedores antes de confirmar.'); return; }
+    if (!vencedoraId) { alert('Selecione a cotação vencedora.'); return; }
+    if (!justificativa.trim()) { alert('Informe a justificativa da cotação vencedora.'); return; }
+    const row = inline[modalCotacoes.id];
+    if (!row?.prazo) { alert('Informe a previsão de recebimento (campo na linha do pedido) antes de confirmar.'); return; }
+    const vencedora = cotacoes.find(c => c.id === vencedoraId);
+    if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
+    setConfirmandoCompra(true);
+    const { error } = await supabase.from('pcp_pedidos_compra').update({
+      status_compra: 'Comprado',
+      vencedora_id: vencedoraId,
+      justificativa_vencedora: justificativa.trim(),
+      fornecedor: vencedora.fornecedor_nome,
+      valor_compra: vencedora.valor,
+      data_prevista_recebimento: row.prazo,
+    }).eq('id', modalCotacoes.id);
+    setConfirmandoCompra(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalCotacoes(null);
+    setFiltro('');
+    load();
+  };
+
+  // ── Prazo Prometido de Entrega ────────────────────────────────────────────
+  const abrirModalPrazoProm = (p: any) => {
+    setModalPrazoProm(p);
+    setPrazoPromData(p.prazo_prometido_entrega || '');
+    setPrazoPromDestino(p.prazo_prometido_destino || 'producao');
+  };
+
+  const salvarPrazoProm = async () => {
+    if (!modalPrazoProm) return;
+    if (!prazoPromData) { alert('Informe a data prometida.'); return; }
+    setSalvandoPrazoProm(true);
+    const { error } = await supabase.from('pcp_pedidos_compra').update({
+      prazo_prometido_entrega: prazoPromData,
+      prazo_prometido_destino: prazoPromDestino,
+    }).eq('id', modalPrazoProm.id);
+    setSalvandoPrazoProm(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalPrazoProm(null);
+    load();
+  };
+
   const salvarObs = async () => {
     if (!obsTexto.trim() || !modalObs) return;
     setSalvandoObs(true);
@@ -287,6 +421,7 @@ export default function ComprasTab({ currentUser }) {
                 {canVerValor && <th style={th}>💰 Valor da Compra</th>}
                 <th style={th}>🏷️ Centro de Custo</th>
                 <th style={th}>📅 Prev. Recebimento</th>
+                <th style={th}>🎯 Prazo Prometido</th>
                 <th style={th}>Status</th>
                 <th style={th}>Ações</th>
               </tr>
@@ -356,6 +491,25 @@ export default function ComprasTab({ currentUser }) {
                       )}
                     </td>
 
+                    {/* PRAZO PROMETIDO — compromisso com Produção ou Cliente, independente do prazo do fornecedor */}
+                    <td style={{...td,maxWidth:130}}>
+                      {p.prazo_prometido_entrega ? (
+                        <div style={{display:'flex',alignItems:'center',gap:5}}>
+                          <span title={p.prazo_prometido_destino==='cliente'?'Prometido ao cliente':'Prometido à Produção'}>
+                            {p.prazo_prometido_destino==='cliente' ? '👤' : '🏭'}
+                          </span>
+                          {fmtData(p.prazo_prometido_entrega)}
+                          <button onClick={()=>abrirModalPrazoProm(p)} title="Alterar prazo prometido"
+                            style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+                        </div>
+                      ) : (
+                        <button onClick={()=>abrirModalPrazoProm(p)}
+                          style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
+                          + Definir
+                        </button>
+                      )}
+                    </td>
+
                     <td style={td}>
                       <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,
                         background:COR[p.status_compra]||'#9ca3af'}}>
@@ -369,7 +523,15 @@ export default function ComprasTab({ currentUser }) {
                         <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',marginRight:3}}>▶️ Iniciar</button>
                       )}
 
-                      {/* ✅ Em Andamento → Comprado (salva valor + prazo) */}
+                      {/* 🏷️ Mesa de Cotações — fluxo recomendado para Em Andamento → Comprado */}
+                      {isEM && (
+                        <button onClick={()=>abrirModalCotacoes(p)}
+                          style={{...btn,background:'#d97706',marginRight:3}}>
+                          🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}
+                        </button>
+                      )}
+
+                      {/* ✅ Em Andamento → Comprado (atalho manual, sem mesa de cotações) */}
                       {isEM && (
                         <button onClick={()=>confirmarCompra(p)} disabled={row.salvando}
                           style={{...btn,background:'#16a34a',marginRight:3}}>
@@ -382,7 +544,13 @@ export default function ComprasTab({ currentUser }) {
                         <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#0891b2',marginRight:3}}>📦 Recebido</button>
                       )}
 
-                      {/* 💬 Observações */}
+                      {/* 🗨️ Acompanhamento — timeline/chat do pedido */}
+                      <button onClick={()=>setModalAcomp(p)}
+                        style={{...btn,background:'#7c3aed',marginRight:3}}>
+                        🗨️
+                      </button>
+
+                      {/* 💬 Observações (registro curto, aparece na impressão) */}
                       <button onClick={()=>{setModalObs(p);setObsTexto('');}}
                         style={{...btn,background:p.observacoes_compra?'#0891b2':'#64748b',marginRight:3}}>
                         💬
@@ -581,6 +749,149 @@ export default function ComprasTab({ currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL PRAZO PROMETIDO DE ENTREGA */}
+      {modalPrazoProm && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalPrazoProm(null);}}>
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">🎯 Prazo Prometido de Entrega — {modalPrazoProm.numero_pedido}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>{modalPrazoProm.descricao_material}</div>
+            <label className="acn-label">Data prometida *</label>
+            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
+              value={prazoPromData} onChange={e=>setPrazoPromData(e.target.value)} />
+            <label className="acn-label">Prometido para</label>
+            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
+              {([['producao','🏭 Produção Interna'],['cliente','👤 Cliente Direto']] as const).map(([t,l])=>(
+                <button key={t} onClick={()=>setPrazoPromDestino(t as any)} style={{
+                  flex:1,padding:'7px 4px',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,
+                  background:prazoPromDestino===t?'#6366f1':'white',
+                  color:prazoPromDestino===t?'white':'#475569',
+                  borderRight:t==='producao'?'1px solid #d1d5db':'none',
+                }}>{l}</button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={salvarPrazoProm} disabled={salvandoPrazoProm}>
+                {salvandoPrazoProm?'Salvando...':'💾 Salvar'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPrazoProm(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MESA DE COTAÇÕES */}
+      {modalCotacoes && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalCotacoes(null);}}>
+          <div className="modal-box" style={{maxWidth:640}}>
+            <div className="modal-title">🏷️ Mesa de Cotações — {modalCotacoes.numero_pedido}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+              {modalCotacoes.descricao_material} · mínimo de 3 cotações para confirmar a compra.
+            </div>
+
+            {loadingCotacoes ? (
+              <div style={{textAlign:'center',padding:20,color:'#9ca3af',fontSize:11}}>Carregando...</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14,maxHeight:220,overflowY:'auto'}}>
+                {cotacoes.length===0 && (
+                  <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
+                )}
+                {cotacoes.map((c:any) => (
+                  <label key={c.id} style={{
+                    display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:6,cursor:'pointer',
+                    border: vencedoraId===c.id ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
+                    background: vencedoraId===c.id ? '#f0fdf4' : '#fff',
+                  }}>
+                    <input type="radio" name="vencedora" checked={vencedoraId===c.id} onChange={()=>setVencedoraId(c.id)} />
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
+                        {c.fornecedor_nome}
+                        {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
+                      </div>
+                      <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
+                        {c.valor ? fmt(c.valor) : '—'}
+                        {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
+                        {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
+                      </div>
+                      {c.anexo_url && (
+                        <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
+                      )}
+                    </div>
+                    <button onClick={(e)=>{e.preventDefault();excluirCotacao(c.id);}} title="Remover"
+                      style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* Nova cotação */}
+            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Fornecedor</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                <div>
+                  <label className="acn-label">Fornecedor *</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.fornecedor_nome}
+                    onChange={e=>setNovaCotacao(f=>({...f,fornecedor_nome:e.target.value}))} />
+                </div>
+                <div>
+                  <label className="acn-label">Valor (R$) *</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor}
+                    placeholder="Ex: 1.500,00"
+                    onChange={e=>setNovaCotacao(f=>({...f,valor:e.target.value}))} />
+                </div>
+                <div>
+                  <label className="acn-label">Condição de Pagamento</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.condicao_pagamento}
+                    placeholder="Ex: 30/60 dias"
+                    onChange={e=>setNovaCotacao(f=>({...f,condicao_pagamento:e.target.value}))} />
+                </div>
+                <div>
+                  <label className="acn-label">Prazo de Entrega</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.prazo_entrega}
+                    placeholder="Ex: 10 dias úteis"
+                    onChange={e=>setNovaCotacao(f=>({...f,prazo_entrega:e.target.value}))} />
+                </div>
+              </div>
+              <div style={{marginBottom:8}}>
+                <label className="acn-label">Anexo (PDF ou imagem)</label>
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={e=>setNovoAnexoCotacao(e.target.files?.[0]||null)} />
+              </div>
+              <button className="acn-btn" style={{background:'#d97706',width:'100%'}} onClick={adicionarCotacao} disabled={enviandoCotacao}>
+                {enviandoCotacao?'Enviando...':'+ Adicionar Cotação'}
+              </button>
+            </div>
+
+            {cotacoes.length >= 3 && (
+              <div style={{marginBottom:14}}>
+                <label className="acn-label">Justificativa da cotação vencedora *</label>
+                <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}}
+                  value={justificativa} onChange={e=>setJustificativa(e.target.value)}
+                  placeholder="Ex: Melhor prazo de entrega e condição de pagamento, apesar de não ser o menor valor..." />
+              </div>
+            )}
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarCompraComVencedora} disabled={confirmandoCompra}>
+                {confirmandoCompra?'Confirmando...':'✅ Confirmar Compra com Vencedora'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ACOMPANHAMENTO (timeline/chat) */}
+      {modalAcomp && (
+        <OplAcompModal
+          referenciaId={modalAcomp.id}
+          referenciaDesc={`Pedido ${modalAcomp.numero_pedido || ''}`}
+          referenciaType="compra"
+          setor="Compras"
+          currentUser={currentUser}
+          onClose={()=>setModalAcomp(null)}
+        />
       )}
     </div>
   );

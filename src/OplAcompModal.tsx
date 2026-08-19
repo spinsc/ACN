@@ -36,12 +36,13 @@ const SETOR_COR: Record<string, string> = {
 const ABA_DESTINO: Record<string, string> = {
   op: 'producao',
   os: 'sac',
+  compra: 'compras',
 };
 
 interface Props {
-  referenciaId:   string;         // número OP (texto) ou ID de OS (UUID como texto)
-  referenciaDesc: string;         // ex: "OP 1234.5678" ou "OS-001/2024"
-  referenciaType: 'op' | 'os';
+  referenciaId:   string;         // número OP (texto), ID de OS (UUID como texto) ou ID de pedido de compra
+  referenciaDesc: string;         // ex: "OP 1234.5678", "OS-001/2024" ou "Pedido PC-0001"
+  referenciaType: 'op' | 'os' | 'compra';
   setor:          string;
   currentUser:    any;
   onClose:        () => void;
