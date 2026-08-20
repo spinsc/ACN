@@ -76,6 +76,32 @@ const diasRestantes = (v: string) => {
   return Math.ceil((new Date(v).getTime() - Date.now()) / 86400000);
 };
 
+// timestamptz do banco (ex: "2026-09-15 10:30:00+00") → formato aceito por
+// <input type="datetime-local"> (ex: "2026-09-15T10:30"). Sem isso o input
+// recebe um valor inválido e o browser some com a data digitada.
+function toDatetimeLocalValue(v: string): string {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+// Máscara de moeda BR: aceita só dígitos digitados (últimos 2 = centavos) e
+// devolve { display: "1.234,56", raw: "1234.56" } — raw é o que vai pro banco.
+function maskMoedaBR(digitsInput: string): { display: string; raw: string } {
+  const digits = digitsInput.replace(/\D/g, '');
+  if (!digits) return { display: '', raw: '' };
+  const num = parseInt(digits, 10) / 100;
+  return { display: num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), raw: String(num) };
+}
+function fmtMoedaBR(raw: string | number): string {
+  if (raw === '' || raw === null || raw === undefined) return '';
+  const num = Number(raw);
+  if (isNaN(num)) return '';
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function sanitizeFileName(name: string): string {
   const dotIdx = name.lastIndexOf('.');
   const ext  = dotIdx >= 0 ? name.slice(dotIdx).toLowerCase() : '';
@@ -379,9 +405,9 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
   const inserirImagem = async (file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
     const path = `licitacoes/${licitacaoId}/area-livre/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('licitacao-docs').upload(path, file, { upsert: true });
-    if (error) return;
-    const { data: urlData } = supabase.storage.from('licitacao-docs').getPublicUrl(path);
+    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+    if (error) { alert('Erro ao inserir imagem: ' + error.message); return; }
+    const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
     const url = urlData?.publicUrl;
     if (!url) return;
     document.execCommand('insertHTML', false, `<img src="${url}" style="max-width:100%;border-radius:4px;margin:4px 0" />`);
@@ -754,13 +780,26 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   };
   const btnProximo = botaoProximoStatus();
 
-  const FInput = ({ label, field, type='text' }: { label:string; field:string; type?:string }) => (
-    <div>
-      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-      <input type={type} value={formEdit[field]||''} onChange={e=>setF(field,e.target.value)}
-        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-    </div>
-  );
+  const FInput = ({ label, field, type='text' }: { label:string; field:string; type?:string }) => {
+    if (type === 'money') {
+      return (
+        <div>
+          <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
+          <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(formEdit[field])}
+            onChange={e=>setF(field, maskMoedaBR(e.target.value).raw)}
+            style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+        </div>
+      );
+    }
+    const value = type === 'datetime-local' ? toDatetimeLocalValue(formEdit[field]) : (formEdit[field]||'');
+    return (
+      <div>
+        <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
+        <input type={type} value={value} onChange={e=>setF(field,e.target.value)}
+          style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+      </div>
+    );
+  };
 
   // ── Minimizado ────────────────────────────────────────────────────────────
   if (minimized) {
@@ -860,7 +899,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             <FInput label="Nome do Projeto" field="nome_projeto" />
             <FInput label="Órgão" field="orgao" />
             <FInput label="Objeto Principal" field="objeto_principal" />
-            <FInput label="Valor Estimado (R$)" field="valor_estimado" type="number" />
+            <FInput label="Valor Estimado (R$)" field="valor_estimado" type="money" />
 
             <div>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Prioridade</label>
@@ -1241,6 +1280,16 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 // cada re-render (cada tecla digitada), fazendo o React desmontar e remontar o
 // <input>, o que tira o foco do campo a cada caractere digitado.
 function ModalNovaInput({ label, field, value, onChange, type='text', required=false }: any) {
+  if (type === 'money') {
+    return (
+      <div>
+        <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}{required?' *':''}</label>
+        <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(value)}
+          onChange={e=>onChange(field, maskMoedaBR(e.target.value).raw)}
+          style={{ width:'100%', padding:'5px 8px', border:`1px solid ${required&&!value?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+      </div>
+    );
+  }
   return (
     <div>
       <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}{required?' *':''}</label>
@@ -1332,7 +1381,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           <ModalNovaInput label="Nome do Projeto" field="nome_projeto" value={form.nome_projeto} onChange={set} required />
           <ModalNovaInput label="Órgão" field="orgao" value={form.orgao} onChange={set} required />
           <ModalNovaInput label="Objeto Principal" field="objeto_principal" value={form.objeto_principal} onChange={set} />
-          <ModalNovaInput label="Valor Estimado (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="number" />
+          <ModalNovaInput label="Valor Estimado (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="money" />
           <ModalNovaInput label="Operador" field="operador" value={form.operador} onChange={set} />
 
           <div>
