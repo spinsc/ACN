@@ -197,10 +197,127 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
   );
 }
 
+// ─── Faturamento de Compras (Fase 3 — Conferência Técnica) ───────────────────
+const STATUS_FAT_LABEL: Record<string, { label: string; cor: string; bg: string }> = {
+  aguardando_recebimento: { label: '🔒 Aguardando recebimento', cor: '#78716c', bg: '#f5f5f4' },
+  liberado:                { label: '🔓 Liberado p/ pagamento',  cor: '#0369a1', bg: '#f0f9ff' },
+  pago:                    { label: '✅ Pago',                   cor: '#15803d', bg: '#f0fdf4' },
+};
+
+async function uploadNfFornecedor(file: File): Promise<{ url: string; error?: string }> {
+  const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  const path = `pcp-nf-fornecedor/${Date.now()}_${nomeLimpo}`;
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+  if (error || !data) return { url: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+  return { url: pub?.publicUrl || '' };
+}
+
+function LinhaFaturamento({ f, onAtualizar }: any) {
+  const [nfNumero, setNfNumero] = useState(f.nf_fornecedor_numero || '');
+  const [arquivo, setArquivo]   = useState<File | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  const marcarPago = async () => {
+    if (!nfNumero.trim()) { alert('Informe o número da NF do fornecedor.'); return; }
+    setSalvando(true);
+    let nfUrl = f.nf_fornecedor_url || null;
+    if (arquivo) {
+      const res = await uploadNfFornecedor(arquivo);
+      if (res.error) { alert('Erro ao enviar NF: ' + res.error); setSalvando(false); return; }
+      nfUrl = res.url;
+    }
+    const { error } = await supabase.from('pcp_pedidos_faturamento').update({
+      nf_fornecedor_numero: nfNumero.trim(),
+      nf_fornecedor_url: nfUrl,
+      status_faturamento: 'pago',
+      data_pagamento: new Date().toISOString().split('T')[0],
+    }).eq('id', f.id);
+    setSalvando(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    onAtualizar();
+  };
+
+  const st = STATUS_FAT_LABEL[f.status_faturamento] || STATUS_FAT_LABEL.aguardando_recebimento;
+
+  return (
+    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, color: '#7c3aed', fontFamily: 'monospace' }}>{f.numero_oc || '—'}</td>
+      <td style={{ padding: '6px 8px', fontSize: 10 }}>{f.numero_pedido || '—'}</td>
+      <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.fornecedor || '—'}</td>
+      <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.centro_custo || '—'}</td>
+      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, textAlign: 'right', fontFamily: 'monospace', color: '#15803d' }}>{fmtR(f.valor)}</td>
+      <td style={{ padding: '6px 8px' }}>
+        <span style={{ background: st.bg, color: st.cor, padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>{st.label}</span>
+      </td>
+      <td style={{ padding: '6px 8px', minWidth: 220 }}>
+        {!f.recebimento_confirmado ? (
+          <span style={{ fontSize: 9, color: '#9ca3af' }}>—</span>
+        ) : f.status_faturamento === 'pago' ? (
+          <span style={{ fontSize: 9, color: '#15803d' }}>
+            NF {f.nf_fornecedor_numero} · pago em {fmtDt(f.data_pagamento)}
+            {f.nf_fornecedor_url && <> · <a href={f.nf_fornecedor_url} target="_blank" rel="noreferrer">ver</a></>}
+          </span>
+        ) : (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input value={nfNumero} onChange={e => setNfNumero(e.target.value)} placeholder="Nº NF fornecedor"
+              style={{ padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 9, width: 100 }} />
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setArquivo(e.target.files?.[0] || null)}
+              style={{ fontSize: 9, width: 90 }} />
+            <button onClick={marcarPago} disabled={salvando}
+              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
+              {salvando ? '...' : '💰 Pago'}
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function SecaoFaturamentoCompras({ faturamentos, onAtualizar }: any) {
+  const [filtro, setFiltro] = useState('');
+  const filtrados = filtro ? faturamentos.filter((f: any) => f.status_faturamento === filtro) : faturamentos;
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', marginTop: 14 }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>📑 Faturamento de Compras — NF do Fornecedor</div>
+        <select value={filtro} onChange={e => setFiltro(e.target.value)}
+          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
+          <option value="">Todos os status</option>
+          <option value="aguardando_recebimento">Aguardando recebimento</option>
+          <option value="liberado">Liberado p/ pagamento</option>
+          <option value="pago">Pago</option>
+        </select>
+      </div>
+      {filtrados.length === 0 ? (
+        <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>Nenhum registro de faturamento.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
+                {['OC', 'Nº Pedido', 'Fornecedor', 'Centro de Custo', 'Valor', 'Status', 'Ação'].map(h => (
+                  <th key={h} style={{ padding: '6px 8px', fontSize: 9, fontWeight: 700, textAlign: h === 'Valor' ? 'right' : 'left' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map((f: any) => <LinhaFaturamento key={f.id} f={f} onAtualizar={onAtualizar} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [centros,  setCentros]  = useState<any[]>([]);
   const [compras,  setCompras]  = useState<any[]>([]);
+  const [faturamentos, setFaturamentos] = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [modalCentros, setModalCentros] = useState(false);
   const [modalCompras, setModalCompras] = useState<any>(null);
@@ -215,12 +332,14 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const [{ data: cData }, { data: pData }] = await Promise.all([
+    const [{ data: cData }, { data: pData }, { data: fData }] = await Promise.all([
       supabase.from('centros_custo').select('*').order('codigo'),
       supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', { ascending: false }),
+      supabase.from('pcp_pedidos_faturamento').select('*').order('criado_em', { ascending: false }),
     ]);
     setCentros(cData || []);
     setCompras(pData || []);
+    setFaturamentos(fData || []);
     setLoading(false);
   }, []);
 
@@ -476,6 +595,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
               </div>
             )}
           </div>
+
+          <SecaoFaturamentoCompras faturamentos={faturamentos} onAtualizar={carregar} />
         </>
       )}
 

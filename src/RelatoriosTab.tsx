@@ -660,7 +660,7 @@ function RelRecebimentosEnvios() {
               <table><thead><tr><th>Nº Pedido</th><th>Descrição</th><th>Fornecedor</th><th>Qtd</th><th>Prev. Recebimento</th><th>Valor</th><th>Status</th></tr></thead>
               <tbody>{recebimentos.map(r=>{
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
-                const dt = r.data_prevista_recebimento ? new Date(r.data_prevista_recebimento+'T00:00:00') : null;
+                const dt = r.data_prevista_recebimento ? new Date(r.data_prevista_recebimento.slice(0,10)+'T00:00:00') : null;
                 const atras = dt && dt < hoje && r.status_compra !== 'Concluído';
                 return <tr key={r.id} style={atras?{background:'#fef2f2'}:{}}>
                   <td><strong>{r.numero_pedido||'—'}</strong></td>

@@ -262,8 +262,10 @@ export default function ComprasTab({ currentUser }) {
     setInline(prev => ({ ...prev, [id]: { ...prev[id], [field]: val } }));
 
   const avancarStatus = async (p: any) => {
+    // 'Comprado' → 'Concluído' não está mais aqui de propósito — a partir da
+    // Fase 3, só fecha via conferência técnica na Logística (seriais/volume/NF).
     const prox: Record<string,string> = {
-      'Pendente':'Em Andamento', 'Comprado':'Concluído',
+      'Pendente':'Em Andamento',
     };
     const novoStatus = prox[p.status_compra];
     if (!novoStatus) return;
@@ -730,9 +732,12 @@ export default function ComprasTab({ currentUser }) {
                         </button>
                       )}
 
-                      {/* 📦 Comprado → Concluído */}
+                      {/* 📦 Comprado → Concluído — só via conferência técnica na Logística (Fase 3) */}
                       {p.status_compra==='Comprado' && (
-                        <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#0891b2',marginRight:3}}>📦 Recebido</button>
+                        <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
+                          style={{fontSize:9,color:'#78716c',marginRight:6,fontStyle:'italic'}}>
+                          📦 Aguarda recebimento na Logística
+                        </span>
                       )}
 
                       {/* 🗨️ Acompanhamento — timeline/chat do pedido */}

@@ -12,6 +12,7 @@ const FORM_VAZIO = {
   remetente: '', destinatario: '', tipo_mercadoria: 'Equipamento',
   descricao: '', quantidade: '', peso: '', nf_referencia: '', veiculo_placa: '', observacoes: '',
   pedido_compra_id: '',
+  seriais: '', volume: '', nf_conferida: false,
 };
 
 // ─── Relatório de Movimentação (IN/OUT) por Período e Tipo ───────────────────
@@ -354,6 +355,7 @@ export default function LogisticaTab({ currentUser }) {
 
     const payload = {
       ...form,
+      volume: form.volume ? parseFloat(String(form.volume).replace(',','.')) : null,
       fotos: fotosUrls,
       pedido_compra_id: form.pedido_compra_id || null,
       criado_por: currentUser?.email,
@@ -362,11 +364,18 @@ export default function LogisticaTab({ currentUser }) {
     const { error } = await supabase.from('logistica_manifestos').insert([payload]);
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
-      // Se recebimento vinculado a pedido de compra, avança status para Concluído
-      if (form.tipo === 'Recebimento' && form.pedido_compra_id) {
+      // Recebimento vinculado a pedido de compra: só fecha a compra e libera o
+      // faturamento se a NF do fornecedor foi conferida (gate real, Fase 3).
+      // Sem conferência, o manifesto fica registrado mas a compra continua
+      // 'Comprado' — divergência a resolver antes de fechar.
+      if (form.tipo === 'Recebimento' && form.pedido_compra_id && form.nf_conferida) {
+        const agora = new Date().toISOString();
         await supabase.from('pcp_pedidos_compra')
           .update({ status_compra: 'Concluído', data_conclusao: new Date().toISOString().split('T')[0] })
           .eq('id', form.pedido_compra_id);
+        await supabase.from('pcp_pedidos_faturamento')
+          .update({ recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado' })
+          .eq('pedido_id', form.pedido_compra_id);
       }
       setForm(FORM_VAZIO); setFotos([]); setShowForm(false); fetchAll();
     }
@@ -464,11 +473,42 @@ export default function LogisticaTab({ currentUser }) {
                     {pedidosCompra.map(p => (
                       <option key={p.id} value={p.id}>
                         {p.numero_pedido ? `#${p.numero_pedido} — ` : ''}{p.descricao_material || '(sem descrição)'}
-                        {p.data_prevista_recebimento ? ` · Prev: ${new Date(p.data_prevista_recebimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
+                        {p.data_prevista_recebimento ? ` · Prev: ${new Date(p.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
+              </div>
+            )}
+
+            {/* CONFERÊNCIA TÉCNICA — só quando há pedido de compra vinculado (Fase 3) */}
+            {form.tipo === 'Recebimento' && form.pedido_compra_id && (
+              <div style={{marginTop:8,background:'#fff7ed',border:'1px solid #fdba74',borderRadius:6,padding:10}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#9a3412',marginBottom:8}}>
+                  🔍 Conferência Técnica — necessária pra fechar a compra e liberar o pagamento da NF
+                </div>
+                <div className="form-row">
+                  <div style={{flex:2}}>
+                    <label className="acn-label">Números de Série Recebidos</label>
+                    <input className="acn-input" style={{width:'100%'}} value={form.seriais}
+                      placeholder="Ex: SN12345, SN12346..."
+                      onChange={e=>setForm({...form,seriais:e.target.value})} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <label className="acn-label">Volume (embalagens)</label>
+                    <input className="acn-input" type="number" style={{width:'100%'}} value={form.volume}
+                      onChange={e=>setForm({...form,volume:e.target.value})} />
+                  </div>
+                </div>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,fontWeight:700,marginTop:8,cursor:'pointer',color:form.nf_conferida?'#16a34a':'#78716c'}}>
+                  <input type="checkbox" checked={form.nf_conferida} onChange={e=>setForm({...form,nf_conferida:e.target.checked})} />
+                  ✅ NF do fornecedor confere com o que chegou
+                </label>
+                {!form.nf_conferida && (
+                  <div style={{fontSize:9,color:'#92400e',marginTop:4}}>
+                    Sem marcar isso, o registro fica salvo mas a compra continua "Comprado" — não fecha e não libera o pagamento.
+                  </div>
+                )}
               </div>
             )}
 

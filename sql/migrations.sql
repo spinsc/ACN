@@ -343,6 +343,54 @@ CREATE TRIGGER trg_numero_oc
   BEFORE UPDATE ON public.pcp_pedidos_compra
   FOR EACH ROW EXECUTE FUNCTION gerar_numero_oc();
 
+-- =============================================================
+-- 2026-08-20 · feat: Faturamento & Conferencia Tecnica (Fase 3)
+-- =============================================================
+-- Substitui o "clique sem verificacao" (Recebimento na Logistica ou
+-- botao Recebido em Compras mudavam pra Concluido direto) por um
+-- gate real: só fecha a compra e libera o pagamento da NF do
+-- fornecedor depois que a Logistica confere seriais/volume/NF.
+ALTER TABLE public.logistica_manifestos ADD COLUMN IF NOT EXISTS seriais text;
+ALTER TABLE public.logistica_manifestos ADD COLUMN IF NOT EXISTS volume numeric;
+ALTER TABLE public.logistica_manifestos ADD COLUMN IF NOT EXISTS nf_conferida boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS public.pcp_pedidos_faturamento (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pedido_id uuid NOT NULL UNIQUE REFERENCES public.pcp_pedidos_compra(id) ON DELETE CASCADE,
+  numero_oc text,
+  numero_pedido text,
+  fornecedor text,
+  centro_custo text,
+  valor numeric,
+  recebimento_confirmado boolean NOT NULL DEFAULT false,
+  recebimento_confirmado_em timestamptz,
+  nf_fornecedor_numero text,
+  nf_fornecedor_url text,
+  status_faturamento text NOT NULL DEFAULT 'aguardando_recebimento',
+  data_pagamento date,
+  observacoes text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.pcp_pedidos_faturamento DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_pcp_pedidos_faturamento_status ON public.pcp_pedidos_faturamento (status_faturamento);
+
+CREATE OR REPLACE FUNCTION gerar_pedido_faturamento()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status_compra = 'Comprado' AND (OLD.status_compra IS DISTINCT FROM 'Comprado') THEN
+    INSERT INTO public.pcp_pedidos_faturamento (pedido_id, numero_oc, numero_pedido, fornecedor, centro_custo, valor)
+    VALUES (NEW.id, NEW.numero_oc, NEW.numero_pedido, NEW.fornecedor, NEW.centro_custo, NEW.valor_compra)
+    ON CONFLICT (pedido_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_pedido_faturamento ON public.pcp_pedidos_compra;
+CREATE TRIGGER trg_pedido_faturamento
+  AFTER UPDATE ON public.pcp_pedidos_compra
+  FOR EACH ROW EXECUTE FUNCTION gerar_pedido_faturamento();
+
 -- Timeline/chat por pedido reaproveita a tabela op_acompanhamentos já
 -- existente (via OplAcompModal com referenciaType='compra') — sem
 -- migração nova para isso.
