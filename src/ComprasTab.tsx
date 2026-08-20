@@ -246,15 +246,34 @@ export default function ComprasTab({ currentUser }) {
     const { data, error } = await q;
     if (error) { setQueryError(error.message); if (!silent) setLoading(false); setPedidos([]); return; }
     setPedidos(data || []);
-    const init: any = {};
-    (data||[]).forEach((p:any) => {
-      init[p.id] = {
-        valor:    p.valor_compra  ? String(p.valor_compra)  : '',
-        prazo:    p.data_prevista_recebimento || '',
-        salvando: false,
-      };
-    });
-    setInline(init);
+    if (silent) {
+      // Refresh silencioso (polling a cada 30s): não sobrescrever edições em
+      // andamento (ex: campos abertos na Mesa de Cotações) — só adiciona
+      // pedidos novos que ainda não têm entrada em `inline`.
+      setInline((prev: any) => {
+        const next = { ...prev };
+        (data||[]).forEach((p:any) => {
+          if (!next[p.id]) {
+            next[p.id] = {
+              valor:    p.valor_compra  ? String(p.valor_compra)  : '',
+              prazo:    p.data_prevista_recebimento || '',
+              salvando: false,
+            };
+          }
+        });
+        return next;
+      });
+    } else {
+      const init: any = {};
+      (data||[]).forEach((p:any) => {
+        init[p.id] = {
+          valor:    p.valor_compra  ? String(p.valor_compra)  : '',
+          prazo:    p.data_prevista_recebimento || '',
+          salvando: false,
+        };
+      });
+      setInline(init);
+    }
     if (!silent) setLoading(false);
   };
 
@@ -491,7 +510,7 @@ export default function ComprasTab({ currentUser }) {
     if (!vencedoraId) { alert('Selecione a cotação vencedora.'); return; }
     if (!justificativa.trim()) { alert('Informe a justificativa da cotação vencedora.'); return; }
     const row = inline[modalCotacoes.id];
-    if (!row?.prazo) { alert('Informe a previsão de recebimento (campo na linha do pedido) antes de confirmar.'); return; }
+    if (!row?.prazo) { alert('Informe a previsão de recebimento antes de confirmar.'); return; }
     const vencedora = cotacoes.find(c => c.id === vencedoraId);
     if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
     setConfirmandoCompra(true);
@@ -990,6 +1009,13 @@ export default function ComprasTab({ currentUser }) {
             <div className="modal-title">🏷️ Mesa de Cotações — {modalCotacoes.numero_pedido}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
               {modalCotacoes.descricao_material} · mínimo de 3 cotações para confirmar a compra.
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label className="acn-label">📅 Previsão de Recebimento *</label>
+              <input type="date" className="acn-input" style={{width:'100%'}}
+                value={inline[modalCotacoes.id]?.prazo || ''}
+                onChange={e=>setInlineField(modalCotacoes.id,'prazo',e.target.value)} />
             </div>
 
             {aprovacoesPedido.length > 0 && (() => {
