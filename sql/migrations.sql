@@ -391,6 +391,57 @@ CREATE TRIGGER trg_pedido_faturamento
   AFTER UPDATE ON public.pcp_pedidos_compra
   FOR EACH ROW EXECUTE FUNCTION gerar_pedido_faturamento();
 
+-- =============================================================
+-- 2026-08-20 · feat: Frete (Fase 4)
+-- =============================================================
+-- Ultima fase do plano de expansao Compras/Faturamento/Logistica.
+-- Mesa de cotacoes de transportadoras (mesmo padrao da Fase 1, tabela
+-- irmã pra nao mexer no fluxo de Compras ja em producao) + linha do
+-- tempo Cotacao -> Em Transito -> Entregue, com canhoto obrigatorio
+-- antes de Entregue (gate real, mesmo padrao do nf_conferida da Fase 3).
+CREATE TABLE IF NOT EXISTS public.pcp_fretes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  direcao text NOT NULL DEFAULT 'inbound',
+  descricao text NOT NULL,
+  origem text,
+  destino text,
+  pedido_compra_id uuid REFERENCES public.pcp_pedidos_compra(id) ON DELETE SET NULL,
+  transportadora text,
+  valor_frete numeric,
+  vencedora_id uuid,
+  justificativa_vencedora text,
+  status text NOT NULL DEFAULT 'Cotação',
+  data_prevista date,
+  data_coleta timestamptz,
+  data_entrega timestamptz,
+  canhoto_url text,
+  canhoto_nome text,
+  observacoes text,
+  criado_por text,
+  criado_por_nome text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.pcp_fretes DISABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.pcp_cotacoes_fretes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  frete_id uuid NOT NULL REFERENCES public.pcp_fretes(id) ON DELETE CASCADE,
+  transportadora_nome text NOT NULL,
+  valor numeric,
+  condicao_pagamento text,
+  prazo_entrega text,
+  anexo_url text,
+  anexo_nome text,
+  criado_por text,
+  criado_por_nome text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.pcp_cotacoes_fretes DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.pcp_fretes
+  ADD CONSTRAINT pcp_fretes_vencedora_fk
+  FOREIGN KEY (vencedora_id) REFERENCES public.pcp_cotacoes_fretes(id);
+
 -- Timeline/chat por pedido reaproveita a tabela op_acompanhamentos já
 -- existente (via OplAcompModal com referenciaType='compra') — sem
 -- migração nova para isso.

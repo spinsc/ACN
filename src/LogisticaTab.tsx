@@ -157,6 +157,444 @@ function RelatorioLogistica() {
   );
 }
 
+// ─── Fretes (Fase 4) — cotação de transportadoras + linha do tempo até Entregue ──
+const VAZIO_FRETE = { direcao: 'inbound', descricao: '', origem: '', destino: '', data_prevista: '', pedido_compra_id: '' };
+const VAZIO_COTACAO_FRETE = { transportadora_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
+
+async function uploadArquivoFrete(file: File, pasta: string): Promise<{ url: string; nome: string; error?: string }> {
+  const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  const path = `${pasta}/${Date.now()}_${nomeLimpo}`;
+  const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+  if (error || !data) return { url: '', nome: '', error: error?.message || 'Falha desconhecida ao enviar.' };
+  const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+  if (!pub?.publicUrl) return { url: '', nome: '', error: 'Não foi possível gerar o link público do arquivo.' };
+  return { url: pub.publicUrl, nome: file.name };
+}
+
+const btn: React.CSSProperties = {padding:'5px 9px',border:'none',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'};
+
+const COR_FRETE: Record<string,string> = {
+  'Cotação':'#94a3b8', 'Em Trânsito':'#3b82f6', 'Entregue':'#22c55e', 'Cancelado':'#ef4444',
+};
+
+function FretesPanel({ currentUser }: any) {
+  const [fretes, setFretes] = useState<any[]>([]);
+  const [pedidosCompra, setPedidosCompra] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ ...VAZIO_FRETE });
+  const [salvandoFrete, setSalvandoFrete] = useState(false);
+
+  const [modalFrete, setModalFrete] = useState<any>(null);
+  const [cotacoes, setCotacoes] = useState<any[]>([]);
+  const [loadingCotacoes, setLoadingCotacoes] = useState(false);
+  const [novaCotacao, setNovaCotacao] = useState({ ...VAZIO_COTACAO_FRETE });
+  const [novoAnexoCotacao, setNovoAnexoCotacao] = useState<File|null>(null);
+  const [enviandoCotacao, setEnviandoCotacao] = useState(false);
+  const [vencedoraId, setVencedoraId] = useState<string|null>(null);
+  const [justificativa, setJustificativa] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+  const [canhotoFile, setCanhotoFile] = useState<File|null>(null);
+  const [enviandoCanhoto, setEnviandoCanhoto] = useState(false);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    const [{ data: fData }, { data: pData }] = await Promise.all([
+      supabase.from('pcp_fretes').select('*').order('criado_em', { ascending: false }),
+      supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material').eq('status_compra', 'Comprado'),
+    ]);
+    setFretes(fData || []);
+    setPedidosCompra(pData || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const criarFrete = async () => {
+    if (!form.descricao.trim()) { alert('Descreva o frete.'); return; }
+    setSalvandoFrete(true);
+    const { error } = await supabase.from('pcp_fretes').insert([{
+      direcao: form.direcao,
+      descricao: form.descricao.trim(),
+      origem: form.origem.trim() || null,
+      destino: form.destino.trim() || null,
+      data_prevista: form.data_prevista || null,
+      pedido_compra_id: form.pedido_compra_id || null,
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+    }]);
+    setSalvandoFrete(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setForm({ ...VAZIO_FRETE }); setShowForm(false); fetchAll();
+  };
+
+  const abrirModalFrete = async (f: any) => {
+    setModalFrete(f);
+    setNovaCotacao({ ...VAZIO_COTACAO_FRETE });
+    setNovoAnexoCotacao(null);
+    setVencedoraId(f.vencedora_id || null);
+    setJustificativa(f.justificativa_vencedora || '');
+    setCanhotoFile(null);
+    setLoadingCotacoes(true);
+    const { data } = await supabase.from('pcp_cotacoes_fretes')
+      .select('*').eq('frete_id', f.id).order('criado_em', { ascending: true });
+    setCotacoes(data || []);
+    setLoadingCotacoes(false);
+  };
+
+  const adicionarCotacao = async () => {
+    if (!modalFrete) return;
+    if (!novaCotacao.transportadora_nome.trim() || !novaCotacao.valor) {
+      alert('Informe ao menos o nome da transportadora e o valor.'); return;
+    }
+    if (novoAnexoCotacao && novoAnexoCotacao.size > 10 * 1024 * 1024) {
+      alert(`Anexo muito grande (${(novoAnexoCotacao.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
+      return;
+    }
+    setEnviandoCotacao(true);
+    let anexo: { url:string; nome:string } | null = null;
+    if (novoAnexoCotacao) {
+      const res = await uploadArquivoFrete(novoAnexoCotacao, 'pcp-fretes-cotacoes');
+      if (res.error) { alert('Erro ao enviar anexo: ' + res.error); setEnviandoCotacao(false); return; }
+      anexo = res;
+    }
+    const { error } = await supabase.from('pcp_cotacoes_fretes').insert([{
+      frete_id: modalFrete.id,
+      transportadora_nome: novaCotacao.transportadora_nome.trim(),
+      valor: parseFloat(String(novaCotacao.valor).replace(/\./g,'').replace(',','.')) || null,
+      condicao_pagamento: novaCotacao.condicao_pagamento.trim() || null,
+      prazo_entrega: novaCotacao.prazo_entrega.trim() || null,
+      anexo_url: anexo?.url || null,
+      anexo_nome: anexo?.nome || null,
+      criado_por: currentUser?.email,
+      criado_por_nome: currentUser?.nome,
+    }]);
+    setEnviandoCotacao(false);
+    if (error) { alert('Erro ao salvar cotação: ' + error.message); return; }
+    setNovaCotacao({ ...VAZIO_COTACAO_FRETE });
+    setNovoAnexoCotacao(null);
+    abrirModalFrete(modalFrete);
+  };
+
+  const excluirCotacao = async (id: string) => {
+    if (!confirm('Remover esta cotação?')) return;
+    await supabase.from('pcp_cotacoes_fretes').delete().eq('id', id);
+    if (vencedoraId === id) setVencedoraId(null);
+    abrirModalFrete(modalFrete);
+  };
+
+  const confirmarFreteComVencedora = async () => {
+    if (!modalFrete) return;
+    if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de transportadoras antes de confirmar.'); return; }
+    if (!vencedoraId) { alert('Selecione a cotação vencedora.'); return; }
+    if (!justificativa.trim()) { alert('Informe a justificativa da cotação vencedora.'); return; }
+    const vencedora = cotacoes.find(c => c.id === vencedoraId);
+    if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
+    setConfirmando(true);
+    const { error } = await supabase.from('pcp_fretes').update({
+      transportadora: vencedora.transportadora_nome,
+      valor_frete: vencedora.valor,
+      vencedora_id: vencedoraId,
+      justificativa_vencedora: justificativa.trim(),
+      status: 'Em Trânsito',
+      data_coleta: new Date().toISOString(),
+    }).eq('id', modalFrete.id);
+    setConfirmando(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalFrete(null);
+    fetchAll();
+  };
+
+  const marcarEntregue = async () => {
+    if (!modalFrete || !canhotoFile) return;
+    setEnviandoCanhoto(true);
+    const res = await uploadArquivoFrete(canhotoFile, 'pcp-fretes-canhotos');
+    if (res.error) { alert('Erro ao enviar canhoto: ' + res.error); setEnviandoCanhoto(false); return; }
+    const { error } = await supabase.from('pcp_fretes').update({
+      status: 'Entregue',
+      data_entrega: new Date().toISOString(),
+      canhoto_url: res.url,
+      canhoto_nome: res.nome,
+    }).eq('id', modalFrete.id);
+    setEnviandoCanhoto(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalFrete(null);
+    fetchAll();
+  };
+
+  const cancelarFrete = async (f: any) => {
+    const motivo = prompt('Motivo do cancelamento:');
+    if (motivo === null) return;
+    await supabase.from('pcp_fretes').update({
+      status: 'Cancelado',
+      observacoes: [f.observacoes, `Cancelado: ${motivo}`].filter(Boolean).join(' · '),
+    }).eq('id', f.id);
+    fetchAll();
+  };
+
+  const fmt = (v: any) => v
+    ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
+  const fmtDt = (d: string) => d ? new Date(d.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const fmtDtHr = (d: string) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+
+  return (
+    <div className="sec-card">
+      <div className="sec-hdr">
+        <span>🚚 Fretes — Cotação de Transportadoras e Acompanhamento até Entrega</span>
+        {!showForm && (
+          <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setForm({...VAZIO_FRETE});setShowForm(true);}}>
+            + Novo Frete
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,margin:'10px 0'}}>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="acn-label">Direção</label>
+              <select className="acn-input" style={{width:'100%'}} value={form.direcao}
+                onChange={e=>setForm({...form,direcao:e.target.value})}>
+                <option value="inbound">📥 Inbound (chegando na ACN)</option>
+                <option value="outbound">📤 Outbound (saindo da ACN)</option>
+              </select>
+            </div>
+            <div style={{flex:2}}>
+              <label className="acn-label">Descrição *</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.descricao}
+                onChange={e=>setForm({...form,descricao:e.target.value})} placeholder="O que está sendo transportado" />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="acn-label">Origem</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.origem}
+                onChange={e=>setForm({...form,origem:e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Destino</label>
+              <input className="acn-input" style={{width:'100%'}} value={form.destino}
+                onChange={e=>setForm({...form,destino:e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Data Prevista</label>
+              <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_prevista}
+                onChange={e=>setForm({...form,data_prevista:e.target.value})} />
+            </div>
+          </div>
+          {pedidosCompra.length > 0 && (
+            <div className="form-row">
+              <div style={{flex:1}}>
+                <label className="acn-label">Vincular Pedido de Compra (opcional)</label>
+                <select className="acn-input" style={{width:'100%'}} value={form.pedido_compra_id}
+                  onChange={e=>setForm({...form,pedido_compra_id:e.target.value})}>
+                  <option value="">— Não vincular —</option>
+                  {pedidosCompra.map((p:any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.numero_pedido ? `#${p.numero_pedido} — ` : ''}{p.descricao_material || '(sem descrição)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:8}}>
+            <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={criarFrete} disabled={salvandoFrete}>
+              {salvandoFrete?'Salvando...':'💾 Registrar Frete'}
+            </button>
+            <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setShowForm(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
+        : fretes.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhum frete registrado.</div>
+        : (
+        <div style={{overflowX:'auto',marginTop:10}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr style={{background:'#f1f5f9',borderBottom:'2px solid #e2e8f0'}}>
+                {['Direção','Descrição','Transportadora','Valor','Status','Datas','Ações'].map(h=>(
+                  <th key={h} style={{padding:'8px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {fretes.map((f:any) => (
+                <tr key={f.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                  <td style={{padding:'9px 10px'}}>{f.direcao==='outbound' ? '📤 Outbound' : '📥 Inbound'}</td>
+                  <td style={{padding:'9px 10px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.descricao}</td>
+                  <td style={{padding:'9px 10px'}}>{f.transportadora || '—'}</td>
+                  <td style={{padding:'9px 10px'}}>{fmt(f.valor_frete)}</td>
+                  <td style={{padding:'9px 10px'}}>
+                    <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,background:COR_FRETE[f.status]||'#9ca3af'}}>
+                      {f.status}
+                    </span>
+                  </td>
+                  <td style={{padding:'9px 10px',fontSize:10,color:'#64748b'}}>
+                    {f.data_prevista && <div>Prev: {fmtDt(f.data_prevista)}</div>}
+                    {f.data_coleta && <div>Coleta: {fmtDtHr(f.data_coleta)}</div>}
+                    {f.data_entrega && <div>Entrega: {fmtDtHr(f.data_entrega)}</div>}
+                  </td>
+                  <td style={{padding:'9px 10px',whiteSpace:'nowrap'}}>
+                    <button onClick={()=>abrirModalFrete(f)} style={{...btn,background:'#0891b2',marginRight:3}}>
+                      {f.status==='Cotação' ? '🏷️ Cotações' : f.status==='Em Trânsito' ? '📎 Canhoto' : '👁️ Ver'}
+                    </button>
+                    {(f.status==='Cotação' || f.status==='Em Trânsito') && (
+                      <button onClick={()=>cancelarFrete(f)} style={{...btn,background:'#ef4444'}}>✕</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* MODAL GERENCIAR FRETE */}
+      {modalFrete && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalFrete(null);}}>
+          <div className="modal-box" style={{maxWidth:640}}>
+            <div className="modal-title">🚚 Frete — {modalFrete.descricao}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+              {modalFrete.origem || '—'} → {modalFrete.destino || '—'}
+              {modalFrete.status==='Cotação' && ' · mínimo de 3 cotações para confirmar a transportadora.'}
+            </div>
+
+            {modalFrete.status === 'Cotação' && (<>
+              {loadingCotacoes ? (
+                <div style={{textAlign:'center',padding:20,color:'#9ca3af',fontSize:11}}>Carregando...</div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14,maxHeight:220,overflowY:'auto'}}>
+                  {cotacoes.length===0 && (
+                    <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
+                  )}
+                  {cotacoes.map((c:any) => (
+                    <label key={c.id} style={{
+                      display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:6,cursor:'pointer',
+                      border: vencedoraId===c.id ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
+                      background: vencedoraId===c.id ? '#f0fdf4' : '#fff',
+                    }}>
+                      <input type="radio" name="vencedoraFrete" checked={vencedoraId===c.id} onChange={()=>setVencedoraId(c.id)} />
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
+                          {c.transportadora_nome}
+                          {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
+                        </div>
+                        <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
+                          {c.valor ? fmt(c.valor) : '—'}
+                          {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
+                          {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
+                        </div>
+                        {c.anexo_url && (
+                          <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
+                        )}
+                      </div>
+                      <button onClick={(e)=>{e.preventDefault();excluirCotacao(c.id);}} title="Remover"
+                        style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Transportadora</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                  <div>
+                    <label className="acn-label">Transportadora *</label>
+                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.transportadora_nome}
+                      onChange={e=>setNovaCotacao(f=>({...f,transportadora_nome:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="acn-label">Valor (R$) *</label>
+                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor}
+                      placeholder="Ex: 350,00"
+                      onChange={e=>setNovaCotacao(f=>({...f,valor:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="acn-label">Condição de Pagamento</label>
+                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.condicao_pagamento}
+                      onChange={e=>setNovaCotacao(f=>({...f,condicao_pagamento:e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="acn-label">Prazo de Entrega</label>
+                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.prazo_entrega}
+                      placeholder="Ex: 3 dias úteis"
+                      onChange={e=>setNovaCotacao(f=>({...f,prazo_entrega:e.target.value}))} />
+                  </div>
+                </div>
+                <div style={{marginBottom:8}}>
+                  <label className="acn-label">Anexo (PDF ou imagem)</label>
+                  <input type="file" accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={e=>setNovoAnexoCotacao(e.target.files?.[0]||null)} />
+                </div>
+                <button className="acn-btn" style={{background:'#d97706',width:'100%'}} onClick={adicionarCotacao} disabled={enviandoCotacao}>
+                  {enviandoCotacao?'Enviando...':'+ Adicionar Cotação'}
+                </button>
+              </div>
+
+              {cotacoes.length >= 3 && (
+                <div style={{marginBottom:14}}>
+                  <label className="acn-label">Justificativa da cotação vencedora *</label>
+                  <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}}
+                    value={justificativa} onChange={e=>setJustificativa(e.target.value)}
+                    placeholder="Ex: Melhor prazo, apesar de não ser o menor valor..." />
+                </div>
+              )}
+
+              <div style={{display:'flex',gap:8}}>
+                <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarFreteComVencedora} disabled={confirmando}>
+                  {confirmando?'Confirmando...':'✅ Confirmar Transportadora'}
+                </button>
+                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
+              </div>
+            </>)}
+
+            {modalFrete.status === 'Em Trânsito' && (<>
+              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>
+                <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
+                <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
+                <div><strong>Coletado em:</strong> {fmtDtHr(modalFrete.data_coleta)}</div>
+              </div>
+              <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#9a3412',marginBottom:8}}>
+                  📎 Canhoto obrigatório pra marcar como Entregue
+                </div>
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e=>setCanhotoFile(e.target.files?.[0]||null)} />
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={marcarEntregue} disabled={!canhotoFile || enviandoCanhoto}>
+                  {enviandoCanhoto?'Enviando...':!canhotoFile?'✅ Marcar como Entregue (anexe o canhoto)':'✅ Marcar como Entregue'}
+                </button>
+                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
+              </div>
+            </>)}
+
+            {modalFrete.status === 'Entregue' && (
+              <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:8,padding:12,fontSize:11}}>
+                <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
+                <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
+                <div><strong>Entregue em:</strong> {fmtDtHr(modalFrete.data_entrega)}</div>
+                {modalFrete.canhoto_url && (
+                  <div style={{marginTop:6}}><a href={modalFrete.canhoto_url} target="_blank" rel="noreferrer">📎 Ver canhoto ({modalFrete.canhoto_nome})</a></div>
+                )}
+                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>setModalFrete(null)}>Fechar</button>
+              </div>
+            )}
+
+            {modalFrete.status === 'Cancelado' && (
+              <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:12,fontSize:11}}>
+                <div>{modalFrete.observacoes || 'Frete cancelado.'}</div>
+                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>setModalFrete(null)}>Fechar</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LogisticaTab({ currentUser }) {
   const [abaLog, setAbaLog] = useState('historico');
   const [manifestos, setManifestos] = useState([]);
@@ -392,9 +830,11 @@ export default function LogisticaTab({ currentUser }) {
           onClick={()=>setAbaLog('historico')}>📦 Histórico / Novo Registro</button>
         <button style={{flex:1,padding:'8px',background:abaLog==='relatorio'?'#1e293b':'white',color:abaLog==='relatorio'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaLog('relatorio')}>📊 Relatório IN/OUT</button>
+        <button style={{flex:1,padding:'8px',background:abaLog==='fretes'?'#1e293b':'white',color:abaLog==='fretes'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaLog('fretes')}>🚚 Fretes</button>
       </div>
 
-      {abaLog === 'relatorio' ? <RelatorioLogistica /> : <>
+      {abaLog === 'relatorio' ? <RelatorioLogistica /> : abaLog === 'fretes' ? <FretesPanel currentUser={currentUser} /> : <>
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Logistica — Controle de Envio e Recebimento de Mercadorias</span>
