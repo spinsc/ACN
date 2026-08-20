@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { imprimirOrdemCompra } from './ComprasTab';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtR = (v: number) =>
@@ -9,10 +10,11 @@ const fmtR = (v: number) =>
 const fmtDt = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
 
 const STATUS_COR: Record<string, string> = {
-  'Pendente':     '#f59e0b',
-  'Em Andamento': '#3b82f6',
-  'Comprado':     '#7c3aed',
-  'Concluído':    '#22c55e',
+  'Pendente':              '#f59e0b',
+  'Em Andamento':          '#3b82f6',
+  'Aguardando Aprovação':  '#ea580c',
+  'Comprado':              '#7c3aed',
+  'Concluído':             '#22c55e',
 };
 
 // ─── Modal CRUD de Centros de Custo ──────────────────────────────────────────
@@ -142,7 +144,7 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
-                  {['Nº Pedido', 'Descrição', 'Fornecedor', 'Status', 'Valor', 'Data'].map(h => (
+                  {['Nº Pedido', 'Descrição', 'Fornecedor', 'Status', 'Ordem de Compra', 'Valor', 'Data'].map(h => (
                     <th key={h} style={{ padding: '6px 8px', fontSize: 9, fontWeight: 700, textAlign: 'left' }}>{h}</th>
                   ))}
                 </tr>
@@ -154,11 +156,22 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
                     <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>{p.descricao_material || '—'}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.fornecedor || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
-                      <span style={{ background: STATUS_COR[p.status_compra] + '22',
+                      <span style={{ background: (STATUS_COR[p.status_compra]||'#6b7280') + '22',
                         color: STATUS_COR[p.status_compra] || '#6b7280',
                         padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
                         {p.status_compra || '—'}
                       </span>
+                    </td>
+                    <td style={{ padding: '5px 8px', fontSize: 10 }}>
+                      {p.numero_oc ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#7c3aed', fontWeight: 700, fontFamily: 'monospace' }}>✓ {p.numero_oc}</span>
+                          <button onClick={() => imprimirOrdemCompra(p)} title="Imprimir Ordem de Compra"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>🖨️</button>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#9ca3af' }}>— aguardando aprovação</span>
+                      )}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: 'monospace' }}>
                       {p.valor_compra ? fmtR(Number(p.valor_compra)) : '—'}
@@ -171,7 +184,7 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
               </tbody>
               <tfoot>
                 <tr style={{ background: '#1e293b', color: '#fff' }}>
-                  <td colSpan={4} style={{ padding: '6px 8px', fontWeight: 700, fontSize: 11, textAlign: 'right' }}>TOTAL</td>
+                  <td colSpan={5} style={{ padding: '6px 8px', fontWeight: 700, fontSize: 11, textAlign: 'right' }}>TOTAL</td>
                   <td style={{ padding: '6px 8px', fontWeight: 800, fontSize: 13, textAlign: 'right', fontFamily: 'monospace' }}>{fmtR(total)}</td>
                   <td />
                 </tr>
@@ -295,7 +308,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
         <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
           style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
           <option value="">Todos os status</option>
-          {['Pendente','Em Andamento','Comprado','Concluído'].map(s => (
+          {['Pendente','Em Andamento','Aguardando Aprovação','Comprado','Concluído'].map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>

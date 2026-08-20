@@ -54,6 +54,44 @@ function imprimirSolicitacao(p: any) {
   if (w) { w.document.write(html); w.document.close(); }
 }
 
+export function imprimirOrdemCompra(p: any) {
+  if (!p.numero_oc) return;
+  const fmt = (v: any) => v
+    ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
+  const fmtDt = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const html = `
+    <html><head><title>Ordem de Compra ${p.numero_oc}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; padding: 30px; color: #000; }
+      h2 { color: #1a3a52; border-bottom: 2px solid #1a3a52; padding-bottom: 6px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th { background: #1a3a52; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; }
+      td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+      .badge { display:inline-block; padding:2px 8px; border-radius:4px; color:#fff; font-weight:bold; background:#7c3aed; }
+      .footer { margin-top:30px; font-size:10px; color:#6b7280; }
+      @media print { button { display:none; } }
+    </style></head>
+    <body>
+      <h2>📋 Ordem de Compra — <span class="badge">${p.numero_oc}</span></h2>
+      <table>
+        <tr><th>Campo</th><th>Informação</th></tr>
+        <tr><td><b>Nº Pedido</b></td><td>${p.numero_pedido || '—'}</td></tr>
+        <tr><td><b>OP Referência</b></td><td>${p.opl || '—'}</td></tr>
+        <tr><td><b>Descrição</b></td><td>${p.descricao_material || '—'}</td></tr>
+        <tr><td><b>Quantidade</b></td><td>${p.quantidade || '—'}</td></tr>
+        <tr><td><b>Fornecedor</b></td><td>${p.fornecedor || '—'}</td></tr>
+        <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
+        <tr><td><b>Centro de Custo</b></td><td>${p.centro_custo || '—'}</td></tr>
+        <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
+        <tr><td><b>Justificativa da Vencedora</b></td><td>${p.justificativa_vencedora || '—'}</td></tr>
+      </table>
+      <div class="footer">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
+      <script>window.onload=()=>window.print();</script>
+    </body></html>`;
+  const w = window.open('', '_blank', 'width=800,height=600');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -111,7 +149,9 @@ export default function ComprasTab({ currentUser }) {
 
   const fmtData = (d: string) => {
     if (!d) return <span style={{color:'#9ca3af'}}>—</span>;
-    const dt = new Date(d + 'T00:00:00');
+    // data_prevista_recebimento é timestamptz no banco — supabase-js retorna ISO completo
+    // (ex: "2026-08-30T00:00:00+00:00"), não só "YYYY-MM-DD". Pega só a data antes de remontar.
+    const dt = new Date(d.slice(0, 10) + 'T00:00:00');
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     const diff = Math.ceil((dt.getTime()-hoje.getTime())/86400000);
     const str = dt.toLocaleDateString('pt-BR');
@@ -651,6 +691,13 @@ export default function ComprasTab({ currentUser }) {
                         background:COR[p.status_compra]||'#9ca3af'}}>
                         {p.status_compra||'—'}
                       </span>
+                      {p.numero_oc && (
+                        <div style={{marginTop:4}}>
+                          <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily:'monospace'}} title="Ordem de Compra">
+                            📋 {p.numero_oc}
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     <td style={{...td,whiteSpace:'nowrap'}}>
@@ -703,6 +750,12 @@ export default function ComprasTab({ currentUser }) {
                       {/* 🖨️ Imprimir */}
                       <button onClick={()=>imprimirSolicitacao(p)}
                         style={{...btn,background:'#475569'}}>🖨️</button>
+
+                      {/* 📋 Imprimir Ordem de Compra — só existe depois de Comprado */}
+                      {p.numero_oc && (
+                        <button onClick={()=>imprimirOrdemCompra(p)} title={`Imprimir ${p.numero_oc}`}
+                          style={{...btn,background:'#7c3aed',marginLeft:3}}>📋 OC</button>
+                      )}
                     </td>
                   </tr>
                 );

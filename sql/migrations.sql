@@ -313,6 +313,36 @@ ALTER TABLE public.pcp_aprovacoes DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_pcp_aprovacoes_pedido ON public.pcp_aprovacoes (pedido_id);
 CREATE INDEX IF NOT EXISTS idx_pcp_aprovacoes_status ON public.pcp_aprovacoes (pedido_id, status);
 
+-- =============================================================
+-- 2026-08-20 · feat: Ordem de Compra automática ao confirmar compra
+-- =============================================================
+-- Gera numero_oc (formato OC-2026-0001) via trigger de banco assim que
+-- status_compra vira 'Comprado' — não importa se veio direto (sem
+-- alcada) ou da aprovacao final da Fase 2. numero_oc preenchido é o
+-- proprio sinal de "aprovado e lancado" no Financeiro (sem tabela de
+-- lancamentos separada). Mesmo padrao de gerar_numero_cotacao() em
+-- sql/cotacoes_vendedor.sql.
+ALTER TABLE public.pcp_pedidos_compra ADD COLUMN IF NOT EXISTS numero_oc text;
+
+CREATE SEQUENCE IF NOT EXISTS ordem_compra_seq START 1;
+
+CREATE OR REPLACE FUNCTION gerar_numero_oc()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status_compra = 'Comprado'
+     AND (OLD.status_compra IS DISTINCT FROM 'Comprado')
+     AND NEW.numero_oc IS NULL THEN
+    NEW.numero_oc := 'OC-' || to_char(now(), 'YYYY') || '-' || LPAD(nextval('ordem_compra_seq')::text, 4, '0');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_numero_oc ON public.pcp_pedidos_compra;
+CREATE TRIGGER trg_numero_oc
+  BEFORE UPDATE ON public.pcp_pedidos_compra
+  FOR EACH ROW EXECUTE FUNCTION gerar_numero_oc();
+
 -- Timeline/chat por pedido reaproveita a tabela op_acompanhamentos já
 -- existente (via OplAcompModal com referenciaType='compra') — sem
 -- migração nova para isso.
