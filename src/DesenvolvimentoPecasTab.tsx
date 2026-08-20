@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import Linkify from './Linkify';
 
 export const ETAPAS_DEV = [
   'Concepção', 'Criação', 'Desenvolvimento', 'Prototipagem',
@@ -250,7 +251,7 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
         {(demanda.cliente_nome || demanda.descricao) && (
           <div style={{ fontSize: 11, color: '#475569', marginBottom: 8 }}>
             {demanda.cliente_nome && <div><strong>Cliente:</strong> {demanda.cliente_nome}</div>}
-            {demanda.descricao && <div style={{ marginTop: 2 }}>{demanda.descricao}</div>}
+            {demanda.descricao && <div style={{ marginTop: 2 }}><Linkify text={demanda.descricao} /></div>}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import Linkify from './Linkify';
 
 // ─── paleta por criticidade ───────────────────────────────────────────────────
 const COR: Record<string, { bg: string; border: string; text: string; dot: string }> = {
@@ -321,7 +322,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                       </div>
                     </div>
                     <div style={{ fontSize: 11, color: '#374151', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: 6 }}>
-                      {av.mensagem}
+                      <Linkify text={av.mensagem} />
                     </div>
                     <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                       <span>✍️ {av.criado_por_nome || '—'}</span>

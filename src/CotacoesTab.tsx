@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import Linkify from './Linkify';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -826,7 +827,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
                   </div>
                   <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Por: {a.solicitado_por} · {new Date(a.solicitado_em).toLocaleString('pt-BR')}</div>
                   {a.motivo && <div style={{ fontSize:9, color:'#374151' }}>Motivo: {a.motivo}</div>}
-                  {a.resposta && <div style={{ fontSize:9, color:'#374151', marginTop:3 }}>Resposta: {a.resposta} (por {a.aprovado_por})</div>}
+                  {a.resposta && <div style={{ fontSize:9, color:'#374151', marginTop:3 }}>Resposta: <Linkify text={a.resposta} /> (por {a.aprovado_por})</div>}
                   {isAdmin && a.status === 'pendente' && (
                     <button onClick={() => aprovarSolicitacao(a)}
                       style={{ marginTop:8, background:'#0f766e', color:'#fff', border:'none', borderRadius:4,

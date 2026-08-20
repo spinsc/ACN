@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import Linkify from './Linkify';
 
 const CANAL_COR: Record<string, string> = {
   'Geral':        '#0f766e',
@@ -837,7 +838,7 @@ export default function ChatWidget({ currentUser }: any) {
                               opacity: m._temp ? 0.55 : 1, transition: 'opacity .2s',
                               boxShadow: '0 1px 2px rgba(0,0,0,.06)',
                             }}>
-                              {m.texto}
+                              <Linkify text={m.texto} />
                             </div>
                             <div style={{ fontSize: 9, color: '#b0bac5', marginTop: 3, textAlign: proprio ? 'right' : 'left', padding: '0 3px' }}>
                               {m._temp ? '⏳ enviando…' : fmtHora(m.criado_em)}

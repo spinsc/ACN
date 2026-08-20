@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
+import Linkify from './Linkify';
 
 
 const PERFIS = [
@@ -2930,7 +2931,7 @@ function PainelAvisos() {
                       {!av.ativo && <span style={{ background: '#94a3b8', color: '#fff', borderRadius: 3, padding: '1px 5px', fontSize: 9 }}>inativo</span>}
                       {expirou && <span style={{ background: '#ef4444', color: '#fff', borderRadius: 3, padding: '1px 5px', fontSize: 9 }}>expirado</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap', marginBottom: 4 }}>{av.mensagem}</div>
+                    <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap', marginBottom: 4 }}><Linkify text={av.mensagem} /></div>
                     <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                       <span>✍️ {av.criado_por_nome || '—'}</span>
                       <span>{av.permanente ? '📌 Permanente' : av.data_expiracao ? `⏱ Até ${new Date(av.data_expiracao).toLocaleString('pt-BR')}` : ''}</span>

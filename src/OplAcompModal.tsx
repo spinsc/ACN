@@ -17,6 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import Linkify from './Linkify';
 
 const SETOR_COR: Record<string, string> = {
   Comercial:     '#2563eb',
@@ -197,7 +198,7 @@ export default function OplAcompModal({
                       whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                       lineHeight: 1.5,
                     }}>
-                      {item.texto}
+                      <Linkify text={item.texto} />
                     </div>
                   </div>
                 );

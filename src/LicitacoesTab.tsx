@@ -5,6 +5,7 @@ import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from '.
 import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import Linkify from './Linkify';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1104,7 +1105,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                           </div>
                         ) : (
                           <>
-                            {d.conteudo && <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>{d.conteudo}</div>}
+                            {d.conteudo && <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={d.conteudo} /></div>}
                             {d.anexo_url && (
                               <a href={d.anexo_url} target="_blank" rel="noreferrer"
                                 style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:'#2563eb', fontWeight:600, marginTop:4 }}>
@@ -1138,7 +1139,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     <div style={{ fontSize:9, color:'#9ca3af', fontWeight:700, textAlign:'center', padding:'4px 0' }}>— registros anteriores —</div>
                     {docsLegacy.map((a: any) => (
                       <div key={a.id} style={{ background:'#fafafa', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #94a3b8', padding:'8px 12px' }}>
-                        <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>{a.conteudo}</div>
+                        <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={a.conteudo} /></div>
                         <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
                           <span>👤 {a.criado_por_nome||'—'}</span>
                           <span>🕒 {fmtDT(a.criado_em)}</span>
@@ -1197,7 +1198,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                       ) : (
                         <div style={{ fontSize:11, color:'#374151', fontWeight:600 }}>{d.nome}</div>
                       )}
-                      {d.conteudo && <div style={{ fontSize:10, color:'#64748b', marginTop:2, whiteSpace:'pre-wrap' }}>{d.conteudo}</div>}
+                      {d.conteudo && <div style={{ fontSize:10, color:'#64748b', marginTop:2, whiteSpace:'pre-wrap' }}><Linkify text={d.conteudo} /></div>}
                       <div style={{ fontSize:9, color:'#9ca3af', marginTop:3 }}>
                         👤 {d.criado_por_nome||'—'} · 🕒 {fmtDT(d.criado_em)}
                       </div>

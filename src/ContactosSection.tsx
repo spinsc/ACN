@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
+import Linkify from './Linkify';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -493,7 +494,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                     <span style={{ fontSize:8, color:'#94a3b8' }}>{fmtDT(i.data_interacao)}</span>
                   </div>
                   {i.descricao && (
-                    <div style={{ fontSize:10, color:'#374151', lineHeight:1.4, paddingLeft:19 }}>{i.descricao}</div>
+                    <div style={{ fontSize:10, color:'#374151', lineHeight:1.4, paddingLeft:19 }}><Linkify text={i.descricao} /></div>
                   )}
                   {i.transcricao && (
                     <div style={{ marginTop:4, paddingLeft:19 }}>

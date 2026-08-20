@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
+import Linkify from './Linkify';
 
 
 export default function FiscalTab({ currentUser }) {
@@ -103,7 +104,7 @@ export default function FiscalTab({ currentUser }) {
                     <td>
                       {o.seriais_equipamentos ? (
                         <div style={{width:180,fontSize:10,fontFamily:'monospace',whiteSpace:'pre-wrap',color:'#1e3a8a',background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:4,padding:'4px 7px'}}>
-                          {o.seriais_equipamentos}
+                          <Linkify text={o.seriais_equipamentos} />
                         </div>
                       ) : (
                         <span style={{fontSize:9,color:'#dc2626',fontStyle:'italic'}}>⚠️ Não informado pelo Comercial</span>

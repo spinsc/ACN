@@ -5,6 +5,7 @@ import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
+import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 
@@ -2559,7 +2560,7 @@ function PrintOS({ os }) {
       {os.resumo_servicos && (
         <div style={{border:'1.5px solid #86efac',borderRadius:4,marginBottom:10}}>
           <div style={{background:'#f0fdf4',padding:'6px 10px',fontWeight:700,fontSize:11,color:'#166534',borderBottom:'1px solid #86efac'}}>🔧 RESUMO DOS SERVIÇOS A SEREM EXECUTADOS</div>
-          <div style={{padding:'8px 10px',fontSize:11,whiteSpace:'pre-wrap',color:'#14532d'}}>{os.resumo_servicos}</div>
+          <div style={{padding:'8px 10px',fontSize:11,whiteSpace:'pre-wrap',color:'#14532d'}}><Linkify text={os.resumo_servicos} /></div>
         </div>
       )}
 
@@ -2665,7 +2666,7 @@ function PrintOS({ os }) {
           {os.observacoes_manutencao && (
             <div style={{padding:'8px 10px',borderTop:'1px solid #fde68a'}}>
               <div style={{fontWeight:700,fontSize:10,color:'#92400e',marginBottom:4,textTransform:'uppercase'}}>🔧 Observação de Produção</div>
-              <div style={{fontSize:11,whiteSpace:'pre-wrap'}}>{os.observacoes_manutencao}</div>
+              <div style={{fontSize:11,whiteSpace:'pre-wrap'}}><Linkify text={os.observacoes_manutencao} /></div>
             </div>
           )}
           {Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0 && (

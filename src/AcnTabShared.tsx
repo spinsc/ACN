@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
+import Linkify from './Linkify';
 
 // ─── Progresso da OP/OS ao longo do pipeline (Comercial → Faturado) ──────────
 const OPL_PIPELINE: { match: string[]; pct: number; label: string; retrabalho?: boolean }[] = [
@@ -658,7 +659,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <>
             <Sec title="🔢 Seriais dos Equipamentos" />
             <div style={{ marginBottom: 8, padding: '8px 12px', background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 6 }}>
-              <div style={{ fontSize: 11, color: '#1e3a8a', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{opl.seriais_equipamentos}</div>
+              <div style={{ fontSize: 11, color: '#1e3a8a', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}><Linkify text={opl.seriais_equipamentos} /></div>
             </div>
           </>
         )}
@@ -668,7 +669,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <>
             <Sec title="🔧 Resumo dos Serviços a serem executados" />
             <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 6 }}>
-              <div style={{ fontSize: 11, color: '#14532d', whiteSpace: 'pre-wrap' }}>{opl.resumo_servicos}</div>
+              <div style={{ fontSize: 11, color: '#14532d', whiteSpace: 'pre-wrap' }}><Linkify text={opl.resumo_servicos} /></div>
             </div>
           </>
         )}
@@ -680,19 +681,19 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             {opl.observacoes_atencao && (
               <div style={{ marginBottom: 8, padding: '8px 12px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 3 }}>⚠️ Atenção</div>
-                <div style={{ fontSize: 11, color: '#7f1d1d', whiteSpace: 'pre-wrap' }}>{opl.observacoes_atencao}</div>
+                <div style={{ fontSize: 11, color: '#7f1d1d', whiteSpace: 'pre-wrap' }}><Linkify text={opl.observacoes_atencao} /></div>
               </div>
             )}
             {opl.observacoes_comercial && (
               <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Observações Comerciais</div>
-                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}>{opl.observacoes_comercial}</div>
+                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}><Linkify text={opl.observacoes_comercial} /></div>
               </div>
             )}
             {opl.observacoes && (
               <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Observações Gerais</div>
-                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}>{opl.observacoes}</div>
+                <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}><Linkify text={opl.observacoes} /></div>
               </div>
             )}
           </>
@@ -1170,7 +1171,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
               {d.observacoes_execucao && (
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>Observações</div>
-                  <div style={{ fontSize: 11, color: '#334155', whiteSpace: 'pre-wrap' }}>{d.observacoes_execucao}</div>
+                  <div style={{ fontSize: 11, color: '#334155', whiteSpace: 'pre-wrap' }}><Linkify text={d.observacoes_execucao} /></div>
                 </div>
               )}
 

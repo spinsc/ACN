@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { LinkOpl } from './AcnTabShared';
+import Linkify from './Linkify';
 
 
 const CATEGORIAS = ['Producao em Linha','Acabamento e Detalhes','Antes e Depois','Entrega ao Cliente','Equipe de Trabalho','Equipamento Instalado','Teste e Demonstracao','Evento ou Feira','Geral'];
@@ -132,7 +133,7 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
                   <div style={{fontSize:9,color:'#94a3b8',marginBottom:2}}>
                     <strong style={{color:'#7c3aed'}}>{v.criado_por_nome || v.criado_por}</strong> — {fmtDtHr(v.created_at)}
                   </div>
-                  <div style={{fontSize:11,color:'#1e293b'}}>{v.observacoes}</div>
+                  <div style={{fontSize:11,color:'#1e293b'}}><Linkify text={v.observacoes} /></div>
                 </div>
               ))}
             </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import Linkify from './Linkify';
 
 // ─── Horas Úteis (Seg-Sex 8:00–17:30) ────────────────────────────────────────
 function horasUteis(inicio, fim) {
@@ -805,14 +806,14 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             </div>
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:'12px 14px',
               whiteSpace:'pre-wrap',fontSize:12,lineHeight:1.7,color:'#1e293b',maxHeight:400,overflowY:'auto'}}>
-              {modalVer.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'}
+              <Linkify text={modalVer.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'} />
             </div>
             {(modalVer.observacoes_execucao) && (
               <>
                 <div style={{fontWeight:700,fontSize:11,color:'#475569',marginTop:14,marginBottom:4}}>Observações de execução:</div>
                 <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:6,padding:'10px 14px',
                   whiteSpace:'pre-wrap',fontSize:11,lineHeight:1.7,color:'#166534'}}>
-                  {modalVer.observacoes_execucao}
+                  <Linkify text={modalVer.observacoes_execucao} />
                 </div>
               </>
             )}

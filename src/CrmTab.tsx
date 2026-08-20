@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
+import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -2377,7 +2378,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {andamentoHistorico.map((h,i)=>(
                 <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0',
                   borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
-                  <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}>{h.texto}</div>
+                  <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={h.texto} /></div>
                   <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
                     <span>👤 {h.usuario_nome||'—'}</span>
                     <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
@@ -2994,7 +2995,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               <div style={{ flex:1 }}>
                                 {d.conteudo && (
                                   <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', marginBottom: d.url ? 4 : 0 }}>
-                                    {d.conteudo}
+                                    <Linkify text={d.conteudo} />
                                   </div>
                                 )}
                                 {d.url && (
@@ -3044,7 +3045,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                       {abrirAndamentoHist.map((h,i) => (
                         <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
                           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                            <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}>{h.texto}</div>
+                            <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}><Linkify text={h.texto} /></div>
                             {currentUser?.perfil==='Admin' && (
                               <button onClick={() => excluirAbrirDoc(h.id,'crm_historico')}
                                 style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', marginLeft:6 }}>✕</button>
@@ -3097,7 +3098,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                   📎 {d.nome || 'Arquivo'}
                                 </a>
                               )}
-                              {d.conteudo && <div style={{ fontSize:10, color:'#475569', whiteSpace:'pre-wrap' }}>{d.conteudo}</div>}
+                              {d.conteudo && <div style={{ fontSize:10, color:'#475569', whiteSpace:'pre-wrap' }}><Linkify text={d.conteudo} /></div>}
                             </div>
                             {currentUser?.perfil==='Admin' && (
                               <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos')}

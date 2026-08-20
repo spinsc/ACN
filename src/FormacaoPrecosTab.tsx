@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import Linkify from './Linkify';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -899,7 +900,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
                 <span>Total: <strong style={{ color:'#1e40af' }}>{fmtR(p.valor_total)}</strong></span>
                 <span>c/ Desc.: <strong style={{ color:'#16a34a' }}>{fmtR(p.valor_com_desconto)}</strong></span>
                 <span style={{ color:'#64748b' }}>por {p.criado_por}</span>
-                {p.observacoes && <span style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic' }}>{p.observacoes}</span>}
+                {p.observacoes && <span style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic' }}><Linkify text={p.observacoes} /></span>}
               </div>
             ))}
           </div>

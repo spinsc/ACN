@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { supabase } from './supabaseClient';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import Linkify from './Linkify';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -662,8 +663,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                   color="#2563eb" />
               )}
               <InfoBlock label="Criado por" value={`${d.criado_por_nome} · ${fmtDT(d.criado_em)}`} />
-              {d.descricao && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Descrição" value={d.descricao} /></div>}
-              {d.observacoes && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Observações" value={d.observacoes} /></div>}
+              {d.descricao && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Descrição" value={<Linkify text={d.descricao} />} /></div>}
+              {d.observacoes && <div style={{ gridColumn:'1/-1' }}><InfoBlock label="Observações" value={<Linkify text={d.observacoes} />} /></div>}
             </div>
           )}
 

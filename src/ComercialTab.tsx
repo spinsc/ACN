@@ -11,6 +11,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
+import Linkify from './Linkify';
 
 
 const TIPOS_PROJETO = [
@@ -539,7 +540,7 @@ function _UNUSED_CRMSection({ currentUser }) {
                       </div>
                       <div style={{fontSize:10,color:'#94a3b8'}}>{fmtDtHr(h.data_contato)} — {h.operador_nome}</div>
                     </div>
-                    {h.observacoes && <div style={{fontSize:11,color:'#1e293b',marginTop:4,lineHeight:1.4}}>{h.observacoes}</div>}
+                    {h.observacoes && <div style={{fontSize:11,color:'#1e293b',marginTop:4,lineHeight:1.4}}><Linkify text={h.observacoes} /></div>}
                     {h.proxima_data && <div style={{fontSize:10,color:'#2563eb',marginTop:2}}>Proximo contato agendado: {new Date(h.proxima_data).toLocaleDateString('pt-BR')}</div>}
                   </div>
                 ))}
