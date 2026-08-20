@@ -275,6 +275,44 @@ ALTER TABLE public.pcp_pedidos_compra
   ADD CONSTRAINT pcp_pedidos_compra_vencedora_fk
   FOREIGN KEY (vencedora_id) REFERENCES public.pcp_cotacoes_fornecedores(id);
 
+-- =============================================================
+-- 2026-08-20 · feat: Alçadas de Aprovação de Compras (Fase 2)
+-- =============================================================
+-- Fase 2 da expansão Compras (ver plano completo salvo na sessão).
+-- Compras acima de um valor configurável passam por status_compra
+-- 'Aguardando Aprovação' antes de virar 'Comprado'. Sem alçada
+-- configurada no Admin, comportamento não muda (fica igual à Fase 1).
+CREATE TABLE IF NOT EXISTS public.compras_alcadas_aprovacao (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nivel integer NOT NULL UNIQUE,
+  nome text NOT NULL,
+  valor_minimo numeric NOT NULL,
+  perfis_aprovadores jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ativo boolean NOT NULL DEFAULT true,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.compras_alcadas_aprovacao DISABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.pcp_aprovacoes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pedido_id uuid NOT NULL REFERENCES public.pcp_pedidos_compra(id) ON DELETE CASCADE,
+  nivel integer NOT NULL,
+  nivel_nome text,
+  valor_no_momento numeric NOT NULL,
+  status text NOT NULL DEFAULT 'pendente',
+  solicitado_por text,
+  solicitado_por_nome text,
+  solicitado_em timestamptz NOT NULL DEFAULT now(),
+  respondido_por text,
+  respondido_por_nome text,
+  respondido_em timestamptz,
+  resposta text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.pcp_aprovacoes DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_pcp_aprovacoes_pedido ON public.pcp_aprovacoes (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_pcp_aprovacoes_status ON public.pcp_aprovacoes (pedido_id, status);
+
 -- Timeline/chat por pedido reaproveita a tabela op_acompanhamentos já
 -- existente (via OplAcompModal com referenciaType='compra') — sem
 -- migração nova para isso.

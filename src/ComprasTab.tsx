@@ -87,6 +87,11 @@ export default function ComprasTab({ currentUser }) {
   const [justificativa, setJustificativa]       = useState('');
   const [confirmandoCompra, setConfirmandoCompra] = useState(false);
 
+  // Alçadas de Aprovação (Fase 2)
+  const [alcadasConfig, setAlcadasConfig]       = useState<any[]>([]);
+  const [aprovacoesPedido, setAprovacoesPedido] = useState<any[]>([]);
+  const [respondendoAprovacao, setRespondendoAprovacao] = useState(false);
+
   // Prazo Prometido de Entrega (Fase 1)
   const [modalPrazoProm, setModalPrazoProm]     = useState<any>(null);
   const [prazoPromData, setPrazoPromData]       = useState('');
@@ -117,12 +122,13 @@ export default function ComprasTab({ currentUser }) {
   };
 
   const COR: Record<string,string> = {
-    'Pendente':'#fbbf24','Em Andamento':'#3b82f6','Comprado':'#7c3aed','Concluído':'#22c55e',
+    'Pendente':'#fbbf24','Em Andamento':'#3b82f6','Aguardando Aprovação':'#ea580c','Comprado':'#7c3aed','Concluído':'#22c55e',
   };
 
   useEffect(() => {
     load();
     loadCentros();
+    loadAlcadas();
     const t = setInterval(()=>load(true), 30000);
     return () => clearInterval(t);
   }, [filtro]);
@@ -130,6 +136,11 @@ export default function ComprasTab({ currentUser }) {
   const loadCentros = async () => {
     const { data } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
     setCentrosCusto(data || []);
+  };
+
+  const loadAlcadas = async () => {
+    const { data } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
+    setAlcadasConfig(data || []);
   };
 
   const buscarOps = async (q: string) => {
@@ -227,16 +238,13 @@ export default function ComprasTab({ currentUser }) {
     if (!row?.valor) { alert('Informe o valor total da compra.'); return; }
     if (!row?.prazo)  { alert('Informe a previsão de recebimento.'); return; }
     setInline(prev => ({...prev, [p.id]: {...prev[p.id], salvando:true}}));
-    const updates: any = {
-      status_compra:              'Comprado',
-      data_prevista_recebimento:  row.prazo,
-    };
+    const extraUpdates: any = { data_prevista_recebimento: row.prazo };
     // valor_compra pode não existir ainda — tentamos salvar, ignoramos erro de coluna
-    try { updates.valor_compra = parseFloat(row.valor.replace(',','.')); } catch(_) {}
-    const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', p.id);
+    try { extraUpdates.valor_compra = parseFloat(row.valor.replace(',','.')); } catch(_) {}
+    const { error, aguardandoAprovacao } = await dispararOuConfirmar(p.id, extraUpdates);
     if (error) { alert('Erro: ' + error.message); setInline(prev => ({...prev, [p.id]:{...prev[p.id],salvando:false}})); return; }
-    // Se vinculado a oportunidade CRM, registrar nota no histórico
-    if (p.oportunidade_id) {
+    // Se vinculado a oportunidade CRM, registrar nota no histórico (só quando realmente comprado, não em aprovação)
+    if (!aguardandoAprovacao && p.oportunidade_id) {
       const dataFmt = row.prazo ? new Date(row.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
       const nota = `📦 Compra confirmada — previsão de recebimento: ${dataFmt}${p.descricao_material ? ` (${p.descricao_material})` : ''}`;
       try {
@@ -264,6 +272,13 @@ export default function ComprasTab({ currentUser }) {
       .select('*').eq('pedido_id', p.id).order('criado_em', { ascending: true });
     setCotacoes(data || []);
     setLoadingCotacoes(false);
+    carregarAprovacoes(p.id);
+  };
+
+  const carregarAprovacoes = async (pedidoId: string) => {
+    const { data } = await supabase.from('pcp_aprovacoes')
+      .select('*').eq('pedido_id', pedidoId).order('nivel', { ascending: true });
+    setAprovacoesPedido(data || []);
   };
 
   const adicionarCotacao = async () => {
@@ -307,6 +322,127 @@ export default function ComprasTab({ currentUser }) {
     abrirModalCotacoes(modalCotacoes);
   };
 
+  // ── Alçadas de Aprovação (Fase 2) ─────────────────────────────────────────
+  const notificarAprovadoresNivel = async (pedido: any, nivelRow: any) => {
+    try {
+      const perfis = nivelRow.perfis_aprovadores || [];
+      if (perfis.length === 0) return;
+      const { data: aprovadores } = await supabase.from('auth_usuarios')
+        .select('id, nome, email').in('perfil', perfis).eq('ativo', true);
+      if (!aprovadores || aprovadores.length === 0) return;
+      const valorFmt = fmt(pedido.valor_compra);
+      const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${pedido.descricao_material} — ${valorFmt}`;
+      for (const ap of aprovadores) {
+        await supabase.from('mencoes').insert({
+          mencionado_id: String(ap.id), mencionado_nome: ap.nome,
+          mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+          contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
+          contexto_descricao: `Pedido ${pedido.numero_pedido}`,
+          campo: 'aprovacao_nivel', texto_trecho: texto,
+          aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
+        });
+      }
+      const emails = aprovadores.map((a:any) => a.email).filter(Boolean);
+      if (emails.length > 0) {
+        const html = `<h3>Aprovação de compra necessária</h3>
+          <p><strong>Nível ${nivelRow.nivel} — ${nivelRow.nome}</strong></p>
+          <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${pedido.descricao_material}<br>Valor: ${valorFmt}</p>
+          <p>Acesse o sistema (aba Compras) para aprovar ou rejeitar.</p>`;
+        await supabase.functions.invoke('send-email', {
+          body: { to: emails, subject: `Aprovação necessária — Pedido ${pedido.numero_pedido}`, html },
+        });
+      }
+    } catch (e) { console.warn('Falha ao notificar aprovadores:', e); }
+  };
+
+  const notificarCriadorPedido = async (pedido: any, mensagem: string) => {
+    try {
+      if (!pedido.criado_por) return;
+      const { data: criador } = await supabase.from('auth_usuarios')
+        .select('id, nome').eq('email', pedido.criado_por).maybeSingle();
+      if (!criador) return;
+      await supabase.from('mencoes').insert({
+        mencionado_id: String(criador.id), mencionado_nome: criador.nome,
+        mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+        contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
+        contexto_descricao: `Pedido ${pedido.numero_pedido}`,
+        campo: 'resultado_aprovacao', texto_trecho: mensagem,
+        aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('Falha ao notificar criador do pedido:', e); }
+  };
+
+  // Ponto único que decide, ao confirmar uma compra, se ela precisa de aprovação
+  // (alçada disparada pelo valor) ou se pode ir direto pra 'Comprado' como antes.
+  const dispararOuConfirmar = async (pedidoId: string, extraUpdates: any) => {
+    const valorCompra = extraUpdates.valor_compra;
+    const niveis = alcadasConfig
+      .filter(a => a.ativo && Number(a.valor_minimo) <= Number(valorCompra || 0))
+      .sort((a,b) => a.nivel - b.nivel);
+    if (niveis.length === 0) {
+      const { error } = await supabase.from('pcp_pedidos_compra')
+        .update({ ...extraUpdates, status_compra: 'Comprado' }).eq('id', pedidoId);
+      return { error };
+    }
+    const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
+    const { error } = await supabase.from('pcp_pedidos_compra')
+      .update({ ...extraUpdates, status_compra: 'Aguardando Aprovação' }).eq('id', pedidoId);
+    if (error) return { error };
+    await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
+      pedido_id: pedidoId, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: valorCompra,
+      status: 'pendente', solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
+    })));
+    await notificarAprovadoresNivel({ ...pedidoAtual, ...extraUpdates, id: pedidoId }, niveis[0]);
+    return { error: null, aguardandoAprovacao: true };
+  };
+
+  const aprovarNivelAtivo = async () => {
+    const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
+    if (!nivelAtivo || !modalCotacoes) return;
+    setRespondendoAprovacao(true);
+    await supabase.from('pcp_aprovacoes').update({
+      status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
+      respondido_em: new Date().toISOString(),
+    }).eq('id', nivelAtivo.id);
+    const { data: restantes } = await supabase.from('pcp_aprovacoes')
+      .select('*').eq('pedido_id', modalCotacoes.id).eq('status', 'pendente').order('nivel', { ascending: true });
+    if (restantes && restantes.length > 0) {
+      const proximaAlcada = alcadasConfig.find(a => a.nivel === restantes[0].nivel);
+      if (proximaAlcada) await notificarAprovadoresNivel(modalCotacoes, proximaAlcada);
+    } else {
+      await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', modalCotacoes.id);
+      await notificarCriadorPedido(modalCotacoes, `Compra aprovada e confirmada — pedido ${modalCotacoes.numero_pedido}.`);
+    }
+    setRespondendoAprovacao(false);
+    setModalCotacoes(null);
+    setFiltro('');
+    load();
+  };
+
+  const rejeitarNivelAtivo = async () => {
+    const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
+    if (!nivelAtivo || !modalCotacoes) return;
+    const motivo = prompt('Motivo da rejeição:');
+    if (motivo === null) return;
+    if (!motivo.trim()) { alert('Informe o motivo.'); return; }
+    setRespondendoAprovacao(true);
+    await supabase.from('pcp_aprovacoes').update({
+      status: 'rejeitado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
+      respondido_em: new Date().toISOString(), resposta: motivo.trim(),
+    }).eq('id', nivelAtivo.id);
+    await supabase.from('pcp_aprovacoes').update({ status: 'cancelado' })
+      .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
+    await supabase.from('pcp_pedidos_compra').update({
+      status_compra: 'Em Andamento', vencedora_id: null, justificativa_vencedora: null,
+    }).eq('id', modalCotacoes.id);
+    await notificarCriadorPedido(modalCotacoes, `Compra rejeitada (Nível ${nivelAtivo.nivel} — ${nivelAtivo.nivel_nome}). Motivo: ${motivo.trim()}`);
+    setRespondendoAprovacao(false);
+    setVencedoraId(null); setJustificativa('');
+    setModalCotacoes(null);
+    setFiltro('');
+    load();
+  };
+
   const confirmarCompraComVencedora = async () => {
     if (!modalCotacoes) return;
     if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de fornecedores antes de confirmar.'); return; }
@@ -317,14 +453,13 @@ export default function ComprasTab({ currentUser }) {
     const vencedora = cotacoes.find(c => c.id === vencedoraId);
     if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
     setConfirmandoCompra(true);
-    const { error } = await supabase.from('pcp_pedidos_compra').update({
-      status_compra: 'Comprado',
+    const { error } = await dispararOuConfirmar(modalCotacoes.id, {
       vencedora_id: vencedoraId,
       justificativa_vencedora: justificativa.trim(),
       fornecedor: vencedora.fornecedor_nome,
       valor_compra: vencedora.valor,
       data_prevista_recebimento: row.prazo,
-    }).eq('id', modalCotacoes.id);
+    });
     setConfirmandoCompra(false);
     if (error) { alert('Erro: ' + error.message); return; }
     setModalCotacoes(null);
@@ -379,7 +514,7 @@ export default function ComprasTab({ currentUser }) {
   };
 
   const total = pedidos.length;
-  const kpis = ['Pendente','Em Andamento','Comprado','Concluído'].map(s => ({
+  const kpis = ['Pendente','Em Andamento','Aguardando Aprovação','Comprado','Concluído'].map(s => ({
     label: s, n: pedidos.filter(p=>p.status_compra===s).length, cor: COR[s],
   }));
 
@@ -396,7 +531,7 @@ export default function ComprasTab({ currentUser }) {
         <select value={filtro} onChange={e=>setFiltro(e.target.value)}
           style={{padding:'5px 10px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11}}>
           <option value="">Todos os status</option>
-          {['Pendente','Em Andamento','Comprado','Concluído'].map(s=><option key={s}>{s}</option>)}
+          {['Pendente','Em Andamento','Aguardando Aprovação','Comprado','Concluído'].map(s=><option key={s}>{s}</option>)}
         </select>
       </div>
 
@@ -430,8 +565,9 @@ export default function ComprasTab({ currentUser }) {
               {pedidos.map((p:any) => {
                 const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
                 const isEM  = p.status_compra === 'Em Andamento';
+                const isAguardandoAprovacao = p.status_compra === 'Aguardando Aprovação';
                 return (
-                  <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9', background: isEM ? '#f0fdf4' : undefined}}>
+                  <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9', background: isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : undefined}}>
                     <td style={td}><strong>{p.numero_pedido}</strong></td>
                     <td style={td}>{p.opl||'—'}</td>
                     <td style={{...td,maxWidth:150}}>
@@ -536,6 +672,14 @@ export default function ComprasTab({ currentUser }) {
                         <button onClick={()=>confirmarCompra(p)} disabled={row.salvando}
                           style={{...btn,background:'#16a34a',marginRight:3}}>
                           {row.salvando ? '...' : '✅ Concluir'}
+                        </button>
+                      )}
+
+                      {/* 🔒 Aguardando Aprovação — abre a mesma mesa de cotações, agora mostrando a seção de aprovação */}
+                      {isAguardandoAprovacao && (
+                        <button onClick={()=>abrirModalCotacoes(p)}
+                          style={{...btn,background:'#ea580c',marginRight:3}}>
+                          🔒 Ver Aprovação
                         </button>
                       )}
 
@@ -790,6 +934,52 @@ export default function ComprasTab({ currentUser }) {
               {modalCotacoes.descricao_material} · mínimo de 3 cotações para confirmar a compra.
             </div>
 
+            {aprovacoesPedido.length > 0 && (() => {
+              const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
+              const alcadaAtiva = nivelAtivo ? alcadasConfig.find(a => a.nivel === nivelAtivo.nivel) : null;
+              const souAprovador = alcadaAtiva && (alcadaAtiva.perfis_aprovadores||[]).includes(currentUser?.perfil);
+              const historico = aprovacoesPedido.filter(a => a.status !== 'pendente');
+              const todosAprovados = historico.length > 0 && historico.every(a => a.status === 'aprovado');
+              return (
+                <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'#9a3412',marginBottom:8}}>
+                    🔒 Aprovação {nivelAtivo ? `— Nível ${nivelAtivo.nivel}: ${nivelAtivo.nivel_nome}` : todosAprovados ? 'concluída' : 'anterior (histórico)'}
+                  </div>
+                  {nivelAtivo ? (
+                    souAprovador ? (
+                      <div style={{display:'flex',gap:8}}>
+                        <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={aprovarNivelAtivo} disabled={respondendoAprovacao}>
+                          {respondendoAprovacao?'...':'✅ Aprovar'}
+                        </button>
+                        <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={rejeitarNivelAtivo} disabled={respondendoAprovacao}>
+                          ❌ Rejeitar
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{fontSize:10,color:'#92400e'}}>
+                        Aguardando aprovação de: {(alcadaAtiva?.perfis_aprovadores||[]).join(', ') || '—'}
+                      </div>
+                    )
+                  ) : todosAprovados ? (
+                    <div style={{fontSize:10,color:'#16a34a',fontWeight:700}}>Todos os níveis aprovados.</div>
+                  ) : (
+                    <div style={{fontSize:10,color:'#78716c'}}>Nenhuma aprovação pendente no momento.</div>
+                  )}
+                  {historico.length > 0 && (
+                    <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:4}}>
+                      {historico.map(a => (
+                        <div key={a.id} style={{fontSize:9,color:'#78716c'}}>
+                          Nível {a.nivel} ({a.nivel_nome}): {a.status==='aprovado'?'✅ Aprovado':a.status==='rejeitado'?'❌ Rejeitado':'Cancelado'}
+                          {a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}
+                          {a.resposta ? ` — "${a.resposta}"` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {loadingCotacoes ? (
               <div style={{textAlign:'center',padding:20,color:'#9ca3af',fontSize:11}}>Carregando...</div>
             ) : (
@@ -825,7 +1015,8 @@ export default function ComprasTab({ currentUser }) {
               </div>
             )}
 
-            {/* Nova cotação */}
+            {/* Nova cotação — escondida enquanto há aprovação pendente (a vencedora já foi travada) */}
+            {!aprovacoesPedido.some(a => a.status === 'pendente') ? (<>
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
               <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Fornecedor</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
@@ -878,6 +1069,11 @@ export default function ComprasTab({ currentUser }) {
               </button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
             </div>
+            </>) : (
+              <div style={{display:'flex',gap:8}}>
+                <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
+              </div>
+            )}
           </div>
         </div>
       )}
