@@ -599,7 +599,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const salvarForm = async () => {
     setSalvandoForm(true);
     const agora = new Date().toISOString();
-    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, ...editaveis } = formEdit;
+    // areas_livres e marcadores são salvos por caminhos próprios (AreaLivre.salvarConteudo
+    // e toggleMarcador) direto no banco — formEdit é uma cópia tirada só na abertura do
+    // modal e nunca é resincronizada, então incluir esses campos aqui sobrescreveria
+    // qualquer alteração feita por esses outros caminhos com o valor antigo do mount.
+    const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, ...editaveis } = formEdit;
     const { error } = await supabase.from('licitacoes').update({ ...editaveis, atualizado_em: agora }).eq('id', licit.id);
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else { onRefresh(); }
