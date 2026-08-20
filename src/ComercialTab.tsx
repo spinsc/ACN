@@ -632,6 +632,21 @@ export default function ComercialTab({ currentUser }) {
     if (editId) {
       // Buscar dados anteriores para log
       const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
+      // Aumentar a quantidade numa OP JÁ CADASTRADA não desmembra em várias OPs
+      // (isso só acontece ao criar uma OP nova, em NovaOpOsModal.tsx) — avisa
+      // antes de salvar pra não confundir com o fluxo de criação.
+      const qtdAnterior = Number(anterior?.quantidade) || 1;
+      const qtdNova = Number(formData.quantidade) || 1;
+      if (qtdNova > qtdAnterior && qtdNova > 1) {
+        const prosseguir = confirm(
+          `Atenção: aumentar a quantidade de ${qtdAnterior} para ${qtdNova} NÃO cria OPs separadas automaticamente ` +
+          `(isso só acontece ao criar uma OP nova do zero). Esta OP continuará sendo uma só, com quantidade=${qtdNova}.\n\n` +
+          `Se são veículos diferentes que precisam de acompanhamento (engenharia/produção) separado, cadastre OPs novas ` +
+          `com sufixo /01, /02... em vez de só aumentar a quantidade aqui.\n\n` +
+          `Continuar mesmo assim?`
+        );
+        if (!prosseguir) return;
+      }
       const { error } = await supabase.from('oples').update(payload).eq('id', editId);
       if (error) { alert('Erro ao atualizar: ' + error.message); return; }
       // Registrar log da alteração
