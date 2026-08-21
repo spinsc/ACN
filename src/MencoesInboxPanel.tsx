@@ -106,6 +106,20 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
 
   const naoLidasCount = mencoes.filter(m => !m.lida).length;
 
+  // Navega pra aba de destino E pede pra ela abrir o registro específico (não só
+  // a aba genérica). Guarda num global além de disparar o evento porque, se a aba
+  // ainda não estiver montada, o listener do componente de destino só existe DEPOIS
+  // que ele montar — o global é lido no mount pra cobrir esse caso.
+  const abrirRegistro = (m: any) => {
+    if (!m.lida) marcarLida(m);
+    if (m.contexto_id) {
+      const detail = { contexto: m.contexto, contextoId: m.contexto_id };
+      (window as any).__acnDeepLink = detail;
+      window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
+    }
+    if (m.aba_destino && onNavigate) onNavigate(m.aba_destino);
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 3100,
@@ -223,7 +237,14 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                     {ctxLabel}
                   </span>
                   {m.contexto_descricao && (
-                    <span style={{ fontSize:9, color:'#475569', fontWeight:600 }}>{m.contexto_descricao}</span>
+                    m.contexto_id ? (
+                      <span onClick={() => abrirRegistro(m)}
+                        style={{ fontSize:9, color:'#4338ca', fontWeight:700, textDecoration:'underline', cursor:'pointer' }}>
+                        {m.contexto_descricao}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize:9, color:'#475569', fontWeight:600 }}>{m.contexto_descricao}</span>
+                    )
                   )}
                   {m.campo && (
                     <span style={{ fontSize:9, color:'#94a3b8' }}>campo: {m.campo}</span>
@@ -246,7 +267,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                   {m.aba_destino && onNavigate && (
                     <button
-                      onClick={() => { if (!m.lida) marcarLida(m); onNavigate(m.aba_destino); }}
+                      onClick={() => abrirRegistro(m)}
                       style={{
                         fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4,
                         background:'#6366f1', color:'white', border:'none', cursor:'pointer',

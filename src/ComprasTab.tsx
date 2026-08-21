@@ -181,6 +181,24 @@ export default function ComprasTab({ currentUser }) {
     return () => clearInterval(t);
   }, [filtro]);
 
+  // Deep-link vindo do painel de Menções ("Pedido X" clicável): abre a Mesa de
+  // Cotações do pedido direto, em vez de só cair na aba Compras genérica. Usa um
+  // global (window.__acnDeepLink) além do evento porque, se esta aba ainda não
+  // estava montada quando o link foi clicado, o listener abaixo só existe DEPOIS
+  // do mount — o global cobre esse caso lendo no próprio efeito de mount.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || (pend.contexto !== 'compra' && pend.contexto !== 'compra_aprovacao')) return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('pcp_pedidos_compra').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) abrirModalCotacoes(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const loadCentros = async () => {
     const { data } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
     setCentrosCusto(data || []);
