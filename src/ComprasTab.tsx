@@ -663,6 +663,28 @@ export default function ComprasTab({ currentUser }) {
     } catch (e) { console.warn('Falha ao notificar criador do pedido:', e); }
   };
 
+  // Depois que a compra fecha (status_compra='Comprado'), cria uma demanda em
+  // "Compras — Demandas" pra ela seguir o fluxo normal a partir dali (ex:
+  // acompanhamento de recebimento/logística) — busca o pedido fresco pra já
+  // pegar o numero_oc gerado pelo trigger na mesma atualização.
+  const criarDemandaComprasFinalizada = async (pedidoId: string) => {
+    try {
+      const { data: pedido } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
+      if (!pedido) return;
+      await supabase.from('demandas_setoriais').insert([{
+        setor_destino: 'Compras',
+        descricao: `[COMPRA CONCLUÍDA] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — ${fmt(pedido.valor_compra)}`,
+        numero_opl: pedido.opl || null,
+        status: 'Pendente',
+        tipo_solicitacao: 'compra',
+        criado_por: currentUser?.email,
+        criado_por_nome: currentUser?.nome,
+        data_abertura: new Date().toISOString(),
+        logs_demanda: [{ texto: `Compra confirmada${pedido.numero_oc ? ` — OC ${pedido.numero_oc}` : ''}.`, usuario: currentUser?.nome, hora: new Date().toISOString() }],
+      }]);
+    } catch (e) { console.warn('Falha ao criar demanda de compra concluída:', e); }
+  };
+
   // Ponto único que decide, ao confirmar uma compra, se ela precisa de aprovação
   // (alçada disparada pelo valor) ou se pode ir direto pra 'Comprado' como antes.
   const dispararOuConfirmar = async (pedidoId: string, extraUpdates: any) => {
@@ -679,6 +701,7 @@ export default function ComprasTab({ currentUser }) {
     if (niveis.length === 0 && !jaTemPendencia) {
       const { error } = await supabase.from('pcp_pedidos_compra')
         .update({ ...extraUpdates, status_compra: 'Comprado' }).eq('id', pedidoId);
+      if (!error) await criarDemandaComprasFinalizada(pedidoId);
       return { error };
     }
     const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
@@ -731,6 +754,7 @@ export default function ComprasTab({ currentUser }) {
         .select('vencedora_id').eq('id', pedido.id).maybeSingle();
       if (pedidoAtual?.vencedora_id) {
         await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', pedido.id);
+        await criarDemandaComprasFinalizada(pedido.id);
         await notificarCriadorPedido(pedido, `Compra aprovada e confirmada — pedido ${pedido.numero_pedido}.`);
       }
     }
