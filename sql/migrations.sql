@@ -445,3 +445,38 @@ ALTER TABLE public.pcp_fretes
 -- Timeline/chat por pedido reaproveita a tabela op_acompanhamentos já
 -- existente (via OplAcompModal com referenciaType='compra') — sem
 -- migração nova para isso.
+
+-- =============================================================
+-- 2026-08-20 · feat: Aprovação por Departamento na Mesa de Cotações
+-- =============================================================
+-- Segunda camada de aprovação, independente da alçada por valor (Fase 2):
+-- o gestor do departamento que solicitou a compra é mencionado assim que
+-- a 1ª cotação de fornecedor é lançada no pedido, e precisa aprovar antes
+-- da compra fechar — em paralelo/adicional à alçada por valor, quando
+-- ambas se aplicam. Reaproveita pcp_aprovacoes/mencoes/o loop sequencial
+-- de aprovação já existentes: a linha de departamento nasce com nivel=0,
+-- então é resolvida antes de qualquer alçada por valor (nivel>=1) criada
+-- depois, no confirmar-compra.
+CREATE TABLE IF NOT EXISTS public.compras_departamentos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome text NOT NULL,
+  gestor_id text NOT NULL,
+  gestor_nome text NOT NULL,
+  ativo boolean NOT NULL DEFAULT true,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.compras_departamentos DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.pcp_pedidos_compra
+  ADD COLUMN IF NOT EXISTS departamento_id uuid REFERENCES public.compras_departamentos(id);
+
+-- tipo diferencia a origem da linha ('alcada' = valor, Fase 2 | 'departamento' = novo).
+-- aprovador_id/aprovador_nome denormalizam quem especificamente pode aprovar uma
+-- linha de departamento (pessoa única, não perfil/role como a alçada).
+ALTER TABLE public.pcp_aprovacoes
+  ADD COLUMN IF NOT EXISTS tipo text NOT NULL DEFAULT 'alcada',
+  ADD COLUMN IF NOT EXISTS aprovador_id text,
+  ADD COLUMN IF NOT EXISTS aprovador_nome text;
+-- valor_no_momento vira opcional: uma linha de departamento pode nascer na 1ª
+-- cotação, antes de existir vencedora/valor definido.
+ALTER TABLE public.pcp_aprovacoes ALTER COLUMN valor_no_momento DROP NOT NULL;

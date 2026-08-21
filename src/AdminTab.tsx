@@ -2122,6 +2122,7 @@ function PainelCentrosCusto() {
 // PAINEL ALÇADAS DE APROVAÇÃO (Compras Fase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 const VAZIO_ALCADA = { nivel: '', nome: '', valor_minimo: '', perfis_aprovadores: [] as string[] };
+const VAZIO_DEPARTAMENTO = { nome: '', gestor_id: '', gestor_nome: '' };
 
 function PainelAlcadasAprovacao() {
   const [alcadas, setAlcadas] = useState([]);
@@ -2286,6 +2287,156 @@ function PainelAlcadasAprovacao() {
                       </button>
                       <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
                         onClick={() => { setForm({ nivel:String(a.nivel), nome:a.nome, valor_minimo:String(a.valor_minimo), perfis_aprovadores:a.perfis_aprovadores||[] }); setEditando(a); setShowForm(true); }}>
+                        ✏️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL DEPARTAMENTOS DE COMPRAS (aprovação por gestor)
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelDepartamentosCompras() {
+  const [departamentos, setDepartamentos] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm]       = useState({ ...VAZIO_DEPARTAMENTO });
+  const [editando, setEditando] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const [{ data: deps }, { data: users }] = await Promise.all([
+      supabase.from('compras_departamentos').select('*').order('nome'),
+      supabase.from('auth_usuarios').select('id,nome').eq('ativo', true).order('nome'),
+    ]);
+    setDepartamentos(deps || []);
+    setUsuarios(users || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const salvar = async () => {
+    if (!form.nome.trim() || !form.gestor_id) {
+      alert('Informe nome e gestor responsável.'); return;
+    }
+    setSalvando(true);
+    const payload = { nome: form.nome.trim(), gestor_id: form.gestor_id, gestor_nome: form.gestor_nome };
+    if (editando) {
+      await supabase.from('compras_departamentos').update(payload).eq('id', editando.id);
+    } else {
+      await supabase.from('compras_departamentos').insert([{ ...payload, ativo: true }]);
+    }
+    setForm({ ...VAZIO_DEPARTAMENTO });
+    setEditando(null); setShowForm(false); setSalvando(false);
+    load();
+  };
+
+  const toggleAtivo = async (d) => {
+    await supabase.from('compras_departamentos').update({ ativo: !d.ativo }).eq('id', d.id);
+    load();
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span>🏢 Departamentos de Compras</span>
+        <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
+          onClick={() => { setForm({ ...VAZIO_DEPARTAMENTO }); setEditando(null); setShowForm(true); }}>
+          + Novo Departamento
+        </button>
+      </div>
+      <div className="sec-body">
+        <p style={{ fontSize:10, color:'#64748b', marginBottom:12 }}>
+          Cada pedido de compra pode ser vinculado a um departamento. Assim que a 1ª cotação de fornecedor
+          é lançada nesse pedido, o gestor responsável é mencionado e precisa aprovar — em paralelo às
+          alçadas por valor, quando também se aplicarem.
+        </p>
+
+        {showForm && (
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
+              {editando ? '✏️ Editar Departamento' : '+ Novo Departamento'}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+              <div>
+                <label className="acn-label">Nome *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Ex: Engenharia, Produção"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+              <div>
+                <label className="acn-label">Gestor Responsável *</label>
+                <select className="acn-input" style={{ width:'100%' }}
+                  value={form.gestor_id}
+                  onChange={e => {
+                    const u = usuarios.find((u:any) => String(u.id) === e.target.value);
+                    setForm(f => ({ ...f, gestor_id: e.target.value, gestor_nome: u ? u.nome : '' }));
+                  }}>
+                  <option value="">Selecione...</option>
+                  {usuarios.map((u:any) => (
+                    <option key={u.id} value={String(u.id)}>{u.nome}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'SALVAR'}
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setShowForm(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {loading && <div style={{ textAlign:'center', padding:20, color:'#64748b', fontSize:11 }}>Carregando...</div>}
+        {!loading && departamentos.length === 0 && (
+          <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11 }}>
+            Nenhum departamento cadastrado. Clique em <strong>+ Novo Departamento</strong> para começar.
+          </div>
+        )}
+
+        {departamentos.length > 0 && (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Nome</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Gestor Responsável</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Status</th>
+                <th style={{ padding:'6px 8px', borderBottom:'1px solid #e2e8f0' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {departamentos.map((d:any) => (
+                <tr key={d.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: d.ativo ? 1 : 0.45 }}>
+                  <td style={{ padding:'8px 8px', fontWeight:700 }}>{d.nome}</td>
+                  <td style={{ padding:'8px 8px', color:'#64748b' }}>{d.gestor_nome}</td>
+                  <td style={{ padding:'8px 8px', textAlign:'center' }}>
+                    <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10,
+                      background: d.ativo ? '#dcfce7' : '#f1f5f9',
+                      color:      d.ativo ? '#16a34a'  : '#94a3b8' }}>
+                      {d.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'8px 6px' }}>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                      <button className="acn-btn" style={{ background: d.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => toggleAtivo(d)}>
+                        {d.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => { setForm({ nome:d.nome, gestor_id:d.gestor_id, gestor_nome:d.gestor_nome }); setEditando(d); setShowForm(true); }}>
                         ✏️
                       </button>
                     </div>
@@ -2519,6 +2670,7 @@ const ABAS_ADMIN = [
   { id:'plataformas',    label:'🏪 Plataformas' },
   { id:'centros_custo',  label:'🏷️ Centros de Custo' },
   { id:'alcadas_aprovacao', label:'✅ Alçadas de Aprovação' },
+  { id:'departamentos_compras', label:'🏢 Departamentos (Compras)' },
   { id:'contratos_padrao', label:'📄 Contratos Padrão' },
   { id:'email_cfg',      label:'📧 Config. Email' },
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
@@ -2991,6 +3143,7 @@ export default function AdminTab() {
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
       {abaAtiva === 'centros_custo' && <PainelCentrosCusto />}
       {abaAtiva === 'alcadas_aprovacao' && <PainelAlcadasAprovacao />}
+      {abaAtiva === 'departamentos_compras' && <PainelDepartamentosCompras />}
       {abaAtiva === 'contratos_padrao' && <PainelContratosPadrao />}
       {abaAtiva === 'email_cfg' && <PainelEmailCfg />}
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}

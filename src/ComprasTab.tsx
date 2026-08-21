@@ -115,6 +115,12 @@ export default function ComprasTab({ currentUser }) {
   const [novoNome, setNovoNome]                 = useState('');
   const [salvandoNovoCentro, setSalvandoNovoCentro] = useState(false);
 
+  // Departamento (aprovação por gestor)
+  const [departamentosConfig, setDepartamentosConfig] = useState<any[]>([]);
+  const [modalDepartamento, setModalDepartamento]     = useState<any>(null); // pedido em edição
+  const [departamentoSelecionado, setDepartamentoSelecionado] = useState('');
+  const [salvandoDepartamento, setSalvandoDepartamento]       = useState(false);
+
   // Mesa de Cotações (Fase 1)
   const [modalCotacoes, setModalCotacoes]       = useState<any>(null); // pedido em cotação
   const [cotacoes, setCotacoes]                 = useState<any[]>([]);
@@ -170,6 +176,7 @@ export default function ComprasTab({ currentUser }) {
     load();
     loadCentros();
     loadAlcadas();
+    loadDepartamentos();
     const t = setInterval(()=>load(true), 30000);
     return () => clearInterval(t);
   }, [filtro]);
@@ -182,6 +189,11 @@ export default function ComprasTab({ currentUser }) {
   const loadAlcadas = async () => {
     const { data } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
     setAlcadasConfig(data || []);
+  };
+
+  const loadDepartamentos = async () => {
+    const { data } = await supabase.from('compras_departamentos').select('*').eq('ativo', true).order('nome');
+    setDepartamentosConfig(data || []);
   };
 
   const buscarOps = async (q: string) => {
@@ -218,6 +230,22 @@ export default function ComprasTab({ currentUser }) {
     await supabase.from('pcp_pedidos_compra').update({ centro_custo: valor }).eq('id', modalCentro.id);
     setSalvandoCentro(false);
     setModalCentro(null);
+    load();
+  };
+
+  const abrirModalDepartamento = (p: any) => {
+    setModalDepartamento(p);
+    setDepartamentoSelecionado(p.departamento_id || '');
+  };
+
+  const salvarDepartamento = async () => {
+    if (!modalDepartamento) return;
+    if (!departamentoSelecionado) { alert('Selecione um departamento.'); return; }
+    setSalvandoDepartamento(true);
+    await supabase.from('pcp_pedidos_compra')
+      .update({ departamento_id: departamentoSelecionado }).eq('id', modalDepartamento.id);
+    setSalvandoDepartamento(false);
+    setModalDepartamento(null);
     load();
   };
 
@@ -372,9 +400,53 @@ export default function ComprasTab({ currentUser }) {
     }]);
     setEnviandoCotacao(false);
     if (error) { alert('Erro ao salvar cotação: ' + error.message); return; }
+    // Era a 1ª cotação deste pedido e ele tem departamento definido: dispara a
+    // aprovação do gestor do departamento (camada adicional à alçada por valor,
+    // que só dispara depois, ao confirmar a compra com vencedora).
+    if (cotacoes.length === 0 && modalCotacoes.departamento_id) {
+      await dispararAprovacaoDepartamento(modalCotacoes);
+    }
     setNovaCotacao({ ...VAZIO_COTACAO });
     setNovoAnexoCotacao(null);
     abrirModalCotacoes(modalCotacoes);
+  };
+
+  // ── Aprovação por Departamento ────────────────────────────────────────────
+  const dispararAprovacaoDepartamento = async (pedido: any) => {
+    const departamento = departamentosConfig.find((d:any) => d.id === pedido.departamento_id);
+    if (!departamento) return;
+    await supabase.from('pcp_aprovacoes').insert([{
+      pedido_id: pedido.id, tipo: 'departamento', nivel: 0, nivel_nome: departamento.nome,
+      aprovador_id: departamento.gestor_id, aprovador_nome: departamento.gestor_nome,
+      valor_no_momento: null, status: 'pendente',
+      solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
+    }]);
+    await notificarGestorDepartamento(pedido, departamento);
+  };
+
+  const notificarGestorDepartamento = async (pedido: any, departamento: any) => {
+    try {
+      const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${pedido.descricao_material}`;
+      await supabase.from('mencoes').insert({
+        mencionado_id: departamento.gestor_id, mencionado_nome: departamento.gestor_nome,
+        mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+        contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
+        contexto_descricao: `Pedido ${pedido.numero_pedido}`,
+        campo: 'aprovacao_departamento', texto_trecho: texto,
+        aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
+      });
+      const { data: gestor } = await supabase.from('auth_usuarios')
+        .select('email').eq('id', departamento.gestor_id).maybeSingle();
+      if (gestor?.email) {
+        const html = `<h3>Nova cotação para avaliar</h3>
+          <p><strong>Departamento: ${departamento.nome}</strong></p>
+          <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${pedido.descricao_material}</p>
+          <p>Acesse o sistema (aba Compras) para acompanhar, aprovar ou rejeitar.</p>`;
+        await supabase.functions.invoke('send-email', {
+          body: { to: [gestor.email], subject: `Nova cotação — Pedido ${pedido.numero_pedido}`, html },
+        });
+      }
+    } catch (e) { console.warn('Falha ao notificar gestor do departamento:', e); }
   };
 
   const excluirCotacao = async (id: string) => {
@@ -441,7 +513,13 @@ export default function ComprasTab({ currentUser }) {
     const niveis = alcadasConfig
       .filter(a => a.ativo && Number(a.valor_minimo) <= Number(valorCompra || 0))
       .sort((a,b) => a.nivel - b.nivel);
-    if (niveis.length === 0) {
+    // Pode já existir uma linha de aprovação por departamento pendente, criada na
+    // 1ª cotação (ver dispararAprovacaoDepartamento) — nesse caso a compra também
+    // precisa aguardar, mesmo que nenhuma alçada por valor tenha disparado agora.
+    const { data: pendentesExistentes } = await supabase.from('pcp_aprovacoes')
+      .select('id').eq('pedido_id', pedidoId).eq('status', 'pendente').limit(1);
+    const jaTemPendencia = (pendentesExistentes?.length || 0) > 0;
+    if (niveis.length === 0 && !jaTemPendencia) {
       const { error } = await supabase.from('pcp_pedidos_compra')
         .update({ ...extraUpdates, status_compra: 'Comprado' }).eq('id', pedidoId);
       return { error };
@@ -450,11 +528,21 @@ export default function ComprasTab({ currentUser }) {
     const { error } = await supabase.from('pcp_pedidos_compra')
       .update({ ...extraUpdates, status_compra: 'Aguardando Aprovação' }).eq('id', pedidoId);
     if (error) return { error };
-    await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
-      pedido_id: pedidoId, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: valorCompra,
-      status: 'pendente', solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
-    })));
-    await notificarAprovadoresNivel({ ...pedidoAtual, ...extraUpdates, id: pedidoId }, niveis[0]);
+    if (niveis.length > 0) {
+      await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
+        pedido_id: pedidoId, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: valorCompra,
+        status: 'pendente', solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
+      })));
+    }
+    // Notifica o nível pendente de menor número — pode ser a linha de departamento
+    // (nivel 0, já notificada quando criada) ou o 1º nível de alçada recém-criado.
+    const { data: pendentesOrdenados } = await supabase.from('pcp_aprovacoes')
+      .select('*').eq('pedido_id', pedidoId).eq('status', 'pendente').order('nivel', { ascending: true });
+    const proximaPendencia = pendentesOrdenados?.[0];
+    if (proximaPendencia && proximaPendencia.tipo !== 'departamento') {
+      const nivelConfig = alcadasConfig.find(a => a.nivel === proximaPendencia.nivel);
+      if (nivelConfig) await notificarAprovadoresNivel({ ...pedidoAtual, ...extraUpdates, id: pedidoId }, nivelConfig);
+    }
     return { error: null, aguardandoAprovacao: true };
   };
 
@@ -469,11 +557,21 @@ export default function ComprasTab({ currentUser }) {
     const { data: restantes } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', modalCotacoes.id).eq('status', 'pendente').order('nivel', { ascending: true });
     if (restantes && restantes.length > 0) {
-      const proximaAlcada = alcadasConfig.find(a => a.nivel === restantes[0].nivel);
-      if (proximaAlcada) await notificarAprovadoresNivel(modalCotacoes, proximaAlcada);
+      if (restantes[0].tipo !== 'departamento') {
+        const proximaAlcada = alcadasConfig.find(a => a.nivel === restantes[0].nivel);
+        if (proximaAlcada) await notificarAprovadoresNivel(modalCotacoes, proximaAlcada);
+      }
+      // linha de departamento: já foi notificada quando criada, nada a fazer aqui.
     } else {
-      await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', modalCotacoes.id);
-      await notificarCriadorPedido(modalCotacoes, `Compra aprovada e confirmada — pedido ${modalCotacoes.numero_pedido}.`);
+      // Só fecha a compra se já existe cotação vencedora escolhida — aprovar cedo
+      // a linha de departamento (antes do comprador confirmar a compra) não deve
+      // sozinho fechar o pedido.
+      const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra')
+        .select('vencedora_id').eq('id', modalCotacoes.id).maybeSingle();
+      if (pedidoAtual?.vencedora_id) {
+        await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', modalCotacoes.id);
+        await notificarCriadorPedido(modalCotacoes, `Compra aprovada e confirmada — pedido ${modalCotacoes.numero_pedido}.`);
+      }
     }
     setRespondendoAprovacao(false);
     setModalCotacoes(null);
@@ -617,6 +715,7 @@ export default function ComprasTab({ currentUser }) {
                 <th style={th}>Fornecedor</th>
                 {canVerValor && <th style={th}>💰 Valor da Compra</th>}
                 <th style={th}>🏷️ Centro de Custo</th>
+                <th style={th}>🏢 Departamento</th>
                 <th style={th}>📅 Prev. Recebimento</th>
                 <th style={th}>🎯 Prazo Prometido</th>
                 <th style={th}>Status</th>
@@ -674,6 +773,27 @@ export default function ComprasTab({ currentUser }) {
                           + Definir
                         </button>
                       )}
+                    </td>
+
+                    {/* DEPARTAMENTO */}
+                    <td style={{...td,maxWidth:130}}>
+                      {(() => {
+                        const dep = departamentosConfig.find((d:any) => d.id === p.departamento_id);
+                        return dep ? (
+                          <div style={{display:'flex',alignItems:'center',gap:5}}>
+                            <span style={{background:'#f0fdf4',color:'#15803d',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={dep.nome}>
+                              {dep.nome}
+                            </span>
+                            <button onClick={()=>abrirModalDepartamento(p)} title="Alterar departamento"
+                              style={{...btn,background:'transparent',color:'#15803d',fontSize:12,padding:'0 2px'}}>✏️</button>
+                          </div>
+                        ) : (
+                          <button onClick={()=>abrirModalDepartamento(p)}
+                            style={{...btn,background:'#f1f5f9',color:'#15803d',fontSize:9,border:'1px dashed #86efac'}}>
+                            + Definir
+                          </button>
+                        );
+                      })()}
                     </td>
 
                     {/* PRAZO — editável direto para itens Em Andamento */}
@@ -895,6 +1015,40 @@ export default function ComprasTab({ currentUser }) {
         </div>
       )}
 
+      {/* MODAL DEPARTAMENTO */}
+      {modalDepartamento && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalDepartamento(null);}}>
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">🏢 Departamento — {modalDepartamento.numero_pedido}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+              {modalDepartamento.descricao_material} · o gestor deste departamento será mencionado
+              assim que a 1ª cotação for lançada.
+            </div>
+
+            <label className="acn-label">Departamento *</label>
+            <select className="acn-input" style={{width:'100%',marginBottom:14}}
+              value={departamentoSelecionado} onChange={e=>setDepartamentoSelecionado(e.target.value)}>
+              <option value="">Selecione...</option>
+              {departamentosConfig.map((d:any) => (
+                <option key={d.id} value={d.id}>{d.nome} — {d.gestor_nome}</option>
+              ))}
+            </select>
+            {departamentosConfig.length === 0 && (
+              <div style={{fontSize:10,color:'#dc2626',marginBottom:14}}>
+                Nenhum departamento cadastrado ainda. Cadastre em Admin → 🏢 Departamentos (Compras).
+              </div>
+            )}
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={salvarDepartamento} disabled={salvandoDepartamento}>
+                {salvandoDepartamento?'Salvando...':'💾 Salvar Departamento'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDepartamento(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL GERENCIAR CENTROS DE CUSTO */}
       {modalGerCentros && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalGerCentros(false);}}>
@@ -1021,14 +1175,17 @@ export default function ComprasTab({ currentUser }) {
 
             {aprovacoesPedido.length > 0 && (() => {
               const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
-              const alcadaAtiva = nivelAtivo ? alcadasConfig.find(a => a.nivel === nivelAtivo.nivel) : null;
-              const souAprovador = alcadaAtiva && (alcadaAtiva.perfis_aprovadores||[]).includes(currentUser?.perfil);
+              const isDepartamento = nivelAtivo?.tipo === 'departamento';
+              const alcadaAtiva = (nivelAtivo && !isDepartamento) ? alcadasConfig.find(a => a.nivel === nivelAtivo.nivel) : null;
+              const souAprovador = isDepartamento
+                ? (String(currentUser?.id) === nivelAtivo.aprovador_id || currentUser?.perfil === 'Admin')
+                : !!(alcadaAtiva && (alcadaAtiva.perfis_aprovadores||[]).includes(currentUser?.perfil));
               const historico = aprovacoesPedido.filter(a => a.status !== 'pendente');
               const todosAprovados = historico.length > 0 && historico.every(a => a.status === 'aprovado');
               return (
                 <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14}}>
                   <div style={{fontSize:11,fontWeight:700,color:'#9a3412',marginBottom:8}}>
-                    🔒 Aprovação {nivelAtivo ? `— Nível ${nivelAtivo.nivel}: ${nivelAtivo.nivel_nome}` : todosAprovados ? 'concluída' : 'anterior (histórico)'}
+                    🔒 Aprovação {nivelAtivo ? (isDepartamento ? `— Departamento: ${nivelAtivo.nivel_nome}` : `— Nível ${nivelAtivo.nivel}: ${nivelAtivo.nivel_nome}`) : todosAprovados ? 'concluída' : 'anterior (histórico)'}
                   </div>
                   {nivelAtivo ? (
                     souAprovador ? (
@@ -1042,7 +1199,7 @@ export default function ComprasTab({ currentUser }) {
                       </div>
                     ) : (
                       <div style={{fontSize:10,color:'#92400e'}}>
-                        Aguardando aprovação de: {(alcadaAtiva?.perfis_aprovadores||[]).join(', ') || '—'}
+                        Aguardando aprovação de: {isDepartamento ? (nivelAtivo.aprovador_nome || '—') : ((alcadaAtiva?.perfis_aprovadores||[]).join(', ') || '—')}
                       </div>
                     )
                   ) : todosAprovados ? (
@@ -1054,7 +1211,7 @@ export default function ComprasTab({ currentUser }) {
                     <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:4}}>
                       {historico.map(a => (
                         <div key={a.id} style={{fontSize:9,color:'#78716c'}}>
-                          Nível {a.nivel} ({a.nivel_nome}): {a.status==='aprovado'?'✅ Aprovado':a.status==='rejeitado'?'❌ Rejeitado':'Cancelado'}
+                          {a.tipo==='departamento' ? `Departamento ${a.nivel_nome}` : `Nível ${a.nivel} (${a.nivel_nome})`}: {a.status==='aprovado'?'✅ Aprovado':a.status==='rejeitado'?'❌ Rejeitado':'Cancelado'}
                           {a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}
                           {a.resposta ? ` — "${a.resposta}"` : ''}
                         </div>
@@ -1100,8 +1257,10 @@ export default function ComprasTab({ currentUser }) {
               </div>
             )}
 
-            {/* Nova cotação — escondida enquanto há aprovação pendente (a vencedora já foi travada) */}
-            {!aprovacoesPedido.some(a => a.status === 'pendente') ? (<>
+            {/* Nova cotação — escondida enquanto há aprovação de ALÇADA pendente (a vencedora já foi
+                travada). Uma pendência de DEPARTAMENTO não trava, pois ela nasce na 1ª cotação — o
+                comprador ainda precisa poder lançar a 2ª e 3ª enquanto o gestor avalia em paralelo. */}
+            {!aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') ? (<>
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
               <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Fornecedor</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
