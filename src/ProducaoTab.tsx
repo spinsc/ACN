@@ -86,11 +86,15 @@ function OplRow({ o, onAction, currentUser }) {
               <>
                 <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>onAction('checklist',o)}>LIB. CQ</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
+                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
                 <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>onAction('devolver',o)}>DEV. PCP</button>
               </>
             )}
             {emRetrab && (
-              <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
+              <>
+                <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
+                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
+              </>
             )}
             {retrabalho && (
               <button className="acn-btn" style={{background:'#ef4444',fontWeight:700}} onClick={()=>onAction('iniciar_retrabalho',o)}>
@@ -488,6 +492,13 @@ function PainelSacVeicular({ currentUser }) {
   const [obsText, setObsText]                               = useState('');
   const [modalItensExecucao, setModalItensExecucao]         = useState(null);
   const [itensExecucao, setItensExecucao]                   = useState([]);
+  // Gerenciar equipe (responsáveis/apoios livres pós-início) — OS
+  const [modalGerenciarEquipeOS, setModalGerenciarEquipeOS] = useState<any>(null);
+  const [equipeAtualOS, setEquipeAtualOS]                   = useState<any[]>([]);
+  const [novoRespNomeOS, setNovoRespNomeOS]                 = useState('');
+  const [novoRespIdOS, setNovoRespIdOS]                     = useState<string|null>(null);
+  const [novoApoioNomeOS, setNovoApoioNomeOS]               = useState('');
+  const [novoApoioIdOS, setNovoApoioIdOS]                   = useState<string|null>(null);
 
   const STATUSES_PROD = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
 
@@ -591,7 +602,50 @@ function PainelSacVeicular({ currentUser }) {
       tecnico_producao_id: iniciarManuTecnicoId || null,
       atualizado_em: agora,
     }).eq('id', os.id);
+    // Semeia a lista livre de responsáveis, igual acontece em iniciarProducao (OP).
+    if (iniciarManuTecnicoId) {
+      await supabase.from('responsaveis_producao').insert([{
+        tipo: 'os', referencia_id: os.id, papel: 'responsavel',
+        tecnico_id: iniciarManuTecnicoId, tecnico_nome: iniciarManuTecnico.trim(),
+        adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
+      }]);
+    }
     setModalIniciarManu(null); setIniciarManuTecnico(''); setIniciarManuTecnicoId(null); load();
+  };
+
+  // ── Gerenciar Equipe (responsáveis/apoios livres, pós-início) — OS ─────────
+  const carregarEquipeAtualOS = async (os: any) => {
+    const { data } = await supabase.from('responsaveis_producao')
+      .select('*').eq('tipo', 'os').eq('referencia_id', os.id).order('criado_em');
+    setEquipeAtualOS(data || []);
+  };
+
+  const abrirGerenciarEquipeOS = (os: any) => {
+    setModalGerenciarEquipeOS(os);
+    setNovoRespNomeOS(''); setNovoRespIdOS(null);
+    setNovoApoioNomeOS(''); setNovoApoioIdOS(null);
+    carregarEquipeAtualOS(os);
+  };
+
+  const adicionarMembroEquipeOS = async (papel: 'responsavel'|'apoio') => {
+    const os = modalGerenciarEquipeOS;
+    if (!os) return;
+    const nome = papel === 'responsavel' ? novoRespNomeOS : novoApoioNomeOS;
+    const id   = papel === 'responsavel' ? novoRespIdOS   : novoApoioIdOS;
+    if (!nome.trim()) { alert('Selecione um técnico.'); return; }
+    await supabase.from('responsaveis_producao').insert([{
+      tipo: 'os', referencia_id: os.id, papel, tecnico_id: id, tecnico_nome: nome,
+      adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
+    }]);
+    if (papel === 'responsavel') { setNovoRespNomeOS(''); setNovoRespIdOS(null); }
+    else { setNovoApoioNomeOS(''); setNovoApoioIdOS(null); }
+    carregarEquipeAtualOS(os);
+  };
+
+  const removerMembroEquipeOS = async (membro: any) => {
+    if (!confirm(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
+    await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
+    carregarEquipeAtualOS(modalGerenciarEquipeOS);
   };
 
   // Salva observação de produção sem concluir (durante execução)
@@ -704,10 +758,13 @@ function PainelSacVeicular({ currentUser }) {
                             </button>
                           )}
                           {os.status === 'Em Manutenção' && (
-                            <button className="acn-btn" style={{background:'#0d9488',fontSize:9}}
-                              onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)?os.materiais_utilizados.map(i=>({...i})):[]}); }}>
-                              ✅ Concluir
-                            </button>
+                            <>
+                              <button className="acn-btn" style={{background:'#0d9488',fontSize:9}}
+                                onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)?os.materiais_utilizados.map(i=>({...i})):[]}); }}>
+                                ✅ Concluir
+                              </button>
+                              <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>abrirGerenciarEquipeOS(os)}>👥 EQUIPE</button>
+                            </>
                           )}
                           {os.status === 'Em Execução' && (
                             <>
@@ -723,6 +780,7 @@ function PainelSacVeicular({ currentUser }) {
                                 onClick={()=>{ setModalConcluirManu(os); setConcluirManuForm({observacoes:'',itens_usados:Array.isArray(os.materiais_utilizados)&&os.materiais_utilizados.length>0?os.materiais_utilizados.map(i=>({...i})):Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[]}); }}>
                                 ✅ Concluir
                               </button>
+                              <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>abrirGerenciarEquipeOS(os)}>👥 EQUIPE</button>
                             </>
                           )}
                           {(os.status === 'Aguardando Aprovação Cliente' || os.status === 'Aguardando Aceite SAC') && (
@@ -859,6 +917,65 @@ function PainelSacVeicular({ currentUser }) {
               <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={iniciarManutencao}>▶️ Iniciar Manutenção</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciarManu(null)}>Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GERENCIAR EQUIPE — responsáveis/apoios livres, pós-início (OS) */}
+      {modalGerenciarEquipeOS && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:480}}>
+            <div className="modal-title">👥 Equipe — OS {modalGerenciarEquipeOS.numero_os}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+              Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
+              do valor de mão de obra desta OS, além do que os responsáveis já recebem.
+            </div>
+
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>RESPONSÁVEIS</div>
+            {equipeAtualOS.filter(m=>m.papel==='responsavel').length === 0 ? (
+              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum responsável ainda.</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
+                {equipeAtualOS.filter(m=>m.papel==='responsavel').map(m => (
+                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                    padding:'6px 10px',background:'#eef2ff',borderRadius:6,fontSize:11}}>
+                    <span>{m.tecnico_nome}</span>
+                    <button onClick={()=>removerMembroEquipeOS(m)}
+                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:'flex',gap:6,marginBottom:16}}>
+              <ColaboradorSelect value={novoRespNomeOS}
+                onChange={nome=>{ setNovoRespNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoRespIdOS(c?.id||null); }}
+                placeholder="Adicionar responsável..." className="acn-input" style={{flex:1}} />
+              <button className="acn-btn" style={{background:'#6366f1',fontSize:10}} onClick={()=>adicionarMembroEquipeOS('responsavel')}>+ Add</button>
+            </div>
+
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>APOIOS (0,1% da mão de obra)</div>
+            {equipeAtualOS.filter(m=>m.papel==='apoio').length === 0 ? (
+              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum apoio ainda.</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
+                {equipeAtualOS.filter(m=>m.papel==='apoio').map(m => (
+                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                    padding:'6px 10px',background:'#f0fdf4',borderRadius:6,fontSize:11}}>
+                    <span>{m.tecnico_nome}</span>
+                    <button onClick={()=>removerMembroEquipeOS(m)}
+                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:'flex',gap:6,marginBottom:16}}>
+              <ColaboradorSelect value={novoApoioNomeOS}
+                onChange={nome=>{ setNovoApoioNomeOS(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoApoioIdOS(c?.id||null); }}
+                placeholder="Adicionar apoio..." className="acn-input" style={{flex:1}} />
+              <button className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>adicionarMembroEquipeOS('apoio')}>+ Add</button>
+            </div>
+
+            <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalGerenciarEquipeOS(null)}>Fechar</button>
           </div>
         </div>
       )}
@@ -1487,6 +1604,13 @@ export default function ProducaoTab({ currentUser }) {
   const [editResp2Nome, setEditResp2Nome] = useState('');
   const [editResp2Id, setEditResp2Id] = useState<string|null>(null);
   const [editEquipeSel, setEditEquipeSel] = useState<any>(null);
+  // Gerenciar equipe (responsáveis/apoios livres pós-início)
+  const [modalGerenciarEquipe, setModalGerenciarEquipe] = useState<any>(null);
+  const [equipeAtual, setEquipeAtual] = useState<any[]>([]);
+  const [novoRespNome, setNovoRespNome] = useState('');
+  const [novoRespId, setNovoRespId] = useState<string|null>(null);
+  const [novoApoioNome, setNovoApoioNome] = useState('');
+  const [novoApoioId, setNovoApoioId] = useState<string|null>(null);
 
   useEffect(() => {
     fetchAll();
@@ -1536,6 +1660,20 @@ export default function ProducaoTab({ currentUser }) {
     }
 
     await supabase.from('oples').update(upd).eq('id', opl.id);
+    // Semeia a lista livre de responsáveis (responsaveis_producao) com quem foi
+    // definido ao iniciar — daqui pra frente essa lista é editável livremente
+    // via "👥 Equipe", sem mexer mais nesses campos legados.
+    const seedResponsaveis = [
+      upd.tecnico_producao_id ? { tecnico_id: upd.tecnico_producao_id, tecnico_nome: upd.responsavel_producao } : null,
+      upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
+    ].filter(Boolean);
+    if (seedResponsaveis.length > 0) {
+      await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r:any) => ({
+        tipo: 'op', referencia_id: opl.id, papel: 'responsavel',
+        tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
+        adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
+      })));
+    }
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Inicio da producao. Responsavel: ${logResp}`,
@@ -1581,6 +1719,54 @@ export default function ProducaoTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     setModalEditResp(null); fetchAll();
+  };
+
+  // ── Gerenciar Equipe (responsáveis/apoios livres, pós-início) ──────────────
+  const carregarEquipeAtual = async (opl: any) => {
+    const { data } = await supabase.from('responsaveis_producao')
+      .select('*').eq('tipo', 'op').eq('referencia_id', opl.id).order('criado_em');
+    setEquipeAtual(data || []);
+  };
+
+  const abrirGerenciarEquipe = (opl: any) => {
+    setModalGerenciarEquipe(opl);
+    setNovoRespNome(''); setNovoRespId(null);
+    setNovoApoioNome(''); setNovoApoioId(null);
+    carregarEquipeAtual(opl);
+  };
+
+  const adicionarMembroEquipe = async (papel: 'responsavel'|'apoio') => {
+    const opl = modalGerenciarEquipe;
+    if (!opl) return;
+    const nome = papel === 'responsavel' ? novoRespNome : novoApoioNome;
+    const id   = papel === 'responsavel' ? novoRespId   : novoApoioId;
+    if (!nome.trim()) { alert('Selecione um técnico.'); return; }
+    await supabase.from('responsaveis_producao').insert([{
+      tipo: 'op', referencia_id: opl.id, papel, tecnico_id: id, tecnico_nome: nome,
+      adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
+    }]);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `${papel === 'responsavel' ? 'Responsável' : 'Apoio'} adicionado: ${nome}`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
+      usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+    }]);
+    if (papel === 'responsavel') { setNovoRespNome(''); setNovoRespId(null); }
+    else { setNovoApoioNome(''); setNovoApoioId(null); }
+    carregarEquipeAtual(opl);
+  };
+
+  const removerMembroEquipe = async (membro: any) => {
+    if (!confirm(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
+    const opl = modalGerenciarEquipe;
+    await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+      evento: `${membro.papel === 'responsavel' ? 'Responsável' : 'Apoio'} removido: ${membro.tecnico_nome}`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
+      usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+    }]);
+    carregarEquipeAtual(opl);
   };
 
   const liberarChecklist = async (opl) => {
@@ -1672,6 +1858,7 @@ export default function ProducaoTab({ currentUser }) {
       setEditResp2Id(opl.tecnico_producao_2_id || null);
       setEditEquipeSel(opl.equipe_id ? { id: opl.equipe_id, nome: opl.equipe_nome, head_line_nome: opl.responsavel_producao } : null);
     }
+    if (tipo === 'gerenciar_equipe') abrirGerenciarEquipe(opl);
   };
 
   const [abaProducao, setAbaProducao] = useState('producao');
@@ -1993,6 +2180,65 @@ export default function ProducaoTab({ currentUser }) {
               <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={editarResponsavel}>✏️ SALVAR ALTERAÇÃO</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditResp(null)}>Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GERENCIAR EQUIPE — responsáveis/apoios livres, pós-início */}
+      {modalGerenciarEquipe && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:480}}>
+            <div className="modal-title">👥 Equipe — OPL {modalGerenciarEquipe.opl}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+              Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
+              do valor de mão de obra desta OP, além do que os responsáveis já recebem.
+            </div>
+
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>RESPONSÁVEIS</div>
+            {equipeAtual.filter(m=>m.papel==='responsavel').length === 0 ? (
+              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum responsável ainda.</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
+                {equipeAtual.filter(m=>m.papel==='responsavel').map(m => (
+                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                    padding:'6px 10px',background:'#eef2ff',borderRadius:6,fontSize:11}}>
+                    <span>{m.tecnico_nome}</span>
+                    <button onClick={()=>removerMembroEquipe(m)}
+                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:'flex',gap:6,marginBottom:16}}>
+              <ColaboradorSelect value={novoRespNome}
+                onChange={nome=>{ setNovoRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoRespId(c?.id||null); }}
+                placeholder="Adicionar responsável..." className="acn-input" style={{flex:1}} />
+              <button className="acn-btn" style={{background:'#6366f1',fontSize:10}} onClick={()=>adicionarMembroEquipe('responsavel')}>+ Add</button>
+            </div>
+
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>APOIOS (0,1% da mão de obra)</div>
+            {equipeAtual.filter(m=>m.papel==='apoio').length === 0 ? (
+              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum apoio ainda.</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
+                {equipeAtual.filter(m=>m.papel==='apoio').map(m => (
+                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                    padding:'6px 10px',background:'#f0fdf4',borderRadius:6,fontSize:11}}>
+                    <span>{m.tecnico_nome}</span>
+                    <button onClick={()=>removerMembroEquipe(m)}
+                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:'flex',gap:6,marginBottom:16}}>
+              <ColaboradorSelect value={novoApoioNome}
+                onChange={nome=>{ setNovoApoioNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoApoioId(c?.id||null); }}
+                placeholder="Adicionar apoio..." className="acn-input" style={{flex:1}} />
+              <button className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>adicionarMembroEquipe('apoio')}>+ Add</button>
+            </div>
+
+            <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalGerenciarEquipe(null)}>Fechar</button>
           </div>
         </div>
       )}

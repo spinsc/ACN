@@ -1552,7 +1552,29 @@ function ComissoesRH({ funcionarios, currentUser }) {
     const oss: any[] = osRes.data || [];
     setFechamentos(fechRes.data || []);
 
-    // Agrupar por tecnico_producao_id
+    // Mapa auxiliar id -> dados do item (OP ou OS), pra resolver cada linha de
+    // responsaveis_producao de volta pro item de onde ela veio.
+    const itemById: Record<string, any> = {};
+    ops.forEach(op => { itemById[op.id] = {
+      tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
+      valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
+      valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria, data_faturamento:op.data_emissao_nf,
+    }; });
+    oss.forEach(os => { itemById[os.id] = {
+      tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
+      valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra, data_faturamento:os.data_faturamento,
+    }; });
+
+    // Fonte única de crédito: responsaveis_producao (semeada com o técnico
+    // principal/dupla ao iniciar a OP/OS — ver ProducaoTab.tsx — e editável
+    // livremente depois via "👥 Equipe"). Não usa mais oples.tecnico_producao_id
+    // direto aqui, pra não contar o técnico principal duas vezes.
+    const idsRelevantes = [...ops.map((o:any)=>o.id), ...oss.map((o:any)=>o.id)];
+    const { data: respData } = idsRelevantes.length > 0
+      ? await supabase.from('responsaveis_producao').select('*').in('referencia_id', idsRelevantes)
+      : { data: [] as any[] };
+    const responsaveis: any[] = respData || [];
+
     const mapa: Record<string, any> = {};
     const addItem = (tecId: string, item: any) => {
       if (!mapa[tecId]) {
@@ -1563,54 +1585,36 @@ function ComissoesRH({ funcionarios, currentUser }) {
           func,
           incideEm: func?.incide_em || 'Faturamento',
           percentual: func?.percentual_comissao || 0,
-          ops: [], oss: [], totalBase: 0, totalComissao: 0,
+          ops: [], oss: [], totalBase: 0, totalComissao: 0, totalComissaoApoio: 0,
         };
       }
-      mapa[tecId].ops = mapa[tecId].ops || [];
-      mapa[tecId].oss = mapa[tecId].oss || [];
       if (item.tipo === 'OP') mapa[tecId].ops.push(item);
       else mapa[tecId].oss.push(item);
     };
 
-    ops.forEach(op => {
-      const incideEm = mapa[op.tecnico_producao_id]?.incideEm;
-      const base = incideEm === 'Mão de Obra'
-        ? Number(op.valor_mao_de_obra || 0)
-        : incideEm === 'Serralheria'
-        ? Number(op.valor_mao_de_obra_serralheria || 0)
-        : Number(op.valor_total || 0);
-      addItem(op.tecnico_producao_id, {
-        tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
-        valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
-        valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria,
-        data_faturamento:op.data_emissao_nf, base,
-      });
-    });
-    oss.forEach(os => {
-      const incideEm = mapa[os.tecnico_producao_id]?.incideEm;
-      const base = incideEm === 'Mão de Obra'
-        ? Number(os.valor_mao_de_obra || 0)
-        : incideEm === 'Serralheria'
-        ? Number(os.valor_mao_de_obra_serralheria || 0)
-        : Number(os.valor_total || 0);
-      addItem(os.tecnico_producao_id, {
-        tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
-        valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra,
-        data_faturamento:os.data_faturamento, base,
-      });
+    responsaveis.forEach((r:any) => {
+      const item = itemById[r.referencia_id];
+      if (!item || !r.tecnico_id) return;
+      addItem(r.tecnico_id, { ...item, papel: r.papel });
     });
 
-    // Recalcular totais com incideEm correto
+    // Recalcular totais com incideEm correto. Responsáveis usam a fórmula normal
+    // (base * percentual configurado do técnico); apoios sempre 0,1% fixo de
+    // valor_mao_de_obra, independente do incide_em/percentual configurado.
     Object.values(mapa).forEach((tec: any) => {
       const allItems = [...tec.ops, ...tec.oss];
       const getBase = (i: any) => {
+        if (i.papel === 'apoio') return Number(i.valor_mao_de_obra || 0);
         if (tec.incideEm === 'Mão de Obra') return Number(i.valor_mao_de_obra || 0);
         if (tec.incideEm === 'Serralheria') return Number(i.valor_mao_de_obra_serralheria || 0);
         return Number(i.valor_total || 0);
       };
-      tec.totalBase = allItems.reduce((s: number, i: any) => s + getBase(i), 0);
       allItems.forEach((i: any) => { i.base = getBase(i); });
-      tec.totalComissao = tec.totalBase * (tec.percentual / 100);
+      const responsavelItems = allItems.filter((i:any) => i.papel !== 'apoio');
+      const apoioItems       = allItems.filter((i:any) => i.papel === 'apoio');
+      tec.totalBase = responsavelItems.reduce((s: number, i: any) => s + i.base, 0);
+      tec.totalComissaoApoio = apoioItems.reduce((s: number, i: any) => s + i.base * 0.001, 0);
+      tec.totalComissao = (tec.totalBase * (tec.percentual / 100)) + tec.totalComissaoApoio;
     });
 
     setDados(Object.values(mapa));
@@ -1732,13 +1736,19 @@ function ComissoesRH({ funcionarios, currentUser }) {
                           <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
                             background:item.tipo==='OP'?'#dcfce7':'#ede9fe',
                             color:item.tipo==='OP'?'#166534':'#5b21b6'}}>{item.tipo}</span>
+                          {item.papel==='apoio' && (
+                            <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
+                              background:'#fef3c7',color:'#92400e',marginLeft:4}}>APOIO</span>
+                          )}
                         </td>
                         <td style={{padding:'4px 8px',fontWeight:700}}>{item.numero||'—'}</td>
                         <td style={{padding:'4px 8px'}}>{item.cliente||'—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_total != null ? fmtMoeda(item.valor_total) : '—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_mao_de_obra != null ? fmtMoeda(item.valor_mao_de_obra) : '—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700}}>{fmtMoeda(item.base)}</td>
-                        <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#2563eb'}}>{fmtMoeda(item.base * tec.percentual / 100)}</td>
+                        <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#2563eb'}}>
+                          {fmtMoeda(item.papel==='apoio' ? item.base * 0.001 : item.base * tec.percentual / 100)}
+                        </td>
                         <td style={{padding:'4px 8px',textAlign:'center'}}>{fmtDt(item.data_faturamento)}</td>
                       </tr>
                     ))}

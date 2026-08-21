@@ -480,3 +480,28 @@ ALTER TABLE public.pcp_aprovacoes
 -- valor_no_momento vira opcional: uma linha de departamento pode nascer na 1ª
 -- cotação, antes de existir vencedora/valor definido.
 ALTER TABLE public.pcp_aprovacoes ALTER COLUMN valor_no_momento DROP NOT NULL;
+
+-- =============================================================
+-- 2026-08-21 · feat: Responsáveis/Apoios livres em OP e OS + comissão de apoio
+-- =============================================================
+-- Lista viva de quem está creditado numa OP/OS depois de iniciada — separada
+-- dos campos legados (oples.tecnico_producao_id/_2_id, modo_execucao, etc.),
+-- que continuam representando só a atribuição inicial e não mudam. A tabela
+-- nova nasce semeada a partir dessa atribuição inicial e daí em diante pode
+-- ganhar/perder responsáveis e apoios livremente, sem estar presa a
+-- individual/dupla/equipe. papel='apoio' credita 0,1% fixo do valor_mao_de_obra
+-- na comissão (RHTab.tsx), independente do percentual_comissao configurado
+-- pro técnico (que só vale pro papel='responsavel').
+CREATE TABLE IF NOT EXISTS public.responsaveis_producao (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo text NOT NULL,
+  referencia_id uuid NOT NULL,
+  papel text NOT NULL DEFAULT 'responsavel',
+  tecnico_id uuid,
+  tecnico_nome text NOT NULL,
+  adicionado_por text,
+  adicionado_por_nome text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_resp_producao_ref ON public.responsaveis_producao (tipo, referencia_id);
+ALTER TABLE public.responsaveis_producao DISABLE ROW LEVEL SECURITY;
