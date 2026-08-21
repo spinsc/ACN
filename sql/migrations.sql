@@ -505,3 +505,10 @@ CREATE TABLE IF NOT EXISTS public.responsaveis_producao (
 );
 CREATE INDEX IF NOT EXISTS idx_resp_producao_ref ON public.responsaveis_producao (tipo, referencia_id);
 ALTER TABLE public.responsaveis_producao DISABLE ROW LEVEL SECURITY;
+
+-- =============================================================
+-- 2026-08-21 · feat: Área livre por cotação + aprovação com senha
+-- =============================================================
+-- Cada cotação de fornecedor ganha seu próprio espaço de anotação rica
+-- (texto/imagens/tabelas coladas), pra embasar a decisão de qual vence.
+ALTER TABLE public.pcp_cotacoes_fornecedores ADD COLUMN IF NOT EXISTS area_livre text;

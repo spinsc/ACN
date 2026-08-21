@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
@@ -93,6 +93,142 @@ export function imprimirOrdemCompra(p: any) {
   if (w) { w.document.write(html); w.document.close(); }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ÁREA LIVRE POR COTAÇÃO — editor rico com suporte a tabelas coladas do
+// Excel/Word, pra embasar a decisão de qual cotação vence. Mesmo padrão do
+// AreaLivre de LicitacoesTab.tsx, mas independente (salva em
+// pcp_cotacoes_fornecedores.area_livre, não em licitacoes.areas_livres).
+// ─────────────────────────────────────────────────────────────────────────────
+function CotacaoAreaLivre({ cotacao, onSaved }: any) {
+  const editorRef   = useRef<any>(null);
+  const imgInputRef = useRef<any>(null);
+  const timerRef    = useRef<any>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo]       = useState(false);
+
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const html = cotacao.area_livre || '';
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }, [cotacao.id]);
+
+  const salvarConteudo = async () => {
+    const el = editorRef.current;
+    if (!el) return;
+    const html = el.innerHTML;
+    setSalvando(true);
+    const { error } = await supabase.from('pcp_cotacoes_fornecedores')
+      .update({ area_livre: html }).eq('id', cotacao.id);
+    setSalvando(false);
+    if (!error) {
+      onSaved?.(html);
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 2000);
+    }
+  };
+
+  const autosave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(salvarConteudo, 1500);
+  };
+
+  const salvarAgora = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    salvarConteudo();
+  };
+
+  const inserirImagem = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+    const path = `pcp-cotacoes/${cotacao.id}/area-livre/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true });
+    if (error) { alert('Erro ao inserir imagem: ' + error.message); return; }
+    const { data: urlData } = supabase.storage.from('acn-media').getPublicUrl(path);
+    const url = urlData?.publicUrl;
+    if (!url) return;
+    document.execCommand('insertHTML', false, `<img src="${url}" style="max-width:100%;border-radius:4px;margin:4px 0" />`);
+    autosave();
+  };
+
+  const handlePaste = (e: any) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const hasHtml = items.some((i: any) => i.type === 'text/html');
+    const imageItem = items.find((i: any) => i.type.startsWith('image/')) as any;
+    if (imageItem && !hasHtml) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) inserirImagem(file);
+    }
+    setTimeout(autosave, 100);
+  };
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  return (
+    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden', marginTop:6 }}>
+      <div style={{ background:'#f1f5f9', borderBottom:'1px solid #e2e8f0', padding:'3px 6px',
+        display:'flex', alignItems:'center', gap:4 }}>
+        <span style={{ fontSize:8, fontWeight:700, color:'#6b7280', marginRight:2 }}>✏️ Área Livre</span>
+        {(['bold','italic'] as const).map(cmd => (
+          <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd); }}
+            title={cmd === 'bold' ? 'Negrito' : 'Itálico'}
+            style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+              padding:'1px 6px', fontSize:10, fontWeight: cmd==='bold' ? 700 : 400,
+              fontStyle: cmd==='italic' ? 'italic' : 'normal', cursor:'pointer', lineHeight:1.4 }}>
+            {cmd === 'bold' ? 'B' : 'I'}
+          </button>
+        ))}
+        <button onMouseDown={e => {
+          e.preventDefault();
+          const url = window.prompt('URL do link:');
+          if (url) document.execCommand('createLink', false, url);
+        }} title="Inserir link"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'1px 6px', fontSize:10, cursor:'pointer', lineHeight:1.4 }}>
+          🔗
+        </button>
+        <button onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click(); }}
+          title="Inserir imagem"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'1px 6px', fontSize:10, cursor:'pointer', lineHeight:1.4 }}>
+          📷
+        </button>
+        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagem(f); e.target.value = ''; }} />
+        <div style={{ flex:1 }} />
+        {salvando && <span style={{ fontSize:8, color:'#d97706' }}>Salvando...</span>}
+        {salvo && !salvando && <span style={{ fontSize:8, color:'#16a34a' }}>✓ Salvo</span>}
+        <button onClick={salvarAgora} disabled={salvando} title="Salvar agora"
+          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:3,
+            padding:'1px 8px', fontSize:8, fontWeight:700, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
+          💾 Salvar
+        </button>
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        className="cotacao-area-livre"
+        onInput={autosave}
+        onPaste={handlePaste}
+        style={{ minHeight:50, padding:'8px 10px', fontSize:10, color:'#1e293b',
+          lineHeight:1.5, outline:'none', background:'#fff', wordBreak:'break-word' }}
+        data-placeholder="Notas sobre esta cotação, cole tabelas, imagens, links..."
+      />
+      <style>{`
+        [data-placeholder]:empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          pointer-events: none;
+        }
+        .cotacao-area-livre table { border-collapse:collapse; width:100%; }
+        .cotacao-area-livre td, .cotacao-area-livre th {
+          border:1px solid #d1d5db; padding:3px 5px; font-size:9px; }
+      `}</style>
+    </div>
+  );
+}
+
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -129,8 +265,11 @@ export default function ComprasTab({ currentUser }) {
   const [novoAnexoCotacao, setNovoAnexoCotacao] = useState<File|null>(null);
   const [enviandoCotacao, setEnviandoCotacao]   = useState(false);
   const [vencedoraId, setVencedoraId]           = useState<string|null>(null);
-  const [justificativa, setJustificativa]       = useState('');
-  const [confirmandoCompra, setConfirmandoCompra] = useState(false);
+  // Aprovar cotação com senha (substitui o antigo fluxo de rádio + justificativa + confirmar)
+  const [modalConfirmarSenha, setModalConfirmarSenha] = useState<any>(null); // cotação sendo aprovada
+  const [senhaConfirmacao, setSenhaConfirmacao] = useState('');
+  const [verificandoSenha, setVerificandoSenha] = useState(false);
+  const [erroSenha, setErroSenha]               = useState('');
 
   // Alçadas de Aprovação (Fase 2)
   const [alcadasConfig, setAlcadasConfig]       = useState<any[]>([]);
@@ -374,7 +513,6 @@ export default function ComprasTab({ currentUser }) {
     setNovaCotacao({ ...VAZIO_COTACAO });
     setNovoAnexoCotacao(null);
     setVencedoraId(p.vencedora_id || null);
-    setJustificativa(p.justificativa_vencedora || '');
     setLoadingCotacoes(true);
     const { data } = await supabase.from('pcp_cotacoes_fornecedores')
       .select('*').eq('pedido_id', p.id).order('criado_em', { ascending: true });
@@ -387,6 +525,7 @@ export default function ComprasTab({ currentUser }) {
     const { data } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', pedidoId).order('nivel', { ascending: true });
     setAprovacoesPedido(data || []);
+    return data || [];
   };
 
   const adicionarCotacao = async () => {
@@ -564,20 +703,24 @@ export default function ComprasTab({ currentUser }) {
     return { error: null, aguardandoAprovacao: true };
   };
 
-  const aprovarNivelAtivo = async () => {
-    const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
-    if (!nivelAtivo || !modalCotacoes) return;
-    setRespondendoAprovacao(true);
+  // Marca a pendência de menor nível (de `lista`) como aprovada e resolve em
+  // cascata — notifica o próximo nível se sobrar alçada, ou fecha pra
+  // "Comprado" se não sobrar nada e já existir vencedora. Recebe `lista`/`pedido`
+  // como parâmetro (em vez de ler do state) pra poder ser chamada logo após um
+  // fetch fresco, sem depender do próximo render pra enxergar dados recém-criados.
+  const resolverPendenciaComoAprovada = async (lista: any[], pedido: any) => {
+    const nivelAtivo = lista.find(a => a.status === 'pendente');
+    if (!nivelAtivo) return;
     await supabase.from('pcp_aprovacoes').update({
       status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(),
     }).eq('id', nivelAtivo.id);
     const { data: restantes } = await supabase.from('pcp_aprovacoes')
-      .select('*').eq('pedido_id', modalCotacoes.id).eq('status', 'pendente').order('nivel', { ascending: true });
+      .select('*').eq('pedido_id', pedido.id).eq('status', 'pendente').order('nivel', { ascending: true });
     if (restantes && restantes.length > 0) {
       if (restantes[0].tipo !== 'departamento') {
         const proximaAlcada = alcadasConfig.find(a => a.nivel === restantes[0].nivel);
-        if (proximaAlcada) await notificarAprovadoresNivel(modalCotacoes, proximaAlcada);
+        if (proximaAlcada) await notificarAprovadoresNivel(pedido, proximaAlcada);
       }
       // linha de departamento: já foi notificada quando criada, nada a fazer aqui.
     } else {
@@ -585,12 +728,30 @@ export default function ComprasTab({ currentUser }) {
       // a linha de departamento (antes do comprador confirmar a compra) não deve
       // sozinho fechar o pedido.
       const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra')
-        .select('vencedora_id').eq('id', modalCotacoes.id).maybeSingle();
+        .select('vencedora_id').eq('id', pedido.id).maybeSingle();
       if (pedidoAtual?.vencedora_id) {
-        await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', modalCotacoes.id);
-        await notificarCriadorPedido(modalCotacoes, `Compra aprovada e confirmada — pedido ${modalCotacoes.numero_pedido}.`);
+        await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', pedido.id);
+        await notificarCriadorPedido(pedido, `Compra aprovada e confirmada — pedido ${pedido.numero_pedido}.`);
       }
     }
+  };
+
+  // Checa se o usuário logado pode aprovar a pendência atual — mesma regra pra
+  // departamento (aprovador_id específico) e alçada (perfil dentro de
+  // perfis_aprovadores). Sem pendência nenhuma, não há autorização especial a checar.
+  const souAprovadorPara = (pendencia: any) => {
+    if (!pendencia) return true;
+    if (pendencia.tipo === 'departamento') {
+      return String(currentUser?.id) === pendencia.aprovador_id || currentUser?.perfil === 'Admin';
+    }
+    const alcada = alcadasConfig.find(a => a.nivel === pendencia.nivel);
+    return !!(alcada && (alcada.perfis_aprovadores||[]).includes(currentUser?.perfil));
+  };
+
+  const aprovarNivelAtivo = async () => {
+    if (!modalCotacoes) return;
+    setRespondendoAprovacao(true);
+    await resolverPendenciaComoAprovada(aprovacoesPedido, modalCotacoes);
     setRespondendoAprovacao(false);
     setModalCotacoes(null);
     setFiltro('');
@@ -615,31 +776,74 @@ export default function ComprasTab({ currentUser }) {
     }).eq('id', modalCotacoes.id);
     await notificarCriadorPedido(modalCotacoes, `Compra rejeitada (Nível ${nivelAtivo.nivel} — ${nivelAtivo.nivel_nome}). Motivo: ${motivo.trim()}`);
     setRespondendoAprovacao(false);
-    setVencedoraId(null); setJustificativa('');
+    setVencedoraId(null);
     setModalCotacoes(null);
     setFiltro('');
     load();
   };
 
-  const confirmarCompraComVencedora = async () => {
+  // Clique em "✅ Aprovar" numa cotação específica: valida as regras de sempre
+  // (≥3 cotações, prazo definido) e, se houver uma pendência de aprovação em
+  // aberto, confirma que ESTE usuário tem autorização pra resolvê-la antes
+  // de sequer abrir o prompt de senha.
+  const aprovarCotacaoComoVencedora = (cotacao: any) => {
     if (!modalCotacoes) return;
-    if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de fornecedores antes de confirmar.'); return; }
-    if (!vencedoraId) { alert('Selecione a cotação vencedora.'); return; }
-    if (!justificativa.trim()) { alert('Informe a justificativa da cotação vencedora.'); return; }
+    if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de fornecedores antes de aprovar.'); return; }
     const row = inline[modalCotacoes.id];
-    if (!row?.prazo) { alert('Informe a previsão de recebimento antes de confirmar.'); return; }
-    const vencedora = cotacoes.find(c => c.id === vencedoraId);
-    if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
-    setConfirmandoCompra(true);
+    if (!row?.prazo) { alert('Informe a previsão de recebimento antes de aprovar.'); return; }
+    const pendencia = aprovacoesPedido.find(a => a.status === 'pendente');
+    if (pendencia && !souAprovadorPara(pendencia)) {
+      const quem = pendencia.tipo === 'departamento'
+        ? pendencia.aprovador_nome
+        : (alcadasConfig.find(a=>a.nivel===pendencia.nivel)?.perfis_aprovadores||[]).join(', ');
+      alert('Você não tem autorização para aprovar este pedido. Aguardando: ' + (quem || '—'));
+      return;
+    }
+    setModalConfirmarSenha(cotacao);
+    setSenhaConfirmacao('');
+    setErroSenha('');
+  };
+
+  // Confirma a senha de quem está aprovando e, se bater, seleciona a cotação
+  // como vencedora e resolve a aprovação pendente (se houver e for desta pessoa).
+  const confirmarAprovacaoComSenha = async () => {
+    const cotacao = modalConfirmarSenha;
+    if (!cotacao || !modalCotacoes) return;
+    if (!senhaConfirmacao) { setErroSenha('Digite sua senha.'); return; }
+    setVerificandoSenha(true);
+    const { data: usuarioAtual } = await supabase.from('auth_usuarios')
+      .select('senha').eq('id', currentUser?.id).maybeSingle();
+    if (!usuarioAtual || usuarioAtual.senha !== senhaConfirmacao) {
+      setVerificandoSenha(false);
+      setErroSenha('Senha incorreta.');
+      return;
+    }
+    const row = inline[modalCotacoes.id];
+    const textoJustificativa = (cotacao.area_livre || '')
+      .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+      || `Cotação vencedora: ${cotacao.fornecedor_nome}`;
     const { error } = await dispararOuConfirmar(modalCotacoes.id, {
-      vencedora_id: vencedoraId,
-      justificativa_vencedora: justificativa.trim(),
-      fornecedor: vencedora.fornecedor_nome,
-      valor_compra: vencedora.valor,
+      vencedora_id: cotacao.id,
+      justificativa_vencedora: textoJustificativa,
+      fornecedor: cotacao.fornecedor_nome,
+      valor_compra: cotacao.valor,
       data_prevista_recebimento: row.prazo,
     });
-    setConfirmandoCompra(false);
-    if (error) { alert('Erro: ' + error.message); return; }
+    if (error) {
+      setVerificandoSenha(false);
+      setErroSenha('Erro: ' + error.message);
+      return;
+    }
+    // Pode ter nascido uma alçada nova (ou já existir uma pendência de
+    // departamento) — busca fresco e resolve na hora se for algo que ESTE
+    // usuário pode aprovar; senão fica "Aguardando Aprovação" normalmente.
+    const listaFresca = await carregarAprovacoes(modalCotacoes.id);
+    const pendenciaFresca = listaFresca.find((a:any) => a.status === 'pendente');
+    if (pendenciaFresca && souAprovadorPara(pendenciaFresca)) {
+      await resolverPendenciaComoAprovada(listaFresca, modalCotacoes);
+    }
+    setVerificandoSenha(false);
+    setModalConfirmarSenha(null);
     setModalCotacoes(null);
     setFiltro('');
     load();
@@ -1208,10 +1412,10 @@ export default function ComprasTab({ currentUser }) {
                   {nivelAtivo ? (
                     souAprovador ? (
                       <div style={{display:'flex',gap:8}}>
-                        <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={aprovarNivelAtivo} disabled={respondendoAprovacao}>
-                          {respondendoAprovacao?'...':'✅ Aprovar'}
-                        </button>
-                        <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={rejeitarNivelAtivo} disabled={respondendoAprovacao}>
+                        <div style={{flex:1,fontSize:9,color:'#92400e',alignSelf:'center'}}>
+                          Aprove clicando em "✅ Aprovar" na cotação vencedora, abaixo.
+                        </div>
+                        <button className="acn-btn" style={{background:'#ef4444'}} onClick={rejeitarNivelAtivo} disabled={respondendoAprovacao}>
                           ❌ Rejeitar
                         </button>
                       </div>
@@ -1248,29 +1452,38 @@ export default function ComprasTab({ currentUser }) {
                   <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
                 )}
                 {cotacoes.map((c:any) => (
-                  <label key={c.id} style={{
-                    display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:6,cursor:'pointer',
+                  <div key={c.id} style={{
+                    padding:'8px 10px',borderRadius:6,
                     border: vencedoraId===c.id ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
                     background: vencedoraId===c.id ? '#f0fdf4' : '#fff',
                   }}>
-                    <input type="radio" name="vencedora" checked={vencedoraId===c.id} onChange={()=>setVencedoraId(c.id)} />
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
-                        {c.fornecedor_nome}
-                        {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
+                          {c.fornecedor_nome}
+                          {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
+                        </div>
+                        <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
+                          {c.valor ? fmt(c.valor) : '—'}
+                          {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
+                          {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
+                        </div>
+                        {c.anexo_url && (
+                          <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
+                        )}
                       </div>
-                      <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
-                        {c.valor ? fmt(c.valor) : '—'}
-                        {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
-                        {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
-                      </div>
-                      {c.anexo_url && (
-                        <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
-                      )}
+                      <button onClick={()=>excluirCotacao(c.id)} title="Remover"
+                        style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
                     </div>
-                    <button onClick={(e)=>{e.preventDefault();excluirCotacao(c.id);}} title="Remover"
-                      style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
-                  </label>
+                    <CotacaoAreaLivre cotacao={c}
+                      onSaved={(html:string)=>setCotacoes(prev=>prev.map(x=>x.id===c.id?{...x,area_livre:html}:x))} />
+                    {!aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
+                      <button className="acn-btn" style={{background:'#16a34a',width:'100%',marginTop:6}}
+                        onClick={()=>aprovarCotacaoComoVencedora(c)}>
+                        ✅ Aprovar esta cotação como vencedora
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -1317,25 +1530,44 @@ export default function ComprasTab({ currentUser }) {
             </div>
 
             {cotacoes.length >= 3 && (
-              <div style={{marginBottom:14}}>
-                <label className="acn-label">Justificativa da cotação vencedora *</label>
-                <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}}
-                  value={justificativa} onChange={e=>setJustificativa(e.target.value)}
-                  placeholder="Ex: Melhor prazo de entrega e condição de pagamento, apesar de não ser o menor valor..." />
+              <div style={{fontSize:9,color:'#64748b',marginBottom:10}}>
+                Escreva na área livre de cada cotação e clique em "✅ Aprovar" na vencedora, acima.
               </div>
             )}
 
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarCompraComVencedora} disabled={confirmandoCompra}>
-                {confirmandoCompra?'Confirmando...':'✅ Confirmar Compra com Vencedora'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
+              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
             </div>
             </>) : (
               <div style={{display:'flex',gap:8}}>
                 <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalCotacoes(null)}>Fechar</button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAR SENHA — reconfirma identidade antes de aprovar uma cotação */}
+      {modalConfirmarSenha && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalConfirmarSenha(null);}}>
+          <div className="modal-box" style={{maxWidth:380}}>
+            <div className="modal-title">🔒 Confirmar Aprovação</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
+              Confirme sua senha para aprovar <strong>{modalConfirmarSenha.fornecedor_nome}</strong> como
+              cotação vencedora ({fmt(modalConfirmarSenha.valor)}).
+            </div>
+            <label className="acn-label">Sua senha</label>
+            <input type="password" className="acn-input" style={{width:'100%',marginBottom:6}}
+              value={senhaConfirmacao} onChange={e=>{setSenhaConfirmacao(e.target.value);setErroSenha('');}}
+              onKeyDown={e=>e.key==='Enter'&&confirmarAprovacaoComSenha()}
+              autoFocus placeholder="Mesma senha do login" />
+            {erroSenha && <div style={{fontSize:10,color:'#dc2626',marginBottom:8}}>{erroSenha}</div>}
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarAprovacaoComSenha} disabled={verificandoSenha}>
+                {verificandoSenha?'Verificando...':'✅ Confirmar'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalConfirmarSenha(null)}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
