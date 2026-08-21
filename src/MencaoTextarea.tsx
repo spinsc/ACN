@@ -67,40 +67,50 @@ export async function salvarMencoes(opts: {
 }) {
   const { texto, mencionanteId, mencionanteNome, contexto, contextoId,
           contextoDescricao, campo, abaDestino } = opts;
-  if (!texto || !contextoId) return;
+  if (!texto || !contextoId || !texto.includes('@')) return;
 
-  // Extrai todos os @Nome do texto
-  const matches = [...texto.matchAll(/@([^\s]{2,})/g)];
-  if (!matches.length) return;
-  const nomes = [...new Set(matches.map(m => m[1]))];
+  // Busca todos os usuários (nomes têm espaço — "João Silva" — então não dá pra
+  // extrair o nome mencionado com um regex que para no primeiro \s; em vez disso,
+  // casa contra a lista real de nomes cadastrados.
+  const { data: todosUsuarios, error: errUs } = await supabase.from('auth_usuarios').select('id, nome');
+  if (errUs) { console.error('[salvarMencoes] busca usuários:', errUs.message); return; }
+  const nomesValidos = (todosUsuarios || []).filter((u: any) => u.nome?.trim());
 
-  for (const nome of nomes) {
-    const { data: us, error: errUs } = await supabase
-      .from('auth_usuarios').select('id, nome').ilike('nome', `%${nome}%`).limit(3);
-    if (errUs) { console.error('[salvarMencoes] busca usuário:', errUs.message); continue; }
-    for (const u of (us || [])) {
-      const uId = String(u.id);
-      const mId = String(mencionanteId);
-      if (uId === mId) continue;  // não menciona a si mesmo
-      const { count, error: errCount } = await supabase.from('mencoes')
-        .select('id', { count: 'exact', head: true })
-        .eq('mencionado_id', uId).eq('contexto_id', contextoId)
-        .eq('campo', campo).eq('lida', false);
-      if (errCount) { console.error('[salvarMencoes] check dup:', errCount.message); }
-      if ((count || 0) === 0) {
-        const { error: errIns } = await supabase.from('mencoes').insert({
-          mencionado_id: uId, mencionado_nome: u.nome,
-          mencionante_id: mId, mencionante_nome: mencionanteNome,
-          contexto, contexto_id: contextoId, contexto_descricao: contextoDescricao,
-          campo, texto_trecho: texto.slice(0, 200),
-          aba_destino: abaDestino, lida: false, criado_em: new Date().toISOString(),
-        });
-        if (errIns) {
-          console.error('[salvarMencoes] insert falhou:', errIns.message,
-            '| mencionado_id:', uId, '| contexto_id:', contextoId);
-        } else {
-          console.log('[salvarMencoes] ✅ menção salva para', u.nome, '| contexto:', contextoId);
-        }
+  // Para cada @ no texto, acha o usuário cujo nome bate ali — prioriza o nome
+  // mais longo (senão "@João Silva" também "acertaria" um usuário só "João").
+  const mencionados = new Map<string, any>();
+  for (const m of texto.matchAll(/@/g)) {
+    const resto = texto.slice((m.index ?? 0) + 1);
+    let melhor: any = null;
+    for (const u of nomesValidos) {
+      if (resto.startsWith(u.nome) && (!melhor || u.nome.length > melhor.nome.length)) melhor = u;
+    }
+    if (melhor) mencionados.set(String(melhor.id), melhor);
+  }
+  if (mencionados.size === 0) return;
+
+  for (const u of mencionados.values()) {
+    const uId = String(u.id);
+    const mId = String(mencionanteId);
+    if (uId === mId) continue;  // não menciona a si mesmo
+    const { count, error: errCount } = await supabase.from('mencoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('mencionado_id', uId).eq('contexto_id', contextoId)
+      .eq('campo', campo).eq('lida', false);
+    if (errCount) { console.error('[salvarMencoes] check dup:', errCount.message); }
+    if ((count || 0) === 0) {
+      const { error: errIns } = await supabase.from('mencoes').insert({
+        mencionado_id: uId, mencionado_nome: u.nome,
+        mencionante_id: mId, mencionante_nome: mencionanteNome,
+        contexto, contexto_id: contextoId, contexto_descricao: contextoDescricao,
+        campo, texto_trecho: texto.slice(0, 200),
+        aba_destino: abaDestino, lida: false, criado_em: new Date().toISOString(),
+      });
+      if (errIns) {
+        console.error('[salvarMencoes] insert falhou:', errIns.message,
+          '| mencionado_id:', uId, '| contexto_id:', contextoId);
+      } else {
+        console.log('[salvarMencoes] ✅ menção salva para', u.nome, '| contexto:', contextoId);
       }
     }
   }
