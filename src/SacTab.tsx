@@ -37,6 +37,10 @@ const STATUS_COR: Record<string, string> = {
   'Verificação e Orçamento':       '#8b5cf6',
   'Em Manutenção':                 '#dc2626',
   'Manutenção Concluída':          '#0d9488',
+  'Aguardando CQ':                 '#8b5cf6',
+  'Aguardando Envio Fiscal':       '#f59e0b',
+  'Aguardando Emissão NF':         '#0891b2',
+  'Faturada - Aguardando Entrega': '#166534',
 };
 
 // Detecta OS de manutenção veicular
@@ -199,6 +203,8 @@ export default function SacTab({ currentUser }) {
   const [modalItens, setModalItens]               = useState<any>(null); // ver/editar itens cotação (Em Cotação)
   const [localItens, setLocalItens]               = useState<any[]>([]); // itens editáveis do modal de cotação
   const [horasCobradas, setHorasCobradas]         = useState<string>(''); // horas cobradas na cotação remota
+  const [modalEnviarFiscal, setModalEnviarFiscal] = useState<any>(null); // Aguardando Envio Fiscal — captura nº de série
+  const [fiscalItens, setFiscalItens]             = useState<any[]>([]);
   const [modalOrcProd, setModalOrcProd]           = useState<any>(null); // ver/editar orçamento vindo da Produção
   const [orcProdModo, setOrcProdModo]             = useState<'ver'|'editar'>('ver');
   const [orcProdItens, setOrcProdItens]           = useState<any[]>([]);
@@ -644,21 +650,25 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     fetchOrdens();
   };
 
-  // SAC aprova orçamento de verificação presencial → Produção inicia manutenção
+  // SAC aprova orçamento de verificação presencial → Produção atribui técnico
+  // (unificado com o caminho Remota: os dois passam por "Aguardando Início"
+  // antes de iniciar o trabalho de fato, em vez de pular direto pra execução).
   const aprovarOrcamentoPresencial = async (os: any) => {
     if (!window.confirm(`Confirmar aprovação do orçamento de manutenção pelo cliente — ${os.numero_os}?`)) return;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
-      status: 'Em Manutenção',
+      status: 'Aguardando Início',
       aprovado: true,
       data_aprovacao: agora,
-      data_inicio_manutencao: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
     fetchOrdens();
   };
 
-  // SAC edita orçamento que veio da Produção (Presencial — Aguardando Aprovação Cliente)
+  // SAC edita orçamento que veio da Produção (Presencial — Aguardando Aprovação
+  // Cliente, ou renegociação em Manutenção Concluída/revisão pendente). Ao
+  // salvar, também resolve uma eventual revisão pendente (ver salvarConclusao
+  // em ProducaoTab.tsx): a Adaptação fica livre pra concluir de novo.
   const salvarEdicaoOrcProd = async () => {
     if (!modalOrcProd) return;
     if (!orcProdItens.length) { alert('Adicione ao menos um item!'); return; }
@@ -667,9 +677,29 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     await supabase.from('sac_ordens_servico').update({
       itens_cotacao: orcProdItens,
       valor_orcamento: total,
+      revisao_pendente: false,
+      valor_orcamento_revisado: null,
+      itens_revisados: null,
       atualizado_em: agora,
     }).eq('id', modalOrcProd.id);
     setModalOrcProd(null); setOrcProdItens([]);
+    fetchOrdens();
+  };
+
+  // SAC envia OS aprovada no CQ para o Fiscal, registrando o nº de série de
+  // cada item instalado (mesma lista de materiais_utilizados, agora com o
+  // campo numero_serie preenchido) → Fiscal passa a enxergar essa OS.
+  const enviarParaFiscal = async () => {
+    const os = modalEnviarFiscal;
+    if (!os) return;
+    const agora = new Date().toISOString();
+    await supabase.from('sac_ordens_servico').update({
+      materiais_utilizados: fiscalItens,
+      status: 'Aguardando Emissão NF',
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('sac_enviado_fiscal', `📤 *Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
+    setModalEnviarFiscal(null); setFiscalItens([]);
     fetchOrdens();
   };
 
@@ -759,6 +789,22 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
 
     // ── FLUXO VEICULAR ──────────────────────────────────────────────────────
     if (eh) {
+      // Orçamento revisado durante a execução (itens não bateram com o
+      // aprovado) → SAC negocia com o cliente e resolve, independente do
+      // status atual (a OS fica parada em Em Execução até isso ser resolvido).
+      if (os.revisao_pendente) {
+        const itensRevisao = Array.isArray(os.itens_revisados) && os.itens_revisados.length > 0
+          ? os.itens_revisados.map((i:any) => ({...i}))
+          : Array.isArray(os.itens_cotacao) && os.itens_cotacao.length > 0
+            ? os.itens_cotacao.map((i:any) => ({...i}))
+            : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0}];
+        btns.push(
+          <button key="revisao" className="acn-btn" style={{background:'#dc2626',fontSize:9,fontWeight:700}}
+            onClick={()=>{ setOrcProdItens(itensRevisao); setOrcProdModo('editar'); setModalOrcProd(os); }}>
+            🔁 Resolver Revisão ({fmtVal(os.valor_orcamento_revisado)})
+          </button>
+        );
+      }
       // Remota: Em Cotação → SAC insere itens e envia cotação
       if (os.status === 'Em Cotação') {
         btns.push(
@@ -820,6 +866,34 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
         );
         btns.push(
           <button key="entrega" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
+        );
+      }
+      // Aguardando CQ → sem ação do SAC, Qualidade que audita
+      if (os.status === 'Aguardando CQ') {
+        btns.push(<span key="cq" style={{fontSize:9,color:'#94a3b8',fontStyle:'italic'}}>Aguardando Qualidade</span>);
+      }
+      // Aguardando Envio Fiscal → SAC informa nº de série dos itens e envia ao Fiscal
+      if (os.status === 'Aguardando Envio Fiscal') {
+        btns.push(
+          <button key="envfiscal" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+            onClick={()=>{
+              const itens = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0
+                ? os.materiais_utilizados.map((i:any) => ({...i}))
+                : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0,numero_serie:''}];
+              setFiscalItens(itens); setModalEnviarFiscal(os);
+            }}>
+            📤 Enviar para Fiscal
+          </button>
+        );
+      }
+      // Aguardando Emissão NF → sem ação do SAC, Fiscal que emite
+      if (os.status === 'Aguardando Emissão NF') {
+        btns.push(<span key="nf" style={{fontSize:9,color:'#94a3b8',fontStyle:'italic'}}>Aguardando Fiscal</span>);
+      }
+      // Faturada - Aguardando Entrega → SAC entrega o veículo
+      if (os.status === 'Faturada - Aguardando Entrega') {
+        btns.push(
+          <button key="entrega2" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
         );
       }
       // Reprovado veicular → reavaliar
@@ -1555,7 +1629,12 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                         </span>
                       )}
                     </td>
-                    <td><span className="acn-badge" style={{background: STATUS_COR[o.status]||'#94a3b8'}}>{o.status}</span></td>
+                    <td>
+                      <span className="acn-badge" style={{background: STATUS_COR[o.status]||'#94a3b8'}}>{o.status}</span>
+                      {o.revisao_pendente && (
+                        <div style={{fontSize:8,color:'#dc2626',fontWeight:700,marginTop:2}}>⚠️ Revisão pendente</div>
+                      )}
+                    </td>
                     <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{renderAcoes(o)}</div></td>
                   </tr>
                 ))}
@@ -2232,6 +2311,45 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                 <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
               </div>
             </>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Enviar para Fiscal — captura nº de série dos itens instalados */}
+      {modalEnviarFiscal && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:760,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">📤 Enviar para Fiscal — {modalEnviarFiscal.numero_os}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalEnviarFiscal.cliente_nome}</div>
+            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
+              ⚠️ Informe o nº de série de cada item instalado antes de enviar — o Fiscal precisa dessa informação para emitir a NF-e.
+            </div>
+            <table style={{width:'100%',borderCollapse:'collapse',marginBottom:12}}>
+              <thead>
+                <tr style={{background:'#f1f5f9'}}>
+                  <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0'}}>Descrição</th>
+                  <th style={{padding:'6px 8px',fontSize:10,textAlign:'center',borderBottom:'2px solid #e2e8f0',width:60}}>Qtd</th>
+                  <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0',width:180}}>Nº de Série</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fiscalItens.map((item, idx) => (
+                  <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
+                    <td style={{padding:'4px 6px',fontSize:11}}>{item.descricao || '—'}</td>
+                    <td style={{padding:'4px 6px',fontSize:11,textAlign:'center'}}>{item.quantidade || 1}</td>
+                    <td style={{padding:'4px 6px'}}>
+                      <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.numero_serie || ''}
+                        placeholder="Nº de série..."
+                        onChange={e=>setFiscalItens(p=>p.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={enviarParaFiscal}>📤 Enviar para Fiscal</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{ setModalEnviarFiscal(null); setFiscalItens([]); }}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}

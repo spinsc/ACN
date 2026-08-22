@@ -8,6 +8,7 @@ import Linkify from './Linkify';
 
 export default function FiscalTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
+  const [ordensOS, setOrdensOS] = useState([]);
   const [loading, setLoading] = useState(false);
   const [nfs, setNfs] = useState({});
   const [modalVer, setModalVer] = useState(null);
@@ -19,10 +20,17 @@ export default function FiscalTab({ currentUser }) {
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const { data } = await supabase.from('oples').select('*')
-      .in('status_geral', ['Aguarda Emissao NF','Faturado e Disponivel para Entrega'])
-      .order('data_liberacao_comercial', { ascending: true });
-    setOpls(data || []);
+    const [oplsRes, osRes] = await Promise.all([
+      supabase.from('oples').select('*')
+        .in('status_geral', ['Aguarda Emissao NF','Faturado e Disponivel para Entrega'])
+        .order('data_liberacao_comercial', { ascending: true }),
+      supabase.from('sac_ordens_servico').select('*')
+        .in('status', ['Aguardando Emissão NF','Faturada - Aguardando Entrega'])
+        .eq('is_manutencao_veicular', true)
+        .order('data_cq', { ascending: true }),
+    ]);
+    setOpls(oplsRes.data || []);
+    setOrdensOS(osRes.data || []);
     if (!silent) setLoading(false);
   };
 
@@ -47,6 +55,25 @@ export default function FiscalTab({ currentUser }) {
     }]);
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, nf.trim(), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
+    fetchAll();
+  };
+
+  const faturarOS = async (os) => {
+    const nf = nfs[os.id];
+    if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
+    const agora = new Date().toISOString();
+    const inicioFiscal = os.data_cq ? new Date(os.data_cq) : null;
+    const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
+    await supabase.from('sac_ordens_servico').update({
+      status: 'Faturada - Aguardando Entrega',
+      numero_nf: nf.trim(),
+      data_emissao_nf: agora,
+      responsavel_fiscal: currentUser?.nome,
+      ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
+      atualizado_em: agora,
+    }).eq('id', os.id);
+    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, nf.trim(), currentUser?.nome));
+    setNfs(prev => { const n={...prev}; delete n[os.id]; return n; });
     fetchAll();
   };
 
@@ -158,6 +185,61 @@ export default function FiscalTab({ currentUser }) {
                     <td>{fmtDt(o.data_emissao_nf)}</td>
                     <td>{o.responsavel_fiscal || '—'}</td>
                     <td><button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* OS DE MANUTENÇÃO VEICULAR — AGUARDANDO EMISSAO */}
+      {ordensOS.filter(o=>o.status==='Aguardando Emissão NF').length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
+            <span style={{color:'#92400e'}}>OS Veiculares Aguardando Emissao de NF-e ({ordensOS.filter(o=>o.status==='Aguardando Emissão NF').length})</span>
+          </div>
+          <div className="sec-body" style={{overflowX:'auto'}}>
+            <table>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
+              <tbody>
+                {ordensOS.filter(o=>o.status==='Aguardando Emissão NF').map(o => (
+                  <tr key={o.id}>
+                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
+                    <td>{o.cliente_nome || '—'}</td>
+                    <td>{o.veiculo_modelo || '—'}</td>
+                    <td>
+                      <input className="acn-input" style={{width:120}} placeholder="NF-e 000000000"
+                        value={nfs[o.id] || ''}
+                        onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
+                        onKeyDown={e => e.key === 'Enter' && faturarOS(o)} />
+                    </td>
+                    <td><button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>faturarOS(o)}>FATURADO</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* OS DE MANUTENÇÃO VEICULAR — JA FATURADAS */}
+      {ordensOS.filter(o=>o.status==='Faturada - Aguardando Entrega').length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#f0fdf4',borderBottom:'2px solid #22c55e'}}>
+            <span style={{color:'#166534'}}>OS Veiculares Faturadas — Aguardando Entrega ({ordensOS.filter(o=>o.status==='Faturada - Aguardando Entrega').length})</span>
+          </div>
+          <div className="sec-body" style={{overflowX:'auto'}}>
+            <table>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th></tr></thead>
+              <tbody>
+                {ordensOS.filter(o=>o.status==='Faturada - Aguardando Entrega').map(o => (
+                  <tr key={o.id}>
+                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
+                    <td>{o.cliente_nome || '—'}</td>
+                    <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
+                    <td>{fmtDt(o.data_emissao_nf)}</td>
+                    <td>{o.responsavel_fiscal || '—'}</td>
                   </tr>
                 ))}
               </tbody>

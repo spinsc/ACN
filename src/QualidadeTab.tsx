@@ -46,6 +46,7 @@ function SignatureCanvas({ onSave }) {
 
 export default function QualidadeTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
+  const [ordensOS, setOrdensOS] = useState([]);
   const [loading, setLoading] = useState(false);
   const [checklist, setChecklist] = useState([]);
   const [modalAudit, setModalAudit] = useState(null);
@@ -60,35 +61,39 @@ export default function QualidadeTab({ currentUser }) {
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const [oplsRes, ckRes] = await Promise.all([
+    const [oplsRes, osRes, ckRes] = await Promise.all([
       supabase.from('oples').select('*').eq('status_geral','Aguardando CQ').order('data_entrada',{ascending:false}),
+      supabase.from('sac_ordens_servico').select('*').eq('status','Aguardando CQ').eq('is_manutencao_veicular',true).order('data_abertura',{ascending:false}),
       supabase.from('cq_checklist_itens').select('*').eq('ativo',true).order('ordem',{ascending:true}),
     ]);
-    setOpls(oplsRes.data || []);
+    setOpls((oplsRes.data || []).map(o => ({ ...o, _tipo: 'op' })));
+    setOrdensOS((osRes.data || []).map(o => ({ ...o, _tipo: 'os' })));
     setChecklist(ckRes.data || []);
     if (!silent) setLoading(false);
   };
 
   // checkStates: null=PENDENTE, true=OK, false=NOK, 'na'=N/A
-  const abrirAuditoria = (opl) => {
+  const abrirAuditoria = (row) => {
     const states = {};
     checklist.forEach(it => states[it.id] = null);
     setCheckStates(states);
     setObsAudit('');
     setSignData(null);
-    setModalAudit(opl);
+    setModalAudit(row);
   };
 
   const aprovar = async () => {
     if (!signData) { alert('Assine o checklist antes de aprovar!'); return; }
     setUploading(true);
-    const opl = modalAudit;
+    const row = modalAudit;
+    const ehOS = row._tipo === 'os';
+    const numero = ehOS ? row.numero_os : row.opl;
     const agora = new Date().toISOString();
     // Upload assinatura
     let sigUrl = null;
     try {
       const blob = await (await fetch(signData)).blob();
-      const path = `assinaturas/cq_${opl.opl}_${Date.now()}.png`;
+      const path = `assinaturas/cq_${numero}_${Date.now()}.png`;
       const { data: up } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
       if (up) {
         const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
@@ -98,7 +103,7 @@ export default function QualidadeTab({ currentUser }) {
 
     // Salvar auditoria
     await supabase.from('cq_auditorias').insert([{
-      opl_id: opl.id, numero_opl: opl.opl,
+      ...(ehOS ? { os_id: row.id, numero_os: numero } : { opl_id: row.id, numero_opl: numero }),
       resultado: 'Aprovado',
       itens_checklist: Object.entries(checkStates).map(([id,val]) => ({
         item_id: id,
@@ -111,53 +116,81 @@ export default function QualidadeTab({ currentUser }) {
       data_auditoria: agora,
     }]);
 
-    const iniciosCq = opl.data_entrada_cq ? new Date(opl.data_entrada_cq) : null;
-    const tempoCq = iniciosCq ? (new Date() - iniciosCq) / 3600000 : null;
-    await supabase.from('oples').update({
-      status_geral: 'Aprovado CQ - Aguardando Liberacao Comercial',
-      data_cq: agora,
-      resultado_cq: 'Aprovado',
-      cq_auditor: currentUser?.nome,
-      ...(tempoCq != null ? { tempo_qualidade_horas: tempoCq } : {}),
-    }).eq('id', opl.id);
+    if (ehOS) {
+      await supabase.from('sac_ordens_servico').update({
+        status: 'Aguardando Envio Fiscal',
+        resultado_cq: 'Aprovado',
+        cq_auditor: currentUser?.nome,
+        data_cq: agora,
+        atualizado_em: agora,
+      }).eq('id', row.id);
+    } else {
+      const iniciosCq = row.data_entrada_cq ? new Date(row.data_entrada_cq) : null;
+      const tempoCq = iniciosCq ? (new Date() - iniciosCq) / 3600000 : null;
+      await supabase.from('oples').update({
+        status_geral: 'Aprovado CQ - Aguardando Liberacao Comercial',
+        data_cq: agora,
+        resultado_cq: 'Aprovado',
+        cq_auditor: currentUser?.nome,
+        ...(tempoCq != null ? { tempo_qualidade_horas: tempoCq } : {}),
+      }).eq('id', row.id);
 
-    await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'CQ',
-      evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}`,
-      status_anterior: 'Aguardando CQ', status_novo: 'Aprovado CQ - Aguardando Liberacao Comercial',
-      usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: row.id, numero_opl: numero, setor: 'CQ',
+        evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}`,
+        status_anterior: 'Aguardando CQ', status_novo: 'Aprovado CQ - Aguardando Liberacao Comercial',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      }]);
+    }
 
-    notificarEvento('cq_aprovado', msg.cqAprovado(opl.opl, currentUser?.nome));
+    notificarEvento('cq_aprovado', msg.cqAprovado(numero, currentUser?.nome));
     setUploading(false); setModalAudit(null); fetchAll();
   };
 
   const reprovar = async () => {
     if (!obsAudit.trim()) { alert('Informe o motivo da reprovacao!'); return; }
-    const opl = modalAudit;
+    const row = modalAudit;
+    const ehOS = row._tipo === 'os';
+    const numero = ehOS ? row.numero_os : row.opl;
     const agora = new Date().toISOString();
     await supabase.from('cq_auditorias').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, resultado: 'Reprovado',
+      ...(ehOS ? { os_id: row.id, numero_os: numero } : { opl_id: row.id, numero_opl: numero }),
+      resultado: 'Reprovado',
       itens_checklist: Object.entries(checkStates).map(([id,val]) => ({
         item_id: id, item_descricao: checklist.find(c=>c.id==id)?.item_texto || id,
         resultado: val === true ? 'OK' : val === false ? 'NOK' : val === 'na' ? 'NA' : 'PENDENTE',
       })),
       observacoes: obsAudit, auditor_nome: currentUser?.nome, data_auditoria: agora,
     }]);
-    await supabase.from('oples').update({
-      status_geral: 'Retrabalho',
-      resultado_cq: 'Reprovado',
-      obs_reprovacao_cq: obsAudit,
-      cq_auditor: currentUser?.nome,
-      data_cq: agora,
-    }).eq('id', opl.id);
-    await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'CQ',
-      evento: `Auditoria CQ REPROVADA. Motivo: ${obsAudit}`,
-      status_anterior: 'Aguardando CQ', status_novo: 'Retrabalho',
-      usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
-    notificarEvento('cq_reprovado', msg.cqReprovado(opl.opl, obsAudit, currentUser?.nome));
+
+    if (ehOS) {
+      // OS não tem um status de "Retrabalho" separado — volta direto pra
+      // Em Execução, com o resultado da reprovação registrado.
+      await supabase.from('sac_ordens_servico').update({
+        status: 'Em Execução',
+        resultado_cq: 'Reprovado',
+        obs_reprovacao_cq: obsAudit,
+        cq_auditor: currentUser?.nome,
+        data_cq: agora,
+        atualizado_em: agora,
+      }).eq('id', row.id);
+    } else {
+      await supabase.from('oples').update({
+        status_geral: 'Retrabalho',
+        resultado_cq: 'Reprovado',
+        obs_reprovacao_cq: obsAudit,
+        cq_auditor: currentUser?.nome,
+        data_cq: agora,
+      }).eq('id', row.id);
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: row.id, numero_opl: numero, setor: 'CQ',
+        evento: `Auditoria CQ REPROVADA. Motivo: ${obsAudit}`,
+        status_anterior: 'Aguardando CQ', status_novo: 'Retrabalho',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      }]);
+    }
+
+    notificarEvento('cq_reprovado', msg.cqReprovado(numero, obsAudit, currentUser?.nome));
     setModalAudit(null); fetchAll();
   };
 
@@ -203,6 +236,33 @@ export default function QualidadeTab({ currentUser }) {
         </div>
       </div>
 
+      {/* OS DE MANUTENÇÃO VEICULAR AGUARDANDO CQ */}
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
+          <span style={{color:'#991b1b'}}>🔧 OS de Manutenção Veicular — Aguardando CQ ({ordensOS.length})</span>
+        </div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {ordensOS.length === 0 ? (
+            <div className="acn-empty">Nenhuma OS veicular aguardando auditoria de qualidade.</div>
+          ) : (
+            <table>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
+              <tbody>
+                {ordensOS.map(o => (
+                  <tr key={o.id}>
+                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
+                    <td>{o.cliente_nome || '—'}</td>
+                    <td>{o.veiculo_modelo || '—'}</td>
+                    <td>{o.tecnico_responsavel || '—'}</td>
+                    <td><button className="acn-btn" style={{background:'#7c3aed'}} onClick={()=>abrirAuditoria(o)}>EXECUTAR AUDITORIA</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
       <OplMovimentadas setor="CQ" />
       <DemandaFooter setor="Controle de Qualidade" />
 
@@ -212,9 +272,13 @@ export default function QualidadeTab({ currentUser }) {
       {modalAudit && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">Auditoria CQ — OPL {modalAudit.opl}</div>
+            <div className="modal-title">
+              Auditoria CQ — {modalAudit._tipo === 'os' ? `OS ${modalAudit.numero_os}` : `OPL ${modalAudit.opl}`}
+            </div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
-              Chassi: {modalAudit.chassi || '—'} | Tipo: {modalAudit.tipo_projeto}
+              {modalAudit._tipo === 'os'
+                ? <>Cliente: {modalAudit.cliente_nome || '—'} | Veículo: {modalAudit.veiculo_modelo || '—'}</>
+                : <>Chassi: {modalAudit.chassi || '—'} | Tipo: {modalAudit.tipo_projeto}</>}
             </div>
 
             {/* CHECKLIST */}

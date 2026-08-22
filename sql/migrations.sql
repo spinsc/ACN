@@ -512,3 +512,53 @@ ALTER TABLE public.responsaveis_producao DISABLE ROW LEVEL SECURITY;
 -- Cada cotação de fornecedor ganha seu próprio espaço de anotação rica
 -- (texto/imagens/tabelas coladas), pra embasar a decisão de qual vence.
 ALTER TABLE public.pcp_cotacoes_fornecedores ADD COLUMN IF NOT EXISTS area_livre text;
+
+-- =============================================================
+-- 2026-08-21 · feat: Reformulação do fluxo de OS de Manutenção Veicular
+-- (SAC <-> Adaptação <-> CQ <-> Fiscal)
+-- =============================================================
+-- Corrige o bug de confirmarChegada (pulava direto pra Aguardando Início
+-- ignorando o passo de orçamento), unifica a atribuição de técnico antes
+-- de iniciar o trabalho (elimina o pulo direto pra Em Manutenção), e
+-- estende os mecanismos de CQ/checklist e Fiscal/NF — que hoje só existem
+-- pra OP (oples) — também pra OS (sac_ordens_servico). Ver plano completo
+-- salvo na sessão (eager-whistling-tome.md).
+
+-- Revisão de orçamento durante a execução: quando os itens conferidos não
+-- batem com o valor aprovado, a OS fica com revisao_pendente=true (sem
+-- avançar de status) até o SAC negociar e resolver com o cliente.
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS revisao_pendente boolean NOT NULL DEFAULT false;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS valor_orcamento_revisado numeric;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS itens_revisados jsonb;
+
+-- Campos de Fiscal/NF, espelhando os mesmos já usados em oples.
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS numero_nf text;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS data_emissao_nf timestamptz;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS responsavel_fiscal text;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS tempo_fiscal_horas numeric;
+
+-- Campos de resultado do CQ, espelhando os mesmos já usados em oples
+-- (data_cq/resultado_cq/obs_reprovacao_cq/cq_auditor) — sac_ordens_servico
+-- não tinha nenhum deles ainda, já que CQ nunca existiu pra OS antes.
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS data_cq timestamptz;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS resultado_cq text;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS obs_reprovacao_cq text;
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS cq_auditor text;
+
+-- cq_auditorias em produção só tem (id, opl, chassi, categoria_servico,
+-- data_auditoria, resultado, itens_checklist, observacoes,
+-- assinatura_responsavel_url, responsavel_nome, nao_conformidades,
+-- tempo_qualidade_horas, criado_por, created_at) — NÃO tem opl_id/numero_opl/
+-- auditor_nome/assinatura_url, que é o que QualidadeTab.tsx sempre inseriu.
+-- Ou seja, o insert em cq_auditorias vinha falhando silenciosamente (o erro
+-- não é checado) em toda auditoria de OP já feita — a trilha de auditoria
+-- nunca foi de fato gravada, embora a aprovação/reprovação em si funcionasse
+-- (o UPDATE em oples que vem depois não depende do insert anterior).
+-- Corrigido aqui de graça, já que a extensão pra OS depende dessas mesmas
+-- colunas pra gravar sua própria trilha (os_id/numero_os).
+ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS opl_id uuid;
+ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS numero_opl text;
+ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS auditor_nome text;
+ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS assinatura_url text;
+ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS os_id uuid;
+ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS numero_os text;

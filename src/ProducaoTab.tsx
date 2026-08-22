@@ -541,11 +541,15 @@ function PainelSacVeicular({ currentUser }) {
     setModalProvisionar(null); setProvisionarForm({ data_provisao:'', periodo:'Manhã' }); load();
   };
 
-  // Produção confirma chegada → Presencial: Verificação e Orçamento / Remota: Em Manutenção
+  // Produção confirma chegada → Verificação e Orçamento.
+  // 'Provisionada' só é alcançado pelo caminho Presencial (a Remota já pula
+  // direto pra 'Aguardando Início' em confirmarAceiteSAC, em SacTab.tsx, já
+  // que a cotação é feita antes de agendar) — então esta função é sempre
+  // presencial na prática, sem precisar checar tipo_avaliacao aqui.
   const confirmarChegada = async () => {
     const os = modalConfirmarChegada;
     const agora = new Date().toISOString();
-    const novoStatus = 'Aguardando Início';
+    const novoStatus = 'Verificação e Orçamento';
     await supabase.from('sac_ordens_servico').update({
       status: novoStatus,
       data_chegada_veiculo: agora,
@@ -572,19 +576,64 @@ function PainelSacVeicular({ currentUser }) {
     setModalVerificacao(null); setVerificacaoItens([]); load();
   };
 
-  // Produção conclui manutenção → Manutenção Concluída
+  // Avisa o SAC (via menção, mesmo padrão do ComprasTab) que uma OS concluiu
+  // com itens diferentes do orçamento aprovado e precisa negociar o novo
+  // valor com o cliente — a OS fica parada (não avança pro CQ) até isso ser
+  // resolvido em SacTab.tsx (botão "🔁 Resolver Revisão").
+  const notificarRevisaoOrcamento = async (os: any, novoTotal: number) => {
+    try {
+      if (!os.criado_por_email) return;
+      const { data: criador } = await supabase.from('auth_usuarios')
+        .select('id, nome').eq('email', os.criado_por_email).maybeSingle();
+      if (!criador) return;
+      await supabase.from('mencoes').insert({
+        mencionado_id: String(criador.id), mencionado_nome: criador.nome,
+        mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+        contexto: 'sac_revisao_orcamento', contexto_id: String(os.id),
+        contexto_descricao: `OS ${os.numero_os}`,
+        campo: 'revisao_orcamento',
+        texto_trecho: `Orçamento revisado na OS ${os.numero_os} (${os.cliente_nome}) — novo total: ${fmtVal(novoTotal)} (aprovado: ${fmtVal(os.valor_orcamento)}). Negocie a aprovação do novo custo com o cliente.`,
+        aba_destino: 'sac', lida: false, criado_em: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('Falha ao notificar SAC sobre revisão de orçamento:', e); }
+  };
+
+  // Produção conclui manutenção → compara o total apurado com o orçamento
+  // aprovado (os.valor_orcamento). Se bater, segue pro CQ (Aguardando CQ);
+  // se não bater, a OS permanece onde está (não avança) e o SAC é avisado
+  // pra negociar o novo valor com o cliente.
   const salvarConclusao = async () => {
     const os = modalConcluirManu;
     const agora = new Date().toISOString();
     const kpi = os.data_inicio_manutencao
       ? Number(((new Date().getTime()-new Date(os.data_inicio_manutencao).getTime())/3600000).toFixed(2))
       : null;
+    const novoTotal = concluirManuForm.itens_usados.reduce((s:number,i:any)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
+    const totalAprovado = Number(os.valor_orcamento) || 0;
+    const bateu = Math.abs(novoTotal - totalAprovado) < 0.01;
+
+    if (!bateu) {
+      await supabase.from('sac_ordens_servico').update({
+        revisao_pendente: true,
+        valor_orcamento_revisado: novoTotal,
+        itens_revisados: concluirManuForm.itens_usados,
+        atualizado_em: agora,
+      }).eq('id', os.id);
+      await notificarRevisaoOrcamento(os, novoTotal);
+      setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
+      alert('Os itens não batem com o orçamento aprovado. A OS ficou pendente de revisão e o SAC foi avisado para negociar o novo valor com o cliente — conclua novamente depois que o SAC resolver.');
+      return;
+    }
+
     await supabase.from('sac_ordens_servico').update({
-      status: 'Manutenção Concluída',
+      status: 'Aguardando CQ',
       data_conclusao_manutencao: agora,
       materiais_utilizados: concluirManuForm.itens_usados,
       observacoes_manutencao: concluirManuForm.observacoes || null,
       kpi_execucao_horas: kpi,
+      revisao_pendente: false,
+      valor_orcamento_revisado: null,
+      itens_revisados: null,
       atualizado_em: agora,
     }).eq('id', os.id);
     setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
@@ -723,7 +772,12 @@ function PainelSacVeicular({ currentUser }) {
                             </span>
                           : '—'}
                       </td>
-                      <td><span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span></td>
+                      <td>
+                        <span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span>
+                        {os.revisao_pendente && (
+                          <div style={{fontSize:8,color:'#dc2626',fontWeight:700,marginTop:2}}>⚠️ Revisão pendente — aguardando SAC</div>
+                        )}
+                      </td>
                       <td>
                         <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
                           {os.status === 'Em Provisionamento' && (
@@ -846,7 +900,7 @@ function PainelSacVeicular({ currentUser }) {
               </div>
             )}
             <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:'10px',marginBottom:14,fontSize:11}}>
-              ✅ Próximo status: <strong>Aguardando Início</strong>
+              ✅ Próximo status: <strong>Verificação e Orçamento</strong>
             </div>
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarChegada}>🚗 Confirmar Chegada</button>
