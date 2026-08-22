@@ -18,6 +18,14 @@ export default function EngenhariaTab({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
   const [obsBom, setObsBom] = useState('');
+  // Liberação de BOM em lote — OPs desmembradas (mesmo número base, sufixo
+  // /01../NN) costumam compartilhar o mesmo BOM, então liberar uma por uma
+  // é retrabalho. selecionadosLote guarda os ids marcados no modal (todos
+  // marcados por padrão, dá pra desmarcar exceções antes de confirmar).
+  const [modalBomLote, setModalBomLote] = useState(null); // { base, irmaos: [] }
+  const [obsBomLote, setObsBomLote] = useState('');
+  const [selecionadosLote, setSelecionadosLote] = useState({});
+  const [liberandoLote, setLiberandoLote] = useState(false);
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
   const [modalDevolver, setModalDevolver] = useState(null);
@@ -123,6 +131,55 @@ export default function EngenhariaTab({ currentUser }) {
     setModalBom(null); setObsBom(''); fetchAll();
   };
 
+  // Número base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
+  // A unidade "01" fica sem sufixo (não renomeada, ver ComercialTab/CrmTab),
+  // então o próprio número original também serve de base do grupo.
+  const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+
+  const abrirBomLote = (opl) => {
+    const base = baseOplDe(opl.opl);
+    const irmaos = opls.filter(o => baseOplDe(o.opl) === base);
+    const marcados = {};
+    irmaos.forEach(o => { marcados[o.id] = true; });
+    setSelecionadosLote(marcados);
+    setObsBomLote('');
+    setModalBomLote({ base, irmaos });
+  };
+
+  const liberarBomLote = async () => {
+    const { irmaos } = modalBomLote;
+    const selecionados = irmaos.filter(o => selecionadosLote[o.id]);
+    if (selecionados.length === 0) { alert('Selecione ao menos uma OP.'); return; }
+    setLiberandoLote(true);
+    const agora = new Date().toISOString();
+    try {
+      for (const opl of selecionados) {
+        const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
+        const tempo = inicio ? (new Date() - inicio) / 3600000 : 0;
+        await supabase.from('oples').update({
+          status_geral: 'Em Espera PCP',
+          status_bom: 'BOM Liberado',
+          obs_liberacao_bom: obsBomLote,
+          data_liberacao_bom: agora,
+          tempo_engenharia_horas: tempo,
+          responsavel_engenharia: opl.responsavel_engenharia || currentUser?.nome,
+          data_inicio_engenharia: opl.data_inicio_engenharia || agora,
+        }).eq('id', opl.id);
+      }
+      await supabase.from('logs_movimentacao_opl').insert(selecionados.map(opl => ({
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
+        evento: `BOM liberado em lote (${selecionados.length} OPs do grupo ${modalBomLote.base}). Obs: ${obsBomLote || 'Sem observacoes'}.`,
+        status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      })));
+      notificarEvento('engenharia_libera_pcp', `📦 *BOM liberado em lote* — ${modalBomLote.base}\n${selecionados.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
+    } finally {
+      setLiberandoLote(false);
+      setModalBomLote(null); setObsBomLote(''); setSelecionadosLote({});
+      fetchAll();
+    }
+  };
+
   const devolverComercial = async () => {
     const opl = modalDevolver;
     const agora = new Date().toISOString();
@@ -207,6 +264,7 @@ export default function EngenhariaTab({ currentUser }) {
                   const rowStyle = kpi48h
                     ? { background:'#fef2f2', borderLeft:'4px solid #ef4444' }
                     : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' } : {};
+                  const qtdIrmaos = opls.filter(x => baseOplDe(x.opl) === baseOplDe(o.opl)).length;
                   return (
                     <tr key={o.id} style={rowStyle}>
                       <td>{fmtDt(o.data_entrada)}</td>
@@ -264,6 +322,11 @@ export default function EngenhariaTab({ currentUser }) {
                                 DEVOLVER
                               </button>
                             </>
+                          )}
+                          {qtdIrmaos > 1 && (
+                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}} onClick={()=>abrirBomLote(o)}>
+                              🏷️ BOM EM LOTE ({qtdIrmaos})
+                            </button>
                           )}
                           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                         </div>
@@ -436,6 +499,44 @@ export default function EngenhariaTab({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={liberarBOM}>LIBERAR BOM</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalBom(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL BOM EM LOTE — OPs desmembradas (mesmo numero base) */}
+      {modalBomLote && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+            <div className="modal-title">🏷️ Liberar BOM em Lote — {modalBomLote.base}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              {modalBomLote.irmaos.length} OPs desmembradas deste número. Desmarque as que não devem receber este BOM
+              (ex: alguma unidade com especificação diferente das demais).
+            </div>
+            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:8,marginBottom:10,maxHeight:220,overflowY:'auto'}}>
+              {modalBomLote.irmaos.map(o => (
+                <label key={o.id} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 2px',fontSize:11,cursor:'pointer'}}>
+                  <input type="checkbox" checked={!!selecionadosLote[o.id]}
+                    onChange={e=>setSelecionadosLote(s=>({...s,[o.id]:e.target.checked}))}
+                    style={{width:14,height:14,cursor:'pointer'}} />
+                  <span style={{flex:1}}>{o.opl}</span>
+                  <span style={{fontSize:9,color:'#94a3b8'}}>{o.status_geral}</span>
+                </label>
+              ))}
+            </div>
+            <label className="acn-label">Observações para PCP/Almoxarifado (aplicadas a todas as selecionadas)</label>
+            <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
+              placeholder="Detalhes do BOM, itens especiais, pendencias..."
+              value={obsBomLote} onChange={e=>setObsBomLote(e.target.value)} />
+            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:10,color:'#92400e'}}>
+              ⚠️ OPs que ainda não foram iniciadas na Engenharia serão marcadas como iniciadas agora mesmo (responsável: você),
+              já que a liberação em lote pula a etapa individual de "Iniciar".
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#7c3aed',flex:1,opacity:liberandoLote?0.6:1}} onClick={liberarBomLote} disabled={liberandoLote}>
+                {liberandoLote ? 'Liberando...' : `LIBERAR BOM PARA ${Object.values(selecionadosLote).filter(Boolean).length} OPs`}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalBomLote(null)} disabled={liberandoLote}>Cancelar</button>
             </div>
           </div>
         </div>
