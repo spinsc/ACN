@@ -633,17 +633,76 @@ export default function ComercialTab({ currentUser }) {
     if (editId) {
       // Buscar dados anteriores para log
       const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
-      // Aumentar a quantidade numa OP JÁ CADASTRADA não desmembra em várias OPs
-      // (isso só acontece ao criar uma OP nova, em NovaOpOsModal.tsx) — avisa
-      // antes de salvar pra não confundir com o fluxo de criação.
+      // Aumentar a quantidade numa OP JÁ CADASTRADA não desmembra sozinho —
+      // pergunta se quer desmembrar de verdade agora (gera OPs /02../NN a
+      // partir desta, que vira a unidade /01 implícita — mesmo padrão de
+      // sufixo usado na criação, NovaOpOsModal.tsx). Só oferece a opção se
+      // esta OP ainda não for ela mesma um sufixo /NN de uma outra (nesse
+      // caso cai direto no aviso antigo, sem tentar desmembrar de novo).
       const qtdAnterior = Number(anterior?.quantidade) || 1;
       const qtdNova = Number(formData.quantidade) || 1;
+      const baseOpl = (anterior?.opl || formData.opl || '').trim();
+      const jaEhSufixo = /\/\d+$/.test(baseOpl);
       if (qtdNova > qtdAnterior && qtdNova > 1) {
+        if (!jaEhSufixo) {
+          const desmembrar = confirm(
+            `Quantidade aumentou de ${qtdAnterior} para ${qtdNova}.\n\n` +
+            `Deseja DESMEMBRAR agora em ${qtdNova} OPs separadas (uma por veículo/unidade)? ` +
+            `Esta OP (${baseOpl}) continua sendo a 1ª unidade, com todo o histórico/status atual preservado. ` +
+            `Serão criadas mais ${qtdNova - 1} OPs novas (${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}), ` +
+            `com os mesmos dados comerciais mas começando do zero (Em Espera Engenharia).\n\n` +
+            `OK = desmembrar agora   |   Cancelar = só perguntar sobre atualizar a quantidade nesta OP mesmo`
+          );
+          if (desmembrar) {
+            const { data: colisao } = await supabase.from('oples').select('id').eq('opl', `${baseOpl}/02`).maybeSingle();
+            if (colisao) {
+              alert(`Já existe uma OP "${baseOpl}/02" — parece que esta OP já foi parcialmente desmembrada antes. Ajuste manualmente.`);
+              return;
+            }
+            const CAMPOS_SIBLING = [
+              'tipo_op','faturamento_empresa','tipo_projeto','modelo','valor_total','valor_mao_de_obra',
+              'valor_mao_de_obra_serralheria','data_entrada','data_prevista_entrega','data_chegada_veiculo',
+              'cliente_nome','responsavel_comercial','observacoes_comercial','crm_oportunidade_id',
+              'servico_terceiro','tipos_servico_terceiro','tipo_servico_terceiro','obs_servico_terceiro',
+              'resumo_servicos','centro_custo','vendedor','cliente_final','edital','proposta','veiculo',
+              'local_instalacao','prazo_entrega_producao','prazo_entrega_comercial','data_aceite_cliente',
+              'composicao_comercial',
+            ];
+            const siblingBase = {};
+            CAMPOS_SIBLING.forEach(k => { if (formSanitizado[k] !== undefined) siblingBase[k] = formSanitizado[k]; });
+            const novasOps = [];
+            for (let i = 2; i <= qtdNova; i++) {
+              const suf = String(i).padStart(2, '0');
+              novasOps.push({
+                ...siblingBase,
+                opl: `${baseOpl}/${suf}`,
+                chassi: null,
+                placa: null,
+                quantidade: 1,
+                status_geral: 'Em Espera Engenharia',
+                criado_por: currentUser?.email,
+                criado_por_nome: currentUser?.nome,
+              });
+            }
+            const { error: errSiblings } = await supabase.from('oples').insert(novasOps);
+            if (errSiblings) { alert('Erro ao criar as OPs desmembradas: ' + errSiblings.message); return; }
+            payload.quantidade = 1;
+            const { error } = await supabase.from('oples').update(payload).eq('id', editId);
+            if (error) { alert('Erro ao atualizar a OP original: ' + error.message); return; }
+            await supabase.from('logs_movimentacao_opl').insert([{
+              opl_id: editId, numero_opl: baseOpl, setor: 'Comercial',
+              evento: `OP desmembrada em ${qtdNova} unidades (${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')} criadas).`,
+              status_anterior: anterior?.status_geral, status_novo: anterior?.status_geral,
+              usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: new Date().toISOString(),
+            }]);
+            alert(`✅ Desmembrado: ${baseOpl} (unidade 1) + ${qtdNova - 1} OPs novas, de ${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}.`);
+            setFormData(FORM_VAZIO); setShowForm(false); setEditId(null); fetchOpls();
+            return;
+          }
+        }
         const prosseguir = confirm(
-          `Atenção: aumentar a quantidade de ${qtdAnterior} para ${qtdNova} NÃO cria OPs separadas automaticamente ` +
-          `(isso só acontece ao criar uma OP nova do zero). Esta OP continuará sendo uma só, com quantidade=${qtdNova}.\n\n` +
-          `Se são veículos diferentes que precisam de acompanhamento (engenharia/produção) separado, cadastre OPs novas ` +
-          `com sufixo /01, /02... em vez de só aumentar a quantidade aqui.\n\n` +
+          `Atenção: aumentar a quantidade de ${qtdAnterior} para ${qtdNova} NÃO cria OPs separadas automaticamente. ` +
+          `Esta OP continuará sendo uma só, com quantidade=${qtdNova}.\n\n` +
           `Continuar mesmo assim?`
         );
         if (!prosseguir) return;

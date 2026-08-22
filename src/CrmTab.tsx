@@ -635,10 +635,113 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const salvarOplEdit = async () => {
     if (!oplEditando) return;
     setOplSalvando(true);
+
+    const qtdAnterior = Number(oplEditando.quantidade) || 1;
+    const qtdNova = Number(oplFormEdit.quantidade) || 1;
+    const baseOpl = (oplEditando.opl || '').trim();
+    const jaEhSufixo = /\/\d+$/.test(baseOpl);
+
+    // Aumentar a quantidade numa OP já cadastrada não desmembra sozinho —
+    // pergunta se quer desmembrar de verdade agora, gerando OPs /02../NN a
+    // partir desta (que vira a unidade /01 implícita, sem renomear — o
+    // texto "opl" original é referenciado por número em várias outras
+    // tabelas, então não é seguro renomear uma OP já em andamento). Mesmo
+    // padrão de sufixo da criação (NovaOpOsModal.tsx). Só oferece a opção
+    // se esta OP não for ela mesma já um sufixo /NN de outra.
+    if (qtdNova > qtdAnterior && qtdNova > 1 && !jaEhSufixo) {
+      const desmembrar = confirm(
+        `Quantidade aumentou de ${qtdAnterior} para ${qtdNova}.\n\n` +
+        `Deseja DESMEMBRAR agora em ${qtdNova} OPs separadas (uma por veículo/unidade)? ` +
+        `Esta OP (${baseOpl}) continua sendo a 1ª unidade, com todo o histórico/status atual preservado. ` +
+        `Serão criadas mais ${qtdNova - 1} OPs novas (${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}), ` +
+        `com os mesmos dados comerciais mas começando do zero (Em Espera Engenharia).\n\n` +
+        `OK = desmembrar agora   |   Cancelar = só salvar a quantidade nesta OP mesmo, sem desmembrar`
+      );
+      if (desmembrar) {
+        const { data: colisao } = await supabase.from('oples').select('id').eq('opl', `${baseOpl}/02`).maybeSingle();
+        if (colisao) {
+          setOplSalvando(false);
+          alert(`Já existe uma OP "${baseOpl}/02" — parece que esta OP já foi parcialmente desmembrada antes. Ajuste manualmente.`);
+          return;
+        }
+        const { data: completa, error: errFetch } = await supabase.from('oples').select('*').eq('id', oplEditando.id).single();
+        if (errFetch || !completa) {
+          setOplSalvando(false);
+          alert('Erro ao buscar dados completos da OP: ' + (errFetch?.message || 'não encontrada'));
+          return;
+        }
+        const siblingBase = {
+          tipo_op:                       completa.tipo_op,
+          faturamento_empresa:           oplFormEdit.faturamento_empresa || 'ACN',
+          tipo_projeto:                  completa.tipo_projeto,
+          modelo:                        oplFormEdit.modelo || null,
+          valor_total:                   completa.valor_total,
+          valor_mao_de_obra:             completa.valor_mao_de_obra,
+          valor_mao_de_obra_serralheria: completa.valor_mao_de_obra_serralheria,
+          data_entrada:                  completa.data_entrada,
+          data_prevista_entrega:         oplFormEdit.data_prevista_entrega || null,
+          data_chegada_veiculo:          completa.data_chegada_veiculo,
+          cliente_nome:                  completa.cliente_nome,
+          responsavel_comercial:         oplFormEdit.responsavel_comercial || null,
+          observacoes_comercial:         oplFormEdit.observacoes_comercial || null,
+          centro_custo:                  oplFormEdit.centro_custo || null,
+          crm_oportunidade_id:           completa.crm_oportunidade_id,
+          servico_terceiro:              completa.servico_terceiro,
+          tipos_servico_terceiro:        completa.tipos_servico_terceiro,
+          tipo_servico_terceiro:         completa.tipo_servico_terceiro,
+          obs_servico_terceiro:          completa.obs_servico_terceiro,
+          resumo_servicos:               completa.resumo_servicos,
+        };
+        const novasOps = [];
+        for (let i = 2; i <= qtdNova; i++) {
+          const suf = String(i).padStart(2, '0');
+          novasOps.push({
+            ...siblingBase,
+            opl: `${baseOpl}/${suf}`,
+            chassi: null,
+            placa: null,
+            quantidade: 1,
+            status_geral: 'Em Espera Engenharia',
+            criado_por: currentUser?.email,
+            criado_por_nome: currentUser?.nome,
+          });
+        }
+        const { error: errSiblings } = await supabase.from('oples').insert(novasOps);
+        if (errSiblings) {
+          setOplSalvando(false);
+          alert('Erro ao criar as OPs desmembradas: ' + errSiblings.message);
+          return;
+        }
+        const { error: errOriginal } = await supabase.from('oples').update({
+          chassi:                oplFormEdit.chassi || null,
+          modelo:                oplFormEdit.modelo || null,
+          quantidade:            1,
+          data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
+          centro_custo:          oplFormEdit.centro_custo || null,
+          responsavel_comercial: oplFormEdit.responsavel_comercial || null,
+          observacoes_comercial: oplFormEdit.observacoes_comercial || null,
+          faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
+          data_atualizacao:      new Date().toISOString(),
+        }).eq('id', oplEditando.id);
+        setOplSalvando(false);
+        if (errOriginal) { alert('Erro ao atualizar a OP original: ' + errOriginal.message); return; }
+        await supabase.from('logs_movimentacao_opl').insert([{
+          opl_id: oplEditando.id, numero_opl: baseOpl, setor: 'Comercial',
+          evento: `OP desmembrada em ${qtdNova} unidades (${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')} criadas).`,
+          status_anterior: completa.status_geral, status_novo: completa.status_geral,
+          usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: new Date().toISOString(),
+        }]);
+        alert(`✅ Desmembrado: ${baseOpl} (unidade 1) + ${qtdNova - 1} OPs novas, de ${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}.`);
+        setOplEditando(null);
+        fetchOplsEmAberto();
+        return;
+      }
+    }
+
     const { error } = await supabase.from('oples').update({
       chassi:                oplFormEdit.chassi || null,
       modelo:                oplFormEdit.modelo || null,
-      quantidade:            Number(oplFormEdit.quantidade) || 1,
+      quantidade:            qtdNova,
       data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
       centro_custo:          oplFormEdit.centro_custo || null,
       responsavel_comercial: oplFormEdit.responsavel_comercial || null,
@@ -656,7 +759,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id')
+      .select('id,opl,cliente_nome,modelo,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
