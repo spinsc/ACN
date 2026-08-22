@@ -562,3 +562,13 @@ ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS auditor_nome text;
 ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS assinatura_url text;
 ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS os_id uuid;
 ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS numero_os text;
+
+-- =============================================================
+-- 2026-08-22 · fix: botão "✏️ Resp." do SAC sempre falhava (coluna faltante)
+-- =============================================================
+-- Bug pré-existente, encontrado pelo usuário em produção logo após o deploy
+-- acima (não relacionado à reformulação de OS veicular): SacTab.tsx sempre
+-- tentou gravar em sac_ordens_servico.responsavel_nome, mas essa coluna
+-- nunca existiu na tabela — o UPDATE falhava com "Could not find the
+-- 'responsavel_nome' column" toda vez que alguém tentava usar o botão.
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS responsavel_nome text;
