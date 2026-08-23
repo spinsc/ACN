@@ -11,6 +11,11 @@ import { notificarEvento, msg } from './whatsappHelper';
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 
+// Statuses ativos do fluxo de OS de manutenção veicular (pós-reformulação
+// 169d90d, 2026-08-21) — usado tanto pelo Calendário quanto pelo Painel SAC
+// Veicular para não divergir quando o fluxo mudar de novo.
+const STATUSES_VEICULAR_ATIVAS = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
+
 function useTimer(start) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -157,13 +162,14 @@ function CalendarioManutencao({ currentUser }) {
       supabase.from('oples').select('id,opl,chassi,cliente_nome,modelo,data_prevista_entrega')
         .in('status_geral', ['Aguardando Agendamento Manutenção','Manutenção Agendada'])
         .order('data_entrada', { ascending: false }),
-      supabase.from('sac_ordens_servico').select('id,numero_os,cliente_nome,veiculo_placa,veiculo_modelo,data_provisionamento,periodo_provisionamento,status')
+      supabase.from('sac_ordens_servico').select('id,numero_os,cliente_nome,veiculo_modelo,numero_serie,data_provisionamento,periodo_provisionamento,status')
         .eq('is_manutencao_veicular', true)
-        .in('status', ['Provisionada','Aguardando Início','Em Execução','Manutenção Concluída'])
+        .in('status', STATUSES_VEICULAR_ATIVAS)
         .not('data_provisionamento', 'is', null),
     ]);
     setAgendamentos(agRes.data || []);
     setAguardando(aguRes.data || []);
+    if (sacRes.error) console.error('Erro ao carregar OS veicular no calendário:', sacRes.error);
     setSacOrdens(sacRes.data || []);
   };
   useEffect(() => { load(); }, []);
@@ -209,7 +215,7 @@ function CalendarioManutencao({ currentUser }) {
 
   const allEntries = [
     ...agendamentos.map(ag => ({ ...ag, _tipo: 'opl', _data: ag.data_agendamento, _periodo: ag.periodo, _label: ag.numero_opl })),
-    ...sacOrdens.map(os => ({ id: os.id, _tipo: 'sac', _data: os.data_provisionamento, _periodo: os.periodo_provisionamento||'Manhã', _label: os.numero_os, numero_opl: os.numero_os, chassi: os.veiculo_placa||'—', cliente_nome: os.cliente_nome, modelo: os.veiculo_modelo, status: os.status })),
+    ...sacOrdens.map(os => ({ id: os.id, _tipo: 'sac', _data: os.data_provisionamento, _periodo: os.periodo_provisionamento||'Manhã', _label: os.numero_os, numero_opl: os.numero_os, chassi: os.numero_serie||'—', cliente_nome: os.cliente_nome, modelo: os.veiculo_modelo, status: os.status })),
   ];
 
   const agDoMes = allEntries.filter(ag => {
@@ -502,13 +508,11 @@ function PainelSacVeicular({ currentUser }) {
   const [novoApoioNomeOS, setNovoApoioNomeOS]               = useState('');
   const [novoApoioIdOS, setNovoApoioIdOS]                   = useState<string|null>(null);
 
-  const STATUSES_PROD = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
-
   const load = async (silent=false) => {
     if (!silent) setLoading(true);
     const { data } = await supabase.from('sac_ordens_servico').select('*')
       .eq('is_manutencao_veicular', true)
-      .in('status', STATUSES_PROD)
+      .in('status', STATUSES_VEICULAR_ATIVAS)
       .order('data_abertura', { ascending: false });
     setOrdens(data || []);
     if (!silent) setLoading(false);
