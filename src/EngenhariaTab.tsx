@@ -26,6 +26,10 @@ export default function EngenhariaTab({ currentUser }) {
   const [obsBomLote, setObsBomLote] = useState('');
   const [selecionadosLote, setSelecionadosLote] = useState({});
   const [liberandoLote, setLiberandoLote] = useState(false);
+  const [iniciandoLote, setIniciandoLote] = useState(false);
+  // Grupos desmembrados aparecem colapsados numa única linha "LOTE" na
+  // tabela — expande[base]=true mostra as unidades individuais por baixo.
+  const [lotesExpandidos, setLotesExpandidos] = useState({});
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
   const [modalDevolver, setModalDevolver] = useState(null);
@@ -146,6 +150,36 @@ export default function EngenhariaTab({ currentUser }) {
     setModalBomLote({ base, irmaos });
   };
 
+  // Inicia de uma vez a analise de todas as unidades ainda nao iniciadas
+  // de um lote (status "Em Espera Engenharia" ou "Devolvida para
+  // Engenharia") — responsavel = quem clicou. As ja iniciadas ficam como
+  // estao (podem ter responsaveis/observacoes diferentes).
+  const iniciarLote = async (grupo) => {
+    const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera Engenharia' || o.status_geral === 'Devolvida para Engenharia');
+    if (pendentes.length === 0) { alert('Todas as unidades deste lote ja foram iniciadas.'); return; }
+    if (!confirm(`Iniciar a analise de engenharia para ${pendentes.length} unidade(s) de ${grupo.base}?\n\nResponsavel: ${currentUser?.nome}.`)) return;
+    setIniciandoLote(true);
+    const agora = new Date().toISOString();
+    try {
+      for (const opl of pendentes) {
+        await supabase.from('oples').update({
+          status_geral: 'Em Analise Engenharia',
+          responsavel_engenharia: currentUser?.nome,
+          data_inicio_engenharia: agora,
+        }).eq('id', opl.id);
+      }
+      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
+        evento: `Inicio de analise em lote (${pendentes.length} OPs do grupo ${grupo.base}). Responsavel: ${currentUser?.nome}.`,
+        status_anterior: opl.status_geral, status_novo: 'Em Analise Engenharia',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      })));
+    } finally {
+      setIniciandoLote(false);
+      fetchAll();
+    }
+  };
+
   const liberarBomLote = async () => {
     const { irmaos } = modalBomLote;
     const selecionados = irmaos.filter(o => selecionadosLote[o.id]);
@@ -250,90 +284,159 @@ export default function EngenhariaTab({ currentUser }) {
                 <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Arquivos</th><th>Acoes</th>
               </tr></thead>
               <tbody>
-                {filtrarOpls(opls, busca).map(o => {
-                  const emAndamento = o.status_geral === 'Em Analise Engenharia';
-                  const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
-                  const tempo = inicio ? ((new Date() - inicio) / 3600000) : null;
-                  const envioDireto = isEnvioDireto(o);
-                  // KPI 48h: Em Espera Engenharia sem iniciar após 48h do lançamento
-                  const emEspera = o.status_geral === 'Em Espera Engenharia';
-                  const horasSemIniciar = emEspera && !o.data_inicio_engenharia && o.data_entrada
-                    ? (new Date().getTime() - new Date(o.data_entrada).getTime()) / 3600000
-                    : 0;
-                  const kpi48h = emEspera && horasSemIniciar > 48;
-                  const rowStyle = kpi48h
-                    ? { background:'#fef2f2', borderLeft:'4px solid #ef4444' }
-                    : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' } : {};
-                  const qtdIrmaos = opls.filter(x => baseOplDe(x.opl) === baseOplDe(o.opl)).length;
-                  return (
-                    <tr key={o.id} style={rowStyle}>
-                      <td>{fmtDt(o.data_entrada)}</td>
-                      <td>
-                        <LinkOpl opl={o} currentUser={currentUser} />
-                        {envioDireto && (
-                          <div style={{marginTop:2}}>
-                            <span style={{fontSize:9,fontWeight:700,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10,letterSpacing:'0.5px'}}>
-                              📤 ENVIO DIRETO
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      <td>{o.chassi || '—'}</td>
-                      <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
-                      <td>
-                        <span className="acn-badge" style={{background: emAndamento?'#3b82f6': kpi48h?'#ef4444':'#f59e0b'}}>
-                          {o.status_geral}
-                          {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}}>REVISAO</span>}
-                        </span>
-                        {kpi48h && (
-                          <div style={{marginTop:2}}>
-                            <span style={{fontSize:9,fontWeight:700,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10}}>
-                              🔴 {Math.floor(horasSemIniciar)}h sem iniciar
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      <td>{o.responsavel_engenharia || '—'}</td>
-                      <td>{fmtDt(o.data_inicio_engenharia)}</td>
-                      <td>{emAndamento && tempo ? fmtH(tempo) : '—'}</td>
-                      <td>
-                        <div style={{display:'flex',gap:4}}>
-                          <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} tipoFixo="proposta" compact={true} />
-                          <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} compact={true} />
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                          {!emAndamento && (
-                            <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>abrirIniciarEng(o)}>
-                              INICIAR
-                            </button>
+                {(() => {
+                  // Agrupa por número base (antes do sufixo /NN) — grupos com
+                  // mais de 1 unidade colapsam numa única linha "LOTE" com
+                  // ações em lote, ao invés de poluir a tabela com dezenas de
+                  // linhas idênticas. Individual continua linha normal.
+                  const listaFiltrada = filtrarOpls(opls, busca);
+                  const basesJaRenderizadas = new Set();
+                  const itens = [];
+                  for (const o of listaFiltrada) {
+                    const base = baseOplDe(o.opl);
+                    const irmaos = opls.filter(x => baseOplDe(x.opl) === base);
+                    if (irmaos.length > 1) {
+                      if (basesJaRenderizadas.has(base)) continue;
+                      basesJaRenderizadas.add(base);
+                      itens.push({ tipo: 'lote', base, irmaos });
+                    } else {
+                      itens.push({ tipo: 'single', row: o });
+                    }
+                  }
+
+                  const renderLinhaOpl = (o) => {
+                    const emAndamento = o.status_geral === 'Em Analise Engenharia';
+                    const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
+                    const tempo = inicio ? ((new Date() - inicio) / 3600000) : null;
+                    const envioDireto = isEnvioDireto(o);
+                    const emEspera = o.status_geral === 'Em Espera Engenharia';
+                    const horasSemIniciar = emEspera && !o.data_inicio_engenharia && o.data_entrada
+                      ? (new Date().getTime() - new Date(o.data_entrada).getTime()) / 3600000
+                      : 0;
+                    const kpi48h = emEspera && horasSemIniciar > 48;
+                    const rowStyle = kpi48h
+                      ? { background:'#fef2f2', borderLeft:'4px solid #ef4444' }
+                      : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' } : {};
+                    return (
+                      <tr key={o.id} style={rowStyle}>
+                        <td>{fmtDt(o.data_entrada)}</td>
+                        <td>
+                          <LinkOpl opl={o} currentUser={currentUser} />
+                          {envioDireto && (
+                            <div style={{marginTop:2}}>
+                              <span style={{fontSize:9,fontWeight:700,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10,letterSpacing:'0.5px'}}>
+                                📤 ENVIO DIRETO
+                              </span>
+                            </div>
                           )}
-                          {emAndamento && (
-                            <>
-                              <button className="acn-btn" style={{background:'#475569'}} onClick={()=>{setModalObs(o);setNovaObs('');}}>
-                                OBS
+                        </td>
+                        <td>{o.chassi || '—'}</td>
+                        <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
+                        <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                        <td>
+                          <span className="acn-badge" style={{background: emAndamento?'#3b82f6': kpi48h?'#ef4444':'#f59e0b'}}>
+                            {o.status_geral}
+                            {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}}>REVISAO</span>}
+                          </span>
+                          {kpi48h && (
+                            <div style={{marginTop:2}}>
+                              <span style={{fontSize:9,fontWeight:700,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10}}>
+                                🔴 {Math.floor(horasSemIniciar)}h sem iniciar
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td>{o.responsavel_engenharia || '—'}</td>
+                        <td>{fmtDt(o.data_inicio_engenharia)}</td>
+                        <td>{emAndamento && tempo ? fmtH(tempo) : '—'}</td>
+                        <td>
+                          <div style={{display:'flex',gap:4}}>
+                            <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} tipoFixo="proposta" compact={true} />
+                            <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} compact={true} />
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                            {!emAndamento && (
+                              <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>abrirIniciarEng(o)}>
+                                INICIAR
                               </button>
-                              <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalBom(o);setObsBom('');}}>
-                                  LIBERAR BOM
+                            )}
+                            {emAndamento && (
+                              <>
+                                <button className="acn-btn" style={{background:'#475569'}} onClick={()=>{setModalObs(o);setNovaObs('');}}>
+                                  OBS
                                 </button>
-                              <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
-                                DEVOLVER
+                                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalBom(o);setObsBom('');}}>
+                                    LIBERAR BOM
+                                  </button>
+                                <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
+                                  DEVOLVER
+                                </button>
+                              </>
+                            )}
+                            <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  };
+
+                  return itens.map(item => {
+                    if (item.tipo === 'single') return renderLinhaOpl(item.row);
+
+                    const { base, irmaos } = item;
+                    const expandido = !!lotesExpandidos[base];
+                    const qtdEspera = irmaos.filter(o => o.status_geral === 'Em Espera Engenharia' || o.status_geral === 'Devolvida para Engenharia').length;
+                    const qtdAndamento = irmaos.filter(o => o.status_geral === 'Em Analise Engenharia').length;
+                    const rep = irmaos[0];
+                    const envioDireto = isEnvioDireto(rep);
+                    return (
+                      <React.Fragment key={base}>
+                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                          <td>{fmtDt(rep.data_entrada)}</td>
+                          <td>
+                            <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
+                            <div style={{marginTop:2}}>
+                              <span style={{fontSize:9,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 6px',borderRadius:10}}>
+                                LOTE — {irmaos.length} unidades
+                              </span>
+                              {envioDireto && (
+                                <span style={{marginLeft:4,fontSize:9,fontWeight:700,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10}}>
+                                  📤 ENVIO DIRETO
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>—</td>
+                          <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
+                          <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td>
+                            {qtdEspera > 0 && <div><span className="acn-badge" style={{background:'#f59e0b',fontSize:9}}>{qtdEspera} aguardando</span></div>}
+                            {qtdAndamento > 0 && <div style={{marginTop:2}}><span className="acn-badge" style={{background:'#3b82f6',fontSize:9}}>{qtdAndamento} em análise</span></div>}
+                          </td>
+                          <td colSpan={3} style={{fontSize:10,color:'#7c6f9c'}}>Ver unidades para detalhes individuais</td>
+                          <td>
+                            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                              {qtdEspera > 0 && (
+                                <button className="acn-btn" style={{background:'#2563eb',fontSize:9}} disabled={iniciandoLote} onClick={()=>iniciarLote(item)}>
+                                  ▶️ INICIAR EM LOTE ({qtdEspera})
+                                </button>
+                              )}
+                              <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>abrirBomLote(rep)}>
+                                ✅ LIBERAR BOM EM LOTE
                               </button>
-                            </>
-                          )}
-                          {qtdIrmaos > 1 && (
-                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}} onClick={()=>abrirBomLote(o)}>
-                              🏷️ BOM EM LOTE ({qtdIrmaos})
-                            </button>
-                          )}
-                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                              <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                                {expandido ? '▲ Ocultar unidades' : `▼ Ver ${irmaos.length} unidades`}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandido && irmaos.map(o => renderLinhaOpl(o))}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           )}
