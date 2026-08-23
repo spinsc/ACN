@@ -902,6 +902,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   const salvarAbrirForm = async () => {
     if (!formOp.titulo?.trim() || !modalAbrir) return;
+    if (isGanho(getEst(formOp.estagio_id)) && !formOp.empresa_vencedora) {
+      alert('Selecione a empresa vencedora.');
+      return;
+    }
     setSalvando(true);
     const p: any = {
       titulo:            formOp.titulo?.trim() || null,
@@ -921,12 +925,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       estagio_id:        limpar(formOp.estagio_id),
       responsavel_id:    limpar(formOp.responsavel_id),
       responsavel_nome:  limpar(formOp.responsavel_nome),
+      motivo_perda:      limpar(formOp.motivo_perda),
       nome_contato:      limpar(formOp.nome_contato),
       contato:           limpar(formOp.contato),
       contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
       hora_prox_contato: limpar(formOp.hora_prox_contato) || null,
     };
+    // OBS: crm_historico já é preenchido automaticamente por trigger (tg_crm_audit_estagio)
+    // sempre que estagio_id muda, então nenhum insert manual é necessário aqui.
     await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
     setSalvando(false);
     await load(true);
@@ -2928,11 +2935,37 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
                     style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
                     <option value="">— Selecione —</option>
-                    {estagiosFunil.filter(e => !isPerdido(e) && !isGanho(e)).map(e => (
+                    {estagiosFunil.map(e => (
                       <option key={e.id} value={e.id}>{e.nome}</option>
                     ))}
                   </select>
                 </div>
+
+                {isGanho(getEst(formOp.estagio_id)) && (
+                  <div style={{ marginBottom:7 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Empresa Vencedora *</div>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {(['ACN','DETECH'] as const).map(emp => (
+                        <button key={emp} type="button" onClick={() => setFormOp(f => ({...f, empresa_vencedora: emp}))}
+                          style={{ flex:1, padding:'6px', fontSize:10, fontWeight:700, borderRadius:4, border:'1.5px solid', cursor:'pointer',
+                            background: formOp.empresa_vencedora===emp ? (emp==='ACN'?'#dbeafe':'#f3e8ff') : 'white',
+                            color:       emp==='ACN' ? '#1e40af' : '#7c3aed',
+                            borderColor: emp==='ACN' ? '#3b82f6' : '#a855f7' }}>
+                          {emp}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {isPerdido(getEst(formOp.estagio_id)) && (
+                  <div style={{ marginBottom:7 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Motivo da Perda</div>
+                    <textarea value={formOp.motivo_perda||''} onChange={e => setFormOp(f => ({...f, motivo_perda: e.target.value}))}
+                      rows={2} placeholder="Descreva o motivo..."
+                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box', resize:'vertical' }} />
+                  </div>
+                )}
 
                 <div style={{ marginBottom:7 }}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Cliente (opcional)</div>
