@@ -1132,6 +1132,34 @@ function obsResumoOs(o) {
   return partes.join(' | ');
 }
 
+// Agrupa OPs/OSs desmembradas (mesmo número base, sufixos /02, /03...) numa única linha —
+// mesma convenção de baseOplDe() usada em Engenharia/PCP/Almoxarifado/Produção.
+const baseOplDe = (numero) => (numero || '').replace(/\/\d+$/, '');
+
+function agruparLinhas(registros) {
+  const grupos = {};
+  const ordem = [];
+  for (const r of registros) {
+    const base = baseOplDe(r.numero);
+    if (!grupos[base]) { grupos[base] = []; ordem.push(base); }
+    grupos[base].push(r);
+  }
+  return ordem.map(base => {
+    const itens = grupos[base];
+    if (itens.length === 1) return { ...itens[0], qtd: 1 };
+    const lead = itens.find(i => i.numero === base) || itens[0];
+    const contagemStatus = {};
+    for (const i of itens) contagemStatus[i.status] = (contagemStatus[i.status] || 0) + 1;
+    const status = Object.entries(contagemStatus).map(([s, c]) => `${c}x ${s}`).join(' | ');
+    const obsPorUnidade = itens.filter(i => i.obs && i.obs !== '—').map(i => `${i.numero}: ${i.obs}`);
+    return {
+      tipo: lead.tipo, numero: base, qtd: itens.length,
+      placa: lead.placa, chassi: lead.chassi, cliente: lead.cliente,
+      status, obs: obsPorUnidade.join(' | ') || '—',
+    };
+  });
+}
+
 function RelOpsOssEmServico() {
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -1159,7 +1187,7 @@ function RelOpsOssEmServico() {
         tipo: 'OS', numero: o.numero_os, placa: '—', chassi: o.numero_serie || '—',
         cliente: o.cliente_nome || '—', status: o.status || '—', obs: obsResumoOs(o) || '—',
       }));
-    setLinhas([...ops, ...oss]);
+    setLinhas([...agruparLinhas(ops), ...agruparLinhas(oss)]);
     setCarregando(false);
   };
 
@@ -1167,11 +1195,12 @@ function RelOpsOssEmServico() {
 
   const exportar = () => {
     const dados = linhas.map(l => ({
-      'Tipo': l.tipo, 'Número': l.numero, 'Placa': l.placa, 'Chassi': l.chassi,
+      'Tipo': l.tipo, 'Número': l.numero, 'Qtd': l.qtd, 'Placa': l.placa, 'Chassi': l.chassi,
       'Cliente': l.cliente, 'Status': l.status, 'Observações': l.obs,
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
-    ws['!cols'] = [{wch:6},{wch:24},{wch:12},{wch:18},{wch:28},{wch:34},{wch:60}];
+    ws['!cols'] = [{wch:6},{wch:24},{wch:6},{wch:12},{wch:18},{wch:28},{wch:34},{wch:70}];
+    ws['!autofilter'] = { ref: ws['!ref'] };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Em Serviço');
     XLSX.writeFile(wb, `Relatorio_OPs_OSs_em_Servico_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -1179,6 +1208,7 @@ function RelOpsOssEmServico() {
 
   const totalOps = linhas.filter(l => l.tipo === 'OP').length;
   const totalOss = linhas.filter(l => l.tipo === 'OS').length;
+  const totalUnidades = linhas.reduce((s, l) => s + l.qtd, 0);
 
   return (
     <div>
@@ -1192,7 +1222,8 @@ function RelOpsOssEmServico() {
         <div className="sec-body">
           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             {[
-              {l:'Total',v:linhas.length,c:'#374151'},
+              {l:'Linhas (agrupadas)',v:linhas.length,c:'#374151'},
+              {l:'Unidades',v:totalUnidades,c:'#7c3aed'},
               {l:'OPs',v:totalOps,c:'#2563eb'},
               {l:'OSs',v:totalOss,c:'#dc2626'},
             ].map(k=>(
@@ -1211,17 +1242,21 @@ function RelOpsOssEmServico() {
            linhas.length===0 ? <div className="acn-empty">Nenhuma OP/OS em serviço no momento.</div> : (
             <table>
               <thead><tr>
-                <th>Tipo</th><th>Número</th><th>Placa</th><th>Chassi</th><th>Cliente</th><th>Status</th><th>Observações</th>
+                <th>Tipo</th><th>Número</th><th>Qtd</th><th>Placa</th><th>Chassi</th><th>Cliente</th><th>Status</th><th>Observações</th>
               </tr></thead>
               <tbody>
                 {linhas.map((l,i)=>(
-                  <tr key={l.tipo+l.numero+i}>
+                  <tr key={l.tipo+l.numero+i} style={l.qtd>1?{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}:{}}>
                     <td><span className="acn-badge" style={{background:l.tipo==='OP'?'#2563eb':'#dc2626',fontSize:8}}>{l.tipo}</span></td>
-                    <td><strong>{l.numero}</strong></td>
+                    <td>
+                      <strong>{l.qtd>1 ? `🔗 ${l.numero}` : l.numero}</strong>
+                      {l.qtd>1 && <div><span className="acn-badge" style={{background:'#7c3aed',fontSize:8}}>LOTE — {l.qtd} unidades</span></div>}
+                    </td>
+                    <td style={{fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
                     <td>{l.placa}</td>
                     <td>{l.chassi}</td>
                     <td>{l.cliente}</td>
-                    <td><span className="acn-badge" style={{background:STATUS_CORES[l.status]||'#94a3b8',fontSize:8}}>{l.status}</span></td>
+                    <td style={{maxWidth:220}}>{l.qtd>1 ? l.status : <span className="acn-badge" style={{background:STATUS_CORES[l.status]||'#94a3b8',fontSize:8}}>{l.status}</span>}</td>
                     <td style={{maxWidth:260,whiteSpace:'pre-wrap'}}>{l.obs}</td>
                   </tr>
                 ))}
