@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -1106,9 +1107,137 @@ function RelComissoes() {
 }
 
 // ── MAIN ──
+// ── Relatório: OPs e OSs em Serviço (planilha) ──
+const OP_STATUS_FINALIZADOS = ['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'];
+const OS_STATUS_FINALIZADOS = ['Entregue','Cancelada'];
+
+function obsResumoOpl(o) {
+  const partes = [];
+  if (o.observacoes_atencao) partes.push(`Atenção: ${o.observacoes_atencao}`);
+  if (o.obs_devolucao) partes.push(`Devolução: ${o.obs_devolucao}`);
+  if (o.obs_devolucao_pcp) partes.push(`Devolução PCP: ${o.obs_devolucao_pcp}`);
+  if (o.obs_devolucao_producao) partes.push(`Devolução Produção: ${o.obs_devolucao_producao}`);
+  if (o.obs_reprovacao_cq) partes.push(`Reprovação CQ: ${o.obs_reprovacao_cq}`);
+  if (o.obs_almox) partes.push(`Almoxarifado: ${o.obs_almox}`);
+  return partes.join(' | ');
+}
+
+function obsResumoOs(o) {
+  const partes = [];
+  if (o.observacoes) partes.push(o.observacoes);
+  if (o.observacoes_manutencao) partes.push(`Manutenção: ${o.observacoes_manutencao}`);
+  if (o.observacoes_lab) partes.push(`Laboratório: ${o.observacoes_lab}`);
+  if (o.motivo_reprovacao) partes.push(`Reprovação: ${o.motivo_reprovacao}`);
+  if (o.obs_reprovacao_cq) partes.push(`Reprovação CQ: ${o.obs_reprovacao_cq}`);
+  return partes.join(' | ');
+}
+
+function RelOpsOssEmServico() {
+  const [linhas, setLinhas] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  const buscar = async () => {
+    setCarregando(true);
+    const [opsRes, ossRes] = await Promise.all([
+      supabase.from('oples').select(
+        'id,opl,placa,chassi,cliente_nome,status_geral,observacoes_atencao,obs_devolucao,obs_devolucao_pcp,obs_devolucao_producao,obs_reprovacao_cq,obs_almox'
+      ).order('opl'),
+      supabase.from('sac_ordens_servico').select(
+        'id,numero_os,numero_serie,cliente_nome,status,observacoes,observacoes_manutencao,observacoes_lab,motivo_reprovacao,obs_reprovacao_cq'
+      ).order('numero_os'),
+    ]);
+    const ops = (opsRes.data || [])
+      .filter(o => !OP_STATUS_FINALIZADOS.includes(o.status_geral))
+      .map(o => ({
+        tipo: 'OP', numero: o.opl, placa: o.placa || '—', chassi: o.chassi || '—',
+        cliente: o.cliente_nome || '—', status: o.status_geral || '—', obs: obsResumoOpl(o) || '—',
+      }));
+    const oss = (ossRes.data || [])
+      .filter(o => !OS_STATUS_FINALIZADOS.includes(o.status))
+      .map(o => ({
+        // sac_ordens_servico não tem coluna de placa — numero_serie faz as vezes de chassi/identificador do veículo/equipamento
+        tipo: 'OS', numero: o.numero_os, placa: '—', chassi: o.numero_serie || '—',
+        cliente: o.cliente_nome || '—', status: o.status || '—', obs: obsResumoOs(o) || '—',
+      }));
+    setLinhas([...ops, ...oss]);
+    setCarregando(false);
+  };
+
+  useEffect(() => { buscar(); }, []);
+
+  const exportar = () => {
+    const dados = linhas.map(l => ({
+      'Tipo': l.tipo, 'Número': l.numero, 'Placa': l.placa, 'Chassi': l.chassi,
+      'Cliente': l.cliente, 'Status': l.status, 'Observações': l.obs,
+    }));
+    const ws = XLSX.utils.json_to_sheet(dados);
+    ws['!cols'] = [{wch:6},{wch:24},{wch:12},{wch:18},{wch:28},{wch:34},{wch:60}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Em Serviço');
+    XLSX.writeFile(wb, `Relatorio_OPs_OSs_em_Servico_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const totalOps = linhas.filter(l => l.tipo === 'OP').length;
+  const totalOss = linhas.filter(l => l.tipo === 'OS').length;
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>OPs e OSs em Serviço</span>
+          <button className="acn-btn" style={{background:'#16a34a'}} onClick={exportar} disabled={carregando || linhas.length===0}>
+            📥 Baixar Planilha (.xlsx)
+          </button>
+        </div>
+        <div className="sec-body">
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {[
+              {l:'Total',v:linhas.length,c:'#374151'},
+              {l:'OPs',v:totalOps,c:'#2563eb'},
+              {l:'OSs',v:totalOss,c:'#dc2626'},
+            ].map(k=>(
+              <div key={k.l} style={{flex:'1 1 110px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
+                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
+                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
+        <div className="sec-hdr">{linhas.length} registros em serviço</div>
+        <div className="sec-body" style={{overflowX:'auto'}}>
+          {carregando ? <div className="acn-empty">Carregando...</div> :
+           linhas.length===0 ? <div className="acn-empty">Nenhuma OP/OS em serviço no momento.</div> : (
+            <table>
+              <thead><tr>
+                <th>Tipo</th><th>Número</th><th>Placa</th><th>Chassi</th><th>Cliente</th><th>Status</th><th>Observações</th>
+              </tr></thead>
+              <tbody>
+                {linhas.map((l,i)=>(
+                  <tr key={l.tipo+l.numero+i}>
+                    <td><span className="acn-badge" style={{background:l.tipo==='OP'?'#2563eb':'#dc2626',fontSize:8}}>{l.tipo}</span></td>
+                    <td><strong>{l.numero}</strong></td>
+                    <td>{l.placa}</td>
+                    <td>{l.chassi}</td>
+                    <td>{l.cliente}</td>
+                    <td><span className="acn-badge" style={{background:STATUS_CORES[l.status]||'#94a3b8',fontSize:8}}>{l.status}</span></td>
+                    <td style={{maxWidth:260,whiteSpace:'pre-wrap'}}>{l.obs}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RelatoriosTab({ currentUser }) {
   const [aba, setAba] = useState('opls');
   const ABAS = [
+    {id:'servico',    label:'Em Serviço'},
     {id:'opls',       label:'OPLs Geral'},
     {id:'finalizadas',label:'Finalizadas'},
     {id:'porsetor',   label:'Por Setor'},
@@ -1134,6 +1263,7 @@ export default function RelatoriosTab({ currentUser }) {
           </button>
         ))}
       </div>
+      {aba==='servico'     && <RelOpsOssEmServico />}
       {aba==='opls'        && <RelOplsGeral />}
       {aba==='finalizadas' && <RelOplsFinalizadas />}
       {aba==='porsetor'    && <RelOplsPorSetor />}
