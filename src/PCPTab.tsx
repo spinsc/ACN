@@ -18,6 +18,10 @@ export default function PCPTab({ currentUser }) {
   const [modalDemanda, setModalDemanda] = useState(null); // null=fechado, false=avulsa, obj=com opl
   const [descDemanda, setDescDemanda] = useState('');
   const [setorDemanda, setSetorDemanda] = useState('Chicotes');
+  // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
+  // linha de lote — mesmo padrao da Engenharia (EngenhariaTab.tsx).
+  const [lotesExpandidos, setLotesExpandidos] = useState({});
+  const [processandoLote, setProcessandoLote] = useState(false);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
@@ -119,6 +123,66 @@ export default function PCPTab({ currentUser }) {
     }]);
     notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
+  };
+
+  // Numero base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
+  const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+
+  const liberarKitingLote = async (grupo) => {
+    const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera PCP');
+    if (pendentes.length === 0) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
+    if (!confirm(`Liberar kiting (Almoxarifado) para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
+    setProcessandoLote(true);
+    const agora = new Date().toISOString();
+    try {
+      for (const opl of pendentes) {
+        await supabase.from('oples').update({
+          status_geral: 'Aguardando Almox',
+          data_liberacao_pcp: agora,
+          liberado_producao_por: currentUser?.nome,
+        }).eq('id', opl.id);
+      }
+      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+        evento: `Liberado para Kiting em lote (${pendentes.length} OPs do grupo ${grupo.base}). PCP: ${currentUser?.nome}.`,
+        status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      })));
+      notificarEvento('pcp_libera_almox', `📦 *Kiting liberado em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para o Almoxarifado.\nPor: ${currentUser?.nome}`);
+    } finally {
+      setProcessandoLote(false);
+      fetchAll();
+    }
+  };
+
+  const liberarProducaoLote = async (grupo) => {
+    const pendentes = grupo.irmaos.filter(o => podeLiberar(o));
+    if (pendentes.length === 0) { alert('Nenhuma unidade deste lote esta pronta para liberar producao (falta kit).'); return; }
+    if (!confirm(`Liberar producao para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
+    setProcessandoLote(true);
+    const agora = new Date().toISOString();
+    try {
+      for (const opl of pendentes) {
+        const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
+        const tempoPcp = inicioPcp ? (new Date() - inicioPcp) / 3600000 : null;
+        await supabase.from('oples').update({
+          status_geral: 'Aguardando Inicio Producao',
+          data_liberacao_pcp: agora,
+          liberado_producao_por: currentUser?.nome,
+          ...(tempoPcp != null ? { tempo_pcp_horas: tempoPcp } : {}),
+        }).eq('id', opl.id);
+      }
+      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+        evento: `OPL liberada para Producao em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
+        status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      })));
+      notificarEvento('pcp_libera_producao', `🏭 *Produção liberada em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para Produção.\nPor: ${currentUser?.nome}`);
+    } finally {
+      setProcessandoLote(false);
+      fetchAll();
+    }
   };
 
   const sanarPendenciaPCP = async (opl) => {
@@ -291,61 +355,135 @@ export default function PCPTab({ currentUser }) {
                 <th>Kit Almox</th><th>Pendencia/Falta</th><th>Status</th><th>Prev. Entrega</th><th>Acoes</th>
               </tr></thead>
               <tbody>
-                {filtrarOpls(opls, busca).map(o => (
-                  <tr key={o.id} style={isEnvioDireto(o)?{background:'#fffbeb',borderLeft:'3px solid #f59e0b'}:{}}>
-                    <td>{fmtDt(o.data_entrada)}</td>
-                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                    <td>{o.chassi || '—'}</td>
-                    <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                    <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
-                    <td>
-                      {o.status_bom === 'BOM Liberado'
-                        ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>
-                        : <span className="acn-badge" style={{background:'#f59e0b'}}>Aguard. BOM</span>}
-                    </td>
-                    <td>
-                      {!o.status_almox && <span className="acn-badge" style={{background:'#94a3b8'}}>Pendente</span>}
-                      {o.status_almox === 'Kit OK' && <span className="acn-badge" style={{background:'#22c55e'}}>Kit 100%</span>}
-                      {o.status_almox === 'Falta de Material' && <span className="acn-badge" style={{background:'#ef4444'}}>Falta Mat.</span>}
-                      {o.status_almox === 'Liberado com Pendencia' && <span className="acn-badge" style={{background:'#f97316'}}>Com Pendencia</span>}
-                    </td>
-                    <td style={{maxWidth:160,fontSize:10,color:'#7f1d1d',fontWeight: o.obs_almox?600:400}}>
-                      {o.obs_almox || '—'}
-                    </td>
-                    <td><span className="acn-badge" style={{background:statusCor(o.status_geral)}}>{o.status_geral}</span></td>
-                    <td>{fmtDt(o.data_prevista_entrega)}</td>
-                    <td>
-                      <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:10}}
-                          onClick={()=>{setModalDemanda(o);setDescDemanda('');setSetorDemanda('Chicotes');}}>
-                          + Demanda
-                        </button>
-                        {o.status_geral === 'Em Espera PCP' && (
-                          <button className="acn-btn" style={{background:'#3b82f6'}} onClick={()=>liberarAlmox(o)}>
-                            LIBERAR KITING
+                {(() => {
+                  // Agrupa OPs desmembradas (mesmo numero base) numa unica
+                  // linha "LOTE" colapsavel — mesmo padrao de EngenhariaTab.tsx.
+                  const listaFiltrada = filtrarOpls(opls, busca);
+                  const basesJaRenderizadas = new Set();
+                  const itens = [];
+                  for (const o of listaFiltrada) {
+                    const base = baseOplDe(o.opl);
+                    const irmaos = opls.filter(x => baseOplDe(x.opl) === base);
+                    if (irmaos.length > 1) {
+                      if (basesJaRenderizadas.has(base)) continue;
+                      basesJaRenderizadas.add(base);
+                      itens.push({ tipo: 'lote', base, irmaos });
+                    } else {
+                      itens.push({ tipo: 'single', row: o });
+                    }
+                  }
+
+                  const renderLinhaOpl = (o) => (
+                    <tr key={o.id} style={isEnvioDireto(o)?{background:'#fffbeb',borderLeft:'3px solid #f59e0b'}:{}}>
+                      <td>{fmtDt(o.data_entrada)}</td>
+                      <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                      <td>{o.chassi || '—'}</td>
+                      <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
+                      <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                      <td>
+                        {o.status_bom === 'BOM Liberado'
+                          ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>
+                          : <span className="acn-badge" style={{background:'#f59e0b'}}>Aguard. BOM</span>}
+                      </td>
+                      <td>
+                        {!o.status_almox && <span className="acn-badge" style={{background:'#94a3b8'}}>Pendente</span>}
+                        {o.status_almox === 'Kit OK' && <span className="acn-badge" style={{background:'#22c55e'}}>Kit 100%</span>}
+                        {o.status_almox === 'Falta de Material' && <span className="acn-badge" style={{background:'#ef4444'}}>Falta Mat.</span>}
+                        {o.status_almox === 'Liberado com Pendencia' && <span className="acn-badge" style={{background:'#f97316'}}>Com Pendencia</span>}
+                      </td>
+                      <td style={{maxWidth:160,fontSize:10,color:'#7f1d1d',fontWeight: o.obs_almox?600:400}}>
+                        {o.obs_almox || '—'}
+                      </td>
+                      <td><span className="acn-badge" style={{background:statusCor(o.status_geral)}}>{o.status_geral}</span></td>
+                      <td>{fmtDt(o.data_prevista_entrega)}</td>
+                      <td>
+                        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                          <button className="acn-btn" style={{background:'#475569',fontSize:10}}
+                            onClick={()=>{setModalDemanda(o);setDescDemanda('');setSetorDemanda('Chicotes');}}>
+                            + Demanda
                           </button>
-                        )}
-                        {podeLiberar(o) && (
-                          <button className="acn-btn"
-                            style={{background: o.status_almox==='Kit OK' ? '#22c55e' : '#f97316'}}
-                            onClick={()=>liberarProducao(o)}>
-                            {o.status_almox==='Kit OK' ? 'LIBERAR PRODUCAO' : 'LIBERAR C/ PENDENCIA'}
+                          {o.status_geral === 'Em Espera PCP' && (
+                            <button className="acn-btn" style={{background:'#3b82f6'}} onClick={()=>liberarAlmox(o)}>
+                              LIBERAR KITING
+                            </button>
+                          )}
+                          {podeLiberar(o) && (
+                            <button className="acn-btn"
+                              style={{background: o.status_almox==='Kit OK' ? '#22c55e' : '#f97316'}}
+                              onClick={()=>liberarProducao(o)}>
+                              {o.status_almox==='Kit OK' ? 'LIBERAR PRODUCAO' : 'LIBERAR C/ PENDENCIA'}
+                            </button>
+                          )}
+                          {o.status_geral === 'Aguardando Almox' && !o.status_almox && (
+                            <span className="acn-badge" style={{background:'#cbd5e1',color:'#475569'}}>AGUARD. KITING</span>
+                          )}
+                          {o.status_almox === 'Falta de Material' && (
+                            <span className="acn-badge" style={{background:'#ef4444'}}>🚫 FALTA MATERIAL</span>
+                          )}
+                          <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
+                            DEVOLVER
                           </button>
-                        )}
-                        {o.status_geral === 'Aguardando Almox' && !o.status_almox && (
-                          <span className="acn-badge" style={{background:'#cbd5e1',color:'#475569'}}>AGUARD. KITING</span>
-                        )}
-                        {o.status_almox === 'Falta de Material' && (
-                          <span className="acn-badge" style={{background:'#ef4444'}}>🚫 FALTA MATERIAL</span>
-                        )}
-                        <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
-                          DEVOLVER
-                        </button>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+
+                  return itens.map(item => {
+                    if (item.tipo === 'single') return renderLinhaOpl(item.row);
+
+                    const { base, irmaos } = item;
+                    const expandido = !!lotesExpandidos[base];
+                    const rep = irmaos[0];
+                    const qtdEspera = irmaos.filter(o => o.status_geral === 'Em Espera PCP').length;
+                    const qtdAguardAlmox = irmaos.filter(o => o.status_geral === 'Aguardando Almox').length;
+                    const qtdProntoProducao = irmaos.filter(o => podeLiberar(o)).length;
+                    const qtdOutros = irmaos.length - qtdEspera - qtdAguardAlmox - qtdProntoProducao;
+                    return (
+                      <React.Fragment key={base}>
+                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                          <td>{fmtDt(rep.data_entrada)}</td>
+                          <td>
+                            <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
+                            <div style={{marginTop:2}}>
+                              <span style={{fontSize:9,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 6px',borderRadius:10}}>
+                                LOTE — {irmaos.length} unidades
+                              </span>
+                            </div>
+                          </td>
+                          <td>—</td>
+                          <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
+                          <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td colSpan={3} style={{fontSize:10}}>
+                            {qtdEspera > 0 && <span className="acn-badge" style={{background:'#f59e0b',fontSize:9,marginRight:4}}>{qtdEspera} aguard. BOM/kiting</span>}
+                            {qtdAguardAlmox > 0 && <span className="acn-badge" style={{background:'#3b82f6',fontSize:9,marginRight:4}}>{qtdAguardAlmox} no Almox</span>}
+                            {qtdProntoProducao > 0 && <span className="acn-badge" style={{background:'#22c55e',fontSize:9,marginRight:4}}>{qtdProntoProducao} prontas p/ Produção</span>}
+                            {qtdOutros > 0 && <span className="acn-badge" style={{background:'#ef4444',fontSize:9}}>{qtdOutros} devolvida/retrabalho</span>}
+                          </td>
+                          <td>{fmtDt(rep.data_prevista_entrega)}</td>
+                          <td>
+                            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                              {qtdEspera > 0 && (
+                                <button className="acn-btn" style={{background:'#3b82f6',fontSize:9}} disabled={processandoLote} onClick={()=>liberarKitingLote(item)}>
+                                  📦 KITING EM LOTE ({qtdEspera})
+                                </button>
+                              )}
+                              {qtdProntoProducao > 0 && (
+                                <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} disabled={processandoLote} onClick={()=>liberarProducaoLote(item)}>
+                                  🏭 PRODUÇÃO EM LOTE ({qtdProntoProducao})
+                                </button>
+                              )}
+                              <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                                {expandido ? '▲ Ocultar unidades' : `▼ Ver ${irmaos.length} unidades`}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandido && irmaos.map(o => renderLinhaOpl(o))}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           )}
