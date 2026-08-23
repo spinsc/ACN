@@ -1145,10 +1145,31 @@ const TABELAS_CONFIG = [
   { id:'crm_interacoes',        label:'CRM — Interações',         desc:'Ligações, WA, reuniões registradas',      cor:'#6366f1' },
   { id:'crm_whatsapp_msgs',     label:'CRM — Msgs WhatsApp',      desc:'Mensagens sincronizadas via Evolution API',cor:'#16a34a' },
   { id:'crm_anexos',            label:'CRM — Anexos',             desc:'Arquivos anexados às oportunidades',      cor:'#78716c' },
+  // ── Compras / Financeiro ─────────────────────────────────────────────────
+  { id:'pcp_pedidos_compra',       label:'Compras — Pedidos',        desc:'Requisições de compra e status',          cor:'#b45309' },
+  { id:'pcp_cotacoes_fornecedores',label:'Compras — Cotações',       desc:'Cotações de fornecedores (Mesa)',         cor:'#d97706' },
+  { id:'pcp_aprovacoes',           label:'Compras — Aprovações',     desc:'Alçadas e aprovações por departamento',   cor:'#c2410c' },
+  { id:'pcp_pedidos_faturamento',  label:'Financeiro — Faturamento', desc:'Conferência técnica e faturamento de compras', cor:'#065f46' },
+  // ── Fretes / Chicotes / Serralheria ─────────────────────────────────────
+  { id:'pcp_fretes',               label:'Fretes',                   desc:'Cotações e contratação de frete',         cor:'#0e7490' },
+  { id:'pcp_cotacoes_fretes',      label:'Fretes — Cotações',        desc:'Cotações de transportadoras',             cor:'#155e75' },
+  { id:'pcp_pedidos_chicotes',     label:'Chicotes — Pedidos',       desc:'Pedidos internos de chicotes',            cor:'#4d7c0f' },
+  { id:'pcp_pedidos_serralheria',  label:'Serralheria — Pedidos',    desc:'Pedidos internos de serralheria',         cor:'#65a30d' },
   // ── Outros ───────────────────────────────────────────────────────────────
   { id:'clientes',              label:'Cadastro Clientes',         desc:'Base unificada de clientes PF/PJ',        cor:'#0f766e' },
   { id:'logs_movimentacao_opl', label:'Logs de OPL',              desc:'Histórico de movimentações',              cor:'#475569' },
   { id:'cq_auditorias',         label:'Auditorias CQ',            desc:'Registros de qualidade',                  cor:'#dc2626' },
+  { id:'vistorias_patio',       label:'Vistorias de Pátio',       desc:'Vistorias de veículos no pátio',          cor:'#334155' },
+  { id:'vouchers_servico',      label:'Vouchers de Serviço',      desc:'Vouchers autorizados (terceiros)',        cor:'#9333ea' },
+  { id:'ajustes_trabalhos',     label:'Ajustes/Retrabalhos',      desc:'Registros de ajuste pós-entrega',         cor:'#be123c' },
+  { id:'analise_solicitacoes',  label:'Análise entre Setores',    desc:'Solicitações de análise técnica',         cor:'#7c2d12' },
+  { id:'agenda_compromissos',   label:'Agenda',                   desc:'Compromissos agendados',                  cor:'#4338ca' },
+  { id:'agendamentos_manutencao',label:'Agend. Manutenção',       desc:'Agenda de manutenção veicular',           cor:'#0369a1' },
+  { id:'chamados_suporte',      label:'Chamados de Suporte',      desc:'Chamados abertos pelos usuários',         cor:'#57534e' },
+  { id:'mencoes',               label:'Menções (@)',              desc:'Notificações de menção entre usuários',   cor:'#525252' },
+  { id:'op_acompanhamentos',    label:'Acompanhamentos de OPL',   desc:'Comentários/andamento nas OPLs',          cor:'#71717a' },
+  { id:'licitacao_documentos',  label:'Licitações — Documentos',  desc:'Notas e documentos anexados a licitações',cor:'#312e81' },
+  { id:'veiculos_nfc',          label:'Dossiê NFC — Veículos',    desc:'Veículos cadastrados no dossiê NFC',      cor:'#166534' },
 ];
 
 function PainelDados() {
@@ -1184,9 +1205,16 @@ function PainelDados() {
       : tabelaAtiva === 'crm_interacoes'                    ? 'data_interacao'
       : tabelaAtiva === 'crm_whatsapp_msgs'                 ? 'data_msg'
       : tabelaAtiva === 'licitacoes'                        ? 'criado_em'
+      // tabelas com data_criacao
+      : ['pcp_pedidos_compra','pcp_pedidos_chicotes','pcp_pedidos_serralheria','vistorias_patio']
+        .includes(tabelaAtiva) ? 'data_criacao'
+      : tabelaAtiva === 'ajustes_trabalhos'                 ? 'data_abertura'
       // tabelas com criado_em
       : ['demandas_avulsas','crm_oportunidades','crm_historico','crm_vendas',
-         'crm_contatos','crm_anexos','clientes'].includes(tabelaAtiva) ? 'criado_em'
+         'crm_contatos','crm_anexos','clientes','pcp_cotacoes_fornecedores','pcp_aprovacoes',
+         'pcp_pedidos_faturamento','pcp_fretes','pcp_cotacoes_fretes','analise_solicitacoes',
+         'agenda_compromissos','mencoes','op_acompanhamentos','licitacao_documentos',
+         'veiculos_nfc','vouchers_servico'].includes(tabelaAtiva) ? 'criado_em'
       : 'created_at';
     const { data, error } = await supabase.from(tabelaAtiva).select('*')
       .order(orderCol, { ascending: false }).limit(200);
@@ -1291,10 +1319,48 @@ function PainelDados() {
       return `OS ${r.numero_os || r.id} — ${r.cliente_nome || '?'} — ${r.status || '?'} — ${r.tipo_servico || '?'}`;
     if (tabelaAtiva === 'rh_autorizacoes')
       return `[${r.tipo || '?'}] ${r.data || '?'} — Saída: ${r.hora_saida || '—'} — ${r.motivo || '?'}`.substring(0,100);
+    if (tabelaAtiva === 'pcp_pedidos_compra')
+      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_material?.substring(0,50) || '?'} — ${r.fornecedor || '?'} — ${r.status_compra || '?'}`;
+    if (tabelaAtiva === 'pcp_cotacoes_fornecedores')
+      return `Cotação — ${r.fornecedor_nome || '?'} — por ${r.criado_por_nome || '?'}`;
+    if (tabelaAtiva === 'pcp_aprovacoes')
+      return `[${r.tipo || '?'}] Nível ${r.nivel ?? '?'} (${r.nivel_nome || r.aprovador_nome || '?'}) — ${r.status || '?'}`;
+    if (tabelaAtiva === 'pcp_pedidos_faturamento')
+      return `${r.numero_oc || r.numero_pedido || r.id} — ${r.fornecedor || '?'} — R$ ${r.valor ? Number(r.valor).toLocaleString('pt-BR') : '—'} — ${r.status_faturamento || '?'}`;
+    if (tabelaAtiva === 'pcp_fretes')
+      return `${r.descricao?.substring(0,60) || '?'} — ${r.status || '?'} — por ${r.criado_por_nome || '?'}`;
+    if (tabelaAtiva === 'pcp_cotacoes_fretes')
+      return `Cotação Frete — ${r.transportadora_nome || '?'} — R$ ${r.valor ? Number(r.valor).toLocaleString('pt-BR') : '—'}`;
+    if (tabelaAtiva === 'pcp_pedidos_chicotes')
+      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_chicote?.substring(0,50) || '?'} — OPL ${r.opl || '?'} — ${r.status_chicote || '?'}`;
+    if (tabelaAtiva === 'pcp_pedidos_serralheria')
+      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_trabalho?.substring(0,50) || '?'} — OPL ${r.opl || '?'} — ${r.status_serralheria || '?'}`;
+    if (tabelaAtiva === 'vistorias_patio')
+      return `Chassi ${r.chassi || '?'} — ${r.status || '?'} — por ${r.criado_por_nome || '?'}`;
+    if (tabelaAtiva === 'vouchers_servico')
+      return `${r.tipo_servico || '?'} — PV/OP ${r.numero_pvop || '?'} — ${r.prestador || '?'} — R$ ${r.valor_total ? Number(r.valor_total).toLocaleString('pt-BR') : '—'}`;
+    if (tabelaAtiva === 'ajustes_trabalhos')
+      return `Chassi ${r.chassi || '?'} — ${r.descricao?.substring(0,60) || '?'} — ${r.status || '?'}`;
+    if (tabelaAtiva === 'analise_solicitacoes')
+      return `[${r.origem || '?'}] ${r.origem_titulo || r.origem_numero || '?'} — Setores: ${Array.isArray(r.setores) ? r.setores.join(', ') : r.setores || '?'} — ${r.status || '?'}`;
+    if (tabelaAtiva === 'agenda_compromissos')
+      return `${r.titulo?.substring(0,60) || '?'} — ${r.usuario_nome || '?'}`;
+    if (tabelaAtiva === 'agendamentos_manutencao')
+      return `OPL ${r.numero_opl || '?'} — ${r.cliente_nome || '?'} — ${r.data_agendamento || '?'} (${r.periodo || '?'})`;
+    if (tabelaAtiva === 'chamados_suporte')
+      return `${r.placa || r.chassi || '?'} — ${r.orgao_cliente || '?'} — ${r.descricao_defeito?.substring(0,50) || '?'} — ${r.status || '?'}`;
+    if (tabelaAtiva === 'mencoes')
+      return `${r.mencionante_nome || '?'} → @${r.mencionado_nome || '?'} — ${r.contexto_descricao?.substring(0,50) || r.contexto || '?'}`;
+    if (tabelaAtiva === 'op_acompanhamentos')
+      return `${r.usuario_nome || '?'}: ${r.texto?.substring(0,70) || '?'}`;
+    if (tabelaAtiva === 'licitacao_documentos')
+      return `${r.nome || '?'} — por ${r.criado_por_nome || '?'}`;
+    if (tabelaAtiva === 'veiculos_nfc')
+      return `Placa ${r.placa || '?'} — Chassi ${r.chassi || '?'}`;
     return r.id;
   };
 
-  const getDataCol = (r) => r.data_abertura || r.criado_em || r.data_interacao || r.data_msg || r.data || r.created_at || r.data_hora || r.data_contato;
+  const getDataCol = (r) => r.data_abertura || r.criado_em || r.data_interacao || r.data_msg || r.data || r.created_at || r.data_hora || r.data_contato || r.data_criacao;
   const todosSelecionados = registros.length > 0 && selecionados.size === registros.length;
   const algumSelecionado = selecionados.size > 0;
 
