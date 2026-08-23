@@ -9,6 +9,8 @@ import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
 
 
+const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+
 function useTimer(start) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -1637,6 +1639,7 @@ export default function ProducaoTab({ currentUser }) {
   const [filtroCliente, setFiltroCliente] = useState('');
   const [filtroEntregaDe, setFiltroEntregaDe]   = useState('');
   const [filtroEntregaAte, setFiltroEntregaAte] = useState('');
+  const [lotesExpandidos, setLotesExpandidos] = useState({});
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
   const [modalAcomp,  setModalAcomp]      = useState<any>(null);
@@ -2058,7 +2061,57 @@ export default function ProducaoTab({ currentUser }) {
                 <th>OPL</th><th>Chassi</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
               </tr></thead>
               <tbody>
-                {oplsFiltradas.map(o => <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} />)}
+                {(() => {
+                  const basesJaRenderizadas = new Set();
+                  const itens = [];
+                  for (const o of oplsFiltradas) {
+                    const base = baseOplDe(o.opl);
+                    const irmaos = oplsFiltradas.filter(x => baseOplDe(x.opl) === base);
+                    if (irmaos.length > 1) {
+                      if (basesJaRenderizadas.has(base)) continue;
+                      basesJaRenderizadas.add(base);
+                      itens.push({ tipo: 'lote', base, irmaos });
+                    } else {
+                      itens.push({ tipo: 'single', row: o });
+                    }
+                  }
+                  return itens.map(item => {
+                    if (item.tipo === 'single') {
+                      return <OplRow key={item.row.id} o={item.row} onAction={handleAction} currentUser={currentUser} />;
+                    }
+                    const grupo = item;
+                    const expandido = !!lotesExpandidos[grupo.base];
+                    const qtdAguardando  = grupo.irmaos.filter(o => o.status_geral === 'Aguardando Inicio Producao').length;
+                    const qtdEmProducao  = grupo.irmaos.filter(o => o.status_geral === 'Em Producao').length;
+                    const qtdRetrabalho  = grupo.irmaos.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho').length;
+                    return (
+                      <React.Fragment key={grupo.base}>
+                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                          <td>
+                            <strong>🔗 {grupo.base}</strong>
+                            <div><span className="acn-badge" style={{background:'#7c3aed'}}>LOTE — {grupo.irmaos.length} unidades</span></div>
+                          </td>
+                          <td colSpan={8}>
+                            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                              {qtdAguardando > 0 && <span className="acn-badge" style={{background:'#f59e0b'}}>{qtdAguardando} aguardando início</span>}
+                              {qtdEmProducao > 0 && <span className="acn-badge" style={{background:'#3b82f6'}}>{qtdEmProducao} em produção</span>}
+                              {qtdRetrabalho > 0 && <span className="acn-badge" style={{background:'#ef4444'}}>{qtdRetrabalho} em retrabalho</span>}
+                            </div>
+                          </td>
+                          <td>
+                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
+                              onClick={()=>setLotesExpandidos(prev => ({...prev, [grupo.base]: !prev[grupo.base]}))}>
+                              {expandido ? `▲ Ocultar` : `▼ Ver ${grupo.irmaos.length} unidades`}
+                            </button>
+                          </td>
+                        </tr>
+                        {expandido && grupo.irmaos.map(o => (
+                          <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} />
+                        ))}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           )}
