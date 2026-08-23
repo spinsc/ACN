@@ -1146,23 +1146,26 @@ function agruparLinhas(registros) {
   }
   return ordem.map(base => {
     const itens = grupos[base];
-    if (itens.length === 1) return { ...itens[0], qtd: 1 };
+    if (itens.length === 1) return { ...itens[0], qtd: 1, statusLista: [{ status: itens[0].status, qtd: 1 }] };
     const lead = itens.find(i => i.numero === base) || itens[0];
     const contagemStatus = {};
     for (const i of itens) contagemStatus[i.status] = (contagemStatus[i.status] || 0) + 1;
-    const status = Object.entries(contagemStatus).map(([s, c]) => `${c}x ${s}`).join(' | ');
+    const statusLista = Object.entries(contagemStatus).map(([status, qtd]) => ({ status, qtd }));
     const obsPorUnidade = itens.filter(i => i.obs && i.obs !== '—').map(i => `${i.numero}: ${i.obs}`);
     return {
       tipo: lead.tipo, numero: base, qtd: itens.length,
       placa: lead.placa, chassi: lead.chassi, cliente: lead.cliente,
-      status, obs: obsPorUnidade.join(' | ') || '—',
+      statusLista, obs: obsPorUnidade.join(' | ') || '—',
     };
   });
 }
 
+const statusResumoTexto = (l) => l.statusLista.map(s => (l.qtd > 1 ? `${s.qtd}x ${s.status}` : s.status)).join(' | ');
+
 function RelOpsOssEmServico() {
   const [linhas, setLinhas] = useState([]);
   const [carregando, setCarregando] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState('Todos');
 
   const buscar = async () => {
     setCarregando(true);
@@ -1194,9 +1197,9 @@ function RelOpsOssEmServico() {
   useEffect(() => { buscar(); }, []);
 
   const exportar = () => {
-    const dados = linhas.map(l => ({
+    const dados = linhasFiltradas.map(l => ({
       'Tipo': l.tipo, 'Número': l.numero, 'Qtd': l.qtd, 'Placa': l.placa, 'Chassi': l.chassi,
-      'Cliente': l.cliente, 'Status': l.status, 'Observações': l.obs,
+      'Cliente': l.cliente, 'Status': statusResumoTexto(l), 'Observações': l.obs,
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
     ws['!cols'] = [{wch:6},{wch:24},{wch:6},{wch:12},{wch:18},{wch:28},{wch:34},{wch:70}];
@@ -1209,55 +1212,70 @@ function RelOpsOssEmServico() {
   const totalOps = linhas.filter(l => l.tipo === 'OP').length;
   const totalOss = linhas.filter(l => l.tipo === 'OS').length;
   const totalUnidades = linhas.reduce((s, l) => s + l.qtd, 0);
+  const totalLotes = linhas.filter(l => l.qtd > 1).length;
+
+  const linhasFiltradas = filtroTipo === 'Todos' ? linhas : linhas.filter(l => l.tipo === filtroTipo);
 
   return (
     <div>
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>OPs e OSs em Serviço</span>
-          <button className="acn-btn" style={{background:'#16a34a'}} onClick={exportar} disabled={carregando || linhas.length===0}>
+          <span>📋 OPs e OSs em Serviço</span>
+          <button className="acn-btn" style={{background:'#16a34a'}} onClick={exportar} disabled={carregando || linhasFiltradas.length===0}>
             📥 Baixar Planilha (.xlsx)
           </button>
         </div>
         <div className="sec-body">
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
             {[
-              {l:'Linhas (agrupadas)',v:linhas.length,c:'#374151'},
-              {l:'Unidades',v:totalUnidades,c:'#7c3aed'},
+              {l:'Unidades em Serviço',v:totalUnidades,c:'#7c3aed'},
               {l:'OPs',v:totalOps,c:'#2563eb'},
               {l:'OSs',v:totalOss,c:'#dc2626'},
+              {l:'Lotes Agrupados',v:totalLotes,c:'#f59e0b'},
             ].map(k=>(
-              <div key={k.l} style={{flex:'1 1 110px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
-                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
-                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
+              <div key={k.l} style={{flex:'1 1 130px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:6,padding:'10px 14px'}}>
+                <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:3,fontWeight:600,textTransform:'uppercase',letterSpacing:'.3px'}}>{k.l}</div>
+                <div style={{fontSize:24,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
               </div>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+            {['Todos','OP','OS'].map(t=>(
+              <button key={t} className="acn-btn"
+                style={{background:filtroTipo===t?'#1e293b':'#94a3b8',fontSize:10}}
+                onClick={()=>setFiltroTipo(t)}>{t==='Todos'?'Todos':t==='OP'?'Somente OPs':'Somente OSs'}</button>
             ))}
           </div>
         </div>
       </div>
       <div className="sec-card">
-        <div className="sec-hdr">{linhas.length} registros em serviço</div>
+        <div className="sec-hdr">{linhasFiltradas.length} linha(s) — {linhasFiltradas.reduce((s,l)=>s+l.qtd,0)} unidade(s)</div>
         <div className="sec-body" style={{overflowX:'auto'}}>
           {carregando ? <div className="acn-empty">Carregando...</div> :
-           linhas.length===0 ? <div className="acn-empty">Nenhuma OP/OS em serviço no momento.</div> : (
+           linhasFiltradas.length===0 ? <div className="acn-empty">Nenhuma OP/OS em serviço no momento.</div> : (
             <table>
               <thead><tr>
                 <th>Tipo</th><th>Número</th><th>Qtd</th><th>Placa</th><th>Chassi</th><th>Cliente</th><th>Status</th><th>Observações</th>
               </tr></thead>
               <tbody>
-                {linhas.map((l,i)=>(
+                {linhasFiltradas.map((l,i)=>(
                   <tr key={l.tipo+l.numero+i} style={l.qtd>1?{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}:{}}>
                     <td><span className="acn-badge" style={{background:l.tipo==='OP'?'#2563eb':'#dc2626',fontSize:8}}>{l.tipo}</span></td>
+                    <td><strong>{l.qtd>1 && '🔗 '}{l.numero}</strong></td>
+                    <td style={{textAlign:'center',fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
+                    <td style={l.placa==='—'?{color:'var(--text-muted)'}:{}}>{l.placa}</td>
+                    <td style={{fontSize:10,...(l.chassi==='—'?{color:'var(--text-muted)'}:{})}}>{l.chassi}</td>
+                    <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.cliente}>{l.cliente}</td>
                     <td>
-                      <strong>{l.qtd>1 ? `🔗 ${l.numero}` : l.numero}</strong>
-                      {l.qtd>1 && <div><span className="acn-badge" style={{background:'#7c3aed',fontSize:8}}>LOTE — {l.qtd} unidades</span></div>}
+                      <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                        {l.statusLista.map((s,si)=>(
+                          <span key={si} className="acn-badge" style={{background:STATUS_CORES[s.status]||'#94a3b8',fontSize:8,whiteSpace:'nowrap'}}>
+                            {l.qtd>1 ? `${s.qtd}x ` : ''}{s.status}
+                          </span>
+                        ))}
+                      </div>
                     </td>
-                    <td style={{fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
-                    <td>{l.placa}</td>
-                    <td>{l.chassi}</td>
-                    <td>{l.cliente}</td>
-                    <td style={{maxWidth:220}}>{l.qtd>1 ? l.status : <span className="acn-badge" style={{background:STATUS_CORES[l.status]||'#94a3b8',fontSize:8}}>{l.status}</span>}</td>
-                    <td style={{maxWidth:260,whiteSpace:'pre-wrap'}}>{l.obs}</td>
+                    <td style={{maxWidth:240,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.obs}>{l.obs}</td>
                   </tr>
                 ))}
               </tbody>
