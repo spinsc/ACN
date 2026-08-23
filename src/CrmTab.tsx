@@ -25,7 +25,11 @@ const diasAte = (v: string | null) => {
   if (!v) return null;
   return Math.ceil((new Date(v + 'T12:00:00').getTime() - Date.now()) / 86400000);
 };
-const isGanho       = (e: any) => e?.nome?.toLowerCase().includes('vencida') || e?.nome?.toLowerCase().includes('convertida');
+const isGanho       = (e: any) => {
+  const n = e?.nome?.toLowerCase() || '';
+  if (n.includes('não') || n.includes('nao ')) return false; // "Não Vencida" não é Ganho
+  return n.includes('vencida') || n.includes('convertida');
+};
 const isDesistencia = (e: any) => e?.nome?.toLowerCase().includes('desist');
 const isFinalizada  = (e: any) => e?.nome?.toLowerCase().includes('finaliz');
 const isPerdido     = (e: any) => e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e);
