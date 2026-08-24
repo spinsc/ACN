@@ -396,9 +396,6 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [logs, setLogs]     = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [liberando, setLiberando] = useState(false);
-  const [mostrarFormLiberar, setMostrarFormLiberar] = useState(false);
-  const [seriaisForm, setSeriaisForm] = useState('');
-
   // Sincroniza se prop mudar
   useEffect(() => { setOpl(oplProp); }, [oplProp?.id]);
 
@@ -414,16 +411,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   }, [opl?.id]);
 
   // ── Liberar OP para o Fiscal emitir NF ──────────────────────────────────
-  // Exige números de série antes de liberar; ao confirmar, dispara email
-  // automático ao Fiscal com os dados da OP/OS.
+  // Os números de série agora são informados pelo Almoxarifado no kiting
+  // (antes de liberar para o PCP), não mais aqui — o Comercial só confirma
+  // a liberação e dispara o email automático ao Fiscal com os dados da OP/OS.
   const confirmarLiberarParaFiscal = async () => {
-    if (!seriaisForm.trim()) { alert('Informe os números de série dos sistemas instalados.'); return; }
     setLiberando(true);
     const agora = new Date().toISOString();
     const { error } = await supabase.from('oples').update({
       status_geral: 'Aguarda Emissao NF',
       data_liberacao_comercial: agora,
-      seriais_equipamentos: seriaisForm.trim(),
     }).eq('id', opl.id);
     if (error) { alert('Erro ao liberar: ' + error.message); setLiberando(false); return; }
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -433,13 +429,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       usuario_nome: currentUser?.nome || null, data_hora: agora,
     }]);
     // Atualiza status local sem fechar o modal
-    setOpl((o: any) => ({ ...o, status_geral: 'Aguarda Emissao NF', seriais_equipamentos: seriaisForm.trim() }));
+    setOpl((o: any) => ({ ...o, status_geral: 'Aguarda Emissao NF' }));
     setLogs(prev => [{
       id: 'tmp', setor: 'Comercial', evento: 'OPL liberada para emissão de NF pelo Fiscal.',
       status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
       usuario_nome: currentUser?.nome || '—', data_hora: agora,
     }, ...prev]);
-    setMostrarFormLiberar(false);
     setLiberando(false);
 
     // Email automático ao Fiscal — não bloqueia a liberação se falhar
@@ -454,7 +449,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <tr><td><strong>Número OP/OS</strong></td><td>${opl.opl}</td></tr>
           <tr><td><strong>Cliente</strong></td><td>${opl.cliente_nome || '—'}</td></tr>
           <tr><td><strong>Data de Entrega Prevista</strong></td><td>${fmtDtBr(opl.data_prevista_entrega)}</td></tr>
-          <tr><td><strong>Números de Série</strong></td><td>${seriaisForm.trim().replace(/\n/g, '<br>')}</td></tr>
+          <tr><td><strong>Números de Série</strong></td><td>${(opl.seriais_equipamentos || '—').replace(/\n/g, '<br>')}</td></tr>
           <tr><td><strong>Valor Total</strong></td><td>${opl.valor_total != null ? `R$ ${Number(opl.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</td></tr>
           <tr><td><strong>Liberado por</strong></td><td>${currentUser?.nome || '—'}</td></tr>
         </table>
@@ -525,48 +520,26 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           opl.status_geral === 'Aguardando Liberacao Comercial') && (
           <div style={{ margin: '12px 0 0', padding: '12px 16px', background: '#f0fdf4',
             border: '2px solid #22c55e', borderRadius: 8 }}>
-            {!mostrarFormLiberar ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d' }}>✅ APROVADO PELO CQ — AGUARDANDO LIBERAÇÃO COMERCIAL</div>
-                  <div style={{ fontSize: 10, color: '#166534', marginTop: 2 }}>
-                    Esta OP está pronta. Libere para o Fiscal emitir a Nota Fiscal.
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d' }}>✅ APROVADO PELO CQ — AGUARDANDO LIBERAÇÃO COMERCIAL</div>
+                <div style={{ fontSize: 10, color: '#166534', marginTop: 2 }}>
+                  Esta OP está pronta. Libere para o Fiscal emitir a Nota Fiscal.
+                </div>
+                {!opl.seriais_equipamentos && (
+                  <div style={{ fontSize: 9, color: '#b45309', marginTop: 4 }}>
+                    ⚠️ Números de série ainda não informados pelo Almoxarifado no kiting.
                   </div>
-                </div>
-                <button
-                  onClick={() => { setSeriaisForm(opl.seriais_equipamentos || ''); setMostrarFormLiberar(true); }}
-                  style={{ background: '#f59e0b', color: '#fff', border: 'none',
-                    borderRadius: 7, padding: '9px 18px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
-                    whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  🟡 LIBERAR PARA FISCAL
-                </button>
+                )}
               </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d', marginBottom: 8 }}>
-                  🔢 Números de Série dos Sistemas Instalados *
-                </div>
-                <textarea autoFocus rows={3} value={seriaisForm} onChange={e => setSeriaisForm(e.target.value)}
-                  placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #86efac', borderRadius: 6,
-                    padding: '8px 10px', fontSize: 12, fontFamily: 'monospace', resize: 'vertical', marginBottom: 8 }} />
-                <div style={{ fontSize: 9, color: '#166534', marginBottom: 10 }}>
-                  Um email será enviado automaticamente ao Fiscal com esses dados assim que você confirmar.
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={confirmarLiberarParaFiscal} disabled={liberando}
-                    style={{ background: liberando ? '#94a3b8' : '#f59e0b', color: '#fff', border: 'none',
-                      borderRadius: 7, padding: '9px 18px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>
-                    {liberando ? 'Liberando...' : '✅ Confirmar e Liberar'}
-                  </button>
-                  <button onClick={() => setMostrarFormLiberar(false)} disabled={liberando}
-                    style={{ background: '#94a3b8', color: '#fff', border: 'none',
-                      borderRadius: 7, padding: '9px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
+              <button
+                onClick={confirmarLiberarParaFiscal} disabled={liberando}
+                style={{ background: liberando ? '#94a3b8' : '#f59e0b', color: '#fff', border: 'none',
+                  borderRadius: 7, padding: '9px 18px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                  whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {liberando ? 'Liberando...' : '🟡 LIBERAR PARA FISCAL'}
+              </button>
+            </div>
           </div>
         )}
 

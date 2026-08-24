@@ -154,6 +154,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
+  // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
+  // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
+  const [lotesExpandidosOpls, setLotesExpandidosOpls] = useState<Record<string,boolean>>({});
   const [oplEditando, setOplEditando]   = useState<any|null>(null);   // OPL sendo editada
   const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
   const [oplFormEdit, setOplFormEdit]   = useState<any>({});
@@ -2115,80 +2118,152 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     </tr>
                   </thead>
                   <tbody>
-                    {oplsFiltradas.map((o, i) => {
+                    {(() => {
+                      const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+                      const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+                      const semDado = (v) => !v || !String(v).trim();
                       const hoje = new Date().toISOString().slice(0,10);
-                      const atrasada = o.data_prevista_entrega && o.data_prevista_entrega < hoje;
-                      const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
-                      return (
-                        <tr key={o.id} style={{ background: i%2===0 ? 'white' : '#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
-                          <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
-                            <LinkOpl opl={o} currentUser={currentUser} />
-                          </td>
-                          <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome||'—'}</td>
-                          <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
-                            {o.tipo_projeto||o.modelo||'—'}
-                          </td>
-                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                            <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
-                              background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
-                              color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
-                              {o.faturamento_empresa||'ACN'}
-                            </span>
-                          </td>
-                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                            <span style={{ fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:3, color:'white',
-                              background: STATUS_COR[o.status_geral] || '#64748b' }}>
-                              {o.status_geral||'—'}
-                            </span>
-                          </td>
-                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
-                            {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
-                          </td>
-                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap', fontWeight: atrasada ? 700 : 400,
-                            color: atrasada ? '#dc2626' : '#64748b' }}>
-                            {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
-                            {atrasada && ' ⚠️'}
-                          </td>
-                          <td style={{ padding:'5px 8px', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
-                            {o.responsavel_comercial||'—'}
-                          </td>
-                          <td style={{ padding:'5px 8px' }}>
-                            {crmCard ? (
-                              <button onClick={() => { setFormOp({ ...VAZIO_OP, ...crmCard }); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
-                                style={{ fontSize:8, padding:'2px 6px', background:'#ede9fe', color:'#7c3aed', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
-                                🔗 {crmCard.titulo?.slice(0,20)||'CRM'}
-                              </button>
-                            ) : (
-                              <span style={{ fontSize:8, color:'#cbd5e1' }}>—</span>
-                            )}
-                          </td>
-                          <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                            <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
-                              {/* Botão de liberação para Fiscal — aparece somente quando Aprovado CQ */}
-                              {(o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||
-                                o.status_geral === 'Aguardando Liberacao Comercial') && (
-                                <button
-                                  onClick={() => liberarFiscalCrm(o)}
-                                  style={{ fontSize:9, padding:'3px 9px', background:'#f59e0b', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
-                                  🟡 LIBERAR FISCAL
+
+                      const basesJaRenderizadas = new Set();
+                      const itens: any[] = [];
+                      for (const o of oplsFiltradas) {
+                        const base = baseOplDe(o.opl);
+                        const irmaos = oplsFiltradas.filter(x => baseOplDe(x.opl) === base);
+                        if (irmaos.length > 1) {
+                          if (basesJaRenderizadas.has(base)) continue;
+                          basesJaRenderizadas.add(base);
+                          itens.push({ tipo: 'lote', base, irmaos: [...irmaos].sort((a,b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
+                        } else {
+                          itens.push({ tipo: 'single', row: o });
+                        }
+                      }
+
+                      const renderLinhaOpl = (o: any) => {
+                        const atrasada = o.data_prevista_entrega && o.data_prevista_entrega < hoje;
+                        const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
+                        return (
+                          <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                            <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
+                              <LinkOpl opl={o} currentUser={currentUser} />
+                            </td>
+                            <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome||'—'}</td>
+                            <td style={{ padding:'5px 8px', maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
+                              {o.tipo_projeto||o.modelo||'—'}
+                              <div style={{ fontSize:8, marginTop:1 }}>
+                                {semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : <span style={{color:'#94a3b8'}}>🔧 {o.chassi}</span>}
+                                {' '}
+                                {semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'#94a3b8'}}>🚘 {o.placa}</span>}
+                              </div>
+                            </td>
+                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
+                              <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
+                                background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
+                                color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                                {o.faturamento_empresa||'ACN'}
+                              </span>
+                            </td>
+                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
+                              <span style={{ fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:3, color:'white',
+                                background: STATUS_COR[o.status_geral] || '#64748b' }}>
+                                {o.status_geral||'—'}
+                              </span>
+                            </td>
+                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
+                              {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                            </td>
+                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap', fontWeight: atrasada ? 700 : 400,
+                              color: atrasada ? '#dc2626' : '#64748b' }}>
+                              {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                              {atrasada && ' ⚠️'}
+                            </td>
+                            <td style={{ padding:'5px 8px', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
+                              {o.responsavel_comercial||'—'}
+                            </td>
+                            <td style={{ padding:'5px 8px' }}>
+                              {crmCard ? (
+                                <button onClick={() => { setFormOp({ ...VAZIO_OP, ...crmCard }); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                                  style={{ fontSize:8, padding:'2px 6px', background:'#ede9fe', color:'#7c3aed', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
+                                  🔗 {crmCard.titulo?.slice(0,20)||'CRM'}
                                 </button>
+                              ) : (
+                                <span style={{ fontSize:8, color:'#cbd5e1' }}>—</span>
                               )}
-                              <button title="Editar OPL"
-                                onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
-                                style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                ✏️ Editar
-                              </button>
-                              <button title="Acompanhamentos / Notas"
-                                onClick={() => setOplAcomp(o)}
-                                style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                💬 Notas
-                              </button>
-                              <OplAnexosWidget opl={o} setor="Comercial/CRM" currentUser={currentUser} compact={true} />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
+                              <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
+                                {/* Botão de liberação para Fiscal — aparece somente quando Aprovado CQ */}
+                                {(o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||
+                                  o.status_geral === 'Aguardando Liberacao Comercial') && (
+                                  <button
+                                    onClick={() => liberarFiscalCrm(o)}
+                                    style={{ fontSize:9, padding:'3px 9px', background:'#f59e0b', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
+                                    🟡 LIBERAR FISCAL
+                                  </button>
+                                )}
+                                <button title="Editar OPL"
+                                  onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
+                                  style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                  ✏️ Editar
+                                </button>
+                                <button title="Acompanhamentos / Notas"
+                                  onClick={() => setOplAcomp(o)}
+                                  style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                  💬 Notas
+                                </button>
+                                <OplAnexosWidget opl={o} setor="Comercial/CRM" currentUser={currentUser} compact={true} />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      };
+
+                      return itens.map((item) => {
+                        if (item.tipo === 'single') return renderLinhaOpl(item.row);
+                        const { base, irmaos } = item;
+                        const expandido = !!lotesExpandidosOpls[base];
+                        const rep = irmaos[0];
+                        const qtdSemChassi = irmaos.filter(o => semDado(o.chassi)).length;
+                        const qtdSemPlaca  = irmaos.filter(o => semDado(o.placa)).length;
+                        return (
+                          <React.Fragment key={base}>
+                            <tr style={{ background:'#f5f3ff', borderLeft:'4px solid #7c3aed', borderBottom:'1px solid #f1f5f9' }}>
+                              <td style={{ padding:'5px 8px', fontWeight:700, color:'#6d28d9', whiteSpace:'nowrap' }}>
+                                🔗 {base}
+                                <div style={{ marginTop:2 }}>
+                                  <span style={{ fontSize:8, fontWeight:700, background:'#7c3aed', color:'white', padding:'1px 6px', borderRadius:10 }}>
+                                    LOTE — {irmaos.length} unidades
+                                  </span>
+                                </div>
+                              </td>
+                              <td style={{ padding:'5px 8px' }}>{rep.cliente_nome||'—'}</td>
+                              <td style={{ padding:'5px 8px', fontSize:8 }}>
+                                {(qtdSemChassi + qtdSemPlaca) > 0 ? (
+                                  <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
+                                    {qtdSemChassi > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemChassi} sem chassi</span>}
+                                    {qtdSemPlaca  > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemPlaca} sem placa</span>}
+                                  </div>
+                                ) : <span style={{color:'#16a34a'}}>✓ dados completos</span>}
+                              </td>
+                              <td style={{ padding:'5px 8px' }}>
+                                <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
+                                  background: rep.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
+                                  color: rep.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                                  {rep.faturamento_empresa||'ACN'}
+                                </span>
+                              </td>
+                              <td colSpan={4} style={{ padding:'5px 8px', fontSize:9, color:'#7c6f9c' }}>Ver unidades para detalhes individuais</td>
+                              <td style={{ padding:'5px 8px' }}>
+                                <button onClick={()=>setLotesExpandidosOpls(s=>({...s,[base]:!expandido}))}
+                                  style={{ fontSize:9, padding:'2px 8px', background:'#94a3b8', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                  {expandido ? '▲ Ocultar' : `▼ Ver ${irmaos.length}`}
+                                </button>
+                              </td>
+                            </tr>
+                            {expandido && irmaos.map(o => renderLinhaOpl(o))}
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>

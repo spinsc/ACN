@@ -134,7 +134,7 @@ export default function FiscalTab({ currentUser }) {
                           <Linkify text={o.seriais_equipamentos} />
                         </div>
                       ) : (
-                        <span style={{fontSize:9,color:'#dc2626',fontStyle:'italic'}}>⚠️ Não informado pelo Comercial</span>
+                        <span style={{fontSize:9,color:'#dc2626',fontStyle:'italic'}}>⚠️ Não informado pelo Almoxarifado no kiting</span>
                       )}
                     </td>
                     <td>

@@ -10,6 +10,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
 // Statuses ativos do fluxo de OS de manutenção veicular (pós-reformulação
 // 169d90d, 2026-08-21) — usado tanto pelo Calendário quanto pelo Painel SAC
@@ -2074,7 +2075,7 @@ export default function ProducaoTab({ currentUser }) {
                     if (irmaos.length > 1) {
                       if (basesJaRenderizadas.has(base)) continue;
                       basesJaRenderizadas.add(base);
-                      itens.push({ tipo: 'lote', base, irmaos });
+                      itens.push({ tipo: 'lote', base, irmaos: [...irmaos].sort((a,b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
                     } else {
                       itens.push({ tipo: 'single', row: o });
                     }

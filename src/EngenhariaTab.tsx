@@ -139,6 +139,7 @@ export default function EngenhariaTab({ currentUser }) {
   // A unidade "01" fica sem sufixo (não renomeada, ver ComercialTab/CrmTab),
   // então o próprio número original também serve de base do grupo.
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+  const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
   const abrirBomLote = (opl) => {
     const base = baseOplDe(opl.opl);
@@ -298,7 +299,7 @@ export default function EngenhariaTab({ currentUser }) {
                     if (irmaos.length > 1) {
                       if (basesJaRenderizadas.has(base)) continue;
                       basesJaRenderizadas.add(base);
-                      itens.push({ tipo: 'lote', base, irmaos });
+                      itens.push({ tipo: 'lote', base, irmaos: [...irmaos].sort((a,b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
                     } else {
                       itens.push({ tipo: 'single', row: o });
                     }

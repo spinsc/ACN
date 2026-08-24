@@ -566,6 +566,9 @@ export default function ComercialTab({ currentUser }) {
   const [modalEntregue, setModalEntregue] = useState(null);
   const [modalVer, setModalVer]           = useState(null);
   const [modalAcomp, setModalAcomp]       = useState<any>(null); // acompanhamento OP
+  // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
+  // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
+  const [lotesExpandidos, setLotesExpandidos] = useState<Record<string,boolean>>({});
   const [nomeRecebeu, setNomeRecebeu] = useState('');
 
   // Categorias de tipo de projeto (sac_categorias + hardcoded)
@@ -1246,47 +1249,113 @@ export default function ComercialTab({ currentUser }) {
               <thead><tr><th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo</th><th>Operador</th><th>Prev. Entrega</th><th>Atraso</th><th>Status</th><th>Proposta</th><th style={{position:'sticky',right:0,background:'#1e293b',zIndex:2,whiteSpace:'nowrap'}}>Acao</th></tr></thead>
               <tbody>
                 {oplsFiltrados.length === 0 ? <tr><td colSpan={11} className="acn-empty">Nenhuma OP encontrada.</td></tr>
-                : oplsFiltrados.map(o => {
-                  const atraso = diasAtraso(o.data_prevista_entrega);
-                  const podeFaturar = o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial';
-                  const podeEntregue = o.status_geral === 'Faturado e Disponivel para Entrega';
-                  return (
-                    <tr key={o.id} style={{background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : ''}}>
-                      <td>{fmtDt(o.data_entrada)}</td>
-                      <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                      <td>{o.chassi||'—'}</td>
-                      <td><span style={{fontWeight:700,color: (o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
-                      <td style={{fontSize:10,color:'#475569'}}>{o.responsavel_comercial || o.criado_por_nome || '—'}</td>
-                      <td>{fmtDt(o.data_prevista_entrega)}</td>
-                      <td>{atraso?<span className="acn-badge" style={{background:'#f59e0b'}}>{atraso}d</span>:<span style={{color:'#22c55e',fontSize:10}}>No prazo</span>}</td>
-                      <td>
-                        <span className="acn-badge" style={{background:statusCor(o.status_geral)}}>{o.status_geral}</span>
-                        {o.liberado_divulgacao && <div style={{marginTop:2}}><span style={{fontSize:9,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>📸 MKT</span></div>}
-                      </td>
-                      <td>
-                        <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} tipoFixo="proposta" compact={true} />
-                      </td>
-                      <td style={{position:'sticky',right:0,background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : 'white',zIndex:1}}>
-                        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                          <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{
-                            setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});
-                            setEditId(o.id); setShowForm(true); window.scrollTo({top:0,behavior:'smooth'});
-                          }}>✏️ EDITAR</button>
-                          {o.status_geral === 'Devolvida Comercial' && (
-                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}} onClick={()=>enviarParaEngenharia(o)}>
-                              ↩ ENGENHARIA
+                : (() => {
+                  // Numero base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
+                  const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+                  const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+                  const semDado = (v) => !v || !String(v).trim();
+
+                  const basesJaRenderizadas = new Set();
+                  const itens = [];
+                  for (const o of oplsFiltrados) {
+                    const base = baseOplDe(o.opl);
+                    const irmaos = oplsFiltrados.filter(x => baseOplDe(x.opl) === base);
+                    if (irmaos.length > 1) {
+                      if (basesJaRenderizadas.has(base)) continue;
+                      basesJaRenderizadas.add(base);
+                      itens.push({ tipo: 'lote', base, irmaos: [...irmaos].sort((a,b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
+                    } else {
+                      itens.push({ tipo: 'single', row: o });
+                    }
+                  }
+
+                  const renderLinhaOpl = (o) => {
+                    const atraso = diasAtraso(o.data_prevista_entrega);
+                    const podeFaturar = o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' || o.status_geral === 'Aguardando Liberacao Comercial';
+                    const podeEntregue = o.status_geral === 'Faturado e Disponivel para Entrega';
+                    return (
+                      <tr key={o.id} style={{background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : ''}}>
+                        <td>{fmtDt(o.data_entrada)}</td>
+                        <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                        <td><span style={{fontWeight:700,color: (o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
+                        <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                        <td style={{fontSize:10,color:'#475569'}}>{o.responsavel_comercial || o.criado_por_nome || '—'}</td>
+                        <td>{fmtDt(o.data_prevista_entrega)}</td>
+                        <td>{atraso?<span className="acn-badge" style={{background:'#f59e0b'}}>{atraso}d</span>:<span style={{color:'#22c55e',fontSize:10}}>No prazo</span>}</td>
+                        <td>
+                          <span className="acn-badge" style={{background:statusCor(o.status_geral)}}>{o.status_geral}</span>
+                          {o.liberado_divulgacao && <div style={{marginTop:2}}><span style={{fontSize:9,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>📸 MKT</span></div>}
+                        </td>
+                        <td>
+                          <OplAnexosWidget opl={o} setor="Comercial" currentUser={currentUser} tipoFixo="proposta" compact={true} />
+                        </td>
+                        <td style={{position:'sticky',right:0,background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : 'white',zIndex:1}}>
+                          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                            <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{
+                              setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});
+                              setEditId(o.id); setShowForm(true); window.scrollTo({top:0,behavior:'smooth'});
+                            }}>✏️ EDITAR</button>
+                            {o.status_geral === 'Devolvida Comercial' && (
+                              <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}} onClick={()=>enviarParaEngenharia(o)}>
+                                ↩ ENGENHARIA
+                              </button>
+                            )}
+                            {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>}
+                            {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
+                            <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
+                            <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬 ACOMP.</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  };
+
+                  return itens.map(item => {
+                    if (item.tipo === 'single') return renderLinhaOpl(item.row);
+
+                    const { base, irmaos } = item;
+                    const expandido = !!lotesExpandidos[base];
+                    const rep = irmaos[0];
+                    const qtdSemChassi = irmaos.filter(o => semDado(o.chassi)).length;
+                    const qtdSemPlaca  = irmaos.filter(o => semDado(o.placa)).length;
+                    const qtdSemModelo = irmaos.filter(o => semDado(o.modelo)).length;
+                    return (
+                      <React.Fragment key={base}>
+                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                          <td>{fmtDt(rep.data_entrada)}</td>
+                          <td>
+                            <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
+                            <div style={{marginTop:2}}>
+                              <span style={{fontSize:9,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 6px',borderRadius:10}}>
+                                LOTE — {irmaos.length} unidades
+                              </span>
+                            </div>
+                          </td>
+                          <td colSpan={2} style={{fontSize:9}}>
+                            {/* Chassi/placa/modelo faltantes — para localizar rápido o que falta cadastrar */}
+                            {(qtdSemChassi + qtdSemPlaca + qtdSemModelo) > 0 ? (
+                              <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                                {qtdSemChassi > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemChassi} sem chassi</span>}
+                                {qtdSemPlaca  > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemPlaca} sem placa</span>}
+                                {qtdSemModelo > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemModelo} sem modelo</span>}
+                              </div>
+                            ) : <span style={{color:'#16a34a'}}>✓ dados completos</span>}
+                          </td>
+                          <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td style={{fontSize:10,color:'#475569'}}>{rep.responsavel_comercial || rep.criado_por_nome || '—'}</td>
+                          <td colSpan={3} style={{fontSize:10,color:'#7c6f9c'}}>Ver unidades para detalhes individuais</td>
+                          <td>
+                            <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
+                              {expandido ? '▲ Ocultar unidades' : `▼ Ver ${irmaos.length} unidades`}
                             </button>
-                          )}
-                          {podeFaturar && <button className="acn-btn" style={{background:'#f59e0b',fontSize:10}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>}
-                          {podeEntregue && <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>}
-                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
-                          <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬 ACOMP.</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          </td>
+                        </tr>
+                        {expandido && irmaos.map(o => renderLinhaOpl(o))}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           )}

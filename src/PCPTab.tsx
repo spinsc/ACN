@@ -127,6 +127,7 @@ export default function PCPTab({ currentUser }) {
 
   // Numero base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+  const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
   const liberarKitingLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera PCP');
@@ -367,7 +368,7 @@ export default function PCPTab({ currentUser }) {
                     if (irmaos.length > 1) {
                       if (basesJaRenderizadas.has(base)) continue;
                       basesJaRenderizadas.add(base);
-                      itens.push({ tipo: 'lote', base, irmaos });
+                      itens.push({ tipo: 'lote', base, irmaos: [...irmaos].sort((a,b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
                     } else {
                       itens.push({ tipo: 'single', row: o });
                     }

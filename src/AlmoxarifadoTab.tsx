@@ -20,6 +20,12 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [processandoLote, setProcessandoLote] = useState(false);
   const [modalLoteAcao, setModalLoteAcao] = useState(null); // { tipo:'falta'|'pendencia', base, irmaos }
   const [obsLoteAcao, setObsLoteAcao] = useState('');
+  // Numeros de serie agora sao informados aqui, no kiting, antes de liberar
+  // para o PCP mandar para producao (antes eram no Comercial, na liberacao
+  // para o Fiscal — mudou porque o produto ja deve sair do Almoxarifado
+  // com o serial aplicado).
+  const [modalSeriais, setModalSeriais] = useState(null); // opl aguardando confirmacao de kiting
+  const [seriaisKitForm, setSeriaisKitForm] = useState('');
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
@@ -32,7 +38,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
     if (!silent) setLoading(false);
   };
 
-  const setAlmox = async (opl, statusAlmox, statusGeral, obs='') => {
+  const setAlmox = async (opl, statusAlmox, statusGeral, obs='', extra={}) => {
     const agora = new Date().toISOString();
     await supabase.from('oples').update({
       status_almox: statusAlmox,
@@ -40,6 +46,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
       obs_almox: obs,
       data_kiting: agora,
       responsavel_almox: currentUser?.nome,
+      ...extra,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
@@ -49,9 +56,17 @@ export default function AlmoxarifadoTab({ currentUser }) {
     }]);
   };
 
-  const kitOk = async (opl) => {
-    await setAlmox(opl, 'Kit OK', 'Kit OK - Aguardando PCP');
-    notificarEvento('kit_ok', msg.kitOk(opl.opl, currentUser?.nome));
+  const abrirModalSeriais = (opl, pendenciaSanada=false) => {
+    setSeriaisKitForm(opl.seriais_equipamentos || '');
+    setModalSeriais({ ...opl, _pendenciaSanada: pendenciaSanada });
+  };
+
+  const confirmarKitOkComSeriais = async () => {
+    if (!seriaisKitForm.trim()) { alert('Informe os números de série dos equipamentos deste kit.'); return; }
+    const obs = modalSeriais._pendenciaSanada ? 'Pendencia sanada' : '';
+    await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, { seriais_equipamentos: seriaisKitForm.trim() });
+    notificarEvento('kit_ok', msg.kitOk(modalSeriais.opl, currentUser?.nome));
+    setModalSeriais(null); setSeriaisKitForm('');
     fetchAll();
   };
 
@@ -67,38 +82,18 @@ export default function AlmoxarifadoTab({ currentUser }) {
     setModalPend(null); setObsPend(''); fetchAll();
   };
 
-  const sanarPendencia = async (opl) => {
-    const agora = new Date().toISOString();
-    await supabase.from('oples').update({
-      status_almox: 'Kit OK',
-      status_geral: 'Kit OK - Aguardando PCP',
-      obs_almox: 'Pendencia sanada',
-    }).eq('id', opl.id);
-    await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
-      evento: 'Pendencia sanada. Kit completo — aguardando liberacao PCP.',
-      status_anterior: 'Aguardando Almox', status_novo: 'Kit OK - Aguardando PCP',
-      usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
-    notificarEvento('kit_ok', msg.kitOk(opl.opl, currentUser?.nome));
-    fetchAll();
-  };
+  // Pendencia sanada tambem libera o kit — passa pelo mesmo modal de seriais.
+  const sanarPendencia = (opl) => abrirModalSeriais(opl, true);
 
   // Numero base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+  const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
   const kitOkLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => o.status_almox !== 'Kit OK');
     if (pendentes.length === 0) { alert('Todas as unidades deste lote ja estao com kit 100%.'); return; }
-    if (!confirm(`Marcar kiting 100% para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
-    setProcessandoLote(true);
-    try {
-      for (const opl of pendentes) await setAlmox(opl, 'Kit OK', 'Kit OK - Aguardando PCP');
-      notificarEvento('kit_ok', `📦 *Kiting 100% em lote* — ${grupo.base}\n${pendentes.length} unidades liberadas.\nPor: ${currentUser?.nome}`);
-    } finally {
-      setProcessandoLote(false);
-      fetchAll();
-    }
+    alert('Cada unidade do lote tem equipamentos com números de série diferentes — expanda o lote e confirme o kiting de cada unidade individualmente.');
+    setLotesExpandidos(s => ({ ...s, [grupo.base]: true }));
   };
 
   const abrirLoteAcao = (tipo, grupo) => {
@@ -153,7 +148,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                     if (irmaos.length > 1) {
                       if (basesJaRenderizadas.has(base)) continue;
                       basesJaRenderizadas.add(base);
-                      itens.push({ tipo: 'lote', base, irmaos });
+                      itens.push({ tipo: 'lote', base, irmaos: [...irmaos].sort((a,b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
                     } else {
                       itens.push({ tipo: 'single', row: o });
                     }
@@ -182,7 +177,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                           {o.status_almox !== 'Kit OK' && (
-                            <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>kitOk(o)}>
+                            <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirModalSeriais(o)}>
                               KITING 100%
                             </button>
                           )}
@@ -300,6 +295,26 @@ export default function AlmoxarifadoTab({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#f97316',flex:1}} onClick={liberarPendencia}>LIBERAR COM PENDENCIA</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPend(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SERIAIS — obrigatorio para confirmar Kiting 100% (ou sanar pendencia) */}
+      {modalSeriais && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-title">🔢 Números de Série — OPL {modalSeriais.opl}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>
+              Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
+            </div>
+            <label className="acn-label">Números de série dos equipamentos instalados *</label>
+            <textarea autoFocus className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily:'monospace'}}
+              placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
+              value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarKitOkComSeriais}>CONFIRMAR KITING 100%</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalSeriais(null);setSeriaisKitForm('');}}>Cancelar</button>
             </div>
           </div>
         </div>
