@@ -766,7 +766,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
@@ -2112,7 +2112,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                   <thead>
                     <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
-                      {['OPL','Cliente','Tipo/Modelo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
+                      {['OPL','Cliente','Tipo/Veículo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
                         <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -2147,13 +2147,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               <LinkOpl opl={o} currentUser={currentUser} />
                             </td>
                             <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome||'—'}</td>
-                            <td style={{ padding:'5px 8px', maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
-                              {o.tipo_projeto||o.modelo||'—'}
-                              <div style={{ fontSize:8, marginTop:1 }}>
-                                {semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : <span style={{color:'#94a3b8'}}>🔧 {o.chassi}</span>}
-                                {' '}
-                                {semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'#94a3b8'}}>🚘 {o.placa}</span>}
-                              </div>
+                            <td style={{ padding:'5px 8px', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', color:'#475569', fontSize:10 }}>
+                              <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
+                              <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                              <div style={{ color:'#94a3b8' }}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                              <div style={{ color:'#94a3b8' }}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
                               <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
@@ -2224,6 +2222,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         const rep = irmaos[0];
                         const qtdSemChassi = irmaos.filter(o => semDado(o.chassi)).length;
                         const qtdSemPlaca  = irmaos.filter(o => semDado(o.placa)).length;
+                        const qtdSemModelo = irmaos.filter(o => semDado(o.modelo)).length;
                         return (
                           <React.Fragment key={base}>
                             <tr style={{ background:'#f5f3ff', borderLeft:'4px solid #7c3aed', borderBottom:'1px solid #f1f5f9' }}>
@@ -2237,8 +2236,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               </td>
                               <td style={{ padding:'5px 8px' }}>{rep.cliente_nome||'—'}</td>
                               <td style={{ padding:'5px 8px', fontSize:8 }}>
-                                {(qtdSemChassi + qtdSemPlaca) > 0 ? (
+                                {(qtdSemModelo + qtdSemChassi + qtdSemPlaca) > 0 ? (
                                   <div style={{ display:'flex', flexDirection:'column', gap:1 }}>
+                                    {qtdSemModelo > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemModelo} sem modelo</span>}
                                     {qtdSemChassi > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemChassi} sem chassi</span>}
                                     {qtdSemPlaca  > 0 && <span style={{color:'#dc2626',fontWeight:700}}>⚠️ {qtdSemPlaca} sem placa</span>}
                                   </div>

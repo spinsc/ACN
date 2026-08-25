@@ -148,7 +148,7 @@ function RelProducao() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples').select(
-      'id,opl,chassi,tipo_projeto,status_geral,responsavel_producao,tecnicos_producao,data_inicio_producao,data_fim_producao,tempo_producao_horas'
+      'id,opl,chassi,modelo,placa,tipo_projeto,status_geral,responsavel_producao,tecnicos_producao,data_inicio_producao,data_fim_producao,tempo_producao_horas'
     )
       .gte('data_entrada', ini+'T00:00:00')
       .lte('data_entrada', fim+'T23:59:59')
@@ -218,12 +218,16 @@ function RelProducao() {
               </div>
               <div className="sec-body" style={{overflowX:'auto'}}>
                 <table>
-                  <thead><tr><th>OPL</th><th>Chassi</th><th>Tipo</th><th>Status</th><th>Técnicos</th><th>Início Prod.</th><th>Fim Prod.</th><th>Tempo</th></tr></thead>
+                  <thead><tr><th>OPL</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Técnicos</th><th>Início Prod.</th><th>Fim Prod.</th><th>Tempo</th></tr></thead>
                   <tbody>
                     {itens.map(o=>(
                       <tr key={o.id}>
                         <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                        <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                         <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                         <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
                         <td style={{fontSize:9}}>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
@@ -242,12 +246,16 @@ function RelProducao() {
         <div className="sec-card">
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
-              <thead><tr><th>OPL</th><th>Chassi</th><th>Tipo</th><th>Status</th><th>Executor</th><th>Técnicos</th><th>Início Prod.</th><th>Tempo</th></tr></thead>
+              <thead><tr><th>OPL</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Executor</th><th>Técnicos</th><th>Início Prod.</th><th>Tempo</th></tr></thead>
               <tbody>
                 {ops.map(o=>(
                   <tr key={o.id}>
                     <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                    <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
                     <td>{o.responsavel_producao||'—'}</td>
@@ -282,7 +290,7 @@ function RelOplsGeral() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples').select(
-      'id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,tempo_producao_horas,responsavel_engenharia,responsavel_producao'
+      'id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,tempo_producao_horas,responsavel_engenharia,responsavel_producao'
     )
       .gte('data_entrada', ini+'T00:00:00')
       .lte('data_entrada', fim+'T23:59:59')
@@ -350,7 +358,7 @@ function RelOplsGeral() {
            lista.length===0 ? <div className="acn-empty">Nenhuma OPL no filtro.</div> : (
             <table>
               <thead><tr>
-                <th>Data Entrada</th><th>OPL</th><th>Chassi</th><th>Tipo Projeto</th>
+                <th>Data Entrada</th><th>OPL</th><th>Veículo</th><th>Tipo Projeto</th>
                 <th>Status</th><th>Prev. Entrega</th><th>Engenharia</th><th>Produção</th>
               </tr></thead>
               <tbody>
@@ -360,7 +368,11 @@ function RelOplsGeral() {
                     <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
                       <td>{fmtData(o.data_entrada)}</td>
                       <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                      <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                      <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                       <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                       <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
                       <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(o.data_prevista_entrega)}</td>
@@ -390,7 +402,7 @@ function RelOplsFinalizadas() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,data_entrega,data_fim_producao,cliente_nome,responsavel_producao')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,data_entrega,data_fim_producao,cliente_nome,responsavel_producao')
       .in('status_geral', STATUS_FINAL)
       .gte('data_entrada', ini+'T00:00:00')
       .lte('data_entrada', fim+'T23:59:59')
@@ -427,13 +439,17 @@ function RelOplsFinalizadas() {
         <div className="sec-body" style={{overflowX:'auto'}}>
           {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OPL finalizada no período.</div>:(
             <table><thead><tr>
-              <th>OPL</th><th>Chassi</th><th>Cliente</th><th>Tipo</th><th>Status</th>
+              <th>OPL</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th>
               <th>Entrada</th><th>Prev. Entrega</th><th>Data Entrega</th><th>Responsável Prod.</th>
             </tr></thead><tbody>
               {ops.map(o=>(
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                  <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                  <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td style={{fontSize:9}}>{o.tipo_projeto}</td>
                   <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
@@ -469,7 +485,7 @@ function RelOplsPorSetor() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome')
       .not('status_geral','in','("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOps(data || []);
@@ -512,12 +528,16 @@ function RelOplsPorSetor() {
         <div className="sec-hdr">{lista.length} OPLs — {setor}</div>
         <div className="sec-body" style={{overflowX:'auto'}}>
           {carregando?<div className="acn-empty">Carregando...</div>:lista.length===0?<div className="acn-empty">Nenhuma OPL.</div>:(
-            <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
+            <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
             <tbody>{lista.map(o=>{
               const atras = o.data_prevista_entrega && new Date(o.data_prevista_entrega)<agora;
               return <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td style={{fontSize:9}}>{o.tipo_projeto}</td>
                 <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
@@ -543,7 +563,7 @@ function RelOplsAtrasadas() {
     setCarregando(true);
     const agora = new Date().toISOString();
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao')
       .not('status_geral','in','("Faturado","Cancelado","Faturado e Disponivel para Entrega")')
       .lt('data_prevista_entrega', agora)
       .not('data_prevista_entrega','is',null)
@@ -586,11 +606,15 @@ function RelOplsAtrasadas() {
       <div className="sec-card">
         <div className="sec-body" style={{overflowX:'auto'}}>
           {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OPL atrasada!</div>:(
-            <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
+            <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
             <tbody>{ops.map(o=>(
               <tr key={o.id} style={{background:'#fef2f2'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td><strong style={{color:'#dc2626'}}>{porSetor(o)}</strong></td>
                 <td><span className="acn-badge" style={{background:'#dc2626',fontSize:8}}>{o.status_geral}</span></td>
@@ -621,7 +645,7 @@ function RelRecebimentosEnvios() {
         .gte('data_prevista_recebimento', ini)
         .lte('data_prevista_recebimento', fim)
         .order('data_prevista_recebimento', { ascending: true }),
-      supabase.from('oples').select('id,opl,chassi,tipo_projeto,status_geral,data_entrega,data_prevista_entrega,cliente_nome')
+      supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrega,data_prevista_entrega,cliente_nome')
         .in('status_geral',['Faturado e Disponivel para Entrega','Faturado'])
         .gte('data_entrada', ini+'T00:00:00')
         .lte('data_entrada', fim+'T23:59:59')
@@ -685,11 +709,15 @@ function RelRecebimentosEnvios() {
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             {carregando?<div className="acn-empty">Carregando...</div>:envios.length===0?<div className="acn-empty">Nenhum envio no período.</div>:(
-              <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
+              <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
               <tbody>{envios.map(o=>(
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                  <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                  <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td style={{fontSize:9}}>{o.tipo_projeto}</td>
                   <td><span className="acn-badge" style={{background:'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
@@ -783,7 +811,7 @@ function RelOplsParadas() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao')
       .in('status_geral', STATUS_PARADA)
       .order('data_entrada', { ascending: true });
     setOps(data || []);
@@ -816,11 +844,15 @@ function RelOplsParadas() {
       <div className="sec-card">
         <div className="sec-body" style={{overflowX:'auto'}}>
           {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OPL parada!</div>:(
-            <table><thead><tr><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
+            <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
             <tbody>{ops.sort((a,b)=>diasParada(b)-diasParada(a)).map(o=>(
               <tr key={o.id} style={{background:'#fff7ed'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td><span className="acn-badge" style={{background:'#f97316',fontSize:8}}>{o.status_geral}</span></td>
                 <td>{fmtData(o.data_entrada)}</td>
@@ -1155,7 +1187,7 @@ function agruparLinhas(registros) {
     const obsPorUnidade = itens.filter(i => i.obs && i.obs !== '—').map(i => `${i.numero}: ${i.obs}`);
     return {
       tipo: lead.tipo, numero: base, qtd: itens.length,
-      placa: lead.placa, chassi: lead.chassi, cliente: lead.cliente,
+      placa: lead.placa, chassi: lead.chassi, modelo: lead.modelo, cliente: lead.cliente,
       statusLista, obs: obsPorUnidade.join(' | ') || '—',
     };
   });
@@ -1172,23 +1204,23 @@ function RelOpsOssEmServico() {
     setCarregando(true);
     const [opsRes, ossRes] = await Promise.all([
       supabase.from('oples').select(
-        'id,opl,placa,chassi,cliente_nome,status_geral,observacoes_atencao,obs_devolucao,obs_devolucao_pcp,obs_devolucao_producao,obs_reprovacao_cq,obs_almox'
+        'id,opl,placa,chassi,modelo,cliente_nome,status_geral,observacoes_atencao,obs_devolucao,obs_devolucao_pcp,obs_devolucao_producao,obs_reprovacao_cq,obs_almox'
       ).order('opl'),
       supabase.from('sac_ordens_servico').select(
-        'id,numero_os,numero_serie,cliente_nome,status,observacoes,observacoes_manutencao,observacoes_lab,motivo_reprovacao,obs_reprovacao_cq'
+        'id,numero_os,numero_serie,modelo,cliente_nome,status,observacoes,observacoes_manutencao,observacoes_lab,motivo_reprovacao,obs_reprovacao_cq'
       ).order('numero_os'),
     ]);
     const ops = (opsRes.data || [])
       .filter(o => !OP_STATUS_FINALIZADOS.includes(o.status_geral))
       .map(o => ({
-        tipo: 'OP', numero: o.opl, placa: o.placa || '—', chassi: o.chassi || '—',
+        tipo: 'OP', numero: o.opl, placa: o.placa || '—', chassi: o.chassi || '—', modelo: o.modelo || '—',
         cliente: o.cliente_nome || '—', status: o.status_geral || '—', obs: obsResumoOpl(o) || '—',
       }));
     const oss = (ossRes.data || [])
       .filter(o => !OS_STATUS_FINALIZADOS.includes(o.status))
       .map(o => ({
         // sac_ordens_servico não tem coluna de placa — numero_serie faz as vezes de chassi/identificador do veículo/equipamento
-        tipo: 'OS', numero: o.numero_os, placa: '—', chassi: o.numero_serie || '—',
+        tipo: 'OS', numero: o.numero_os, placa: '—', chassi: o.numero_serie || '—', modelo: o.modelo || '—',
         cliente: o.cliente_nome || '—', status: o.status || '—', obs: obsResumoOs(o) || '—',
       }));
     setLinhas([...agruparLinhas(ops), ...agruparLinhas(oss)]);
@@ -1199,11 +1231,11 @@ function RelOpsOssEmServico() {
 
   const exportar = () => {
     const dados = linhasFiltradas.map(l => ({
-      'Tipo': l.tipo, 'Número': l.numero, 'Qtd': l.qtd, 'Placa': l.placa, 'Chassi': l.chassi,
+      'Tipo': l.tipo, 'Número': l.numero, 'Qtd': l.qtd, 'Modelo': l.modelo, 'Chassi': l.chassi, 'Placa': l.placa,
       'Cliente': l.cliente, 'Status': statusResumoTexto(l), 'Observações': l.obs,
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
-    ws['!cols'] = [{wch:6},{wch:24},{wch:6},{wch:12},{wch:18},{wch:28},{wch:34},{wch:70}];
+    ws['!cols'] = [{wch:6},{wch:24},{wch:6},{wch:18},{wch:18},{wch:12},{wch:28},{wch:34},{wch:70}];
     ws['!autofilter'] = { ref: ws['!ref'] };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Em Serviço');
@@ -1256,7 +1288,7 @@ function RelOpsOssEmServico() {
            linhasFiltradas.length===0 ? <div className="acn-empty">Nenhuma OP/OS em serviço no momento.</div> : (
             <table>
               <thead><tr>
-                <th>Tipo</th><th>Número</th><th>Qtd</th><th>Placa</th><th>Chassi</th><th>Cliente</th><th>Status</th><th>Observações</th>
+                <th>Tipo</th><th>Número</th><th>Qtd</th><th>Veículo</th><th>Cliente</th><th>Status</th><th>Observações</th>
               </tr></thead>
               <tbody>
                 {linhasFiltradas.map((l,i)=>(
@@ -1264,8 +1296,11 @@ function RelOpsOssEmServico() {
                     <td><span className="acn-badge" style={{background:l.tipo==='OP'?'#2563eb':'#dc2626',fontSize:8}}>{l.tipo}</span></td>
                     <td><strong>{l.qtd>1 && '🔗 '}{l.numero}</strong></td>
                     <td style={{textAlign:'center',fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
-                    <td>{l.placa==='—' ? (l.tipo==='OP' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'var(--text-muted)'}}>—</span>) : l.placa}</td>
-                    <td style={{fontSize:10}}>{l.chassi==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : l.chassi}</td>
+                    <td style={{fontSize:10}}>
+                      <div>{l.modelo==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : l.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{l.chassi==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${l.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{l.placa==='—' ? (l.tipo==='OP' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'var(--text-muted)'}}>—</span>) : `🚘 ${l.placa}`}</div>
+                    </td>
                     <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.cliente}>{l.cliente}</td>
                     <td>
                       <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>

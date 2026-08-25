@@ -117,14 +117,18 @@ export default function FiscalTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
+                <th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
                 <th>Seriais / Nº Equipamentos</th><th>Numero NF-e</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {filtrarOpls(aguardando, busca).map(o => (
                   <tr key={o.id}>
                     <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                    <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td>{o.cliente_nome || '—'}</td>
@@ -174,13 +178,17 @@ export default function FiscalTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th><th>Acao</th>
+                <th>OPL</th><th>Veículo</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {faturados.map(o => (
                   <tr key={o.id}>
                     <td><LinkOpl opl={o} currentUser={currentUser} color="#22c55e" /></td>
-                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                    <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
                     <td>{fmtDt(o.data_emissao_nf)}</td>
@@ -202,14 +210,16 @@ export default function FiscalTab({ currentUser }) {
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Chassi</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
               <tbody>
                 {ordensOS.filter(o=>o.status==='Aguardando Emissão NF').map(o => (
                   <tr key={o.id}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
-                    <td>{semDado(o.veiculo_modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.veiculo_modelo}</td>
+                    <td style={{fontSize:10}}>
+                      <div>{semDado(o.veiculo_modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.veiculo_modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                    </td>
                     <td>
                       <input className="acn-input" style={{width:120}} placeholder="NF-e 000000000"
                         value={nfs[o.id] || ''}

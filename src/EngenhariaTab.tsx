@@ -282,7 +282,7 @@ export default function EngenhariaTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>Data Entrada</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>Status</th>
+                <th>Data Entrada</th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Status</th>
                 <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Arquivos</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -332,7 +332,11 @@ export default function EngenhariaTab({ currentUser }) {
                             </div>
                           )}
                         </td>
-                        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                        <td style={{fontSize:10}}>
+                          <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                          <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                          <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                        </td>
                         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                         <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                         <td>

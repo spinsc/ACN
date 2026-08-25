@@ -32,7 +32,7 @@ export default function PCPTab({ currentUser }) {
       supabase.from('oples').select('*')
         .in('status_geral', ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP','Retrabalho'])
         .order('data_entrada', { ascending: false }),
-      supabase.from('oples').select('id,opl,chassi,tipo_projeto,status_almox,obs_almox,responsavel_almox,data_kiting')
+      supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_almox,obs_almox,responsavel_almox,data_kiting')
         .in('status_almox', ['Falta de Material','Liberado com Pendencia']),
     ]);
     setOpls(oplsRes.data || []);
@@ -232,14 +232,18 @@ export default function PCPTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Tipo Projeto</th><th>Situacao</th>
+                <th>OPL</th><th>Veículo</th><th>Tipo Projeto</th><th>Situacao</th>
                 <th>Detalhamento da Pendencia / Falta</th><th>Resp. Almox</th><th>Data Apontamento</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {oplsFalta.map(o => (
                   <tr key={o.id} style={{background: o.status_almox==='Falta de Material'?'#fff5f5':'#fff7ed'}}>
                     <td><strong style={{color:'#dc2626'}}>{o.opl}</strong></td>
-                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                    <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td>
                       <span className="acn-badge" style={{background: o.status_almox==='Falta de Material'?'#ef4444':'#f97316'}}>
@@ -353,7 +357,7 @@ export default function PCPTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
+                <th>Data</th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
                 <th>Kit Almox</th><th>Pendencia/Falta</th><th>Status</th><th>Prev. Entrega</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -379,7 +383,11 @@ export default function PCPTab({ currentUser }) {
                     <tr key={o.id} style={isEnvioDireto(o)?{background:'#fffbeb',borderLeft:'3px solid #f59e0b'}:{}}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                      <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                      <td style={{fontSize:10}}>
+                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                    </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                       <td>

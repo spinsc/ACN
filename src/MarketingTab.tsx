@@ -110,8 +110,11 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
             {opl.item_envio && <span style={{fontSize:9,background:'#f59e0b',color:'#78350f',padding:'1px 6px',borderRadius:10,fontWeight:700}}>📤 ENVIO DIRETO</span>}
           </div>
           <div style={{marginTop:3}}><PipelineStatus opl={opl} /></div>
-          <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>
-            {opl.tipo_projeto} | Chassi: {semDado(opl.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : opl.chassi}
+          <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{opl.tipo_projeto}</div>
+          <div style={{fontSize:10,marginTop:2}}>
+            <div>{semDado(opl.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : opl.modelo}</div>
+            <div style={{color:'#94a3b8'}}>{semDado(opl.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${opl.chassi}`}</div>
+            <div style={{color:'#94a3b8'}}>{semDado(opl.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${opl.placa}`}</div>
           </div>
         </div>
         <div style={{textAlign:'right',minWidth:80}}>

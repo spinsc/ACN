@@ -1606,15 +1606,13 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                       <div style={{fontSize:9,marginTop:1}}>
                         {o.is_manutencao_veicular ? (
                           <>
-                            {o.chassi ? <span style={{color:'#64748b'}}>🔧 {o.chassi}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span>}
-                            {' · '}
-                            {o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}
+                            <div>{o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}</div>
+                            <div>{o.chassi ? <span style={{color:'#64748b'}}>🔧 {o.chassi}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span>}</div>
                           </>
                         ) : (
                           <>
-                            {o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}
-                            {' · '}
-                            {o.numero_serie ? <span style={{color:'#64748b'}}>SN {o.numero_serie}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem série</span>}
+                            <div>{o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}</div>
+                            <div>{o.numero_serie ? <span style={{color:'#64748b'}}>SN {o.numero_serie}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem série</span>}</div>
                           </>
                         )}
                       </div>

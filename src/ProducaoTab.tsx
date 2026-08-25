@@ -60,7 +60,11 @@ function OplRow({ o, onAction, currentUser }) {
             <div><span style={{fontSize:9,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>🔁 RETRABALHO</span></div>
           )}
         </td>
-        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+        <td style={{fontSize:10}}>
+          <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+          <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+          <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+        </td>
         <td>{o.cliente_nome || '—'}</td>
         <td>{o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
@@ -2064,7 +2068,7 @@ export default function ProducaoTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Chassi</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
+                <th>OPL</th><th>Veículo</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
               </tr></thead>
               <tbody>
                 {(() => {

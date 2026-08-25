@@ -135,7 +135,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL</th><th>Chassi</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
+                <th>Data</th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
                 <th>Status Kit</th><th>Obs. Almox</th><th>Responsavel</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -159,7 +159,11 @@ export default function AlmoxarifadoTab({ currentUser }) {
                     <tr key={o.id}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                      <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                      <td style={{fontSize:10}}>
+                        <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                        <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                        <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                      </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                       <td>
