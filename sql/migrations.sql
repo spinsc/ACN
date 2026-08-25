@@ -591,3 +591,46 @@ ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS responsavel_nome 
 -- equipamentos), com aviso "⚠️ sem X" quando faltar. sac_ordens_servico
 -- ja tinha modelo/numero_serie, mas nao tinha chassi.
 ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS chassi text;
+
+-- =============================================================
+-- 2026-08-25 · feat: reorganizacao do processo de Licitacao —
+-- Andamento fixo, abas destacadas e filtro "Ultimas Alteracoes"
+-- =============================================================
+-- Ja executado em producao em 2026-08-25.
+--
+-- auth_usuarios: rastreio de ultimo login. LoginTab.tsx grava o login ATUAL
+-- aqui e devolve o login ANTERIOR (capturado antes de sobrescrever) como
+-- ultimo_login_anterior no objeto salvo em localStorage — é essa marca que
+-- o filtro "Ultimas Alteracoes" usa como corte.
+ALTER TABLE public.auth_usuarios ADD COLUMN IF NOT EXISTS ultimo_login timestamptz;
+
+-- licitacao_documentos nao tinha atualizado_em -- coluna que salvarEdicaoDoc
+-- (agora salvarEdicaoAndamento) ja tentava gravar, entao toda edicao de uma
+-- entrada de Andamento falhava com "Could not find the atualizado_em column"
+-- (bug pre-existente, corrigido de graca aqui). Tambem passa a ser usada
+-- para calcular a "ultima alteracao" de cada aba (Impugnacoes, Custos etc.)
+-- e destacar a aba na barra quando houver algo novo desde a ultima leitura
+-- do usuario (rastreada via registro_leituras, tabela='licitacao_aba',
+-- registro_id='{licitacao_id}:{categoria}' -- reaproveita a tabela/padrao
+-- ja usado pelo badge de nao-lido dos cards, sem migracao nova pra isso).
+ALTER TABLE public.licitacao_documentos ADD COLUMN IF NOT EXISTS atualizado_em timestamptz;
+
+-- Qualquer insercao/edicao de documento em QUALQUER aba (inclusive Andamento,
+-- que deixou de ser aba e agora fica fixo abaixo do formulario) toca
+-- licitacoes.atualizado_em -- fonte unica usada tanto pelo badge de
+-- nao-lido do card (ja existente, useUnread) quanto pelo novo filtro
+-- "Ultimas Alteracoes" do dashboard. Sem isso, so mudancas no formulario/
+-- marcadores/area livre/status bumpavam atualizado_em -- upload de arquivo
+-- em Impugnacoes, por exemplo, nunca refletia no card nem no filtro.
+CREATE OR REPLACE FUNCTION public.licitacao_doc_touch_licitacao()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.licitacoes SET atualizado_em = now() WHERE id = NEW.licitacao_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_licitacao_doc_touch ON public.licitacao_documentos;
+CREATE TRIGGER trg_licitacao_doc_touch
+  AFTER INSERT OR UPDATE ON public.licitacao_documentos
+  FOR EACH ROW EXECUTE FUNCTION public.licitacao_doc_touch_licitacao();

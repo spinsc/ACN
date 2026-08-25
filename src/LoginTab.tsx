@@ -55,6 +55,12 @@ export default function LoginTab() {
         await supabase.from('auth_usuarios').update({ primeiro_acesso: true, senha_temp: null, senha_temp_expiry: null }).eq('id', usuario.id);
       }
 
+      // ultimoLoginAnterior = login anterior a este, guardado antes de sobrescrever —
+      // é o marco usado pelo filtro "Últimas Alterações" (Licitações) pra saber o que
+      // mudou desde a última vez que o usuário entrou no sistema.
+      const ultimoLoginAnterior = usuario.ultimo_login || null;
+      await supabase.from('auth_usuarios').update({ ultimo_login: agora.toISOString() }).eq('id', usuario.id);
+
       localStorage.setItem('user', JSON.stringify({
         id:                    usuario.id,
         email:                 usuario.email,
@@ -66,6 +72,7 @@ export default function LoginTab() {
         permissoes_crm:        usuario.permissoes_crm        || [],
         recebe_alerta_analise: usuario.recebe_alerta_analise || false,
         pode_enviar_avisos:    usuario.pode_enviar_avisos    || false,
+        ultimo_login_anterior: ultimoLoginAnterior,
       }));
 
       window.location.href = window.location.origin + '/ACN/';

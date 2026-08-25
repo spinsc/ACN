@@ -27,6 +27,7 @@ const PRIO_COR: Record<string,string> = { 'Alta':'#dc2626','Média':'#d97706','B
 const FATURAMENTO_OPTIONS = ['ACN','Detech','ACN e Detech'];
 const TIPO_CONTATO_OPCOES = ['Pregoeiro','Secretário','Supervisor','Diretor','Comprador','Outro'];
 const SORT_OPTIONS = [
+  { value:'ultimas_alteracoes',          label:'🔔 Últimas Alterações' },
   { value:'data_disputa',                label:'Data de Disputa' },
   { value:'data_limite_proposta',        label:'Limite de Proposta' },
   { value:'data_limite_analise_tecnica', label:'Limite Análise Técnica' },
@@ -37,7 +38,6 @@ const SORT_OPTIONS = [
 ];
 
 const TABS_DIREITO = [
-  { key:'andamento',    label:'📝 Andamento' },
   { key:'processo',     label:'📂 Arquivos de Licitação' },
   { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
   { key:'custos',       label:'💰 Custos e Docs Técnicos' },
@@ -47,6 +47,11 @@ const TABS_DIREITO = [
   { key:'informacoes',  label:'ℹ️ Informações Importantes' },
   { key:'analise',      label:'🔬 Análise' },
 ];
+
+// Abas cujas alterações (novo documento/anexo) ficam destacadas na barra de
+// abas até o usuário clicar nela — 'analise' já tem seu próprio indicador
+// (AnaliseStatusBadge, baseado em outra tabela) e por isso fica de fora.
+const TABS_DESTACAVEIS = ['processo','impugnacoes','custos','docs_enviados','contratos','atestado','informacoes'];
 
 const LICIT_VAZIO = {
   numero:'', nome_projeto:'', objeto_principal:'', orgao:'',
@@ -522,20 +527,29 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Áreas livres ──────────────────────────────────────────────────────────
   const [areasLivres, setAreasLivres] = useState<any>(licit.areas_livres || {});
 
-  // ── RIGHT PANEL ───────────────────────────────────────────────────────────
-  const [tabDir, setTabDir] = useState<string>('andamento');
-  const [docs, setDocs] = useState<any[]>([]);
-  const [docsLegacy, setDocsLegacy] = useState<any[]>([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
+  // ── ANDAMENTO — agora fixo abaixo do formulário da esquerda, não é mais aba ─
+  const [andDocs, setAndDocs] = useState<any[]>([]);
+  const [andDocsLegacy, setAndDocsLegacy] = useState<any[]>([]);
+  const [loadingAndDocs, setLoadingAndDocs] = useState(false);
   const [novoText, setNovoText] = useState('');
   const [novoAnexoFiles, setNovoAnexoFiles] = useState<File[]>([]);
-  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
-  const [salvandoDoc, setSalvandoDoc] = useState(false);
-  const [uploadDesc, setUploadDesc] = useState('');
+  const [salvandoAndamento, setSalvandoAndamento] = useState(false);
   const [editandoDocId, setEditandoDocId] = useState<string|null>(null);
   const [editandoDocTexto, setEditandoDocTexto] = useState('');
   const novoAnexoRef = useRef<any>(null);
+
+  // ── RIGHT PANEL ───────────────────────────────────────────────────────────
+  const [tabDir, setTabDir] = useState<string>('processo');
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [salvandoDoc, setSalvandoDoc] = useState(false);
+  const [uploadDesc, setUploadDesc] = useState('');
   const uploadRef = useRef<any>(null);
+
+  // ── Abas destacadas (alteração desde a última vez que o usuário abriu a aba)
+  const [abaAlteracoes, setAbaAlteracoes] = useState<Record<string,string>>({}); // categoria -> última alteração
+  const [abaLidoEm, setAbaLidoEm] = useState<Record<string,string>>({});         // categoria -> última leitura do usuário
 
   // ── Status / fluxo ────────────────────────────────────────────────────────
   const [showModalSolicitar, setShowModalSolicitar] = useState(false);
@@ -574,26 +588,95 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     return () => { document.removeEventListener('mousemove', handleMove); document.removeEventListener('mouseup', handleUp); };
   }, [isDragging]);
 
-  // ── Fetch docs ────────────────────────────────────────────────────────────
+  // ── Fetch docs (abas de documentos, exceto Análise que tem painel próprio) ──
   const fetchDocs = useCallback(async () => {
     if (tabDir === 'analise') return;
     setLoadingDocs(true);
-    const [novosRes, legacyRes] = await Promise.all([
-      supabase.from('licitacao_documentos')
-        .select('*').eq('licitacao_id', licit.id).eq('categoria', tabDir)
-        .order('criado_em', { ascending: false }),
-      tabDir === 'andamento'
-        ? supabase.from('licitacao_anexos').select('*')
-            .eq('licitacao_id', licit.id).eq('tipo', 'andamento')
-            .order('criado_em', { ascending: false })
-        : Promise.resolve({ data: [] }),
-    ]);
-    setDocs(novosRes.data || []);
-    setDocsLegacy(legacyRes.data || []);
+    const { data } = await supabase.from('licitacao_documentos')
+      .select('*').eq('licitacao_id', licit.id).eq('categoria', tabDir)
+      .order('criado_em', { ascending: false });
+    setDocs(data || []);
     setLoadingDocs(false);
   }, [licit.id, tabDir]);
 
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
+
+  // ── Fetch Andamento (sempre visível, abaixo do formulário — não é mais aba) ─
+  const fetchAndamento = useCallback(async () => {
+    setLoadingAndDocs(true);
+    const [novosRes, legacyRes] = await Promise.all([
+      supabase.from('licitacao_documentos').select('*')
+        .eq('licitacao_id', licit.id).eq('categoria', 'andamento')
+        .order('criado_em', { ascending: false }),
+      supabase.from('licitacao_anexos').select('*')
+        .eq('licitacao_id', licit.id).eq('tipo', 'andamento')
+        .order('criado_em', { ascending: false }),
+    ]);
+    setAndDocs(novosRes.data || []);
+    setAndDocsLegacy(legacyRes.data || []);
+    setLoadingAndDocs(false);
+  }, [licit.id]);
+
+  useEffect(() => { fetchAndamento(); }, [fetchAndamento]);
+
+  // ── Fetch alterações por aba (destaque na barra de abas) ────────────────────
+  const fetchAbaAlteracoes = useCallback(async () => {
+    const [docsRes, leiturasRes] = await Promise.all([
+      supabase.from('licitacao_documentos')
+        .select('categoria, criado_em, atualizado_em')
+        .eq('licitacao_id', licit.id)
+        .in('categoria', TABS_DESTACAVEIS),
+      currentUser?.email
+        ? supabase.from('registro_leituras')
+            .select('registro_id, lido_em')
+            .eq('tabela', 'licitacao_aba')
+            .eq('usuario_email', currentUser.email)
+            .in('registro_id', TABS_DESTACAVEIS.map(c => `${licit.id}:${c}`))
+        : Promise.resolve({ data: [] }),
+    ]);
+    const maxPorCategoria: Record<string,string> = {};
+    (docsRes.data || []).forEach((d: any) => {
+      const ts = d.atualizado_em || d.criado_em;
+      if (!ts) return;
+      if (!maxPorCategoria[d.categoria] || new Date(ts) > new Date(maxPorCategoria[d.categoria])) {
+        maxPorCategoria[d.categoria] = ts;
+      }
+    });
+    const lidoMap: Record<string,string> = {};
+    (leiturasRes.data || []).forEach((r: any) => {
+      const cat = r.registro_id.split(':')[1];
+      lidoMap[cat] = r.lido_em;
+    });
+    setAbaAlteracoes(maxPorCategoria);
+    setAbaLidoEm(lidoMap);
+  }, [licit.id, currentUser?.email]);
+
+  useEffect(() => { fetchAbaAlteracoes(); }, [fetchAbaAlteracoes]);
+
+  const isAbaDestacada = (key: string) => {
+    const alterado = abaAlteracoes[key];
+    if (!alterado) return false;
+    const lido = abaLidoEm[key];
+    if (!lido) return true;
+    return new Date(alterado) > new Date(lido);
+  };
+
+  const marcarAbaLida = async (key: string) => {
+    if (!TABS_DESTACAVEIS.includes(key) || !currentUser?.email || !isAbaDestacada(key)) return;
+    const agora = new Date().toISOString();
+    await supabase.from('registro_leituras').upsert({
+      tabela: 'licitacao_aba',
+      registro_id: `${licit.id}:${key}`,
+      usuario_email: currentUser.email,
+      lido_em: agora,
+    }, { onConflict: 'tabela,registro_id,usuario_email' });
+    setAbaLidoEm(prev => ({ ...prev, [key]: agora }));
+  };
+
+  // Marca a aba ativa como lida sempre que ela tiver alteração pendente — cobre
+  // tanto a aba padrão ao abrir o modal (nunca passa pelo onClick da aba) quanto
+  // uma alteração feita nela mesma enquanto o usuário está com ela aberta.
+  useEffect(() => { marcarAbaLida(tabDir); }, [tabDir, abaAlteracoes]);
 
   // ── Salvar form esquerdo ──────────────────────────────────────────────────
   const salvarForm = async () => {
@@ -610,88 +693,60 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     setSalvandoForm(false);
   };
 
-  // ── Salvar novo andamento ou doc ──────────────────────────────────────────
-  const salvarDoc = async () => {
-    if (tabDir === 'andamento' && !novoText.trim() && novoAnexoFiles.length === 0) return;
-    if (tabDir !== 'andamento' && uploadFiles.length === 0 && !uploadDesc.trim()) return;
-    setSalvandoDoc(true);
+  // ── Salvar nova atualização de Andamento ────────────────────────────────────
+  const salvarAndamento = async () => {
+    if (!novoText.trim() && novoAnexoFiles.length === 0) return;
+    setSalvandoAndamento(true);
     const agora = new Date().toISOString();
     const autor = currentUser?.nome || currentUser?.email || 'Usuário';
     try {
-      if (tabDir === 'andamento') {
-        let primeiroAnexoUrl: string|null = null;
-        let primeiroAnexoNome: string|null = null;
-        // upload primeiro arquivo (principal)
-        if (novoAnexoFiles.length > 0) {
-          primeiroAnexoUrl = await uploadAnexo(novoAnexoFiles[0], licit.id, 'andamento');
-          primeiroAnexoNome = novoAnexoFiles[0].name;
-        }
-        const { error } = await supabase.from('licitacao_documentos').insert([{
+      let primeiroAnexoUrl: string|null = null;
+      let primeiroAnexoNome: string|null = null;
+      // upload primeiro arquivo (principal)
+      if (novoAnexoFiles.length > 0) {
+        primeiroAnexoUrl = await uploadAnexo(novoAnexoFiles[0], licit.id, 'andamento');
+        primeiroAnexoNome = novoAnexoFiles[0].name;
+      }
+      const { error } = await supabase.from('licitacao_documentos').insert([{
+        licitacao_id: licit.id, categoria: 'andamento',
+        nome: 'Andamento', conteudo: novoText.trim(),
+        anexo_url: primeiroAnexoUrl, anexo_nome: primeiroAnexoNome,
+        criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
+      }]);
+      // uploads adicionais (arquivos extras sem texto)
+      for (let i = 1; i < novoAnexoFiles.length; i++) {
+        const url = await uploadAnexo(novoAnexoFiles[i], licit.id, 'andamento');
+        await supabase.from('licitacao_documentos').insert([{
           licitacao_id: licit.id, categoria: 'andamento',
-          nome: 'Andamento', conteudo: novoText.trim(),
-          anexo_url: primeiroAnexoUrl, anexo_nome: primeiroAnexoNome,
+          nome: 'Andamento', conteudo: null,
+          anexo_url: url, anexo_nome: novoAnexoFiles[i].name,
           criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
         }]);
-        // uploads adicionais (arquivos extras sem texto)
-        for (let i = 1; i < novoAnexoFiles.length; i++) {
-          const url = await uploadAnexo(novoAnexoFiles[i], licit.id, 'andamento');
-          await supabase.from('licitacao_documentos').insert([{
-            licitacao_id: licit.id, categoria: 'andamento',
-            nome: 'Andamento', conteudo: null,
-            anexo_url: url, anexo_nome: novoAnexoFiles[i].name,
-            criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-          }]);
-        }
-        if (error) { alert('Erro: ' + error.message); }
-        else {
-          await salvarMencoes({
-            texto:             novoText.trim(),
-            mencionanteId:     String(currentUser?.id || ''),
-            mencionanteNome:   autor,
-            contexto:          'licitacao',
-            contextoId:        licit.id,
-            contextoDescricao: licit.nome_projeto || licit.numero || '',
-            campo:             'andamento',
-            abaDestino:        'licitacoes',
-          });
-          setNovoText('');
-          setNovoAnexoFiles([]);
-          if (novoAnexoRef.current) novoAnexoRef.current.value = '';
-        }
-      } else {
-        if (uploadFiles.length === 0 && uploadDesc.trim()) {
-          // só texto, sem arquivo
-          const { error } = await supabase.from('licitacao_documentos').insert([{
-            licitacao_id: licit.id, categoria: tabDir,
-            nome: uploadDesc.slice(0,80) || 'Documento',
-            url: null, conteudo: uploadDesc.trim(),
-            criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-          }]);
-          if (error) alert('Erro: ' + error.message);
-        } else {
-          // upload de cada arquivo
-          for (const file of uploadFiles) {
-            const url = await uploadAnexo(file, licit.id, tabDir);
-            await supabase.from('licitacao_documentos').insert([{
-              licitacao_id: licit.id, categoria: tabDir,
-              nome: file.name, url,
-              conteudo: uploadDesc.trim() || null,
-              criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-            }]);
-          }
-        }
-        setUploadFiles([]);
-        setUploadDesc('');
-        if (uploadRef.current) uploadRef.current.value = '';
       }
-      await fetchDocs();
+      if (error) { alert('Erro: ' + error.message); }
+      else {
+        await salvarMencoes({
+          texto:             novoText.trim(),
+          mencionanteId:     String(currentUser?.id || ''),
+          mencionanteNome:   autor,
+          contexto:          'licitacao',
+          contextoId:        licit.id,
+          contextoDescricao: licit.nome_projeto || licit.numero || '',
+          campo:             'andamento',
+          abaDestino:        'licitacoes',
+        });
+        setNovoText('');
+        setNovoAnexoFiles([]);
+        if (novoAnexoRef.current) novoAnexoRef.current.value = '';
+      }
+      await fetchAndamento();
     } finally {
-      setSalvandoDoc(false);
+      setSalvandoAndamento(false);
     }
   };
 
   // ── Editar andamento existente ────────────────────────────────────────────
-  const salvarEdicaoDoc = async () => {
+  const salvarEdicaoAndamento = async () => {
     if (!editandoDocId) return;
     const { error } = await supabase.from('licitacao_documentos')
       .update({ conteudo: editandoDocTexto, atualizado_em: new Date().toISOString() })
@@ -709,7 +764,53 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     });
     setEditandoDocId(null);
     setEditandoDocTexto('');
-    fetchDocs();
+    fetchAndamento();
+  };
+
+  // ── Excluir entrada de Andamento ────────────────────────────────────────────
+  const excluirAndamentoDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
+    if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
+    if (!confirm('Remover este registro?')) return;
+    await supabase.from(tabela).delete().eq('id', id);
+    fetchAndamento();
+  };
+
+  // ── Salvar novo doc nas demais abas ─────────────────────────────────────────
+  const salvarDoc = async () => {
+    if (uploadFiles.length === 0 && !uploadDesc.trim()) return;
+    setSalvandoDoc(true);
+    const agora = new Date().toISOString();
+    const autor = currentUser?.nome || currentUser?.email || 'Usuário';
+    try {
+      if (uploadFiles.length === 0 && uploadDesc.trim()) {
+        // só texto, sem arquivo
+        const { error } = await supabase.from('licitacao_documentos').insert([{
+          licitacao_id: licit.id, categoria: tabDir,
+          nome: uploadDesc.slice(0,80) || 'Documento',
+          url: null, conteudo: uploadDesc.trim(),
+          criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
+        }]);
+        if (error) alert('Erro: ' + error.message);
+      } else {
+        // upload de cada arquivo
+        for (const file of uploadFiles) {
+          const url = await uploadAnexo(file, licit.id, tabDir);
+          await supabase.from('licitacao_documentos').insert([{
+            licitacao_id: licit.id, categoria: tabDir,
+            nome: file.name, url,
+            conteudo: uploadDesc.trim() || null,
+            criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
+          }]);
+        }
+      }
+      setUploadFiles([]);
+      setUploadDesc('');
+      if (uploadRef.current) uploadRef.current.value = '';
+      await fetchDocs();
+      await fetchAbaAlteracoes();
+    } finally {
+      setSalvandoDoc(false);
+    }
   };
 
   // ── Excluir doc ───────────────────────────────────────────────────────────
@@ -718,6 +819,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     if (!confirm('Remover este registro?')) return;
     await supabase.from(tabela).delete().eq('id', id);
     fetchDocs();
+    fetchAbaAlteracoes();
   };
 
   // ── Mudar status ──────────────────────────────────────────────────────────
@@ -965,6 +1067,112 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 ))}
               </div>
             )}
+
+            {/* ANDAMENTO — sempre visível, abaixo do formulário (não é mais aba) */}
+            <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>📝 Andamento</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {/* Nova entrada */}
+                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
+                  <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
+                  <MencaoTextarea value={novoText} onChange={v=>setNovoText(v)}
+                    placeholder="Descreva o andamento... @Nome para mencionar" rows={3}
+                    style={{ fontSize:11 }} />
+                  <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    <label style={{ fontSize:10, color:'#374151', cursor:'pointer', display:'flex', alignItems:'center', gap:4, background:'#e0f2fe', borderRadius:4, padding:'3px 8px', border:'1px solid #7dd3fc' }}>
+                      📎 Vincular arquivo(s)
+                      <input type="file" ref={novoAnexoRef} style={{ display:'none' }} multiple
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+                        onChange={e => setNovoAnexoFiles(Array.from(e.target.files||[]))} />
+                    </label>
+                    {novoAnexoFiles.length > 0 && (
+                      <span style={{ fontSize:9, color:'#0369a1', fontWeight:600 }}>
+                        📎 {novoAnexoFiles.length} arquivo(s)
+                        <button onClick={() => { setNovoAnexoFiles([]); if(novoAnexoRef.current) novoAnexoRef.current.value=''; }}
+                          style={{ marginLeft:4, background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:10 }}>✕</button>
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={salvarAndamento} disabled={salvandoAndamento||(!novoText.trim()&&novoAnexoFiles.length===0)}
+                    style={{ marginTop:8, background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'6px 18px', fontWeight:700, fontSize:11, cursor:'pointer', opacity:(novoText.trim()||novoAnexoFiles.length>0)?1:.5 }}>
+                    {salvandoAndamento ? 'Salvando...' : '+ Registrar'}
+                  </button>
+                </div>
+
+                {/* Lista de entradas */}
+                {andDocs.map((d: any) => (
+                  <div key={d.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #2563eb', padding:'10px 12px' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        {editandoDocId === d.id ? (
+                          <div>
+                            <MencaoTextarea value={editandoDocTexto} onChange={v=>setEditandoDocTexto(v)}
+                              rows={3} style={{ fontSize:11 }} />
+                            <div style={{ display:'flex', gap:6, marginTop:6 }}>
+                              <button onClick={salvarEdicaoAndamento}
+                                style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'4px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
+                                💾 Salvar
+                              </button>
+                              <button onClick={() => { setEditandoDocId(null); setEditandoDocTexto(''); }}
+                                style={{ padding:'4px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {d.conteudo && <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={d.conteudo} /></div>}
+                            {d.anexo_url && (
+                              <a href={d.anexo_url} target="_blank" rel="noreferrer"
+                                style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:'#2563eb', fontWeight:600, marginTop:4 }}>
+                                📎 {d.anexo_nome||'Arquivo'}
+                              </a>
+                            )}
+                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                              <span>👤 {d.criado_por_nome||'—'}</span>
+                              <span>🕒 {fmtDT(d.criado_em)}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div style={{ display:'flex', gap:4, flexShrink:0, marginLeft:6 }}>
+                        {editandoDocId !== d.id && (
+                          <button onClick={() => { setEditandoDocId(d.id); setEditandoDocTexto(d.conteudo||''); }}
+                            title="Editar" style={{ background:'none', border:'none', color:'#6b7280', cursor:'pointer', fontSize:11, padding:'0 2px' }}>✏️</button>
+                        )}
+                        {podeExcluirAnexos && (
+                          <button onClick={() => excluirAndamentoDoc(d.id,'licitacao_documentos')}
+                            style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px' }}>✕</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Legado */}
+                {andDocsLegacy.length > 0 && (
+                  <>
+                    <div style={{ fontSize:9, color:'#9ca3af', fontWeight:700, textAlign:'center', padding:'4px 0' }}>— registros anteriores —</div>
+                    {andDocsLegacy.map((a: any) => (
+                      <div key={a.id} style={{ background:'#fafafa', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #94a3b8', padding:'8px 12px' }}>
+                        <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={a.conteudo} /></div>
+                        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
+                          <span>👤 {a.criado_por_nome||'—'}</span>
+                          <span>🕒 {fmtDT(a.criado_em)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {andDocs.length === 0 && andDocsLegacy.length === 0 && !loadingAndDocs && (
+                  <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização ainda.</div>
+                )}
+
+                {/* Área Livre desta seção */}
+                <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -1070,15 +1278,22 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
           {/* Tab bar */}
           <div style={{ display:'flex', overflowX:'auto', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0, scrollbarWidth:'none' }}>
-            {TABS_DIREITO.map(t => (
-              <button key={t.key} onClick={() => setTabDir(t.key)}
-                style={{ flex:'0 0 auto', padding:'9px 12px', border:'none',
-                  borderBottom: tabDir===t.key ? '2px solid #2563eb' : '2px solid transparent',
-                  background:'none', fontWeight: tabDir===t.key ? 700 : 400,
-                  color: tabDir===t.key ? '#2563eb' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
-                {t.label}
-              </button>
-            ))}
+            {TABS_DIREITO.map(t => {
+              const destacada = tabDir !== t.key && isAbaDestacada(t.key);
+              return (
+                <button key={t.key} onClick={() => { setTabDir(t.key); marcarAbaLida(t.key); }}
+                  style={{ flex:'0 0 auto', padding:'9px 12px', border:'none',
+                    borderBottom: tabDir===t.key ? '2px solid #2563eb' : '2px solid transparent',
+                    background: destacada ? '#fef9c3' : 'none', fontWeight: (tabDir===t.key||destacada) ? 700 : 400,
+                    color: tabDir===t.key ? '#2563eb' : destacada ? '#92400e' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  {t.label}
+                  {destacada && (
+                    <span style={{ marginLeft:5, display:'inline-block', width:7, height:7, borderRadius:'50%',
+                      background:'#dc2626', boxShadow:'0 0 0 2px #fee2e2', verticalAlign:'middle' }} />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Conteúdo da aba */}
@@ -1096,113 +1311,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               />
             )}
 
-            {/* ── ANDAMENTO ── */}
-            {tabDir === 'andamento' && (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {/* Nova entrada */}
-                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
-                  <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
-                  <MencaoTextarea value={novoText} onChange={v=>setNovoText(v)}
-                    placeholder="Descreva o andamento... @Nome para mencionar" rows={3}
-                    style={{ fontSize:11 }} />
-                  <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                    <label style={{ fontSize:10, color:'#374151', cursor:'pointer', display:'flex', alignItems:'center', gap:4, background:'#e0f2fe', borderRadius:4, padding:'3px 8px', border:'1px solid #7dd3fc' }}>
-                      📎 Vincular arquivo(s)
-                      <input type="file" ref={novoAnexoRef} style={{ display:'none' }} multiple
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
-                        onChange={e => setNovoAnexoFiles(Array.from(e.target.files||[]))} />
-                    </label>
-                    {novoAnexoFiles.length > 0 && (
-                      <span style={{ fontSize:9, color:'#0369a1', fontWeight:600 }}>
-                        📎 {novoAnexoFiles.length} arquivo(s)
-                        <button onClick={() => { setNovoAnexoFiles([]); if(novoAnexoRef.current) novoAnexoRef.current.value=''; }}
-                          style={{ marginLeft:4, background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:10 }}>✕</button>
-                      </span>
-                    )}
-                  </div>
-                  <button onClick={salvarDoc} disabled={salvandoDoc||(!novoText.trim()&&novoAnexoFiles.length===0)}
-                    style={{ marginTop:8, background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'6px 18px', fontWeight:700, fontSize:11, cursor:'pointer', opacity:(novoText.trim()||novoAnexoFiles.length>0)?1:.5 }}>
-                    {salvandoDoc ? 'Salvando...' : '+ Registrar'}
-                  </button>
-                </div>
-
-                {/* Lista de entradas */}
-                {docs.map((d: any) => (
-                  <div key={d.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #2563eb', padding:'10px 12px' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        {editandoDocId === d.id ? (
-                          <div>
-                            <MencaoTextarea value={editandoDocTexto} onChange={v=>setEditandoDocTexto(v)}
-                              rows={3} style={{ fontSize:11 }} />
-                            <div style={{ display:'flex', gap:6, marginTop:6 }}>
-                              <button onClick={salvarEdicaoDoc}
-                                style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'4px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                                💾 Salvar
-                              </button>
-                              <button onClick={() => { setEditandoDocId(null); setEditandoDocTexto(''); }}
-                                style={{ padding:'4px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
-                                Cancelar
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {d.conteudo && <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={d.conteudo} /></div>}
-                            {d.anexo_url && (
-                              <a href={d.anexo_url} target="_blank" rel="noreferrer"
-                                style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:'#2563eb', fontWeight:600, marginTop:4 }}>
-                                📎 {d.anexo_nome||'Arquivo'}
-                              </a>
-                            )}
-                            <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                              <span>👤 {d.criado_por_nome||'—'}</span>
-                              <span>🕒 {fmtDT(d.criado_em)}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <div style={{ display:'flex', gap:4, flexShrink:0, marginLeft:6 }}>
-                        {editandoDocId !== d.id && (
-                          <button onClick={() => { setEditandoDocId(d.id); setEditandoDocTexto(d.conteudo||''); }}
-                            title="Editar" style={{ background:'none', border:'none', color:'#6b7280', cursor:'pointer', fontSize:11, padding:'0 2px' }}>✏️</button>
-                        )}
-                        {podeExcluirAnexos && (
-                          <button onClick={() => excluirDoc(d.id,'licitacao_documentos')}
-                            style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12, padding:'0 2px' }}>✕</button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Legado */}
-                {docsLegacy.length > 0 && (
-                  <>
-                    <div style={{ fontSize:9, color:'#9ca3af', fontWeight:700, textAlign:'center', padding:'4px 0' }}>— registros anteriores —</div>
-                    {docsLegacy.map((a: any) => (
-                      <div key={a.id} style={{ background:'#fafafa', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #94a3b8', padding:'8px 12px' }}>
-                        <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={a.conteudo} /></div>
-                        <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
-                          <span>👤 {a.criado_por_nome||'—'}</span>
-                          <span>🕒 {fmtDT(a.criado_em)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {docs.length === 0 && docsLegacy.length === 0 && !loadingDocs && (
-                  <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhuma atualização ainda.</div>
-                )}
-
-                {/* Área Livre da aba */}
-                <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
-              </div>
-            )}
-
-            {/* ── OUTRAS ABAS DE DOCUMENTOS ── */}
-            {tabDir !== 'andamento' && tabDir !== 'analise' && (
+            {/* ── ABAS DE DOCUMENTOS ── */}
+            {tabDir !== 'analise' && (
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {/* Upload */}
                 <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
@@ -1704,7 +1814,21 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       if (filtroPeriodoAte && disp > new Date(filtroPeriodoAte + 'T23:59:59')) return false;
       return true;
     })
+    .filter(l => {
+      // "Últimas Alterações" filtra, além de ordenar — só processos alterados
+      // desde o login anterior ao atual. Sem login anterior registrado (1º
+      // acesso), não há linha de corte: mostra tudo.
+      if (sortBy !== 'ultimas_alteracoes') return true;
+      const desde = currentUser?.ultimo_login_anterior;
+      if (!desde) return true;
+      return !!l.atualizado_em && new Date(l.atualizado_em) > new Date(desde);
+    })
     .sort((a, b) => {
+      if (sortBy === 'ultimas_alteracoes') {
+        const da = a.atualizado_em ? new Date(a.atualizado_em).getTime() : 0;
+        const db2 = b.atualizado_em ? new Date(b.atualizado_em).getTime() : 0;
+        return db2 - da;
+      }
       if (sortBy === 'prioridade') { const ord = { 'Alta':0,'Média':1,'Baixa':2 }; return (ord[a.prioridade]??1) - (ord[b.prioridade]??1); }
       if (sortBy === 'status') return a.status.localeCompare(b.status);
       if (sortBy === 'orgao') return (a.orgao||'').localeCompare(b.orgao||'');
