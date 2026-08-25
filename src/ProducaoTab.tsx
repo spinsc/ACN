@@ -273,10 +273,11 @@ function CalendarioManutencao({ currentUser }) {
                 <div>
                   <LinkOpl opl={o} currentUser={currentUser} />
                   <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
-                  {o.chassi||'—'}
-                  <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
                   {o.cliente_nome||'—'}
-                  {o.modelo && <span style={{margin:'0 8px',color:'#6b7280',fontSize:10}}>({o.modelo})</span>}
+                  <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
+                  {semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}
+                  <span style={{margin:'0 8px',color:'#9ca3af'}}>·</span>
+                  {semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}
                 </div>
                 <button className="acn-btn" style={{background:'#f97316'}}
                   onClick={()=>{ setModalAgendar(o); setFormAg({ data:'', periodo:'Manhã', obs:'' }); }}>
@@ -762,7 +763,7 @@ function PainelSacVeicular({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>Nº OS</th><th>Cliente</th><th>Equip.</th><th>Tipo</th><th>Data Prov.</th><th>Status</th><th>Ação Produção</th>
+                <th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Tipo</th><th>Data Prov.</th><th>Status</th><th>Ação Produção</th>
               </tr></thead>
               <tbody>
                 {ordens.map(os => {
@@ -774,7 +775,11 @@ function PainelSacVeicular({ currentUser }) {
                         {os.tipo_avaliacao && <div><span style={{fontSize:8,background:'#e2e8f0',padding:'1px 5px',borderRadius:10}}>{os.tipo_avaliacao}</span></div>}
                       </td>
                       <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.cliente_nome}</td>
-                      <td style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.equipamento_nome}</td>
+                      <td style={{maxWidth:130,fontSize:10}}>
+                        <div style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.equipamento_nome}</div>
+                        <div>{semDado(os.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : os.modelo}</div>
+                        <div style={{color:'#94a3b8'}}>{semDado(os.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${os.chassi}`}</div>
+                      </td>
                       <td><span style={{fontSize:9,background:'#e2e8f0',padding:'2px 6px',borderRadius:10}}>{os.tipo_avaliacao||'—'}</span></td>
                       <td style={{fontSize:10}}>
                         {os.data_provisionamento

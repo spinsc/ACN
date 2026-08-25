@@ -461,7 +461,7 @@ export default function EngenhariaTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto',padding:0}}>
             <table>
               <thead><tr>
-                <th>Nº OS</th><th>Cliente</th><th>Equipamento</th><th>Tipo</th><th>Status</th><th>Abertura</th><th>Ação</th>
+                <th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Abertura</th><th>Ação</th>
               </tr></thead>
               <tbody>
                 {osAcomp.map(os => {
@@ -475,7 +475,10 @@ export default function EngenhariaTab({ currentUser }) {
                     <tr key={os.id}>
                       <td><strong style={{color:'#0f766e'}}>{os.numero_os}</strong></td>
                       <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.cliente_nome}</td>
-                      <td style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.equipamento_nome}</td>
+                      <td style={{maxWidth:130,fontSize:10}}>
+                        <div>{semDado(os.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : os.modelo}</div>
+                        <div style={{color:'#94a3b8'}}>{semDado(os.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${os.chassi}`}</div>
+                      </td>
                       <td><span style={{fontSize:9,background:'#e2e8f0',padding:'2px 6px',borderRadius:10}}>{os.tipo_avaliacao||'—'}</span></td>
                       <td><span className="acn-badge" style={{background:STATUS_COR_VEI[os.status]||'#94a3b8'}}>{os.status}</span></td>
                       <td style={{fontSize:10}}>{os.data_abertura ? new Date(os.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
