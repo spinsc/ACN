@@ -480,34 +480,12 @@ export default function ComprasTab({ currentUser }) {
     else { setFiltro(''); load(); }
   };
 
-  const confirmarCompra = async (p: any) => {
-    const row = inline[p.id];
-    if (!row?.valor) { alert('Informe o valor total da compra.'); return; }
-    if (!row?.prazo)  { alert('Informe a previsão de recebimento.'); return; }
-    setInline(prev => ({...prev, [p.id]: {...prev[p.id], salvando:true}}));
-    const extraUpdates: any = { data_prevista_recebimento: row.prazo };
-    // valor_compra pode não existir ainda — tentamos salvar, ignoramos erro de coluna
-    try { extraUpdates.valor_compra = parseFloat(row.valor.replace(',','.')); } catch(_) {}
-    const { error, aguardandoAprovacao } = await dispararOuConfirmar(p.id, extraUpdates);
-    if (error) { alert('Erro: ' + error.message); setInline(prev => ({...prev, [p.id]:{...prev[p.id],salvando:false}})); return; }
-    // Se vinculado a oportunidade CRM, registrar nota no histórico (só quando realmente comprado, não em aprovação)
-    if (!aguardandoAprovacao && p.oportunidade_id) {
-      const dataFmt = row.prazo ? new Date(row.prazo + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-      const nota = `📦 Compra confirmada — previsão de recebimento: ${dataFmt}${p.descricao_material ? ` (${p.descricao_material})` : ''}`;
-      try {
-        await supabase.from('crm_historico').insert({
-          oportunidade_id: p.oportunidade_id,
-          texto: nota,
-          usuario_nome: currentUser?.nome || 'Compras',
-          criado_em: new Date().toISOString(),
-        });
-      } catch(_) {}
-    }
-    setFiltro('');
-    load();
-  };
-
   // ── Mesa de Cotações ──────────────────────────────────────────────────────
+  // Removido de propósito: existia um atalho manual "✅ Concluir" que fechava
+  // a compra direto (valor + prazo digitados na linha), sem passar pelas 3
+  // cotações mínimas nem pela aprovação por departamento/alçada — driblava
+  // o controle inteiro desta feature. A Mesa de Cotações (abrirModalCotacoes)
+  // é agora o único caminho de Em Andamento → Comprado.
   const abrirModalCotacoes = async (p: any) => {
     setModalCotacoes(p);
     setNovaCotacao({ ...VAZIO_COTACAO });
@@ -785,6 +763,15 @@ export default function ComprasTab({ currentUser }) {
   const rejeitarNivelAtivo = async () => {
     const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
     if (!nivelAtivo || !modalCotacoes) return;
+    // Mesma checagem de autorização que "Aprovar" já faz — rejeitar não pode
+    // ser mais permissivo que aprovar.
+    if (!souAprovadorPara(nivelAtivo)) {
+      const quem = nivelAtivo.tipo === 'departamento'
+        ? nivelAtivo.aprovador_nome
+        : (alcadasConfig.find(a=>a.nivel===nivelAtivo.nivel)?.perfis_aprovadores||[]).join(', ');
+      alert('Você não tem autorização para rejeitar este pedido. Aguardando: ' + (quem || '—'));
+      return;
+    }
     const motivo = prompt('Motivo da rejeição:');
     if (motivo === null) return;
     if (!motivo.trim()) { alert('Informe o motivo.'); return; }
@@ -985,21 +972,12 @@ export default function ComprasTab({ currentUser }) {
                     <td style={td}>{p.quantidade}</td>
                     <td style={td}>{p.fornecedor||'—'}</td>
 
-                    {/* VALOR — editável direto para itens Em Andamento */}
+                    {/* VALOR — somente leitura; só é definido ao escolher a cotação vencedora na Mesa de Cotações */}
                     {canVerValor && (
                       <td style={td}>
-                        {isEM ? (
-                          <input type="number" step="0.01" min="0"
-                            value={row.valor}
-                            onChange={e => setInlineField(p.id,'valor',e.target.value)}
-                            placeholder="R$ 0,00"
-                            style={{width:110,padding:'5px 7px',border:'2px solid #16a34a',borderRadius:5,fontSize:12,outline:'none'}}
-                          />
-                        ) : (
-                          p.valor_compra
-                            ? <strong style={{color:'#16a34a'}}>{fmt(p.valor_compra)}</strong>
-                            : <span style={{color:'#9ca3af'}}>—</span>
-                        )}
+                        {p.valor_compra
+                          ? <strong style={{color:'#16a34a'}}>{fmt(p.valor_compra)}</strong>
+                          : <span style={{color:'#9ca3af'}}>—</span>}
                       </td>
                     )}
 
@@ -1099,14 +1077,6 @@ export default function ComprasTab({ currentUser }) {
                         <button onClick={()=>abrirModalCotacoes(p)}
                           style={{...btn,background:'#d97706',marginRight:3}}>
                           🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}
-                        </button>
-                      )}
-
-                      {/* ✅ Em Andamento → Comprado (atalho manual, sem mesa de cotações) */}
-                      {isEM && (
-                        <button onClick={()=>confirmarCompra(p)} disabled={row.salvando}
-                          style={{...btn,background:'#16a34a',marginRight:3}}>
-                          {row.salvando ? '...' : '✅ Concluir'}
                         </button>
                       )}
 

@@ -220,6 +220,9 @@ function LinhaFaturamento({ f, onAtualizar }: any) {
 
   const marcarPago = async () => {
     if (!nfNumero.trim()) { alert('Informe o número da NF do fornecedor.'); return; }
+    // Trava real, não só o botão escondido na tela — sem isso dava pra marcar
+    // como pago direto pela API sem o recebimento físico ter sido confirmado.
+    if (!f.recebimento_confirmado) { alert('Recebimento ainda não confirmado na Logística. Não é possível marcar como pago.'); return; }
     setSalvando(true);
     let nfUrl = f.nf_fornecedor_url || null;
     if (arquivo) {

@@ -307,6 +307,10 @@ function FretesPanel({ currentUser }: any) {
 
   const marcarEntregue = async () => {
     if (!modalFrete || !canhotoFile) return;
+    if (canhotoFile.size > 10 * 1024 * 1024) {
+      alert(`Canhoto muito grande (${(canhotoFile.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
+      return;
+    }
     setEnviandoCanhoto(true);
     const res = await uploadArquivoFrete(canhotoFile, 'pcp-fretes-canhotos');
     if (res.error) { alert('Erro ao enviar canhoto: ' + res.error); setEnviandoCanhoto(false); return; }
@@ -808,12 +812,15 @@ export default function LogisticaTab({ currentUser }) {
       // 'Comprado' — divergência a resolver antes de fechar.
       if (form.tipo === 'Recebimento' && form.pedido_compra_id && form.nf_conferida) {
         const agora = new Date().toISOString();
-        await supabase.from('pcp_pedidos_compra')
+        const { error: errCompra } = await supabase.from('pcp_pedidos_compra')
           .update({ status_compra: 'Concluído', data_conclusao: new Date().toISOString().split('T')[0] })
           .eq('id', form.pedido_compra_id);
-        await supabase.from('pcp_pedidos_faturamento')
+        const { error: errFat } = await supabase.from('pcp_pedidos_faturamento')
           .update({ recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado' })
           .eq('pedido_id', form.pedido_compra_id);
+        if (errCompra || errFat) {
+          alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra/faturamento: ' + (errCompra?.message || errFat?.message) + '. Verifique manualmente.');
+        }
       }
       setForm(FORM_VAZIO); setFotos([]); setShowForm(false); fetchAll();
     }
