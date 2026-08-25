@@ -6,6 +6,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
+const semDado = (v) => !v || !String(v).trim();
 
 export default function PCPTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
@@ -238,7 +239,7 @@ export default function PCPTab({ currentUser }) {
                 {oplsFalta.map(o => (
                   <tr key={o.id} style={{background: o.status_almox==='Falta de Material'?'#fff5f5':'#fff7ed'}}>
                     <td><strong style={{color:'#dc2626'}}>{o.opl}</strong></td>
-                    <td>{o.chassi || '—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td>
                       <span className="acn-badge" style={{background: o.status_almox==='Falta de Material'?'#ef4444':'#f97316'}}>
@@ -378,7 +379,7 @@ export default function PCPTab({ currentUser }) {
                     <tr key={o.id} style={isEnvioDireto(o)?{background:'#fffbeb',borderLeft:'3px solid #f59e0b'}:{}}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                      <td>{o.chassi || '—'}</td>
+                      <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                       <td>

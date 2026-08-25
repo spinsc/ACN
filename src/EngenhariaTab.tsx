@@ -11,6 +11,7 @@ import AgendaWidget from './AgendaWidget';
 import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
 import HorasTarefasTab from './HorasTarefasTab';
 
+const semDado = (v) => !v || !String(v).trim();
 
 export default function EngenhariaTab({ currentUser }) {
   const [abaEng, setAbaEng] = useState('analise');
@@ -331,7 +332,7 @@ export default function EngenhariaTab({ currentUser }) {
                             </div>
                           )}
                         </td>
-                        <td>{o.chassi || '—'}</td>
+                        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                         <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                         <td>

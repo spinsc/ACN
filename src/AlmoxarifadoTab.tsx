@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
+const semDado = (v) => !v || !String(v).trim();
 
 export default function AlmoxarifadoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
@@ -158,7 +159,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                     <tr key={o.id}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                      <td>{o.chassi || '—'}</td>
+                      <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                       <td>

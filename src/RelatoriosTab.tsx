@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
+const semDado = (v) => !v || !String(v).trim();
 const STATUS_CORES = {
   Pendente:'#f59e0b','Em Andamento':'#3b82f6',Concluido:'#22c55e',
   'Em Espera PCP':'#f59e0b','Em Analise Engenharia':'#6366f1',
@@ -222,7 +223,7 @@ function RelProducao() {
                     {itens.map(o=>(
                       <tr key={o.id}>
                         <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                        <td>{o.chassi||'—'}</td>
+                        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                         <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                         <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
                         <td style={{fontSize:9}}>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
@@ -246,7 +247,7 @@ function RelProducao() {
                 {ops.map(o=>(
                   <tr key={o.id}>
                     <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                    <td>{o.chassi||'—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
                     <td>{o.responsavel_producao||'—'}</td>
@@ -359,7 +360,7 @@ function RelOplsGeral() {
                     <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
                       <td>{fmtData(o.data_entrada)}</td>
                       <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                      <td>{o.chassi||'—'}</td>
+                      <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                       <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                       <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
                       <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(o.data_prevista_entrega)}</td>
@@ -432,7 +433,7 @@ function RelOplsFinalizadas() {
               {ops.map(o=>(
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                  <td>{o.chassi||'—'}</td>
+                  <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td style={{fontSize:9}}>{o.tipo_projeto}</td>
                   <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
@@ -516,7 +517,7 @@ function RelOplsPorSetor() {
               const atras = o.data_prevista_entrega && new Date(o.data_prevista_entrega)<agora;
               return <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td>{o.chassi||'—'}</td>
+                <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td style={{fontSize:9}}>{o.tipo_projeto}</td>
                 <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
@@ -589,7 +590,7 @@ function RelOplsAtrasadas() {
             <tbody>{ops.map(o=>(
               <tr key={o.id} style={{background:'#fef2f2'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td>{o.chassi||'—'}</td>
+                <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td><strong style={{color:'#dc2626'}}>{porSetor(o)}</strong></td>
                 <td><span className="acn-badge" style={{background:'#dc2626',fontSize:8}}>{o.status_geral}</span></td>
@@ -688,7 +689,7 @@ function RelRecebimentosEnvios() {
               <tbody>{envios.map(o=>(
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                  <td>{o.chassi||'—'}</td>
+                  <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td style={{fontSize:9}}>{o.tipo_projeto}</td>
                   <td><span className="acn-badge" style={{background:'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
@@ -819,7 +820,7 @@ function RelOplsParadas() {
             <tbody>{ops.sort((a,b)=>diasParada(b)-diasParada(a)).map(o=>(
               <tr key={o.id} style={{background:'#fff7ed'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td>{o.chassi||'—'}</td>
+                <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td><span className="acn-badge" style={{background:'#f97316',fontSize:8}}>{o.status_geral}</span></td>
                 <td>{fmtData(o.data_entrada)}</td>
@@ -1263,8 +1264,8 @@ function RelOpsOssEmServico() {
                     <td><span className="acn-badge" style={{background:l.tipo==='OP'?'#2563eb':'#dc2626',fontSize:8}}>{l.tipo}</span></td>
                     <td><strong>{l.qtd>1 && '🔗 '}{l.numero}</strong></td>
                     <td style={{textAlign:'center',fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
-                    <td style={l.placa==='—'?{color:'var(--text-muted)'}:{}}>{l.placa}</td>
-                    <td style={{fontSize:10,...(l.chassi==='—'?{color:'var(--text-muted)'}:{})}}>{l.chassi}</td>
+                    <td>{l.placa==='—' ? (l.tipo==='OP' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'var(--text-muted)'}}>—</span>) : l.placa}</td>
+                    <td style={{fontSize:10}}>{l.chassi==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : l.chassi}</td>
                     <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.cliente}>{l.cliente}</td>
                     <td>
                       <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>

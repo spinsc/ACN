@@ -11,6 +11,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+const semDado = (v) => !v || !String(v).trim();
 
 // Statuses ativos do fluxo de OS de manutenção veicular (pós-reformulação
 // 169d90d, 2026-08-21) — usado tanto pelo Calendário quanto pelo Painel SAC
@@ -59,7 +60,7 @@ function OplRow({ o, onAction, currentUser }) {
             <div><span style={{fontSize:9,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>🔁 RETRABALHO</span></div>
           )}
         </td>
-        <td>{o.chassi || '—'}</td>
+        <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
         <td>{o.cliente_nome || '—'}</td>
         <td>{o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>

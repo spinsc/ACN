@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 
+const semDado = (v) => !v || !String(v).trim();
 
 export default function FiscalTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
@@ -123,7 +124,7 @@ export default function FiscalTab({ currentUser }) {
                 {filtrarOpls(aguardando, busca).map(o => (
                   <tr key={o.id}>
                     <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                    <td>{o.chassi || '—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td>{o.cliente_nome || '—'}</td>
@@ -179,7 +180,7 @@ export default function FiscalTab({ currentUser }) {
                 {faturados.map(o => (
                   <tr key={o.id}>
                     <td><LinkOpl opl={o} currentUser={currentUser} color="#22c55e" /></td>
-                    <td>{o.chassi || '—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
                     <td>{fmtDt(o.data_emissao_nf)}</td>
@@ -201,13 +202,14 @@ export default function FiscalTab({ currentUser }) {
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Chassi</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
               <tbody>
                 {ordensOS.filter(o=>o.status==='Aguardando Emissão NF').map(o => (
                   <tr key={o.id}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td>{o.veiculo_modelo || '—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                    <td>{semDado(o.veiculo_modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.veiculo_modelo}</td>
                     <td>
                       <input className="acn-input" style={{width:120}} placeholder="NF-e 000000000"
                         value={nfs[o.id] || ''}

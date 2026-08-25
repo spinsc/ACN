@@ -5,6 +5,7 @@ import { LinkOpl } from './AcnTabShared';
 import Linkify from './Linkify';
 
 
+const semDado = (v) => !v || !String(v).trim();
 const CATEGORIAS = ['Producao em Linha','Acabamento e Detalhes','Antes e Depois','Entrega ao Cliente','Equipe de Trabalho','Equipamento Instalado','Teste e Demonstracao','Evento ou Feira','Geral'];
 const TURNOS = ['Manha (06h-14h)','Tarde (14h-22h)','Noite (22h-06h)','Horario Especifico'];
 const TIPOS_REG = ['Foto','Video','Foto e Video'];
@@ -109,7 +110,9 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
             {opl.item_envio && <span style={{fontSize:9,background:'#f59e0b',color:'#78350f',padding:'1px 6px',borderRadius:10,fontWeight:700}}>📤 ENVIO DIRETO</span>}
           </div>
           <div style={{marginTop:3}}><PipelineStatus opl={opl} /></div>
-          <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{opl.tipo_projeto} {opl.chassi ? `| Chassi: ${opl.chassi}` : ''}</div>
+          <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>
+            {opl.tipo_projeto} | Chassi: {semDado(opl.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : opl.chassi}
+          </div>
         </div>
         <div style={{textAlign:'right',minWidth:80}}>
           <div style={{fontSize:11,fontWeight:700,color: minhas.length>0?'#7c3aed':'#94a3b8'}}>

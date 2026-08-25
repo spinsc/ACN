@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 
+const semDado = (v) => !v || !String(v).trim();
 
 function SignatureCanvas({ onSave }) {
   const ref = useRef(null);
@@ -215,7 +216,7 @@ export default function QualidadeTab({ currentUser }) {
                 {filtrarOpls(opls, busca).map(o => (
                   <tr key={o.id}>
                     <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                    <td>{o.chassi || '—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
                     <td>{o.responsavel_producao || '—'}</td>
@@ -246,13 +247,14 @@ export default function QualidadeTab({ currentUser }) {
             <div className="acn-empty">Nenhuma OS veicular aguardando auditoria de qualidade.</div>
           ) : (
             <table>
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Chassi</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
               <tbody>
                 {ordensOS.map(o => (
                   <tr key={o.id}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td>{o.veiculo_modelo || '—'}</td>
+                    <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
+                    <td>{semDado(o.veiculo_modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.veiculo_modelo}</td>
                     <td>{o.tecnico_responsavel || '—'}</td>
                     <td><button className="acn-btn" style={{background:'#7c3aed'}} onClick={()=>abrirAuditoria(o)}>EXECUTAR AUDITORIA</button></td>
                   </tr>
