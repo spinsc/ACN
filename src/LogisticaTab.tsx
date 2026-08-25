@@ -196,6 +196,11 @@ function FretesPanel({ currentUser }: any) {
   const [confirmando, setConfirmando] = useState(false);
   const [canhotoFile, setCanhotoFile] = useState<File|null>(null);
   const [enviandoCanhoto, setEnviandoCanhoto] = useState(false);
+  // CT-e / rastreio — preenchidos depois que a transportadora coleta a carga
+  const [numeroCte, setNumeroCte] = useState('');
+  const [codigoRastreio, setCodigoRastreio] = useState('');
+  const [urlRastreio, setUrlRastreio] = useState('');
+  const [salvandoRastreio, setSalvandoRastreio] = useState(false);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -235,6 +240,9 @@ function FretesPanel({ currentUser }: any) {
     setVencedoraId(f.vencedora_id || null);
     setJustificativa(f.justificativa_vencedora || '');
     setCanhotoFile(null);
+    setNumeroCte(f.numero_cte || '');
+    setCodigoRastreio(f.codigo_rastreio || '');
+    setUrlRastreio(f.url_rastreio || '');
     setLoadingCotacoes(true);
     const { data } = await supabase.from('pcp_cotacoes_fretes')
       .select('*').eq('frete_id', f.id).order('criado_em', { ascending: true });
@@ -302,6 +310,20 @@ function FretesPanel({ currentUser }: any) {
     setConfirmando(false);
     if (error) { alert('Erro: ' + error.message); return; }
     setModalFrete(null);
+    fetchAll();
+  };
+
+  const salvarRastreio = async () => {
+    if (!modalFrete) return;
+    setSalvandoRastreio(true);
+    const { error } = await supabase.from('pcp_fretes').update({
+      numero_cte: numeroCte.trim() || null,
+      codigo_rastreio: codigoRastreio.trim() || null,
+      url_rastreio: urlRastreio.trim() || null,
+    }).eq('id', modalFrete.id);
+    setSalvandoRastreio(false);
+    if (error) { alert('Erro: ' + error.message); return; }
+    setModalFrete((f:any) => ({ ...f, numero_cte: numeroCte.trim() || null, codigo_rastreio: codigoRastreio.trim() || null, url_rastreio: urlRastreio.trim() || null }));
     fetchAll();
   };
 
@@ -428,7 +450,14 @@ function FretesPanel({ currentUser }: any) {
                 <tr key={f.id} style={{borderBottom:'1px solid #f1f5f9'}}>
                   <td style={{padding:'9px 10px'}}>{f.direcao==='outbound' ? '📤 Outbound' : '📥 Inbound'}</td>
                   <td style={{padding:'9px 10px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.descricao}</td>
-                  <td style={{padding:'9px 10px'}}>{f.transportadora || '—'}</td>
+                  <td style={{padding:'9px 10px'}}>
+                    {f.transportadora || '—'}
+                    {f.transportadora && (f.numero_cte || f.codigo_rastreio) && (
+                      <div style={{fontSize:9,color:'#0891b2',marginTop:1}}>
+                        {f.numero_cte && '📄 CT-e'}{f.numero_cte && f.codigo_rastreio && ' · '}{f.codigo_rastreio && '📦 rastreio'}
+                      </div>
+                    )}
+                  </td>
                   <td style={{padding:'9px 10px'}}>{fmt(f.valor_frete)}</td>
                   <td style={{padding:'9px 10px'}}>
                     <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,background:COR_FRETE[f.status]||'#9ca3af'}}>
@@ -560,6 +589,27 @@ function FretesPanel({ currentUser }: any) {
                 <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
                 <div><strong>Coletado em:</strong> {fmtDtHr(modalFrete.data_coleta)}</div>
               </div>
+              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>🚚 CT-e e Rastreio</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                  <div>
+                    <label className="acn-label">Número do CT-e</label>
+                    <input className="acn-input" style={{width:'100%'}} value={numeroCte}
+                      onChange={e=>setNumeroCte(e.target.value)} placeholder="Ex: 35260812345678000199570010000012341234567890" />
+                  </div>
+                  <div>
+                    <label className="acn-label">Código de Rastreio</label>
+                    <input className="acn-input" style={{width:'100%'}} value={codigoRastreio}
+                      onChange={e=>setCodigoRastreio(e.target.value)} placeholder="Ex: BR123456789BR" />
+                  </div>
+                </div>
+                <label className="acn-label">Link de Rastreio</label>
+                <input className="acn-input" style={{width:'100%',marginBottom:8}} value={urlRastreio}
+                  onChange={e=>setUrlRastreio(e.target.value)} placeholder="https://..." />
+                <button className="acn-btn" style={{background:'#0891b2',fontSize:10}} onClick={salvarRastreio} disabled={salvandoRastreio}>
+                  {salvandoRastreio?'Salvando...':'💾 Salvar CT-e/Rastreio'}
+                </button>
+              </div>
               <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14}}>
                 <div style={{fontSize:10,fontWeight:700,color:'#9a3412',marginBottom:8}}>
                   📎 Canhoto obrigatório pra marcar como Entregue
@@ -579,6 +629,11 @@ function FretesPanel({ currentUser }: any) {
                 <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
                 <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
                 <div><strong>Entregue em:</strong> {fmtDtHr(modalFrete.data_entrega)}</div>
+                {modalFrete.numero_cte && <div><strong>CT-e:</strong> {modalFrete.numero_cte}</div>}
+                {modalFrete.codigo_rastreio && <div><strong>Rastreio:</strong> {modalFrete.codigo_rastreio}</div>}
+                {modalFrete.url_rastreio && (
+                  <div><a href={modalFrete.url_rastreio} target="_blank" rel="noreferrer">🔗 Ver rastreio</a></div>
+                )}
                 {modalFrete.canhoto_url && (
                   <div style={{marginTop:6}}><a href={modalFrete.canhoto_url} target="_blank" rel="noreferrer">📎 Ver canhoto ({modalFrete.canhoto_nome})</a></div>
                 )}

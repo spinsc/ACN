@@ -447,6 +447,16 @@ ALTER TABLE public.pcp_fretes
 -- migração nova para isso.
 
 -- =============================================================
+-- 2026-08-24 · feat: CT-e e código/link de rastreio no Frete
+-- =============================================================
+-- Ja executado em producao em 2026-08-24. Campos que faltavam na Fase 4
+-- (achado numa auditoria) — preenchidos na tela "Em Trânsito", exibidos
+-- em "Entregue" e na listagem principal.
+ALTER TABLE public.pcp_fretes ADD COLUMN IF NOT EXISTS numero_cte text;
+ALTER TABLE public.pcp_fretes ADD COLUMN IF NOT EXISTS codigo_rastreio text;
+ALTER TABLE public.pcp_fretes ADD COLUMN IF NOT EXISTS url_rastreio text;
+
+-- =============================================================
 -- 2026-08-20 · feat: Aprovação por Departamento na Mesa de Cotações
 -- =============================================================
 -- Segunda camada de aprovação, independente da alçada por valor (Fase 2):
