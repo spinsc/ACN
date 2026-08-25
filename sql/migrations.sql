@@ -582,3 +582,12 @@ ALTER TABLE public.cq_auditorias ADD COLUMN IF NOT EXISTS numero_os text;
 -- nunca existiu na tabela — o UPDATE falhava com "Could not find the
 -- 'responsavel_nome' column" toda vez que alguém tentava usar o botão.
 ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS responsavel_nome text;
+
+-- =============================================================
+-- 2026-08-24 · feat: campo Chassi no dashboard do SAC
+-- =============================================================
+-- Ja executado em producao em 2026-08-24. Dashboard de OS/OP do SAC passa
+-- a sempre mostrar chassi+modelo (veiculo) ou modelo+numero_serie (outros
+-- equipamentos), com aviso "⚠️ sem X" quando faltar. sac_ordens_servico
+-- ja tinha modelo/numero_serie, mas nao tinha chassi.
+ALTER TABLE public.sac_ordens_servico ADD COLUMN IF NOT EXISTS chassi text;

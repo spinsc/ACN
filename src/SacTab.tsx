@@ -221,7 +221,7 @@ export default function SacTab({ currentUser }) {
   const [arquivosEntradaFiles, setArquivosEntradaFiles] = useState<File[]>([]);
 
   // Lista de equipamentos por item (cresce/diminui conforme quantidade)
-  const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', defeito:'' };
+  const EQUIP_VAZIO = { marca:'', modelo:'', numero_serie:'', chassi:'', defeito:'' };
   const [equipLista, setEquipLista]     = useState([{ ...EQUIP_VAZIO }]);
 
   useEffect(() => {
@@ -345,6 +345,7 @@ export default function SacTab({ currentUser }) {
       marca: equipLista[0]?.marca || null,
       modelo: equipLista[0]?.modelo || null,
       numero_serie: equipLista[0]?.numero_serie || null,
+      chassi: equipLista[0]?.chassi || null,
       quantidade: form.quantidade || 1,
       defeito_reclamado: equipLista[0]?.defeito || null,
       equipamentos_lista: equipLista,
@@ -984,14 +985,14 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
 
     const equipLista: any[] = Array.isArray(os.equipamentos_lista) && os.equipamentos_lista.length > 0
       ? os.equipamentos_lista
-      : [{ marca: os.marca||'', modelo: os.modelo||'', numero_serie: os.numero_serie||'', defeito: os.defeito_reclamado||'' }];
+      : [{ marca: os.marca||'', modelo: os.modelo||'', numero_serie: os.numero_serie||'', chassi: os.chassi||'', defeito: os.defeito_reclamado||'' }];
 
     const equipRows = equipLista.map((eq: any, idx: number) => `
       <tr style="background:${idx%2===0?'#f8fafc':'white'}">
         <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${equipLista.length>1?`#${idx+1} — `:''}<strong>${os.equipamento_nome||'—'}</strong></td>
         <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.marca||'—'}</td>
         <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.modelo||'—'}</td>
-        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.numero_serie||'—'}</td>
+        <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${os.is_manutencao_veicular ? (eq.chassi||'—') : (eq.numero_serie||'—')}</td>
         <td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #e2e8f0">${eq.defeito||'—'}</td>
       </tr>`).join('');
 
@@ -1105,7 +1106,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
               <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Tipo</th>
               <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Marca</th>
               <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Modelo</th>
-              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Nº Série</th>
+              <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">${os.is_manutencao_veicular ? 'Chassi' : 'Nº Série'}</th>
               <th style="padding:5px 8px;font-size:10px;text-align:left;border-bottom:1px solid #e2e8f0">Defeito Reclamado</th>
             </tr>
           </thead>
@@ -1600,7 +1601,24 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
                     <td>{o.tipo_avaliacao==='Remota' ? <span style={{fontSize:9,fontWeight:700,color:'#0ea5e9',background:'#e0f2fe',borderRadius:10,padding:'2px 7px'}}>📡 Remota</span> : o.tipo_avaliacao==='Presencial' ? <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',background:'#ede9fe',borderRadius:10,padding:'2px 7px'}}>📍 Presencial</span> : <span style={{color:'#cbd5e1',fontSize:9}}>—</span>}</td>
-                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.equipamento_nome}</td>
+                    <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      {o.equipamento_nome}
+                      <div style={{fontSize:9,marginTop:1}}>
+                        {o.is_manutencao_veicular ? (
+                          <>
+                            {o.chassi ? <span style={{color:'#64748b'}}>🔧 {o.chassi}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span>}
+                            {' · '}
+                            {o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}
+                          </>
+                        ) : (
+                          <>
+                            {o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}
+                            {' · '}
+                            {o.numero_serie ? <span style={{color:'#64748b'}}>SN {o.numero_serie}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem série</span>}
+                          </>
+                        )}
+                      </div>
+                    </td>
                     <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.cliente_nome}</td>
                     <td style={{fontSize:10}}>{fmtDt(o.data_abertura)}</td>
                     <td style={{fontSize:10,color: o.prazo_orcamento && new Date(o.prazo_orcamento)<new Date() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
@@ -1747,11 +1765,19 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                       <input className="acn-input" style={{width:'100%'}} value={eq.modelo}
                         onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,modelo:e.target.value}:x))} />
                     </div>
-                    <div className="form-group">
-                      <label className="acn-label">Nº de Série</label>
-                      <input className="acn-input" style={{width:'100%'}} value={eq.numero_serie}
-                        onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
-                    </div>
+                    {(form.is_veiculo || isVeicular(form.tipo_projeto)) ? (
+                      <div className="form-group">
+                        <label className="acn-label">Chassi</label>
+                        <input className="acn-input" style={{width:'100%'}} value={eq.chassi}
+                          onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,chassi:e.target.value}:x))} />
+                      </div>
+                    ) : (
+                      <div className="form-group">
+                        <label className="acn-label">Nº de Série</label>
+                        <input className="acn-input" style={{width:'100%'}} value={eq.numero_serie}
+                          onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
+                      </div>
+                    )}
                   </div>
                   <div className="form-group" style={{marginTop:4}}>
                     <label className="acn-label">Defeito Reclamado *</label>
@@ -2645,7 +2671,7 @@ function PrintOS({ os }) {
               {row('Tipo', os.equipamento_nome)}
               {row('Marca', os.marca)}
               {row('Modelo', os.modelo)}
-              {row('Nº Série', os.numero_serie)}
+              {os.is_manutencao_veicular ? row('Chassi', os.chassi) : row('Nº Série', os.numero_serie)}
               {row('Quantidade', os.quantidade)}
               {row('Categoria', os.tipo_projeto)}
             </tbody>
