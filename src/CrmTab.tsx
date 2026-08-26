@@ -62,6 +62,27 @@ const VAZIO_OP: any = {
   contato_email:  '',
   prox_contato:      '',
   hora_prox_contato: '',
+  // ── quadro Lead (Fase 2) ──
+  data_aceite_cliente:     '',
+  cliente_final:           '',
+  numero_proposta:         '',
+  veiculo_modelo:          '',
+  quantidade:              '',
+  local_instalacao:        '',
+  data_chegada_veiculo:    '',
+  prazo_entrega_producao:  '',
+  prazo_entrega_comercial: '',
+  ctrl_ordem_servico:        '',
+  ctrl_relatorio_fotografico:'',
+  ctrl_nao_conformidades:    '',
+  ctrl_desenhos:              '',
+  ctrl_melhorias:             '',
+  ctrl_pop:                   '',
+  ctrl_protocolo_viagem:      '',
+  ctrl_controle:              '',
+  ctrl_data_entrada:          '',
+  ctrl_data_saida:            '',
+  ctrl_prazo_garantia:        '12 MESES',
 };
 
 const VAZIO_VENDA: any = {
@@ -665,6 +686,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   const TABS_CRM = [
     { key:'andamento',    label:'📝 Andamento' },
+    ...(modalAbrir?.funil === 'venda_direta' ? [{ key:'quadro_lead' as const, label:'🧾 Quadro Lead' }] : []),
     { key:'cotacoes',     label:'💰 Cotações' },
     { key:'processo',     label:'📂 Arquivos de Licitação' },
     { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
@@ -1065,6 +1087,28 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       contato_email:     limpar(formOp.contato_email),
       prox_contato:      limpar(formOp.prox_contato) || null,
       hora_prox_contato: limpar(formOp.hora_prox_contato) || null,
+      faturamento_empresa: formOp.faturamento_empresa || 'ACN',
+      // ── quadro Lead (Fase 2) ──
+      data_aceite_cliente:     limpar(formOp.data_aceite_cliente),
+      cliente_final:           limpar(formOp.cliente_final),
+      numero_proposta:         limpar(formOp.numero_proposta),
+      veiculo_modelo:          limpar(formOp.veiculo_modelo),
+      quantidade:              limpar(formOp.quantidade),
+      local_instalacao:        limpar(formOp.local_instalacao),
+      data_chegada_veiculo:    limpar(formOp.data_chegada_veiculo),
+      prazo_entrega_producao:  limpar(formOp.prazo_entrega_producao),
+      prazo_entrega_comercial: limpar(formOp.prazo_entrega_comercial),
+      ctrl_ordem_servico:         limpar(formOp.ctrl_ordem_servico),
+      ctrl_relatorio_fotografico: limpar(formOp.ctrl_relatorio_fotografico),
+      ctrl_nao_conformidades:     limpar(formOp.ctrl_nao_conformidades),
+      ctrl_desenhos:              limpar(formOp.ctrl_desenhos),
+      ctrl_melhorias:             limpar(formOp.ctrl_melhorias),
+      ctrl_pop:                   limpar(formOp.ctrl_pop),
+      ctrl_protocolo_viagem:      limpar(formOp.ctrl_protocolo_viagem),
+      ctrl_controle:              limpar(formOp.ctrl_controle),
+      ctrl_data_entrada:          limpar(formOp.ctrl_data_entrada),
+      ctrl_data_saida:            limpar(formOp.ctrl_data_saida),
+      ctrl_prazo_garantia:        limpar(formOp.ctrl_prazo_garantia) || '12 MESES',
     };
     // OBS: crm_historico já é preenchido automaticamente por trigger (tg_crm_audit_estagio)
     // sempre que estagio_id muda, então nenhum insert manual é necessário aqui.
@@ -3504,6 +3548,111 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
               {/* Conteúdo */}
               <div style={{ flex:1, overflowY:'auto', padding:14 }}>
+
+                {/* ── QUADRO LEAD ── */}
+                {abrirTabDir === 'quadro_lead' && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    <div>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#0f766e', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>
+                        Cadastro do Lead
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data do aceite do cliente</label>
+                          <input type="date" className="acn-input" style={{ width:'100%' }}
+                            value={formOp.data_aceite_cliente||''} onChange={e=>setFormOp(f=>({...f,data_aceite_cliente:e.target.value}))} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Faturamento pela ACN ou DETECH</label>
+                          <select className="acn-input" style={{ width:'100%' }}
+                            value={formOp.faturamento_empresa||'ACN'} onChange={e=>setFormOp(f=>({...f,faturamento_empresa:e.target.value}))}>
+                            <option value="ACN">ACN</option>
+                            <option value="Detech">Detech</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Vendedor</label>
+                          <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o vendedor" />
+                        </div>
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Cliente</label>
+                          <input className="acn-input" style={{ width:'100%' }}
+                            value={formOp.orgao||''} onChange={e=>setFormOp(f=>({...f,orgao:e.target.value}))} />
+                        </div>
+                        {([
+                          { label:'Cliente final',  key:'cliente_final' },
+                          { label:'Edital',         key:'numero_edital' },
+                          { label:'Proposta',       key:'numero_proposta' },
+                          { label:'Veículo',        key:'veiculo_modelo' },
+                          { label:'Quantidade',     key:'quantidade' },
+                          { label:'Local',          key:'local_instalacao' },
+                        ] as any[]).map(({ label, key }) => (
+                          <div key={key}>
+                            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
+                            <input className="acn-input" style={{ width:'100%' }}
+                              value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
+                          </div>
+                        ))}
+                        {([
+                          { label:'Data de chegada do veículo',   key:'data_chegada_veiculo' },
+                          { label:'Prazo de entrega PRODUÇÃO',    key:'prazo_entrega_producao' },
+                          { label:'Prazo de entrega COMERCIAL',   key:'prazo_entrega_comercial' },
+                        ] as any[]).map(({ label, key }) => (
+                          <div key={key}>
+                            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
+                            <input type="date" className="acn-input" style={{ width:'100%' }}
+                              value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <hr style={{ border:'none', borderTop:'1px solid #e2e8f0', margin:0 }} />
+
+                    <div>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#0f766e', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>
+                        Controle
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                        {([
+                          { label:'Ordem de Serviço',        key:'ctrl_ordem_servico' },
+                          { label:'Relatório Fotográfico',   key:'ctrl_relatorio_fotografico' },
+                          { label:'Não Conformidades',       key:'ctrl_nao_conformidades' },
+                          { label:'Desenhos',                key:'ctrl_desenhos' },
+                          { label:'Melhorias',               key:'ctrl_melhorias' },
+                          { label:'P.O.P',                   key:'ctrl_pop' },
+                          { label:'Protocolo Viagem',        key:'ctrl_protocolo_viagem' },
+                          { label:'Controle',                key:'ctrl_controle' },
+                        ] as any[]).map(({ label, key }) => (
+                          <div key={key}>
+                            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
+                            <input className="acn-input" style={{ width:'100%' }}
+                              value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
+                          </div>
+                        ))}
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data Entrada</label>
+                          <input type="date" className="acn-input" style={{ width:'100%' }}
+                            value={formOp.ctrl_data_entrada||''} onChange={e=>setFormOp(f=>({...f,ctrl_data_entrada:e.target.value}))} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data Saída</label>
+                          <input type="date" className="acn-input" style={{ width:'100%' }}
+                            value={formOp.ctrl_data_saida||''} onChange={e=>setFormOp(f=>({...f,ctrl_data_saida:e.target.value}))} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Prazo de Garantia</label>
+                          <input className="acn-input" style={{ width:'100%' }} placeholder="12 MESES"
+                            value={formOp.ctrl_prazo_garantia||''} onChange={e=>setFormOp(f=>({...f,ctrl_prazo_garantia:e.target.value}))} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize:9, color:'#94a3b8' }}>
+                      Use "💾 Salvar Alterações" no painel à esquerda para gravar este quadro.
+                    </div>
+                  </div>
+                )}
 
                 {/* ── COTAÇÕES ── */}
                 {abrirTabDir === 'cotacoes' && (

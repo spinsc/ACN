@@ -727,3 +727,38 @@ ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS temperatura text; 
 -- (1 dia antes + no dia do proximo contato agendado), alem do vendedor.
 ALTER TABLE public.auth_usuarios ADD COLUMN IF NOT EXISTS gestor_id uuid REFERENCES public.auth_usuarios(id);
 ALTER TABLE public.oples_reboque_modelos DISABLE ROW LEVEL SECURITY;
+
+-- =============================================================
+-- 2026-08-26 · feat: Reformulação do funil Comercial/CRM (Fase 2)
+-- =============================================================
+-- Ja executado em producao em 2026-08-26. Nova aba "🧾 Quadro Lead" dentro
+-- do modal "Abrir" do CrmTab.tsx (so aparece pra funil='venda_direta'),
+-- reproduzindo o formulario em papel usado hoje pra cadastro do Lead:
+-- cabecalho (data aceite cliente, faturamento ACN/Detech, vendedor,
+-- cliente, cliente final, edital, proposta, veiculo, quantidade, local,
+-- datas de entrega producao/comercial) + secao de controle (ordem de
+-- servico, relatorio fotografico, nao conformidades, desenhos, melhorias,
+-- P.O.P, protocolo viagem, controle, data entrada/saida, prazo de
+-- garantia). Campos livres (texto/data), sem checklist. "Proposta" e um
+-- campo a parte do numero_pv (que so existe depois, no estagio Enviado).
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS cliente_final text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS numero_proposta text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS veiculo_modelo text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS quantidade text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS local_instalacao text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS data_chegada_veiculo date;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS prazo_entrega_producao date;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS prazo_entrega_comercial date;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS data_aceite_cliente date;
+
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_ordem_servico text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_relatorio_fotografico text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_nao_conformidades text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_desenhos text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_melhorias text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_pop text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_protocolo_viagem text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_controle text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_data_entrada date;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_data_saida date;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_prazo_garantia text DEFAULT '12 MESES';
