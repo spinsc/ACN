@@ -650,3 +650,16 @@ CREATE TRIGGER trg_licitacao_doc_touch
 -- desmembradas juntas com 1 unico numero de NF-e -- guarda a lista de
 -- chassi/placa/serial de cada unidade coberta pela nota.
 ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS observacoes_faturamento text;
+
+-- =============================================================
+-- 2026-08-26 · feat: CNPJ de faturamento por veiculo desmembrado
+-- =============================================================
+-- Ja executado em producao em 2026-08-26. Cada unidade desmembrada (ja e
+-- uma linha propria em oples, com seu proprio chassi/placa) pode ter seu
+-- proprio CNPJ de faturamento, diferente do cliente -- mesmo padrao ja
+-- usado em sac_ordens_servico (cnpj_faturamento/razao_social_faturamento).
+-- Editavel no modal de editar OPL (CrmTab.tsx) e no novo modal de
+-- lancamento em lote (chassi/placa/CNPJ de todas as unidades de um lote
+-- de uma vez, com opcao de colar uma lista de chassis).
+ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS cnpj_faturamento text;
+ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS razao_social_faturamento text;

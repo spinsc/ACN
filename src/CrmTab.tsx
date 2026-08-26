@@ -139,6 +139,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const podeVerTotais       = pcrm.includes('totais_vendas')        || currentUser?.perfil === 'Admin';
   const podeVerFaturamentos = pcrm.includes('painel_faturamentos')  || currentUser?.perfil === 'Admin';
   const podeVerRelatorio    = pcrm.includes('relatorio_vendedores') || currentUser?.perfil === 'Admin';
+  const podeVer             = podeVerTotais && currentUser?.ver_valores !== false;
 
   // ── estado principal ──
   const [secaoCrm, setSecaoCrm]     = useState<'funil'|'contatos'>('funil');
@@ -161,6 +162,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
   const [oplFormEdit, setOplFormEdit]   = useState<any>({});
   const [oplSalvando, setOplSalvando]   = useState(false);
+
+  // Lançamento em lote de chassi/placa/CNPJ por unidade desmembrada
+  const [modalLote, setModalLote]       = useState<any[]|null>(null); // irmaos do lote sendo editado
+  const [loteForm, setLoteForm]         = useState<Record<string,any>>({}); // id -> {chassi,placa,cnpj_faturamento,razao_social_faturamento}
+  const [loteColar, setLoteColar]       = useState('');
+  const [loteSalvando, setLoteSalvando] = useState(false);
 
   // ── drag & drop ──
   const [dragging, setDragging]     = useState<string|null>(null);
@@ -757,6 +764,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
     const { error } = await supabase.from('oples').update({
       chassi:                oplFormEdit.chassi || null,
+      placa:                 oplFormEdit.placa || null,
       modelo:                oplFormEdit.modelo || null,
       quantidade:            qtdNova,
       data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
@@ -764,6 +772,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       responsavel_comercial: oplFormEdit.responsavel_comercial || null,
       observacoes_comercial: oplFormEdit.observacoes_comercial || null,
       faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
+      cnpj_faturamento:            oplFormEdit.cnpj_faturamento || null,
+      razao_social_faturamento:    oplFormEdit.razao_social_faturamento || null,
       data_atualizacao:      new Date().toISOString(),
     }).eq('id', oplEditando.id);
     setOplSalvando(false);
@@ -772,11 +782,65 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     fetchOplsEmAberto();
   };
 
+  // ── Lançamento em lote: chassi/placa/CNPJ de todas as unidades de um lote ──
+  // (irmaos já vem ordenado por sufixo /01../NN pelo chamador)
+  const abrirModalLote = (irmaos: any[]) => {
+    const form: Record<string,any> = {};
+    irmaos.forEach(o => {
+      form[o.id] = {
+        chassi: o.chassi || '', placa: o.placa || '',
+        cnpj_faturamento: o.cnpj_faturamento || '', razao_social_faturamento: o.razao_social_faturamento || '',
+      };
+    });
+    setLoteForm(form);
+    setLoteColar('');
+    setModalLote(irmaos);
+  };
+
+  const setLoteCampo = (id: string, campo: string, valor: string) =>
+    setLoteForm(f => ({ ...f, [id]: { ...f[id], [campo]: valor } }));
+
+  // Cola uma lista de chassis (um por linha) e distribui na ordem das unidades
+  // do lote (/01, /02...) — não sobrescreve o que já foi digitado manualmente
+  // além do que a lista colada cobre.
+  const aplicarColaChassis = () => {
+    if (!modalLote) return;
+    const linhas = loteColar.split('\n').map(l => l.trim()).filter(Boolean);
+    if (linhas.length === 0) return;
+    setLoteForm(f => {
+      const novo = { ...f };
+      modalLote.forEach((o, i) => {
+        if (linhas[i] == null) return;
+        novo[o.id] = { ...novo[o.id], chassi: linhas[i] };
+      });
+      return novo;
+    });
+  };
+
+  const salvarLote = async () => {
+    if (!modalLote) return;
+    setLoteSalvando(true);
+    const agora = new Date().toISOString();
+    for (const o of modalLote) {
+      const dados = loteForm[o.id] || {};
+      await supabase.from('oples').update({
+        chassi: dados.chassi?.trim() || null,
+        placa: dados.placa?.trim() || null,
+        cnpj_faturamento: dados.cnpj_faturamento?.trim() || null,
+        razao_social_faturamento: dados.razao_social_faturamento?.trim() || null,
+        data_atualizacao: agora,
+      }).eq('id', o.id);
+    }
+    setLoteSalvando(false);
+    setModalLote(null);
+    fetchOplsEmAberto();
+  };
+
   const fetchOplsEmAberto = async () => {
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
@@ -1481,7 +1545,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const totalPipeline      = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const totalPipelineACN   = opsAtivas.reduce((s, o) => s + receitaEfetiva(o), 0);
     const totalPerdido       = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
-    const podeVer = podeVerTotais && currentUser?.ver_valores !== false;
 
     return (
       <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
@@ -2166,6 +2229,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
                               <div style={{ color:'#94a3b8' }}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
                               <div style={{ color:'#94a3b8' }}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                              {!semDado(o.cnpj_faturamento) && <div style={{ color:'#7c3aed', fontWeight:700 }}>🏢 {o.cnpj_faturamento}</div>}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
                               <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
@@ -2267,10 +2331,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               </td>
                               <td colSpan={4} style={{ padding:'5px 8px', fontSize:9, color:'#7c6f9c' }}>Ver unidades para detalhes individuais</td>
                               <td style={{ padding:'5px 8px' }}>
-                                <button onClick={()=>setLotesExpandidosOpls(s=>({...s,[base]:!expandido}))}
-                                  style={{ fontSize:9, padding:'2px 8px', background:'#94a3b8', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                  {expandido ? '▲ Ocultar' : `▼ Ver ${irmaos.length}`}
-                                </button>
+                                <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                                  <button onClick={()=>setLotesExpandidosOpls(s=>({...s,[base]:!expandido}))}
+                                    style={{ fontSize:9, padding:'2px 8px', background:'#94a3b8', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                    {expandido ? '▲ Ocultar' : `▼ Ver ${irmaos.length}`}
+                                  </button>
+                                  <button title="Lançar chassi/placa/CNPJ de todas as unidades de uma vez"
+                                    onClick={()=>abrirModalLote(irmaos)}
+                                    style={{ fontSize:9, padding:'2px 8px', background:'#7c3aed', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
+                                    🚗 Lote
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                             {expandido && irmaos.map(o => renderLinhaOpl(o))}
@@ -3365,6 +3436,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               <input className="acn-input" value={oplFormEdit.chassi||''} onChange={e=>setOplFormEdit((f:any)=>({...f,chassi:e.target.value}))} style={{ width:'100%' }} />
             </div>
             <div>
+              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Placa</div>
+              <input className="acn-input" value={oplFormEdit.placa||''} onChange={e=>setOplFormEdit((f:any)=>({...f,placa:e.target.value}))} style={{ width:'100%' }} />
+            </div>
+            <div>
               <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Modelo</div>
               <input className="acn-input" value={oplFormEdit.modelo||''} onChange={e=>setOplFormEdit((f:any)=>({...f,modelo:e.target.value}))} style={{ width:'100%' }} />
             </div>
@@ -3396,6 +3471,27 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
 
           <div style={{ marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', letterSpacing:1, textTransform:'uppercase', marginBottom:6, paddingBottom:4, borderBottom:'2px solid #0f766e' }}>
+              Dados de Faturamento (Fiscal / NF)
+            </div>
+            <div style={{ fontSize:9, color:'#94a3b8', marginBottom:6 }}>
+              Por unidade — cada veículo desmembrado pode ter seu próprio CNPJ, diferente do cliente.
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:10 }}>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>CNPJ / CPF Faturamento</div>
+                <input className="acn-input" placeholder="Pode ser diferente do cliente"
+                  value={oplFormEdit.cnpj_faturamento||''} onChange={e=>setOplFormEdit((f:any)=>({...f,cnpj_faturamento:e.target.value}))} style={{ width:'100%' }} />
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Razão Social / Nome Faturamento</div>
+                <input className="acn-input"
+                  value={oplFormEdit.razao_social_faturamento||''} onChange={e=>setOplFormEdit((f:any)=>({...f,razao_social_faturamento:e.target.value}))} style={{ width:'100%' }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
             <textarea className="acn-input" rows={3} value={oplFormEdit.observacoes_comercial||''} onChange={e=>setOplFormEdit((f:any)=>({...f,observacoes_comercial:e.target.value}))} style={{ width:'100%', resize:'vertical' }} />
           </div>
@@ -3405,6 +3501,70 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             <button onClick={salvarOplEdit} disabled={oplSalvando}
               style={{ padding:'7px 18px', border:'none', borderRadius:5, background:'#0f766e', color:'white', fontWeight:700, cursor:'pointer', fontSize:11, opacity:oplSalvando?.6:1 }}>
               {oplSalvando ? 'Salvando...' : '💾 Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Modal Lançamento em Lote (chassi/placa/CNPJ por unidade desmembrada) ── */}
+    {modalLote && (
+      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center' }}
+        onClick={e => { if (e.target===e.currentTarget) setModalLote(null); }}>
+        <div style={{ background:'white', borderRadius:8, width:'min(700px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
+          <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:4 }}>
+            🚗 Lançar Chassi/Placa/CNPJ — Lote {modalLote[0]?.opl.replace(/\/\d+$/, '')}
+          </div>
+          <div style={{ fontSize:9, color:'#94a3b8', marginBottom:12 }}>
+            {modalLote.length} unidades. Cada veículo pode ter seu próprio CNPJ de faturamento, diferente do cliente.
+          </div>
+
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:14 }}>
+            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Colar lista de chassis (um por linha, na ordem das unidades abaixo)</div>
+            <textarea className="acn-input" rows={3} placeholder={'Ex:\n9BW...\n9BW...\n9BW...'}
+              value={loteColar} onChange={e=>setLoteColar(e.target.value)}
+              style={{ width:'100%', resize:'vertical', fontFamily:'monospace', fontSize:10 }} />
+            <button onClick={aplicarColaChassis}
+              style={{ marginTop:6, fontSize:9, padding:'4px 10px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+              ⬇ Aplicar às unidades abaixo
+            </button>
+          </div>
+
+          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
+            {modalLote.map(o => (
+              <div key={o.id} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:'#0891b2', marginBottom:6 }}>{o.opl}</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:6 }}>
+                  <div>
+                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Chassi</div>
+                    <input className="acn-input" value={loteForm[o.id]?.chassi||''} onChange={e=>setLoteCampo(o.id,'chassi',e.target.value)} style={{ width:'100%' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Placa</div>
+                    <input className="acn-input" value={loteForm[o.id]?.placa||''} onChange={e=>setLoteCampo(o.id,'placa',e.target.value)} style={{ width:'100%' }} />
+                  </div>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8 }}>
+                  <div>
+                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>CNPJ Faturamento</div>
+                    <input className="acn-input" placeholder="Pode ser diferente do cliente"
+                      value={loteForm[o.id]?.cnpj_faturamento||''} onChange={e=>setLoteCampo(o.id,'cnpj_faturamento',e.target.value)} style={{ width:'100%' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Razão Social Faturamento</div>
+                    <input className="acn-input"
+                      value={loteForm[o.id]?.razao_social_faturamento||''} onChange={e=>setLoteCampo(o.id,'razao_social_faturamento',e.target.value)} style={{ width:'100%' }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button onClick={() => setModalLote(null)} style={{ padding:'7px 16px', border:'1px solid #e2e8f0', borderRadius:5, background:'#f8fafc', cursor:'pointer', fontSize:11 }}>Cancelar</button>
+            <button onClick={salvarLote} disabled={loteSalvando}
+              style={{ padding:'7px 18px', border:'none', borderRadius:5, background:'#7c3aed', color:'white', fontWeight:700, cursor:'pointer', fontSize:11, opacity:loteSalvando?.6:1 }}>
+              {loteSalvando ? 'Salvando...' : `💾 Salvar ${modalLote.length} Unidades`}
             </button>
           </div>
         </div>
