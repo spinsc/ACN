@@ -23,6 +23,7 @@ export default function FiscalTab({ currentUser }) {
   const [selecionados, setSelecionados] = useState(() => new Set());
   const [nfLote, setNfLote] = useState('');
   const [faturandoLote, setFaturandoLote] = useState(false);
+  const [faturandoId, setFaturandoId] = useState(null);
   const jaPreselecionou = React.useRef(false);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
@@ -60,6 +61,12 @@ export default function FiscalTab({ currentUser }) {
   }, [opls]);
 
   // ── Faturar em grupo — 1 NF-e cobrindo todas as OPs marcadas ────────────────
+  // Trava contra faturar 2x o mesmo chassi (cada linha oples = 1 veículo):
+  // o .eq('status_geral','Aguarda Emissao NF') vai junto no UPDATE, então só
+  // "pega" quem ainda estiver de fato aguardando NF-e naquele instante — se
+  // outra aba/usuário já faturou entre o carregamento da lista e o clique
+  // aqui, o update não afeta a linha (retorna vazio) e ela é pulada, em vez
+  // de sobrescrever um numero_nf que já existe.
   const faturarSelecionados = async () => {
     const nf = nfLote.trim();
     if (!nf) { alert('Informe o numero da NF-e!'); return; }
@@ -76,17 +83,21 @@ export default function FiscalTab({ currentUser }) {
           return `${o.opl}${partes.length ? ' — ' + partes.join(' | ') : ''}`;
         }).join('\n')
       : null;
+    const faturadas = [];
+    const jaFaturadasPorOutro = [];
     for (const o of itens) {
       const inicioFiscal = o.data_liberacao_comercial ? new Date(o.data_liberacao_comercial) : null;
       const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
-      await supabase.from('oples').update({
+      const { data: upd } = await supabase.from('oples').update({
         status_geral: 'Faturado e Disponivel para Entrega',
         numero_nf: nf,
         data_emissao_nf: agora,
         responsavel_fiscal: currentUser?.nome,
         observacoes_faturamento: obsCombinado,
         ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
-      }).eq('id', o.id);
+      }).eq('id', o.id).eq('status_geral', 'Aguarda Emissao NF').select();
+      if (!upd || upd.length === 0) { jaFaturadasPorOutro.push(o.opl); continue; }
+      faturadas.push(o);
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
         evento: itens.length > 1
@@ -96,7 +107,12 @@ export default function FiscalTab({ currentUser }) {
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
     }
-    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(itens.map(o=>o.opl).join(', '), nf, currentUser?.nome));
+    if (faturadas.length > 0) {
+      notificarEvento('fiscal_nf_emitida', msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), nf, currentUser?.nome));
+    }
+    if (jaFaturadasPorOutro.length > 0) {
+      alert(`Atenção: ${jaFaturadasPorOutro.join(', ')} já ${jaFaturadasPorOutro.length>1?'foram faturadas':'foi faturada'} por outra sessão enquanto você selecionava — não foram faturadas de novo. Confira a lista atualizada.`);
+    }
     setSelecionados(new Set());
     setNfLote('');
     setFaturandoLote(false);
@@ -106,16 +122,23 @@ export default function FiscalTab({ currentUser }) {
   const faturar = async (opl) => {
     const nf = nfs[opl.id];
     if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
+    setFaturandoId(opl.id);
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
     const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
-    await supabase.from('oples').update({
+    const { data: upd } = await supabase.from('oples').update({
       status_geral: 'Faturado e Disponivel para Entrega',
       numero_nf: nf.trim(),
       data_emissao_nf: agora,
       responsavel_fiscal: currentUser?.nome,
       ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
-    }).eq('id', opl.id);
+    }).eq('id', opl.id).eq('status_geral', 'Aguarda Emissao NF').select();
+    if (!upd || upd.length === 0) {
+      setFaturandoId(null);
+      alert(`Esta OP já foi faturada por outra sessão enquanto você digitava. Atualizando a lista.`);
+      fetchAll();
+      return;
+    }
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `NF-e emitida: ${nf.trim()}. Disponivel para entrega.`,
@@ -124,6 +147,7 @@ export default function FiscalTab({ currentUser }) {
     }]);
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, nf.trim(), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
+    setFaturandoId(null);
     fetchAll();
   };
 
@@ -251,8 +275,8 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td>
                       <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>faturar(o)}>
-                          FATURADO
+                        <button className="acn-btn" style={{background:'#22c55e'}} disabled={faturandoId===o.id} onClick={()=>faturar(o)}>
+                          {faturandoId===o.id ? '...' : 'FATURADO'}
                         </button>
                         <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
                           ↩ Devolver
