@@ -663,3 +663,20 @@ ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS observacoes_faturamento text;
 -- de uma vez, com opcao de colar uma lista de chassis).
 ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS cnpj_faturamento text;
 ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS razao_social_faturamento text;
+
+-- =============================================================
+-- 2026-08-26 · feat: tipo de projeto "Reboque" + catalogo de modelos
+-- =============================================================
+-- Ja executado em producao em 2026-08-26. Novo Tipo de Projeto "Reboque"
+-- em NovaOpOsModal.tsx. Ao selecionar Reboque, o campo Modelo vira um
+-- select alimentado por este catalogo (em vez de texto livre), com opcao
+-- "Novo modelo..." que cadastra o nome direto pela tela da OP/OS e ja fica
+-- disponivel pra selecionar em registros futuros. Mesmo formato ja usado
+-- em sac_tipos_servico.
+CREATE TABLE IF NOT EXISTS public.oples_reboque_modelos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome text NOT NULL UNIQUE,
+  ativo boolean DEFAULT true,
+  criado_em timestamptz DEFAULT now()
+);
+ALTER TABLE public.oples_reboque_modelos DISABLE ROW LEVEL SECURITY;

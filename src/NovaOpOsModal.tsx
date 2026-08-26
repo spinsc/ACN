@@ -79,6 +79,7 @@ const TIPOS_PROJETO = [
   { emoji:'📤', label:'Envio de Material para Terceiro' },
   { emoji:'🛒', label:'Envio de Produto Vendido' },
   { emoji:'🔀', label:'Demanda Direta para Engenharia' },
+  { emoji:'🚚', label:'Reboque' },
 ];
 
 const TIPOS_OS = [
@@ -149,10 +150,33 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const [erro, setErro]       = useState('');
   const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos
 
+  // Catálogo de modelos de reboque — cadastrável direto por aqui, fica salvo
+  // pra reaproveitar em OPs futuras (tipo_projeto === 'Reboque').
+  const [modelosReboque, setModelosReboque]   = useState<{id:string,nome:string}[]>([]);
+  const [novoModeloReboque, setNovoModeloReboque] = useState('');
+  const [mostrandoNovoModelo, setMostrandoNovoModelo] = useState(false);
+
+  const fetchModelosReboque = async () => {
+    const { data } = await supabase.from('oples_reboque_modelos').select('id,nome').eq('ativo', true).order('nome');
+    setModelosReboque(data || []);
+  };
+
+  const salvarNovoModeloReboque = async () => {
+    const nome = novoModeloReboque.trim();
+    if (!nome) return;
+    const { error } = await supabase.from('oples_reboque_modelos').insert([{ nome }]);
+    if (error && !/duplicate/i.test(error.message)) { alert('Erro ao salvar modelo: ' + error.message); return; }
+    setF('modelo', nome);
+    setNovoModeloReboque('');
+    setMostrandoNovoModelo(false);
+    fetchModelosReboque();
+  };
+
   // Pré-preenche quando crmCard muda
   useEffect(() => {
     if (!isOpen) return;
     setSavedOp(null);
+    fetchModelosReboque();
     if (crmCard) {
       setForm(f => ({
         ...f,
@@ -488,8 +512,29 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 </div>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Modelo</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Opcional"
-                    value={form.modelo} onChange={e => setF('modelo', e.target.value)} />
+                  {form.tipo_projeto === 'Reboque' ? (
+                    mostrandoNovoModelo ? (
+                      <div style={{ display:'flex', gap:4 }}>
+                        <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do novo modelo"
+                          value={novoModeloReboque} onChange={e => setNovoModeloReboque(e.target.value)} autoFocus
+                          onKeyDown={e => e.key === 'Enter' && salvarNovoModeloReboque()} />
+                        <button type="button" onClick={salvarNovoModeloReboque}
+                          style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'0 10px', fontSize:11, fontWeight:700, cursor:'pointer' }}>✓</button>
+                        <button type="button" onClick={() => { setMostrandoNovoModelo(false); setNovoModeloReboque(''); }}
+                          style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #d1d5db', borderRadius:4, padding:'0 10px', fontSize:11, cursor:'pointer' }}>✕</button>
+                      </div>
+                    ) : (
+                      <select className="acn-input" style={{ width:'100%' }} value={form.modelo}
+                        onChange={e => { if (e.target.value === '___NOVO___') setMostrandoNovoModelo(true); else setF('modelo', e.target.value); }}>
+                        <option value="">— Selecione o modelo —</option>
+                        {modelosReboque.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
+                        <option value="___NOVO___">➕ Novo modelo...</option>
+                      </select>
+                    )
+                  ) : (
+                    <input className="acn-input" style={{ width:'100%' }} placeholder="Opcional"
+                      value={form.modelo} onChange={e => setF('modelo', e.target.value)} />
+                  )}
                 </div>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
