@@ -1055,6 +1055,24 @@ export default function DemandaAvulsaPanel({ currentUser }) {
 
   useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
 
+  // Deep-link vindo do painel de Menções ("Demanda Avulsa X" clicável): abre o
+  // detalhe da demanda direto, em vez de só cair na aba Engenharia genérica.
+  // Usa um global (window.__acnDeepLink) além do evento porque, se este painel
+  // ainda não estava montado quando o link foi clicado, o listener abaixo só
+  // existe DEPOIS do mount — o global cobre esse caso lendo no próprio efeito.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'demanda_avulsa') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('demandas_avulsas').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setSelected(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const isVencida = (d: any) => {
     if (d.status === 'Concluída') return false;
     const etapas = d.etapas || [];

@@ -2611,18 +2611,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
                 disabled={salvando}
                 onClick={async () => {
-                  if (!window.confirm('Converter em Licitação (status: Aguardando Licitação)?')) return;
+                  if (!window.confirm('Converter em Licitação (status: Aberta)?')) return;
                   setSalvando(true);
                   const agora = new Date().toISOString();
                   const op = modalConverterLicit;
-                  const historico = [{ status:'Aguardando Licitação', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM: ${op.titulo}` }];
+                  const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM: ${op.titulo}` }];
                   const { error } = await supabase.from('licitacoes').insert([{
                     numero: op.numero_edital || `VD-${op.id.slice(0,6).toUpperCase()}`,
                     nome_projeto: op.titulo || '—',
                     orgao: op.orgao || '',
                     objeto_principal: op.descricao || '',
                     classificacao: 'Direta',
-                    status: 'Aguardando Licitação',
+                    status: 'Aberta',
                     prioridade: 'Média',
                     analista_nome: op.responsavel_nome || currentUser?.nome || '',
                     analista_email: currentUser?.email || '',
@@ -2636,10 +2636,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   setSalvando(false);
                   if (error) { alert('Erro: ' + error.message); return; }
                   setModalConverterLicit(null);
-                  alert('✅ Licitação criada com status "Aguardando Licitação"! Acesse a aba Licitações para acompanhar.');
+                  alert('✅ Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
                 }}>
                 🏛️ Processo Licitatório<br/>
-                <span style={{ fontSize:9, fontWeight:400 }}>Cria nova licitação com status "Aguardando Licitação"</span>
+                <span style={{ fontSize:9, fontWeight:400 }}>Cria nova licitação com status "Aberta"</span>
               </button>
               <button
                 style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
@@ -2649,14 +2649,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   setSalvando(true);
                   const agora = new Date().toISOString();
                   const op = modalConverterLicit;
-                  const historico = [{ status:'Aguardando Licitação', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM (Adesão a ATA): ${op.titulo}` }];
+                  const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM (Adesão a ATA): ${op.titulo}` }];
                   const { error } = await supabase.from('licitacoes').insert([{
                     numero: op.numero_edital || `ATA-${op.id.slice(0,6).toUpperCase()}`,
                     nome_projeto: op.titulo || '—',
                     orgao: op.orgao || '',
                     objeto_principal: op.descricao || '',
                     classificacao: 'Adesão a ATA',
-                    status: 'Aguardando Licitação',
+                    status: 'Aberta',
                     prioridade: 'Média',
                     analista_nome: op.responsavel_nome || currentUser?.nome || '',
                     analista_email: currentUser?.email || '',

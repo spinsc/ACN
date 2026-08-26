@@ -10,16 +10,15 @@ import Linkify from './Linkify';
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────────────────────────────────────
-const STATUS_LIST = ['Aguardando Licitação','Aberta','Em Análise','Analisada','Em Andamento','Vencida','Perdida','Descartada'];
+const STATUS_LIST = ['Aberta','Em Andamento','Vencida','Finalizada','Perdida','Descartada','Suspenso'];
 const STATUS_COR: Record<string,string> = {
-  'Aguardando Licitação': '#94a3b8',
   'Aberta':       '#2563eb',
-  'Em Análise':   '#d97706',
-  'Analisada':    '#7c3aed',
   'Em Andamento': '#059669',
   'Vencida':      '#16a34a',
+  'Finalizada':   '#0d9488',
   'Perdida':      '#dc2626',
   'Descartada':   '#6b7280',
+  'Suspenso':     '#d97706',
 };
 const MARCADORES = ['Em Recurso','Em Defesa','Impugnado'];
 const PRIORIDADES = ['Alta','Média','Baixa'];
@@ -562,7 +561,6 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   const isAdmin = true;
   const isAnalista = true;
-  const isCoordenador = true;
   const podeExcluirAnexos = currentUser?.pode_deletar_anexos === true || isAdmin;
 
   // ── Drag resize ───────────────────────────────────────────────────────────
@@ -879,9 +877,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const marcadores: string[] = licit.marcadores || [];
 
   const botaoProximoStatus = () => {
-    if (s === 'Aberta' && isAnalista) return { label:'📤 Enviar para Análise', next:'Em Análise' };
-    if (s === 'Em Análise' && isCoordenador) return { label:'✅ Marcar como Analisada', next:'Analisada' };
-    if (s === 'Analisada' && isAnalista) return { label:'🚀 Iniciar Andamento', next:'Em Andamento' };
+    if (s === 'Aberta' && isAnalista) return { label:'🚀 Iniciar Andamento', next:'Em Andamento' };
     return null;
   };
   const btnProximo = botaoProximoStatus();
@@ -1238,11 +1234,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 )}
 
                 {s === 'Em Andamento' && isAnalista && (
-                  <div style={{ display:'flex', gap:6 }}>
-                    {['Vencida','Perdida','Descartada'].map(ns => (
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {['Vencida','Finalizada','Perdida','Descartada','Suspenso'].map(ns => (
                       <button key={ns} onClick={() => setConfirmStatus(ns)}
-                        style={{ flex:1, background:STATUS_COR[ns], color:'#fff', border:'none', borderRadius:4, padding:'5px 4px', fontWeight:700, fontSize:9, cursor:'pointer' }}>
-                        {ns === 'Vencida' ? '🏆 Vencida' : ns === 'Perdida' ? '😞 Perdida' : '🗑️ Descartada'}
+                        style={{ flex:'1 0 30%', background:STATUS_COR[ns], color:'#fff', border:'none', borderRadius:4, padding:'5px 4px', fontWeight:700, fontSize:9, cursor:'pointer' }}>
+                        {ns === 'Vencida' ? '🏆 Vencida' : ns === 'Finalizada' ? '🏁 Finalizada' : ns === 'Perdida' ? '😞 Perdida' : ns === 'Descartada' ? '🗑️ Descartada' : '⏸️ Suspenso'}
                       </button>
                     ))}
                   </div>
@@ -1554,7 +1550,7 @@ function LicitCard({ l, onClick, unread = false }) {
   const marcadores: string[] = l.marcadores || [];
   const dias = diasRestantes(l.data_disputa);
   const urgente = dias !== null && dias >= 0 && dias <= 5;
-  const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Análise','Analisada','Em Andamento'].includes(l.status);
+  const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Andamento'].includes(l.status);
 
   return (
     <div onClick={onClick} style={{ background: unread ? '#fefce8' : '#fff',
@@ -1626,9 +1622,11 @@ const fmtValRel = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{min
 const GRUPOS_RELATORIO = [
   { label:'🟢 Em Andamento', key:'Em Andamento', cor:'#059669', bgCor:'#ecfdf5' },
   { label:'🏆 Vencidas',     key:'Vencida',      cor:'#16a34a', bgCor:'#f0fdf4' },
+  { label:'🏁 Finalizadas',  key:'Finalizada',   cor:'#0d9488', bgCor:'#f0fdfa' },
   { label:'📋 Adesões a ATA', key:'__adesao',    cor:'#0891b2', bgCor:'#f0f9ff' },
   { label:'❌ Perdidas',     key:'Perdida',       cor:'#dc2626', bgCor:'#fef2f2' },
   { label:'🚫 Descartadas',  key:'Descartada',   cor:'#6b7280', bgCor:'#f9fafb' },
+  { label:'⏸️ Suspensas',    key:'Suspenso',     cor:'#d97706', bgCor:'#fffbeb' },
 ];
 
 function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
