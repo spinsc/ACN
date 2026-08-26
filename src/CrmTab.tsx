@@ -1112,9 +1112,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     };
     // OBS: crm_historico já é preenchido automaticamente por trigger (tg_crm_audit_estagio)
     // sempre que estagio_id muda, então nenhum insert manual é necessário aqui.
+    const entrouEmVencidoAgora = isGanho(getEst(formOp.estagio_id)) && !isGanho(getEst(modalAbrir.estagio_id));
     await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
+    let oplCriada: string|null = null;
+    if (entrouEmVencidoAgora && formOp.empresa_vencedora) {
+      oplCriada = await criarOpAutomatica({ ...formOp, id: modalAbrir.id }, formOp.empresa_vencedora);
+    }
     setSalvando(false);
     await load(true);
+    if (oplCriada) {
+      alert(`✅ OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1139,6 +1147,49 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (modalGate?.op?.id === opId) {
       setModalGate((g: any) => g ? { ...g, prog: data || [] } : null);
     }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CRIAR OP AUTOMATICAMENTE AO ENTRAR EM VENCIDO
+  // ─────────────────────────────────────────────────────────────────────────
+  // Antes exigia clicar manualmente em "📋 Lançar OP" — várias vendas
+  // vencidas ficavam sem OP correspondente porque ninguém lembrava de criar.
+  // Agora, assim que a oportunidade vira Vencido (com PV já atribuído no
+  // Enviado), a OP nasce sozinha com o número A/D+PV+.+MMAA e já entra no
+  // fluxo normal ("Em Espera Engenharia"). Idempotente: não cria de novo se
+  // já existir uma OP vinculada a esta oportunidade, nem se o número gerado
+  // já estiver em uso — nesses casos fica só o botão manual como fallback.
+  const criarOpAutomatica = async (op: any, empresa: 'ACN'|'DETECH') => {
+    if (!op.numero_pv) return null; // sem PV não dá pra gerar número — fica pro fluxo manual
+
+    const { data: jaExiste } = await supabase.from('oples').select('id').eq('crm_oportunidade_id', op.id).limit(1).maybeSingle();
+    if (jaExiste) return null; // já tem OP vinculada — não duplica
+
+    const baseOpl = numOpDePv(empresa, op.numero_pv);
+    const { data: colisao } = await supabase.from('oples').select('id').eq('opl', baseOpl).maybeSingle();
+    if (colisao) return null; // número já em uso — deixa pro fluxo manual resolver
+
+    const agora = new Date().toISOString();
+    const { data: novaOp, error } = await supabase.from('oples').insert([{
+      opl:                   baseOpl,
+      modelo:                op.titulo,
+      valor_total:           op.valor_registrado ?? null,
+      cliente_nome:          op.orgao || op.titulo,
+      responsavel_comercial: op.responsavel_nome || null,
+      status_geral:          'Em Espera Engenharia',
+      data_entrada:          agora.slice(0, 10),
+      criado_por_nome:       currentUser?.nome,
+      criado_por:            currentUser?.email,
+      crm_oportunidade_id:   op.id,
+    }]).select().single();
+    if (error) { console.error('Erro ao gerar OP automática:', error); return null; }
+    if (novaOp) {
+      await supabase.from('crm_historico').insert({
+        oportunidade_id: op.id, tipo: 'conversao_op',
+        conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}`, usuario_nome: currentUser?.nome,
+      });
+    }
+    return baseOpl;
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -2694,12 +2745,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   await moverCard(opVenc.id, modalEmpresaVenc.estagioDestId);
                   await supabase.from('crm_oportunidades').update({ empresa_vencedora: emp }).eq('id', opVenc.id);
                   setModalEmpresaVenc(null);
+                  // OP nasce sozinha, já numerada a partir do PV (A/D+PV+.+MMAA)
+                  // e entra direto no fluxo normal — sem precisar de "Lançar OP" manual.
+                  const oplCriada = await criarOpAutomatica(opVenc, emp);
                   await load();
-                  // Abre direto o lançamento da OP, já numerada a partir do PV (A/D+PV+.+MMAA)
-                  if (opVenc.numero_pv) {
-                    setModalConverter({ ...opVenc, empresa_vencedora: emp });
-                    setTipoConverter('op');
-                    setNumOp(numOpDePv(emp, opVenc.numero_pv));
+                  if (oplCriada) {
+                    alert(`✅ OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+                  } else if (!opVenc.numero_pv) {
+                    alert('⚠️ Esta oportunidade não tem PV atribuído — use o botão "📋 Lançar OP" para criar manualmente.');
                   }
                 }} style={{
                   flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
