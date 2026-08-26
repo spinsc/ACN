@@ -174,9 +174,20 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
   const [loading, setLoading]           = useState(true);
   const [adicionando, setAdicionando]   = useState(false);
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
-  const [verTodos, setVerTodos]         = useState(false); // gerente vê todos
-  const isGerente = currentUser?.perfil === 'gerente' || currentUser?.admin;
+  const [modoView, setModoView]         = useState<'meus'|'equipe'|'todos'>('meus');
+  const [equipeEmails, setEquipeEmails] = useState<string[]|null>(null); // null = ainda não carregou
+  // Perfil "gerente" cobre Admin e qualquer variação de Gerente (Gerente,
+  // Gerente Comercial, Gerente de Licitações, etc) — antes só comparava
+  // com a string exata 'gerente' minúscula, que nunca batia de verdade.
+  const isGerente = /gerente|admin/i.test(currentUser?.perfil || '');
   const timerRef = useRef<any>(null);
+
+  // Equipe = usuários que têm este usuário como gestor (auth_usuarios.gestor_id)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    supabase.from('auth_usuarios').select('email').eq('gestor_id', currentUser.id)
+      .then(({ data }) => setEquipeEmails((data || []).map((u: any) => u.email).filter(Boolean)));
+  }, [currentUser?.id]);
 
   const carregar = useCallback(async () => {
     let q = supabase.from('agenda_compromissos')
@@ -184,8 +195,9 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
       .eq('setor', setor)
       .order('data_hora', { ascending: true });
 
-    // Gerente pode ver todos; usuário normal vê só os seus
-    if (!isGerente || !verTodos) {
+    if (modoView === 'equipe' && isGerente) {
+      q = q.in('usuario_email', (equipeEmails && equipeEmails.length) ? equipeEmails : ['__nenhum__']);
+    } else if (!(modoView === 'todos' && isGerente)) {
       q = q.eq('usuario_email', currentUser?.email);
     }
     if (!mostrarConcluidos) {
@@ -195,7 +207,7 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
     const { data } = await q.limit(50);
     setCompromissos(data || []);
     setLoading(false);
-  }, [setor, currentUser?.email, isGerente, verTodos, mostrarConcluidos]);
+  }, [setor, currentUser?.email, isGerente, modoView, equipeEmails, mostrarConcluidos]);
 
   useEffect(() => {
     carregar();
@@ -245,13 +257,21 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
         </div>
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
           {isGerente && (
-            <button onClick={() => setVerTodos(v => !v)}
-              style={{ background: verTodos ? '#1e3a5f' : '#f1f5f9',
-                color: verTodos ? '#fff' : '#475569',
-                border:'none', borderRadius:4, padding:'3px 10px', fontSize:9,
-                fontWeight:700, cursor:'pointer' }}>
-              {verTodos ? '👥 Todos' : '👤 Meus'}
-            </button>
+            <div style={{ display:'flex', gap:2, background:'#f1f5f9', borderRadius:4, padding:2 }}>
+              {([
+                ['meus',  '👤 Meus'],
+                ...(equipeEmails && equipeEmails.length > 0 ? [['equipe', '👔 Equipe']] : []),
+                ['todos', '👥 Todos'],
+              ] as [typeof modoView, string][]).map(([v, label]) => (
+                <button key={v} onClick={() => setModoView(v)}
+                  style={{ background: modoView===v ? '#1e3a5f' : 'transparent',
+                    color: modoView===v ? '#fff' : '#475569',
+                    border:'none', borderRadius:3, padding:'3px 9px', fontSize:9,
+                    fontWeight:700, cursor:'pointer' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
           <button onClick={() => setMostrarConcluidos(v => !v)}
             style={{ background:'#f1f5f9', border:'none', borderRadius:4,
