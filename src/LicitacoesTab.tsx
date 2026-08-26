@@ -44,12 +44,10 @@ const TABS_DIREITO = [
   { key:'contratos',    label:'📋 Fase de Contrato' },
   { key:'atestado',     label:'🏅 Atestado' },
   { key:'informacoes',  label:'ℹ️ Informações Importantes' },
-  { key:'analise',      label:'🔬 Análise' },
 ];
 
 // Abas cujas alterações (novo documento/anexo) ficam destacadas na barra de
-// abas até o usuário clicar nela — 'analise' já tem seu próprio indicador
-// (AnaliseStatusBadge, baseado em outra tabela) e por isso fica de fora.
+// abas até o usuário clicar nela.
 const TABS_DESTACAVEIS = ['processo','impugnacoes','custos','docs_enviados','contratos','atestado','informacoes'];
 
 const LICIT_VAZIO = {
@@ -586,9 +584,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     return () => { document.removeEventListener('mousemove', handleMove); document.removeEventListener('mouseup', handleUp); };
   }, [isDragging]);
 
-  // ── Fetch docs (abas de documentos, exceto Análise que tem painel próprio) ──
+  // ── Fetch docs (abas de documentos) ──
   const fetchDocs = useCallback(async () => {
-    if (tabDir === 'analise') return;
     setLoadingDocs(true);
     const { data } = await supabase.from('licitacao_documentos')
       .select('*').eq('licitacao_id', licit.id).eq('categoria', tabDir)
@@ -1067,6 +1064,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             {/* ANDAMENTO — sempre visível, abaixo do formulário (não é mais aba) */}
             <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>📝 Andamento</div>
+
+              {/* Análise — migrada pra dentro do Andamento, não é mais aba própria do painel direito */}
+              <div style={{ marginBottom:10 }}>
+                <AnaliseStatusPanel
+                  origemId={licit.id}
+                  origemTitulo={licit.nome_projeto}
+                  origemNumero={licit.numero}
+                  origem="licitacao"
+                  currentUser={currentUser}
+                  onSolicitarNova={() => setShowModalSolicitar(true)}
+                />
+              </div>
+
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {/* Nova entrada */}
                 <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
@@ -1295,21 +1305,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           {/* Conteúdo da aba */}
           <div style={{ flex:1, overflowY:'auto', padding:14 }}>
 
-            {/* ── ANÁLISE ── */}
-            {tabDir === 'analise' && (
-              <AnaliseStatusPanel
-                origemId={licit.id}
-                origemTitulo={licit.nome_projeto}
-                origemNumero={licit.numero}
-                origem="licitacao"
-                currentUser={currentUser}
-                onSolicitarNova={() => setShowModalSolicitar(true)}
-              />
-            )}
-
             {/* ── ABAS DE DOCUMENTOS ── */}
-            {tabDir !== 'analise' && (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {/* Upload */}
                 <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
                   <div style={{ fontWeight:700, fontSize:10, color:'#374151', marginBottom:8 }}>
@@ -1362,7 +1359,6 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 {/* Área Livre desta aba */}
                 <AreaLivre licitacaoId={licit.id} tabKey={tabDir} areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
               </div>
-            )}
           </div>
         </div>
       </div>
@@ -1376,7 +1372,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           origemNumero={licit.numero}
           currentUser={currentUser}
           onClose={() => setShowModalSolicitar(false)}
-          onSaved={() => setTabDir('analise')}
+          onSaved={() => {}}
         />
       )}
     </div>
