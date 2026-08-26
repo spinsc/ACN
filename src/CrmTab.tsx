@@ -13,6 +13,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared';
 import { CotacoesCrmPanel } from './CotacoesTab';
+import AgendaWidget from './AgendaWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -25,14 +26,15 @@ const diasAte = (v: string | null) => {
   if (!v) return null;
   return Math.ceil((new Date(v + 'T12:00:00').getTime() - Date.now()) / 86400000);
 };
-const isGanho       = (e: any) => {
-  const n = e?.nome?.toLowerCase() || '';
-  if (n.includes('não') || n.includes('nao ')) return false; // "Não Vencida" não é Ganho
-  return n.includes('vencida') || n.includes('convertida');
-};
-const isDesistencia = (e: any) => e?.nome?.toLowerCase().includes('desist');
-const isFinalizada  = (e: any) => e?.nome?.toLowerCase().includes('finaliz');
-const isPerdido     = (e: any) => e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e);
+// Classificação explícita por crm_estagios_funil.tipo — não depende mais de
+// adivinhar pelo nome do estágio (que quebrava toda vez que um estágio era
+// renomeado). Mantém fallback por nome só pra estágios de outro funil
+// (licitação) que ainda não têm `tipo` preenchido.
+const isGanho       = (e: any) => e?.tipo === 'ganho'       || (!e?.tipo && /vencida|convertida/.test(e?.nome?.toLowerCase()||'') && !/não|nao /.test(e?.nome?.toLowerCase()||''));
+const isFaturado    = (e: any) => e?.tipo === 'faturado';
+const isDesistencia = (e: any) => e?.tipo === 'desistencia' || (!e?.tipo && e?.nome?.toLowerCase().includes('desist'));
+const isFinalizada  = (e: any) => e?.tipo === 'faturado'    || (!e?.tipo && e?.nome?.toLowerCase().includes('finaliz'));
+const isPerdido     = (e: any) => e?.tipo === 'perdido'     || (!e?.tipo && e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e));
 
 const VAZIO_OP: any = {
   funil: 'venda_direta',
@@ -93,6 +95,27 @@ function mascaraOp(valor: string): string {
   return num.slice(0, 4) + '.' + num.slice(4);
 }
 
+// MMAA do mês/ano atual (usado na numeração da OP gerada a partir do PV)
+function mmaaAtual(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const aa = String(d.getFullYear()).slice(-2);
+  return mm + aa;
+}
+
+// Número da OP a partir do PV: A/D + 4 dígitos do PV + . + MMAA
+function numOpDePv(empresa: 'ACN'|'DETECH', numeroPv: string): string {
+  const letra = empresa === 'ACN' ? 'A' : 'D';
+  return `${letra}${(numeroPv || '').padStart(4, '0')}.${mmaaAtual()}`;
+}
+
+// Mesma máscara XXXX.XXXX, mas preserva um prefixo A/D (OP gerada a partir de PV)
+function mascaraOpComLetra(valor: string): string {
+  const letraMatch = valor.match(/^[AD]/i);
+  const letra = letraMatch ? letraMatch[0].toUpperCase() : '';
+  return letra + mascaraOp(valor.slice(letra.length));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL COTAÇÕES DENTRO DO CARD CRM
 // Wrapper local que carrega config de visibilidade e delega ao CotacoesCrmPanel
@@ -151,7 +174,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [vendas, setVendas]         = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
-  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'>('kanban');
+  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'>('kanban');
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
@@ -183,6 +206,19 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [modalDesist, setModalDesist]         = useState<any|null>(null);
   const [modalEmpresaVenc, setModalEmpresaVenc] = useState<any|null>(null);
   const [desistTexto, setDesistTexto]         = useState('');
+  // ── gate Enviado: PV + temperatura + contato obrigatório ──
+  const [modalEnviado, setModalEnviado]       = useState<any|null>(null); // {op, estagioDestId}
+  const [pvTexto, setPvTexto]                 = useState('');
+  const [temperaturaSel, setTemperaturaSel]   = useState<''|'frio'|'morno'|'quente'>('');
+  const [enviadoContatoData, setEnviadoContatoData] = useState('');
+  const [enviadoContatoHora, setEnviadoContatoHora] = useState('');
+  const [salvandoEnviado, setSalvandoEnviado] = useState(false);
+  // ── vincular PV/oportunidade a um processo licitatório (estágio Vencido) ──
+  const [modalVincularLicit, setModalVincularLicit] = useState<any|null>(null); // op
+  const [buscaVincularLicit, setBuscaVincularLicit] = useState('');
+  const [resultVincularLicit, setResultVincularLicit] = useState<any[]>([]);
+  // ── gate Faturado: bloqueia até a OP vinculada estar status_geral='Faturado' ──
+  const [avisoFaturadoBloq, setAvisoFaturadoBloq] = useState<any|null>(null); // {op, oplsPendentes}
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
@@ -382,6 +418,27 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
     const estDest = getEst(estagioDestId);
     setDragging(null);
+
+    if (estDest?.tipo === 'enviado') {
+      setModalEnviado({ op, estagioDestId });
+      setPvTexto(op.numero_pv || '');
+      setTemperaturaSel(op.temperatura || '');
+      setEnviadoContatoData(op.prox_contato || '');
+      setEnviadoContatoHora(op.hora_prox_contato || '');
+      return;
+    }
+
+    if (estDest?.tipo === 'faturado') {
+      const { data: oplsVinc } = await supabase.from('oples').select('opl,status_geral').eq('crm_oportunidade_id', op.id);
+      const semOpl = !oplsVinc || oplsVinc.length === 0;
+      const pendentes = (oplsVinc || []).filter(o => o.status_geral !== 'Faturado');
+      if (semOpl || pendentes.length > 0) {
+        setAvisoFaturadoBloq({ op, semOpl, pendentes });
+        return;
+      }
+      await moverCard(op.id, estagioDestId);
+      return;
+    }
 
     if (isGanho(estDest)) {
       setModalEmpresaVenc({ op, estagioDestId });
@@ -1158,6 +1215,62 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  // GATE ENVIADO — PV + temperatura + contato obrigatório
+  // ─────────────────────────────────────────────────────────────────────────
+  const confirmarEnviado = async () => {
+    if (!modalEnviado) return;
+    const pv = pvTexto.replace(/\D/g, '').padStart(4, '0').slice(0, 4);
+    if (!/^\d{4}$/.test(pv)) { alert('Informe um número de PV com 4 dígitos.'); return; }
+    if (!temperaturaSel) { alert('Classifique a temperatura do lead (frio/morno/quente).'); return; }
+    if (!enviadoContatoData) { alert('Informe a data do próximo contato.'); return; }
+
+    setSalvandoEnviado(true);
+    const op = modalEnviado.op;
+
+    const { data: dup } = await supabase.from('crm_oportunidades').select('id,titulo').eq('numero_pv', pv).neq('id', op.id).maybeSingle();
+    if (dup) {
+      alert(`PV ${pv} já está em uso em "${dup.titulo}". Informe outro número.`);
+      setSalvandoEnviado(false);
+      return;
+    }
+
+    await supabase.from('crm_oportunidades').update({
+      estagio_id:        modalEnviado.estagioDestId,
+      numero_pv:         pv,
+      temperatura:       temperaturaSel,
+      prox_contato:      enviadoContatoData,
+      hora_prox_contato: enviadoContatoHora || null,
+      atualizado_em:      new Date().toISOString(),
+    }).eq('id', op.id);
+
+    let respEmail = currentUser?.email;
+    if (op.responsavel_nome && op.responsavel_nome !== currentUser?.nome) {
+      const { data: respUser } = await supabase.from('auth_usuarios').select('email').eq('nome', op.responsavel_nome).maybeSingle();
+      if (respUser?.email) respEmail = respUser.email;
+    }
+    await supabase.from('agenda_compromissos').insert([{
+      setor:         'comercial',
+      usuario_email: respEmail,
+      usuario_nome:  op.responsavel_nome || currentUser?.nome,
+      titulo:        `Contato — ${op.titulo}`,
+      descricao:     `PV ${pv} · Temperatura: ${temperaturaSel}`,
+      data_hora:     new Date(`${enviadoContatoData}T${enviadoContatoHora || '09:00'}:00`).toISOString(),
+    }]);
+
+    await supabase.from('crm_historico').insert({
+      oportunidade_id: op.id, tipo: 'status_change',
+      estagio_novo: getEst(modalEnviado.estagioDestId)?.nome,
+      conteudo: `PV ${pv} atribuído · Temperatura: ${temperaturaSel} · Próximo contato: ${enviadoContatoData}${enviadoContatoHora ? ' ' + enviadoContatoHora : ''}`,
+      usuario_nome: currentUser?.nome,
+    });
+
+    setSalvandoEnviado(false);
+    setModalEnviado(null);
+    setPvTexto(''); setTemperaturaSel(''); setEnviadoContatoData(''); setEnviadoContatoHora('');
+    await load();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   // MOTIVO PERDA
   // ─────────────────────────────────────────────────────────────────────────
   const confirmarPerda = async () => {
@@ -1496,6 +1609,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 onClick={() => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }}>
                 📦 Compras
               </button>
+              <button className="acn-btn" style={{ background:'#0891b2' }}
+                onClick={() => { setModalVincularLicit(op); setBuscaVincularLicit(''); setResultVincularLicit([]); }}>
+                🔗 {op.licitacao_processo_id ? 'Processo Vinculado' : 'Vincular a Processo Licitatório'}
+              </button>
             </>
           )}
           {desistiu && (
@@ -1510,7 +1627,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               📂 Abrir
             </button>
           )}
-          {funil === 'venda_direta' && !desistiu && (
+          {funil === 'venda_direta' && !desistiu && est?.tipo === 'estimativa' && (
             <button className="acn-btn" style={{ background:'#7c3aed', fontSize:8 }}
               onClick={() => setModalConverterLicit(op)}>
               🏛️ → Licitação/ATA
@@ -1695,28 +1812,20 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     await load();
   };
 
-  const SUPER_COLS = [
-    { id:'aberto',      label:'Aberto',      bg:'#1e3a5f', dropBg:'#e8ecf0',   terminal:false,
-      match: (o: any) => { const e = getEst(o.estagio_id); return !isGanho(e) && !isPerdido(e) && !isDesistencia(e) && !isFinalizada(e); },
-      estDrop: () => estagiosFunil.find(e => !isGanho(e) && !isPerdido(e) && !isDesistencia(e) && !isFinalizada(e))?.id,
-    },
-    { id:'vencidas',    label:'Vencidas',    bg:'#166534', dropBg:'#dcfce760', terminal:true,
-      match: (o: any) => isGanho(getEst(o.estagio_id)),
-      estDrop: () => estagiosFunil.find(e => isGanho(e))?.id,
-    },
-    { id:'perdidas',    label:'Perdidas',    bg:'#991b1b', dropBg:'#fee2e260', terminal:true,
-      match: (o: any) => isPerdido(getEst(o.estagio_id)),
-      estDrop: () => estagiosFunil.find(e => isPerdido(e))?.id,
-    },
-    { id:'desistencias',label:'Desistências',bg:'#92400e', dropBg:'#fef3c760', terminal:true,
-      match: (o: any) => isDesistencia(getEst(o.estagio_id)),
-      estDrop: () => estagiosFunil.find(e => isDesistencia(e))?.id,
-    },
-    { id:'finalizadas', label:'Finalizadas', bg:'#0f766e', dropBg:'#ccfbf160', terminal:true,
-      match: (o: any) => isFinalizada(getEst(o.estagio_id)),
-      estDrop: () => estagiosFunil.find(e => isFinalizada(e))?.id,
-    },
-  ];
+  // Uma coluna por estágio real (ordenado por `ordem`) — cada estágio já é
+  // granular o suficiente, não precisa mais do agrupamento em super-colunas.
+  const SUPER_COLS = [...estagiosFunil]
+    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+    .map(est => ({
+      id:       est.id,
+      label:    est.nome,
+      tipo:     est.tipo,
+      bg:       est.cor || '#1e3a5f',
+      dropBg:   (est.cor || '#94a3b8') + '20',
+      terminal: !!est.is_final,
+      match:    (o: any) => o.estagio_id === est.id,
+      estDrop:  () => est.id,
+    }));
 
   const renderKanban = () => (
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
@@ -1726,19 +1835,19 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         const isDragOver = dragOver === col.id;
 
         return (
-          <div key={col.id} style={{ width: col.id === 'aberto' ? 240 : 195, flexShrink:0 }}>
+          <div key={col.id} style={{ width: 205, flexShrink:0 }}>
             {/* Header */}
             <div style={{ background:col.bg, color:'white', padding:'5px 8px', borderRadius:'5px 5px 0 0',
               fontSize:9, fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center',
               textTransform:'uppercase', letterSpacing:'.4px' }}>
               <span>{col.label}</span>
               <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                {col.id === 'vencidas' && (
+                {col.tipo === 'ganho' && (
                   <span style={{ fontSize:7, opacity:.8 }}>
                     ACN:{cards.filter(o=>o.empresa_vencedora==='ACN').length} · DTC:{cards.filter(o=>o.empresa_vencedora==='DETECH').length}
                   </span>
                 )}
-                {col.id === 'aberto' && (
+                {!col.terminal && (
                   <span style={{ fontSize:7, opacity:.8 }}>
                     📐{cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} 📄{cards.filter(o=>o.sub_status==='suspenso').length} 💰{cards.filter(o=>o.sub_status==='aguardando').length}
                   </span>
@@ -1776,17 +1885,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     }
                   }}
                 >
-                  {/* Badge do estágio real dentro de Aberto */}
-                  {col.id === 'aberto' && (
-                    <div style={{ fontSize:7, color:'#64748b', marginBottom:1, paddingLeft:2 }}>
-                      {getEst(op.estagio_id)?.nome}
-                    </div>
-                  )}
-
                   {renderCard(op)}
 
-                  {/* Sub-status chips — coluna Aberto */}
-                  {col.id === 'aberto' && (
+                  {/* Sub-status chips — colunas abertas */}
+                  {!col.terminal && (
                     <div style={{ display:'flex', gap:2, marginTop:1, marginBottom:5, paddingLeft:2 }}>
                       {(['andamento','suspenso','aguardando'] as const).map(s => {
                         const ativo = (op.sub_status || 'andamento') === s;
@@ -1803,8 +1905,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     </div>
                   )}
 
-                  {/* Badge empresa vencedora — coluna Vencidas */}
-                  {col.id === 'vencidas' && (
+                  {/* Badge empresa vencedora — coluna Vencido */}
+                  {col.tipo === 'ganho' && (
                     <div style={{ marginTop:2, marginBottom:5, paddingLeft:2 }}>
                       <span style={{ fontSize:8, fontWeight:700, padding:'1px 7px', borderRadius:8,
                         background: op.empresa_vencedora === 'ACN' ? '#dbeafe' : op.empresa_vencedora === 'DETECH' ? '#f3e8ff' : '#f1f5f9',
@@ -2029,6 +2131,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
             {([
               ['kanban',       '📋 Kanban'],
+              ['agenda',       '📅 Agenda'],
               ['relatorio',    '📊 Relatório'],
               ['opls',         '🔧 OPLs em Aberto'],
               ...(podeVerFaturamentos ? [['faturamentos', '💰 Faturamentos']] : []),
@@ -2117,6 +2220,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         <div>
           <div style={{ padding:'10px 4px 0' }}>{renderResumoCards()}</div>
           <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
+        </div>
+      )}
+      {abaInterna === 'agenda' && (
+        <div style={{ maxWidth:520, padding:'8px 4px' }}>
+          <AgendaWidget setor="comercial" currentUser={currentUser} />
         </div>
       )}
       {abaInterna === 'relatorio' && (
@@ -2538,10 +2646,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             <div style={{ display:'flex', gap:10 }}>
               {(['ACN','DETECH'] as const).map(emp => (
                 <button key={emp} onClick={async () => {
-                  await moverCard(modalEmpresaVenc.op.id, modalEmpresaVenc.estagioDestId);
-                  await supabase.from('crm_oportunidades').update({ empresa_vencedora: emp }).eq('id', modalEmpresaVenc.op.id);
+                  const opVenc = modalEmpresaVenc.op;
+                  await moverCard(opVenc.id, modalEmpresaVenc.estagioDestId);
+                  await supabase.from('crm_oportunidades').update({ empresa_vencedora: emp }).eq('id', opVenc.id);
                   setModalEmpresaVenc(null);
                   await load();
+                  // Abre direto o lançamento da OP, já numerada a partir do PV (A/D+PV+.+MMAA)
+                  if (opVenc.numero_pv) {
+                    setModalConverter({ ...opVenc, empresa_vencedora: emp });
+                    setTipoConverter('op');
+                    setNumOp(numOpDePv(emp, opVenc.numero_pv));
+                  }
                 }} style={{
                   flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
                   cursor:'pointer',
@@ -2557,6 +2672,97 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               style={{ marginTop:12, width:'100%', background:'none', border:'1px solid #e2e8f0', borderRadius:6, padding:'6px', fontSize:10, cursor:'pointer', color:'#64748b' }}>
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL GATE ENVIADO — PV + TEMPERATURA + CONTATO ══════ */}
+      {modalEnviado && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(400px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:13, color:'#0369a1', marginBottom:4 }}>📤 Enviar Proposta</div>
+            <div style={{ fontSize:11, color:'#475569', marginBottom:14 }}>
+              <strong>{modalEnviado.op.titulo}</strong>
+            </div>
+
+            <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>Número do PV (4 dígitos) *</label>
+            <input className="acn-input" style={{ width:'100%', fontSize:12, marginBottom:12, letterSpacing:2, fontWeight:700 }}
+              value={pvTexto} placeholder="0000" maxLength={4}
+              onChange={e => setPvTexto(e.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus />
+
+            <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:6 }}>Temperatura do Lead *</label>
+            <div style={{ position:'relative', height:10, borderRadius:5, marginBottom:6,
+              background:'linear-gradient(to right, #3b82f6, #a855f7, #dc2626)' }}>
+              {temperaturaSel && (
+                <div style={{ position:'absolute', top:-3, width:16, height:16, borderRadius:'50%',
+                  background:'white', border:'3px solid #1e293b', boxShadow:'0 1px 4px #0005',
+                  left: temperaturaSel==='frio' ? '0%' : temperaturaSel==='morno' ? '50%' : '100%',
+                  transform:'translateX(-50%)', transition:'left .15s' }} />
+              )}
+            </div>
+            <div style={{ display:'flex', gap:6, marginBottom:14 }}>
+              {([
+                { v:'frio',   label:'🧊 Frio',   cor:'#3b82f6' },
+                { v:'morno',  label:'🌤️ Morno',  cor:'#a855f7' },
+                { v:'quente', label:'🔥 Quente',  cor:'#dc2626' },
+              ] as const).map(t => (
+                <button key={t.v} onClick={() => setTemperaturaSel(t.v)}
+                  style={{ flex:1, padding:'7px 4px', fontSize:10, fontWeight:700, borderRadius:6, cursor:'pointer',
+                    border: `2px solid ${temperaturaSel===t.v ? t.cor : '#e2e8f0'}`,
+                    background: temperaturaSel===t.v ? `${t.cor}18` : 'white',
+                    color: temperaturaSel===t.v ? t.cor : '#94a3b8' }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>Próximo Contato *</label>
+            <div style={{ display:'flex', gap:6, marginBottom:16 }}>
+              <input type="date" className="acn-input" style={{ flex:1, fontSize:11 }}
+                value={enviadoContatoData} onChange={e => setEnviadoContatoData(e.target.value)} />
+              <input type="time" className="acn-input" style={{ width:90, fontSize:11 }}
+                value={enviadoContatoHora} onChange={e => setEnviadoContatoHora(e.target.value)} />
+            </div>
+
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'5px 12px' }}
+                onClick={() => setModalEnviado(null)} disabled={salvandoEnviado}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#0369a1', fontSize:10, padding:'5px 12px', opacity: salvandoEnviado?.5:1 }}
+                onClick={confirmarEnviado} disabled={salvandoEnviado}>
+                {salvandoEnviado ? 'Salvando...' : '✅ Confirmar Envio'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ AVISO — BLOQUEIO DO ESTÁGIO FATURADO ══════ */}
+      {avisoFaturadoBloq && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={() => setAvisoFaturadoBloq(null)}>
+          <div style={{ background:'white', borderRadius:8, width:'min(400px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight:700, fontSize:13, color:'#991b1b', marginBottom:8 }}>🚫 Ainda não pode ir para Faturado</div>
+            <div style={{ fontSize:11, color:'#475569', marginBottom:10 }}>
+              <strong>{avisoFaturadoBloq.op.titulo}</strong>
+            </div>
+            {avisoFaturadoBloq.semOpl ? (
+              <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
+                Nenhuma OP está vinculada a esta oportunidade ainda. Lance a OP (botão "📋 Lançar OP") antes de faturar e entregar.
+              </div>
+            ) : (
+              <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
+                Esta ainda tem OP(s) sem confirmação de faturamento/entrega:
+                <ul style={{ margin:'6px 0 0', paddingLeft:18 }}>
+                  {avisoFaturadoBloq.pendentes.map((o: any) => (
+                    <li key={o.opl} style={{ marginBottom:2 }}>{o.opl} — <em>{o.status_geral || 'sem status'}</em></li>
+                  ))}
+                </ul>
+                <div style={{ marginTop:8 }}>Confirme a entrega na aba Fiscal (tabela "Já Faturados") antes de mover para Faturado.</div>
+              </div>
+            )}
+            <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'5px 12px', width:'100%' }}
+              onClick={() => setAvisoFaturadoBloq(null)}>Entendido</button>
           </div>
         </div>
       )}
@@ -2687,7 +2893,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   const agora = new Date().toISOString();
                   const op = modalConverterLicit;
                   const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM: ${op.titulo}` }];
-                  const { error } = await supabase.from('licitacoes').insert([{
+                  const { data: novaLic, error } = await supabase.from('licitacoes').insert([{
                     numero: op.numero_edital || `VD-${op.id.slice(0,6).toUpperCase()}`,
                     nome_projeto: op.titulo || '—',
                     orgao: op.orgao || '',
@@ -2703,10 +2909,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     criado_por_nome: currentUser?.nome,
                     criado_em: agora,
                     atualizado_em: agora,
-                  }]);
+                  }]).select().single();
                   setSalvando(false);
                   if (error) { alert('Erro: ' + error.message); return; }
+                  if (novaLic) await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
                   setModalConverterLicit(null);
+                  await load();
                   alert('✅ Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
                 }}>
                 🏛️ Processo Licitatório<br/>
@@ -2721,7 +2929,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   const agora = new Date().toISOString();
                   const op = modalConverterLicit;
                   const historico = [{ status:'Aberta', usuario: currentUser?.nome, data: agora, obs: `Convertida de Venda Direta CRM (Adesão a ATA): ${op.titulo}` }];
-                  const { error } = await supabase.from('licitacoes').insert([{
+                  const { data: novaLic, error } = await supabase.from('licitacoes').insert([{
                     numero: op.numero_edital || `ATA-${op.id.slice(0,6).toUpperCase()}`,
                     nome_projeto: op.titulo || '—',
                     orgao: op.orgao || '',
@@ -2737,10 +2945,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     criado_por_nome: currentUser?.nome,
                     criado_em: agora,
                     atualizado_em: agora,
-                  }]);
+                  }]).select().single();
                   setSalvando(false);
                   if (error) { alert('Erro: ' + error.message); return; }
+                  if (novaLic) await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
                   setModalConverterLicit(null);
+                  await load();
                   alert('✅ Adesão a ATA criada! Acesse a aba Licitações para acompanhar.');
                 }}>
                 📋 Adesão a ATA<br/>
@@ -2749,6 +2959,71 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             </div>
             <button style={{ marginTop:10, width:'100%', padding:'7px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}
               onClick={() => setModalConverterLicit(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL VINCULAR A PROCESSO LICITATÓRIO ══════ */}
+      {modalVincularLicit && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={e => { if (e.target===e.currentTarget) setModalVincularLicit(null); }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(460px,96vw)', maxHeight:'80vh', display:'flex', flexDirection:'column', padding:'16px 18px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:12, color:'#0e7490', marginBottom:8 }}>🔗 Vincular a Processo Licitatório</div>
+            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'6px 10px', marginBottom:10, fontSize:10 }}>
+              <strong>{modalVincularLicit.titulo}</strong> {modalVincularLicit.numero_pv && <span style={{ color:'#0369a1' }}>· PV {modalVincularLicit.numero_pv}</span>}
+            </div>
+
+            {modalVincularLicit.licitacao_processo_id && (
+              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:5, padding:'8px 10px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontSize:10, color:'#166534', fontWeight:700 }}>✓ Já vinculado a um processo</span>
+                <button className="acn-btn" style={{ background:'#dc2626', fontSize:8, padding:'3px 8px' }}
+                  onClick={async () => {
+                    await supabase.from('crm_oportunidades').update({ licitacao_processo_id: null }).eq('id', modalVincularLicit.id);
+                    setModalVincularLicit(null);
+                    await load();
+                  }}>
+                  Desvincular
+                </button>
+              </div>
+            )}
+
+            <input
+              placeholder="🔍 Buscar por número, nome do projeto ou órgão..."
+              value={buscaVincularLicit}
+              onChange={async e => {
+                const v = e.target.value;
+                setBuscaVincularLicit(v);
+                if (v.trim().length < 2) { setResultVincularLicit([]); return; }
+                const { data } = await supabase.from('licitacoes')
+                  .select('id,numero,nome_projeto,orgao,status')
+                  .or(`numero.ilike.%${v}%,nome_projeto.ilike.%${v}%,orgao.ilike.%${v}%`)
+                  .limit(20);
+                setResultVincularLicit(data || []);
+              }}
+              style={{ padding:'6px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, marginBottom:8, boxSizing:'border-box' }}
+              autoFocus
+            />
+
+            <div style={{ overflowY:'auto', flex:1, minHeight:100 }}>
+              {resultVincularLicit.map(lic => (
+                <div key={lic.id} onClick={async () => {
+                  await supabase.from('crm_oportunidades').update({ licitacao_processo_id: lic.id }).eq('id', modalVincularLicit.id);
+                  setModalVincularLicit(null);
+                  await load();
+                }} style={{
+                  padding:'7px 9px', border:'1px solid #e2e8f0', borderRadius:5, marginBottom:5, cursor:'pointer',
+                }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:'#1e293b' }}>{lic.numero} — {lic.nome_projeto}</div>
+                  <div style={{ fontSize:9, color:'#64748b' }}>{lic.orgao} · {lic.status}</div>
+                </div>
+              ))}
+              {buscaVincularLicit.trim().length >= 2 && resultVincularLicit.length === 0 && (
+                <div style={{ fontSize:10, color:'#94a3b8', textAlign:'center', padding:'12px 0' }}>Nenhum processo encontrado</div>
+              )}
+            </div>
+
+            <button style={{ marginTop:10, width:'100%', padding:'7px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}
+              onClick={() => setModalVincularLicit(null)}>Fechar</button>
           </div>
         </div>
       )}
@@ -2791,13 +3066,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 <input
                   className="acn-input"
                   style={{ width:'100%', fontSize:11 }}
-                  placeholder="Ex: 2024.0001"
+                  placeholder="Ex: A1234.0826 ou 2024.0001"
                   value={numOp}
-                  onChange={e => setNumOp(mascaraOp(e.target.value))}
-                  maxLength={9}
+                  onChange={e => setNumOp(mascaraOpComLetra(e.target.value))}
+                  maxLength={10}
                   autoFocus
                 />
-                <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>Formato: XXXX.XXXX (ex: 2024.0001)</div>
+                <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>Formato: [A/D]XXXX.MMAA — gerado a partir do PV quando disponível</div>
               </div>
             )}
 

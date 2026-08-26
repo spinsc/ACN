@@ -679,4 +679,51 @@ CREATE TABLE IF NOT EXISTS public.oples_reboque_modelos (
   ativo boolean DEFAULT true,
   criado_em timestamptz DEFAULT now()
 );
+
+-- =============================================================
+-- 2026-08-26 · feat: Reformulação do funil Comercial/CRM (Fase 1)
+-- =============================================================
+-- Ja executado em producao em 2026-08-26. Kanban de Vendas Diretas
+-- (CrmTab.tsx) reduzido/renomeado para 7 estagios explicitos:
+-- Estimativa(1) < Lead/Contato+Qualificacao, Lead(2) < Qualificacao,
+-- Enviado(3) < Proposta Enviada+Negociacao, Vencido(4,ganho) <
+-- Venda Convertida+Finalizada, Faturado(5,NOVO), Perdido(6), Desistencia(99,
+-- mantido). Nova coluna crm_estagios_funil.tipo classifica cada estagio
+-- explicitamente (usado por CrmTab.tsx no lugar de adivinhar pelo nome).
+-- Dados existentes remapeados 1:1 sem perda (22 oportunidades antes = 22
+-- depois, verificado por GROUP BY antes/depois de aplicar).
+ALTER TABLE public.crm_estagios_funil ADD COLUMN IF NOT EXISTS tipo text;
+
+UPDATE public.crm_oportunidades SET estagio_id = '2ff82a13-356b-49bf-abe0-9fb0e6de6fe2'
+  WHERE estagio_id = 'e8cc024d-e8c6-4d89-acf1-fc657e3ebeab';
+DELETE FROM public.crm_estagios_funil WHERE id = 'e8cc024d-e8c6-4d89-acf1-fc657e3ebeab';
+
+UPDATE public.crm_oportunidades SET estagio_id = 'bfa861af-c559-448b-8418-afe73b9def6a'
+  WHERE estagio_id = '0fc0062a-6b24-4d38-9bfe-ac0301dc566e';
+DELETE FROM public.crm_estagios_funil WHERE id = '0fc0062a-6b24-4d38-9bfe-ac0301dc566e';
+
+UPDATE public.crm_estagios_funil SET nome='Estimativa', ordem=1, tipo='estimativa' WHERE id='5415992e-8e05-4896-a4c0-17fe49bf1c5d';
+UPDATE public.crm_estagios_funil SET nome='Lead',       ordem=2, tipo='lead'       WHERE id='23b5cd3b-2b93-4413-a81f-7e5a53f3ea0e';
+UPDATE public.crm_estagios_funil SET nome='Enviado',    ordem=3, tipo='enviado'    WHERE id='2ff82a13-356b-49bf-abe0-9fb0e6de6fe2';
+UPDATE public.crm_estagios_funil SET nome='Vencido',    ordem=4, tipo='ganho', is_final=true WHERE id='bfa861af-c559-448b-8418-afe73b9def6a';
+UPDATE public.crm_estagios_funil SET nome='Perdido',    ordem=6, tipo='perdido'    WHERE id='72f5f9b2-c11a-4f71-be75-8468b2cfedce';
+UPDATE public.crm_estagios_funil SET tipo='desistencia' WHERE id='bff8d52c-80f6-43a7-ae97-3ecc962386a3';
+
+INSERT INTO public.crm_estagios_funil (funil, nome, ordem, is_final, cor, tipo)
+VALUES ('venda_direta', 'Faturado', 5, true, '#15803d', 'faturado');
+
+-- Estagio Estimativa ganha botao "-> Licitacao/ATA" que agora grava o
+-- vinculo de volta (varios PVs/oportunidades podem apontar pro mesmo
+-- processo licitatorio). Estagio Enviado passa a exigir PV (4 digitos) +
+-- temperatura do lead + proximo contato antes de mover o card (gate no
+-- handleDrop). Estagio Vencido gera o numero da OP a partir do PV
+-- (A/D + PV + . + MMAA) e ganha botao "Vincular a Processo Licitatorio".
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS licitacao_processo_id uuid REFERENCES public.licitacoes(id);
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS numero_pv text;
+ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS temperatura text; -- 'quente' | 'morno' | 'frio'
+
+-- Campo Gestor por usuario (Admin > Editar Usuario) -- usado pelo novo
+-- ContatoComercialAlertWidget.tsx pra avisar tambem o gestor do vendedor
+-- (1 dia antes + no dia do proximo contato agendado), alem do vendedor.
+ALTER TABLE public.auth_usuarios ADD COLUMN IF NOT EXISTS gestor_id uuid REFERENCES public.auth_usuarios(id);
 ALTER TABLE public.oples_reboque_modelos DISABLE ROW LEVEL SECURITY;

@@ -34,6 +34,7 @@ import AnaliseInboxPanel from './AnaliseInboxPanel';
 import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
 import ContatoAlertWidget from './ContatoAlertWidget';
+import ContatoComercialAlertWidget from './ContatoComercialAlertWidget';
 import { OplDetalheModal } from './AcnTabShared';
 
 
@@ -1293,6 +1294,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
       <AvisoSistemaWidget currentUser={currentUser} />
       <ContatoAlertWidget currentUser={currentUser} />
+      <ContatoComercialAlertWidget currentUser={currentUser} />
       <ChatWidget currentUser={currentUser} />
 
       {/* ── OPL aberto via busca global (modal flutuante) ── */}

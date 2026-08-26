@@ -18,6 +18,8 @@ export default function FiscalTab({ currentUser }) {
   const [busca, setBusca] = useState('');
   const [modalDevolver, setModalDevolver] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
+  const [modalEntregue, setModalEntregue] = useState(null);
+  const [nomeRecebeu, setNomeRecebeu] = useState('');
 
   // ── Faturamento em grupo (OPs desmembradas — mesmo lote, 1 NF-e cobrindo todas) ─
   const [selecionados, setSelecionados] = useState(() => new Set());
@@ -190,6 +192,26 @@ export default function FiscalTab({ currentUser }) {
     fetchAll();
   };
 
+  // ── Confirmar Entrega (fecha o ciclo: OP passa a status_geral='Faturado') ──
+  const confirmarEntrega = async () => {
+    if (!nomeRecebeu.trim()) { alert('Informe o nome de quem recebeu!'); return; }
+    const opl = modalEntregue;
+    const agora = new Date().toISOString();
+    const { error } = await supabase.from('oples').update({
+      status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu.trim(), data_entrega: agora,
+    }).eq('id', opl.id);
+    if (error) { alert('Erro ao confirmar entrega: ' + error.message); return; }
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
+      evento: `Equipamento entregue. Recebeu: ${nomeRecebeu.trim()}`,
+      status_anterior: opl.status_geral, status_novo: 'Faturado',
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    notificarEvento('comercial_entregue', msg.entregue(opl.opl, opl.cliente_nome||'—', nomeRecebeu.trim()));
+    setModalEntregue(null); setNomeRecebeu('');
+    fetchAll();
+  };
+
   const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
 
   const aguardando = opls.filter(o => o.status_geral === 'Aguarda Emissao NF');
@@ -323,7 +345,12 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td>{fmtDt(o.data_emissao_nf)}</td>
                     <td>{o.responsavel_fiscal || '—'}</td>
-                    <td><button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button></td>
+                    <td>
+                      <div style={{display:'flex',gap:4}}>
+                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                        <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>✅ Confirmar Entrega</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -407,6 +434,23 @@ export default function FiscalTab({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverComercial}>CONFIRMAR DEVOLUÇÃO</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAR ENTREGA */}
+      {modalEntregue && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalEntregue(null);}}>
+          <div className="modal-box">
+            <div className="modal-title">✅ Confirmar Entrega — {modalEntregue.opl}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>NF: <strong>#{modalEntregue.numero_nf}</strong></div>
+            <label className="acn-label">Nome completo de quem recebeu o equipamento</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:14,fontSize:13,padding:'8px'}}
+              autoFocus placeholder="Nome do receptor" value={nomeRecebeu} onChange={e=>setNomeRecebeu(e.target.value)} onKeyDown={e=>e.key==='Enter'&&confirmarEntrega()} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'8px'}} onClick={confirmarEntrega}>CONFIRMAR ENTREGA</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEntregue(null)}>Cancelar</button>
             </div>
           </div>
         </div>

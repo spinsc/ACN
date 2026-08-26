@@ -142,7 +142,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
 
   // Perfis disponíveis = padrão + qualquer extra criado no banco
@@ -182,7 +182,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, ver_valores: u.ver_valores !== false });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -205,6 +205,7 @@ function PainelUsuarios() {
       pode_enviar_avisos: editForm.pode_enviar_avisos,
       permissoes_crm: editForm.permissoes_crm,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
+      gestor_id: editForm.gestor_id || null,
     };
     if (editForm.novaSenha.length >= 4) updates.senha = editForm.novaSenha;
     const { error } = await supabase.from('auth_usuarios').update(updates).eq('id', modalEditar.id);
@@ -293,6 +294,17 @@ function PainelUsuarios() {
                   title="Preenche as abas e permissões conforme o perfil selecionado">
                   ⚡ Aplicar permissões do perfil
                 </button>
+              </div>
+              <div>
+                <label className="acn-label">👔 Gestor</label>
+                <select className="acn-input" style={{width:'100%'}}
+                  value={editForm.gestor_id || ''}
+                  onChange={e=>setEditForm(f=>({...f,gestor_id:e.target.value || null}))}>
+                  <option value="">— Nenhum —</option>
+                  {usuarios.filter((u:any)=>u.id!==modalEditar.id).map((u:any)=>
+                    <option key={u.id} value={u.id}>{u.nome}</option>
+                  )}
+                </select>
               </div>
               <div style={{gridColumn:'1/-1'}}>
                 <label className="acn-label">Nova Senha (deixe em branco para manter)</label>
