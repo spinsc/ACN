@@ -634,3 +634,19 @@ DROP TRIGGER IF EXISTS trg_licitacao_doc_touch ON public.licitacao_documentos;
 CREATE TRIGGER trg_licitacao_doc_touch
   AFTER INSERT OR UPDATE ON public.licitacao_documentos
   FOR EACH ROW EXECUTE FUNCTION public.licitacao_doc_touch_licitacao();
+
+-- =============================================================
+-- 2026-08-25 · feat: valor dividido no desmembramento de OP +
+-- faturamento em lote no Fiscal (varias OPs, 1 NF-e so)
+-- =============================================================
+-- Ja executado em producao em 2026-08-25. Quando uma OP com N veiculos e
+-- desmembrada (NovaOpOsModal.tsx, CrmTab.tsx converterGanho e
+-- salvarOplEdit), valor_total/valor_mao_de_obra/valor_mao_de_obra_serralheria
+-- passam a ser divididos igualmente entre as N unidades (antes eram
+-- copiados inteiros em cada uma, ou ficavam em branco no caminho CRM->OP).
+-- Ver dividirValorEmUnidades() em AcnTabShared.tsx.
+--
+-- Campo novo usado pelo Fiscal (FiscalTab.tsx) ao faturar varias OPs
+-- desmembradas juntas com 1 unico numero de NF-e -- guarda a lista de
+-- chassi/placa/serial de cada unidade coberta pela nota.
+ALTER TABLE public.oples ADD COLUMN IF NOT EXISTS observacoes_faturamento text;

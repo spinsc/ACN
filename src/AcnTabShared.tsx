@@ -6,6 +6,17 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 
+// ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
+// O resto de arredondamento (centavos) fica todo na última unidade, pra soma
+// das partes fechar exatamente com o valor original.
+export function dividirValorEmUnidades(valor: number|null|undefined, qtd: number): (number|null)[] {
+  if (valor == null || !qtd || qtd < 1) return Array(Math.max(qtd,1)).fill(valor ?? null);
+  const centavosTotal = Math.round(valor * 100);
+  const base = Math.floor(centavosTotal / qtd);
+  const resto = centavosTotal - base * qtd;
+  return Array.from({ length: qtd }, (_, i) => (base + (i === qtd - 1 ? resto : 0)) / 100);
+}
+
 // ─── Progresso da OP/OS ao longo do pipeline (Comercial → Faturado) ──────────
 const OPL_PIPELINE: { match: string[]; pct: number; label: string; retrabalho?: boolean }[] = [
   { match: ['Em Espera Engenharia'], pct: 10, label: 'Aguardando Engenharia' },

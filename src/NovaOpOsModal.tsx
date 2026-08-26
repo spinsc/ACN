@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ClienteAutocomplete } from './ClienteUtils';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { dividirValorEmUnidades } from './AcnTabShared';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -209,7 +210,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           return;
         }
 
-        const makePayload = (oplNum: string, veiculo?: {chassi:string, placa:string}) => ({
+        const parseMoedaOuNull = (v: any) => v ? parseFloat(String(v).replace(/\./g,'').replace(',','.')) : null;
+
+        const makePayload = (oplNum: string, veiculo?: {chassi:string, placa:string}, valores?: {total: number|null, mo: number|null, moSerr: number|null}) => ({
           opl:                    oplNum,
           tipo_op:                'OPL',
           faturamento_empresa:    form.empresa,
@@ -218,9 +221,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           placa:                  (veiculo?.placa  || form.placa)  || null,
           modelo:                 form.modelo || null,
           quantidade:             1,
-          valor_total:            form.valor_total ? parseFloat(String(form.valor_total).replace(/\./g,'').replace(',','.')) : null,
-          valor_mao_de_obra:      form.valor_mao_de_obra ? parseFloat(String(form.valor_mao_de_obra).replace(/\./g,'').replace(',','.')) : null,
-          valor_mao_de_obra_serralheria: form.valor_mao_de_obra_serralheria ? parseFloat(String(form.valor_mao_de_obra_serralheria).replace(/\./g,'').replace(',','.')) : null,
+          valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
+          valor_mao_de_obra:      valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra),
+          valor_mao_de_obra_serralheria: valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria),
           data_entrada:           form.data_entrada,
           data_prevista_entrega:  form.prazo_entrega || null,
           data_chegada_veiculo:   form.data_chegada_veiculo || null,
@@ -242,12 +245,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
         let firstData: any;
         if (desmembrar) {
-          // Criar uma OP por veículo com sufixo /01, /02...
+          // Criar uma OP por veículo com sufixo /01, /02... — valor dividido
+          // igualmente entre as unidades (resto de arredondamento na última).
           const veiculos = form.veiculos || [];
+          const valoresTotal = dividirValorEmUnidades(parseMoedaOuNull(form.valor_total), qty);
+          const valoresMO     = dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra), qty);
+          const valoresMOSerr = dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra_serralheria), qty);
           for (let i = 0; i < qty; i++) {
             const suf = String(i + 1).padStart(2, '0');
             const { data, error } = await supabase.from('oples')
-              .insert([makePayload(`${baseOpl}/${suf}`, veiculos[i])])
+              .insert([makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] })])
               .select().single();
             if (error) throw error;
             if (i === 0) firstData = data;

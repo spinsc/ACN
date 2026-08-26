@@ -11,7 +11,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
-import { OplDetalheModal, LinkOpl } from './AcnTabShared';
+import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared';
 import { CotacoesCrmPanel } from './CotacoesTab';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -677,14 +677,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           alert('Erro ao buscar dados completos da OP: ' + (errFetch?.message || 'não encontrada'));
           return;
         }
+        // Valor da OP original dividido igualmente entre as unidades (unidade
+        // 1 = a própria OP original, unidades 2..N = as novas siblings) —
+        // resto de arredondamento fica na última unidade.
+        const valoresTotal   = dividirValorEmUnidades(completa.valor_total, qtdNova);
+        const valoresMO      = dividirValorEmUnidades(completa.valor_mao_de_obra, qtdNova);
+        const valoresMOSerr  = dividirValorEmUnidades(completa.valor_mao_de_obra_serralheria, qtdNova);
+
         const siblingBase = {
           tipo_op:                       completa.tipo_op,
           faturamento_empresa:           oplFormEdit.faturamento_empresa || 'ACN',
           tipo_projeto:                  completa.tipo_projeto,
           modelo:                        oplFormEdit.modelo || null,
-          valor_total:                   completa.valor_total,
-          valor_mao_de_obra:             completa.valor_mao_de_obra,
-          valor_mao_de_obra_serralheria: completa.valor_mao_de_obra_serralheria,
           data_entrada:                  completa.data_entrada,
           data_prevista_entrega:         oplFormEdit.data_prevista_entrega || null,
           data_chegada_veiculo:          completa.data_chegada_veiculo,
@@ -708,6 +712,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             chassi: null,
             placa: null,
             quantidade: 1,
+            valor_total:                   valoresTotal[i-1],
+            valor_mao_de_obra:             valoresMO[i-1],
+            valor_mao_de_obra_serralheria: valoresMOSerr[i-1],
             status_geral: 'Em Espera Engenharia',
             criado_por: currentUser?.email,
             criado_por_nome: currentUser?.nome,
@@ -723,6 +730,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           chassi:                oplFormEdit.chassi || null,
           modelo:                oplFormEdit.modelo || null,
           quantidade:            1,
+          valor_total:                   valoresTotal[0],
+          valor_mao_de_obra:             valoresMO[0],
+          valor_mao_de_obra_serralheria: valoresMOSerr[0],
           data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
           centro_custo:          oplFormEdit.centro_custo || null,
           responsavel_comercial: oplFormEdit.responsavel_comercial || null,
@@ -992,11 +1002,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           return;
         }
 
-        const makePayload = (oplNum: string, veiculo?: {chassi:string,placa:string}) => ({
+        const makePayload = (oplNum: string, veiculo?: {chassi:string,placa:string}, valorTotal?: number|null) => ({
           opl:                   oplNum,
           modelo:                op.titulo,
           chassi:                veiculo?.chassi || null,
           placa:                 veiculo?.placa || null,
+          valor_total:           valorTotal ?? null,
           cliente_nome:          op.orgao || op.titulo,
           responsavel_comercial: op.responsavel_nome || null,
           status_geral:          'Em Espera Engenharia',
@@ -1008,9 +1019,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         });
 
         if (desmembrar) {
+          // Valor da oportunidade dividido igualmente entre os veículos —
+          // antes esse campo nem era gravado nas OPs desmembradas.
+          const valoresTotal = dividirValorEmUnidades(op.valor_registrado ?? null, qty);
           for (let i = 0; i < qty; i++) {
             const suf = String(i + 1).padStart(2, '0');
-            const { error } = await supabase.from('oples').insert([makePayload(`${baseOpl}/${suf}`, veiculosConv[i])]);
+            const { error } = await supabase.from('oples').insert([makePayload(`${baseOpl}/${suf}`, veiculosConv[i], valoresTotal[i])]);
             if (error) throw error;
           }
           await supabase.from('crm_historico').insert({
@@ -1018,7 +1032,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             conteudo: `${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`, usuario_nome: currentUser?.nome,
           });
         } else {
-          const { data: novaOp, error } = await supabase.from('oples').insert([makePayload(baseOpl)]).select().single();
+          const { data: novaOp, error } = await supabase.from('oples').insert([makePayload(baseOpl, undefined, op.valor_registrado ?? null)]).select().single();
           if (error) throw error;
           if (novaOp) {
             await supabase.from('crm_historico').insert({

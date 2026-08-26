@@ -6,6 +6,8 @@ import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 
 const semDado = (v) => !v || !String(v).trim();
+const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
 export default function FiscalTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
@@ -16,6 +18,12 @@ export default function FiscalTab({ currentUser }) {
   const [busca, setBusca] = useState('');
   const [modalDevolver, setModalDevolver] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
+
+  // ── Faturamento em grupo (OPs desmembradas — mesmo lote, 1 NF-e cobrindo todas) ─
+  const [selecionados, setSelecionados] = useState(() => new Set());
+  const [nfLote, setNfLote] = useState('');
+  const [faturandoLote, setFaturandoLote] = useState(false);
+  const jaPreselecionou = React.useRef(false);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
@@ -33,6 +41,66 @@ export default function FiscalTab({ currentUser }) {
     setOpls(oplsRes.data || []);
     setOrdensOS(osRes.data || []);
     if (!silent) setLoading(false);
+  };
+
+  // Pré-marca automaticamente, só na primeira carga, as OPs cujo lote (mesmo
+  // número base) tem mais de 1 unidade aguardando NF-e ao mesmo tempo — nos
+  // refreshes automáticos de 30s não mexe mais na seleção, pra não atropelar
+  // um ajuste manual do usuário.
+  useEffect(() => {
+    if (jaPreselecionou.current) return;
+    const aguardandoAgora = opls.filter(o => o.status_geral === 'Aguarda Emissao NF');
+    if (aguardandoAgora.length === 0) return;
+    jaPreselecionou.current = true;
+    const porBase = {};
+    aguardandoAgora.forEach(o => { const b = baseOplDe(o.opl); (porBase[b] = porBase[b] || []).push(o); });
+    const novo = new Set();
+    Object.values(porBase).forEach(irmaos => { if (irmaos.length > 1) irmaos.forEach(o => novo.add(o.id)); });
+    setSelecionados(novo);
+  }, [opls]);
+
+  // ── Faturar em grupo — 1 NF-e cobrindo todas as OPs marcadas ────────────────
+  const faturarSelecionados = async () => {
+    const nf = nfLote.trim();
+    if (!nf) { alert('Informe o numero da NF-e!'); return; }
+    const itens = opls.filter(o => selecionados.has(o.id) && o.status_geral === 'Aguarda Emissao NF');
+    if (itens.length === 0) return;
+    setFaturandoLote(true);
+    const agora = new Date().toISOString();
+    const obsCombinado = itens.length > 1
+      ? itens.map(o => {
+          const partes = [];
+          if (!semDado(o.chassi)) partes.push(`Chassi ${o.chassi}`);
+          if (!semDado(o.placa)) partes.push(`Placa ${o.placa}`);
+          if (!semDado(o.seriais_equipamentos)) partes.push(`Serial ${o.seriais_equipamentos}`);
+          return `${o.opl}${partes.length ? ' — ' + partes.join(' | ') : ''}`;
+        }).join('\n')
+      : null;
+    for (const o of itens) {
+      const inicioFiscal = o.data_liberacao_comercial ? new Date(o.data_liberacao_comercial) : null;
+      const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
+      await supabase.from('oples').update({
+        status_geral: 'Faturado e Disponivel para Entrega',
+        numero_nf: nf,
+        data_emissao_nf: agora,
+        responsavel_fiscal: currentUser?.nome,
+        observacoes_faturamento: obsCombinado,
+        ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
+      }).eq('id', o.id);
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
+        evento: itens.length > 1
+          ? `NF-e emitida em lote: ${nf} (junto com ${itens.length - 1} outra(s) unidade(s): ${itens.map(x=>x.opl).filter(n=>n!==o.opl).join(', ')}).`
+          : `NF-e emitida: ${nf}. Disponivel para entrega.`,
+        status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      }]);
+    }
+    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(itens.map(o=>o.opl).join(', '), nf, currentUser?.nome));
+    setSelecionados(new Set());
+    setNfLote('');
+    setFaturandoLote(false);
+    fetchAll();
   };
 
   const faturar = async (opl) => {
@@ -103,6 +171,15 @@ export default function FiscalTab({ currentUser }) {
   const aguardando = opls.filter(o => o.status_geral === 'Aguarda Emissao NF');
   const faturados = opls.filter(o => o.status_geral === 'Faturado e Disponivel para Entrega');
 
+  const contagemPorBase = {};
+  aguardando.forEach(o => { const b = baseOplDe(o.opl); contagemPorBase[b] = (contagemPorBase[b]||0) + 1; });
+  const ehLote = (o) => contagemPorBase[baseOplDe(o.opl)] > 1;
+  const toggleSelecionado = (id) => setSelecionados(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
   return (
     <div>
       {/* AGUARDANDO EMISSAO */}
@@ -111,19 +188,41 @@ export default function FiscalTab({ currentUser }) {
           <span style={{color:'#92400e'}}>OPLs Aguardando Emissao de NF-e ({filtrarOpls(aguardando, busca).length})</span>
         </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
+
+        {selecionados.size > 0 && (
+          <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#ede9fe',borderBottom:'2px solid #7c3aed',flexWrap:'wrap'}}>
+            <span style={{fontWeight:700,fontSize:11,color:'#5b21b6'}}>🔗 {selecionados.size} selecionada(s)</span>
+            <input className="acn-input" style={{width:140}} placeholder="NF-e 000000000"
+              value={nfLote} onChange={e=>setNfLote(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
+            <button className="acn-btn" style={{background:'#7c3aed'}} disabled={faturandoLote} onClick={faturarSelecionados}>
+              {faturandoLote ? 'Faturando...' : `FATURAR ${selecionados.size} SELECIONADA(S)`}
+            </button>
+            <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setSelecionados(new Set())}>
+              Limpar seleção
+            </button>
+          </div>
+        )}
+
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : aguardando.length === 0 ? (
             <div className="acn-empty">Nenhuma OPL aguardando emissao de NF-e.</div>
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
+                <th></th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
                 <th>Seriais / Nº Equipamentos</th><th>Numero NF-e</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {filtrarOpls(aguardando, busca).map(o => (
-                  <tr key={o.id}>
-                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                  <tr key={o.id} style={ehLote(o) ? {background:'#faf5ff',borderLeft:'3px solid #7c3aed'} : undefined}>
+                    <td>
+                      <input type="checkbox" checked={selecionados.has(o.id)} onChange={()=>toggleSelecionado(o.id)} />
+                    </td>
+                    <td>
+                      <LinkOpl opl={o} currentUser={currentUser} />
+                      {ehLote(o) && <div><span style={{fontSize:8,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10}}>🔗 LOTE</span></div>}
+                    </td>
                     <td style={{fontSize:10}}>
                       <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
                       <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
@@ -190,7 +289,14 @@ export default function FiscalTab({ currentUser }) {
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
+                    <td>
+                      <strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong>
+                      {o.observacoes_faturamento && (
+                        <div style={{marginTop:3,width:200,fontSize:9,fontFamily:'monospace',whiteSpace:'pre-wrap',color:'#5b21b6',background:'#faf5ff',border:'1px solid #d8b4fe',borderRadius:4,padding:'4px 6px'}}>
+                          🔗 NF em lote:<br/>{o.observacoes_faturamento}
+                        </div>
+                      )}
+                    </td>
                     <td>{fmtDt(o.data_emissao_nf)}</td>
                     <td>{o.responsavel_fiscal || '—'}</td>
                     <td><button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button></td>
