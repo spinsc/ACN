@@ -2403,6 +2403,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           if (oplsFiltro === 'crm')     return !!o.crm_oportunidade_id;
           if (oplsFiltro === 'sem_crm') return !o.crm_oportunidade_id;
           return true;
+        }).filter(o => {
+          // Mesmos filtros "Responsável" e busca da barra de ferramentas
+          // compartilhada com o Kanban — antes só apareciam na tela sem
+          // nunca serem aplicados aqui.
+          if (filtResp && o.responsavel_comercial !== filtResp) return false;
+          if (!busca) return true;
+          const b = busca.toLowerCase();
+          return (
+            o.opl?.toLowerCase().includes(b) ||
+            o.cliente_nome?.toLowerCase().includes(b) ||
+            o.modelo?.toLowerCase().includes(b)
+          );
         });
         return (
           <div style={{ padding:'8px 4px' }}>
