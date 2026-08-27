@@ -13,6 +13,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared';
 import { CotacoesCrmPanel } from './CotacoesTab';
+import FormacaoPrecosTab from './FormacaoPrecosTab';
 import AgendaWidget from './AgendaWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -696,6 +697,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     { key:'andamento',    label:'📝 Andamento' },
     ...(modalAbrir?.funil === 'venda_direta' ? [{ key:'quadro_lead' as const, label:'🧾 Quadro Lead' }] : []),
     { key:'cotacoes',     label:'💰 Cotações' },
+    { key:'formacao_precos', label:'💲 Formação de Preços' },
     { key:'processo',     label:'📂 Arquivos de Licitação' },
     { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
     { key:'custos',       label:'💰 Custos e Docs Técnicos' },
@@ -3924,6 +3926,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   <CotacoesCrmPanelCrm
                     oportunidadeId={modalAbrir.id}
                     currentUser={currentUser}
+                  />
+                )}
+
+                {/* ── FORMAÇÃO DE PREÇOS (embutida, já vinculada a este processo) ── */}
+                {abrirTabDir === 'formacao_precos' && (
+                  <FormacaoPrecosTab
+                    currentUser={currentUser}
+                    vinculo={{ tipo:'crm', id: modalAbrir.id }}
+                    embutido
                   />
                 )}
 

@@ -811,3 +811,22 @@ CREATE TABLE IF NOT EXISTS visualizacoes_recentes (
 ALTER TABLE visualizacoes_recentes DISABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_visualizacoes_recentes_unico ON visualizacoes_recentes(usuario_id, tipo, registro_id);
 CREATE INDEX IF NOT EXISTS idx_visualizacoes_recentes_usuario ON visualizacoes_recentes(usuario_id, tipo, visualizado_em DESC);
+
+-- =============================================================
+-- 2026-08-27 · feat: lista de 12 ajustes — Fase 7 (Formação de Preços embutida)
+-- =============================================================
+-- Ja executado em producao em 2026-08-27. cotacoes_precos ja tinha
+-- crm_oportunidade_id (sql/cotacoes_vendedor.sql) mas nao tinha vinculo
+-- nenhum com licitacoes -- adicionado aqui, simetrico ao que ja existia
+-- pro CRM. Usado pela nova aba "💲 Formação de Preços" embutida dentro do
+-- modal Abrir (CRM, CrmTab.tsx) e do detalhe de licitação (LicitacoesTab.tsx)
+-- -- FormacaoPrecosTab.tsx ganhou as props `vinculo`/`embutido`: quando
+-- informadas, roda dentro do modal do processo (sem o navegador de abas/
+-- Preços Formados), lista as formações já vinculadas àquele processo, e
+-- ao salvar grava o vínculo sozinho (crm_oportunidade_id ou licitacao_id).
+-- De quebra, a tabela de itens da Formação de Preços (usada tanto na tela
+-- cheia quanto embutida) foi redesenhada pra nunca precisar de rolagem
+-- horizontal: só Produto/Marca/Qt/Valor Unit./Valor Total ficam sempre
+-- visíveis, o resto (custo, IPI/ST/Markup/DIFAL/Imposto, lucro%) fica num
+-- painel expansível por linha (▸/▾).
+ALTER TABLE public.cotacoes_precos ADD COLUMN IF NOT EXISTS licitacao_id uuid REFERENCES public.licitacoes(id);

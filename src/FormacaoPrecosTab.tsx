@@ -653,7 +653,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor }) {
   const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct } = result;
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
-  const H = isVendedor ? { display:'none' } : {};
+  const [aberto, setAberto] = useState(false);
 
   // estilos base reutilizáveis
   const inp11 = { fontSize:11, padding:'5px 7px' };
@@ -664,90 +664,131 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
     color:      usarParamsGlobais ? '#94a3b8' : undefined,
   });
 
+  // Vendedor não vê custo/impostos/markup — não há nada pra expandir.
+  const temDetalhe = !isVendedor;
+
   return (
-    <tr style={{ borderBottom:'1px solid #e8ecf0' }}>
-      {/* Produto */}
-      <td style={{ padding:'6px 8px', minWidth:200, position:'relative' }}>
-        <ProdutoAutocomplete
-          value={item.produto}
-          params={params}
-          onFill={dados => onFill(dados)}
-          onExpand={linhas => onExpand(linhas)}
-        />
-      </td>
-      {/* Marca */}
-      <td style={{ padding:'6px 6px', minWidth:110 }}>
-        <input className="acn-input" style={{ width:'100%', ...inp11 }}
-          placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
-      </td>
-      {/* Qt */}
-      <td style={{ padding:'6px 6px', minWidth:68 }}>
-        <input type="number" className="acn-input" style={{ width:62, ...inp11r }}
-          min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
-      </td>
-      {/* Moeda */}
-      <td style={{ padding:'6px 6px', minWidth:82 }}>
-        <select className="acn-input" style={{ width:78, ...inp11 }}
-          value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
-          {MOEDAS.map(m=><option key={m}>{m}</option>)}
-        </select>
-      </td>
-      {/* Custo Unit */}
-      <td style={{ padding:'6px 6px', minWidth:96, ...H }}>
-        <input type="number" className="acn-input" style={{ width:88, ...inp11r }}
-          min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
-      </td>
-      {/* IPI */}
-      <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
-        <input type="number" className="acn-input" style={{ width:62, ...inp11r }}
-          min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
-      </td>
-      {/* ST */}
-      <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
-        <input type="number" className="acn-input" style={{ width:62, ...inp11r }}
-          min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
-      </td>
-      {/* Markup */}
-      <td style={{ padding:'6px 6px', minWidth:76, ...H }}>
-        <input type="number" className="acn-input"
-          style={{ width:68, ...inp11r,
-            background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
-            color: usarMarkupGlobal ? '#7c3aed' : undefined }}
-          step="0.1" value={item.markup_pct}
-          onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-          readOnly={!!usarMarkupGlobal} />
-      </td>
-      {/* DIFAL */}
-      <td style={{ padding:'6px 6px', minWidth:68, ...H }}>
-        <input type="number" className="acn-input"
-          style={{ width:62, ...globStyle() }}
-          step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
-          onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
-          readOnly={usarParamsGlobais} />
-      </td>
-      {/* Imposto */}
-      <td style={{ padding:'6px 6px', minWidth:76, ...H }}>
-        <input type="number" className="acn-input"
-          style={{ width:68, ...globStyle() }}
-          step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
-          onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
-          readOnly={usarParamsGlobais} />
-      </td>
-      {/* Calculados */}
-      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:11, color:'#0f766e', fontWeight:600, ...H }}>{fmtR(custoUnitBrl)}</td>
-      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:11, color:'#0f766e', ...H }}>{fmtR(custoTotal)}</td>
-      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:11, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
-      <td style={{ padding:'6px 8px', minWidth:110, textAlign:'right', fontSize:12, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</td>
-      <td style={{ padding:'6px 8px', minWidth:90, textAlign:'right', fontSize:11, color:'#b45309', ...H }}>{fmtR(totalDifal)}</td>
-      <td style={{ padding:'6px 8px', minWidth:90, textAlign:'right', fontSize:11, color:'#9d174d', ...H }}>{fmtR(totalImposto)}</td>
-      <td style={{ padding:'6px 8px', minWidth:80, textAlign:'right', fontSize:12, fontWeight:800, color: lucroColor, ...H }}>{fmtPct(lucroPct)}</td>
-      <td style={{ padding:'6px 6px', textAlign:'center' }}>
-        <button onClick={onRemove}
-          style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
-          ✕
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr style={{ borderBottom: aberto ? 'none' : '1px solid #e8ecf0' }}>
+        {/* Produto */}
+        <td style={{ padding:'6px 8px', minWidth:180, position:'relative' }}>
+          <ProdutoAutocomplete
+            value={item.produto}
+            params={params}
+            onFill={dados => onFill(dados)}
+            onExpand={linhas => onExpand(linhas)}
+          />
+        </td>
+        {/* Marca */}
+        <td style={{ padding:'6px 6px', minWidth:90 }}>
+          <input className="acn-input" style={{ width:'100%', ...inp11 }}
+            placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
+        </td>
+        {/* Qt */}
+        <td style={{ padding:'6px 6px', width:54 }}>
+          <input type="number" className="acn-input" style={{ width:48, ...inp11r }}
+            min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
+        </td>
+        {/* Valor Unit (calculado) */}
+        <td style={{ padding:'6px 8px', width:100, textAlign:'right', fontSize:11, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
+        {/* Valor Total (calculado) */}
+        <td style={{ padding:'6px 8px', width:110, textAlign:'right', fontSize:12, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</td>
+        {/* Toggle detalhe */}
+        <td style={{ padding:'6px 4px', width:28, textAlign:'center' }}>
+          {temDetalhe && (
+            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
+              style={{ background:'none', border:'none', color:'#64748b', fontSize:12, cursor:'pointer', padding:2 }}>
+              {aberto ? '▾' : '▸'}
+            </button>
+          )}
+        </td>
+        {/* Remover */}
+        <td style={{ padding:'6px 6px', width:32, textAlign:'center' }}>
+          <button onClick={onRemove}
+            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 7px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
+            ✕
+          </button>
+        </td>
+      </tr>
+      {aberto && temDetalhe && (
+        <tr style={{ borderBottom:'1px solid #e8ecf0', background:'#f8fafc' }}>
+          <td colSpan={7} style={{ padding:'8px 12px' }}>
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'flex-end' }}>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Moeda</div>
+                <select className="acn-input" style={{ width:78, ...inp11 }}
+                  value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
+                  {MOEDAS.map(m=><option key={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Custo Unit.</div>
+                <input type="number" className="acn-input" style={{ width:88, ...inp11r }}
+                  min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>IPI%</div>
+                <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                  min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ST%</div>
+                <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                  min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Markup%</div>
+                <input type="number" className="acn-input"
+                  style={{ width:60, ...inp11r,
+                    background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
+                    color: usarMarkupGlobal ? '#7c3aed' : undefined }}
+                  step="0.1" value={item.markup_pct}
+                  onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+                  readOnly={!!usarMarkupGlobal} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>DIFAL%</div>
+                <input type="number" className="acn-input"
+                  style={{ width:56, ...globStyle() }}
+                  step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                  onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+                  readOnly={usarParamsGlobais} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Imposto%</div>
+                <input type="number" className="acn-input"
+                  style={{ width:60, ...globStyle() }}
+                  step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
+                  onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
+                  readOnly={usarParamsGlobais} />
+              </div>
+              <div style={{ borderLeft:'1px solid #e2e8f0', paddingLeft:14, display:'flex', gap:14, flexWrap:'wrap' }}>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Custo c/Imp. Unit</div>
+                  <div style={{ fontSize:11, color:'#0f766e', fontWeight:600 }}>{fmtR(custoUnitBrl)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Custo Total</div>
+                  <div style={{ fontSize:11, color:'#0f766e' }}>{fmtR(custoTotal)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>DIFAL Total</div>
+                  <div style={{ fontSize:11, color:'#b45309' }}>{fmtR(totalDifal)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Imposto Total</div>
+                  <div style={{ fontSize:11, color:'#9d174d' }}>{fmtR(totalImposto)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Lucro%</div>
+                  <div style={{ fontSize:12, fontWeight:800, color: lucroColor }}>{fmtPct(lucroPct)}</div>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -1016,7 +1057,13 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
 }
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
-export default function FormacaoPrecosTab({ currentUser }) {
+// `vinculo` — { tipo:'crm'|'licitacao', id, label? } — quando informado, o
+// componente roda "embutido" dentro do processo (CrmTab.tsx/LicitacoesTab.tsx):
+// mostra só a aba de edição (sem o navegador de abas/Preços Formados), lista
+// as formações já vinculadas àquele processo pra carregar, e ao salvar grava
+// o vínculo automaticamente (crm_oportunidade_id/licitacao_id), sem precisar
+// procurar manualmente na tela cheia.
+export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: any = {}) {
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
   const [usarGlobais, setUsarGlobais]             = useState(true);
@@ -1037,6 +1084,31 @@ export default function FormacaoPrecosTab({ currentUser }) {
   const [descontoMaximoPct, setDescontoMax] = useState(0);
   const [finalizando, setFinalizando]       = useState(false);
   const [editandoId, setEditandoId]         = useState(null); // id da cotação em edição
+
+  // ── Formações já vinculadas a este processo (modo embutido) ──
+  const [formacoesVinculo, setFormacoesVinculo]     = useState<any[]>([]);
+  const [carregandoVinculo, setCarregandoVinculo]   = useState(!!vinculo);
+
+  const carregarFormacoesVinculo = useCallback(async () => {
+    if (!vinculo?.id) return;
+    setCarregandoVinculo(true);
+    const col = vinculo.tipo === 'licitacao' ? 'licitacao_id' : 'crm_oportunidade_id';
+    const { data } = await supabase.from('cotacoes_precos').select('*').eq(col, vinculo.id).order('criado_em', { ascending: false });
+    setFormacoesVinculo(data || []);
+    setCarregandoVinculo(false);
+  }, [vinculo?.tipo, vinculo?.id]);
+
+  useEffect(() => { carregarFormacoesVinculo(); }, [carregarFormacoesVinculo]);
+
+  // Se só existe 1 formação vinculada a este processo, já carrega ela
+  // direto pra edição — evita o usuário ter que clicar no seletor.
+  useEffect(() => {
+    if (formacoesVinculo.length === 1 && !editandoId) {
+      carregarModelo(formacoesVinculo[0]);
+      setEditandoId(formacoesVinculo[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formacoesVinculo]);
 
   const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
@@ -1115,7 +1187,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
   const salvarModelo = async (nome, tipo) => {
     setSalvando(true);
-    const payload = {
+    const payload: any = {
       nome,
       tipo,
       empresa,
@@ -1126,6 +1198,9 @@ export default function FormacaoPrecosTab({ currentUser }) {
       opl_numero:          oplVinculada?.opl  || null,
       desconto_maximo_pct: descontoMaximoPct  || 0,
     };
+    // Modo embutido — grava o vínculo com o processo automaticamente.
+    if (vinculo?.tipo === 'crm')       payload.crm_oportunidade_id = vinculo.id;
+    if (vinculo?.tipo === 'licitacao') payload.licitacao_id        = vinculo.id;
     let error;
     if (editandoId) {
       // Atualiza a cotação existente
@@ -1140,6 +1215,7 @@ export default function FormacaoPrecosTab({ currentUser }) {
       setModalSalvar(false);
       setEditandoId(null);
       carregarModelos();
+      if (vinculo?.id) carregarFormacoesVinculo();
     }
     setSalvando(false);
   };
@@ -1352,36 +1428,63 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
+    <div style={{ fontFamily:'system-ui,sans-serif', minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
 
-      {/* ── NAVEGAÇÃO DE ABAS ── */}
-      <div style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#fff', paddingLeft:14, paddingTop:8 }}>
-        {[
-          { id:'formacao',       label:'📊 Formação de Preços' },
-          { id:'precos_formados', label:'📋 Preços Formados' },
-        ].map(tab => (
-          <button key={tab.id}
-            onClick={() => setAbaAtiva(tab.id)}
-            style={{
-              padding:'8px 18px', fontSize:11, fontWeight: abaAtiva === tab.id ? 800 : 500,
-              border:'none', borderBottom: abaAtiva === tab.id ? '3px solid #2563eb' : '3px solid transparent',
-              background:'none', cursor:'pointer',
-              color: abaAtiva === tab.id ? '#2563eb' : '#64748b',
-              marginBottom:-2,
-            }}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* ── NAVEGAÇÃO DE ABAS — some no modo embutido, só a edição importa ── */}
+      {!embutido && (
+        <div style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#fff', paddingLeft:14, paddingTop:8 }}>
+          {[
+            { id:'formacao',       label:'📊 Formação de Preços' },
+            { id:'precos_formados', label:'📋 Preços Formados' },
+          ].map(tab => (
+            <button key={tab.id}
+              onClick={() => setAbaAtiva(tab.id)}
+              style={{
+                padding:'8px 18px', fontSize:11, fontWeight: abaAtiva === tab.id ? 800 : 500,
+                border:'none', borderBottom: abaAtiva === tab.id ? '3px solid #2563eb' : '3px solid transparent',
+                background:'none', cursor:'pointer',
+                color: abaAtiva === tab.id ? '#2563eb' : '#64748b',
+                marginBottom:-2,
+              }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── ABA PREÇOS FORMADOS ── */}
-      {abaAtiva === 'precos_formados' && (
+      {!embutido && abaAtiva === 'precos_formados' && (
         <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} />
       )}
 
       {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
-      {abaAtiva === 'formacao' && (
-        <div style={{ padding:14 }}>
+      {(embutido || abaAtiva === 'formacao') && (
+        <div style={{ padding: embutido ? 0 : 14 }}>
+
+          {/* ── SELETOR DE FORMAÇÕES VINCULADAS (modo embutido) ── */}
+          {vinculo && (
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
+              {carregandoVinculo ? (
+                <span style={{ fontSize:10, color:'#94a3b8' }}>Carregando formações vinculadas...</span>
+              ) : (
+                <>
+                  {formacoesVinculo.map((m: any) => (
+                    <button key={m.id} onClick={() => { carregarModelo(m); setEditandoId(m.id); }}
+                      style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'none',
+                        background: editandoId === m.id ? '#1e40af' : '#eff6ff',
+                        color: editandoId === m.id ? '#fff' : '#1e40af' }}>
+                      {m.nome}
+                    </button>
+                  ))}
+                  <button onClick={novaQuotacao}
+                    style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px dashed #94a3b8',
+                      background:'#f8fafc', color:'#64748b' }}>
+                    + Nova formação
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ── HEADER ── */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
@@ -1541,38 +1644,28 @@ export default function FormacaoPrecosTab({ currentUser }) {
 
           {/* ── TABELA DE ITENS ── */}
           <div style={{ marginBottom:12 }}>
-            {/* Container redimensionável */}
+            {/* Container — sem overflow-x, colunas essenciais só; custo/impostos/markup
+                ficam num painel expansível por linha (ver ItemRow) */}
             <div style={{
               background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
-              overflowX:'auto', overflowY:'auto', height: tableHeight,
+              overflowY:'auto', height: tableHeight,
             }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1400 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{...thStyle, textAlign:'left', minWidth:200}}>Produto / Descrição</th>
-                  <th style={{...thStyle, minWidth:110, fontSize:10}}>Marca</th>
-                  <th style={{...thStyle, minWidth:68, fontSize:10}}>Qt</th>
-                  <th style={{...thStyle, minWidth:82, fontSize:10}}>Moeda</th>
-                  <th style={{...thStyle, minWidth:96, fontSize:10, display: isVendedor ? 'none' : undefined}}>Custo Unit.</th>
-                  <th style={{...thStyle, minWidth:68, fontSize:10, display: isVendedor ? 'none' : undefined}}>IPI%</th>
-                  <th style={{...thStyle, minWidth:68, fontSize:10, display: isVendedor ? 'none' : undefined}}>ST%</th>
-                  <th style={{...thStyle, minWidth:76, fontSize:10, display: isVendedor ? 'none' : undefined}}>Markup%</th>
-                  <th style={{...thStyle, minWidth:68, fontSize:10, display: isVendedor ? 'none' : undefined}}>DIFAL%</th>
-                  <th style={{...thStyle, minWidth:76, fontSize:10, display: isVendedor ? 'none' : undefined}}>Imposto%</th>
-                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo c/Imp. Unit</th>
-                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#065f46', display: isVendedor ? 'none' : undefined}}>Custo Total</th>
-                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#1e40af'}}>Valor Unit.</th>
-                  <th style={{...thStyle, minWidth:110, fontSize:10, background:'#1e40af'}}>Valor Total</th>
-                  <th style={{...thStyle, minWidth:90, fontSize:10, background:'#92400e', display: isVendedor ? 'none' : undefined}}>DIFAL Total</th>
-                  <th style={{...thStyle, minWidth:90, fontSize:10, background:'#831843', display: isVendedor ? 'none' : undefined}}>Imposto</th>
-                  <th style={{...thStyle, minWidth:80, fontSize:10, display: isVendedor ? 'none' : undefined}}>Lucro%</th>
-                  <th style={{...thStyle, minWidth:42, fontSize:10}}>✕</th>
+                  <th style={{...thStyle, textAlign:'left'}}>Produto / Descrição</th>
+                  <th style={{...thStyle, fontSize:10}}>Marca</th>
+                  <th style={{...thStyle, fontSize:10}}>Qt</th>
+                  <th style={{...thStyle, fontSize:10, background:'#1e40af'}}>Valor Unit.</th>
+                  <th style={{...thStyle, fontSize:10, background:'#1e40af'}}>Valor Total</th>
+                  <th style={{...thStyle, fontSize:9}} />
+                  <th style={{...thStyle, fontSize:10}}>✕</th>
                 </tr>
               </thead>
               <tbody>
                 {itens.length === 0 && (
                   <tr>
-                    <td colSpan={isVendedor ? 7 : 18} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+                    <td colSpan={7} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
                       Nenhum item. Clique em <strong>+ Adicionar Item</strong>.
                     </td>
                   </tr>

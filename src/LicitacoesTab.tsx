@@ -6,6 +6,7 @@ import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
+import FormacaoPrecosTab from './FormacaoPrecosTab';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -75,6 +76,7 @@ const SORT_OPTIONS = [
 ];
 
 const TABS_DIREITO = [
+  { key:'formacao_precos', label:'💲 Formação de Preços' },
   { key:'processo',     label:'📂 Arquivos de Licitação' },
   { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
   { key:'custos',       label:'💰 Custos e Docs Técnicos' },
@@ -1343,7 +1345,17 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           {/* Conteúdo da aba */}
           <div style={{ flex:1, overflowY:'auto', padding:14 }}>
 
+            {/* ── FORMAÇÃO DE PREÇOS (embutida, já vinculada a este processo) ── */}
+            {tabDir === 'formacao_precos' && (
+              <FormacaoPrecosTab
+                currentUser={currentUser}
+                vinculo={{ tipo:'licitacao', id: licit.id }}
+                embutido
+              />
+            )}
+
             {/* ── ABAS DE DOCUMENTOS ── */}
+            {tabDir !== 'formacao_precos' && (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {/* Upload */}
                 <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
@@ -1397,6 +1409,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 {/* Área Livre desta aba */}
                 <AreaLivre licitacaoId={licit.id} tabKey={tabDir} areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
               </div>
+            )}
           </div>
         </div>
       </div>
