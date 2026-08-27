@@ -233,6 +233,7 @@ export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
   const [loading, setLoading]   = useState(false);
   const [filtro, setFiltro]     = useState('');
+  const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
   const [modalObs, setModalObs] = useState<any>(null);
   const [obsTexto, setObsTexto] = useState('');
   const [salvandoObs, setSalvandoObs] = useState(false);
@@ -911,6 +912,180 @@ export default function ComprasTab({ currentUser }) {
     label: s, n: pedidos.filter(p=>p.status_compra===s).length, cor: COR[s],
   }));
 
+  // Concluídos ficam agrupados/colapsados no fim da lista, pendentes e em
+  // andamento sempre no topo — só quando a visão é "Todos os status"; um
+  // filtro de status específico (ex: só "Concluído") continua mostrando
+  // exatamente o que foi filtrado, sem o agrupamento.
+  const agruparPorStatus  = filtro === '';
+  const pedidosAtivos     = agruparPorStatus ? pedidos.filter((p:any) => p.status_compra !== 'Concluído') : pedidos;
+  const pedidosConcluidos = agruparPorStatus ? pedidos.filter((p:any) => p.status_compra === 'Concluído') : [];
+
+  const renderPedidoRow = (p: any) => {
+    const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
+    const isEM  = p.status_compra === 'Em Andamento';
+    const isAguardandoAprovacao = p.status_compra === 'Aguardando Aprovação';
+    return (
+      <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9', background: isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : undefined}}>
+        <td style={td}><strong>{p.numero_pedido}</strong></td>
+        <td style={td}>{p.opl||'—'}</td>
+        <td style={{...td,maxWidth:150}}>
+          <span style={{display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+            {p.descricao_material}
+          </span>
+        </td>
+        <td style={td}>{p.quantidade}</td>
+        <td style={td}>{p.fornecedor||'—'}</td>
+
+        {/* VALOR — somente leitura; só é definido ao escolher a cotação vencedora na Mesa de Cotações */}
+        {canVerValor && (
+          <td style={td}>
+            {p.valor_compra
+              ? <strong style={{color:'#16a34a'}}>{fmt(p.valor_compra)}</strong>
+              : <span style={{color:'#9ca3af'}}>—</span>}
+          </td>
+        )}
+
+        {/* CENTRO DE CUSTO */}
+        <td style={{...td,maxWidth:130}}>
+          {p.centro_custo ? (
+            <div style={{display:'flex',alignItems:'center',gap:5}}>
+              <span style={{background:'#eff6ff',color:'#1d4ed8',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={p.centro_custo}>
+                {p.centro_custo}
+              </span>
+              <button onClick={()=>abrirModalCentro(p)} title="Alterar centro de custo"
+                style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+            </div>
+          ) : (
+            <button onClick={()=>abrirModalCentro(p)}
+              style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
+              + Definir
+            </button>
+          )}
+        </td>
+
+        {/* DEPARTAMENTO */}
+        <td style={{...td,maxWidth:130}}>
+          {(() => {
+            const dep = departamentosConfig.find((d:any) => d.id === p.departamento_id);
+            return dep ? (
+              <div style={{display:'flex',alignItems:'center',gap:5}}>
+                <span style={{background:'#f0fdf4',color:'#15803d',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={dep.nome}>
+                  {dep.nome}
+                </span>
+                <button onClick={()=>abrirModalDepartamento(p)} title="Alterar departamento"
+                  style={{...btn,background:'transparent',color:'#15803d',fontSize:12,padding:'0 2px'}}>✏️</button>
+              </div>
+            ) : (
+              <button onClick={()=>abrirModalDepartamento(p)}
+                style={{...btn,background:'#f1f5f9',color:'#15803d',fontSize:9,border:'1px dashed #86efac'}}>
+                + Definir
+              </button>
+            );
+          })()}
+        </td>
+
+        {/* PRAZO — editável direto para itens Em Andamento */}
+        <td style={td}>
+          {isEM ? (
+            <input type="date"
+              value={row.prazo}
+              onChange={e => setInlineField(p.id,'prazo',e.target.value)}
+              style={{width:130,padding:'5px 7px',border:'2px solid #16a34a',borderRadius:5,fontSize:12,outline:'none'}}
+            />
+          ) : (
+            fmtData(p.data_prevista_recebimento)
+          )}
+        </td>
+
+        {/* PRAZO PROMETIDO — compromisso com Produção ou Cliente, independente do prazo do fornecedor */}
+        <td style={{...td,maxWidth:130}}>
+          {p.prazo_prometido_entrega ? (
+            <div style={{display:'flex',alignItems:'center',gap:5}}>
+              <span title={p.prazo_prometido_destino==='cliente'?'Prometido ao cliente':'Prometido à Produção'}>
+                {p.prazo_prometido_destino==='cliente' ? '👤' : '🏭'}
+              </span>
+              {fmtData(p.prazo_prometido_entrega)}
+              <button onClick={()=>abrirModalPrazoProm(p)} title="Alterar prazo prometido"
+                style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+            </div>
+          ) : (
+            <button onClick={()=>abrirModalPrazoProm(p)}
+              style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
+              + Definir
+            </button>
+          )}
+        </td>
+
+        <td style={td}>
+          <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,
+            background:COR[p.status_compra]||'#9ca3af'}}>
+            {p.status_compra||'—'}
+          </span>
+          {p.numero_oc && (
+            <div style={{marginTop:4}}>
+              <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily:'monospace'}} title="Ordem de Compra">
+                📋 {p.numero_oc}
+              </span>
+            </div>
+          )}
+        </td>
+
+        <td style={{...td,whiteSpace:'nowrap'}}>
+          {/* ▶️ Pendente → Em Andamento */}
+          {p.status_compra==='Pendente' && (
+            <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',marginRight:3}}>▶️ Iniciar</button>
+          )}
+
+          {/* 🏷️ Mesa de Cotações — fluxo recomendado para Em Andamento → Comprado */}
+          {isEM && (
+            <button onClick={()=>abrirModalCotacoes(p)}
+              style={{...btn,background:'#d97706',marginRight:3}}>
+              🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}
+            </button>
+          )}
+
+          {/* 🔒 Aguardando Aprovação — abre a mesma mesa de cotações, agora mostrando a seção de aprovação */}
+          {isAguardandoAprovacao && (
+            <button onClick={()=>abrirModalCotacoes(p)}
+              style={{...btn,background:'#ea580c',marginRight:3}}>
+              🔒 Ver Aprovação
+            </button>
+          )}
+
+          {/* 📦 Comprado → Concluído — só via conferência técnica na Logística (Fase 3) */}
+          {p.status_compra==='Comprado' && (
+            <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
+              style={{fontSize:9,color:'#78716c',marginRight:6,fontStyle:'italic'}}>
+              📦 Aguarda recebimento na Logística
+            </span>
+          )}
+
+          {/* 🗨️ Acompanhamento — timeline/chat do pedido */}
+          <button onClick={()=>setModalAcomp(p)}
+            style={{...btn,background:'#7c3aed',marginRight:3}}>
+            🗨️
+          </button>
+
+          {/* 💬 Observações (registro curto, aparece na impressão) */}
+          <button onClick={()=>{setModalObs(p);setObsTexto('');}}
+            style={{...btn,background:p.observacoes_compra?'#0891b2':'#64748b',marginRight:3}}>
+            💬
+          </button>
+
+          {/* 🖨️ Imprimir */}
+          <button onClick={()=>imprimirSolicitacao(p)}
+            style={{...btn,background:'#475569'}}>🖨️</button>
+
+          {/* 📋 Imprimir Ordem de Compra — só existe depois de Comprado */}
+          {p.numero_oc && (
+            <button onClick={()=>imprimirOrdemCompra(p)} title={`Imprimir ${p.numero_oc}`}
+              style={{...btn,background:'#7c3aed',marginLeft:3}}>📋 OC</button>
+          )}
+        </td>
+      </tr>
+    );
+  };
+
   return (
     <div style={{background:'#fff',borderRadius:8,padding:20,marginTop:16,boxShadow:'0 1px 3px #0001'}}>
 
@@ -956,171 +1131,19 @@ export default function ComprasTab({ currentUser }) {
               </tr>
             </thead>
             <tbody>
-              {pedidos.map((p:any) => {
-                const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
-                const isEM  = p.status_compra === 'Em Andamento';
-                const isAguardandoAprovacao = p.status_compra === 'Aguardando Aprovação';
-                return (
-                  <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9', background: isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : undefined}}>
-                    <td style={td}><strong>{p.numero_pedido}</strong></td>
-                    <td style={td}>{p.opl||'—'}</td>
-                    <td style={{...td,maxWidth:150}}>
-                      <span style={{display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                        {p.descricao_material}
-                      </span>
-                    </td>
-                    <td style={td}>{p.quantidade}</td>
-                    <td style={td}>{p.fornecedor||'—'}</td>
-
-                    {/* VALOR — somente leitura; só é definido ao escolher a cotação vencedora na Mesa de Cotações */}
-                    {canVerValor && (
-                      <td style={td}>
-                        {p.valor_compra
-                          ? <strong style={{color:'#16a34a'}}>{fmt(p.valor_compra)}</strong>
-                          : <span style={{color:'#9ca3af'}}>—</span>}
-                      </td>
-                    )}
-
-                    {/* CENTRO DE CUSTO */}
-                    <td style={{...td,maxWidth:130}}>
-                      {p.centro_custo ? (
-                        <div style={{display:'flex',alignItems:'center',gap:5}}>
-                          <span style={{background:'#eff6ff',color:'#1d4ed8',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={p.centro_custo}>
-                            {p.centro_custo}
-                          </span>
-                          <button onClick={()=>abrirModalCentro(p)} title="Alterar centro de custo"
-                            style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
-                        </div>
-                      ) : (
-                        <button onClick={()=>abrirModalCentro(p)}
-                          style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
-                          + Definir
-                        </button>
-                      )}
-                    </td>
-
-                    {/* DEPARTAMENTO */}
-                    <td style={{...td,maxWidth:130}}>
-                      {(() => {
-                        const dep = departamentosConfig.find((d:any) => d.id === p.departamento_id);
-                        return dep ? (
-                          <div style={{display:'flex',alignItems:'center',gap:5}}>
-                            <span style={{background:'#f0fdf4',color:'#15803d',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={dep.nome}>
-                              {dep.nome}
-                            </span>
-                            <button onClick={()=>abrirModalDepartamento(p)} title="Alterar departamento"
-                              style={{...btn,background:'transparent',color:'#15803d',fontSize:12,padding:'0 2px'}}>✏️</button>
-                          </div>
-                        ) : (
-                          <button onClick={()=>abrirModalDepartamento(p)}
-                            style={{...btn,background:'#f1f5f9',color:'#15803d',fontSize:9,border:'1px dashed #86efac'}}>
-                            + Definir
-                          </button>
-                        );
-                      })()}
-                    </td>
-
-                    {/* PRAZO — editável direto para itens Em Andamento */}
-                    <td style={td}>
-                      {isEM ? (
-                        <input type="date"
-                          value={row.prazo}
-                          onChange={e => setInlineField(p.id,'prazo',e.target.value)}
-                          style={{width:130,padding:'5px 7px',border:'2px solid #16a34a',borderRadius:5,fontSize:12,outline:'none'}}
-                        />
-                      ) : (
-                        fmtData(p.data_prevista_recebimento)
-                      )}
-                    </td>
-
-                    {/* PRAZO PROMETIDO — compromisso com Produção ou Cliente, independente do prazo do fornecedor */}
-                    <td style={{...td,maxWidth:130}}>
-                      {p.prazo_prometido_entrega ? (
-                        <div style={{display:'flex',alignItems:'center',gap:5}}>
-                          <span title={p.prazo_prometido_destino==='cliente'?'Prometido ao cliente':'Prometido à Produção'}>
-                            {p.prazo_prometido_destino==='cliente' ? '👤' : '🏭'}
-                          </span>
-                          {fmtData(p.prazo_prometido_entrega)}
-                          <button onClick={()=>abrirModalPrazoProm(p)} title="Alterar prazo prometido"
-                            style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
-                        </div>
-                      ) : (
-                        <button onClick={()=>abrirModalPrazoProm(p)}
-                          style={{...btn,background:'#f1f5f9',color:'#6366f1',fontSize:9,border:'1px dashed #a5b4fc'}}>
-                          + Definir
-                        </button>
-                      )}
-                    </td>
-
-                    <td style={td}>
-                      <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,
-                        background:COR[p.status_compra]||'#9ca3af'}}>
-                        {p.status_compra||'—'}
-                      </span>
-                      {p.numero_oc && (
-                        <div style={{marginTop:4}}>
-                          <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily:'monospace'}} title="Ordem de Compra">
-                            📋 {p.numero_oc}
-                          </span>
-                        </div>
-                      )}
-                    </td>
-
-                    <td style={{...td,whiteSpace:'nowrap'}}>
-                      {/* ▶️ Pendente → Em Andamento */}
-                      {p.status_compra==='Pendente' && (
-                        <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',marginRight:3}}>▶️ Iniciar</button>
-                      )}
-
-                      {/* 🏷️ Mesa de Cotações — fluxo recomendado para Em Andamento → Comprado */}
-                      {isEM && (
-                        <button onClick={()=>abrirModalCotacoes(p)}
-                          style={{...btn,background:'#d97706',marginRight:3}}>
-                          🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}
-                        </button>
-                      )}
-
-                      {/* 🔒 Aguardando Aprovação — abre a mesma mesa de cotações, agora mostrando a seção de aprovação */}
-                      {isAguardandoAprovacao && (
-                        <button onClick={()=>abrirModalCotacoes(p)}
-                          style={{...btn,background:'#ea580c',marginRight:3}}>
-                          🔒 Ver Aprovação
-                        </button>
-                      )}
-
-                      {/* 📦 Comprado → Concluído — só via conferência técnica na Logística (Fase 3) */}
-                      {p.status_compra==='Comprado' && (
-                        <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
-                          style={{fontSize:9,color:'#78716c',marginRight:6,fontStyle:'italic'}}>
-                          📦 Aguarda recebimento na Logística
-                        </span>
-                      )}
-
-                      {/* 🗨️ Acompanhamento — timeline/chat do pedido */}
-                      <button onClick={()=>setModalAcomp(p)}
-                        style={{...btn,background:'#7c3aed',marginRight:3}}>
-                        🗨️
-                      </button>
-
-                      {/* 💬 Observações (registro curto, aparece na impressão) */}
-                      <button onClick={()=>{setModalObs(p);setObsTexto('');}}
-                        style={{...btn,background:p.observacoes_compra?'#0891b2':'#64748b',marginRight:3}}>
-                        💬
-                      </button>
-
-                      {/* 🖨️ Imprimir */}
-                      <button onClick={()=>imprimirSolicitacao(p)}
-                        style={{...btn,background:'#475569'}}>🖨️</button>
-
-                      {/* 📋 Imprimir Ordem de Compra — só existe depois de Comprado */}
-                      {p.numero_oc && (
-                        <button onClick={()=>imprimirOrdemCompra(p)} title={`Imprimir ${p.numero_oc}`}
-                          style={{...btn,background:'#7c3aed',marginLeft:3}}>📋 OC</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {pedidosAtivos.map(renderPedidoRow)}
+              {agruparPorStatus && pedidosConcluidos.length > 0 && (
+                <tr>
+                  <td colSpan={canVerValor ? 12 : 11} style={{padding:0}}>
+                    <button onClick={()=>setMostrarConcluidos(v=>!v)}
+                      style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
+                        background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+                      {mostrarConcluidos ? '▲ Ocultar' : '▼ Mostrar'} Concluídos ({pedidosConcluidos.length})
+                    </button>
+                  </td>
+                </tr>
+              )}
+              {agruparPorStatus && mostrarConcluidos && pedidosConcluidos.map(renderPedidoRow)}
             </tbody>
           </table>
         </div>

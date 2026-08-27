@@ -762,3 +762,32 @@ ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_controle text
 ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_data_entrada date;
 ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_data_saida date;
 ALTER TABLE public.crm_oportunidades ADD COLUMN IF NOT EXISTS ctrl_prazo_garantia text DEFAULT '12 MESES';
+
+-- =============================================================
+-- 2026-08-27 · feat: lista de 12 ajustes — Fase 1 (ganhos rápidos)
+-- =============================================================
+-- Ja executado em producao em 2026-08-27. Tipo de formacao extensivel
+-- (catalogo, mesmo padrao de oples_reboque_modelos) -- ModalSalvar em
+-- FormacaoPrecosTab.tsx troca o <select> hardcoded ('licitacao'|
+-- 'venda_direta'|'orcamento') por um alimentado desta tabela + sentinela
+-- "Novo tipo...". Valores antigos normalizados pra bater com os novos
+-- rotulos do catalogo (nao quebra registros existentes).
+CREATE TABLE IF NOT EXISTS formacao_precos_tipos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome text NOT NULL UNIQUE,
+  ativo boolean DEFAULT true,
+  criado_em timestamptz DEFAULT now()
+);
+ALTER TABLE formacao_precos_tipos DISABLE ROW LEVEL SECURITY;
+INSERT INTO formacao_precos_tipos (nome) VALUES
+  ('SAC'), ('Licitação'), ('Venda Direta'), ('Engenharia'), ('Flutuantes'), ('Orçamento')
+ON CONFLICT (nome) DO NOTHING;
+
+UPDATE cotacoes_precos SET tipo = 'Licitação'    WHERE tipo = 'licitacao';
+UPDATE cotacoes_precos SET tipo = 'Venda Direta' WHERE tipo = 'venda_direta';
+UPDATE cotacoes_precos SET tipo = 'Orçamento'    WHERE tipo = 'orcamento';
+
+-- Markup padrao do produto formado: 30 -> 100 (pedido do usuario, mesma
+-- decisao do markup global da Formacao de Precos, que tambem passa a
+-- iniciar em 100% -- FormacaoPrecosTab.tsx PARAMS_PADRAO/novoItem()).
+ALTER TABLE cadastro_produtos ALTER COLUMN markup_pct SET DEFAULT 100;

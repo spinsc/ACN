@@ -13,7 +13,7 @@ const PARAMS_PADRAO = {
   imposto_pct:    16,
   custo_fixo_pct: 3,
   lote_qtd:       1,
-  markup_pct:     30,
+  markup_pct:     100,
 };
 
 function novoItem() {
@@ -27,7 +27,7 @@ function novoItem() {
     custo_unit:     0,
     ipi_pct:        0,
     st_pct:         0,
-    markup_pct:     30,
+    markup_pct:     100,
     difal_pct:      16,
     imposto_pct:    16,
     custo_fixo_pct: 3,
@@ -156,9 +156,45 @@ function OplAutocomplete({ value, onSelect }) {
 }
 
 // ─── MODAL DE SALVAR TEMPLATE ─────────────────────────────────────────────────
+const NOVO_TIPO_SENTINEL = '___NOVO___';
+
 function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, editando }) {
   const [nome, setNome] = useState(nomeInicial || '');
-  const [tipo, setTipo] = useState(tipoInicial || 'licitacao');
+  const [tipo, setTipo] = useState(tipoInicial || '');
+  const [tipos, setTipos] = useState([]);
+  const [carregandoTipos, setCarregandoTipos] = useState(true);
+  const [novoTipoTexto, setNovoTipoTexto] = useState('');
+  const [salvandoNovoTipo, setSalvandoNovoTipo] = useState(false);
+
+  // Refresh simples da lista (usado depois de criar um tipo novo) — não mexe
+  // na seleção atual, só atualiza as opções disponíveis.
+  const carregarTipos = () => {
+    supabase.from('formacao_precos_tipos').select('id,nome').eq('ativo', true).order('nome')
+      .then(({ data }) => setTipos(data || []));
+  };
+  // Carga inicial — essa sim escolhe um padrão (o 1º do catálogo) quando é
+  // um modelo novo sem tipo pré-definido. Roda só uma vez, no mount.
+  useEffect(() => {
+    supabase.from('formacao_precos_tipos').select('id,nome').eq('ativo', true).order('nome')
+      .then(({ data }) => {
+        setTipos(data || []);
+        setCarregandoTipos(false);
+        if (!tipoInicial && (data || []).length > 0) setTipo(data[0].nome);
+      });
+  }, []);
+
+  const salvarNovoTipo = async () => {
+    const nomeNovo = novoTipoTexto.trim();
+    if (!nomeNovo) return;
+    setSalvandoNovoTipo(true);
+    const { data, error } = await supabase.from('formacao_precos_tipos').insert([{ nome: nomeNovo }]).select().single();
+    setSalvandoNovoTipo(false);
+    if (error) { alert('Erro ao criar tipo: ' + error.message); return; }
+    setNovoTipoTexto('');
+    setTipo(data.nome);
+    carregarTipos();
+  };
+
   return (
     <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -173,15 +209,28 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
         </div>
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo</div>
-          <select className="acn-input" style={{ width:'100%' }} value={tipo} onChange={e => setTipo(e.target.value)}>
-            <option value="licitacao">Licitação</option>
-            <option value="venda_direta">Venda Direta</option>
-            <option value="orcamento">Orçamento</option>
-          </select>
+          {novoTipoTexto !== '' || tipo === NOVO_TIPO_SENTINEL ? (
+            <div style={{ display:'flex', gap:6 }}>
+              <input className="acn-input" style={{ flex:1 }} placeholder="Nome do novo tipo"
+                value={novoTipoTexto} onChange={e => setNovoTipoTexto(e.target.value)} autoFocus
+                onKeyDown={e => e.key === 'Enter' && salvarNovoTipo()} />
+              <button className="acn-btn" style={{ background:'#16a34a', padding:'0 10px' }}
+                onClick={salvarNovoTipo} disabled={salvandoNovoTipo}>✓</button>
+              <button className="acn-btn" style={{ background:'#94a3b8', padding:'0 10px' }}
+                onClick={() => { setNovoTipoTexto(''); setTipo(tipos[0]?.nome || ''); }}>✕</button>
+            </div>
+          ) : (
+            <select className="acn-input" style={{ width:'100%' }} value={tipo} disabled={carregandoTipos}
+              onChange={e => setTipo(e.target.value)}>
+              {carregandoTipos && <option>Carregando...</option>}
+              {tipos.map((t: any) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+              <option value={NOVO_TIPO_SENTINEL}>➕ Novo tipo...</option>
+            </select>
+          )}
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <button className="acn-btn" style={{ background: editando ? '#f59e0b' : '#16a34a', flex:1 }}
-            onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } onSalvar(nome.trim(), tipo); }}
+            onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } if (!tipo || tipo === NOVO_TIPO_SENTINEL) { alert('Informe/selecione o tipo.'); return; } onSalvar(nome.trim(), tipo); }}
             disabled={salvando}>
             {salvando ? 'Salvando...' : editando ? 'ATUALIZAR' : 'SALVAR'}
           </button>

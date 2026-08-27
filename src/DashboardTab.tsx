@@ -871,6 +871,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       if (chk(r.cliente_nome)) return { campo: 'Cliente', valor: r.cliente_nome };
       if (chk(r.veiculo))      return { campo: 'Veículo', valor: r.veiculo };
       if (chk(r.modelo))       return { campo: 'Modelo',  valor: r.modelo };
+    } else if (r._tipo === 'licitacao') {
+      if (chk(r.orgao))  return { campo: 'Órgão',  valor: r.orgao };
+      if (chk(r.numero)) return { campo: 'Número', valor: r.numero };
+    } else if (r._tipo === 'item') {
+      if (chk(r.codigo))    return { campo: 'Código',     valor: r.codigo };
+      if (chk(r.marca))     return { campo: 'Marca',      valor: r.marca };
+      if (chk(r.fornecedor))return { campo: 'Fornecedor', valor: r.fornecedor };
+    } else if (r._tipo === 'produto') {
+      if (chk(r.codigo))    return { campo: 'Código',    valor: r.codigo };
+      if (chk(r.categoria)) return { campo: 'Categoria', valor: r.categoria };
     }
     return null;
   };
@@ -879,7 +889,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (!termo.trim() || termo.length < 2) { setGlobalResultados([]); setGlobalBuscando(false); return; }
     setGlobalBuscando(true);
     const t = termo.trim();
-    const [r1, r2, r3] = await Promise.all([
+    const [r1, r2, r3, r4, r5, r6] = await Promise.all([
       supabase.from('crm_oportunidades')
         .select('id,titulo,numero_edital,orgao,responsavel_nome,funil')
         .or(`titulo.ilike.%${t}%,numero_edital.ilike.%${t}%,orgao.ilike.%${t}%,responsavel_nome.ilike.%${t}%`)
@@ -892,11 +902,26 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         .select('id,numero_os,cliente_nome,veiculo,modelo,status_os')
         .or(`numero_os.ilike.%${t}%,cliente_nome.ilike.%${t}%,veiculo.ilike.%${t}%,modelo.ilike.%${t}%`)
         .limit(6),
+      supabase.from('licitacoes')
+        .select('id,numero,nome_projeto,orgao,status')
+        .or(`numero.ilike.%${t}%,nome_projeto.ilike.%${t}%,orgao.ilike.%${t}%`)
+        .limit(6),
+      supabase.from('cadastro_itens')
+        .select('id,codigo,nome,marca,fornecedor')
+        .or(`nome.ilike.%${t}%,codigo.ilike.%${t}%,marca.ilike.%${t}%`)
+        .limit(6),
+      supabase.from('cadastro_produtos')
+        .select('id,codigo,nome,categoria')
+        .or(`nome.ilike.%${t}%,codigo.ilike.%${t}%`)
+        .limit(6),
     ]);
     const res = [
       ...(r1.data||[]).map(r => ({ _tipo:'crm', ...r })),
       ...(r2.data||[]).map(r => ({ _tipo:'opl', ...r })),
       ...(r3.data||[]).map(r => ({ _tipo:'os',  ...r })),
+      ...(r4.data||[]).map(r => ({ _tipo:'licitacao', ...r })),
+      ...(r5.data||[]).map(r => ({ _tipo:'item',       ...r })),
+      ...(r6.data||[]).map(r => ({ _tipo:'produto',    ...r })),
     ];
     setGlobalResultados(res);
     setGlobalBuscando(false);
@@ -923,13 +948,23 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     } else if (r._tipo === 'os') {
       setActiveTab('sac');
       setTimeout(() => window.dispatchEvent(new CustomEvent('os:abrir-global', { detail: { id: r.id } })), 400);
+    } else if (r._tipo === 'licitacao') {
+      setPendingOpenLicitId(r.id);
+      setActiveTab('licitacoes');
+    } else if (r._tipo === 'item') {
+      setActiveTab('cadastro_itens');
+    } else if (r._tipo === 'produto') {
+      setActiveTab('cadastro_produtos');
     }
   };
 
   const TIPO_META: Record<string, { icon: string; cor: string; label: string }> = {
-    crm: { icon:'🤝', cor:'#7c3aed', label:'Processo CRM' },
-    opl: { icon:'🏭', cor:'#0891b2', label:'OP / OPL' },
-    os:  { icon:'🔧', cor:'#0f766e', label:'OS' },
+    crm:       { icon:'🤝', cor:'#7c3aed', label:'Processo CRM' },
+    opl:       { icon:'🏭', cor:'#0891b2', label:'OP / OPL' },
+    os:        { icon:'🔧', cor:'#0f766e', label:'OS' },
+    licitacao: { icon:'🏛️', cor:'#1d4ed8', label:'Licitação' },
+    item:      { icon:'📦', cor:'#b45309', label:'Item do Catálogo' },
+    produto:   { icon:'🏷️', cor:'#be185d', label:'Produto Formado' },
   };
 
   return (
@@ -1014,7 +1049,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 )}
 
                 {/* Agrupar por tipo */}
-                {(['crm','opl','os'] as const).map(tipo => {
+                {(['crm','opl','os','licitacao','item','produto'] as const).map(tipo => {
                   const grupo = globalResultados.filter(r => r._tipo === tipo);
                   if (!grupo.length) return null;
                   const meta = TIPO_META[tipo];
@@ -1027,11 +1062,14 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                         {meta.icon} {meta.label}
                       </div>
                       {grupo.map((r, i) => {
-                        const titulo = r._tipo==='crm' ? r.titulo
-                                     : r._tipo==='opl' ? `${r.opl || ''} — ${r.cliente_nome || ''}`
-                                     : `OS ${r.numero_os || ''} — ${r.cliente_nome || ''}`;
+                        const titulo = r._tipo==='crm'       ? r.titulo
+                                     : r._tipo==='opl'        ? `${r.opl || ''} — ${r.cliente_nome || ''}`
+                                     : r._tipo==='os'         ? `OS ${r.numero_os || ''} — ${r.cliente_nome || ''}`
+                                     : r._tipo==='licitacao'  ? `${r.numero || ''} — ${r.nome_projeto || ''}`
+                                     : r._tipo==='item'       ? `${r.codigo ? r.codigo + ' — ' : ''}${r.nome || ''}`
+                                     : `${r.codigo ? r.codigo + ' — ' : ''}${r.nome || ''}`;
                         const ctx = getContexto(r, globalBusca);
-                        const status = r.status_geral || r.status_os || r.funil || '';
+                        const status = r.status_geral || r.status_os || r.funil || r.status || '';
                         return (
                           <div key={r.id||i}
                             onClick={() => abrirResultado(r)}
