@@ -195,7 +195,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [vendas, setVendas]         = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
-  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'>('kanban');
+  const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'>('kanban');
+  const [recentesCrm, setRecentesCrm] = useState<any[]>([]);
+  const [recentesCrmLoading, setRecentesCrmLoading] = useState(false);
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
@@ -710,6 +712,30 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // pequeno delay para o DOM do contenteditable estar montado
     setTimeout(() => carregarNotaLivre(modalAbrir, abrirTabDir), 100);
   }, [modalAbrir?.id, abrirTabDir]);
+
+  // Registra "últimas visualizadas" — upsert, dispara uma vez por abertura
+  // (não por troca de aba dentro do mesmo processo já aberto).
+  useEffect(() => {
+    if (!modalAbrir?.id || !currentUser?.id) return;
+    supabase.from('visualizacoes_recentes')
+      .upsert(
+        { usuario_id: currentUser.id, tipo: 'crm', registro_id: modalAbrir.id, visualizado_em: new Date().toISOString() },
+        { onConflict: 'usuario_id,tipo,registro_id' }
+      ).then(() => {});
+  }, [modalAbrir?.id, currentUser?.id]);
+
+  // Carrega a lista de "Últimas Visualizadas" (20 mais recentes do usuário)
+  const carregarRecentesCrm = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setRecentesCrmLoading(true);
+    const { data } = await supabase.from('visualizacoes_recentes')
+      .select('registro_id, visualizado_em')
+      .eq('usuario_id', currentUser.id).eq('tipo', 'crm')
+      .order('visualizado_em', { ascending: false }).limit(20);
+    setRecentesCrm(data || []);
+    setRecentesCrmLoading(false);
+  }, [currentUser?.id]);
+  useEffect(() => { if (abaInterna === 'recentes') carregarRecentesCrm(); }, [abaInterna, carregarRecentesCrm]);
 
   // ── resize do modal Abrir (drag divider) ──
   useEffect(() => {
@@ -2288,6 +2314,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             {([
               ['kanban',       '📋 Kanban'],
               ['agenda',       '📅 Agenda'],
+              ['recentes',     '🕐 Últimas Visualizadas'],
               ['relatorio',    '📊 Relatório'],
               ['opls',         '🔧 OPLs em Aberto'],
               ...(podeVerFaturamentos ? [['faturamentos', '💰 Faturamentos']] : []),
@@ -2418,6 +2445,34 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       {abaInterna === 'agenda' && (
         <div style={{ maxWidth:520, padding:'8px 4px' }}>
           <AgendaWidget setor="comercial" currentUser={currentUser} />
+        </div>
+      )}
+      {abaInterna === 'recentes' && (
+        <div style={{ maxWidth:640, padding:'8px 4px' }}>
+          {recentesCrmLoading ? (
+            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Carregando...</div>
+          ) : recentesCrm.length === 0 ? (
+            <div style={{ textAlign:'center', color:'#94a3b8', fontSize:11, padding:20 }}>Nenhuma oportunidade visualizada ainda.</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {recentesCrm.map((r: any) => {
+                const op = ops.find(o => o.id === r.registro_id);
+                if (!op) return null;
+                return (
+                  <div key={r.registro_id} onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                    style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{op.titulo}</div>
+                      <div style={{ fontSize:9, color:'#64748b' }}>{op.orgao || '—'} · {getEst(op.estagio_id)?.nome || '—'}</div>
+                    </div>
+                    <div style={{ fontSize:9, color:'#94a3b8', flexShrink:0 }}>
+                      {new Date(r.visualizado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
       {abaInterna === 'relatorio' && (

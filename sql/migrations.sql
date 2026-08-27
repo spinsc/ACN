@@ -791,3 +791,23 @@ UPDATE cotacoes_precos SET tipo = 'Orçamento'    WHERE tipo = 'orcamento';
 -- decisao do markup global da Formacao de Precos, que tambem passa a
 -- iniciar em 100% -- FormacaoPrecosTab.tsx PARAMS_PADRAO/novoItem()).
 ALTER TABLE cadastro_produtos ALTER COLUMN markup_pct SET DEFAULT 100;
+
+-- =============================================================
+-- 2026-08-27 · feat: lista de 12 ajustes — Fase 4 (Últimas Visualizadas)
+-- =============================================================
+-- Ja executado em producao em 2026-08-27. Tabela generica de tracking de
+-- visualizacao por usuario (tipo 'crm'|'licitacao' + registro_id), upsert
+-- em (usuario_id, tipo, registro_id) toda vez que o modal Abrir (CRM) ou
+-- o detalhe de uma licitacao e aberto. Nova aba "Ultimas Visualizadas" no
+-- CRM e chip de mesmo nome em Licitacoes mostram os 20 mais recentes do
+-- usuario logado.
+CREATE TABLE IF NOT EXISTS visualizacoes_recentes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id uuid NOT NULL,
+  tipo text NOT NULL, -- 'crm' | 'licitacao'
+  registro_id uuid NOT NULL,
+  visualizado_em timestamptz DEFAULT now()
+);
+ALTER TABLE visualizacoes_recentes DISABLE ROW LEVEL SECURITY;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_visualizacoes_recentes_unico ON visualizacoes_recentes(usuario_id, tipo, registro_id);
+CREATE INDEX IF NOT EXISTS idx_visualizacoes_recentes_usuario ON visualizacoes_recentes(usuario_id, tipo, visualizado_em DESC);

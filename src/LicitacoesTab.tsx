@@ -1757,6 +1757,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [modalNova, setModalNova] = useState(false);
   const [selected, setSelected] = useState<any|null>(null);
   const [vistaRelatorio, setVistaRelatorio] = useState(false);
+  const [modoRecentes, setModoRecentes] = useState(false);
+  const [recentesLicit, setRecentesLicit] = useState<any[]>([]);
+  const [recentesLicitLoading, setRecentesLicitLoading] = useState(false);
 
   const isAdmin = true;
   const isAnalista = true;
@@ -1773,6 +1776,30 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       onAutoOpenConsumed?.();
     }
   }, [autoOpenLicitId, loading, licitacoes]);
+
+  // Registra "últimas visualizadas" — upsert, dispara toda vez que uma
+  // licitação diferente é aberta no detalhe.
+  useEffect(() => {
+    if (!selected?.id || !currentUser?.id) return;
+    supabase.from('visualizacoes_recentes')
+      .upsert(
+        { usuario_id: currentUser.id, tipo: 'licitacao', registro_id: selected.id, visualizado_em: new Date().toISOString() },
+        { onConflict: 'usuario_id,tipo,registro_id' }
+      ).then(() => {});
+  }, [selected?.id, currentUser?.id]);
+
+  // Carrega a lista de "Últimas Visualizadas" (20 mais recentes do usuário)
+  const carregarRecentesLicit = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setRecentesLicitLoading(true);
+    const { data } = await supabase.from('visualizacoes_recentes')
+      .select('registro_id, visualizado_em')
+      .eq('usuario_id', currentUser.id).eq('tipo', 'licitacao')
+      .order('visualizado_em', { ascending: false }).limit(20);
+    setRecentesLicit(data || []);
+    setRecentesLicitLoading(false);
+  }, [currentUser?.id]);
+  useEffect(() => { if (modoRecentes) carregarRecentesLicit(); }, [modoRecentes, carregarRecentesLicit]);
 
   const excluirLicitacao = async (l: any) => {
     if (!confirm(`Excluir "${l.numero} — ${l.nome_projeto}"?\n\nEsta ação não pode ser desfeita.`)) return;
@@ -1796,7 +1823,13 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   useEffect(() => { fetchLicit(); }, [fetchLicit]);
 
-  const lista = licitacoes
+  // "Últimas Visualizadas" — ignora os demais filtros/ordenação, mostra
+  // exatamente as 20 mais recentes do usuário, na ordem em que foram vistas.
+  const listaRecentes = modoRecentes
+    ? recentesLicit.map(r => licitacoes.find(l => l.id === r.registro_id)).filter(Boolean)
+    : null;
+
+  const lista = listaRecentes || licitacoes
     .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
     .filter(l => !filtroOperador || (l.operador||l.analista_nome||'').toLowerCase().includes(filtroOperador.toLowerCase()))
@@ -1866,6 +1899,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
             padding:'3px 14px', fontSize:10, fontWeight:800, cursor:'pointer', marginRight:6 }}>
           {vistaRelatorio ? '← Lista' : '📊 Relatório'}
         </button>
+        <button onClick={() => setModoRecentes(v => !v)}
+          style={{ background: modoRecentes ? '#7c3aed' : '#f1f5f9', color: modoRecentes ? '#fff' : '#374151', border:'none', borderRadius:20,
+            padding:'3px 12px', fontSize:10, fontWeight:700, cursor:'pointer', marginRight:6 }}>
+          🕐 Últimas Visualizadas
+        </button>
         <div style={{ width:1, height:18, background:'#e2e8f0', marginRight:6 }} />
         <button onClick={() => setFiltroStatus('todas')}
           style={{ border:'none', borderRadius:20, padding:'3px 12px', fontSize:10, fontWeight:700,
@@ -1931,11 +1969,12 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
         <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} />
       ) : (
         <div style={{ flex:1, overflowY:'auto', padding:16 }}>
-          {loading ? (
+          {loading || (modoRecentes && recentesLicitLoading) ? (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
           ) : !lista.length ? (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>
-              {filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
+              {modoRecentes ? 'Nenhuma licitação visualizada ainda.'
+                : filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
             </div>
           ) : (
             lista.map(l => <LicitCard key={l.id} l={l} unread={isUnread(l)} onClick={() => { setSelected(l); marcarLido(String(l.id)); }} />)
