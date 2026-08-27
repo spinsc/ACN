@@ -228,6 +228,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
   const [sacOrdensMap, setSacOrdensMap] = useState<Record<string,any>>({});
   const [loading, setLoading]         = useState(false);
   const [filtro, setFiltro]           = useState('Todos');
+  const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
   const [abaAtiva, setAbaAtiva]       = useState('demandas');
   const [tick, setTick]               = useState(0);
 
@@ -627,6 +628,55 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
     return [];
   };
 
+  const renderDemandaRow = (d:any) => {
+    const isAjuste = d.descricao?.startsWith('[AJUSTE]');
+    const descExibida = isAjuste
+      ? d.descricao.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','')
+      : d.descricao?.replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—';
+    const timer = timerUteis(d);
+    const os = sacOs(d);
+    return (
+      <tr key={d.id} style={{background:sacRowBg(d,isAjuste)}}>
+        <td style={{fontSize:10}}>{fmtDt(d.data_abertura)}</td>
+        <td>{d.numero_opl||'—'}</td>
+        <td style={{maxWidth:220}}>
+          {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
+          {setor === 'Compras' && d.tipo_solicitacao && (
+            <span style={{background: d.tipo_solicitacao==='cotacao' ? '#7c3aed' : '#0891b2', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
+              {d.tipo_solicitacao==='cotacao' ? 'COTAÇÃO' : 'COMPRA'}
+            </span>
+          )}
+          {sacBadge(d)}
+          {sacFlagBadge(d)}
+          {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
+          <span style={{overflow:'hidden',textOverflow:'ellipsis',display:'block',whiteSpace:'nowrap',maxWidth:180}} title={descExibida}>{descExibida}</span>
+          <button onClick={() => setModalVer(d)}
+            style={{marginTop:2,padding:'1px 7px',fontSize:9,fontWeight:700,background:'#e2e8f0',
+              color:'#475569',border:'none',borderRadius:3,cursor:'pointer'}}>
+            VER
+          </button>
+        </td>
+        <td><span className="acn-badge" style={{background:statusCor[d.status]||'#94a3b8'}}>{d.status}</span></td>
+        <td>{d.responsavel_nome||'—'}</td>
+        <td>
+          {timer
+            ? <span style={{fontFamily:'monospace',color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
+            : <span style={{fontSize:10,color:'#94a3b8'}}>{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
+          }
+        </td>
+        <td style={{fontSize:10,color:'#0d9488'}}>{d.status==='Concluido'?fmtH(d.tempo_execucao_horas):''}</td>
+        <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+          {renderAcoes(d)}
+          <button className="acn-btn" style={{background:'#475569',fontSize:10,padding:'3px 7px'}} onClick={()=>imprimirDemanda(d)} title="Imprimir demanda">🖨️</button>
+        </div></td>
+      </tr>
+    );
+  };
+
+  const agruparPorStatusDemanda = filtro === 'Todos';
+  const demandasAtivas     = agruparPorStatusDemanda ? demandas.filter((d:any) => d.status !== 'Concluido') : demandas;
+  const demandasConcluidas = agruparPorStatusDemanda ? demandas.filter((d:any) => d.status === 'Concluido') : [];
+
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div>
@@ -670,50 +720,19 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
                     <th>Responsável</th><th>Timer (h úteis)</th><th>KPI</th><th>Ações</th>
                   </tr></thead>
                   <tbody>
-                    {demandas.map(d => {
-                      const isAjuste = d.descricao?.startsWith('[AJUSTE]');
-                      const descExibida = isAjuste
-                        ? d.descricao.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','')
-                        : d.descricao?.replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—';
-                      const timer = timerUteis(d);
-                      const os = sacOs(d);
-                      return (
-                        <tr key={d.id} style={{background:sacRowBg(d,isAjuste)}}>
-                          <td style={{fontSize:10}}>{fmtDt(d.data_abertura)}</td>
-                          <td>{d.numero_opl||'—'}</td>
-                          <td style={{maxWidth:220}}>
-                            {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
-                            {setor === 'Compras' && d.tipo_solicitacao && (
-                              <span style={{background: d.tipo_solicitacao==='cotacao' ? '#7c3aed' : '#0891b2', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
-                                {d.tipo_solicitacao==='cotacao' ? 'COTAÇÃO' : 'COMPRA'}
-                              </span>
-                            )}
-                            {sacBadge(d)}
-                            {sacFlagBadge(d)}
-                            {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
-                            <span style={{overflow:'hidden',textOverflow:'ellipsis',display:'block',whiteSpace:'nowrap',maxWidth:180}} title={descExibida}>{descExibida}</span>
-                            <button onClick={() => setModalVer(d)}
-                              style={{marginTop:2,padding:'1px 7px',fontSize:9,fontWeight:700,background:'#e2e8f0',
-                                color:'#475569',border:'none',borderRadius:3,cursor:'pointer'}}>
-                              VER
-                            </button>
-                          </td>
-                          <td><span className="acn-badge" style={{background:statusCor[d.status]||'#94a3b8'}}>{d.status}</span></td>
-                          <td>{d.responsavel_nome||'—'}</td>
-                          <td>
-                            {timer
-                              ? <span style={{fontFamily:'monospace',color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
-                              : <span style={{fontSize:10,color:'#94a3b8'}}>{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
-                            }
-                          </td>
-                          <td style={{fontSize:10,color:'#0d9488'}}>{d.status==='Concluido'?fmtH(d.tempo_execucao_horas):''}</td>
-                          <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
-                            {renderAcoes(d)}
-                            <button className="acn-btn" style={{background:'#475569',fontSize:10,padding:'3px 7px'}} onClick={()=>imprimirDemanda(d)} title="Imprimir demanda">🖨️</button>
-                          </div></td>
-                        </tr>
-                      );
-                    })}
+                    {demandasAtivas.map(renderDemandaRow)}
+                    {agruparPorStatusDemanda && demandasConcluidas.length > 0 && (
+                      <tr>
+                        <td colSpan={8} style={{padding:0}}>
+                          <button onClick={()=>setMostrarConcluidas(v=>!v)}
+                            style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
+                              background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+                            {mostrarConcluidas ? '▲ Ocultar' : '▼ Mostrar'} Concluídas ({demandasConcluidas.length})
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                    {agruparPorStatusDemanda && mostrarConcluidas && demandasConcluidas.map(renderDemandaRow)}
                   </tbody>
                 </table>
               )}
