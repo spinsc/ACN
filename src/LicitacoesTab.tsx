@@ -25,6 +25,44 @@ const PRIORIDADES = ['Alta','Média','Baixa'];
 const PRIO_COR: Record<string,string> = { 'Alta':'#dc2626','Média':'#d97706','Baixa':'#16a34a' };
 const FATURAMENTO_OPTIONS = ['ACN','Detech','ACN e Detech'];
 const TIPO_CONTATO_OPCOES = ['Pregoeiro','Secretário','Supervisor','Diretor','Comprador','Outro'];
+const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const fmtDataCurta = (d: Date) => d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+
+// Agrupamento por período — calcula, a partir de data_disputa, a chave (pra
+// ordenar cronologicamente) e o rótulo (pra mostrar no cabeçalho da seção)
+// do bloco de semana/mês/bimestre/trimestre/semestre a que a data pertence.
+function bucketPeriodo(dataStr: string, gran: string) {
+  // data_disputa é timestamptz — supabase-js retorna ISO completo
+  // ("2026-05-20T10:45:00+00:00"), não "YYYY-MM-DD" puro. .slice(0,10)
+  // extrai só a data antes de montar meio-dia local (mesmo bug/fix já
+  // recorrente neste projeto com outras colunas timestamptz).
+  const d = new Date(dataStr.slice(0, 10) + 'T12:00:00');
+  const ano = d.getFullYear();
+  const mes = d.getMonth(); // 0-11
+  if (gran === 'semana') {
+    const dow = d.getDay() || 7; // 1=seg..7=dom
+    const seg = new Date(d); seg.setDate(d.getDate() - dow + 1);
+    const dom = new Date(seg); dom.setDate(seg.getDate() + 6);
+    return { key: seg.toISOString().slice(0, 10), label: `Semana de ${fmtDataCurta(seg)} a ${fmtDataCurta(dom)}` };
+  }
+  if (gran === 'mes') {
+    return { key: `${ano}-${String(mes + 1).padStart(2, '0')}`, label: `${MESES_NOMES[mes]}/${ano}` };
+  }
+  if (gran === 'bimestre') {
+    const bi = Math.floor(mes / 2);
+    return { key: `${ano}-B${bi + 1}`, label: `${MESES_NOMES[bi * 2].slice(0, 3)}-${MESES_NOMES[bi * 2 + 1].slice(0, 3)}/${ano}` };
+  }
+  if (gran === 'trimestre') {
+    const tri = Math.floor(mes / 3);
+    return { key: `${ano}-Q${tri + 1}`, label: `${tri + 1}º Trimestre/${ano}` };
+  }
+  if (gran === 'semestre') {
+    const sem = mes < 6 ? 1 : 2;
+    return { key: `${ano}-S${sem}`, label: `${sem}º Semestre/${ano}` };
+  }
+  return { key: '', label: '' };
+}
+
 const SORT_OPTIONS = [
   { value:'ultimas_alteracoes',          label:'🔔 Últimas Alterações' },
   { value:'data_disputa',                label:'Data de Disputa' },
@@ -1758,6 +1796,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [selected, setSelected] = useState<any|null>(null);
   const [vistaRelatorio, setVistaRelatorio] = useState(false);
   const [modoRecentes, setModoRecentes] = useState(false);
+  const [agrupamentoPeriodo, setAgrupamentoPeriodo] = useState<''|'semana'|'mes'|'bimestre'|'trimestre'|'semestre'>('');
   const [recentesLicit, setRecentesLicit] = useState<any[]>([]);
   const [recentesLicitLoading, setRecentesLicitLoading] = useState(false);
 
@@ -1864,6 +1903,22 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       return da - db2;
     });
 
+  // Agrupamento por período (semana/mês/bimestre/trimestre/semestre) — só
+  // faz sentido sobre a lista normal, não sobre "Últimas Visualizadas".
+  const gruposPeriodo = (agrupamentoPeriodo && !modoRecentes) ? (() => {
+    const mapa: Record<string, { label: string; itens: any[] }> = {};
+    const semPrevisao: any[] = [];
+    lista.forEach((l: any) => {
+      if (!l.data_disputa) { semPrevisao.push(l); return; }
+      const { key, label } = bucketPeriodo(l.data_disputa, agrupamentoPeriodo);
+      if (!mapa[key]) mapa[key] = { label, itens: [] };
+      mapa[key].itens.push(l);
+    });
+    const grupos = Object.keys(mapa).sort().map(k => mapa[k]);
+    if (semPrevisao.length) grupos.push({ label: 'Sem previsão', itens: semPrevisao });
+    return grupos;
+  })() : null;
+
   const conts: Record<string,number> = {};
   licitacoes.forEach(l => { conts[l.status] = (conts[l.status]||0) + 1; });
 
@@ -1956,8 +2011,20 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           <input type="date" value={filtroPeriodoAte} onChange={e=>setFiltroPeriodoAte(e.target.value)}
             style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
         </div>
-        {(filtroTipo!=='todos'||filtroOperador||filtroPeriodoDe||filtroPeriodoAte) && (
-          <button onClick={() => { setFiltroTipo('todos'); setFiltroOperador(''); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); }}
+        <div>
+          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>AGRUPAR POR PERÍODO</div>
+          <select value={agrupamentoPeriodo} onChange={e=>setAgrupamentoPeriodo(e.target.value as any)}
+            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+            <option value="">Não agrupar</option>
+            <option value="semana">Semana</option>
+            <option value="mes">Mês</option>
+            <option value="bimestre">Bimestre</option>
+            <option value="trimestre">Trimestre</option>
+            <option value="semestre">Semestre</option>
+          </select>
+        </div>
+        {(filtroTipo!=='todos'||filtroOperador||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
+          <button onClick={() => { setFiltroTipo('todos'); setFiltroOperador(''); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}
             style={{ padding:'4px 10px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', fontSize:10, cursor:'pointer' }}>
             ✕ Limpar
           </button>
@@ -1976,6 +2043,17 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
               {modoRecentes ? 'Nenhuma licitação visualizada ainda.'
                 : filtroStatus !== 'todas' ? `Nenhuma licitação com status "${filtroStatus}".` : 'Nenhuma licitação cadastrada.'}
             </div>
+          ) : gruposPeriodo ? (
+            gruposPeriodo.map((g, i) => (
+              <div key={i} style={{ marginBottom:16 }}>
+                <div style={{ fontSize:11, fontWeight:800, color:'#374151', textTransform:'uppercase', letterSpacing:.4,
+                  padding:'4px 0', borderBottom:'2px solid #e2e8f0', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
+                  {g.label}
+                  <span style={{ background:'#1e3a5f', color:'#fff', borderRadius:10, padding:'1px 8px', fontSize:9, fontWeight:700 }}>{g.itens.length}</span>
+                </div>
+                {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={isUnread(l)} onClick={() => { setSelected(l); marcarLido(String(l.id)); }} />)}
+              </div>
+            ))
           ) : (
             lista.map(l => <LicitCard key={l.id} l={l} unread={isUnread(l)} onClick={() => { setSelected(l); marcarLido(String(l.id)); }} />)
           )}
