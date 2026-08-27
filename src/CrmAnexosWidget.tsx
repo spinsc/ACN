@@ -5,12 +5,17 @@ import { supabase } from './supabaseClient';
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
+// `accept` é só um rótulo pra UI (mostrado embaixo do botão) — o input
+// aceita qualquer tipo/versão de arquivo em todas as categorias, sem
+// restrição real nenhuma (usuário pediu explicitamente depois de um docx
+// mais novo ter "falhado" — a causa real era o limite de 10MB do bucket,
+// já corrigido pra 50MB; nunca houve de fato uma restrição de formato).
 const TIPOS = [
-  { id: 'edital',   label: '📋 Edital',          cor: '#7c3aed', accept: '.pdf,.doc,.docx,.xls,.xlsx' },
-  { id: 'proposta', label: '💼 Proposta',         cor: '#0891b2', accept: '.pdf,.doc,.docx,.xls,.xlsx' },
-  { id: 'ata',      label: '📝 Ata / Resultado',  cor: '#059669', accept: '.pdf,.doc,.docx' },
-  { id: 'contrato', label: '🤝 Contrato',         cor: '#b45309', accept: '.pdf,.doc,.docx' },
-  { id: 'foto',     label: '🖼️ Foto / Imagem',   cor: '#be185d', accept: '.png,.jpg,.jpeg,.webp,.gif' },
+  { id: 'edital',   label: '📋 Edital',          cor: '#7c3aed', accept: '*' },
+  { id: 'proposta', label: '💼 Proposta',         cor: '#0891b2', accept: '*' },
+  { id: 'ata',      label: '📝 Ata / Resultado',  cor: '#059669', accept: '*' },
+  { id: 'contrato', label: '🤝 Contrato',         cor: '#b45309', accept: '*' },
+  { id: 'foto',     label: '🖼️ Foto / Imagem',   cor: '#be185d', accept: '*' },
   { id: 'outro',    label: '📄 Outro',            cor: '#475569', accept: '*' },
 ];
 
@@ -59,17 +64,23 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
 
   const upload = async (files: FileList) => {
     setUploading(true);
+    const falhas: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const safe = sanitize(f.name);
       const path = `crm-anexos/${op.id}/${Date.now()}_${safe}`;
-      // Office files: force octet-stream para evitar restrições MIME do bucket
+      // Office files: força octet-stream (mais compatível com o bucket do
+      // que o content-type que o navegador reporta pra .doc/.docx/.xlsx/etc)
       const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
       const ct = officeExts.test(f.name) ? 'application/octet-stream' : f.type;
       const { data: up, error } = await supabase.storage
         .from('acn-media')
         .upload(path, f, { upsert: true, contentType: ct });
-      if (error || !up) { console.error('Upload erro:', error?.message); continue; }
+      if (error || !up) {
+        console.error('Upload erro:', error?.message);
+        falhas.push(`${f.name} — ${error?.message || 'erro desconhecido'}`);
+        continue;
+      }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       await supabase.from('crm_anexos').insert({
         oportunidade_id: op.id,
@@ -80,6 +91,9 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
         mime_type:       f.type,
         criado_por:      currentUser?.nome,
       });
+    }
+    if (falhas.length > 0) {
+      alert(`❌ Falha ao enviar ${falhas.length} arquivo${falhas.length>1?'s':''}:\n\n${falhas.join('\n')}`);
     }
     if (fileRef.current) fileRef.current.value = '';
     setUploading(false);
@@ -141,7 +155,7 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
             padding:'6px 14px', fontSize:10, fontWeight:700, opacity: uploading ? .6 : 1,
           }}>
             {uploading ? 'Enviando...' : `${tipoAtual.label} — Anexar`}
-            <input ref={fileRef} type="file" multiple accept={tipoAtual.accept}
+            <input ref={fileRef} type="file" multiple
               onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
               style={{ display:'none' }} disabled={uploading} />
           </label>

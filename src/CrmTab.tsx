@@ -266,6 +266,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [filtFat, setFiltFat]               = useState<'todos'|'pendente'|'faturado'>('todos');
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
   const [filtResp, setFiltResp]             = useState('');
+  const [filtTemp, setFiltTemp]             = useState<''|'frio'|'morno'|'quente'>('');
   // ── cards colapsados (Set de IDs) ──
   const [cardsExpandidos, setCardsExpandidos] = useState<Set<string>>(new Set());
   // ── modal Nova OP/OS ──
@@ -373,6 +374,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   );
   const opsFiltradas   = opsFunil.filter(o => {
     if (filtResp && o.responsavel_nome !== filtResp) return false;
+    if (filtTemp && o.temperatura !== filtTemp) return false;
     if (!busca) return true;
     return (
       o.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
@@ -981,7 +983,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (abrirUploadFile) {
       const ext = abrirUploadFile.name.split('.').pop();
       const path = `crm-docs/${modalAbrir.id}/${abrirTabDir}/${Date.now()}.${ext}`;
-      await supabase.storage.from('acn-media').upload(path, abrirUploadFile);
+      // Office files: força octet-stream, mesmo ajuste já usado em CrmAnexosWidget.tsx
+      const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
+      const ct = officeExts.test(abrirUploadFile.name) ? 'application/octet-stream' : abrirUploadFile.type;
+      const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
+      if (upErr) {
+        alert(`❌ Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);
+        setAbrirSalvandoDoc(false);
+        return;
+      }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
       url = pub.publicUrl;
       nome = abrirUploadFile.name;
@@ -1536,6 +1546,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               </span>
             );
           })()}
+          {/* Badge de temperatura do lead */}
+          {op.temperatura && (
+            <span title={`Temperatura: ${op.temperatura}`} style={{ fontSize:9, flexShrink:0, lineHeight:1 }}>
+              {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
+            </span>
+          )}
           <span style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, flex:1, cursor:'pointer' }}>
             {op.titulo}
           </span>
@@ -1599,6 +1615,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         {op.responsavel_nome && (
           <div style={{ fontSize:8, color:'#94a3b8', marginBottom:3 }}>👤 {op.responsavel_nome}</div>
         )}
+        {op.temperatura && (() => {
+          const cor = op.temperatura === 'quente' ? '#dc2626' : op.temperatura === 'morno' ? '#a855f7' : '#3b82f6';
+          const label = op.temperatura === 'quente' ? '🔥 Quente' : op.temperatura === 'morno' ? '🌤️ Morno' : '🧊 Frio';
+          return (
+            <span style={{ fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:8, display:'inline-block', marginBottom:3,
+              background:`${cor}18`, color:cor, border:`1px solid ${cor}50` }}>
+              {label}
+            </span>
+          );
+        })()}
         {op.prox_contato && (
           <div style={{
             fontSize:8, fontWeight:700, marginBottom:3,
@@ -2300,6 +2326,20 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         </select>
         {filtResp && (
           <button onClick={() => setFiltResp('')}
+            style={{ fontSize:9, padding:'2px 7px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer' }}>
+            ✕
+          </button>
+        )}
+        {/* Filtro por temperatura do lead */}
+        <select value={filtTemp} onChange={e => setFiltTemp(e.target.value as any)}
+          style={{ padding:'3px 7px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
+          <option value="">🌡️ Todas as temperaturas</option>
+          <option value="quente">🔥 Quente</option>
+          <option value="morno">🌤️ Morno</option>
+          <option value="frio">🧊 Frio</option>
+        </select>
+        {filtTemp && (
+          <button onClick={() => setFiltTemp('')}
             style={{ fontSize:9, padding:'2px 7px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer' }}>
             ✕
           </button>
