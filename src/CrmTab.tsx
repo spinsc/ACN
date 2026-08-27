@@ -3743,11 +3743,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             {/* ── DIREITO: abas de documentos ── */}
             <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden' }}>
 
-              {/* Tab bar */}
-              <div style={{ display:'flex', overflowX:'auto', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0, scrollbarWidth:'none' }}>
+              {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
+              <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
                 {TABS_CRM.map(t => (
                   <button key={t.key} onClick={() => setAbrirTabDir(t.key)}
-                    style={{ flex:'0 0 auto', padding:'9px 11px', border:'none',
+                    style={{ flex:'0 0 auto', padding:'8px 10px', border:'none',
                       borderBottom: abrirTabDir===t.key ? '2px solid #0369a1' : '2px solid transparent',
                       background:'none', fontWeight: abrirTabDir===t.key ? 700 : 400,
                       color: abrirTabDir===t.key ? '#0369a1' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>

@@ -1282,13 +1282,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         {/* ══ PAINEL DIREITO: Abas ══ */}
         <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden' }}>
 
-          {/* Tab bar */}
-          <div style={{ display:'flex', overflowX:'auto', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0, scrollbarWidth:'none' }}>
+          {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
+          <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
             {TABS_DIREITO.map(t => {
               const destacada = tabDir !== t.key && isAbaDestacada(t.key);
               return (
                 <button key={t.key} onClick={() => { setTabDir(t.key); marcarAbaLida(t.key); }}
-                  style={{ flex:'0 0 auto', padding:'9px 12px', border:'none',
+                  style={{ flex:'0 0 auto', padding:'8px 11px', border:'none',
                     borderBottom: tabDir===t.key ? '2px solid #2563eb' : '2px solid transparent',
                     background: destacada ? '#fef9c3' : 'none', fontWeight: (tabDir===t.key||destacada) ? 700 : 400,
                     color: tabDir===t.key ? '#2563eb' : destacada ? '#92400e' : '#6b7280', fontSize:10, cursor:'pointer', whiteSpace:'nowrap' }}>
