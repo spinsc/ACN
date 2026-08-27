@@ -794,12 +794,12 @@ export default function ComprasTab({ currentUser }) {
   };
 
   // Clique em "✅ Aprovar" numa cotação específica: valida as regras de sempre
-  // (≥3 cotações, prazo definido) e, se houver uma pendência de aprovação em
-  // aberto, confirma que ESTE usuário tem autorização pra resolvê-la antes
-  // de sequer abrir o prompt de senha.
+  // (prazo definido) e, se houver uma pendência de aprovação em aberto,
+  // confirma que ESTE usuário tem autorização pra resolvê-la antes de
+  // sequer abrir o prompt de senha. 3 cotações é o recomendado, não mais
+  // obrigatório — nem sempre dá pra conseguir 3 fornecedores pro mesmo item.
   const aprovarCotacaoComoVencedora = (cotacao: any) => {
     if (!modalCotacoes) return;
-    if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de fornecedores antes de aprovar.'); return; }
     const row = inline[modalCotacoes.id];
     if (!row?.prazo) { alert('Informe a previsão de recebimento antes de aprovar.'); return; }
     const pendencia = aprovacoesPedido.find(a => a.status === 'pendente');
@@ -1379,7 +1379,7 @@ export default function ComprasTab({ currentUser }) {
           <div className="modal-box" style={{maxWidth:640}}>
             <div className="modal-title">🏷️ Mesa de Cotações — {modalCotacoes.numero_pedido}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
-              {modalCotacoes.descricao_material} · mínimo de 3 cotações para confirmar a compra.
+              {modalCotacoes.descricao_material} · recomendado 3 cotações, mas pode aprovar com menos quando não houver 3 fornecedores disponíveis.
             </div>
 
             <div style={{marginBottom:14}}>
@@ -1523,7 +1523,7 @@ export default function ComprasTab({ currentUser }) {
               </button>
             </div>
 
-            {cotacoes.length >= 3 && (
+            {cotacoes.length >= 1 && (
               <div style={{fontSize:9,color:'#64748b',marginBottom:10}}>
                 Escreva na área livre de cada cotação e clique em "✅ Aprovar" na vencedora, acima.
               </div>

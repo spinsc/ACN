@@ -293,7 +293,8 @@ function FretesPanel({ currentUser }: any) {
 
   const confirmarFreteComVencedora = async () => {
     if (!modalFrete) return;
-    if (cotacoes.length < 3) { alert('Registre pelo menos 3 cotações de transportadoras antes de confirmar.'); return; }
+    // 3 cotações é o recomendado, não mais obrigatório — nem sempre dá pra
+    // conseguir 3 transportadoras pro mesmo frete.
     if (!vencedoraId) { alert('Selecione a cotação vencedora.'); return; }
     if (!justificativa.trim()) { alert('Informe a justificativa da cotação vencedora.'); return; }
     const vencedora = cotacoes.find(c => c.id === vencedoraId);
@@ -491,7 +492,7 @@ function FretesPanel({ currentUser }: any) {
             <div className="modal-title">🚚 Frete — {modalFrete.descricao}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
               {modalFrete.origem || '—'} → {modalFrete.destino || '—'}
-              {modalFrete.status==='Cotação' && ' · mínimo de 3 cotações para confirmar a transportadora.'}
+              {modalFrete.status==='Cotação' && ' · recomendado 3 cotações, mas pode confirmar com menos quando não houver 3 transportadoras disponíveis.'}
             </div>
 
             {modalFrete.status === 'Cotação' && (<>
@@ -566,7 +567,7 @@ function FretesPanel({ currentUser }: any) {
                 </button>
               </div>
 
-              {cotacoes.length >= 3 && (
+              {cotacoes.length >= 1 && (
                 <div style={{marginBottom:14}}>
                   <label className="acn-label">Justificativa da cotação vencedora *</label>
                   <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}}
