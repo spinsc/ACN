@@ -240,6 +240,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [resultVincularLicit, setResultVincularLicit] = useState<any[]>([]);
   // ── gate Faturado: bloqueia até a OP vinculada estar status_geral='Faturado' ──
   const [avisoFaturadoBloq, setAvisoFaturadoBloq] = useState<any|null>(null); // {op, oplsPendentes}
+  // ── editar temperatura do lead a qualquer momento (não só no gate Enviado) ──
+  const [modalEditarTemp, setModalEditarTemp] = useState<any|null>(null); // op
+  const [tempEditSel, setTempEditSel]         = useState<''|'frio'|'morno'|'quente'>('');
+  const [salvandoTempEdit, setSalvandoTempEdit] = useState(false);
   const [modalVenda, setModalVenda]         = useState<any|null>(null);
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
@@ -1376,6 +1380,25 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  // EDITAR TEMPERATURA A QUALQUER MOMENTO (fora do gate Enviado)
+  // ─────────────────────────────────────────────────────────────────────────
+  const confirmarEdicaoTemp = async () => {
+    if (!modalEditarTemp || !tempEditSel) return;
+    setSalvandoTempEdit(true);
+    await supabase.from('crm_oportunidades').update({
+      temperatura: tempEditSel, atualizado_em: new Date().toISOString(),
+    }).eq('id', modalEditarTemp.id);
+    await supabase.from('crm_historico').insert({
+      oportunidade_id: modalEditarTemp.id, tipo: 'observacao',
+      conteudo: `Temperatura alterada para: ${tempEditSel}`, usuario_nome: currentUser?.nome,
+    });
+    setSalvandoTempEdit(false);
+    setModalEditarTemp(null);
+    setTempEditSel('');
+    await load();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   // MOTIVO PERDA
   // ─────────────────────────────────────────────────────────────────────────
   const confirmarPerda = async () => {
@@ -1615,16 +1638,28 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         {op.responsavel_nome && (
           <div style={{ fontSize:8, color:'#94a3b8', marginBottom:3 }}>👤 {op.responsavel_nome}</div>
         )}
-        {op.temperatura && (() => {
-          const cor = op.temperatura === 'quente' ? '#dc2626' : op.temperatura === 'morno' ? '#a855f7' : '#3b82f6';
-          const label = op.temperatura === 'quente' ? '🔥 Quente' : op.temperatura === 'morno' ? '🌤️ Morno' : '🧊 Frio';
-          return (
-            <span style={{ fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:8, display:'inline-block', marginBottom:3,
-              background:`${cor}18`, color:cor, border:`1px solid ${cor}50` }}>
-              {label}
-            </span>
-          );
-        })()}
+        {op.funil === 'venda_direta' && (
+          <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:3 }}>
+            {op.temperatura ? (() => {
+              const cor = op.temperatura === 'quente' ? '#dc2626' : op.temperatura === 'morno' ? '#a855f7' : '#3b82f6';
+              const label = op.temperatura === 'quente' ? '🔥 Quente' : op.temperatura === 'morno' ? '🌤️ Morno' : '🧊 Frio';
+              return (
+                <span style={{ fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:8, display:'inline-block',
+                  background:`${cor}18`, color:cor, border:`1px solid ${cor}50` }}>
+                  {label}
+                </span>
+              );
+            })() : (
+              <span style={{ fontSize:8, color:'#94a3b8' }}>🌡️ sem temperatura</span>
+            )}
+            <button
+              onClick={e => { e.stopPropagation(); setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }}
+              title="Editar temperatura"
+              style={{ background:'none', border:'none', cursor:'pointer', fontSize:8, color:'#64748b', padding:0 }}>
+              ✏️
+            </button>
+          </div>
+        )}
         {op.prox_contato && (
           <div style={{
             fontSize:8, fontWeight:700, marginBottom:3,
@@ -2330,18 +2365,41 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             ✕
           </button>
         )}
-        {/* Filtro por temperatura do lead */}
-        <select value={filtTemp} onChange={e => setFiltTemp(e.target.value as any)}
-          style={{ padding:'3px 7px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
-          <option value="">🌡️ Todas as temperaturas</option>
-          <option value="quente">🔥 Quente</option>
-          <option value="morno">🌤️ Morno</option>
-          <option value="frio">🧊 Frio</option>
-        </select>
+        {/* Filtro por temperatura do lead — mini gráfico de barras clicável */}
+        {(() => {
+          const contTemp: Record<string, number> = { frio:0, morno:0, quente:0 };
+          opsFunil.forEach(o => { if (o.temperatura && contTemp[o.temperatura] !== undefined) contTemp[o.temperatura]++; });
+          const maxTemp = Math.max(1, contTemp.frio, contTemp.morno, contTemp.quente);
+          const BARRAS = [
+            { v:'frio',   label:'🧊', cor:'#3b82f6' },
+            { v:'morno',  label:'🌤️', cor:'#a855f7' },
+            { v:'quente', label:'🔥', cor:'#dc2626' },
+          ] as const;
+          return (
+            <div title="Clique numa barra pra filtrar por temperatura"
+              style={{ display:'flex', alignItems:'flex-end', gap:3, height:26, padding:'0 4px', border:'1px solid #e2e8f0', borderRadius:4, background:'#fafafa' }}>
+              {BARRAS.map(b => {
+                const n = contTemp[b.v];
+                const ativo = filtTemp === b.v;
+                const h = Math.max(3, Math.round((n / maxTemp) * 18));
+                return (
+                  <div key={b.v} onClick={() => setFiltTemp(ativo ? '' : b.v)}
+                    title={`${b.label} ${n}`}
+                    style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end',
+                      cursor:'pointer', width:16, height:20 }}>
+                    <div style={{ width:10, height:h, borderRadius:'2px 2px 0 0',
+                      background: ativo ? b.cor : `${b.cor}70`,
+                      border: ativo ? `1px solid ${b.cor}` : 'none' }} />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         {filtTemp && (
           <button onClick={() => setFiltTemp('')}
             style={{ fontSize:9, padding:'2px 7px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer' }}>
-            ✕
+            ✕ {filtTemp}
           </button>
         )}
         <span style={{ fontSize:9, color:'#94a3b8' }}>
@@ -2879,6 +2937,53 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               <button className="acn-btn" style={{ background:'#0369a1', fontSize:10, padding:'5px 12px', opacity: salvandoEnviado?.5:1 }}
                 onClick={confirmarEnviado} disabled={salvandoEnviado}>
                 {salvandoEnviado ? 'Salvando...' : '✅ Confirmar Envio'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL EDITAR TEMPERATURA (a qualquer momento) ══════ */}
+      {modalEditarTemp && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setModalEditarTemp(null); }}>
+          <div style={{ background:'white', borderRadius:8, width:'min(360px,96vw)', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
+            <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:4 }}>🌡️ Temperatura do Lead</div>
+            <div style={{ fontSize:11, color:'#475569', marginBottom:14 }}>
+              <strong>{modalEditarTemp.titulo}</strong>
+            </div>
+
+            <div style={{ position:'relative', height:10, borderRadius:5, marginBottom:6,
+              background:'linear-gradient(to right, #3b82f6, #a855f7, #dc2626)' }}>
+              {tempEditSel && (
+                <div style={{ position:'absolute', top:-3, width:16, height:16, borderRadius:'50%',
+                  background:'white', border:'3px solid #1e293b', boxShadow:'0 1px 4px #0005',
+                  left: tempEditSel==='frio' ? '0%' : tempEditSel==='morno' ? '50%' : '100%',
+                  transform:'translateX(-50%)', transition:'left .15s' }} />
+              )}
+            </div>
+            <div style={{ display:'flex', gap:6, marginBottom:16 }}>
+              {([
+                { v:'frio',   label:'🧊 Frio',   cor:'#3b82f6' },
+                { v:'morno',  label:'🌤️ Morno',  cor:'#a855f7' },
+                { v:'quente', label:'🔥 Quente',  cor:'#dc2626' },
+              ] as const).map(t => (
+                <button key={t.v} onClick={() => setTempEditSel(t.v)}
+                  style={{ flex:1, padding:'7px 4px', fontSize:10, fontWeight:700, borderRadius:6, cursor:'pointer',
+                    border: `2px solid ${tempEditSel===t.v ? t.cor : '#e2e8f0'}`,
+                    background: tempEditSel===t.v ? `${t.cor}18` : 'white',
+                    color: tempEditSel===t.v ? t.cor : '#94a3b8' }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'5px 12px' }}
+                onClick={() => setModalEditarTemp(null)} disabled={salvandoTempEdit}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#0369a1', fontSize:10, padding:'5px 12px', opacity: (salvandoTempEdit||!tempEditSel)?.5:1 }}
+                onClick={confirmarEdicaoTemp} disabled={salvandoTempEdit || !tempEditSel}>
+                {salvandoTempEdit ? 'Salvando...' : '✅ Salvar'}
               </button>
             </div>
           </div>
