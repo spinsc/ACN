@@ -908,3 +908,24 @@ ALTER TABLE public.licitacoes
   ADD COLUMN IF NOT EXISTS tipo_objeto text,
   ADD COLUMN IF NOT EXISTS julgamento text[],
   ADD COLUMN IF NOT EXISTS forma_disputa text;
+
+-- 2026-08-28 · Fase 5 reforma menu Licitações: migração de dados de
+-- licitacao_documentos das categorias antigas 'custos' e 'impugnacoes' (só
+-- as linhas cuja licitacao_id ainda existe — o restante eram órfãos de
+-- licitações já excluídas) para as novas categorias por sub-quadro dentro
+-- de "Arquivos de Licitação". Sem alteração de schema, só de dados.
+-- custos → edital_anexos (8 docs reais migrados)
+UPDATE licitacao_documentos d SET categoria='edital_anexos'
+WHERE d.categoria='custos' AND EXISTS (SELECT 1 FROM licitacoes l WHERE l.id::text = d.licitacao_id::text);
+-- impugnacoes → impugnacao / impugnacao_decisao / esclarecimento /
+-- esclarecimento_resposta, inferido do padrão de nome de arquivo já usado
+-- pelo usuário (12 docs reais migrados, licitação PE 90011.2026)
+UPDATE licitacao_documentos d SET categoria =
+  CASE
+    WHEN d.nome ILIKE '%resposta%esclarecimento%' THEN 'esclarecimento_resposta'
+    WHEN d.nome ILIKE '%esclarecimento%' THEN 'esclarecimento'
+    WHEN d.nome ILIKE '%impugna%' THEN 'impugnacao'
+    WHEN d.nome ILIKE '%resposta%' THEN 'impugnacao_decisao'
+    ELSE d.categoria
+  END
+WHERE d.categoria='impugnacoes' AND EXISTS (SELECT 1 FROM licitacoes l WHERE l.id::text = d.licitacao_id::text);

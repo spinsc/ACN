@@ -146,17 +146,28 @@ const SORT_OPTIONS = [
 const TABS_DIREITO = [
   { key:'formacao_precos', label:'💲 Formação de Preços' },
   { key:'processo',     label:'📂 Arquivos de Licitação' },
-  { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
-  { key:'custos',       label:'💰 Custos e Docs Técnicos' },
-  { key:'docs_enviados',label:'📤 Docs Enviados ao Processo' },
+  { key:'docs_enviados',label:'📤 Documentos Enviados ao Órgão' },
   { key:'contratos',    label:'📋 Fase de Contrato' },
-  { key:'atestado',     label:'🏅 Atestado' },
-  { key:'informacoes',  label:'ℹ️ Informações Importantes' },
+  { key:'atestado',     label:'🏅 Atestados' },
+];
+
+// Sub-quadros dentro de "Arquivos de Licitação" — cada um é uma categoria
+// própria de licitacao_documentos, com upload/lista/Área Livre independentes
+// (mesmo padrão do bloco genérico "DEMAIS ABAS", só que fixo por quadro em
+// vez de seguir a aba selecionada). Migração de dados reais já feita: os
+// documentos antigos de "impugnacoes" (só a licitação PE 90011.2026 restava
+// viva) foram reclassificados por nome de arquivo, e os de "custos" viraram
+// edital_anexos.
+const SUBQUADROS_ARQUIVOS: { categoria: string; label: string }[][] = [
+  [{ categoria:'edital_anexos', label:'📄 Edital / Anexos' }],
+  [{ categoria:'impugnacao', label:'⚠️ Impugnações' }, { categoria:'impugnacao_decisao', label:'⚖️ Decisão' }],
+  [{ categoria:'esclarecimento', label:'❓ Esclarecimento' }, { categoria:'esclarecimento_resposta', label:'💬 Respostas' }],
+  [{ categoria:'recurso', label:'📮 Recursos' }, { categoria:'recurso_defesa', label:'🛡️ Defesa' }, { categoria:'recurso_decisao', label:'⚖️ Decisão' }],
 ];
 
 // Abas cujas alterações (novo documento/anexo) ficam destacadas na barra de
 // abas até o usuário clicar nela.
-const TABS_DESTACAVEIS = ['processo','impugnacoes','custos','docs_enviados','contratos','atestado','informacoes'];
+const TABS_DESTACAVEIS = ['processo','docs_enviados','contratos','atestado'];
 
 const LICIT_VAZIO = {
   numero:'', nome_projeto:'', objeto_principal:'', orgao:'',
@@ -669,6 +680,118 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
         .licit-area-livre td, .licit-area-livre th {
           border:1px solid #d1d5db; padding:4px 6px; font-size:10px; }
       `}</style>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-QUADRO DE DOCUMENTOS — usado dentro de "Arquivos de Licitação", um por
+// categoria fixa (edital_anexos, impugnacao, impugnacao_decisao, etc). Autônomo
+// (upload/lista/exclusão/Área Livre próprios) porque vários quadros ficam
+// visíveis ao mesmo tempo na tela, ao contrário do bloco genérico de
+// documentos que segue a aba única selecionada (tabDir).
+// ─────────────────────────────────────────────────────────────────────────────
+function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeExcluir, areasLivres, onAreasLivresChange }: any) {
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadDesc, setUploadDesc] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const uploadRef = useRef<any>(null);
+
+  const fetchDocs = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('licitacao_documentos').select('*')
+      .eq('licitacao_id', licitacaoId).eq('categoria', categoria)
+      .order('criado_em', { ascending: false });
+    setDocs(data || []);
+    setLoading(false);
+  }, [licitacaoId, categoria]);
+
+  useEffect(() => { fetchDocs(); }, [fetchDocs]);
+
+  // Recarrega se um documento excluído deste quadro foi restaurado via
+  // Ctrl+Z (UndoToast) — o evento não sabe a categoria, então sempre
+  // recarrega quando a tabela bate; é uma query leve.
+  useEffect(() => {
+    const onRestaurado = (e: any) => { if (e.detail?.tabela === 'licitacao_documentos') fetchDocs(); };
+    window.addEventListener('acn:undo-restaurado', onRestaurado);
+    return () => window.removeEventListener('acn:undo-restaurado', onRestaurado);
+  }, [fetchDocs]);
+
+  const salvar = async () => {
+    if (uploadFiles.length === 0 && !uploadDesc.trim()) return;
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const autor = currentUser?.nome || currentUser?.email || 'Usuário';
+    try {
+      if (uploadFiles.length === 0 && uploadDesc.trim()) {
+        await supabase.from('licitacao_documentos').insert([{
+          licitacao_id: licitacaoId, categoria,
+          nome: uploadDesc.slice(0,80) || 'Documento',
+          url: null, conteudo: uploadDesc.trim(),
+          criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
+        }]);
+      } else {
+        for (const file of uploadFiles) {
+          const url = await uploadAnexo(file, licitacaoId, categoria);
+          await supabase.from('licitacao_documentos').insert([{
+            licitacao_id: licitacaoId, categoria, nome: file.name, url,
+            conteudo: uploadDesc.trim() || null,
+            criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
+          }]);
+        }
+      }
+      setUploadFiles([]);
+      setUploadDesc('');
+      if (uploadRef.current) uploadRef.current.value = '';
+      await fetchDocs();
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const excluir = async (d: any) => {
+    if (!podeExcluir) { alert('Você não tem permissão para excluir arquivos.'); return; }
+    if (!confirm('Remover este registro?')) return;
+    await supabase.from('licitacao_documentos').delete().eq('id', d.id);
+    registrarExclusaoParaUndo('licitacao_documentos', d, currentUser?.nome || currentUser?.email, label);
+    fetchDocs();
+  };
+
+  return (
+    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:10, display:'flex', flexDirection:'column', gap:8, minWidth:0, flex:'1 1 260px' }}>
+      <div style={{ fontWeight:700, fontSize:10, color:'#374151' }}>{label}</div>
+      <input type="file" ref={uploadRef} multiple
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar"
+        onChange={e => setUploadFiles(Array.from(e.target.files||[]))}
+        style={{ width:'100%', fontSize:9 }} />
+      {uploadFiles.length > 0 && <div style={{ fontSize:9, color:'#0369a1' }}>📎 {uploadFiles.length} arquivo(s)</div>}
+      <input type="text" placeholder="Descrição / legenda (opcional)" value={uploadDesc} onChange={e=>setUploadDesc(e.target.value)}
+        style={{ width:'100%', padding:'4px 7px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+      <button onClick={salvar} disabled={salvando||(uploadFiles.length===0&&!uploadDesc.trim())}
+        style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'5px 10px', fontSize:10, fontWeight:700, cursor:'pointer', alignSelf:'flex-start', opacity:(uploadFiles.length>0||uploadDesc.trim())?1:.5 }}>
+        {salvando ? 'Salvando...' : '+ Adicionar'}
+      </button>
+      {loading && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center' }}>Carregando...</div>}
+      {!loading && docs.length === 0 && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center', padding:8 }}>Nenhum documento.</div>}
+      {docs.map(d => (
+        <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:6, padding:'6px 8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:4 }}>
+          <div style={{ flex:1, minWidth:0 }}>
+            {d.url ? (
+              <a href={d.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb', fontSize:10, fontWeight:600, wordBreak:'break-all' }}>📎 {d.nome}</a>
+            ) : (
+              <div style={{ fontSize:10, color:'#374151', fontWeight:600 }}>{d.nome}</div>
+            )}
+            {d.conteudo && <div style={{ fontSize:9, color:'#64748b', marginTop:2, whiteSpace:'pre-wrap' }}><Linkify text={d.conteudo} /></div>}
+            <div style={{ fontSize:8, color:'#9ca3af', marginTop:2 }}>👤 {d.criado_por_nome||'—'} · 🕒 {fmtDT(d.criado_em)}</div>
+          </div>
+          {podeExcluir && (
+            <button onClick={()=>excluir(d)} style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:11, padding:'0 2px' }}>✕</button>
+          )}
+        </div>
+      ))}
+      <AreaLivre licitacaoId={licitacaoId} tabKey={`processo:${categoria}`} areasLivres={areasLivres} onAreasLivresChange={onAreasLivresChange} />
     </div>
   );
 }
@@ -1535,8 +1658,24 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               />
             )}
 
-            {/* ── ABAS DE DOCUMENTOS ── */}
-            {tabDir !== 'formacao_precos' && (
+            {/* ── ARQUIVOS DE LICITAÇÃO — sub-quadros por categoria fixa ── */}
+            {tabDir === 'processo' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {SUBQUADROS_ARQUIVOS.map((linha, i) => (
+                  <div key={i} style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                    {linha.map(sq => (
+                      <SubQuadroDocumentos key={sq.categoria}
+                        licitacaoId={licit.id} categoria={sq.categoria} label={sq.label}
+                        currentUser={currentUser} podeExcluir={podeExcluirAnexos}
+                        areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── ABAS DE DOCUMENTOS (demais abas — Docs Enviados, Fase Contrato, Atestados) ── */}
+            {tabDir !== 'formacao_precos' && tabDir !== 'processo' && (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {/* Upload */}
                 <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>
