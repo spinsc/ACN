@@ -138,7 +138,6 @@ const SORT_OPTIONS = [
   { value:'data_disputa',                label:'Data de Disputa' },
   { value:'data_limite_proposta',        label:'Limite de Proposta' },
   { value:'data_limite_analise_tecnica', label:'Limite Análise Técnica' },
-  { value:'prioridade',                  label:'Prioridade' },
   { value:'orgao',                       label:'Órgão' },
   { value:'status',                      label:'Status' },
   { value:'criado_em',                   label:'Mais Recentes' },
@@ -168,7 +167,13 @@ const LICIT_VAZIO = {
   data_limite_analise_tecnica:'',
   analista_nome:'', analista_email:'',
   coordenador_nome:'', coordenador_email:'',
+  // Novos campos (substituem Objeto Principal/Prioridade no formulário —
+  // as colunas antigas continuam existindo no banco por compatibilidade
+  // com registros já cadastrados, só pararam de aparecer aqui).
+  tipo_objeto:'', julgamento:[] as string[], forma_disputa:'',
 };
+const JULGAMENTO_OPCOES = ['Item','Lote','Global','Grupo'];
+const FORMA_DISPUTA_OPCOES = ['Aberto e Fechado','Aberto','Randômico'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -1020,13 +1025,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     const numero = `PC-L${numRef}`;
     const obs = [
       `Pedido de Compra Direta — ${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} Vencida`,
-      `Número: ${licit.numero || '—'}`, `Projeto: ${licit.nome_projeto || '—'}`,
-      `Órgão/Cliente: ${licit.orgao || '—'}`, `Objeto: ${licit.objeto_principal || '—'}`,
+      `Nome do Projeto: ${licit.numero || '—'}`, `Nome do Órgão: ${licit.nome_projeto || '—'}`,
+      `Portal: ${licit.orgao || '—'}`, `Tipo: ${licit.tipo_objeto || licit.objeto_principal || '—'}`,
       `Solicitado por: ${currentUser?.nome || '—'}`, `Data: ${new Date().toLocaleString('pt-BR')}`,
     ].join('\n');
     const { error } = await supabase.from('pcp_pedidos_compra').insert([{
       numero_pedido: numero, opl: licit.numero || null,
-      descricao_material: licit.objeto_principal || licit.nome_projeto || '—',
+      descricao_material: licit.numero || licit.tipo_objeto || licit.objeto_principal || '—',
       quantidade: 1, status_compra: 'Pendente', observacoes_compra: obs, data_criacao: agora,
     }]);
     setEmitindoPedido(false);
@@ -1036,8 +1041,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   const prepararOpComercial = () => {
     const prefill = {
-      cliente_nome: licit.orgao || '',
-      modelo: licit.nome_projeto || '',
+      cliente_nome: licit.nome_projeto || '',
+      modelo: licit.numero || '',
       observacoes_comercial: `${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} vencida: ${licit.numero} — ${licit.nome_projeto}`,
     };
     localStorage.setItem('acn_nova_op_prefill', JSON.stringify(prefill));
@@ -1076,27 +1081,6 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     if (!anterior) return;
     if (!confirm(`Voltar de "${s}" para "${anterior}"?`)) return;
     mudarStatus(anterior);
-  };
-
-  const FInput = ({ label, field, type='text' }: { label:string; field:string; type?:string }) => {
-    if (type === 'money') {
-      return (
-        <div>
-          <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-          <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(formEdit[field])}
-            onChange={e=>setF(field, maskMoedaBR(e.target.value).raw)}
-            style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-        </div>
-      );
-    }
-    const value = type === 'datetime-local' ? toDatetimeLocalValue(formEdit[field]) : (formEdit[field]||'');
-    return (
-      <div>
-        <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-        <input type={type} value={value} onChange={e=>setF(field,e.target.value)}
-          style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-      </div>
-    );
   };
 
   // ── Minimizado ────────────────────────────────────────────────────────────
@@ -1152,7 +1136,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
           {/* Marcadores */}
           <div style={{ padding:'6px 12px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', flexShrink:0 }}>
-            <span style={{ background:PRIO_COR[formEdit.prioridade]||'#374151', color:'#fff', borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:700 }}>★ {formEdit.prioridade}</span>
+            {formEdit.forma_disputa && (
+              <span style={{ background:'#374151', color:'#fff', borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:700 }}>⚖️ {formEdit.forma_disputa}</span>
+            )}
             {MARCADORES.map(m => (
               <button key={m} onClick={() => toggleMarcador(m)}
                 style={{ border:`1.5px solid ${marcadores.includes(m)?'#dc2626':'#d1d5db'}`,
@@ -1184,7 +1170,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              <FInput label="Número" field="numero" />
+              <FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} />
               <div>
                 <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação</label>
                 <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)}
@@ -1194,21 +1180,58 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
-            <FInput label="Nome do Projeto" field="nome_projeto" />
-            <FInput label="Órgão" field="orgao" />
-            <FInput label="Objeto Principal" field="objeto_principal" />
-            <FInput label="Valor Estimado (R$)" field="valor_estimado" type="money" />
+            <FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} />
+            <FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} />
 
             <div>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Prioridade</label>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Tipo</label>
               <div style={{ display:'flex', gap:6 }}>
-                {PRIORIDADES.map(p => (
-                  <button key={p} onClick={() => setF('prioridade', p)}
-                    style={{ flex:1, padding:'4px', border:`1.5px solid ${formEdit.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
-                      background: formEdit.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
-                      color: formEdit.prioridade===p ? PRIO_COR[p] : '#374151',
+                {['Registro de Preços','Contrato'].map(opt => (
+                  <button key={opt} onClick={() => setF('tipo_objeto', opt)}
+                    style={{ flex:1, padding:'5px 4px', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4,
+                      border:`1.5px solid ${formEdit.tipo_objeto===opt?'#2563eb':'#d1d5db'}`,
+                      background: formEdit.tipo_objeto===opt ? '#dbeafe' : '#fff',
+                      color: formEdit.tipo_objeto===opt ? '#1d4ed8' : '#374151' }}>
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              <FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" />
+              <div>
+                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Julgamento</label>
+                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                  {JULGAMENTO_OPCOES.map(opt => {
+                    const ativos: string[] = formEdit.julgamento || [];
+                    const sel = ativos.includes(opt);
+                    return (
+                      <button key={opt} onClick={() => setFormEdit((f:any) => {
+                          const at = f.julgamento || [];
+                          return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
+                        })}
+                        style={{ padding:'4px 8px', fontSize:9, fontWeight:700, cursor:'pointer', borderRadius:4,
+                          border:`1.5px solid ${sel?'#2563eb':'#d1d5db'}`,
+                          background: sel ? '#dbeafe' : '#fff', color: sel ? '#1d4ed8' : '#374151' }}>
+                        {sel?'✓ ':''}{opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Forma de Disputa</label>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {FORMA_DISPUTA_OPCOES.map(opt => (
+                  <button key={opt} onClick={() => setF('forma_disputa', opt)}
+                    style={{ flex:'1 0 30%', padding:'4px', border:`1.5px solid ${formEdit.forma_disputa===opt?'#2563eb':'#d1d5db'}`,
+                      background: formEdit.forma_disputa===opt ? '#dbeafe' : '#fff',
+                      color: formEdit.forma_disputa===opt ? '#1d4ed8' : '#374151',
                       borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                    {p}
+                    {opt}
                   </button>
                 ))}
               </div>
@@ -1218,25 +1241,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>PRAZOS</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <FInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" type="datetime-local" />
-                <FInput label="Limite Proposta" field="data_limite_proposta" type="datetime-local" />
-                <FInput label="Data/Hora de Disputa" field="data_disputa" type="datetime-local" />
-                <FInput label="Horário da Sessão" field="horario_sessao" type="time" />
-                <FInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" type="datetime-local" />
-              </div>
-            </div>
-
-            {/* OPERADORES */}
-            <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>OPERADORES</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <FInput label="Analista de Licitações" field="analista_nome" />
-                <FInput label="E-mail Analista" field="analista_email" type="email" />
-                <FInput label="Analista Técnico" field="coordenador_nome" />
-                <FInput label="E-mail Analista Técnico" field="coordenador_email" type="email" />
-              </div>
-              <div style={{ marginTop:8 }}>
-                <FInput label="Operador Principal" field="operador" />
+                <FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" />
+                <FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" />
+                <FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" />
+                <FInput label="Horário da Sessão" value={formEdit.horario_sessao} onChange={v=>setF('horario_sessao',v)} type="time" />
+                <FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" />
               </div>
             </div>
 
@@ -1603,8 +1612,33 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODAL NOVA LICITAÇÃO
+// Campo de edição de LicitacaoModal — definido FORA do componente (mesmo
+// bug/fix que ModalNovaInput logo abaixo já resolve: se ficasse dentro de
+// LicitacaoModal, uma nova função seria criada a cada re-render/tecla
+// digitada, fazendo o React desmontar e remontar o <input> e tirar o foco).
 // ─────────────────────────────────────────────────────────────────────────────
+function FInput({ label, value, onChange, type='text' }: { label:string; value:any; onChange:(v:string)=>void; type?:string }) {
+  if (type === 'money') {
+    return (
+      <div>
+        <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
+        <input type="text" inputMode="decimal" placeholder="0,00" value={fmtMoedaBR(value)}
+          onChange={e=>onChange(maskMoedaBR(e.target.value).raw)}
+          style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+      </div>
+    );
+  }
+  const v = type === 'datetime-local' ? toDatetimeLocalValue(value) : (value||'');
+  return (
+    <div>
+      <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
+      <input type={type} value={v} onChange={e=>onChange(e.target.value)}
+        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+    </div>
+  );
+}
+
+// MODAL NOVA LICITAÇÃO
 // Definido FORA de ModalNova: se ficasse dentro, uma nova função seria criada a
 // cada re-render (cada tecla digitada), fazendo o React desmontar e remontar o
 // <input>, o que tira o foco do campo a cada caractere digitado.
@@ -1629,12 +1663,7 @@ function ModalNovaInput({ label, field, value, onChange, type='text', required=f
 }
 
 function ModalNova({ currentUser, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    ...LICIT_VAZIO,
-    analista_nome: currentUser?.nome||'',
-    analista_email: currentUser?.email||'',
-    operador: currentUser?.nome||'',
-  });
+  const [form, setForm] = useState({ ...LICIT_VAZIO });
   const [salvando, setSalvando] = useState(false);
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
@@ -1695,7 +1724,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <ModalNovaInput label="Número da Licitação" field="numero" value={form.numero} onChange={set} required />
+            <ModalNovaInput label="Nome do Projeto" field="numero" value={form.numero} onChange={set} required />
             <div>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação *</label>
               <select value={form.classificacao} onChange={e=>set('classificacao',e.target.value)}
@@ -1707,22 +1736,58 @@ function ModalNova({ currentUser, onClose, onSaved }) {
             </div>
           </div>
 
-          <ModalNovaInput label="Nome do Projeto" field="nome_projeto" value={form.nome_projeto} onChange={set} required />
-          <ModalNovaInput label="Órgão" field="orgao" value={form.orgao} onChange={set} required />
-          <ModalNovaInput label="Objeto Principal" field="objeto_principal" value={form.objeto_principal} onChange={set} />
-          <ModalNovaInput label="Valor Estimado (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="money" />
-          <ModalNovaInput label="Operador" field="operador" value={form.operador} onChange={set} />
+          <ModalNovaInput label="Nome completo do Órgão" field="nome_projeto" value={form.nome_projeto} onChange={set} required />
+          <ModalNovaInput label="Portal" field="orgao" value={form.orgao} onChange={set} required />
 
           <div>
-            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Prioridade</label>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Tipo</label>
             <div style={{ display:'flex', gap:6 }}>
-              {PRIORIDADES.map(p => (
-                <button key={p} onClick={() => set('prioridade', p)}
-                  style={{ flex:1, padding:'5px', border:`1.5px solid ${form.prioridade===p?PRIO_COR[p]:'#d1d5db'}`,
-                    background: form.prioridade===p ? PRIO_COR[p]+'18' : '#fff',
-                    color: form.prioridade===p ? PRIO_COR[p] : '#374151',
+              {['Registro de Preços','Contrato'].map(opt => (
+                <button key={opt} onClick={() => set('tipo_objeto', opt)}
+                  style={{ flex:1, padding:'5px 4px', fontSize:11, fontWeight:700, cursor:'pointer', borderRadius:4,
+                    border:`1.5px solid ${form.tipo_objeto===opt?'#2563eb':'#d1d5db'}`,
+                    background: form.tipo_objeto===opt ? '#dbeafe' : '#fff',
+                    color: form.tipo_objeto===opt ? '#1d4ed8' : '#374151' }}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <ModalNovaInput label="Valor Global Previsto (R$) — opcional" field="valor_estimado" value={form.valor_estimado} onChange={set} type="money" />
+            <div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Julgamento</label>
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                {JULGAMENTO_OPCOES.map(opt => {
+                  const ativos: string[] = form.julgamento || [];
+                  const sel = ativos.includes(opt);
+                  return (
+                    <button key={opt} onClick={() => setForm((f:any) => {
+                        const at = f.julgamento || [];
+                        return { ...f, julgamento: at.includes(opt) ? at.filter((x:string)=>x!==opt) : [...at, opt] };
+                      })}
+                      style={{ padding:'4px 8px', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4,
+                        border:`1.5px solid ${sel?'#2563eb':'#d1d5db'}`,
+                        background: sel ? '#dbeafe' : '#fff', color: sel ? '#1d4ed8' : '#374151' }}>
+                      {sel?'✓ ':''}{opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Forma de Disputa</label>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {FORMA_DISPUTA_OPCOES.map(opt => (
+                <button key={opt} onClick={() => set('forma_disputa', opt)}
+                  style={{ flex:'1 0 30%', padding:'5px', border:`1.5px solid ${form.forma_disputa===opt?'#2563eb':'#d1d5db'}`,
+                    background: form.forma_disputa===opt ? '#dbeafe' : '#fff',
+                    color: form.forma_disputa===opt ? '#1d4ed8' : '#374151',
                     borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                  {p}
+                  {opt}
                 </button>
               ))}
             </div>
@@ -1736,16 +1801,6 @@ function ModalNova({ currentUser, onClose, onSaved }) {
               <ModalNovaInput label="Data/Hora de Disputa" field="data_disputa" value={form.data_disputa} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Horário da Sessão" field="horario_sessao" value={form.horario_sessao} onChange={set} type="time" />
               <ModalNovaInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" value={form.data_limite_analise_tecnica} onChange={set} type="datetime-local" />
-            </div>
-          </div>
-
-          <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:8 }}>OPERADORES</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-              <ModalNovaInput label="Analista de Licitações" field="analista_nome" value={form.analista_nome} onChange={set} />
-              <ModalNovaInput label="E-mail do Analista" field="analista_email" value={form.analista_email} onChange={set} type="email" />
-              <ModalNovaInput label="Analista Técnico" field="coordenador_nome" value={form.coordenador_nome} onChange={set} />
-              <ModalNovaInput label="E-mail do Analista Técnico" field="coordenador_email" value={form.coordenador_email} onChange={set} type="email" />
             </div>
           </div>
         </div>
@@ -1785,7 +1840,9 @@ function LicitCard({ l, onClick, unread = false }) {
           <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginBottom:3 }}>
             {unread && <UnreadBadge show />}
             <span style={{ background:STATUS_COR[l.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{l.status}</span>
-            <span style={{ background:PRIO_COR[l.prioridade]+'18', color:PRIO_COR[l.prioridade], border:`1px solid ${PRIO_COR[l.prioridade]}40`, borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>{l.prioridade}</span>
+            {l.forma_disputa && (
+              <span style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>⚖️ {l.forma_disputa}</span>
+            )}
             <span style={{ background:'#f1f5f9', color:'#475569', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:600 }}>{l.classificacao}</span>
             {l.faturamento_empresa && l.faturamento_empresa !== 'ACN' && (
               <span style={{ background:'#ede9fe', color:'#6d28d9', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:600 }}>{l.faturamento_empresa}</span>
@@ -1796,7 +1853,7 @@ function LicitCard({ l, onClick, unread = false }) {
           </div>
           <div style={{ fontSize:12, fontWeight:700, color:'#1f2937', marginBottom:2 }}>{l.numero} — {l.nome_projeto}</div>
           <div style={{ fontSize:10, color:'#6b7280' }}>{l.orgao}</div>
-          {l.objeto_principal && <div style={{ fontSize:10, color:'#9ca3af', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.objeto_principal}</div>}
+          {(l.tipo_objeto || l.objeto_principal) && <div style={{ fontSize:10, color:'#9ca3af', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.tipo_objeto || l.objeto_principal}</div>}
         </div>
       </div>
       <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -1916,7 +1973,6 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
                     <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Nº</th>
                     <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Projeto / Órgão</th>
                     <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Tipo</th>
-                    <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Operador</th>
                     <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'right', color:'#64748b' }}>Valor</th>
                     <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Disputa</th>
                     <th style={{ padding:'6px 10px', fontWeight:700, textAlign:'left', color:'#64748b' }}>Status</th>
@@ -1934,7 +1990,6 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
                         <div style={{ fontSize:9, color:'#94a3b8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.orgao || ''}</div>
                       </td>
                       <td style={{ padding:'6px 10px', color:'#475569' }}>{l.classificacao || '—'}</td>
-                      <td style={{ padding:'6px 10px', color:'#475569' }}>{l.operador || l.analista_nome || '—'}</td>
                       <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color:'#0f766e' }}>
                         {fmtValRel(l.valor_proposta || l.valor_estimado)}
                       </td>
@@ -1973,7 +2028,6 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
-  const [filtroOperador, setFiltroOperador] = useState<string>('');
   const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
   const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
   const [filtroPeriodoDe, setFiltroPeriodoDe] = useState('');
@@ -2074,7 +2128,6 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const lista = listaRecentes || licitacoes
     .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
-    .filter(l => !filtroOperador || (l.operador||l.analista_nome||'').toLowerCase().includes(filtroOperador.toLowerCase()))
     .filter(l => filtroAnaliseSetor === 'todas' || (analisesPendentesPorLicit[l.id]||[]).includes(filtroAnaliseSetor))
     .filter(l => {
       if (!filtroPeriodoDe && !filtroPeriodoAte) return true;
@@ -2099,7 +2152,6 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
         const db2 = b.atualizado_em ? new Date(b.atualizado_em).getTime() : 0;
         return db2 - da;
       }
-      if (sortBy === 'prioridade') { const ord = { 'Alta':0,'Média':1,'Baixa':2 }; return (ord[a.prioridade]??1) - (ord[b.prioridade]??1); }
       if (sortBy === 'status') return a.status.localeCompare(b.status);
       if (sortBy === 'orgao') return (a.orgao||'').localeCompare(b.orgao||'');
       const da = a[sortBy] ? new Date(a[sortBy]).getTime() : Infinity;
@@ -2125,8 +2177,6 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   const conts: Record<string,number> = {};
   licitacoes.forEach(l => { conts[l.status] = (conts[l.status]||0) + 1; });
-
-  const operadoresUnicos = [...new Set(licitacoes.map(l => l.operador || l.analista_nome).filter(Boolean))];
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f4f6f9' }}>
@@ -2210,14 +2260,6 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           </select>
         </div>
         <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>👤 OPERADOR</div>
-          <select value={filtroOperador} onChange={e=>setFiltroOperador(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-            <option value="">Todos</option>
-            {operadoresUnicos.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
-        <div>
           <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>DISPUTA DE</div>
           <input type="date" value={filtroPeriodoDe} onChange={e=>setFiltroPeriodoDe(e.target.value)}
             style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
@@ -2239,8 +2281,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
             <option value="semestre">Semestre</option>
           </select>
         </div>
-        {(filtroTipo!=='todos'||filtroOperador||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
-          <button onClick={() => { setFiltroTipo('todos'); setFiltroOperador(''); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}
+        {(filtroTipo!=='todos'||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
+          <button onClick={() => { setFiltroTipo('todos'); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}
             style={{ padding:'4px 10px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', fontSize:10, cursor:'pointer' }}>
             ✕ Limpar
           </button>

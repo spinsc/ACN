@@ -898,3 +898,13 @@ ALTER TABLE pcp_fretes
   ADD COLUMN IF NOT EXISTS vinculo_tipo text,   -- null | 'op_os' | 'licitacao'
   ADD COLUMN IF NOT EXISTS vinculo_id uuid,
   ADD COLUMN IF NOT EXISTS vinculo_desc text;
+
+-- 2026-08-28 · Fase 4 reforma cadastro de Licitação: tipo_objeto (Registro de
+-- Preços/Contrato, substitui "Objeto Principal" no formulário), julgamento
+-- (array, Item/Lote/Global/Grupo, ao lado do Valor), forma_disputa
+-- (substitui "Prioridade"). Colunas antigas objeto_principal/prioridade
+-- mantidas por compatibilidade com registros já cadastrados.
+ALTER TABLE public.licitacoes
+  ADD COLUMN IF NOT EXISTS tipo_objeto text,
+  ADD COLUMN IF NOT EXISTS julgamento text[],
+  ADD COLUMN IF NOT EXISTS forma_disputa text;
