@@ -283,6 +283,62 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
   );
 }
 
+// ─── IMPORTAR FORMAÇÃO EXISTENTE (modo embutido) ───────────────────────────────
+// Diferente de "Carregar Modelo" (que só copia valores pra um registro novo),
+// isto vincula de verdade o registro escolhido a este processo — o registro
+// continua existindo em "Formação de Preços", agora com o vínculo atualizado.
+function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, onImportar, onClose }) {
+  const listaFiltrada = modelos.filter((m: any) => {
+    if (vinculo.tipo === 'crm' && m.crm_oportunidade_id === vinculo.id) return false;
+    if (vinculo.tipo === 'licitacao' && m.licitacao_id === vinculo.id) return false;
+    return true;
+  });
+  return (
+    <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background:'#fff', borderRadius:8, width:'min(560px,95vw)', maxHeight:'70vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
+        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13 }}>
+          📥 Importar Formação Existente
+        </div>
+        <div style={{ padding:'8px 16px', fontSize:9, color:'#64748b', borderBottom:'1px solid #f1f5f9' }}>
+          Vincula a formação escolhida a este processo — o registro continua existindo em "Formação de Preços", agora com o vínculo atualizado.
+        </div>
+        <div style={{ flex:1, overflowY:'auto', padding:10 }}>
+          {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
+          {!carregando && listaFiltrada.length === 0 && (
+            <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhuma formação disponível.</div>
+          )}
+          {!carregando && listaFiltrada.map((m: any) => {
+            const vinculoAtual = m.crm_oportunidade_id ? vinculoLabels['crm:' + m.crm_oportunidade_id]
+                               : m.licitacao_id ? vinculoLabels['lic:' + m.licitacao_id] : null;
+            return (
+              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
+                border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:11 }}>{m.nome}</div>
+                  <div style={{ fontSize:9, color:'#64748b' }}>
+                    {m.tipo} · {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                  </div>
+                  {vinculoAtual && (
+                    <div style={{ fontSize:9, color:'#b45309', marginTop:2 }}>
+                      🔗 já vinculado a: {vinculoAtual}
+                    </div>
+                  )}
+                </div>
+                <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9, padding:'3px 10px' }}
+                  onClick={() => onImportar(m)}>Importar e Vincular</button>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0' }}>
+          <button className="acn-btn" style={{ background:'#94a3b8', float:'right' }} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Aceita tanto "15000" quanto o formato brasileiro "15.000,50" — sem isso,
 // parseFloat("15.000") vira 15 (trunca no ponto de milhar) e o resultado
 // sai errado por um fator de 1000, sem nenhum aviso ao usuário.
@@ -1071,6 +1127,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   const [modelos, setModelos]         = useState([]);
   const [modalSalvar, setModalSalvar]     = useState(false);
   const [modalCarregar, setModalCarregar] = useState(false);
+  const [modalImportar, setModalImportar] = useState(false);
+  const [vinculoLabels, setVinculoLabels] = useState<Record<string, string>>({});
   const [salvando, setSalvando]       = useState(false);
   const [carregando, setCarregando]   = useState(false);
   const [nomeCotacao, setNomeCotacao] = useState('');
@@ -1099,6 +1157,49 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   }, [vinculo?.tipo, vinculo?.id]);
 
   useEffect(() => { carregarFormacoesVinculo(); }, [carregarFormacoesVinculo]);
+
+  // ── Nomes dos processos já vinculados às formações (badge no modal Importar) ──
+  const carregarVinculoLabels = useCallback(async (lista: any[]) => {
+    const crmIds = [...new Set(lista.filter(m => m.crm_oportunidade_id).map(m => m.crm_oportunidade_id))];
+    const licIds = [...new Set(lista.filter(m => m.licitacao_id).map(m => m.licitacao_id))];
+    const map: Record<string, string> = {};
+    if (crmIds.length) {
+      const { data } = await supabase.from('crm_oportunidades').select('id,titulo').in('id', crmIds);
+      (data || []).forEach((o: any) => { map['crm:' + o.id] = o.titulo || 'Oportunidade CRM'; });
+    }
+    if (licIds.length) {
+      const { data } = await supabase.from('licitacoes').select('id,numero,nome_projeto').in('id', licIds);
+      (data || []).forEach((l: any) => { map['lic:' + l.id] = `${l.numero || ''} ${l.nome_projeto || ''}`.trim(); });
+    }
+    setVinculoLabels(map);
+  }, []);
+
+  useEffect(() => { if (modalImportar) carregarVinculoLabels(modelos); }, [modalImportar, modelos, carregarVinculoLabels]);
+
+  // Vincula de verdade o registro escolhido a este processo (não copia — atualiza
+  // crm_oportunidade_id/licitacao_id do registro original). Se já estiver vinculado
+  // a outro processo, pede confirmação antes de transferir o vínculo.
+  const importarEVincular = async (m: any) => {
+    if (!vinculo?.id) return;
+    const jaVinculadoOutro = vinculo.tipo === 'crm'
+      ? (m.licitacao_id || (m.crm_oportunidade_id && m.crm_oportunidade_id !== vinculo.id))
+      : (m.crm_oportunidade_id || (m.licitacao_id && m.licitacao_id !== vinculo.id));
+    if (jaVinculadoOutro) {
+      const label = m.crm_oportunidade_id ? vinculoLabels['crm:' + m.crm_oportunidade_id]
+                  : m.licitacao_id ? vinculoLabels['lic:' + m.licitacao_id] : null;
+      if (!confirm(`Esta formação já está vinculada a "${label || 'outro processo'}". Transferir o vínculo para este processo?`)) return;
+    }
+    const payload: any = vinculo.tipo === 'licitacao'
+      ? { licitacao_id: vinculo.id, crm_oportunidade_id: null }
+      : { crm_oportunidade_id: vinculo.id, licitacao_id: null };
+    const { error } = await supabase.from('cotacoes_precos').update(payload).eq('id', m.id);
+    if (error) { alert('Erro ao vincular: ' + error.message); return; }
+    await carregarFormacoesVinculo();
+    carregarModelo({ ...m, ...payload });
+    setEditandoId(m.id);
+    setModalImportar(false);
+    carregarModelos();
+  };
 
   // Se só existe 1 formação vinculada a este processo, já carrega ela
   // direto pra edição — evita o usuário ter que clicar no seletor.
@@ -1481,6 +1582,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
                       background:'#f8fafc', color:'#64748b' }}>
                     + Nova formação
                   </button>
+                  <button onClick={() => { setModalImportar(true); carregarModelos(); }}
+                    style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px dashed #7c3aed',
+                      background:'#faf5ff', color:'#7c3aed' }}>
+                    📥 Importar Formação
+                  </button>
                 </>
               )}
             </div>
@@ -1789,6 +1895,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               onCarregar={carregarModelo}
               onExcluir={excluirModelo}
               onClose={() => setModalCarregar(false)}
+            />
+          )}
+
+          {modalImportar && vinculo && (
+            <ModalImportar
+              modelos={modelos}
+              carregando={carregando}
+              vinculo={vinculo}
+              vinculoLabels={vinculoLabels}
+              onImportar={importarEVincular}
+              onClose={() => setModalImportar(false)}
             />
           )}
         </div>
