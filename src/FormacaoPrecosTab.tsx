@@ -287,12 +287,10 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
 // Diferente de "Carregar Modelo" (que só copia valores pra um registro novo),
 // isto vincula de verdade o registro escolhido a este processo — o registro
 // continua existindo em "Formação de Preços", agora com o vínculo atualizado.
-function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, onImportar, onClose }) {
-  const listaFiltrada = modelos.filter((m: any) => {
-    if (vinculo.tipo === 'crm' && m.crm_oportunidade_id === vinculo.id) return false;
-    if (vinculo.tipo === 'licitacao' && m.licitacao_id === vinculo.id) return false;
-    return true;
-  });
+function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPorCotacao, onImportar, onClose }) {
+  const jaVinculadaAqui = (m: any) =>
+    (vinculosPorCotacao[m.id] || []).some((v:any) => v.tipo === vinculo.tipo && v.processo_id === vinculo.id);
+  const listaFiltrada = modelos.filter((m: any) => !jaVinculadaAqui(m));
   return (
     <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -309,8 +307,9 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, onImportar
             <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhuma formação disponível.</div>
           )}
           {!carregando && listaFiltrada.map((m: any) => {
-            const vinculoAtual = m.crm_oportunidade_id ? vinculoLabels['crm:' + m.crm_oportunidade_id]
-                               : m.licitacao_id ? vinculoLabels['lic:' + m.licitacao_id] : null;
+            const vinculosAtuais = (vinculosPorCotacao[m.id] || [])
+              .map((v:any) => vinculoLabels[(v.tipo === 'crm' ? 'crm:' : 'lic:') + v.processo_id])
+              .filter(Boolean);
             return (
               <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
                 border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6 }}>
@@ -319,14 +318,14 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, onImportar
                   <div style={{ fontSize:9, color:'#64748b' }}>
                     {m.tipo} · {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
                   </div>
-                  {vinculoAtual && (
+                  {vinculosAtuais.length > 0 && (
                     <div style={{ fontSize:9, color:'#b45309', marginTop:2 }}>
-                      🔗 já vinculado a: {vinculoAtual}
+                      🔗 já atende: {vinculosAtuais.join(' · ')}
                     </div>
                   )}
                 </div>
                 <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9, padding:'3px 10px' }}
-                  onClick={() => onImportar(m)}>Importar e Vincular</button>
+                  onClick={() => onImportar(m)}>+ Vincular também aqui</button>
               </div>
             );
           })}
@@ -1150,18 +1149,34 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   const carregarFormacoesVinculo = useCallback(async () => {
     if (!vinculo?.id) return;
     setCarregandoVinculo(true);
-    const col = vinculo.tipo === 'licitacao' ? 'licitacao_id' : 'crm_oportunidade_id';
-    const { data } = await supabase.from('cotacoes_precos').select('*').eq(col, vinculo.id).order('criado_em', { ascending: false });
+    // N:N via tabela de junção — uma formação pode atender vários processos.
+    const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+      .select('cotacao_id').eq('tipo', vinculo.tipo).eq('processo_id', vinculo.id);
+    const ids = [...new Set((vinc || []).map((v: any) => v.cotacao_id))];
+    if (!ids.length) { setFormacoesVinculo([]); setCarregandoVinculo(false); return; }
+    const { data } = await supabase.from('cotacoes_precos').select('*').in('id', ids).order('criado_em', { ascending: false });
     setFormacoesVinculo(data || []);
     setCarregandoVinculo(false);
   }, [vinculo?.tipo, vinculo?.id]);
 
   useEffect(() => { carregarFormacoesVinculo(); }, [carregarFormacoesVinculo]);
 
-  // ── Nomes dos processos já vinculados às formações (badge no modal Importar) ──
+  // ── Vínculos N:N de todas as formações (badges no modal Importar) ──
+  // vinculosPorCotacao: cotacao_id -> [{tipo, processo_id}] (todos os
+  // processos que aquela formação atende); vinculoLabels: "crm:id"/"lic:id"
+  // -> nome legível do processo.
+  const [vinculosPorCotacao, setVinculosPorCotacao] = useState<Record<string, { tipo:string; processo_id:string }[]>>({});
   const carregarVinculoLabels = useCallback(async (lista: any[]) => {
-    const crmIds = [...new Set(lista.filter(m => m.crm_oportunidade_id).map(m => m.crm_oportunidade_id))];
-    const licIds = [...new Set(lista.filter(m => m.licitacao_id).map(m => m.licitacao_id))];
+    const ids = lista.map(m => m.id);
+    if (!ids.length) { setVinculosPorCotacao({}); setVinculoLabels({}); return; }
+    const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+      .select('cotacao_id, tipo, processo_id').in('cotacao_id', ids);
+    const porCotacao: Record<string, { tipo:string; processo_id:string }[]> = {};
+    (vinc || []).forEach((v: any) => { (porCotacao[v.cotacao_id] ||= []).push({ tipo: v.tipo, processo_id: v.processo_id }); });
+    setVinculosPorCotacao(porCotacao);
+
+    const crmIds = [...new Set((vinc || []).filter((v:any) => v.tipo === 'crm').map((v:any) => v.processo_id))];
+    const licIds = [...new Set((vinc || []).filter((v:any) => v.tipo === 'licitacao').map((v:any) => v.processo_id))];
     const map: Record<string, string> = {};
     if (crmIds.length) {
       const { data } = await supabase.from('crm_oportunidades').select('id,titulo').in('id', crmIds);
@@ -1176,26 +1191,18 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
 
   useEffect(() => { if (modalImportar) carregarVinculoLabels(modelos); }, [modalImportar, modelos, carregarVinculoLabels]);
 
-  // Vincula de verdade o registro escolhido a este processo (não copia — atualiza
-  // crm_oportunidade_id/licitacao_id do registro original). Se já estiver vinculado
-  // a outro processo, pede confirmação antes de transferir o vínculo.
+  // Vincula de verdade o registro escolhido a este processo (não copia) —
+  // INSERT na tabela de junção, sem apagar nenhum vínculo existente: uma
+  // formação pode atender vários processos (CRM e/ou Licitação) ao mesmo
+  // tempo. Clicar "Importar" de novo no mesmo processo é inofensivo
+  // (unique constraint com onConflict:'do nothing').
   const importarEVincular = async (m: any) => {
     if (!vinculo?.id) return;
-    const jaVinculadoOutro = vinculo.tipo === 'crm'
-      ? (m.licitacao_id || (m.crm_oportunidade_id && m.crm_oportunidade_id !== vinculo.id))
-      : (m.crm_oportunidade_id || (m.licitacao_id && m.licitacao_id !== vinculo.id));
-    if (jaVinculadoOutro) {
-      const label = m.crm_oportunidade_id ? vinculoLabels['crm:' + m.crm_oportunidade_id]
-                  : m.licitacao_id ? vinculoLabels['lic:' + m.licitacao_id] : null;
-      if (!confirm(`Esta formação já está vinculada a "${label || 'outro processo'}". Transferir o vínculo para este processo?`)) return;
-    }
-    const payload: any = vinculo.tipo === 'licitacao'
-      ? { licitacao_id: vinculo.id, crm_oportunidade_id: null }
-      : { crm_oportunidade_id: vinculo.id, licitacao_id: null };
-    const { error } = await supabase.from('cotacoes_precos').update(payload).eq('id', m.id);
+    const { error } = await supabase.from('cotacoes_precos_vinculos')
+      .upsert([{ cotacao_id: m.id, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
     if (error) { alert('Erro ao vincular: ' + error.message); return; }
     await carregarFormacoesVinculo();
-    carregarModelo({ ...m, ...payload });
+    carregarModelo(m);
     setEditandoId(m.id);
     setModalImportar(false);
     carregarModelos();
@@ -1299,16 +1306,25 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
       opl_numero:          oplVinculada?.opl  || null,
       desconto_maximo_pct: descontoMaximoPct  || 0,
     };
-    // Modo embutido — grava o vínculo com o processo automaticamente.
+    // Modo embutido — grava o vínculo com o processo automaticamente (coluna
+    // escalar mantida por compatibilidade com CotacoesTab.tsx; o vínculo N:N
+    // de verdade vive na tabela de junção, inserida abaixo só ao criar).
     if (vinculo?.tipo === 'crm')       payload.crm_oportunidade_id = vinculo.id;
     if (vinculo?.tipo === 'licitacao') payload.licitacao_id        = vinculo.id;
-    let error;
+    let error, novaCotacaoId: string | null = null;
     if (editandoId) {
       // Atualiza a cotação existente
       ({ error } = await supabase.from('cotacoes_precos').update(payload).eq('id', editandoId));
     } else {
       // Cria nova cotação
-      ({ error } = await supabase.from('cotacoes_precos').insert([{ ...payload, criado_por: currentUser?.nome || 'Sistema' }]));
+      const { data, error: insErr } = await supabase.from('cotacoes_precos')
+        .insert([{ ...payload, criado_por: currentUser?.nome || 'Sistema' }]).select('id').single();
+      error = insErr;
+      novaCotacaoId = data?.id || null;
+    }
+    if (!error && novaCotacaoId && vinculo?.id) {
+      await supabase.from('cotacoes_precos_vinculos')
+        .upsert([{ cotacao_id: novaCotacaoId, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
     }
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
@@ -1904,6 +1920,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               carregando={carregando}
               vinculo={vinculo}
               vinculoLabels={vinculoLabels}
+              vinculosPorCotacao={vinculosPorCotacao}
               onImportar={importarEVincular}
               onClose={() => setModalImportar(false)}
             />

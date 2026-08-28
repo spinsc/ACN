@@ -929,3 +929,26 @@ UPDATE licitacao_documentos d SET categoria =
     ELSE d.categoria
   END
 WHERE d.categoria='impugnacoes' AND EXISTS (SELECT 1 FROM licitacoes l WHERE l.id::text = d.licitacao_id::text);
+
+-- 2026-08-28 · Fase 6 — vínculo N:N de Formação de Preços. Tabela de junção
+-- permite uma formação atender vários processos (CRM/Licitação) ao mesmo
+-- tempo, sem apagar vínculos existentes ao adicionar um novo. Colunas
+-- escalares antigas (crm_oportunidade_id/licitacao_id em cotacoes_precos)
+-- mantidas por compatibilidade com CotacoesTab.tsx. Nenhum dado real
+-- existente pra migrar (0 de 3 formações tinham algum vínculo até agora).
+CREATE TABLE IF NOT EXISTS cotacoes_precos_vinculos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cotacao_id uuid NOT NULL REFERENCES cotacoes_precos(id) ON DELETE CASCADE,
+  tipo text NOT NULL CHECK (tipo IN ('crm','licitacao')),
+  processo_id uuid NOT NULL,
+  criado_em timestamptz DEFAULT now(),
+  UNIQUE(cotacao_id, tipo, processo_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cotacoes_precos_vinculos_processo ON cotacoes_precos_vinculos(tipo, processo_id);
+ALTER TABLE cotacoes_precos_vinculos DISABLE ROW LEVEL SECURITY;
+INSERT INTO cotacoes_precos_vinculos (cotacao_id, tipo, processo_id)
+SELECT id, 'crm', crm_oportunidade_id FROM cotacoes_precos WHERE crm_oportunidade_id IS NOT NULL
+ON CONFLICT DO NOTHING;
+INSERT INTO cotacoes_precos_vinculos (cotacao_id, tipo, processo_id)
+SELECT id, 'licitacao', licitacao_id FROM cotacoes_precos WHERE licitacao_id IS NOT NULL
+ON CONFLICT DO NOTHING;
