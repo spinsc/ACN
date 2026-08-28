@@ -29,6 +29,75 @@ const TIPO_CONTATO_OPCOES = ['Pregoeiro','Secretário','Supervisor','Diretor','C
 const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const fmtDataCurta = (d: Date) => d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UNDO (Ctrl+Z) DE EXCLUSÕES — reaproveita a tabela `lixeira` já usada pelo
+// painel Admin → "♻️ Lixeira (24h)" e por excluirLicitacao. Cada exclusão
+// dentro de Licitações grava o registro completo na lixeira ANTES de
+// deletar (mesmo padrão de excluirLicitacao), e dispara este evento — um
+// toast global escuta e oferece "Ctrl+Z" por alguns segundos pra restaurar.
+// ─────────────────────────────────────────────────────────────────────────────
+async function registrarExclusaoParaUndo(tabela: string, dados: any, deletadoPor: string, label: string) {
+  const { data } = await supabase.from('lixeira').insert([{
+    tabela, registro_id: dados.id, dados, deletado_por: deletadoPor,
+  }]).select('id').single();
+  if (data?.id) {
+    window.dispatchEvent(new CustomEvent('acn:undo-disponivel', { detail: { lixeiraId: data.id, label } }));
+  }
+}
+
+function UndoToast({ onRestaurado }: { onRestaurado?: () => void }) {
+  const [pendente, setPendente] = useState<{ lixeiraId: string; label: string } | null>(null);
+  const timerRef = useRef<any>(null);
+
+  useEffect(() => {
+    const onDisponivel = (e: any) => {
+      setPendente(e.detail);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setPendente(null), 10000);
+    };
+    window.addEventListener('acn:undo-disponivel', onDisponivel);
+    return () => { window.removeEventListener('acn:undo-disponivel', onDisponivel); if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+
+  const desfazer = useCallback(async () => {
+    if (!pendente) return;
+    const { data: item } = await supabase.from('lixeira').select('*').eq('id', pendente.lixeiraId).maybeSingle();
+    if (!item || item.restaurado) { setPendente(null); return; }
+    const { error } = await supabase.from(item.tabela).insert([item.dados]);
+    if (error) { alert('Não foi possível desfazer: ' + error.message); return; }
+    await supabase.from('lixeira').update({ restaurado: true, restaurado_em: new Date().toISOString() }).eq('id', item.id);
+    setPendente(null);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    onRestaurado?.();
+    // Avisa quem mais mantém uma lista dessa tabela em memória (ex: contatos
+    // e docs dentro do modal aberto) a recarregar — o registro voltou ao
+    // banco, mas o estado local de cada lista só sabe disso ouvindo aqui.
+    window.dispatchEvent(new CustomEvent('acn:undo-restaurado', { detail: { tabela: item.tabela } }));
+  }, [pendente, onRestaurado]);
+
+  useEffect(() => {
+    if (!pendente) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); desfazer(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pendente, desfazer]);
+
+  if (!pendente) return null;
+  return (
+    <div style={{ position:'fixed', bottom:20, left:'50%', transform:'translateX(-50%)', zIndex:5000,
+      background:'#1e293b', color:'#fff', borderRadius:8, padding:'10px 16px',
+      display:'flex', alignItems:'center', gap:12, boxShadow:'0 4px 16px #0004', fontSize:11 }}>
+      <span>🗑️ {pendente.label} excluído(a).</span>
+      <button onClick={desfazer}
+        style={{ background:'#f59e0b', color:'#1e293b', border:'none', borderRadius:4, padding:'4px 12px', fontWeight:800, fontSize:10, cursor:'pointer' }}>
+        ↩ Desfazer (Ctrl+Z)
+      </button>
+    </div>
+  );
+}
+
 // Agrupamento por período — calcula, a partir de data_disputa, a chave (pra
 // ordenar cronologicamente) e o rótulo (pra mostrar no cabeçalho da seção)
 // do bloco de semana/mês/bimestre/trimestre/semestre a que a data pertence.
@@ -219,6 +288,13 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   useEffect(() => { fetchContatos(); }, [fetchContatos]);
 
+  // Recarrega se um contato excluído foi restaurado via Ctrl+Z (UndoToast).
+  useEffect(() => {
+    const onRestaurado = (e: any) => { if (e.detail?.tabela === 'licitacao_contatos') fetchContatos(); };
+    window.addEventListener('acn:undo-restaurado', onRestaurado);
+    return () => window.removeEventListener('acn:undo-restaurado', onRestaurado);
+  }, [fetchContatos]);
+
   const setF = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const addTelefone = () => setForm((f: any) => ({ ...f, telefones: [...(f.telefones||[]), { numero:'', tipo:'Celular' }] }));
@@ -260,7 +336,9 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   const excluir = async (id: string) => {
     if (!confirm('Remover este contato?')) return;
+    const { data: reg } = await supabase.from('licitacao_contatos').select('*').eq('id', id).maybeSingle();
     await supabase.from('licitacao_contatos').delete().eq('id', id);
+    if (reg) registrarExclusaoParaUndo('licitacao_contatos', reg, currentUser?.nome || currentUser?.email, `Contato "${reg.nome||'—'}"`);
     fetchContatos();
   };
 
@@ -515,10 +593,13 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
         <div style={{ flex:1 }} />
         {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
         {salvo && !salvando && <span style={{ fontSize:9, color:'#16a34a' }}>✓ Salvo</span>}
-        <button onClick={salvarAgora} disabled={salvando} title="Salvar agora"
-          style={{ background:'#0369a1', color:'#fff', border:'none', borderRadius:3,
-            padding:'2px 10px', fontSize:9, fontWeight:700, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
-          💾 Salvar
+        {/* Discreto de propósito — já autosalva 1.5s após parar de digitar; o
+            botão em destaque da tela é "💾 Salvar Alterações" (registro
+            inteiro), este aqui só força salvar antes desse intervalo. */}
+        <button onClick={salvarAgora} disabled={salvando} title="Forçar salvar agora (já autosalva sozinho)"
+          style={{ background:'#f1f5f9', color:'#64748b', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 8px', fontSize:9, fontWeight:600, cursor:'pointer', opacity: salvando ? .6 : 1 }}>
+          💾
         </button>
       </div>
       {/* Editor */}
@@ -661,6 +742,16 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   }, [licit.id]);
 
   useEffect(() => { fetchAndamento(); }, [fetchAndamento]);
+
+  // Recarrega docs/andamento se um registro excluído foi restaurado via
+  // Ctrl+Z (UndoToast) — inclui licitacao_anexos (formato legado).
+  useEffect(() => {
+    const onRestaurado = (e: any) => {
+      if (['licitacao_documentos','licitacao_anexos'].includes(e.detail?.tabela)) { fetchDocs(); fetchAndamento(); }
+    };
+    window.addEventListener('acn:undo-restaurado', onRestaurado);
+    return () => window.removeEventListener('acn:undo-restaurado', onRestaurado);
+  }, [fetchDocs, fetchAndamento]);
 
   // ── Fetch alterações por aba (destaque na barra de abas) ────────────────────
   const fetchAbaAlteracoes = useCallback(async () => {
@@ -814,7 +905,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const excluirAndamentoDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
     if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
     if (!confirm('Remover este registro?')) return;
+    const { data: reg } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
     await supabase.from(tabela).delete().eq('id', id);
+    if (reg) registrarExclusaoParaUndo(tabela, reg, currentUser?.nome || currentUser?.email, 'Registro de andamento');
     fetchAndamento();
   };
 
@@ -860,7 +953,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const excluirDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
     if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
     if (!confirm('Remover este registro?')) return;
+    const { data: reg } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
     await supabase.from(tabela).delete().eq('id', id);
+    if (reg) registrarExclusaoParaUndo(tabela, reg, currentUser?.nome || currentUser?.email, 'Documento/anexo');
     fetchDocs();
     fetchAbaAlteracoes();
   };
@@ -926,6 +1021,23 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     return null;
   };
   const btnProximo = botaoProximoStatus();
+
+  // ── Voltar fase ──────────────────────────────────────────────────────────
+  // Um registro finalizado pode precisar voltar (ex: Finalizada → Vencida,
+  // Vencida → Em Andamento). Licitações não usa Kanban/gates de estágio como
+  // o CRM — é status simples por botão, sem automação de banco amarrada à
+  // troca, então retroceder é seguro (só grava mais uma entrada no histórico).
+  const statusAnterior = (): string | null => {
+    if (s === 'Em Andamento') return 'Aberta';
+    if (['Vencida','Finalizada','Perdida','Descartada','Suspenso'].includes(s)) return 'Em Andamento';
+    return null;
+  };
+  const voltarFase = () => {
+    const anterior = statusAnterior();
+    if (!anterior) return;
+    if (!confirm(`Voltar de "${s}" para "${anterior}"?`)) return;
+    mudarStatus(anterior);
+  };
 
   const FInput = ({ label, field, type='text' }: { label:string; field:string; type?:string }) => {
     if (type === 'money') {
@@ -1164,8 +1276,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                               rows={3} style={{ fontSize:11 }} />
                             <div style={{ display:'flex', gap:6, marginTop:6 }}>
                               <button onClick={salvarEdicaoAndamento}
-                                style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'4px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                                💾 Salvar
+                                style={{ background:'#475569', color:'#fff', border:'none', borderRadius:4, padding:'4px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
+                                💾 Salvar Nota
                               </button>
                               <button onClick={() => { setEditandoDocId(null); setEditandoDocTexto(''); }}
                                 style={{ padding:'4px 10px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:10, cursor:'pointer' }}>
@@ -1279,8 +1391,12 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
             {!showAcoesVencida && !confirmStatus && (
               <>
+                {/* Botão principal da tela — único em evidência para salvar o
+                    registro. Os demais "salvar" (Área Livre, nota de andamento,
+                    contato) ficam discretos de propósito: cada um grava um
+                    sub-recurso à parte (Área Livre já autosalva sozinha). */}
                 <button onClick={salvarForm} disabled={salvandoForm}
-                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'8px', fontWeight:700, fontSize:12, cursor:'pointer', opacity:salvandoForm?.6:1 }}>
+                  style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'10px', fontWeight:800, fontSize:13, cursor:'pointer', opacity:salvandoForm?.6:1, boxShadow:'0 2px 6px #16a34a40' }}>
                   {salvandoForm ? 'Salvando...' : '💾 Salvar Alterações'}
                 </button>
 
@@ -1300,6 +1416,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                       </button>
                     ))}
                   </div>
+                )}
+
+                {statusAnterior() && (
+                  <button onClick={voltarFase} disabled={salvando}
+                    title={`Voltar para "${statusAnterior()}"`}
+                    style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:4,
+                      padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
+                    ◀ Voltar Fase (para {statusAnterior()})
+                  </button>
                 )}
 
                 <div style={{ display:'flex', gap:6 }}>
@@ -1864,14 +1989,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   useEffect(() => { if (modoRecentes) carregarRecentesLicit(); }, [modoRecentes, carregarRecentesLicit]);
 
   const excluirLicitacao = async (l: any) => {
-    if (!confirm(`Excluir "${l.numero} — ${l.nome_projeto}"?\n\nEsta ação não pode ser desfeita.`)) return;
-    await supabase.from('lixeira').insert([{
-      tabela: 'licitacoes',
-      registro_id: l.id,
-      dados: l,
-      deletado_por: currentUser?.nome || currentUser?.email,
-    }]).then(() => {});
+    if (!confirm(`Excluir "${l.numero} — ${l.nome_projeto}"?`)) return;
     await supabase.from('licitacoes').delete().eq('id', l.id);
+    registrarExclusaoParaUndo('licitacoes', l, currentUser?.nome || currentUser?.email, `Licitação "${l.numero}"`);
     setSelected(null);
     fetchLicit();
   };
@@ -1971,6 +2091,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f4f6f9' }}>
+      <UndoToast onRestaurado={fetchLicit} />
 
       {/* HEADER */}
       <div style={{ background:'#1e3a5f', color:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
