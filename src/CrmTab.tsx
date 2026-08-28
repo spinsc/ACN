@@ -1850,43 +1850,72 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const totalPipeline      = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const totalPipelineACN   = opsAtivas.reduce((s, o) => s + receitaEfetiva(o), 0);
     const totalPerdido       = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const totalGanho         = opsGanhas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    // "Total e por Vendedor" reaproveita o filtro Responsável já existente na
+    // barra de ferramentas (filtResp) — opsFiltradas já vem filtrado por ele.
+    const recorteLabel = filtResp || 'Total (todos os vendedores)';
 
     return (
-      <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
-        <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-          <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>ABERTO</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsAtivas.length}</div>
-        </div>
-        <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-          <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
-        </div>
-        <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-          <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PERDIDAS</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{opsPerdidas.length}</div>
-          {podeVer && totalPerdido > 0 && (
-            <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
-          )}
-        </div>
-        <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-          <div style={{ fontSize:8, color:'#92400e', fontWeight:700, marginBottom:2 }}>🚫 DESISTÊNCIAS</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#92400e', lineHeight:1 }}>{opsDesistencias.length}</div>
-        </div>
-        <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-          <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 GANHAS</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
-        </div>
-        {podeVer && (
-          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
-            <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>PIPELINE — TOTAL</div>
-            <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{fmtMoeda(totalPipeline)}</div>
+      <div style={{ marginBottom:14 }}>
+        <div style={{ display:'flex', gap:10, marginBottom:10, flexWrap:'wrap' }}>
+          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
+            <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>🤝 PIPELINE EM NEGOCIAÇÃO</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsAtivas.length}</div>
+            {podeVer && totalPipeline > 0 && (
+              <div style={{ fontSize:9, color:'#3b82f6', marginTop:2 }}>{fmtMoeda(totalPipeline)}</div>
+            )}
           </div>
-        )}
-        {podeVer && totalPipelineACN !== totalPipeline && (
-          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:140 }}>
-            <div style={{ fontSize:8, color:'#1d4ed8', fontWeight:700, marginBottom:2 }}>PIPELINE — RECEITA ACN</div>
-            <div style={{ fontSize:15, fontWeight:800, color:'#1d4ed8', lineHeight:1 }}>{fmtMoeda(totalPipelineACN)}</div>
-            <div style={{ fontSize:7, color:'#64748b', marginTop:2 }}>apenas valor ACN/Detech em processos com parceiro</div>
+          <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
+          </div>
+          <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
+            <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PIPELINE PERDIDAS</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{opsPerdidas.length}</div>
+            {podeVer && totalPerdido > 0 && (
+              <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
+            )}
+          </div>
+          <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
+            <div style={{ fontSize:8, color:'#92400e', fontWeight:700, marginBottom:2 }}>🚫 DESISTÊNCIAS</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#92400e', lineHeight:1 }}>{opsDesistencias.length}</div>
+          </div>
+          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
+            <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 PIPELINE GANHAS</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
+            {podeVer && totalGanho > 0 && (
+              <div style={{ fontSize:9, color:'#16a34a', marginTop:2 }}>{fmtMoeda(totalGanho)}</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── PIPELINE — VALORES (Negociação / Vencidas / Perdidas) ── */}
+        {podeVer && (
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 14px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:6, marginBottom:6 }}>
+              <div style={{ fontSize:9, fontWeight:800, color:'#1e293b' }}>💰 PIPELINE — VALORES</div>
+              <div style={{ fontSize:8, color:'#64748b' }}>
+                recorte: <strong style={{ color:'#1e293b' }}>{recorteLabel}</strong>
+                {' · '}filtre por vendedor no seletor "👤 Responsável" acima
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:18, flexWrap:'wrap' }}>
+              <div>
+                <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700 }}>NEGOCIAÇÃO</div>
+                <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1.4 }}>{fmtMoeda(totalPipeline)}</div>
+                {totalPipelineACN !== totalPipeline && (
+                  <div style={{ fontSize:8, color:'#1d4ed8' }}>Receita ACN: {fmtMoeda(totalPipelineACN)}</div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#16a34a', fontWeight:700 }}>VENCIDAS</div>
+                <div style={{ fontSize:15, fontWeight:800, color:'#16a34a', lineHeight:1.4 }}>{fmtMoeda(totalGanho)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#dc2626', fontWeight:700 }}>PERDIDAS</div>
+                <div style={{ fontSize:15, fontWeight:800, color:'#dc2626', lineHeight:1.4 }}>{fmtMoeda(totalPerdido)}</div>
+              </div>
+            </div>
           </div>
         )}
       </div>
