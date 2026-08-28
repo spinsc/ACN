@@ -830,3 +830,71 @@ CREATE INDEX IF NOT EXISTS idx_visualizacoes_recentes_usuario ON visualizacoes_r
 -- visíveis, o resto (custo, IPI/ST/Markup/DIFAL/Imposto, lucro%) fica num
 -- painel expansível por linha (▸/▾).
 ALTER TABLE public.cotacoes_precos ADD COLUMN IF NOT EXISTS licitacao_id uuid REFERENCES public.licitacoes(id);
+
+-- =============================================================
+-- 2026-08-28 · feat: Fretes — dados completos de transporte, vínculo a
+-- processo e fluxo de aprovação por alçada
+-- =============================================================
+-- Já executado em produção em 2026-08-28. Espelha o padrão de alçadas de
+-- Compras (compras_alcadas_aprovacao / pcp_aprovacoes), mas com tabelas
+-- próprias de Fretes -- faixas de valor são de escala bem menor, e mexer
+-- nas tabelas de Compras (já em produção) seria mais arriscado do que
+-- duplicar o padrão já provado.
+
+-- Alçadas de aprovação de Fretes (mesmo formato de compras_alcadas_aprovacao)
+CREATE TABLE IF NOT EXISTS fretes_alcadas_aprovacao (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nivel integer NOT NULL,
+  nome text NOT NULL,
+  valor_minimo numeric NOT NULL,
+  perfis_aprovadores jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ativo boolean NOT NULL DEFAULT true,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+
+-- Pendências de aprovação de Fretes (mesmo formato de pcp_aprovacoes, sem a
+-- camada de departamento que só existe em Compras)
+CREATE TABLE IF NOT EXISTS pcp_aprovacoes_fretes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  frete_id uuid NOT NULL REFERENCES pcp_fretes(id),
+  nivel integer NOT NULL,
+  nivel_nome text NOT NULL,
+  valor_no_momento numeric,
+  status text NOT NULL DEFAULT 'pendente',
+  solicitado_por text,
+  solicitado_por_nome text,
+  solicitado_em timestamptz NOT NULL DEFAULT now(),
+  respondido_por text,
+  respondido_por_nome text,
+  respondido_em timestamptz,
+  resposta text,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+
+-- Tabelas novas no Supabase nascem com RLS ligado por padrão; o resto do
+-- sistema usa auth_usuarios (não Supabase Auth) e roda com RLS desligado,
+-- então sem isto as duas tabelas acima ficariam bloqueadas pra tudo.
+ALTER TABLE fretes_alcadas_aprovacao DISABLE ROW LEVEL SECURITY;
+ALTER TABLE pcp_aprovacoes_fretes DISABLE ROW LEVEL SECURITY;
+
+-- Dados fiscais/logísticos da cotação de frete
+ALTER TABLE pcp_fretes
+  ADD COLUMN IF NOT EXISTS cnpj_cpf_pagador text,
+  ADD COLUMN IF NOT EXISTS cep_origem text,
+  ADD COLUMN IF NOT EXISTS cep_destino text,
+  ADD COLUMN IF NOT EXISTS cnpj_cpf_remetente text,
+  ADD COLUMN IF NOT EXISTS cnpj_cpf_destinatario text,
+  ADD COLUMN IF NOT EXISTS valor_nota numeric,
+  ADD COLUMN IF NOT EXISTS quantidade_volumes integer,
+  ADD COLUMN IF NOT EXISTS peso_total numeric,
+  ADD COLUMN IF NOT EXISTS medida_altura numeric,
+  ADD COLUMN IF NOT EXISTS medida_largura numeric,
+  ADD COLUMN IF NOT EXISTS medida_comprimento numeric;
+
+-- Vínculo do frete a um processo (OP/OS ou Licitação) -- texto livre continua
+-- possível (vinculo_tipo null), usado pro auto-post no "andamento" do
+-- processo quando o frete é marcado como Entregue.
+ALTER TABLE pcp_fretes
+  ADD COLUMN IF NOT EXISTS vinculo_tipo text,   -- null | 'op_os' | 'licitacao'
+  ADD COLUMN IF NOT EXISTS vinculo_id uuid,
+  ADD COLUMN IF NOT EXISTS vinculo_desc text;

@@ -158,7 +158,16 @@ function RelatorioLogistica() {
 }
 
 // ─── Fretes (Fase 4) — cotação de transportadoras + linha do tempo até Entregue ──
-const VAZIO_FRETE = { direcao: 'inbound', descricao: '', origem: '', destino: '', data_prevista: '', pedido_compra_id: '' };
+const VAZIO_FRETE = {
+  direcao: 'inbound', descricao: '', origem: '', destino: '', data_prevista: '', pedido_compra_id: '',
+  // Dados fiscais/logísticos do transporte
+  cnpj_cpf_pagador: '', cep_origem: '', cep_destino: '',
+  cnpj_cpf_remetente: '', cnpj_cpf_destinatario: '',
+  valor_nota: '', quantidade_volumes: '', peso_total: '',
+  medida_altura: '', medida_largura: '', medida_comprimento: '',
+  // Vínculo a processo (OP/OS ou Licitação) — null = motivo só em texto livre (descricao)
+  vinculo_tipo: null, vinculo_id: null, vinculo_desc: '',
+};
 const VAZIO_COTACAO_FRETE = { transportadora_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 
 async function uploadArquivoFrete(file: File, pasta: string): Promise<{ url: string; nome: string; error?: string }> {
@@ -174,8 +183,125 @@ async function uploadArquivoFrete(file: File, pasta: string): Promise<{ url: str
 const btn: React.CSSProperties = {padding:'5px 9px',border:'none',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'};
 
 const COR_FRETE: Record<string,string> = {
-  'Cotação':'#94a3b8', 'Em Trânsito':'#3b82f6', 'Entregue':'#22c55e', 'Cancelado':'#ef4444',
+  'Cotação':'#94a3b8', 'Aguardando Aprovação':'#ea580c', 'Em Trânsito':'#3b82f6', 'Entregue':'#22c55e', 'Cancelado':'#ef4444',
 };
+
+// ─── Autocomplete de OP/OS — vínculo do frete a um processo (mesmo padrão de
+// OplAutocomplete em FormacaoPrecosTab.tsx) ──────────────────────────────────
+function OplAutocompleteFrete({ value, onSelect }: any) {
+  const [query, setQuery]       = useState(value || '');
+  const [resultados, setRes]    = useState<any[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [aberto, setAberto]     = useState(false);
+  const timerRef                = useRef<any>(null);
+
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  const buscar = (texto: string) => {
+    setQuery(texto);
+    clearTimeout(timerRef.current);
+    if (!texto || texto.length < 2) { setRes([]); setAberto(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true);
+      const { data } = await supabase.from('oples')
+        .select('id, opl, cliente_nome, status_geral')
+        .or(`opl.ilike.%${texto}%,cliente_nome.ilike.%${texto}%`)
+        .limit(8);
+      setRes(data || []);
+      setBuscando(false);
+      setAberto(true);
+    }, 300);
+  };
+
+  const selecionar = (op: any) => {
+    setQuery(op.opl);
+    setAberto(false);
+    setRes([]);
+    onSelect(op);
+  };
+
+  return (
+    <div style={{ position:'relative' }}>
+      <input className="acn-input" style={{ width:'100%' }}
+        placeholder="Buscar OP/OS por número ou cliente..."
+        value={query}
+        onChange={e => buscar(e.target.value)}
+        onFocus={() => resultados.length > 0 && setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 180)} />
+      {aberto && (
+        <div style={{ position:'absolute', zIndex:20, top:'100%', left:0, right:0, background:'#fff',
+          border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 4px 12px #0002', maxHeight:220, overflowY:'auto' }}>
+          {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Buscando...</div>}
+          {!buscando && resultados.length === 0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Nada encontrado.</div>}
+          {resultados.map(o => (
+            <div key={o.id} onMouseDown={() => selecionar(o)}
+              style={{ padding:'6px 10px', fontSize:10, cursor:'pointer', borderBottom:'1px solid #f1f5f9' }}>
+              <strong>{o.opl}</strong> — {o.cliente_nome} <span style={{ color:'#94a3b8' }}>({o.status_geral})</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Autocomplete de Licitação — vínculo do frete a um processo ──────────────
+function LicitacaoAutocompleteFrete({ value, onSelect }: any) {
+  const [query, setQuery]       = useState(value || '');
+  const [resultados, setRes]    = useState<any[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [aberto, setAberto]     = useState(false);
+  const timerRef                = useRef<any>(null);
+
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  const buscar = (texto: string) => {
+    setQuery(texto);
+    clearTimeout(timerRef.current);
+    if (!texto || texto.length < 2) { setRes([]); setAberto(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setBuscando(true);
+      const { data } = await supabase.from('licitacoes')
+        .select('id, numero, nome_projeto, orgao')
+        .or(`numero.ilike.%${texto}%,nome_projeto.ilike.%${texto}%`)
+        .limit(8);
+      setRes(data || []);
+      setBuscando(false);
+      setAberto(true);
+    }, 300);
+  };
+
+  const selecionar = (l: any) => {
+    setQuery(`${l.numero} — ${l.nome_projeto}`);
+    setAberto(false);
+    setRes([]);
+    onSelect(l);
+  };
+
+  return (
+    <div style={{ position:'relative' }}>
+      <input className="acn-input" style={{ width:'100%' }}
+        placeholder="Buscar licitação por número ou nome do projeto..."
+        value={query}
+        onChange={e => buscar(e.target.value)}
+        onFocus={() => resultados.length > 0 && setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 180)} />
+      {aberto && (
+        <div style={{ position:'absolute', zIndex:20, top:'100%', left:0, right:0, background:'#fff',
+          border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 4px 12px #0002', maxHeight:220, overflowY:'auto' }}>
+          {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Buscando...</div>}
+          {!buscando && resultados.length === 0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Nada encontrado.</div>}
+          {resultados.map(l => (
+            <div key={l.id} onMouseDown={() => selecionar(l)}
+              style={{ padding:'6px 10px', fontSize:10, cursor:'pointer', borderBottom:'1px solid #f1f5f9' }}>
+              <strong>{l.numero}</strong> — {l.nome_projeto} <span style={{ color:'#94a3b8' }}>({l.orgao})</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function FretesPanel({ currentUser }: any) {
   const [fretes, setFretes] = useState<any[]>([]);
@@ -202,14 +328,21 @@ function FretesPanel({ currentUser }: any) {
   const [urlRastreio, setUrlRastreio] = useState('');
   const [salvandoRastreio, setSalvandoRastreio] = useState(false);
 
+  // ── Fluxo de aprovação por alçada (Fase 4 — espelha ComprasTab.tsx) ──────
+  const [alcadasFrete, setAlcadasFrete]         = useState<any[]>([]);
+  const [aprovacoesFrete, setAprovacoesFrete]   = useState<any[]>([]);
+  const [respondendoAprovacao, setRespondendoAprovacao] = useState(false);
+
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: fData }, { data: pData }] = await Promise.all([
+    const [{ data: fData }, { data: pData }, { data: aData }] = await Promise.all([
       supabase.from('pcp_fretes').select('*').order('criado_em', { ascending: false }),
       supabase.from('pcp_pedidos_compra').select('id, numero_pedido, descricao_material').eq('status_compra', 'Comprado'),
+      supabase.from('fretes_alcadas_aprovacao').select('*').eq('ativo', true).order('nivel'),
     ]);
     setFretes(fData || []);
     setPedidosCompra(pData || []);
+    setAlcadasFrete(aData || []);
     setLoading(false);
   };
 
@@ -218,6 +351,7 @@ function FretesPanel({ currentUser }: any) {
   const criarFrete = async () => {
     if (!form.descricao.trim()) { alert('Descreva o frete.'); return; }
     setSalvandoFrete(true);
+    const numOrNull = (v: any) => v === '' || v == null ? null : parseFloat(String(v).replace(',', '.'));
     const { error } = await supabase.from('pcp_fretes').insert([{
       direcao: form.direcao,
       descricao: form.descricao.trim(),
@@ -225,6 +359,22 @@ function FretesPanel({ currentUser }: any) {
       destino: form.destino.trim() || null,
       data_prevista: form.data_prevista || null,
       pedido_compra_id: form.pedido_compra_id || null,
+      // Dados fiscais/logísticos
+      cnpj_cpf_pagador:      form.cnpj_cpf_pagador.trim()      || null,
+      cep_origem:            form.cep_origem.trim()            || null,
+      cep_destino:           form.cep_destino.trim()           || null,
+      cnpj_cpf_remetente:    form.cnpj_cpf_remetente.trim()    || null,
+      cnpj_cpf_destinatario: form.cnpj_cpf_destinatario.trim() || null,
+      valor_nota:            numOrNull(form.valor_nota),
+      quantidade_volumes:    form.quantidade_volumes === '' ? null : parseInt(form.quantidade_volumes, 10),
+      peso_total:            numOrNull(form.peso_total),
+      medida_altura:         numOrNull(form.medida_altura),
+      medida_largura:        numOrNull(form.medida_largura),
+      medida_comprimento:    numOrNull(form.medida_comprimento),
+      // Vínculo a processo
+      vinculo_tipo: form.vinculo_tipo || null,
+      vinculo_id:   form.vinculo_id   || null,
+      vinculo_desc: form.vinculo_desc || null,
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
     }]);
@@ -247,6 +397,13 @@ function FretesPanel({ currentUser }: any) {
     const { data } = await supabase.from('pcp_cotacoes_fretes')
       .select('*').eq('frete_id', f.id).order('criado_em', { ascending: true });
     setCotacoes(data || []);
+    if (f.status === 'Aguardando Aprovação') {
+      const { data: aprov } = await supabase.from('pcp_aprovacoes_fretes')
+        .select('*').eq('frete_id', f.id).order('nivel', { ascending: true });
+      setAprovacoesFrete(aprov || []);
+    } else {
+      setAprovacoesFrete([]);
+    }
     setLoadingCotacoes(false);
   };
 
@@ -291,6 +448,57 @@ function FretesPanel({ currentUser }: any) {
     abrirModalFrete(modalFrete);
   };
 
+  // ── Notificações do fluxo de aprovação de Fretes (mesmo padrão de
+  // notificarAprovadoresNivel/notificarCriadorPedido em ComprasTab.tsx) ──────
+  const notificarAprovadoresNivelFrete = async (frete: any, nivelRow: any) => {
+    try {
+      const perfis = nivelRow.perfis_aprovadores || [];
+      if (perfis.length === 0) return;
+      const { data: aprovadores } = await supabase.from('auth_usuarios')
+        .select('id, nome, email').in('perfil', perfis).eq('ativo', true);
+      if (!aprovadores || aprovadores.length === 0) return;
+      const valorFmt = fmt(frete.valor_frete);
+      const texto = `Aprovação de frete necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): ${frete.descricao} — ${valorFmt}`;
+      for (const ap of aprovadores) {
+        await supabase.from('mencoes').insert({
+          mencionado_id: String(ap.id), mencionado_nome: ap.nome,
+          mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+          contexto: 'frete_aprovacao', contexto_id: String(frete.id),
+          contexto_descricao: frete.descricao,
+          campo: 'aprovacao_nivel', texto_trecho: texto,
+          aba_destino: 'logistica', lida: false, criado_em: new Date().toISOString(),
+        });
+      }
+      const emails = aprovadores.map((a:any) => a.email).filter(Boolean);
+      if (emails.length > 0) {
+        const html = `<h3>Aprovação de frete necessária</h3>
+          <p><strong>Nível ${nivelRow.nivel} — ${nivelRow.nome}</strong></p>
+          <p>Frete: ${frete.descricao}<br>Transportadora: ${frete.transportadora}<br>Valor: ${valorFmt}</p>
+          <p>Acesse o sistema (aba Logística → Fretes) para aprovar ou rejeitar.</p>`;
+        await supabase.functions.invoke('send-email', {
+          body: { to: emails, subject: `Aprovação necessária — Frete ${frete.descricao}`, html },
+        });
+      }
+    } catch (e) { console.warn('Falha ao notificar aprovadores do frete:', e); }
+  };
+
+  const notificarCriadorFrete = async (frete: any, mensagem: string) => {
+    try {
+      if (!frete.criado_por) return;
+      const { data: criador } = await supabase.from('auth_usuarios')
+        .select('id, nome').eq('email', frete.criado_por).maybeSingle();
+      if (!criador) return;
+      await supabase.from('mencoes').insert({
+        mencionado_id: String(criador.id), mencionado_nome: criador.nome,
+        mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+        contexto: 'frete_aprovacao', contexto_id: String(frete.id),
+        contexto_descricao: frete.descricao,
+        campo: 'resultado_aprovacao', texto_trecho: mensagem,
+        aba_destino: 'logistica', lida: false, criado_em: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('Falha ao notificar criador do frete:', e); }
+  };
+
   const confirmarFreteComVencedora = async () => {
     if (!modalFrete) return;
     // 3 cotações é o recomendado, não mais obrigatório — nem sempre dá pra
@@ -300,16 +508,113 @@ function FretesPanel({ currentUser }: any) {
     const vencedora = cotacoes.find(c => c.id === vencedoraId);
     if (!vencedora) { alert('Cotação vencedora inválida.'); return; }
     setConfirmando(true);
+
+    const niveis = alcadasFrete
+      .filter(a => Number(a.valor_minimo) <= Number(vencedora.valor || 0))
+      .sort((a,b) => a.nivel - b.nivel);
+
+    if (niveis.length === 0) {
+      // Sem alçada aplicável — comportamento de sempre, vai direto pra Em Trânsito.
+      const { error } = await supabase.from('pcp_fretes').update({
+        transportadora: vencedora.transportadora_nome,
+        valor_frete: vencedora.valor,
+        vencedora_id: vencedoraId,
+        justificativa_vencedora: justificativa.trim(),
+        status: 'Em Trânsito',
+        data_coleta: new Date().toISOString(),
+      }).eq('id', modalFrete.id);
+      setConfirmando(false);
+      if (error) { alert('Erro: ' + error.message); return; }
+      setModalFrete(null);
+      fetchAll();
+      return;
+    }
+
+    // Alçada aplicável — vai pra Aguardando Aprovação e cria as pendências,
+    // uma por nível, todas com status 'pendente' (resolvidas em ordem).
     const { error } = await supabase.from('pcp_fretes').update({
       transportadora: vencedora.transportadora_nome,
       valor_frete: vencedora.valor,
       vencedora_id: vencedoraId,
       justificativa_vencedora: justificativa.trim(),
-      status: 'Em Trânsito',
-      data_coleta: new Date().toISOString(),
+      status: 'Aguardando Aprovação',
     }).eq('id', modalFrete.id);
+    if (error) { setConfirmando(false); alert('Erro: ' + error.message); return; }
+    await supabase.from('pcp_aprovacoes_fretes').insert(niveis.map(n => ({
+      frete_id: modalFrete.id, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: vencedora.valor,
+      status: 'pendente', solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
+    })));
+    const freteAtualizado = { ...modalFrete, transportadora: vencedora.transportadora_nome, valor_frete: vencedora.valor };
+    await notificarAprovadoresNivelFrete(freteAtualizado, niveis[0]);
     setConfirmando(false);
-    if (error) { alert('Erro: ' + error.message); return; }
+    setModalFrete(null);
+    fetchAll();
+  };
+
+  // Marca o nível pendente de menor número como aprovado e resolve em cascata —
+  // notifica o próximo nível se sobrar alçada, ou libera pra "Em Trânsito" se
+  // não sobrar nada (mesmo padrão de resolverPendenciaComoAprovada em ComprasTab.tsx).
+  const souAprovadorParaFrete = (pendencia: any) => {
+    if (!pendencia) return true;
+    const alcada = alcadasFrete.find(a => a.nivel === pendencia.nivel);
+    return !!(alcada && (alcada.perfis_aprovadores||[]).includes(currentUser?.perfil)) || currentUser?.perfil === 'Admin';
+  };
+
+  const aprovarNivelFreteAtivo = async () => {
+    if (!modalFrete) return;
+    const nivelAtivo = aprovacoesFrete.find(a => a.status === 'pendente');
+    if (!nivelAtivo) return;
+    if (!souAprovadorParaFrete(nivelAtivo)) {
+      const quem = (alcadasFrete.find(a=>a.nivel===nivelAtivo.nivel)?.perfis_aprovadores||[]).join(', ');
+      alert('Você não tem autorização para aprovar este frete. Aguardando: ' + (quem || '—'));
+      return;
+    }
+    setRespondendoAprovacao(true);
+    await supabase.from('pcp_aprovacoes_fretes').update({
+      status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
+      respondido_em: new Date().toISOString(),
+    }).eq('id', nivelAtivo.id);
+    const { data: restantes } = await supabase.from('pcp_aprovacoes_fretes')
+      .select('*').eq('frete_id', modalFrete.id).eq('status', 'pendente').order('nivel', { ascending: true });
+    if (restantes && restantes.length > 0) {
+      const proximaAlcada = alcadasFrete.find(a => a.nivel === restantes[0].nivel);
+      if (proximaAlcada) await notificarAprovadoresNivelFrete(modalFrete, proximaAlcada);
+    } else {
+      await supabase.from('pcp_fretes').update({
+        status: 'Em Trânsito', data_coleta: new Date().toISOString(),
+      }).eq('id', modalFrete.id);
+      await notificarCriadorFrete(modalFrete, `Frete aprovado e liberado — ${modalFrete.descricao}.`);
+    }
+    setRespondendoAprovacao(false);
+    setModalFrete(null);
+    fetchAll();
+  };
+
+  const rejeitarNivelFreteAtivo = async () => {
+    if (!modalFrete) return;
+    const nivelAtivo = aprovacoesFrete.find(a => a.status === 'pendente');
+    if (!nivelAtivo) return;
+    if (!souAprovadorParaFrete(nivelAtivo)) {
+      const quem = (alcadasFrete.find(a=>a.nivel===nivelAtivo.nivel)?.perfis_aprovadores||[]).join(', ');
+      alert('Você não tem autorização para rejeitar este frete. Aguardando: ' + (quem || '—'));
+      return;
+    }
+    const motivo = prompt('Motivo da rejeição:');
+    if (motivo === null) return;
+    if (!motivo.trim()) { alert('Informe o motivo.'); return; }
+    setRespondendoAprovacao(true);
+    await supabase.from('pcp_aprovacoes_fretes').update({
+      status: 'rejeitado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
+      respondido_em: new Date().toISOString(), resposta: motivo.trim(),
+    }).eq('id', nivelAtivo.id);
+    await supabase.from('pcp_aprovacoes_fretes').update({ status: 'cancelado' })
+      .eq('frete_id', modalFrete.id).eq('status', 'pendente');
+    await supabase.from('pcp_fretes').update({
+      status: 'Cotação', vencedora_id: null, justificativa_vencedora: null,
+    }).eq('id', modalFrete.id);
+    await notificarCriadorFrete(modalFrete, `Frete rejeitado (Nível ${nivelAtivo.nivel} — ${nivelAtivo.nivel_nome}). Motivo: ${motivo.trim()}`);
+    setRespondendoAprovacao(false);
+    setVencedoraId(null);
     setModalFrete(null);
     fetchAll();
   };
@@ -326,6 +631,33 @@ function FretesPanel({ currentUser }: any) {
     if (error) { alert('Erro: ' + error.message); return; }
     setModalFrete((f:any) => ({ ...f, numero_cte: numeroCte.trim() || null, codigo_rastreio: codigoRastreio.trim() || null, url_rastreio: urlRastreio.trim() || null }));
     fetchAll();
+  };
+
+  // Ao finalizar o frete (Entregue), se ele estiver vinculado a um processo,
+  // anexa automaticamente um registro no "andamento" daquele processo — mesmo
+  // padrão que CRM (crm_historico) e Licitações (licitacao_documentos categoria
+  // 'andamento') já usam pra timeline; pra OP/OS reaproveita op_acompanhamentos
+  // (o mesmo que OplAcompModal.tsx grava).
+  const postarAndamentoVinculo = async (frete: any) => {
+    if (!frete.vinculo_tipo || !frete.vinculo_id) return;
+    const valorFmt = frete.valor_frete
+      ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(frete.valor_frete) : '—';
+    const texto = `🚚 Frete entregue — ${frete.descricao}\nTransportadora: ${frete.transportadora || '—'} · Valor: ${valorFmt}\nEntregue em: ${new Date().toLocaleString('pt-BR')}`;
+    try {
+      if (frete.vinculo_tipo === 'op_os') {
+        await supabase.from('op_acompanhamentos').insert({
+          referencia_id: frete.vinculo_id, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc,
+          setor: 'Logística', texto,
+          usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
+          criado_em: new Date().toISOString(),
+        });
+      } else if (frete.vinculo_tipo === 'licitacao') {
+        await supabase.from('licitacao_documentos').insert({
+          licitacao_id: frete.vinculo_id, categoria: 'andamento', nome: 'Andamento', conteudo: texto,
+          criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, criado_em: new Date().toISOString(),
+        });
+      }
+    } catch (e) { console.warn('Falha ao postar andamento do frete:', e); }
   };
 
   const marcarEntregue = async () => {
@@ -345,6 +677,7 @@ function FretesPanel({ currentUser }: any) {
     }).eq('id', modalFrete.id);
     setEnviandoCanhoto(false);
     if (error) { alert('Erro: ' + error.message); return; }
+    await postarAndamentoVinculo(modalFrete);
     setModalFrete(null);
     fetchAll();
   };
@@ -425,6 +758,109 @@ function FretesPanel({ currentUser }: any) {
               </div>
             </div>
           )}
+
+          {/* ── MOTIVO DA COTAÇÃO — texto livre (Descrição acima) ou vínculo a um processo ── */}
+          <div style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:6,padding:10,marginTop:8}}>
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>🔗 Motivo da Cotação — vincular a um processo (opcional)</div>
+            <div style={{display:'flex',gap:6,marginBottom:8}}>
+              {[
+                {v:null,        label:'Só texto livre'},
+                {v:'op_os',     label:'🔗 Vincular a OP/OS'},
+                {v:'licitacao', label:'🔗 Vincular a Licitação'},
+              ].map(opt => (
+                <button key={String(opt.v)} type="button"
+                  onClick={()=>setForm({...form, vinculo_tipo: opt.v, vinculo_id:null, vinculo_desc:''})}
+                  style={{padding:'4px 10px',fontSize:10,fontWeight:700,borderRadius:20,cursor:'pointer',
+                    border: form.vinculo_tipo===opt.v ? '1.5px solid #1e293b' : '1px solid #e2e8f0',
+                    background: form.vinculo_tipo===opt.v ? '#1e293b' : '#f8fafc',
+                    color: form.vinculo_tipo===opt.v ? '#fff' : '#64748b'}}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {form.vinculo_tipo === 'op_os' && (
+              <OplAutocompleteFrete value={form.vinculo_desc}
+                onSelect={(o:any)=> o
+                  ? setForm({...form, vinculo_id:o.id, vinculo_desc:`${o.opl} — ${o.cliente_nome}`})
+                  : setForm({...form, vinculo_id:null, vinculo_desc:''})} />
+            )}
+            {form.vinculo_tipo === 'licitacao' && (
+              <LicitacaoAutocompleteFrete value={form.vinculo_desc}
+                onSelect={(l:any)=> l
+                  ? setForm({...form, vinculo_id:l.id, vinculo_desc:`${l.numero} — ${l.nome_projeto}`})
+                  : setForm({...form, vinculo_id:null, vinculo_desc:''})} />
+            )}
+            {form.vinculo_id && (
+              <div style={{fontSize:9,color:'#16a34a',marginTop:4}}>✓ Vinculado: {form.vinculo_desc}</div>
+            )}
+          </div>
+
+          {/* ── DADOS DO TRANSPORTE ── */}
+          <div style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:6,padding:10,marginTop:8}}>
+            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>📋 Dados do Transporte</div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="acn-label">CNPJ/CPF Pagador</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.cnpj_cpf_pagador}
+                  onChange={e=>setForm({...form,cnpj_cpf_pagador:e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">CEP Origem</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.cep_origem}
+                  onChange={e=>setForm({...form,cep_origem:e.target.value})} placeholder="00000-000" />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">CEP Destino</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.cep_destino}
+                  onChange={e=>setForm({...form,cep_destino:e.target.value})} placeholder="00000-000" />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="acn-label">CNPJ/CPF Remetente</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.cnpj_cpf_remetente}
+                  onChange={e=>setForm({...form,cnpj_cpf_remetente:e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">CNPJ/CPF Destinatário</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.cnpj_cpf_destinatario}
+                  onChange={e=>setForm({...form,cnpj_cpf_destinatario:e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Valor da Nota (R$)</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.valor_nota}
+                  onChange={e=>setForm({...form,valor_nota:e.target.value})} placeholder="Ex: 1500,00" />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="acn-label">Quant. de Volumes</label>
+                <input type="number" className="acn-input" style={{width:'100%'}} value={form.quantidade_volumes}
+                  onChange={e=>setForm({...form,quantidade_volumes:e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Peso Total (kg)</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.peso_total}
+                  onChange={e=>setForm({...form,peso_total:e.target.value})} placeholder="Ex: 12,5" />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Altura (m)</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.medida_altura}
+                  onChange={e=>setForm({...form,medida_altura:e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Largura (m)</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.medida_largura}
+                  onChange={e=>setForm({...form,medida_largura:e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Comprimento (m)</label>
+                <input className="acn-input" style={{width:'100%'}} value={form.medida_comprimento}
+                  onChange={e=>setForm({...form,medida_comprimento:e.target.value})} />
+              </div>
+            </div>
+          </div>
+
           <div style={{display:'flex',gap:8,marginTop:8}}>
             <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={criarFrete} disabled={salvandoFrete}>
               {salvandoFrete?'Salvando...':'💾 Registrar Frete'}
@@ -490,10 +926,33 @@ function FretesPanel({ currentUser }: any) {
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalFrete(null);}}>
           <div className="modal-box" style={{maxWidth:640}}>
             <div className="modal-title">🚚 Frete — {modalFrete.descricao}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:8}}>
               {modalFrete.origem || '—'} → {modalFrete.destino || '—'}
               {modalFrete.status==='Cotação' && ' · recomendado 3 cotações, mas pode confirmar com menos quando não houver 3 transportadoras disponíveis.'}
             </div>
+
+            {modalFrete.vinculo_desc && (
+              <div style={{fontSize:9,color:'#1e40af',background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'4px 8px',marginBottom:8}}>
+                🔗 Vinculado a {modalFrete.vinculo_tipo==='licitacao'?'Licitação':'OP/OS'}: {modalFrete.vinculo_desc}
+              </div>
+            )}
+
+            {(modalFrete.cnpj_cpf_pagador || modalFrete.cep_origem || modalFrete.cep_destino || modalFrete.cnpj_cpf_remetente ||
+              modalFrete.cnpj_cpf_destinatario || modalFrete.valor_nota || modalFrete.quantidade_volumes || modalFrete.peso_total ||
+              modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento) && (
+              <div style={{fontSize:9,color:'#475569',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:'6px 8px',marginBottom:12,display:'grid',gridTemplateColumns:'1fr 1fr',gap:'2px 10px'}}>
+                {modalFrete.cnpj_cpf_pagador && <div><strong>Pagador:</strong> {modalFrete.cnpj_cpf_pagador}</div>}
+                {(modalFrete.cep_origem || modalFrete.cep_destino) && <div><strong>CEP:</strong> {modalFrete.cep_origem||'—'} → {modalFrete.cep_destino||'—'}</div>}
+                {modalFrete.cnpj_cpf_remetente && <div><strong>Remetente:</strong> {modalFrete.cnpj_cpf_remetente}</div>}
+                {modalFrete.cnpj_cpf_destinatario && <div><strong>Destinatário:</strong> {modalFrete.cnpj_cpf_destinatario}</div>}
+                {modalFrete.valor_nota && <div><strong>Valor NF:</strong> {fmt(modalFrete.valor_nota)}</div>}
+                {modalFrete.quantidade_volumes && <div><strong>Volumes:</strong> {modalFrete.quantidade_volumes}</div>}
+                {modalFrete.peso_total && <div><strong>Peso:</strong> {modalFrete.peso_total} kg</div>}
+                {(modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento) && (
+                  <div><strong>Medidas (AxLxC):</strong> {modalFrete.medida_altura||'—'} x {modalFrete.medida_largura||'—'} x {modalFrete.medida_comprimento||'—'} m</div>
+                )}
+              </div>
+            )}
 
             {modalFrete.status === 'Cotação' && (<>
               {loadingCotacoes ? (
@@ -583,6 +1042,47 @@ function FretesPanel({ currentUser }: any) {
                 <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
               </div>
             </>)}
+
+            {modalFrete.status === 'Aguardando Aprovação' && (() => {
+              const nivelAtivo = aprovacoesFrete.find(a => a.status === 'pendente');
+              const historico  = aprovacoesFrete.filter(a => a.status !== 'pendente');
+              return (<>
+                <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>
+                  <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
+                  <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
+                  <div><strong>Justificativa:</strong> {modalFrete.justificativa_vencedora}</div>
+                </div>
+                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>✅ Níveis de Aprovação</div>
+                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14}}>
+                  {historico.map(a => (
+                    <div key={a.id} style={{padding:'8px 10px',borderRadius:6,fontSize:10,
+                      background: a.status==='aprovado' ? '#f0fdf4' : '#fef2f2',
+                      border: `1px solid ${a.status==='aprovado' ? '#86efac' : '#fca5a5'}`}}>
+                      <strong>Nível {a.nivel} — {a.nivel_nome}</strong>: {a.status==='aprovado' ? '✅ Aprovado' : a.status==='rejeitado' ? '❌ Rejeitado' : a.status}
+                      {a.respondido_por_nome && <span style={{color:'#64748b'}}> por {a.respondido_por_nome}</span>}
+                      {a.resposta && <div style={{color:'#64748b',marginTop:2}}>Motivo: {a.resposta}</div>}
+                    </div>
+                  ))}
+                  {nivelAtivo && (
+                    <div style={{padding:'8px 10px',borderRadius:6,fontSize:10,background:'#fff7ed',border:'1.5px solid #f59e0b'}}>
+                      <strong>Nível {nivelAtivo.nivel} — {nivelAtivo.nivel_nome}</strong>: ⏳ Aguardando aprovação de{' '}
+                      {(alcadasFrete.find(a=>a.nivel===nivelAtivo.nivel)?.perfis_aprovadores||[]).join(', ') || '—'}
+                    </div>
+                  )}
+                </div>
+                {nivelAtivo && (
+                  <div style={{display:'flex',gap:8}}>
+                    <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={aprovarNivelFreteAtivo} disabled={respondendoAprovacao}>
+                      {respondendoAprovacao?'Processando...':'✅ Aprovar'}
+                    </button>
+                    <button className="acn-btn" style={{background:'#dc2626',flex:1}} onClick={rejeitarNivelFreteAtivo} disabled={respondendoAprovacao}>
+                      ❌ Rejeitar
+                    </button>
+                    <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
+                  </div>
+                )}
+              </>);
+            })()}
 
             {modalFrete.status === 'Em Trânsito' && (<>
               <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>

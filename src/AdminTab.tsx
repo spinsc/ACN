@@ -2380,6 +2380,187 @@ function PainelAlcadasAprovacao() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PAINEL ALÇADAS DE APROVAÇÃO DE FRETES (mesmo padrão de PainelAlcadasAprovacao,
+// tabela própria — faixas de valor de frete são de escala bem menor que compras)
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelAlcadasAprovacaoFretes() {
+  const [alcadas, setAlcadas] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm]       = useState({ ...VAZIO_ALCADA });
+  const [editando, setEditando] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('fretes_alcadas_aprovacao').select('*').order('nivel');
+    setAlcadas(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const togglePerfil = (perfil: string) => {
+    setForm(f => ({
+      ...f,
+      perfis_aprovadores: f.perfis_aprovadores.includes(perfil)
+        ? f.perfis_aprovadores.filter(p => p !== perfil)
+        : [...f.perfis_aprovadores, perfil],
+    }));
+  };
+
+  const salvar = async () => {
+    if (!form.nivel || !form.nome.trim() || !form.valor_minimo) {
+      alert('Informe nível, nome e valor mínimo.'); return;
+    }
+    if (form.perfis_aprovadores.length === 0) {
+      alert('Selecione ao menos um perfil aprovador.'); return;
+    }
+    setSalvando(true);
+    const payload = {
+      nivel: parseInt(form.nivel, 10),
+      nome: form.nome.trim(),
+      valor_minimo: parseFloat(String(form.valor_minimo).replace(',', '.')),
+      perfis_aprovadores: form.perfis_aprovadores,
+    };
+    if (editando) {
+      await supabase.from('fretes_alcadas_aprovacao').update(payload).eq('id', editando.id);
+    } else {
+      await supabase.from('fretes_alcadas_aprovacao').insert([{ ...payload, ativo: true }]);
+    }
+    setForm({ ...VAZIO_ALCADA });
+    setEditando(null); setShowForm(false); setSalvando(false);
+    load();
+  };
+
+  const toggleAtivo = async (a) => {
+    await supabase.from('fretes_alcadas_aprovacao').update({ ativo: !a.ativo }).eq('id', a.id);
+    load();
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span>🚚 Alçadas de Aprovação de Fretes</span>
+        <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
+          onClick={() => { setForm({ ...VAZIO_ALCADA }); setEditando(null); setShowForm(true); }}>
+          + Novo Nível
+        </button>
+      </div>
+      <div className="sec-body">
+        <p style={{ fontSize:10, color:'#64748b', marginBottom:12 }}>
+          Fretes com a cotação vencedora igual ou acima do "valor mínimo" de um nível precisam da aprovação de
+          alguém com um dos perfis selecionados antes de virar "Em Trânsito". Níveis são aprovados em ordem (do
+          menor pro maior). Sem nenhum nível ativo aqui, o fluxo de Fretes funciona como hoje (sem aprovação).
+        </p>
+
+        {showForm && (
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
+            <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
+              {editando ? '✏️ Editar Nível' : '+ Novo Nível de Aprovação'}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr 1fr', gap:8, marginBottom:8 }}>
+              <div>
+                <label className="acn-label">Nível *</label>
+                <input className="acn-input" type="number" style={{ width:'100%' }}
+                  placeholder="1, 2, 3..."
+                  value={form.nivel}
+                  onChange={e => setForm(f => ({ ...f, nivel: e.target.value }))} />
+              </div>
+              <div>
+                <label className="acn-label">Nome *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Ex: Gerência, Diretoria"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+              <div>
+                <label className="acn-label">Valor Mínimo (R$) *</label>
+                <input className="acn-input" style={{ width:'100%' }}
+                  placeholder="Ex: 1500,00"
+                  value={form.valor_minimo}
+                  onChange={e => setForm(f => ({ ...f, valor_minimo: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label className="acn-label">Perfis aprovadores *</label>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:4 }}>
+                {PERFIS.map(p => (
+                  <label key={p} style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, cursor:'pointer',
+                    padding:'4px 9px', border:`1.5px solid ${form.perfis_aprovadores.includes(p)?'#0f766e':'#e2e8f0'}`,
+                    borderRadius:5, background: form.perfis_aprovadores.includes(p)?'#f0fdfa':'#fff' }}>
+                    <input type="checkbox" checked={form.perfis_aprovadores.includes(p)}
+                      onChange={() => togglePerfil(p)} style={{ display:'none' }} />
+                    {p}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'SALVAR'}
+              </button>
+              <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setShowForm(false)}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {loading && <div style={{ textAlign:'center', padding:20, color:'#64748b', fontSize:11 }}>Carregando...</div>}
+        {!loading && alcadas.length === 0 && (
+          <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11 }}>
+            Nenhum nível de alçada cadastrado. Clique em <strong>+ Novo Nível</strong> para começar.
+          </div>
+        )}
+
+        {alcadas.length > 0 && (
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Nível</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Nome</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Valor Mínimo</th>
+                <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Aprovadores</th>
+                <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Status</th>
+                <th style={{ padding:'6px 8px', borderBottom:'1px solid #e2e8f0' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {alcadas.map(a => (
+                <tr key={a.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: a.ativo ? 1 : 0.45 }}>
+                  <td style={{ padding:'8px 8px', fontWeight:700, fontFamily:'monospace', color:'#0f766e' }}>{a.nivel}</td>
+                  <td style={{ padding:'8px 8px', fontWeight:700 }}>{a.nome}</td>
+                  <td style={{ padding:'8px 8px' }}>R$ {Number(a.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding:'8px 8px', color:'#64748b' }}>{(a.perfis_aprovadores || []).join(', ') || '—'}</td>
+                  <td style={{ padding:'8px 8px', textAlign:'center' }}>
+                    <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10,
+                      background: a.ativo ? '#dcfce7' : '#f1f5f9',
+                      color:      a.ativo ? '#16a34a'  : '#94a3b8' }}>
+                      {a.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'8px 6px' }}>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                      <button className="acn-btn" style={{ background: a.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => toggleAtivo(a)}>
+                        {a.ativo ? 'Desativar' : 'Ativar'}
+                      </button>
+                      <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
+                        onClick={() => { setForm({ nivel:String(a.nivel), nome:a.nome, valor_minimo:String(a.valor_minimo), perfis_aprovadores:a.perfis_aprovadores||[] }); setEditando(a); setShowForm(true); }}>
+                        ✏️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DEPARTAMENTOS DE COMPRAS (aprovação por gestor)
 // ─────────────────────────────────────────────────────────────────────────────
 function PainelDepartamentosCompras() {
@@ -2748,6 +2929,7 @@ const ABAS_ADMIN = [
   { id:'plataformas',    label:'🏪 Plataformas' },
   { id:'centros_custo',  label:'🏷️ Centros de Custo' },
   { id:'alcadas_aprovacao', label:'✅ Alçadas de Aprovação' },
+  { id:'alcadas_aprovacao_fretes', label:'🚚 Alçadas de Fretes' },
   { id:'departamentos_compras', label:'🏢 Departamentos (Compras)' },
   { id:'contratos_padrao', label:'📄 Contratos Padrão' },
   { id:'email_cfg',      label:'📧 Config. Email' },
@@ -3221,6 +3403,7 @@ export default function AdminTab() {
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
       {abaAtiva === 'centros_custo' && <PainelCentrosCusto />}
       {abaAtiva === 'alcadas_aprovacao' && <PainelAlcadasAprovacao />}
+      {abaAtiva === 'alcadas_aprovacao_fretes' && <PainelAlcadasAprovacaoFretes />}
       {abaAtiva === 'departamentos_compras' && <PainelDepartamentosCompras />}
       {abaAtiva === 'contratos_padrao' && <PainelContratosPadrao />}
       {abaAtiva === 'email_cfg' && <PainelEmailCfg />}
