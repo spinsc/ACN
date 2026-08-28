@@ -891,6 +891,21 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
     return () => clearInterval(t);
   }, []);
 
+  // Deep-link vindo do painel de Menções ("Demanda X" clicável) — abre o
+  // detalhe da demanda em vez de só cair na aba do setor genérica.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'demanda') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('demandas_setoriais').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setModalVer(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const fetchDemandas = async () => {
     const { data } = await supabase
       .from('demandas_setoriais')

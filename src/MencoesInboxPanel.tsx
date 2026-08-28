@@ -113,9 +113,16 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const abrirRegistro = (m: any) => {
     if (!m.lida) marcarLida(m);
     if (m.contexto_id) {
-      const detail = { contexto: m.contexto, contextoId: m.contexto_id };
-      (window as any).__acnDeepLink = detail;
-      window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
+      // CRM/Licitação já têm um mecanismo de deep-link próprio e testado
+      // (analise:abrir-origem, ouvido em DashboardTab.tsx — já troca a aba E
+      // abre o card) — reaproveita em vez de duplicar.
+      if (m.contexto === 'crm' || m.contexto === 'licitacao') {
+        window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: m.contexto, origemId: m.contexto_id } }));
+      } else {
+        const detail = { contexto: m.contexto, contextoId: m.contexto_id };
+        (window as any).__acnDeepLink = detail;
+        window.dispatchEvent(new CustomEvent('acn:abrir-registro', { detail }));
+      }
     }
     if (m.aba_destino && onNavigate) onNavigate(m.aba_destino);
   };

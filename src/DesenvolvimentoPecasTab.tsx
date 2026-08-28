@@ -375,6 +375,7 @@ export default function DesenvolvimentoPecasTab({ currentUser }: { currentUser: 
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filtro, setFiltro] = useState<'todas' | 'andamento' | 'concluidas'>('todas');
+  const [busca, setBusca] = useState('');
   const [modalNova, setModalNova] = useState(false);
 
   const carregar = async () => {
@@ -389,8 +390,13 @@ export default function DesenvolvimentoPecasTab({ currentUser }: { currentUser: 
   const filtradas = demandas.filter(d => {
     const etapas = d.etapas || [];
     const finalizada = etapas.length > 0 && etapas.every((e: any) => e.status === 'concluida');
-    if (filtro === 'andamento') return !finalizada;
-    if (filtro === 'concluidas') return finalizada;
+    if (filtro === 'andamento' && finalizada) return false;
+    if (filtro === 'concluidas' && !finalizada) return false;
+    if (busca.trim()) {
+      const t = busca.trim().toLowerCase();
+      const alvo = `${d.titulo||''} ${d.descricao||''} ${d.numero_opl||''} ${d.cliente_nome||''}`.toLowerCase();
+      if (!alvo.includes(t)) return false;
+    }
     return true;
   });
 
@@ -403,7 +409,7 @@ export default function DesenvolvimentoPecasTab({ currentUser }: { currentUser: 
             + Nova Demanda
           </button>
         </div>
-        <div className="sec-body" style={{ display: 'flex', gap: 6 }}>
+        <div className="sec-body" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {(['todas', 'andamento', 'concluidas'] as const).map(f => (
             <button key={f} className="acn-btn"
               style={{ background: filtro === f ? '#1e293b' : '#e2e8f0', color: filtro === f ? '#fff' : '#475569', fontSize: 10 }}
@@ -411,6 +417,8 @@ export default function DesenvolvimentoPecasTab({ currentUser }: { currentUser: 
               {f === 'todas' ? 'Todas' : f === 'andamento' ? 'Em Andamento' : 'Concluídas'}
             </button>
           ))}
+          <input placeholder="🔍 Buscar por título, OPL ou cliente..." value={busca} onChange={e => setBusca(e.target.value)}
+            style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
         </div>
       </div>
 

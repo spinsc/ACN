@@ -7,6 +7,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
+import Linkify from './Linkify';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -505,6 +506,8 @@ function PainelSacVeicular({ currentUser }) {
   const [iniciarManuTecnicoId, setIniciarManuTecnicoId]     = useState<string|null>(null);
   const [modalObsProd, setModalObsProd]                     = useState(null);
   const [obsText, setObsText]                               = useState('');
+  // Ver diagnóstico/relato da OS antes de provisionar (estimar tempo) — só leitura, sem query nova (registro já em memória)
+  const [modalVerOs, setModalVerOs]                         = useState(null);
   const [modalItensExecucao, setModalItensExecucao]         = useState(null);
   const [itensExecucao, setItensExecucao]                   = useState([]);
   // Gerenciar equipe (responsáveis/apoios livres pós-início) — OS
@@ -797,6 +800,10 @@ function PainelSacVeicular({ currentUser }) {
                       </td>
                       <td>
                         <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                          <button className="acn-btn" style={{background:'#e2e8f0',color:'#475569',fontSize:9}}
+                            onClick={()=>setModalVerOs(os)} title="Ver diagnóstico/relato antes de provisionar">
+                            👁 VER
+                          </button>
                           {os.status === 'Em Provisionamento' && (
                             <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
                               onClick={()=>{ setProvisionarForm({data_provisao:'',periodo:'Manhã'}); setModalProvisionar(os); }}>
@@ -961,6 +968,53 @@ function PainelSacVeicular({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#0891b2',flex:1}} onClick={salvarObsProducao}>💾 Salvar</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObsProd(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Ver OS (somente leitura) — diagnóstico/relato antes de provisionar */}
+      {modalVerOs && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:520,maxHeight:'85vh',overflowY:'auto'}}>
+            <div className="modal-title">👁 {modalVerOs.numero_os} — {modalVerOs.cliente_nome}</div>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12,fontSize:11,color:'#475569'}}>
+              {modalVerOs.tipo_avaliacao && <span style={{background:'#e2e8f0',padding:'2px 8px',borderRadius:10}}>{modalVerOs.tipo_avaliacao}</span>}
+              <span className="acn-badge" style={{background:STATUS_COR_VEI[modalVerOs.status]||'#94a3b8'}}>{modalVerOs.status}</span>
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>
+              <strong>Veículo/Equipamento:</strong> {modalVerOs.equipamento_nome||'—'}<br/>
+              <strong>Marca/Modelo:</strong> {[modalVerOs.marca,modalVerOs.modelo].filter(Boolean).join(' / ')||'—'}<br/>
+              <strong>Chassi/Série:</strong> {modalVerOs.chassi||modalVerOs.numero_serie||'—'}
+            </div>
+            <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:4}}>🗣️ Defeito Reclamado (relato do cliente)</div>
+            <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11,whiteSpace:'pre-wrap'}}>
+              {modalVerOs.defeito_reclamado ? <Linkify text={modalVerOs.defeito_reclamado} /> : <span style={{color:'#94a3b8'}}>Nenhum defeito reclamado registrado.</span>}
+            </div>
+            {modalVerOs.observacoes && (
+              <>
+                <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:4}}>📝 Observações</div>
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11,whiteSpace:'pre-wrap'}}>
+                  <Linkify text={modalVerOs.observacoes} />
+                </div>
+              </>
+            )}
+            {Array.isArray(modalVerOs.itens_cotacao) && modalVerOs.itens_cotacao.length > 0 && (
+              <>
+                <div style={{fontWeight:700,fontSize:9,color:'#475569',textTransform:'uppercase',marginBottom:4}}>
+                  🔧 Itens já orçados {modalVerOs.valor_orcamento!=null && `— Total: ${fmtVal(modalVerOs.valor_orcamento)}`}
+                </div>
+                <div style={{marginBottom:12}}>
+                  {modalVerOs.itens_cotacao.map((it,i)=>(
+                    <div key={i} style={{fontSize:10,color:'#374151',padding:'3px 0',borderBottom:i<modalVerOs.itens_cotacao.length-1?'1px solid #f1f5f9':'none'}}>
+                      {it.quantidade||1}x {it.descricao||it.codigo||'—'} {it.valor_unitario ? `— ${fmtVal(it.valor_unitario)}` : ''}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div style={{display:'flex',justifyContent:'flex-end'}}>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVerOs(null)}>Fechar</button>
             </div>
           </div>
         </div>

@@ -15,14 +15,15 @@ export default function AjustesProjetoTab({ currentUser }) {
   const [form, setForm] = useState({
     opl_referencia: '', requerente: '', descricao: '',
     prioridade: 'Normal', data_limite: '', setor: 'Serralheria',
-    tipo_solicitacao: 'compra',
+    tipo_solicitacao: 'compra', centro_custo: '',
   });
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
   const [oplesLista, setOplesLista] = useState([]);
+  const [centrosCusto, setCentrosCusto] = useState([]);
   const [tick, setTick] = useState(0);
 
-  useEffect(() => { fetchAll(); fetchOples(); }, []);
+  useEffect(() => { fetchAll(); fetchOples(); fetchCentrosCusto(); }, []);
   useEffect(() => {
     const t = setInterval(() => setTick(p => p + 1), 1000);
     return () => clearInterval(t);
@@ -34,6 +35,11 @@ export default function AjustesProjetoTab({ currentUser }) {
       .not('status_geral', 'in', '("Faturado","Cancelado","Entregue")')
       .order('data_entrada', { ascending: false }).limit(200);
     setOplesLista(data || []);
+  };
+
+  const fetchCentrosCusto = async () => {
+    const { data } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
+    setCentrosCusto(data || []);
   };
 
   const fetchAll = async () => {
@@ -63,6 +69,7 @@ export default function AjustesProjetoTab({ currentUser }) {
         descricao_material: form.descricao.trim(),
         quantidade: 1,
         status_compra: 'Pendente',
+        centro_custo: form.centro_custo || null,
         criado_por: currentUser?.email,
         criado_por_nome: requerente,
         criado_por_setor: 'Demandas Gerais',
@@ -75,7 +82,7 @@ export default function AjustesProjetoTab({ currentUser }) {
       }
       const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
       notificarEvento('demanda_criada_compras', mensagemNotif, form.setor);
-      setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra' });
+      setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra', centro_custo: '' });
       setShowForm(false);
       fetchAll();
       return;
@@ -105,7 +112,7 @@ export default function AjustesProjetoTab({ currentUser }) {
     // Notifica o setor destino
     const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
     notificarEvento('demanda_criada_setor', mensagemNotif, form.setor);
-    setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra' });
+    setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra', centro_custo: '' });
     setShowForm(false);
     fetchAll();
   };
@@ -212,13 +219,26 @@ export default function AjustesProjetoTab({ currentUser }) {
                   onChange={e => setForm({ ...form, data_limite: e.target.value })} />
               </div>
               {form.setor === 'Compras' && (
-                <div className="form-group">
-                  <div style={{ fontSize: 9, color: '#0f766e', background:'#f0fdfa', border:'1px solid #99f6e4',
-                    borderRadius: 5, padding: '6px 10px' }}>
-                    🛒 Este pedido será criado direto na aba <strong>Compras</strong>, onde o comprador monta a
-                    mesa de cotações com os fornecedores.
+                <>
+                  <div className="form-group">
+                    <label className="acn-label">Centro de Custo (opcional)</label>
+                    <select className="acn-input" style={{ width: '100%' }}
+                      value={form.centro_custo}
+                      onChange={e => setForm({ ...form, centro_custo: e.target.value })}>
+                      <option value="">— Não informar —</option>
+                      {centrosCusto.map(c => (
+                        <option key={c.id} value={`${c.codigo} — ${c.nome}`}>{c.codigo} — {c.nome}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
+                  <div className="form-group">
+                    <div style={{ fontSize: 9, color: '#0f766e', background:'#f0fdfa', border:'1px solid #99f6e4',
+                      borderRadius: 5, padding: '6px 10px' }}>
+                      🛒 Este pedido será criado direto na aba <strong>Compras</strong>, onde o comprador monta a
+                      mesa de cotações com os fornecedores.
+                    </div>
+                  </div>
+                </>
               )}
             </div>
             <div className="form-row">

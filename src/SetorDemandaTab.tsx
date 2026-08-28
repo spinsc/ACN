@@ -283,6 +283,22 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
     setEnviandoAnexo(false);
   };
 
+  // Deep-link vindo do painel de Menções ("Demanda X" clicável, contexto
+  // 'demanda_cotacao') — abre o detalhe da demanda em vez de só cair na
+  // aba do setor genérica.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'demanda_cotacao') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('demandas_setoriais').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setModalVer(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const fetchDemandas = async (silent=false) => {
     if (!silent) setLoading(true);
     let q = supabase.from('demandas_setoriais').select('*').eq('setor_destino', setor).order('data_abertura', { ascending: false });

@@ -348,6 +348,22 @@ function FretesPanel({ currentUser }: any) {
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Deep-link vindo do painel de Menções ("Frete X" clicável, contexto
+  // 'frete_aprovacao') — abre o detalhe do frete em vez de só cair na
+  // aba de Logística genérica.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'frete_aprovacao') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('pcp_fretes').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setModalFrete(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const criarFrete = async () => {
     if (!form.descricao.trim()) { alert('Descreva o frete.'); return; }
     setSalvandoFrete(true);

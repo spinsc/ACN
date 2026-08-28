@@ -358,6 +358,7 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
   const [tarefas, setTarefas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filtro, setFiltro] = useState<'todas' | 'nao_iniciada' | 'em_andamento' | 'pausada' | 'concluida'>('todas');
+  const [busca, setBusca] = useState('');
   const [modalNova, setModalNova] = useState(false);
   const [tick, setTick] = useState(Date.now());
 
@@ -371,7 +372,14 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
   useEffect(() => { carregar(); }, []);
   useEffect(() => { const t = setInterval(() => setTick(Date.now()), 1000); return () => clearInterval(t); }, []);
 
-  const filtradas = filtro === 'todas' ? tarefas : tarefas.filter(t => t.status === filtro);
+  const filtradas = tarefas.filter(t => {
+    if (filtro !== 'todas' && t.status !== filtro) return false;
+    if (busca.trim()) {
+      const alvo = `${t.titulo||''} ${t.numero_opl||''} ${t.responsavel_nome||''}`.toLowerCase();
+      if (!alvo.includes(busca.trim().toLowerCase())) return false;
+    }
+    return true;
+  });
 
   return (
     <div>
@@ -389,7 +397,7 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
               <span>⏱️ Controle de Horas/Tarefas ({filtradas.length})</span>
               <button className="acn-btn" style={{ background: '#0f766e', fontSize: 10 }} onClick={() => setModalNova(true)}>+ Nova Tarefa</button>
             </div>
-            <div className="sec-body" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div className="sec-body" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               {(['todas', 'nao_iniciada', 'em_andamento', 'pausada', 'concluida'] as const).map(f => (
                 <button key={f} className="acn-btn"
                   style={{ background: filtro === f ? '#1e293b' : '#e2e8f0', color: filtro === f ? '#fff' : '#475569', fontSize: 10 }}
@@ -397,6 +405,8 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
                   {f === 'todas' ? 'Todas' : STATUS_LABEL[f]}
                 </button>
               ))}
+              <input placeholder="🔍 Buscar por título, OPL ou responsável..." value={busca} onChange={e => setBusca(e.target.value)}
+                style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
             </div>
             <div className="sec-body" style={{ overflowX: 'auto', paddingTop: 0 }}>
               {loading ? <div className="acn-empty">Carregando...</div> : filtradas.length === 0 ? (

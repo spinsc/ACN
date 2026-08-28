@@ -619,6 +619,21 @@ export default function ComercialTab({ currentUser }) {
     if (!silent) setLoading(false);
   };
 
+  // Deep-link vindo do painel de Menções ("OP X" clicável) — abre o modal
+  // "Ver" da OP em vez de só cair na aba Comercial genérica.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'op') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('oples').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setModalVer(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   const salvarOPL = async () => {
     if (!formData.opl || !formData.modelo) { alert('Preencha numero da OP e Modelo!'); return; }
     const isManutencao = (formData.tipo_projeto||'').toLowerCase().includes('manutencao') || (formData.tipo_projeto||'').toLowerCase().includes('manutenção');
