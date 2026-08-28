@@ -117,6 +117,14 @@ const diasRestantes = (v: string) => {
   if (!v) return null;
   return Math.ceil((new Date(v).getTime() - Date.now()) / 86400000);
 };
+// Destaque do card só no DIA EXATO do pregão, sem antecipação — compara por
+// dia civil local (não por diferença de 24h cheias, que erra perto da
+// virada do dia; mesmo cuidado com timestamptz já visto neste projeto).
+const isDiaDisputa = (v: string) => {
+  if (!v) return false;
+  const d = new Date(v), hoje = new Date();
+  return d.getFullYear() === hoje.getFullYear() && d.getMonth() === hoje.getMonth() && d.getDate() === hoje.getDate();
+};
 
 // timestamptz do banco (ex: "2026-09-15 10:30:00+00") → formato aceito por
 // <input type="datetime-local"> (ex: "2026-09-15T10:30"). Sem isso o input
@@ -1596,7 +1604,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
 function LicitCard({ l, onClick, unread = false }) {
   const marcadores: string[] = l.marcadores || [];
   const dias = diasRestantes(l.data_disputa);
-  const urgente = dias !== null && dias >= 0 && dias <= 5;
+  const urgente = isDiaDisputa(l.data_disputa);
   const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Andamento'].includes(l.status);
 
   return (
@@ -1802,6 +1810,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [filtroOperador, setFiltroOperador] = useState<string>('');
+  const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
+  const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
   const [filtroPeriodoDe, setFiltroPeriodoDe] = useState('');
   const [filtroPeriodoAte, setFiltroPeriodoAte] = useState('');
   const [sortBy, setSortBy] = useState('data_disputa');
@@ -1875,6 +1885,27 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   useEffect(() => { fetchLicit(); }, [fetchLicit]);
 
+  // Filtro "por Análise" — mapeia licitação → setores com solicitação de
+  // análise pendente (analise_solicitacoes/analise_setores, mesma estrutura
+  // usada em AnaliseWidget.tsx). Busca em lote, refeita sempre que a lista
+  // de licitações mudar.
+  useEffect(() => {
+    const ids = licitacoes.map(l => l.id);
+    if (!ids.length) { setAnalisesPendentesPorLicit({}); return; }
+    supabase.from('analise_solicitacoes')
+      .select('origem_id, analise_setores(setor, status)')
+      .eq('origem', 'licitacao').eq('status', 'em_andamento')
+      .in('origem_id', ids)
+      .then(({ data }) => {
+        const mapa: Record<string,string[]> = {};
+        (data || []).forEach((sol: any) => {
+          const pendentes = (sol.analise_setores || []).filter((s: any) => s.status === 'pendente').map((s: any) => s.setor);
+          if (pendentes.length) mapa[sol.origem_id] = [...(mapa[sol.origem_id]||[]), ...pendentes];
+        });
+        setAnalisesPendentesPorLicit(mapa);
+      });
+  }, [licitacoes]);
+
   // "Últimas Visualizadas" — ignora os demais filtros/ordenação, mostra
   // exatamente as 20 mais recentes do usuário, na ordem em que foram vistas.
   const listaRecentes = modoRecentes
@@ -1885,6 +1916,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
     .filter(l => !filtroOperador || (l.operador||l.analista_nome||'').toLowerCase().includes(filtroOperador.toLowerCase()))
+    .filter(l => filtroAnaliseSetor === 'todas' || (analisesPendentesPorLicit[l.id]||[]).includes(filtroAnaliseSetor))
     .filter(l => {
       if (!filtroPeriodoDe && !filtroPeriodoAte) return true;
       const disp = l.data_disputa ? new Date(l.data_disputa) : null;
@@ -2007,6 +2039,17 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           </select>
         </div>
         <div>
+          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>🔍 ANÁLISE</div>
+          <select value={filtroAnaliseSetor} onChange={e=>setFiltroAnaliseSetor(e.target.value)}
+            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+            <option value="todas">Todas</option>
+            <option value="Orcamento">Orçamentária</option>
+            <option value="Telecom">Telecom</option>
+            <option value="Engenharia">Engenharia</option>
+            <option value="Comercial">Comercial</option>
+          </select>
+        </div>
+        <div>
           <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>👤 OPERADOR</div>
           <select value={filtroOperador} onChange={e=>setFiltroOperador(e.target.value)}
             style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
@@ -2036,8 +2079,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
             <option value="semestre">Semestre</option>
           </select>
         </div>
-        {(filtroTipo!=='todos'||filtroOperador||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
-          <button onClick={() => { setFiltroTipo('todos'); setFiltroOperador(''); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}
+        {(filtroTipo!=='todos'||filtroOperador||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
+          <button onClick={() => { setFiltroTipo('todos'); setFiltroOperador(''); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}
             style={{ padding:'4px 10px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', fontSize:10, cursor:'pointer' }}>
             ✕ Limpar
           </button>
