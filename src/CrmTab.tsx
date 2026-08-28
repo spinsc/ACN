@@ -1045,8 +1045,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setAbrirSalvandoDoc(false);
   };
 
-  const excluirAbrirDoc = async (id: string, tabela: string) => {
-    if (!window.confirm('Excluir este registro?')) return;
+  const excluirAbrirDoc = async (id: string, tabela: string, label?: string) => {
+    // Mensagem específica (mostra o que vai ser apagado) reduz o risco de
+    // confirmar sem perceber — achado real: usuário apagou uma análise sem
+    // notar, porque "Excluir este registro?" genérico não dizia qual era.
+    const msg = label ? `Excluir "${label}"?` : 'Excluir este registro?';
+    if (!window.confirm(msg)) return;
     await supabase.from(tabela).delete().eq('id', id);
     await fetchAbrirTabContent(modalAbrir, abrirTabDir);
   };
@@ -4006,7 +4010,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                 )}
                               </div>
                               {currentUser?.perfil==='Admin' && (
-                                <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos')}
+                                <button onClick={() => excluirAbrirDoc(d.id,'licitacao_documentos',
+                                  (d.conteudo ? d.conteudo.slice(0,60) + (d.conteudo.length>60?'…':'') : d.nome) || 'este registro')}
                                   style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, cursor:'pointer', flexShrink:0 }}>✕</button>
                               )}
                             </div>
