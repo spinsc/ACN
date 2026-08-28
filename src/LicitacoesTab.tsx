@@ -491,7 +491,26 @@ function ContatosSection({ licitacaoId, currentUser }) {
 function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
   const editorRef  = useRef<any>(null);
   const imgInputRef = useRef<any>(null);
+  const corTextoRef = useRef<any>(null);
+  const corDestaqueRef = useRef<any>(null);
+  const savedRangeRef = useRef<Range|null>(null);
   const timerRef   = useRef<any>(null);
+
+  // O <input type="color"> nativo rouba o foco do editor ao abrir — sem isso
+  // a seleção de texto se perde e a cor não teria o que colorir. Salva a
+  // seleção antes de abrir o picker, restaura antes de aplicar a cor.
+  const salvarSelecao = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const restaurarSelecaoEAplicar = (cmd: string, valor: string) => {
+    const sel = window.getSelection();
+    if (sel && savedRangeRef.current) { sel.removeAllRanges(); sel.addRange(savedRangeRef.current); }
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, valor);
+  };
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo]       = useState(false);
 
@@ -564,15 +583,35 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
       <div style={{ background:'#f1f5f9', borderBottom:'1px solid #e2e8f0', padding:'4px 8px',
         display:'flex', alignItems:'center', gap:4 }}>
         <span style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginRight:4 }}>✏️ Área Livre</span>
-        {(['bold','italic'] as const).map(cmd => (
+        {(['bold','italic','underline','strikeThrough'] as const).map(cmd => (
           <button key={cmd} onMouseDown={e => { e.preventDefault(); document.execCommand(cmd); }}
-            title={cmd === 'bold' ? 'Negrito' : 'Itálico'}
+            title={cmd === 'bold' ? 'Negrito' : cmd === 'italic' ? 'Itálico' : cmd === 'underline' ? 'Sublinhado' : 'Tachado'}
             style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
               padding:'2px 7px', fontSize:11, fontWeight: cmd==='bold' ? 700 : 400,
-              fontStyle: cmd==='italic' ? 'italic' : 'normal', cursor:'pointer', lineHeight:1.4 }}>
-            {cmd === 'bold' ? 'B' : 'I'}
+              fontStyle: cmd==='italic' ? 'italic' : 'normal',
+              textDecoration: cmd==='underline' ? 'underline' : cmd==='strikeThrough' ? 'line-through' : 'none',
+              cursor:'pointer', lineHeight:1.4 }}>
+            {cmd === 'bold' ? 'B' : cmd === 'italic' ? 'I' : cmd === 'underline' ? 'S' : 'X'}
           </button>
         ))}
+        {/* Cor de texto e destaque/pintado — reaproveita o padrão de input
+            escondido já usado para inserir imagem (imgInputRef abaixo). */}
+        <button onMouseDown={e => { e.preventDefault(); salvarSelecao(); corTextoRef.current?.click(); }}
+          title="Cor do texto"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          🎨
+        </button>
+        <input ref={corTextoRef} type="color" style={{ display:'none' }}
+          onChange={e => { restaurarSelecaoEAplicar('foreColor', e.target.value); autosave(); }} />
+        <button onMouseDown={e => { e.preventDefault(); salvarSelecao(); corDestaqueRef.current?.click(); }}
+          title="Destacar / pintar fundo do texto"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          🖍️
+        </button>
+        <input ref={corDestaqueRef} type="color" style={{ display:'none' }}
+          onChange={e => { restaurarSelecaoEAplicar('hiliteColor', e.target.value); autosave(); }} />
         <button onMouseDown={e => {
           e.preventDefault();
           const url = window.prompt('URL do link:');
@@ -1538,9 +1577,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     )}
                   </div>
                 ))}
-
-                {/* Área Livre desta aba */}
-                <AreaLivre licitacaoId={licit.id} tabKey={tabDir} areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
+                {/* Área Livre genérica por aba removida daqui — fica só em
+                    Andamento (painel esquerdo). "Arquivos de Licitação" ganha
+                    áreas livres próprias, estruturadas em sub-quadros. */}
               </div>
             )}
           </div>
