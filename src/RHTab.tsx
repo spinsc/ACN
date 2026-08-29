@@ -1515,7 +1515,16 @@ function ComissoesRH({ funcionarios, currentUser }) {
   const hoje = new Date();
   const [mes, setMes]     = useState(hoje.getMonth() + 1);
   const [ano, setAno]     = useState(hoje.getFullYear());
+  // Período — Mês/Ano (padrão) ou um intervalo de datas livre
+  const [modoPeriodo, setModoPeriodo] = useState<'mes'|'intervalo'>('mes');
+  const [dataDe, setDataDe] = useState('');
+  const [dataAte, setDataAte] = useState('');
+  // Origem — Adaptação = OPs (fabricação/transformação veicular) + OS de
+  // manutenção veicular; exclui só as demais OS de SAC (rádio/equipamento
+  // avulso, não é "carro").
+  const [filtroOrigem, setFiltroOrigem] = useState<'todos'|'adaptacao'>('todos');
   const [dados, setDados] = useState<any[]>([]);
+  const [grupos, setGrupos] = useState<any[]>([]); // pipeline por técnico/dupla/equipe
   const [fechamentos, setFechamentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [aprovando, setAprovando] = useState<string|null>(null);
@@ -1530,26 +1539,35 @@ function ComissoesRH({ funcionarios, currentUser }) {
 
   const calcular = async () => {
     setLoading(true);
-    // Buscar OPs faturadas no mês/ano selecionado
-    const mesStr = String(mes).padStart(2,'0');
-    const inicioMes = `${ano}-${mesStr}-01`;
-    const fimMes    = new Date(ano, mes, 0).toISOString().split('T')[0];
+    // Período: Mês/Ano (calendário) ou intervalo de datas livre
+    let inicio: string, fim: string;
+    if (modoPeriodo === 'intervalo') {
+      if (!dataDe || !dataAte) { alert('Informe as duas datas do período.'); setLoading(false); return; }
+      inicio = dataDe; fim = dataAte;
+    } else {
+      const mesStr = String(mes).padStart(2,'0');
+      inicio = `${ano}-${mesStr}-01`;
+      fim    = new Date(ano, mes, 0).toISOString().split('T')[0];
+    }
 
     const [opRes, osRes, fechRes] = await Promise.all([
       supabase.from('oples')
-        .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf')
-        .gte('data_emissao_nf', inicioMes).lte('data_emissao_nf', fimMes)
+        .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome')
+        .gte('data_emissao_nf', inicio).lte('data_emissao_nf', fim)
         .not('tecnico_producao_id','is',null),
       supabase.from('sac_ordens_servico')
-        .select('id,numero_os,cliente_nome,tecnico_producao_id,tecnico_responsavel,valor_total,valor_mao_de_obra,data_faturamento')
-        .gte('data_faturamento', inicioMes).lte('data_faturamento', fimMes)
+        .select('id,numero_os,cliente_nome,tecnico_producao_id,tecnico_responsavel,valor_total,valor_mao_de_obra,data_faturamento,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,is_manutencao_veicular')
+        .gte('data_faturamento', inicio).lte('data_faturamento', fim)
         .not('tecnico_producao_id','is',null),
-      supabase.from('rh_comissoes_fechamento')
-        .select('*').eq('mes', mes).eq('ano', ano),
+      modoPeriodo === 'mes'
+        ? supabase.from('rh_comissoes_fechamento').select('*').eq('mes', mes).eq('ano', ano)
+        : Promise.resolve({ data: [] as any[] }),
     ]);
 
     const ops: any[] = opRes.data || [];
-    const oss: any[] = osRes.data || [];
+    // Origem "Adaptação": OPs (toda fabricação/transformação de veículo) +
+    // só as OS de manutenção veicular — exclui SAC de equipamento/rádio avulso.
+    const oss: any[] = (osRes.data || []).filter((os: any) => filtroOrigem === 'todos' || os.is_manutencao_veicular === true);
     setFechamentos(fechRes.data || []);
 
     // Mapa auxiliar id -> dados do item (OP ou OS), pra resolver cada linha de
@@ -1559,10 +1577,14 @@ function ComissoesRH({ funcionarios, currentUser }) {
       tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
       valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
       valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria, data_faturamento:op.data_emissao_nf,
+      modo_execucao:op.modo_execucao, equipe_id:op.equipe_id, equipe_nome:op.equipe_nome,
+      tecnico_producao_id:op.tecnico_producao_id, tecnico_producao_2_id:op.tecnico_producao_2_id, tecnico_producao_2_nome:op.tecnico_producao_2_nome,
     }; });
     oss.forEach(os => { itemById[os.id] = {
       tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
       valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra, data_faturamento:os.data_faturamento,
+      modo_execucao:os.modo_execucao, equipe_id:os.equipe_id, equipe_nome:os.equipe_nome,
+      tecnico_producao_id:os.tecnico_producao_id, tecnico_producao_2_id:os.tecnico_producao_2_id, tecnico_producao_2_nome:os.tecnico_producao_2_nome,
     }; });
 
     // Fonte única de crédito: responsaveis_producao (semeada com o técnico
@@ -1617,7 +1639,62 @@ function ComissoesRH({ funcionarios, currentUser }) {
       tec.totalComissao = (tec.totalBase * (tec.percentual / 100)) + tec.totalComissaoApoio;
     });
 
+    // ── Pipeline agrupado por Técnico individual / Dupla / Equipe ──────────
+    // Usa o mesmo item.base/comissão já calculado acima (por técnico), só
+    // reagrupa pela "chave de execução" do item (modo_execucao do
+    // OP/OS) em vez de por técnico isolado — uma dupla/equipe vira 1 grupo
+    // com a soma dos dois, sem contar o mesmo OP/OS duas vezes na contagem.
+    const chaveGrupo = (item: any) => {
+      if (item.modo_execucao === 'equipe' && item.equipe_id) {
+        return { chave: `equipe:${item.equipe_id}`, label: item.equipe_nome || '—', tipo: 'equipe' as const };
+      }
+      if (item.modo_execucao === 'dupla' && item.tecnico_producao_2_id) {
+        const nome1 = mapa[item.tecnico_producao_id]?.tecnicoNome || '—';
+        const nome2 = item.tecnico_producao_2_nome || '—';
+        const chave = ['dupla', item.tecnico_producao_id, item.tecnico_producao_2_id].sort().join(':');
+        return { chave, label: `${nome1} + ${nome2}`, tipo: 'dupla' as const };
+      }
+      if (item.tecnico_producao_id) {
+        return { chave: `individual:${item.tecnico_producao_id}`, label: mapa[item.tecnico_producao_id]?.tecnicoNome || '—', tipo: 'individual' as const };
+      }
+      return null;
+    };
+
+    const mapaGrupos: Record<string, any> = {};
+    Object.values(mapa).forEach((tec: any) => {
+      [...tec.ops, ...tec.oss].forEach((item: any) => {
+        if (item.papel === 'apoio') return; // apoio não define o grupo, só é contabilizado dentro dele
+        const g = chaveGrupo(item);
+        if (!g) return;
+        if (!mapaGrupos[g.chave]) {
+          mapaGrupos[g.chave] = { chave: g.chave, label: g.label, tipo: g.tipo, itensVistos: new Set<string>(), qtdComApoio: 0, qtdSemApoio: 0, totalComissao: 0 };
+        }
+        const grupo = mapaGrupos[g.chave];
+        if (grupo.itensVistos.has(item.id)) { grupo.totalComissao += item.base * tec.percentual / 100; return; } // 2º membro da dupla/equipe no mesmo item — só soma a comissão dele
+        grupo.itensVistos.add(item.id);
+        grupo.totalComissao += item.base * tec.percentual / 100;
+      });
+    });
+    // Marca com/sem apoio (feito num 2º passo, olhando responsaveis_producao
+    // diretamente por item, já que "apoio" não passa pela chaveGrupo acima).
+    const apoiosPorItem: Record<string, boolean> = {};
+    responsaveis.forEach((r: any) => { if (r.papel === 'apoio') apoiosPorItem[r.referencia_id] = true; });
+    Object.values(mapaGrupos).forEach((grupo: any) => {
+      grupo.itensVistos.forEach((itemId: string) => {
+        if (apoiosPorItem[itemId]) grupo.qtdComApoio++; else grupo.qtdSemApoio++;
+      });
+      grupo.qtdTotal = grupo.itensVistos.size;
+    });
+    // Soma a comissão dos apoios de cada item no total do grupo dono do item
+    Object.values(mapa).forEach((tec: any) => {
+      [...tec.ops, ...tec.oss].filter((i: any) => i.papel === 'apoio').forEach((item: any) => {
+        const grupoDono = Object.values(mapaGrupos).find((gr: any) => gr.itensVistos.has(item.id));
+        if (grupoDono) grupoDono.totalComissao += item.base * 0.001;
+      });
+    });
+
     setDados(Object.values(mapa));
+    setGrupos(Object.values(mapaGrupos).sort((a: any, b: any) => b.qtdTotal - a.qtdTotal));
     setLoading(false);
   };
 
@@ -1667,21 +1744,74 @@ function ComissoesRH({ funcionarios, currentUser }) {
 
       {!collapsed && abaComissao === 'calculo' && (
         <div style={{padding:'10px 12px'}}>
-          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
-            <select value={mes} onChange={e=>setMes(Number(e.target.value))}
+          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
+            <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d1d5db'}}>
+              <button onClick={()=>setModoPeriodo('mes')} style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
+                background:modoPeriodo==='mes'?'#2563eb':'#fff',color:modoPeriodo==='mes'?'#fff':'#475569'}}>Mês/Ano</button>
+              <button onClick={()=>setModoPeriodo('intervalo')} style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
+                background:modoPeriodo==='intervalo'?'#2563eb':'#fff',color:modoPeriodo==='intervalo'?'#fff':'#475569'}}>Período (De/Até)</button>
+            </div>
+            {modoPeriodo === 'mes' ? (
+              <>
+                <select value={mes} onChange={e=>setMes(Number(e.target.value))}
+                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+                  {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
+                </select>
+                <select value={ano} onChange={e=>setAno(Number(e.target.value))}
+                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+                  {anos.map(y=><option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            ) : (
+              <>
+                <input type="date" value={dataDe} onChange={e=>setDataDe(e.target.value)}
+                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
+                <span style={{fontSize:10,color:'#94a3b8'}}>até</span>
+                <input type="date" value={dataAte} onChange={e=>setDataAte(e.target.value)}
+                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
+              </>
+            )}
+            <select value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value as any)}
               style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
-              {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
-            </select>
-            <select value={ano} onChange={e=>setAno(Number(e.target.value))}
-              style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
-              {anos.map(y=><option key={y} value={y}>{y}</option>)}
+              <option value="todos">Todas as origens</option>
+              <option value="adaptacao">🚗 Só Adaptação (veículos)</option>
             </select>
             <button onClick={calcular} disabled={loading}
               style={{background:'#2563eb',color:'#fff',border:'none',borderRadius:4,padding:'4px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
               {loading ? 'Calculando...' : '🔍 Calcular'}
             </button>
-            <span style={{fontSize:10,color:'#64748b'}}>Período: {mesNome(mes)}/{ano} · Apenas OPs/OSs faturadas no mês</span>
           </div>
+          <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+            Período: {modoPeriodo==='mes' ? `${mesNome(mes)}/${ano}` : `${dataDe||'—'} até ${dataAte||'—'}`} · Apenas OPs/OSs faturadas no período
+            {filtroOrigem==='adaptacao' && <> · 🚗 só OPs (transformação veicular) + OS de manutenção veicular</>}
+            {modoPeriodo==='intervalo' && <> · aprovação de fechamento fica disponível só no modo Mês/Ano</>}
+          </div>
+
+          {grupos.length > 0 && (
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6,textTransform:'uppercase'}}>
+                📊 Pipeline — OP/OS por Técnico, Dupla e Equipe
+              </div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {grupos.map((g:any) => (
+                  <div key={g.chave} style={{minWidth:170,border:'1px solid #e2e8f0',borderRadius:6,padding:'8px 10px',
+                    background: g.tipo==='equipe' ? '#faf5ff' : g.tipo==='dupla' ? '#eff6ff' : '#f8fafc'}}>
+                    <div style={{fontSize:9,fontWeight:700,color: g.tipo==='equipe' ? '#7c3aed' : g.tipo==='dupla' ? '#2563eb' : '#475569',marginBottom:3}}>
+                      {g.tipo==='equipe' ? '🏷️ Equipe' : g.tipo==='dupla' ? '👥 Dupla' : '👤 Individual'}
+                    </div>
+                    <div style={{fontWeight:700,fontSize:12,color:'#1e293b',marginBottom:5}}>{g.label}</div>
+                    <div style={{fontSize:16,fontWeight:800,color:'#1e293b'}}>{g.qtdTotal} <span style={{fontSize:9,fontWeight:600,color:'#94a3b8'}}>OP/OS</span></div>
+                    <div style={{fontSize:9,color:'#64748b',marginBottom:4}}>
+                      {g.qtdComApoio>0 && <span style={{color:'#b45309',fontWeight:600}}>{g.qtdComApoio} c/ apoio</span>}
+                      {g.qtdComApoio>0 && g.qtdSemApoio>0 && ' · '}
+                      {g.qtdSemApoio>0 && <span>{g.qtdSemApoio} sem apoio</span>}
+                    </div>
+                    <div style={{fontSize:12,fontWeight:800,color:'#16a34a'}}>{fmtMoeda(g.totalComissao)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {dados.length === 0 && !loading && (
             <div className="acn-empty">Clique em Calcular para carregar as comissões do período.</div>
@@ -1710,7 +1840,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
                     </div>
                     {aprov && <div style={{fontSize:9,color:'#16a34a',fontWeight:600}}>✅ Aprovado por {aprov.aprovado_por}</div>}
                   </div>
-                  {podeAutorizar && !aprov && (
+                  {podeAutorizar && !aprov && modoPeriodo === 'mes' && (
                     <button onClick={()=>aprovar(tec)} disabled={aprovando===tec.tecnicoId}
                       style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:4,padding:'5px 12px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
                       {aprovando===tec.tecnicoId ? '...' : 'Aprovar'}
