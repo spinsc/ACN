@@ -216,6 +216,10 @@ export default function FiscalTab({ currentUser }) {
 
   const aguardando = opls.filter(o => o.status_geral === 'Aguarda Emissao NF');
   const faturados = opls.filter(o => o.status_geral === 'Faturado e Disponivel para Entrega');
+  const osAguardando = ordensOS.filter(o => o.status === 'Aguardando Emissão NF');
+  const osFaturadas  = ordensOS.filter(o => o.status === 'Faturada - Aguardando Entrega');
+  const totalPendentes = aguardando.length + osAguardando.length;
+  const totalEmitidas  = faturados.length + osFaturadas.length;
 
   const contagemPorBase = {};
   aguardando.forEach(o => { const b = baseOplDe(o.opl); contagemPorBase[b] = (contagemPorBase[b]||0) + 1; });
@@ -228,6 +232,20 @@ export default function FiscalTab({ currentUser }) {
 
   return (
     <div>
+      {/* PIPELINE — Notas Pendentes / Emitidas (OPLs + OS veiculares, tudo que está na fila agora) */}
+      <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:14}}>
+        <div style={{flex:'1 1 220px',minWidth:200,background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:'12px 16px'}}>
+          <div style={{fontSize:10,fontWeight:700,color:'#92400e',textTransform:'uppercase',letterSpacing:'.3px',marginBottom:4}}>📤 Notas Pendentes</div>
+          <div style={{fontSize:26,fontWeight:800,color:'#b45309'}}>{totalPendentes}</div>
+          <div style={{fontSize:10,color:'#92400e'}}>{aguardando.length} OPL{aguardando.length!==1?'s':''} · {osAguardando.length} OS</div>
+        </div>
+        <div style={{flex:'1 1 220px',minWidth:200,background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:8,padding:'12px 16px'}}>
+          <div style={{fontSize:10,fontWeight:700,color:'#166534',textTransform:'uppercase',letterSpacing:'.3px',marginBottom:4}}>✅ Notas Emitidas</div>
+          <div style={{fontSize:26,fontWeight:800,color:'#15803d'}}>{totalEmitidas}</div>
+          <div style={{fontSize:10,color:'#166534'}}>{faturados.length} OPL{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</div>
+        </div>
+      </div>
+
       {/* AGUARDANDO EMISSAO */}
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
@@ -360,16 +378,16 @@ export default function FiscalTab({ currentUser }) {
       )}
 
       {/* OS DE MANUTENÇÃO VEICULAR — AGUARDANDO EMISSAO */}
-      {ordensOS.filter(o=>o.status==='Aguardando Emissão NF').length > 0 && (
+      {osAguardando.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
-            <span style={{color:'#92400e'}}>OS Veiculares Aguardando Emissao de NF-e ({ordensOS.filter(o=>o.status==='Aguardando Emissão NF').length})</span>
+            <span style={{color:'#92400e'}}>OS Veiculares Aguardando Emissao de NF-e ({osAguardando.length})</span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
               <tbody>
-                {ordensOS.filter(o=>o.status==='Aguardando Emissão NF').map(o => (
+                {osAguardando.map(o => (
                   <tr key={o.id}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
@@ -393,16 +411,16 @@ export default function FiscalTab({ currentUser }) {
       )}
 
       {/* OS DE MANUTENÇÃO VEICULAR — JA FATURADAS */}
-      {ordensOS.filter(o=>o.status==='Faturada - Aguardando Entrega').length > 0 && (
+      {osFaturadas.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr" style={{background:'#f0fdf4',borderBottom:'2px solid #22c55e'}}>
-            <span style={{color:'#166534'}}>OS Veiculares Faturadas — Aguardando Entrega ({ordensOS.filter(o=>o.status==='Faturada - Aguardando Entrega').length})</span>
+            <span style={{color:'#166534'}}>OS Veiculares Faturadas — Aguardando Entrega ({osFaturadas.length})</span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th></tr></thead>
               <tbody>
-                {ordensOS.filter(o=>o.status==='Faturada - Aguardando Entrega').map(o => (
+                {osFaturadas.map(o => (
                   <tr key={o.id}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
