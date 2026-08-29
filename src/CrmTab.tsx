@@ -913,19 +913,69 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const setLoteCampo = (id: string, campo: string, valor: string) =>
     setLoteForm(f => ({ ...f, [id]: { ...f[id], [campo]: valor } }));
 
-  // Cola uma lista de chassis (um por linha) e distribui na ordem das unidades
-  // do lote (/01, /02...) — não sobrescreve o que já foi digitado manualmente
-  // além do que a lista colada cobre.
+  // Cola uma lista vinda do Excel (Ctrl+C na planilha, Ctrl+V aqui) e aplica
+  // às unidades do lote. Duas situações:
+  //  - Veículo já emplacado: colando Placa + Chassi (2 colunas, em qualquer
+  //    ordem — reconhece o formato da placa) cada linha é casada com a
+  //    unidade que JÁ TEM aquela placa cadastrada, sem depender da ordem.
+  //  - Veículo 0KM sem placa ainda: colando só uma coluna de chassis (ou
+  //    linhas sem placa reconhecível), distribui em ordem entre as unidades
+  //    do lote que ainda não têm chassi nem placa preenchidos.
+  const REGEX_PLACA = /^[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}$/i;
   const aplicarColaChassis = () => {
     if (!modalLote) return;
-    const linhas = loteColar.split('\n').map(l => l.trim()).filter(Boolean);
-    if (linhas.length === 0) return;
+    const linhasRaw = loteColar.split('\n').map(l => l.trim()).filter(Boolean);
+    if (linhasRaw.length === 0) return;
+
+    const linhas = linhasRaw.map(l => {
+      const partes = l.split(/\t|;/).map(p => p.trim()).filter(Boolean);
+      if (partes.length < 2) return { chassi: partes[0] || '', placa: '' };
+      const idxPlaca = partes.findIndex(p => REGEX_PLACA.test(p.replace(/\s/g, '')));
+      if (idxPlaca >= 0) {
+        return { placa: partes[idxPlaca], chassi: partes.find((_, i) => i !== idxPlaca) || '' };
+      }
+      // Nenhuma coluna parece placa — assume ordem [chassi, placa]
+      return { chassi: partes[0], placa: partes[1] || '' };
+    });
+
     setLoteForm(f => {
       const novo = { ...f };
-      modalLote.forEach((o, i) => {
-        if (linhas[i] == null) return;
-        novo[o.id] = { ...novo[o.id], chassi: linhas[i] };
+      const usados = new Set<string>();
+
+      // 1) Casa por placa já cadastrada na unidade (mais confiável que ordem)
+      const semCasamento: typeof linhas = [];
+      for (const linha of linhas) {
+        let casou = false;
+        if (linha.placa) {
+          const alvo = modalLote.find(o => !usados.has(o.id) &&
+            (novo[o.id]?.placa || '').trim().toUpperCase() === linha.placa.toUpperCase());
+          if (alvo) {
+            usados.add(alvo.id);
+            novo[alvo.id] = {
+              ...novo[alvo.id],
+              chassi: linha.chassi || novo[alvo.id].chassi,
+              placa: linha.placa || novo[alvo.id].placa,
+            };
+            casou = true;
+          }
+        }
+        if (!casou) semCasamento.push(linha);
+      }
+
+      // 2) O restante (sem placa reconhecida/casada) distribui em ordem
+      // entre as unidades ainda sem chassi e sem placa (veículo 0KM sem
+      // vínculo definido ainda).
+      const livres = modalLote.filter(o => !usados.has(o.id) && !novo[o.id]?.chassi && !novo[o.id]?.placa);
+      semCasamento.forEach((linha, i) => {
+        const alvo = livres[i];
+        if (!alvo) return;
+        novo[alvo.id] = {
+          ...novo[alvo.id],
+          chassi: linha.chassi || novo[alvo.id].chassi,
+          placa: linha.placa || novo[alvo.id].placa,
+        };
       });
+
       return novo;
     });
   };
@@ -4254,8 +4304,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
 
           <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:14 }}>
-            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Colar lista de chassis (um por linha, na ordem das unidades abaixo)</div>
-            <textarea className="acn-input" rows={3} placeholder={'Ex:\n9BW...\n9BW...\n9BW...'}
+            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Colar do Excel (Ctrl+C na planilha, Ctrl+V aqui)</div>
+            <div style={{ fontSize:8, color:'#94a3b8', marginBottom:6 }}>
+              Só chassi (uma coluna) → distribui em ordem entre as unidades ainda sem chassi e sem placa (0KM sem vínculo).
+              Placa + Chassi (duas colunas, em qualquer ordem) → casa cada linha com a unidade que já tem aquela placa cadastrada,
+              não importa a ordem.
+            </div>
+            <textarea className="acn-input" rows={3} placeholder={'Ex. só chassi:\n9BW...\n9BW...\n\nEx. placa + chassi:\nABC1D23\t9BW...\nDEF4G56\t9BW...'}
               value={loteColar} onChange={e=>setLoteColar(e.target.value)}
               style={{ width:'100%', resize:'vertical', fontFamily:'monospace', fontSize:10 }} />
             <button onClick={aplicarColaChassis}
