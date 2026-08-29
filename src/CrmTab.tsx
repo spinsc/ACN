@@ -15,6 +15,7 @@ import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared
 import { CotacoesCrmPanel } from './CotacoesTab';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import AgendaWidget from './AgendaWidget';
+import { notificarEvento, msg } from './whatsappHelper';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -209,6 +210,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [oplAcomp, setOplAcomp]         = useState<any|null>(null);   // OPL com acompanhamento aberto
   const [oplFormEdit, setOplFormEdit]   = useState<any>({});
   const [oplSalvando, setOplSalvando]   = useState(false);
+  // Seleção livre por checkbox (não precisa ser do mesmo lote/base) — ação
+  // em massa: Liberar Fiscal e Confirmar Entrega, mesmo padrão do
+  // ProducaoTab.tsx (Iniciar Produção/Liberar CQ em lote).
+  const [oplsSelecionadas, setOplsSelecionadas] = useState<Set<string>>(new Set());
+  const toggleOplSelecionada = (id: string) => setOplsSelecionadas(prev => {
+    const novo = new Set(prev);
+    if (novo.has(id)) novo.delete(id); else novo.add(id);
+    return novo;
+  });
+  const [aplicandoLoteOpls, setAplicandoLoteOpls] = useState(false);
+  const [modalEntregaLote, setModalEntregaLote] = useState<any[]|null>(null); // OPLs selecionadas p/ confirmar entrega
+  const [nomeRecebeuLote, setNomeRecebeuLote] = useState('');
 
   // Lançamento em lote de chassi/placa/CNPJ por unidade desmembrada
   const [modalLote, setModalLote]       = useState<any[]|null>(null); // irmaos do lote sendo editado
@@ -2597,6 +2610,56 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           }]);
           fetchOplsEmAberto();
         };
+
+        // Libera para o Fiscal todas as selecionadas de uma vez — mesma
+        // regra do botão individual (só as que estão Aprovado CQ/Aguardando
+        // Liberação Comercial; ignora as demais).
+        const LIBERAVEIS_FISCAL = ['Aprovado CQ - Aguardando Liberacao Comercial', 'Aguardando Liberacao Comercial'];
+        const liberarFiscalEmLote = async () => {
+          const alvos = oplsEmAberto.filter((o: any) => oplsSelecionadas.has(o.id) && LIBERAVEIS_FISCAL.includes(o.status_geral));
+          if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está pronta para liberação ao Fiscal.'); return; }
+          if (!window.confirm(`Liberar ${alvos.length} OP(s) selecionada(s) para o Fiscal emitir a NF?`)) return;
+          setAplicandoLoteOpls(true);
+          const agora = new Date().toISOString();
+          for (const o of alvos) {
+            await supabase.from('oples').update({ status_geral: 'Aguarda Emissao NF', data_liberacao_comercial: agora }).eq('id', o.id);
+            await supabase.from('logs_movimentacao_opl').insert([{
+              opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
+              evento: 'OPL liberada para emissão de NF pelo Fiscal (ação em lote).',
+              status_anterior: o.status_geral, status_novo: 'Aguarda Emissao NF',
+              usuario_nome: currentUser?.nome || null, data_hora: agora,
+            }]);
+          }
+          setAplicandoLoteOpls(false);
+          setOplsSelecionadas(new Set());
+          fetchOplsEmAberto();
+        };
+
+        // Confirma a entrega ao cliente — usada tanto pelo botão individual
+        // (1 OPL) quanto pela ação em lote (várias de uma vez, mesmo nome de
+        // quem recebeu para todas — pensado para lote do mesmo cliente).
+        const confirmarEntregaLote = async () => {
+          if (!modalEntregaLote || modalEntregaLote.length === 0) return;
+          if (!nomeRecebeuLote.trim()) { alert('Informe o nome de quem recebeu!'); return; }
+          setAplicandoLoteOpls(true);
+          const agora = new Date().toISOString();
+          for (const o of modalEntregaLote) {
+            await supabase.from('oples').update({
+              status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeuLote.trim(), data_entrega: agora,
+            }).eq('id', o.id);
+            await supabase.from('logs_movimentacao_opl').insert([{
+              opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
+              evento: `Equipamento entregue. Recebeu: ${nomeRecebeuLote.trim()}`,
+              status_anterior: o.status_geral, status_novo: 'Faturado',
+              usuario_nome: currentUser?.nome || null, data_hora: agora,
+            }]);
+            notificarEvento('comercial_entregue', msg.entregue(o.opl, o.cliente_nome||'—', nomeRecebeuLote.trim()));
+          }
+          setAplicandoLoteOpls(false);
+          setModalEntregaLote(null); setNomeRecebeuLote('');
+          setOplsSelecionadas(new Set());
+          fetchOplsEmAberto();
+        };
         const oplsFiltradas = oplsEmAberto.filter(o => {
           if (oplsFiltro === 'crm')     return !!o.crm_oportunidade_id;
           if (oplsFiltro === 'sem_crm') return !o.crm_oportunidade_id;
@@ -2642,6 +2705,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                   <thead>
                     <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
+                      <th style={{ padding:'5px 8px', borderBottom:'2px solid #e2e8f0' }}></th>
                       {['OPL','Cliente','Tipo/Veículo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
                         <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
@@ -2673,6 +2737,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
                         return (
                           <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                            <td style={{ padding:'5px 8px', textAlign:'center' }}>
+                              <input type="checkbox" checked={oplsSelecionadas.has(o.id)} onChange={()=>toggleOplSelecionada(o.id)} style={{ cursor:'pointer' }} />
+                            </td>
                             <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
                               <LinkOpl opl={o} currentUser={currentUser} />
                             </td>
@@ -2729,6 +2796,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                     🟡 LIBERAR FISCAL
                                   </button>
                                 )}
+                                {o.status_geral === 'Faturado e Disponivel para Entrega' && (
+                                  <button
+                                    onClick={() => { setModalEntregaLote([o]); setNomeRecebeuLote(''); }}
+                                    style={{ fontSize:9, padding:'3px 9px', background:'#22c55e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
+                                    ✅ CONFIRMAR ENTREGA
+                                  </button>
+                                )}
                                 <button title="Editar OPL"
                                   onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
                                   style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
@@ -2754,9 +2828,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         const qtdSemChassi = irmaos.filter(o => semDado(o.chassi)).length;
                         const qtdSemPlaca  = irmaos.filter(o => semDado(o.placa)).length;
                         const qtdSemModelo = irmaos.filter(o => semDado(o.modelo)).length;
+                        const todasLoteSelecionadas = irmaos.every((o:any) => oplsSelecionadas.has(o.id));
                         return (
                           <React.Fragment key={base}>
                             <tr style={{ background:'#f5f3ff', borderLeft:'4px solid #7c3aed', borderBottom:'1px solid #f1f5f9' }}>
+                              <td style={{ padding:'5px 8px', textAlign:'center' }}>
+                                <input type="checkbox" checked={todasLoteSelecionadas} title="Selecionar todas as unidades deste lote"
+                                  onChange={()=>setOplsSelecionadas(prev => {
+                                    const novo = new Set(prev);
+                                    irmaos.forEach((o:any) => { if (todasLoteSelecionadas) novo.delete(o.id); else novo.add(o.id); });
+                                    return novo;
+                                  })} style={{ cursor:'pointer' }} />
+                              </td>
                               <td style={{ padding:'5px 8px', fontWeight:700, color:'#6d28d9', whiteSpace:'nowrap' }}>
                                 🔗 {base}
                                 <div style={{ marginTop:2 }}>
@@ -2804,6 +2887,54 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     })()}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* ── Barra de ação em lote — seleção livre por checkbox, não precisa ser do mesmo lote/base ── */}
+            {oplsSelecionadas.size > 0 && (
+              <div style={{ position:'fixed', left:'50%', transform:'translateX(-50%)', bottom:16, zIndex:1500,
+                background:'#1e293b', color:'white', borderRadius:8, padding:'10px 16px', boxShadow:'0 8px 24px rgba(0,0,0,.3)',
+                display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', maxWidth:'92vw' }}>
+                <strong style={{ fontSize:12 }}>{oplsSelecionadas.size} selecionada{oplsSelecionadas.size!==1?'s':''}</strong>
+                <button className="acn-btn" style={{ background:'#f59e0b', fontSize:10 }} disabled={aplicandoLoteOpls} onClick={liberarFiscalEmLote}>
+                  {aplicandoLoteOpls ? 'Aplicando...' : '🟡 Liberar Fiscal em Lote'}
+                </button>
+                <button className="acn-btn" style={{ background:'#22c55e', fontSize:10 }}
+                  onClick={() => {
+                    const alvos = oplsEmAberto.filter((o:any) => oplsSelecionadas.has(o.id) && o.status_geral === 'Faturado e Disponivel para Entrega');
+                    if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Faturado e Disponível para Entrega".'); return; }
+                    setModalEntregaLote(alvos); setNomeRecebeuLote('');
+                  }}>
+                  ✅ Confirmar Entrega em Lote
+                </button>
+                <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={()=>setOplsSelecionadas(new Set())}>
+                  ✕ Limpar seleção
+                </button>
+              </div>
+            )}
+
+            {/* ── Modal Confirmar Entrega (individual e em lote — mesmo nome de quem recebeu para todas) ── */}
+            {modalEntregaLote && (
+              <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget && !aplicandoLoteOpls){setModalEntregaLote(null);setNomeRecebeuLote('');}}}>
+                <div className="modal-box" style={{ maxWidth:420 }}>
+                  <div className="modal-title">✅ Confirmar Entrega{modalEntregaLote.length>1?` — ${modalEntregaLote.length} unidades`:` — ${modalEntregaLote[0]?.opl}`}</div>
+                  <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>
+                    {modalEntregaLote.length > 1
+                      ? 'O nome informado será registrado como quem recebeu em todas as unidades selecionadas.'
+                      : `Cliente: ${modalEntregaLote[0]?.cliente_nome || '—'}`}
+                  </div>
+                  <label className="acn-label">Nome de quem recebeu *</label>
+                  <input className="acn-input" autoFocus style={{ width:'100%', marginBottom:14 }}
+                    placeholder="Nome do receptor" value={nomeRecebeuLote} onChange={e=>setNomeRecebeuLote(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter' && confirmarEntregaLote()} />
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button className="acn-btn" style={{ background:'#22c55e', flex:1 }} disabled={aplicandoLoteOpls} onClick={confirmarEntregaLote}>
+                      {aplicandoLoteOpls ? 'Aplicando...' : 'CONFIRMAR'}
+                    </button>
+                    <button className="acn-btn" style={{ background:'#94a3b8' }} disabled={aplicandoLoteOpls}
+                      onClick={()=>{setModalEntregaLote(null);setNomeRecebeuLote('');}}>Cancelar</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
