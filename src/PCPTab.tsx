@@ -23,21 +23,46 @@ export default function PCPTab({ currentUser }) {
   // linha de lote — mesmo padrao da Engenharia (EngenhariaTab.tsx).
   const [lotesExpandidos, setLotesExpandidos] = useState({});
   const [processandoLote, setProcessandoLote] = useState(false);
+  // Controle de liberação parcial p/ Serralheria — Engenharia pode antecipar
+  // a parte metálica/estrutural sem esperar o resto do BOM, então essas OPs
+  // aparecem aqui mesmo antes de "Em Espera PCP" (a trilha é independente do
+  // status_geral normal). PCP acompanha e "sana" a pendência quando a
+  // Serralheria termina.
+  const [oplsSerralheria, setOplsSerralheria] = useState([]);
+  const [sanandoSerralheria, setSanandoSerralheria] = useState(null);
+  const [painelSerralheriaAberto, setPainelSerralheriaAberto] = useState(true);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const [oplsRes, faltaRes] = await Promise.all([
+    const [oplsRes, faltaRes, serralheriaRes] = await Promise.all([
       supabase.from('oples').select('*')
         .in('status_geral', ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP','Retrabalho'])
         .order('data_entrada', { ascending: false }),
       supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_almox,obs_almox,responsavel_almox,data_kiting')
         .in('status_almox', ['Falta de Material','Liberado com Pendencia']),
+      supabase.from('oples').select('id,opl,chassi,modelo,cliente_nome,status_geral,serralheria_status')
+        .in('serralheria_status', ['Pendente','Concluido']).order('data_entrada', { ascending: false }),
     ]);
     setOpls(oplsRes.data || []);
     setOplsFalta(faltaRes.data || []);
+    setOplsSerralheria(serralheriaRes.data || []);
     if (!silent) setLoading(false);
+  };
+
+  const sanarPendenciaSerralheria = async (opl) => {
+    setSanandoSerralheria(opl.id);
+    const agora = new Date().toISOString();
+    await supabase.from('oples').update({ serralheria_status: 'Sanado' }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+      evento: `PCP sanou a pendência de Serralheria (serviço concluído e conferido).`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    setSanandoSerralheria(null);
+    fetchAll();
   };
 
   const liberarProducao = async (opl) => {
@@ -269,6 +294,59 @@ export default function PCPTab({ currentUser }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* CONTROLE DE LIBERAÇÃO PARCIAL — SERRALHERIA (Engenharia antecipa a
+          parte metálica/estrutural sem esperar o resto do BOM; aparece aqui
+          mesmo antes de "Em Espera PCP", trilha independente do status_geral) */}
+      {oplsSerralheria.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#faf5ff',borderBottom:'2px solid #7c3aed',cursor:'pointer'}}
+            onClick={()=>setPainelSerralheriaAberto(a=>!a)}>
+            <span style={{color:'#6d28d9'}}>🔧 Controle de Serralheria — Liberação Parcial ({oplsSerralheria.length})</span>
+            <span style={{fontSize:11,color:'#94a3b8'}}>{painelSerralheriaAberto ? '▾' : '▸'}</span>
+          </div>
+          {painelSerralheriaAberto && (
+            <div className="sec-body" style={{overflowX:'auto'}}>
+              <table>
+                <thead><tr>
+                  <th>OPL</th><th>Veículo</th><th>Cliente</th><th>Status Geral</th><th>Serralheria</th><th>Ação</th>
+                </tr></thead>
+                <tbody>
+                  {oplsSerralheria.map(o => (
+                    <tr key={o.id} style={{background: o.serralheria_status==='Concluido' ? '#f0fdf4' : '#faf5ff'}}>
+                      <td><strong style={{color:'#6d28d9'}}>{o.opl}</strong></td>
+                      <td style={{fontSize:10}}>
+                        <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                        <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                      </td>
+                      <td>{o.cliente_nome || '—'}</td>
+                      <td><span style={{fontSize:9,color:'#64748b'}}>{o.status_geral}</span></td>
+                      <td>
+                        <span className="acn-badge" style={{background: o.serralheria_status==='Concluido' ? '#16a34a' : '#7c3aed'}}>
+                          {o.serralheria_status==='Concluido' ? '✅ Concluída' : '🔧 Em Serralheria'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{display:'flex',gap:4}}>
+                          {o.serralheria_status==='Concluido' ? (
+                            <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} disabled={sanandoSerralheria===o.id}
+                              onClick={()=>sanarPendenciaSerralheria(o)}>
+                              {sanandoSerralheria===o.id ? '...' : '✅ SANAR PENDÊNCIA'}
+                            </button>
+                          ) : (
+                            <span style={{fontSize:9,color:'#94a3b8'}}>Aguardando Serralheria terminar</span>
+                          )}
+                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

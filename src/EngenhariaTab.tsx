@@ -19,6 +19,12 @@ export default function EngenhariaTab({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
   const [obsBom, setObsBom] = useState('');
+  // Liberação parcial de BOM p/ Serralheria — Engenharia antecipa a parte
+  // metálica/estrutural sem esperar terminar o resto do BOM. Trilha própria
+  // (oples.serralheria_status), não mexe no status_geral normal.
+  const [modalSerralheria, setModalSerralheria] = useState(null);
+  const [obsSerralheria, setObsSerralheria] = useState('');
+  const [enviandoSerralheria, setEnviandoSerralheria] = useState(false);
   // Liberação de BOM em lote — OPs desmembradas (mesmo número base, sufixo
   // /01../NN) costumam compartilhar o mesmo BOM, então liberar uma por uma
   // é retrabalho. selecionadosLote guarda os ids marcados no modal (todos
@@ -134,6 +140,40 @@ export default function EngenhariaTab({ currentUser }) {
     }]);
     notificarEvento('engenharia_libera_pcp', msg.oplEnviada(opl.opl,'PCP',currentUser?.nome));
     setModalBom(null); setObsBom(''); fetchAll();
+  };
+
+  // Libera só a parte da Serralheria (metálica/estrutural), antecipando o
+  // serviço sem esperar o resto do BOM ficar pronto. Não mexe no
+  // status_geral — a OP continua "Em Analise Engenharia" normalmente, e o
+  // "LIBERAR BOM" (saldo completo) segue disponível a qualquer momento,
+  // independente de a Serralheria já ter terminado ou não.
+  const liberarParcialSerralheria = async () => {
+    if (!obsSerralheria.trim()) { alert('Descreva o que a Serralheria precisa fazer!'); return; }
+    const opl = modalSerralheria;
+    setEnviandoSerralheria(true);
+    const agora = new Date().toISOString();
+    // Usa a mesma tabela/tela que a Serralheria já usa de verdade
+    // (demandas_setoriais + SetorDemandaTab.tsx) — tipo_solicitacao marca
+    // essa demanda como liberação parcial de BOM, pra SetorDemandaTab.tsx
+    // saber que precisa sincronizar oples.serralheria_status ao concluir.
+    const { error: errDemanda } = await supabase.from('demandas_setoriais').insert([{
+      setor_destino: 'Serralheria', setor_origem: 'Engenharia', tipo_solicitacao: 'liberacao_parcial_bom',
+      numero_opl: opl.opl, chassi: opl.chassi || null, descricao: obsSerralheria.trim(),
+      status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+      data_abertura: agora,
+      logs_demanda: [{ texto: `Liberação parcial de BOM (Engenharia): ${obsSerralheria.trim()}`, usuario: currentUser?.nome, hora: agora }],
+    }]);
+    if (errDemanda) { alert('Erro ao criar demanda para Serralheria: ' + errDemanda.message); setEnviandoSerralheria(false); return; }
+    await supabase.from('oples').update({ serralheria_status: 'Pendente' }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
+      evento: `Liberação parcial de BOM para Serralheria. Obs: ${obsSerralheria.trim()}`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    notificarEvento('engenharia_libera_serralheria', `🔧 *Liberação parcial p/ Serralheria* — OPL ${opl.opl}\n${obsSerralheria.trim()}\nPor: ${currentUser?.nome}`, 'Serralheria');
+    setEnviandoSerralheria(false);
+    setModalSerralheria(null); setObsSerralheria(''); fetchAll();
   };
 
   // Número base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
@@ -344,6 +384,13 @@ export default function EngenhariaTab({ currentUser }) {
                             {o.status_geral}
                             {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}}>REVISAO</span>}
                           </span>
+                          {o.serralheria_status && (
+                            <div style={{marginTop:2}}>
+                              <span style={{fontSize:9,fontWeight:700,background:o.serralheria_status==='Pendente'?'#7c3aed':'#16a34a',color:'white',padding:'1px 6px',borderRadius:10}}>
+                                {o.serralheria_status==='Pendente' ? '🔧 Liberado Parcial (Serralheria)' : '✅ Serralheria concluída'}
+                              </span>
+                            </div>
+                          )}
                           {kpi48h && (
                             <div style={{marginTop:2}}>
                               <span style={{fontSize:9,fontWeight:700,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10}}>
@@ -376,6 +423,12 @@ export default function EngenhariaTab({ currentUser }) {
                                 <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalBom(o);setObsBom('');}}>
                                     LIBERAR BOM
                                   </button>
+                                {!o.serralheria_status && (
+                                  <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}} title="Antecipar a parte metálica/estrutural pra Serralheria sem esperar o resto do BOM"
+                                    onClick={()=>{setModalSerralheria(o);setObsSerralheria('');}}>
+                                    🔧 Parcial Serralheria
+                                  </button>
+                                )}
                                 <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
                                   DEVOLVER
                                 </button>
@@ -611,6 +664,29 @@ export default function EngenhariaTab({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={liberarBOM}>LIBERAR BOM</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalBom(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LIBERAÇÃO PARCIAL SERRALHERIA — antecipa a parte metálica/estrutural sem esperar o resto do BOM */}
+      {modalSerralheria && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-title">🔧 Liberar Parcial p/ Serralheria — {modalSerralheria.opl}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              A Serralheria começa essa parte já; você continua a análise e libera o saldo do BOM pro PCP
+              normalmente quando terminar (essa liberação parcial não interfere na liberação do BOM completo).
+            </div>
+            <label className="acn-label">O que a Serralheria precisa fazer *</label>
+            <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
+              placeholder="Descreva a parte metálica/estrutural a ser feita..."
+              value={obsSerralheria} onChange={e=>setObsSerralheria(e.target.value)} autoFocus />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} disabled={enviandoSerralheria} onClick={liberarParcialSerralheria}>
+                {enviandoSerralheria ? 'Enviando...' : 'ENVIAR PARA SERRALHERIA'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} disabled={enviandoSerralheria} onClick={()=>{setModalSerralheria(null);setObsSerralheria('');}}>Cancelar</button>
             </div>
           </div>
         </div>

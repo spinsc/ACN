@@ -1000,3 +1000,21 @@ ALTER TABLE sac_ordens_servico
   ADD COLUMN IF NOT EXISTS tecnico_producao_2_nome text,
   ADD COLUMN IF NOT EXISTS equipe_id uuid REFERENCES producao_equipes(id),
   ADD COLUMN IF NOT EXISTS equipe_nome text;
+
+-- 2026-08-29 · Liberação parcial de BOM p/ Serralheria (Engenharia → PCP).
+-- Trilha PARALELA ao status_geral normal — Engenharia pode antecipar a
+-- parte metálica/estrutural pra Serralheria sem esperar terminar o resto
+-- do BOM, e continua liberando o saldo do BOM pro PCP como sempre (as duas
+-- ações não se sobrescrevem, cada uma mexe numa coluna diferente).
+-- Usa demandas_setoriais (tipo_solicitacao='liberacao_parcial_bom') como
+-- transporte — é a tabela/tela que a Serralheria de fato usa
+-- (SetorDemandaTab.tsx, roteado em DashboardTab.tsx). pcp_pedidos_serralheria
+-- (com colunas próprias tipo status_serralheria) e SerralheriaTab.tsx nunca
+-- foram usados de verdade: SerralheriaTab.tsx não está no roteamento
+-- (código morto) e nada gravava na tabela (PedidoChicotesSerralheria.tsx
+-- também é órfão, nem importado em lugar nenhum, e grava na tabela errada
+-- mesmo assim). Deixamos o RLS de pcp_pedidos_serralheria desabilitado (fix
+-- de passagem, consistente com o resto do banco) mas não a usamos aqui.
+ALTER TABLE pcp_pedidos_serralheria DISABLE ROW LEVEL SECURITY;
+ALTER TABLE oples ADD COLUMN IF NOT EXISTS serralheria_status text;
+COMMENT ON COLUMN oples.serralheria_status IS 'Trilha paralela ao status_geral p/ liberação parcial de BOM à Serralheria: null | Pendente | Concluido | Sanado. Não interfere no fluxo normal Engenharia->PCP.';

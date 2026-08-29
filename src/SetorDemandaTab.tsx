@@ -6,6 +6,7 @@ import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import Linkify from './Linkify';
 import { ordenarArvore, labelHierarquico } from './CentroCustoShared';
+import { notificarEvento } from './whatsappHelper';
 
 // ─── Horas Úteis (Seg-Sex 8:00–17:30) ────────────────────────────────────────
 function horasUteis(inicio, fim) {
@@ -387,6 +388,23 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       }).eq('id',d.sac_os_id);
     }
 
+    // Liberação parcial de BOM (Engenharia → Serralheria): devolve o aviso
+    // pro PCP via trilha paralela oples.serralheria_status — não mexe no
+    // status_geral normal da OP.
+    if (d.tipo_solicitacao === 'liberacao_parcial_bom' && d.numero_opl) {
+      const { data: opl } = await supabase.from('oples').select('id,opl,status_geral').eq('opl', d.numero_opl).maybeSingle();
+      if (opl) {
+        await supabase.from('oples').update({ serralheria_status: 'Concluido' }).eq('id', opl.id);
+        await supabase.from('logs_movimentacao_opl').insert([{
+          opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
+          evento: 'Serralheria concluiu a liberação parcial. Aguardando PCP sanar a pendência.',
+          status_anterior: opl.status_geral, status_novo: opl.status_geral,
+          usuario_nome: currentUser?.nome, data_hora: agora,
+        }]);
+        notificarEvento('serralheria_conclui_parcial', `✅ *Serralheria concluiu* — OPL ${opl.opl}\nPor: ${currentUser?.nome}`, 'PCP');
+      }
+    }
+
     fetchDemandas();
   };
 
@@ -664,6 +682,11 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
           {setor === 'Compras' && d.tipo_solicitacao && (
             <span style={{background: d.tipo_solicitacao==='cotacao' ? '#7c3aed' : '#0891b2', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
               {d.tipo_solicitacao==='cotacao' ? 'COTAÇÃO' : 'COMPRA'}
+            </span>
+          )}
+          {setor === 'Serralheria' && d.tipo_solicitacao === 'liberacao_parcial_bom' && (
+            <span style={{background:'#7c3aed', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
+              🔧 LIB. PARCIAL BOM
             </span>
           )}
           {sacBadge(d)}
