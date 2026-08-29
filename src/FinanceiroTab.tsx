@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
+import { CentrosCustoManager, labelHierarquico } from './CentroCustoShared';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtR = (v: number) =>
@@ -18,99 +19,21 @@ const STATUS_COR: Record<string, string> = {
 };
 
 // ─── Modal CRUD de Centros de Custo ──────────────────────────────────────────
-function ModalCentros({ centros, onClose, onAtualizar, currentUser }: any) {
-  const [codigo, setCodigo] = useState('');
-  const [nome,   setNome]   = useState('');
-  const [salvando, setSalvando] = useState(false);
-
-  const criar = async () => {
-    if (!codigo.trim() || !nome.trim()) { alert('Informe código e nome.'); return; }
-    setSalvando(true);
-    const { error } = await supabase.from('centros_custo').insert([{
-      codigo: codigo.trim().toUpperCase(), nome: nome.trim(), ativo: true,
-    }]);
-    if (error) { alert('Erro: ' + error.message); }
-    else { setCodigo(''); setNome(''); onAtualizar(); }
-    setSalvando(false);
-  };
-
-  const toggleAtivo = async (c: any) => {
-    await supabase.from('centros_custo').update({ ativo: !c.ativo }).eq('id', c.id);
-    onAtualizar();
-  };
-
-  const inp: React.CSSProperties = {
-    padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 5,
-    fontSize: 11, outline: 'none', boxSizing: 'border-box',
-  };
-
+function ModalCentros({ onClose, onAtualizar }: any) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2000,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: '#fff', borderRadius: 10, width: 520, maxWidth: '95vw',
+      onClick={e => { if (e.target === e.currentTarget) { onAtualizar(); onClose(); } }}>
+      <div style={{ background: '#fff', borderRadius: 10, width: 560, maxWidth: '95vw',
         maxHeight: '85vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 16px 48px rgba(0,0,0,.28)' }}>
         <div style={{ background: '#0f766e', color: '#fff', padding: '12px 16px',
           borderRadius: '10px 10px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 13 }}>🏷️ Gerenciar Centros de Custo</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
+          <button onClick={() => { onAtualizar(); onClose(); }} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
-
-        <div style={{ padding: 16, flexShrink: 0 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', marginBottom: 8, textTransform: 'uppercase' }}>Novo Centro de Custo</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={codigo} onChange={e => setCodigo(e.target.value)}
-              placeholder="Código (ex: RH, TI, PROD)" style={{ ...inp, width: 130 }} />
-            <input value={nome} onChange={e => setNome(e.target.value)}
-              placeholder="Nome completo do centro" style={{ ...inp, flex: 1 }} />
-            <button onClick={criar} disabled={salvando}
-              style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 5,
-                padding: '6px 16px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                opacity: salvando ? .6 : 1 }}>
-              + Criar
-            </button>
-          </div>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
-                {['Código', 'Nome', 'Status', 'Ação'].map(h => (
-                  <th key={h} style={{ padding: '6px 10px', fontSize: 9, fontWeight: 700, textAlign: 'left' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {centros.length === 0 ? (
-                <tr><td colSpan={4} style={{ padding: 16, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>
-                  Nenhum centro cadastrado.
-                </td></tr>
-              ) : centros.map((c: any, i: number) => (
-                <tr key={c.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                  <td style={{ padding: '6px 10px', fontWeight: 700, fontSize: 11, fontFamily: 'monospace', color: '#0f766e' }}>{c.codigo}</td>
-                  <td style={{ padding: '6px 10px', fontSize: 11 }}>{c.nome}</td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <span style={{ background: c.ativo ? '#dcfce7' : '#fee2e2',
-                      color: c.ativo ? '#15803d' : '#991b1b',
-                      padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                      {c.ativo ? '✅ Ativo' : '⛔ Inativo'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <button onClick={() => toggleAtivo(c)}
-                      style={{ background: c.ativo ? '#fef2f2' : '#f0fdf4',
-                        border: `1px solid ${c.ativo ? '#fca5a5' : '#86efac'}`,
-                        color: c.ativo ? '#dc2626' : '#16a34a',
-                        borderRadius: 4, padding: '3px 10px', fontSize: 9, cursor: 'pointer', fontWeight: 700 }}>
-                      {c.ativo ? 'Desativar' : 'Ativar'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          <CentrosCustoManager embutido />
         </div>
       </div>
     </div>
@@ -357,10 +280,16 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     return okMes && okAno && okStatus;
   });
 
-  // Agrupa por centro de custo
+  // Agrupa por centro de custo — prioriza a FK real (centro_custo_id, com
+  // cadeia hierárquica no rótulo) sobre o texto livre legado, que pode ter
+  // pequenas variações de digitação e nunca agrupa de verdade.
   const porCentro: Record<string, { nome: string; total: number; count: number; compras: any[] }> = {};
   for (const p of comprasFiltradas) {
-    const key = p.centro_custo || '(Sem Centro)';
+    let key = p.centro_custo || '(Sem Centro)';
+    if (p.centro_custo_id) {
+      const c = centros.find((x: any) => x.id === p.centro_custo_id);
+      if (c) key = labelHierarquico(c, centros) + ' — ' + c.nome;
+    }
     if (!porCentro[key]) porCentro[key] = { nome: key, total: 0, count: 0, compras: [] };
     porCentro[key].total += Number(p.valor_compra) || 0;
     porCentro[key].count++;
@@ -606,8 +535,6 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       {/* Modais */}
       {modalCentros && (
         <ModalCentros
-          centros={centros}
-          currentUser={currentUser}
           onClose={() => setModalCentros(false)}
           onAtualizar={() => {
             supabase.from('centros_custo').select('*').order('codigo')

@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { labelHierarquico } from './CentroCustoShared';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -870,26 +871,35 @@ function RelOplsParadas() {
 // ── REL CENTRO DE CUSTO ──
 function RelCentroCusto() {
   const [rows, setRows] = useState<any[]>([]);
+  const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandido, setExpandido] = useState<Record<string,boolean>>({});
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('pcp_pedidos_compra')
-        .select('id,numero_pedido,descricao_material,fornecedor,valor_total,centro_custo,status_compra,data_pedido')
-        .not('centro_custo','is',null)
-        .order('data_pedido',{ascending:false});
+      const [{ data, error }, { data: cData }] = await Promise.all([
+        supabase.from('pcp_pedidos_compra')
+          .select('id,numero_pedido,descricao_material,fornecedor,valor_total,centro_custo,centro_custo_id,status_compra,data_pedido')
+          .not('centro_custo','is',null)
+          .order('data_pedido',{ascending:false}),
+        supabase.from('centros_custo').select('*'),
+      ]);
       if (!error && data) setRows(data);
+      setCentrosCusto(cData || []);
       setLoading(false);
     })();
   }, []);
 
-  // Agrupar por centro_custo
+  // Agrupar por centro de custo — prioriza a FK real (centro_custo_id, com
+  // cadeia hierárquica no rótulo) sobre o texto livre legado.
   const grupos: Record<string,any[]> = {};
   for (const r of rows) {
-    const k = r.centro_custo || '—';
+    let k = r.centro_custo || '—';
+    if (r.centro_custo_id) {
+      const c = centrosCusto.find((x: any) => x.id === r.centro_custo_id);
+      if (c) k = labelHierarquico(c, centrosCusto) + ' — ' + c.nome;
+    }
     if (!grupos[k]) grupos[k] = [];
     grupos[k].push(r);
   }

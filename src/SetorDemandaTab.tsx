@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import Linkify from './Linkify';
+import { ordenarArvore, labelHierarquico } from './CentroCustoShared';
 
 // ─── Horas Úteis (Seg-Sex 8:00–17:30) ────────────────────────────────────────
 function horasUteis(inicio, fim) {
@@ -245,7 +246,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
 
   // Modal Concluir Compra (setor Compras)
   const [modalConcluirCompra, setModalConcluirCompra] = useState(null);
-  const [compraForm, setCompraForm] = useState({ valor:'', prazo:'', centro_custo:'', numero_opl:'' });
+  const [compraForm, setCompraForm] = useState({ valor:'', prazo:'', centro_custo_id:'', numero_opl:'' });
   const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
   const [opBuscaCompra, setOpBuscaCompra] = useState('');
   const [opResultadosCompra, setOpResultadosCompra] = useState<any[]>([]);
@@ -438,22 +439,25 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
   // ── CONCLUIR COMPRA (modal com valor + prazo + centro de custo) ──────────
   const confirmarConcluirCompra = async () => {
     if (!compraForm.prazo) { alert('Informe a previsão de recebimento.'); return; }
-    if (!compraForm.centro_custo) { alert('Informe o centro de custo.'); return; }
+    if (!compraForm.centro_custo_id) { alert('Informe o centro de custo.'); return; }
     const d = modalConcluirCompra;
     const isCotacao = d.tipo_solicitacao === 'cotacao';
     const agora = new Date().toISOString();
     const inicio = d.data_inicio ? new Date(d.data_inicio) : new Date(d.data_abertura||agora);
     const tempo  = Math.max(0, horasUteis(inicio, new Date()) - (d.tempo_pausado_horas||0));
+    const centroSel = centrosCusto.find(c => c.id === compraForm.centro_custo_id);
+    const centroLabel = centroSel ? labelHierarquico(centroSel, centrosCusto) + ' — ' + centroSel.nome : '';
     const updates: any = {
       status: 'Concluido',
       data_conclusao: agora,
       tempo_execucao_horas: tempo,
       data_prevista_recebimento: compraForm.prazo,
-      centro_custo: compraForm.centro_custo,
+      centro_custo_id: compraForm.centro_custo_id,
+      centro_custo: centroLabel,
       ...(compraForm.numero_opl ? { numero_opl: compraForm.numero_opl } : {}),
       ...(anexosCotacao.length ? { anexos: anexosCotacao } : {}),
       logs_demanda: [...(d.logs_demanda||[]), {
-        texto: `${isCotacao ? 'Cotação' : 'Compra'} concluída. Centro de custo: ${compraForm.centro_custo}. Prev. recebimento: ${new Date(compraForm.prazo+'T00:00:00').toLocaleDateString('pt-BR')}${compraForm.valor ? `. Valor: R$ ${compraForm.valor}` : ''}. Tempo útil: ${tempo.toFixed(1)}h`,
+        texto: `${isCotacao ? 'Cotação' : 'Compra'} concluída. Centro de custo: ${centroLabel}. Prev. recebimento: ${new Date(compraForm.prazo+'T00:00:00').toLocaleDateString('pt-BR')}${compraForm.valor ? `. Valor: R$ ${compraForm.valor}` : ''}. Tempo útil: ${tempo.toFixed(1)}h`,
         usuario: currentUser?.nome, hora: agora,
       }],
     };
@@ -479,7 +483,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       } catch (e) { console.warn('Falha ao notificar solicitante da cotação:', e); }
     }
 
-    setModalConcluirCompra(null); setCompraForm({ valor:'', prazo:'', centro_custo:'', numero_opl:'' });
+    setModalConcluirCompra(null); setCompraForm({ valor:'', prazo:'', centro_custo_id:'', numero_opl:'' });
     setAnexosCotacao([]); setOpBuscaCompra(''); setOpResultadosCompra([]);
     fetchDemandas();
   };
@@ -627,7 +631,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             setCompraForm({
               valor: d.valor_compra ? String(d.valor_compra) : '',
               prazo: d.data_prevista_recebimento || '',
-              centro_custo: d.centro_custo || '',
+              centro_custo_id: d.centro_custo_id || '',
               numero_opl: d.numero_opl || '',
             });
             setOpBuscaCompra(d.numero_opl || ''); setOpResultadosCompra([]);
@@ -890,10 +894,12 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
             <div style={{marginBottom:12}}>
               <label className="acn-label">🏷️ Centro de Custo *</label>
               <select className="acn-input" style={{width:'100%'}}
-                value={compraForm.centro_custo}
-                onChange={e=>setCompraForm(f=>({...f,centro_custo:e.target.value}))}>
+                value={compraForm.centro_custo_id||''}
+                onChange={e=>setCompraForm(f=>({...f,centro_custo_id:e.target.value}))}>
                 <option value="">— Selecionar —</option>
-                {centrosCusto.map(c => <option key={c.id} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                {ordenarArvore(centrosCusto).map(c => (
+                  <option key={c.id} value={c.id}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}</option>
+                ))}
               </select>
             </div>
 

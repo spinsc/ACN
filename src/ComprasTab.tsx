@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
+import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 
@@ -248,9 +249,6 @@ export default function ComprasTab({ currentUser }) {
   const [opSelecionada, setOpSelecionada]       = useState('');
   const [salvandoCentro, setSalvandoCentro]     = useState(false);
   const [modalGerCentros, setModalGerCentros]   = useState(false);
-  const [novoCodigo, setNovoCodigo]             = useState('');
-  const [novoNome, setNovoNome]                 = useState('');
-  const [salvandoNovoCentro, setSalvandoNovoCentro] = useState(false);
 
   // Departamento (aprovação por gestor)
   const [departamentosConfig, setDepartamentosConfig] = useState<any[]>([]);
@@ -363,29 +361,37 @@ export default function ComprasTab({ currentUser }) {
 
   const abrirModalCentro = (p: any) => {
     setModalCentro(p);
-    setCentroTipo('op');
+    setCentroTipo(p.centro_custo_id ? 'custom' : 'op');
     setOpBusca(p.opl || '');
     setOpSelecionada(p.opl ? (p.centro_custo?.startsWith('OP') ? p.centro_custo : `OP ${p.opl}`) : '');
-    setCentroCustom('');
-    setCentroLivre(p.centro_custo || '');
+    setCentroCustom(p.centro_custo_id || '');
+    setCentroLivre(p.centro_custo_id ? '' : (p.centro_custo || ''));
     setOpResultados([]);
   };
 
   const salvarCentro = async () => {
     if (!modalCentro) return;
+    setSalvandoCentro(true);
+    if (centroTipo === 'custom') {
+      if (!centroCustom) { alert('Selecione um centro de custo.'); setSalvandoCentro(false); return; }
+      // Grava a FK real (centro_custo_id) e também o texto (fallback para
+      // telas que ainda leem só centro_custo — ex: agrupamento no Financeiro).
+      const centro = centrosCusto.find((c:any) => c.id === centroCustom);
+      const label = centro ? labelHierarquico(centro, centrosCusto) + ' — ' + centro.nome : '';
+      await supabase.from('pcp_pedidos_compra').update({ centro_custo_id: centroCustom, centro_custo: label }).eq('id', modalCentro.id);
+      setSalvandoCentro(false);
+      setModalCentro(null); load();
+      return;
+    }
     let valor = '';
     if (centroTipo === 'op') {
-      if (!opSelecionada) { alert('Selecione uma OP.'); return; }
+      if (!opSelecionada) { alert('Selecione uma OP.'); setSalvandoCentro(false); return; }
       valor = opSelecionada;
-    } else if (centroTipo === 'custom') {
-      if (!centroCustom) { alert('Selecione um centro de custo.'); return; }
-      valor = centroCustom;
     } else {
-      if (!centroLivre.trim()) { alert('Informe o centro de custo.'); return; }
+      if (!centroLivre.trim()) { alert('Informe o centro de custo.'); setSalvandoCentro(false); return; }
       valor = centroLivre.trim();
     }
-    setSalvandoCentro(true);
-    await supabase.from('pcp_pedidos_compra').update({ centro_custo: valor }).eq('id', modalCentro.id);
+    await supabase.from('pcp_pedidos_compra').update({ centro_custo: valor, centro_custo_id: null }).eq('id', modalCentro.id);
     setSalvandoCentro(false);
     setModalCentro(null);
     load();
@@ -405,22 +411,6 @@ export default function ComprasTab({ currentUser }) {
     setSalvandoDepartamento(false);
     setModalDepartamento(null);
     load();
-  };
-
-  const criarCentro = async () => {
-    if (!novoCodigo.trim() || !novoNome.trim()) { alert('Informe código e nome.'); return; }
-    setSalvandoNovoCentro(true);
-    const { error } = await supabase.from('centros_custo').insert([{
-      codigo: novoCodigo.trim().toUpperCase(), nome: novoNome.trim(), ativo: true,
-    }]);
-    if (error) { alert('Erro: ' + error.message); }
-    else { setNovoCodigo(''); setNovoNome(''); loadCentros(); }
-    setSalvandoNovoCentro(false);
-  };
-
-  const excluirCentro = async (id: string) => {
-    await supabase.from('centros_custo').update({ ativo: false }).eq('id', id);
-    loadCentros();
   };
 
   const [queryError, setQueryError] = useState<string|null>(null);
@@ -1218,12 +1208,13 @@ export default function ComprasTab({ currentUser }) {
                   </div>
                 ) : (
                   <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10,maxHeight:200,overflowY:'auto'}}>
-                    {centrosCusto.map((c:any)=>(
-                      <div key={c.id} onClick={()=>setCentroCustom(`${c.codigo} — ${c.nome}`)} style={{
-                        padding:'8px 12px',borderRadius:6,cursor:'pointer',fontSize:11,
-                        border:centroCustom===`${c.codigo} — ${c.nome}`?'2px solid #6366f1':'1.5px solid #e2e8f0',
-                        background:centroCustom===`${c.codigo} — ${c.nome}`?'#eef2ff':'white',
+                    {ordenarArvore(centrosCusto).map((c:any)=>(
+                      <div key={c.id} onClick={()=>setCentroCustom(c.id)} style={{
+                        padding:'8px 12px',marginLeft:c.nivel*16,borderRadius:6,cursor:'pointer',fontSize:11,
+                        border:centroCustom===c.id?'2px solid #6366f1':'1.5px solid #e2e8f0',
+                        background:centroCustom===c.id?'#eef2ff':'white',
                       }}>
+                        {c.nivel>0 && <span style={{color:'#94a3b8',marginRight:4}}>└</span>}
                         <strong style={{color:'#4f46e5'}}>{c.codigo}</strong>
                         <span style={{marginLeft:8}}>{c.nome}</span>
                         {c.descricao && <span style={{color:'#94a3b8',marginLeft:6,fontSize:9}}>{c.descricao}</span>}
@@ -1291,48 +1282,11 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL GERENCIAR CENTROS DE CUSTO */}
       {modalGerCentros && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalGerCentros(false);}}>
-          <div className="modal-box" style={{maxWidth:480}}>
+          <div className="modal-box" style={{maxWidth:560,maxHeight:'85vh',overflowY:'auto'}}>
             <div className="modal-title">⚙️ Centros de Custo</div>
-
-            {/* Criar novo */}
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
-              <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>Novo Centro de Custo</div>
-              <div style={{display:'flex',gap:8,marginBottom:8}}>
-                <div style={{flex:'0 0 100px'}}>
-                  <label className="acn-label">Código *</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novoCodigo}
-                    onChange={e=>setNovoCodigo(e.target.value)} placeholder="Ex: ADM-01" />
-                </div>
-                <div style={{flex:1}}>
-                  <label className="acn-label">Nome *</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novoNome}
-                    onChange={e=>setNovoNome(e.target.value)} placeholder="Ex: Administração" />
-                </div>
-              </div>
-              <button className="acn-btn" style={{background:'#0f766e',width:'100%'}} onClick={criarCentro} disabled={salvandoNovoCentro}>
-                {salvandoNovoCentro?'Salvando...':'+ Criar Centro'}
-              </button>
-            </div>
-
-            {/* Lista */}
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>Centros Cadastrados ({centrosCusto.length})</div>
-            {centrosCusto.length===0 ? (
-              <div style={{textAlign:'center',color:'#94a3b8',fontSize:11,padding:20}}>Nenhum centro cadastrado.</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:5,maxHeight:280,overflowY:'auto'}}>
-                {centrosCusto.map((c:any)=>(
-                  <div key={c.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',background:'white',border:'1px solid #e2e8f0',borderRadius:6}}>
-                    <span style={{fontWeight:700,color:'#4f46e5',minWidth:60,fontSize:11}}>{c.codigo}</span>
-                    <span style={{flex:1,fontSize:11}}>{c.nome}</span>
-                    <button onClick={()=>excluirCentro(c.id)} title="Excluir"
-                      style={{...btn,background:'#ef4444',padding:'3px 8px',fontSize:10}}>🗑️</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
+            <CentrosCustoManager embutido />
             <div style={{marginTop:14}}>
-              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalGerCentros(false)}>Fechar</button>
+              <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>{setModalGerCentros(false);loadCentros();}}>Fechar</button>
             </div>
           </div>
         </div>

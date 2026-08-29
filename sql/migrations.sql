@@ -952,3 +952,24 @@ ON CONFLICT DO NOTHING;
 INSERT INTO cotacoes_precos_vinculos (cotacao_id, tipo, processo_id)
 SELECT id, 'licitacao', licitacao_id FROM cotacoes_precos WHERE licitacao_id IS NOT NULL
 ON CONFLICT DO NOTHING;
+
+-- 2026-08-28 · Fase 7 — hierarquia de Centro de Custo (parent_id, ex:
+-- FLUTUANTE > PIER > ILHA) + FK real em pcp_pedidos_compra
+-- (centro_custo_id), substituindo aos poucos o texto livre (centro_custo,
+-- mantido por compatibilidade). Migração best-effort dos dados de texto
+-- existentes, casando pelo código antes do " — " (3 de 4 valores distintos
+-- casaram; "TESTE DO SISTEMA" não tem código, ficou sem FK, texto intacto).
+ALTER TABLE centros_custo
+  ADD COLUMN IF NOT EXISTS parent_id uuid REFERENCES centros_custo(id) ON DELETE SET NULL;
+ALTER TABLE pcp_pedidos_compra
+  ADD COLUMN IF NOT EXISTS centro_custo_id uuid REFERENCES centros_custo(id) ON DELETE SET NULL;
+UPDATE pcp_pedidos_compra p SET centro_custo_id = c.id
+FROM centros_custo c
+WHERE p.centro_custo IS NOT NULL AND p.centro_custo_id IS NULL
+  AND upper(trim(split_part(p.centro_custo, '—', 1))) = c.codigo;
+
+-- 2026-08-28 · Fase 7 (continuação) — mesma FK de centro de custo também em
+-- demandas_setoriais (modal "Concluir Compra" em SetorDemandaTab.tsx grava
+-- centro de custo ali, não só em pcp_pedidos_compra).
+ALTER TABLE demandas_setoriais
+  ADD COLUMN IF NOT EXISTS centro_custo_id uuid REFERENCES centros_custo(id) ON DELETE SET NULL;
