@@ -504,6 +504,12 @@ function PainelSacVeicular({ currentUser }) {
   const [modalIniciarManu, setModalIniciarManu]             = useState(null);
   const [iniciarManuTecnico, setIniciarManuTecnico]         = useState('');
   const [iniciarManuTecnicoId, setIniciarManuTecnicoId]     = useState<string|null>(null);
+  // Modo de execução (individual/dupla/equipe) — mesmo padrão da Produção de OPL
+  const [iniciarManuModo, setIniciarManuModo]                 = useState<'individual'|'dupla'|'equipe'>('individual');
+  const [iniciarManuTecnico2, setIniciarManuTecnico2]         = useState('');
+  const [iniciarManuTecnico2Id, setIniciarManuTecnico2Id]     = useState<string|null>(null);
+  const [equipesManu, setEquipesManu]                         = useState<any[]>([]);
+  const [iniciarManuEquipeSel, setIniciarManuEquipeSel]       = useState<any>(null);
   const [modalObsProd, setModalObsProd]                     = useState(null);
   const [obsText, setObsText]                               = useState('');
   // Ver diagnóstico/relato da OS antes de provisionar (estimar tempo) — só leitura, sem query nova (registro já em memória)
@@ -528,6 +534,10 @@ function PainelSacVeicular({ currentUser }) {
     if (!silent) setLoading(false);
   };
   useEffect(() => { load(); const t = setInterval(()=>load(true), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    supabase.from('producao_equipes').select('*').eq('ativa', true).order('nome')
+      .then(({ data }) => setEquipesManu(data || []));
+  }, []);
 
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
 
@@ -655,27 +665,45 @@ function PainelSacVeicular({ currentUser }) {
     setModalConcluirManu(null); setConcluirManuForm({ observacoes:'', itens_usados:[] }); load();
   };
 
-  // Produção inicia manutenção: registra técnico + inicia KPI
+  // Produção inicia manutenção: registra técnico(s)/equipe + inicia KPI —
+  // mesmo padrão individual/dupla/equipe da Produção de OPL.
   const iniciarManutencao = async () => {
-    if (!iniciarManuTecnico.trim()) { alert('Informe o nome do técnico!'); return; }
     const os = modalIniciarManu;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
-      status: 'Em Execução',
-      data_inicio_manutencao: agora,
-      tecnico_responsavel: iniciarManuTecnico.trim(),
-      tecnico_producao_id: iniciarManuTecnicoId || null,
-      atualizado_em: agora,
-    }).eq('id', os.id);
-    // Semeia a lista livre de responsáveis, igual acontece em iniciarProducao (OP).
-    if (iniciarManuTecnicoId) {
-      await supabase.from('responsaveis_producao').insert([{
-        tipo: 'os', referencia_id: os.id, papel: 'responsavel',
-        tecnico_id: iniciarManuTecnicoId, tecnico_nome: iniciarManuTecnico.trim(),
-        adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
-      }]);
+    let upd: any = { status: 'Em Execução', data_inicio_manutencao: agora, atualizado_em: agora, modo_execucao: iniciarManuModo };
+
+    if (iniciarManuModo === 'individual') {
+      if (!iniciarManuTecnico.trim()) { alert('Informe o nome do técnico!'); return; }
+      upd = { ...upd, tecnico_responsavel: iniciarManuTecnico.trim(), tecnico_producao_id: iniciarManuTecnicoId || null,
+               tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null };
+    } else if (iniciarManuModo === 'dupla') {
+      if (!iniciarManuTecnico.trim() || !iniciarManuTecnico2.trim()) { alert('Informe os dois técnicos.'); return; }
+      upd = { ...upd, tecnico_responsavel: iniciarManuTecnico.trim(), tecnico_producao_id: iniciarManuTecnicoId || null,
+               tecnico_producao_2_nome: iniciarManuTecnico2.trim(), tecnico_producao_2_id: iniciarManuTecnico2Id || null,
+               equipe_id: null, equipe_nome: null };
+    } else if (iniciarManuModo === 'equipe') {
+      if (!iniciarManuEquipeSel) { alert('Selecione uma equipe.'); return; }
+      upd = { ...upd, tecnico_responsavel: iniciarManuEquipeSel.head_line_nome, tecnico_producao_id: iniciarManuEquipeSel.head_line_id || null,
+               equipe_id: iniciarManuEquipeSel.id, equipe_nome: iniciarManuEquipeSel.nome,
+               tecnico_producao_2_nome: null, tecnico_producao_2_id: null };
     }
-    setModalIniciarManu(null); setIniciarManuTecnico(''); setIniciarManuTecnicoId(null); load();
+
+    await supabase.from('sac_ordens_servico').update(upd).eq('id', os.id);
+    // Semeia a lista livre de responsáveis, igual acontece em iniciarProducao (OP).
+    const seedResponsaveis = [
+      upd.tecnico_producao_id ? { tecnico_id: upd.tecnico_producao_id, tecnico_nome: upd.tecnico_responsavel } : null,
+      upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
+    ].filter(Boolean);
+    if (seedResponsaveis.length > 0) {
+      await supabase.from('responsaveis_producao').insert(seedResponsaveis.map((r: any) => ({
+        tipo: 'os', referencia_id: os.id, papel: 'responsavel',
+        tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
+        adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
+      })));
+    }
+    setModalIniciarManu(null); setIniciarManuTecnico(''); setIniciarManuTecnicoId(null);
+    setIniciarManuModo('individual'); setIniciarManuTecnico2(''); setIniciarManuTecnico2Id(null); setIniciarManuEquipeSel(null);
+    load();
   };
 
   // ── Gerenciar Equipe (responsáveis/apoios livres, pós-início) — OS ─────────
@@ -797,6 +825,13 @@ function PainelSacVeicular({ currentUser }) {
                         {os.revisao_pendente && (
                           <div style={{fontSize:8,color:'#dc2626',fontWeight:700,marginTop:2}}>⚠️ Revisão pendente — aguardando SAC</div>
                         )}
+                        {os.tecnico_responsavel && (
+                          <div style={{fontSize:9,color:'#475569',marginTop:2}}>
+                            {os.modo_execucao === 'equipe'
+                              ? <>🏷️ <strong>{os.equipe_nome || os.tecnico_responsavel}</strong></>
+                              : <>👤 {os.tecnico_responsavel}{os.tecnico_producao_2_nome ? <> + {os.tecnico_producao_2_nome}</> : ''}</>}
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
@@ -825,7 +860,9 @@ function PainelSacVeicular({ currentUser }) {
                           )}
                           {os.status === 'Aguardando Início' && (
                             <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
-                              onClick={()=>{ setIniciarManuTecnico(''); setModalIniciarManu(os); }}>
+                              onClick={()=>{ setIniciarManuTecnico(''); setIniciarManuTecnicoId(null);
+                                setIniciarManuModo('individual'); setIniciarManuTecnico2(''); setIniciarManuTecnico2Id(null); setIniciarManuEquipeSel(null);
+                                setModalIniciarManu(os); }}>
                               ▶️ Iniciar
                             </button>
                           )}
@@ -1032,12 +1069,71 @@ function PainelSacVeicular({ currentUser }) {
             <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
               ⏱️ A contagem do KPI de manutenção inicia ao confirmar.
             </div>
-            <label className="acn-label">Técnico Responsável *</label>
-            <ColaboradorSelect
-              value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
-              placeholder="Selecione o técnico responsável"
-              className="acn-input" style={{width:'100%',marginBottom:14}}
-              autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
+            {/* Seletor de modo — mesmo padrão individual/dupla/equipe da Produção de OPL */}
+            <label className="acn-label">Modo de Execução</label>
+            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
+              {(['individual','dupla','equipe'] as const).map(m => (
+                <button key={m} onClick={()=>setIniciarManuModo(m)} style={{
+                  flex:1, padding:'7px 4px', border:'none', cursor:'pointer', fontSize:10, fontWeight:700,
+                  background: iniciarManuModo===m ? '#f59e0b' : 'white',
+                  color: iniciarManuModo===m ? 'white' : '#475569',
+                  borderRight: m!=='equipe' ? '1px solid #d1d5db' : 'none',
+                }}>
+                  {m==='individual'?'👤 Individual':m==='dupla'?'👥 Dupla':'🏷️ Equipe'}
+                </button>
+              ))}
+            </div>
+
+            {iniciarManuModo === 'individual' && (
+              <>
+                <label className="acn-label">Técnico Responsável *</label>
+                <ColaboradorSelect
+                  value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
+                  placeholder="Selecione o técnico responsável"
+                  className="acn-input" style={{width:'100%',marginBottom:14}}
+                  autoFocus onKeyDown={e=>e.key==='Enter'&&iniciarManutencao()} />
+              </>
+            )}
+
+            {iniciarManuModo === 'dupla' && (
+              <>
+                <label className="acn-label">Head Line (Técnico 1) *</label>
+                <ColaboradorSelect
+                  value={iniciarManuTecnico} onChange={(nome)=>{ setIniciarManuTecnico(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnicoId(colab?.id||null); }}
+                  placeholder="Selecione o head line"
+                  className="acn-input" style={{width:'100%',marginBottom:8}} />
+                <label className="acn-label">Auxiliar (Técnico 2) *</label>
+                <ColaboradorSelect
+                  value={iniciarManuTecnico2} onChange={(nome)=>{ setIniciarManuTecnico2(nome); const colab = colaboradoresList.find(c=>c.nome===nome); setIniciarManuTecnico2Id(colab?.id||null); }}
+                  placeholder="Selecione o auxiliar"
+                  className="acn-input" style={{width:'100%',marginBottom:14}} />
+              </>
+            )}
+
+            {iniciarManuModo === 'equipe' && (
+              <>
+                <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
+                {equipesManu.length === 0 ? (
+                  <div style={{fontSize:10,color:'#ef4444',marginBottom:14}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14}}>
+                    {equipesManu.map(eq => (
+                      <div key={eq.id} onClick={()=>setIniciarManuEquipeSel(eq)} style={{
+                        padding:'9px 12px', borderRadius:6, cursor:'pointer', fontSize:11,
+                        border: iniciarManuEquipeSel?.id===eq.id ? '2px solid #f59e0b' : '1.5px solid #e2e8f0',
+                        background: iniciarManuEquipeSel?.id===eq.id ? '#fffbeb' : 'white',
+                      }}>
+                        <strong>{eq.nome}</strong>
+                        <span style={{color:'#475569',marginLeft:8,fontSize:10}}>Head: {eq.head_line_nome}</span>
+                        {(eq.membros||[]).length>0 && (
+                          <span style={{color:'#6366f1',marginLeft:8,fontSize:9}}>+{eq.membros.length} membros</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={iniciarManutencao}>▶️ Iniciar Manutenção</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciarManu(null)}>Cancelar</button>

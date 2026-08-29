@@ -988,3 +988,15 @@ CREATE TABLE IF NOT EXISTS centro_custo_despesas (
 );
 CREATE INDEX IF NOT EXISTS idx_centro_custo_despesas_centro ON centro_custo_despesas(centro_custo_id);
 ALTER TABLE centro_custo_despesas DISABLE ROW LEVEL SECURITY;
+
+-- 2026-08-29 · Adaptação (SAC Veicular) — mesmo suporte a modo de execução
+-- (individual/dupla/equipe) que a Produção de OPL já tinha, espelhando as
+-- colunas equivalentes de `oples`. Antes só existia técnico único
+-- (tecnico_responsavel/tecnico_producao_id), sem opção de atribuir uma
+-- equipe pré-cadastrada (producao_equipes) nem um 2º técnico (head+auxiliar).
+ALTER TABLE sac_ordens_servico
+  ADD COLUMN IF NOT EXISTS modo_execucao text DEFAULT 'individual',
+  ADD COLUMN IF NOT EXISTS tecnico_producao_2_id uuid REFERENCES rh_funcionarios(id),
+  ADD COLUMN IF NOT EXISTS tecnico_producao_2_nome text,
+  ADD COLUMN IF NOT EXISTS equipe_id uuid REFERENCES producao_equipes(id),
+  ADD COLUMN IF NOT EXISTS equipe_nome text;
