@@ -27,6 +27,12 @@ export default function AlmoxarifadoTab({ currentUser }) {
   // com o serial aplicado).
   const [modalSeriais, setModalSeriais] = useState(null); // opl aguardando confirmacao de kiting
   const [seriaisKitForm, setSeriaisKitForm] = useState('');
+  // Importação em lote dos seriais — uma linha colada por unidade, na
+  // ordem /01../NN (cada unidade tem equipamentos/seriais diferentes, não
+  // dá para repetir o mesmo valor para todas de uma vez).
+  const [modalSeriaisLote, setModalSeriaisLote] = useState(null); // { base, irmaos }
+  const [seriaisLoteTexto, setSeriaisLoteTexto] = useState('');
+  const [aplicandoSeriaisLote, setAplicandoSeriaisLote] = useState(false);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
@@ -93,8 +99,29 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const kitOkLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => o.status_almox !== 'Kit OK');
     if (pendentes.length === 0) { alert('Todas as unidades deste lote ja estao com kit 100%.'); return; }
-    alert('Cada unidade do lote tem equipamentos com números de série diferentes — expanda o lote e confirme o kiting de cada unidade individualmente.');
-    setLotesExpandidos(s => ({ ...s, [grupo.base]: true }));
+    setSeriaisLoteTexto('');
+    setModalSeriaisLote({ base: grupo.base, irmaos: pendentes });
+  };
+
+  // Cada linha colada (Ctrl+C na planilha, Ctrl+V aqui) = uma unidade, na
+  // ordem /01../NN das que ainda não têm kit — como cada unidade leva
+  // equipamento(s)/serial(is) diferentes, não dá pra casar por chassi/placa
+  // como no import de técnicos; a ordem da lista é o identificador.
+  const aplicarSeriaisLote = async () => {
+    const linhas = seriaisLoteTexto.split('\n').map(l => l.trim()).filter(Boolean);
+    if (linhas.length === 0) return;
+    const { irmaos } = modalSeriaisLote;
+    setAplicandoSeriaisLote(true);
+    try {
+      for (let i = 0; i < linhas.length && i < irmaos.length; i++) {
+        await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', '', { seriais_equipamentos: linhas[i] });
+      }
+      notificarEvento('kit_ok', msg.kitOk(modalSeriaisLote.base, currentUser?.nome) + ` (${Math.min(linhas.length, irmaos.length)} unidades em lote)`);
+    } finally {
+      setAplicandoSeriaisLote(false);
+      setModalSeriaisLote(null); setSeriaisLoteTexto('');
+      fetchAll();
+    }
   };
 
   const abrirLoteAcao = (tipo, grupo) => {
@@ -239,7 +266,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                             <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                               {(qtdPendente + qtdFalta + qtdComPendencia) > 0 && (
                                 <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} disabled={processandoLote} onClick={()=>kitOkLote(item)}>
-                                  ✅ KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
+                                  📥 IMPORTAR SERIAIS EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
                                 </button>
                               )}
                               <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} disabled={processandoLote} onClick={()=>abrirLoteAcao('falta', item)}>
@@ -320,6 +347,51 @@ export default function AlmoxarifadoTab({ currentUser }) {
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarKitOkComSeriais}>CONFIRMAR KITING 100%</button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalSeriais(null);setSeriaisKitForm('');}}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL IMPORTAR SERIAIS EM LOTE — cada linha colada = uma unidade, na ordem /01..NN */}
+      {modalSeriaisLote && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget && !aplicandoSeriaisLote) setModalSeriaisLote(null);}}>
+          <div className="modal-box" style={{maxWidth:560,width:'95vw'}}>
+            <div className="modal-title">📥 Importar Seriais em Lote — 🔗 {modalSeriaisLote.base}</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              {modalSeriaisLote.irmaos.length} unidade(s) sem kit ainda. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) —
+              cada linha vira o(s) serial(is) de uma unidade, <strong>na ordem abaixo</strong> (não há chassi/placa para
+              casar aqui, então a ordem da lista importa). Uma célula pode ter mais de um serial (separados por vírgula).
+            </div>
+            <div style={{maxHeight:160,overflowY:'auto',border:'1px solid #e2e8f0',borderRadius:6,marginBottom:10}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
+                <thead><tr style={{background:'#f8fafc'}}>
+                  <th style={{padding:'4px 8px',textAlign:'left'}}>#</th>
+                  <th style={{padding:'4px 8px',textAlign:'left'}}>OPL</th>
+                  <th style={{padding:'4px 8px',textAlign:'left'}}>Serial(is) a aplicar</th>
+                </tr></thead>
+                <tbody>
+                  {modalSeriaisLote.irmaos.map((o, i) => {
+                    const linha = seriaisLoteTexto.split('\n').map(l=>l.trim()).filter(Boolean)[i];
+                    return (
+                      <tr key={o.id} style={{borderTop:'1px solid #f1f5f9'}}>
+                        <td style={{padding:'4px 8px',color:'#94a3b8'}}>{i+1}</td>
+                        <td style={{padding:'4px 8px',fontWeight:700}}>{o.opl}</td>
+                        <td style={{padding:'4px 8px',color: linha ? '#15803d' : '#cbd5e1'}}>{linha || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <textarea autoFocus className="acn-input" rows={Math.min(8, modalSeriaisLote.irmaos.length)} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily:'monospace',fontSize:11}}
+              placeholder={'Ex:\nSN-00123\nSN-00124, SN-00125\nSN-00126'}
+              value={seriaisLoteTexto} onChange={e=>setSeriaisLoteTexto(e.target.value)} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,opacity:aplicandoSeriaisLote?0.6:1}}
+                onClick={aplicarSeriaisLote} disabled={aplicandoSeriaisLote || !seriaisLoteTexto.trim()}>
+                {aplicandoSeriaisLote ? 'Aplicando...' : `✅ Confirmar Kiting 100% (${Math.min(seriaisLoteTexto.split('\n').map(l=>l.trim()).filter(Boolean).length, modalSeriaisLote.irmaos.length)})`}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} disabled={aplicandoSeriaisLote} onClick={()=>{setModalSeriaisLote(null);setSeriaisLoteTexto('');}}>Cancelar</button>
             </div>
           </div>
         </div>
