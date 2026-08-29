@@ -34,7 +34,7 @@ function useTimer(start) {
   return `${h}:${m}:${s}`;
 }
 
-function OplRow({ o, onAction, currentUser }) {
+function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
   const emProd       = o.status_geral === 'Em Producao';
   const aguardando   = o.status_geral === 'Aguardando Inicio Producao';
   const retrabalho   = o.status_geral === 'Retrabalho';
@@ -52,6 +52,11 @@ function OplRow({ o, onAction, currentUser }) {
   return (
     <>
       <tr style={rowStyle}>
+        {onToggleSelecionar && (
+          <td style={{textAlign:'center'}}>
+            <input type="checkbox" checked={!!selecionado} onChange={()=>onToggleSelecionar(o.id)} style={{cursor:'pointer'}} />
+          </td>
+        )}
         <td>
           <LinkOpl opl={o} currentUser={currentUser} color={retrabalho || emRetrab ? '#dc2626' : '#2563eb'} />
           {o.liberado_divulgacao && !retrabalho && !emRetrab && (
@@ -126,7 +131,7 @@ function OplRow({ o, onAction, currentUser }) {
       {/* Linha extra: motivo da reprovação CQ */}
       {(retrabalho || emRetrab) && o.obs_reprovacao_cq && (
         <tr style={{background:'#fef2f2'}}>
-          <td colSpan={10} style={{padding:'4px 10px'}}>
+          <td colSpan={onToggleSelecionar ? 11 : 10} style={{padding:'4px 10px'}}>
             <div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'5px 8px',background:'#fee2e2',borderRadius:4,border:'1px solid #fca5a5'}}>
               <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
               <div style={{flex:1}}>
@@ -1905,9 +1910,9 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ maxWidth: 640, maxHeight: '85vh', overflowY: 'auto' }}>
-        <div className="modal-title">📥 Importar Técnicos/Equipes — 🔗 {base}</div>
+        <div className="modal-title">📥 Importar Técnicos/Equipes — {base === 'Seleção' ? '☑️ Seleção' : `🔗 ${base}`}</div>
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
-          {irmaos.length} unidade(s) neste lote. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) — cada linha:
+          {irmaos.length} unidade(s) {base === 'Seleção' ? 'selecionada(s)' : 'neste lote'}. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) — cada linha:
           <strong> Chassi (ou Placa) [tab] Responsável</strong>, ou <strong>Chassi [tab] Placa [tab] Responsável</strong>.
           Responsável pode ser um técnico, "Técnico A + Técnico B" (dupla) ou o nome de uma equipe cadastrada.
           O casamento é sempre pelo chassi/placa já vinculado à OP, nunca pela ordem das linhas.
@@ -1989,6 +1994,15 @@ export default function ProducaoTab({ currentUser }) {
   const [filtroEntregaAte, setFiltroEntregaAte] = useState('');
   const [lotesExpandidos, setLotesExpandidos] = useState({});
   const [modalImportarLoteProducao, setModalImportarLoteProducao] = useState<any>(null); // { base, irmaos }
+  // Seleção livre por checkbox (não precisa ser do mesmo lote/base) — pra
+  // ação em massa: iniciar produção e/ou atribuir técnicos/equipes de uma vez.
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const toggleSelecionar = (id: string) => setSelecionados(prev => {
+    const novo = new Set(prev);
+    if (novo.has(id)) novo.delete(id); else novo.add(id);
+    return novo;
+  });
+  const [aplicandoIniciarLote, setAplicandoIniciarLote] = useState(false);
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
   const [modalAcomp,  setModalAcomp]      = useState<any>(null);
@@ -2088,6 +2102,30 @@ export default function ProducaoTab({ currentUser }) {
     }]);
     setModalIniciar(null); setRespNome(''); setRespId(null); setRespNome2(''); setRespId2(null);
     setModoExecucao('individual'); setEquipeSel(null); fetchAll();
+  };
+
+  // Inicia produção de todas as selecionadas de uma vez, sem definir
+  // responsável ainda (fica "Em Producao" sem técnico) — o usuário atribui
+  // depois via "📥 Importar Técnicos/Equipes" na mesma seleção. Só afeta as
+  // que ainda estão "Aguardando Inicio Producao"; ignora as demais.
+  const iniciarProducaoEmLote = async () => {
+    const alvos = opls.filter((o: any) => selecionados.has(o.id) && o.status_geral === 'Aguardando Inicio Producao');
+    if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Aguardando Início Produção".'); return; }
+    if (!confirm(`Iniciar produção de ${alvos.length} OP(s) selecionada(s)? Você atribui o técnico/equipe depois, na mesma seleção.`)) return;
+    setAplicandoIniciarLote(true);
+    const agora = new Date().toISOString();
+    for (const opl of alvos) {
+      await supabase.from('oples').update({ status_geral: 'Em Producao', data_inicio_producao: agora }).eq('id', opl.id);
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
+        evento: 'Início da produção em lote (ação em massa por seleção) — responsável a definir.',
+        status_anterior: opl.status_geral, status_novo: 'Em Producao',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      }]);
+    }
+    setAplicandoIniciarLote(false);
+    setSelecionados(new Set());
+    fetchAll();
   };
 
   const editarResponsavel = async () => {
@@ -2407,7 +2445,7 @@ export default function ProducaoTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Veículo</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
+                <th></th><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
               </tr></thead>
               <tbody>
                 {(() => {
@@ -2426,16 +2464,26 @@ export default function ProducaoTab({ currentUser }) {
                   }
                   return itens.map(item => {
                     if (item.tipo === 'single') {
-                      return <OplRow key={item.row.id} o={item.row} onAction={handleAction} currentUser={currentUser} />;
+                      return <OplRow key={item.row.id} o={item.row} onAction={handleAction} currentUser={currentUser}
+                        selecionado={selecionados.has(item.row.id)} onToggleSelecionar={toggleSelecionar} />;
                     }
                     const grupo = item;
                     const expandido = !!lotesExpandidos[grupo.base];
                     const qtdAguardando  = grupo.irmaos.filter(o => o.status_geral === 'Aguardando Inicio Producao').length;
                     const qtdEmProducao  = grupo.irmaos.filter(o => o.status_geral === 'Em Producao').length;
                     const qtdRetrabalho  = grupo.irmaos.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho').length;
+                    const todosSelecionados = grupo.irmaos.every((o:any) => selecionados.has(o.id));
                     return (
                       <React.Fragment key={grupo.base}>
                         <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                          <td style={{textAlign:'center'}}>
+                            <input type="checkbox" checked={todosSelecionados} title="Selecionar todas as unidades deste lote"
+                              onChange={()=>setSelecionados(prev => {
+                                const novo = new Set(prev);
+                                grupo.irmaos.forEach((o:any) => { if (todosSelecionados) novo.delete(o.id); else novo.add(o.id); });
+                                return novo;
+                              })} style={{cursor:'pointer'}} />
+                          </td>
                           <td>
                             <strong>🔗 {grupo.base}</strong>
                             <div><span className="acn-badge" style={{background:'#7c3aed'}}>LOTE — {grupo.irmaos.length} unidades</span></div>
@@ -2461,7 +2509,8 @@ export default function ProducaoTab({ currentUser }) {
                           </td>
                         </tr>
                         {expandido && grupo.irmaos.map(o => (
-                          <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} />
+                          <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser}
+                            selecionado={selecionados.has(o.id)} onToggleSelecionar={toggleSelecionar} />
                         ))}
                       </React.Fragment>
                     );
@@ -2716,8 +2765,27 @@ export default function ProducaoTab({ currentUser }) {
           colaboradoresList={colaboradoresList}
           currentUser={currentUser}
           onClose={()=>setModalImportarLoteProducao(null)}
-          onImportado={()=>fetchAll()}
+          onImportado={()=>{fetchAll();setSelecionados(new Set());}}
         />
+      )}
+
+      {/* BARRA DE AÇÃO EM LOTE — seleção livre por checkbox, não precisa ser do mesmo lote/base */}
+      {selecionados.size > 0 && (
+        <div style={{position:'fixed',left:'50%',transform:'translateX(-50%)',bottom:16,zIndex:1500,
+          background:'#1e293b',color:'white',borderRadius:8,padding:'10px 16px',boxShadow:'0 8px 24px rgba(0,0,0,.3)',
+          display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',maxWidth:'92vw'}}>
+          <strong style={{fontSize:12}}>{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
+          <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} disabled={aplicandoIniciarLote} onClick={iniciarProducaoEmLote}>
+            {aplicandoIniciarLote ? 'Aplicando...' : '▶️ Iniciar Produção em Lote'}
+          </button>
+          <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
+            onClick={()=>setModalImportarLoteProducao({base:'Seleção', irmaos: opls.filter((o:any)=>selecionados.has(o.id))})}>
+            📥 Atribuir Técnicos/Equipes
+          </button>
+          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>setSelecionados(new Set())}>
+            ✕ Limpar seleção
+          </button>
+        </div>
       )}
 
       {/* MODAL DEVOLVER PCP */}
