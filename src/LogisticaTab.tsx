@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
+import { notificarEvento } from './whatsappHelper';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -1171,6 +1172,234 @@ function FretesPanel({ currentUser }: any) {
   );
 }
 
+// ─── Recebimento de Compras — pedidos com status_compra='Comprado' aguardando
+// chegada física. O comprador já preencheu fornecedor/valor/prazo lá em
+// ComprasTab; aqui a Logística preenche o que só se sabe ao receber (NF real,
+// data de chegada, quantidade recebida, divergência) — usa os campos
+// numero_nf/data_recebimento_real/quantidade_recebida/tem_divergencia que já
+// existiam em pcp_pedidos_compra mas nunca eram gravados por nenhuma tela. ──
+const VAZIO_RECEBIMENTO = {
+  numero_nf: '', data_recebimento_real: new Date().toISOString().split('T')[0],
+  quantidade_recebida: '', confere: true, observacoes: '', seriais: '', volume: '',
+};
+
+function PainelRecebimento({ currentUser }: any) {
+  const [pedidos, setPedidos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalReceber, setModalReceber] = useState<any>(null);
+  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO });
+  const [salvando, setSalvando] = useState(false);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('pcp_pedidos_compra')
+      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome')
+      .eq('status_compra', 'Comprado')
+      .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
+    setPedidos(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const abrirReceber = (p: any) => {
+    setModalReceber(p);
+    setForm({ ...VAZIO_RECEBIMENTO, quantidade_recebida: p.quantidade != null ? String(p.quantidade) : '' });
+  };
+
+  const fmt = (v: any) => v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
+  const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(new Date().toISOString().slice(0, 10));
+
+  // Mesmo padrão de notificarCriadorPedido (ComprasTab.tsx) / notificarCriadorFrete
+  // (FretesPanel acima) — avisa quem fez a compra que a divergência precisa ser resolvida.
+  const notificarComprador = async (pedido: any, mensagem: string) => {
+    try {
+      if (!pedido.criado_por) return;
+      const { data: criador } = await supabase.from('auth_usuarios').select('id, nome').eq('email', pedido.criado_por).maybeSingle();
+      if (!criador) return;
+      await supabase.from('mencoes').insert({
+        mencionado_id: String(criador.id), mencionado_nome: criador.nome,
+        mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+        contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
+        contexto_descricao: `Pedido ${pedido.numero_pedido}`,
+        campo: 'recebimento', texto_trecho: mensagem,
+        aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('Falha ao notificar comprador:', e); }
+  };
+
+  const numOrNull = (v: any) => v === '' || v == null ? null : parseFloat(String(v).replace(',', '.'));
+
+  const confirmarRecebimento = async () => {
+    if (!modalReceber) return;
+    if (!form.numero_nf.trim()) { alert('Informe o número da NF.'); return; }
+    if (!form.confere && !form.observacoes.trim()) { alert('Descreva a divergência.'); return; }
+    setSalvando(true);
+    const pedido = modalReceber;
+    const agora = new Date().toISOString();
+
+    // Registra o recebimento como manifesto de Logística também — mesma tabela/
+    // fluxo do "+ Novo Registro", garante que ele apareça no Histórico e possa
+    // gerar o PDF de comprovante como qualquer outro manifesto.
+    const { error: errManifesto } = await supabase.from('logistica_manifestos').insert([{
+      tipo: 'Recebimento', data: form.data_recebimento_real,
+      remetente: pedido.fornecedor || 'Fornecedor', destinatario: 'ACN Sinal Verde',
+      tipo_mercadoria: 'Materiais', descricao: pedido.descricao_material || '',
+      quantidade: numOrNull(form.quantidade_recebida),
+      nf_referencia: form.numero_nf.trim(),
+      observacoes: form.observacoes.trim() || null,
+      pedido_compra_id: pedido.id,
+      seriais: form.seriais.trim() || null,
+      volume: numOrNull(form.volume),
+      nf_conferida: form.confere,
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+    }]);
+    if (errManifesto) { alert('Erro ao registrar manifesto: ' + errManifesto.message); setSalvando(false); return; }
+
+    const updatePedido: any = {
+      numero_nf: form.numero_nf.trim(),
+      data_recebimento_real: form.data_recebimento_real,
+      quantidade_recebida: numOrNull(form.quantidade_recebida),
+      tem_divergencia: !form.confere,
+      observacoes: form.observacoes.trim() || null,
+    };
+    if (form.confere) {
+      updatePedido.status_compra = 'Concluído';
+      updatePedido.data_conclusao = new Date().toISOString().split('T')[0];
+    }
+    const { error: errPedido } = await supabase.from('pcp_pedidos_compra').update(updatePedido).eq('id', pedido.id);
+    if (errPedido) { alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra: ' + errPedido.message); setSalvando(false); return; }
+
+    if (form.confere) {
+      // Mesmo gate de fechamento/liberação de pagamento já usado no fluxo antigo
+      // de "+ Novo Registro" (Fase 3) — sem divergência, libera o faturamento.
+      const { error: errFat } = await supabase.from('pcp_pedidos_faturamento').update({
+        recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado',
+      }).eq('pedido_id', pedido.id);
+      if (errFat) console.warn('Falha ao atualizar faturamento:', errFat.message);
+      notificarEvento('logistica_recebe_pedido', `📦 *Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}\nNF: ${form.numero_nf.trim()}`, 'Compras');
+    } else {
+      await supabase.from('demandas_setoriais').insert([{
+        setor_destino: 'Compras', numero_opl: pedido.opl || null,
+        descricao: `[DIVERGÊNCIA NO RECEBIMENTO] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — NF ${form.numero_nf.trim()}: ${form.observacoes.trim()}`,
+        status: 'Pendente', tipo_solicitacao: 'divergencia_recebimento',
+        criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, data_abertura: agora,
+        logs_demanda: [{ texto: `Divergência no recebimento: ${form.observacoes.trim()}`, usuario: currentUser?.nome, hora: agora }],
+      }]);
+      await notificarComprador(pedido, `⚠️ Divergência no recebimento do pedido ${pedido.numero_pedido}: ${form.observacoes.trim()}`);
+      notificarEvento('logistica_divergencia_recebimento', `⚠️ *Divergência no recebimento* — Pedido ${pedido.numero_pedido}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
+    }
+
+    setSalvando(false);
+    setModalReceber(null);
+    fetchAll();
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-hdr"><span>📦 Pedidos Aguardando Recebimento ({pedidos.length})</span></div>
+      <div className="sec-body" style={{ overflowX: 'auto' }}>
+        {loading ? <div className="acn-empty">Carregando...</div> : pedidos.length === 0 ? (
+          <div className="acn-empty">Nenhum pedido comprado aguardando recebimento.</div>
+        ) : (
+          <table>
+            <thead><tr><th>Pedido / OC</th><th>Material</th><th>Fornecedor</th><th>Qtd</th><th>Valor</th><th>Previsão</th><th>Ação</th></tr></thead>
+            <tbody>
+              {pedidos.map(p => (
+                <tr key={p.id} style={atrasado(p) ? { background: '#fef2f2' } : undefined}>
+                  <td>{p.numero_pedido || '—'}{p.numero_oc ? <div style={{ fontSize: 9, color: '#64748b' }}>{p.numero_oc}</div> : null}</td>
+                  <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.descricao_material || '—'}</td>
+                  <td>{p.fornecedor || '—'}</td>
+                  <td>{p.quantidade ?? '—'}</td>
+                  <td>{fmt(p.valor_compra)}</td>
+                  <td>{fmtDt(p.data_prevista_recebimento)}{atrasado(p) && <span style={{ color: '#dc2626', fontWeight: 700 }}> ⚠ atrasado</span>}</td>
+                  <td><button className="acn-btn" style={{ background: '#16a34a', fontSize: 10 }} onClick={() => abrirReceber(p)}>📥 Receber</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {modalReceber && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) setModalReceber(null); }}>
+          <div className="modal-box" style={{ maxWidth: 520 }}>
+            <div className="modal-title">📥 Receber Pedido — {modalReceber.numero_pedido || modalReceber.numero_oc || '—'}</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+              {modalReceber.descricao_material || '—'} · Fornecedor: {modalReceber.fornecedor || '—'} · Qtd pedida: {modalReceber.quantidade ?? '—'}
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="acn-label">Número da NF *</label>
+                <input className="acn-input" style={{ width: '100%' }} value={form.numero_nf}
+                  onChange={e => setForm(f => ({ ...f, numero_nf: e.target.value }))} placeholder="Ex: 004821" />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Data de Recebimento</label>
+                <input type="date" className="acn-input" style={{ width: '100%' }} value={form.data_recebimento_real}
+                  onChange={e => setForm(f => ({ ...f, data_recebimento_real: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="acn-label">Quantidade Recebida</label>
+                <input type="number" className="acn-input" style={{ width: '100%' }} value={form.quantidade_recebida}
+                  onChange={e => setForm(f => ({ ...f, quantidade_recebida: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Volume (embalagens)</label>
+                <input type="number" className="acn-input" style={{ width: '100%' }} value={form.volume}
+                  onChange={e => setForm(f => ({ ...f, volume: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label className="acn-label">Números de Série (opcional)</label>
+              <input className="acn-input" style={{ width: '100%' }} value={form.seriais}
+                placeholder="Ex: SN12345, SN12346..."
+                onChange={e => setForm(f => ({ ...f, seriais: e.target.value }))} />
+            </div>
+
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" onClick={() => setForm(f => ({ ...f, confere: true }))}
+                  style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+                    border: form.confere ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                    background: form.confere ? '#f0fdf4' : '#fff', color: form.confere ? '#16a34a' : '#64748b' }}>
+                  ✅ Confere com o pedido
+                </button>
+                <button type="button" onClick={() => setForm(f => ({ ...f, confere: false }))}
+                  style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+                    border: !form.confere ? '2px solid #dc2626' : '1px solid #e2e8f0',
+                    background: !form.confere ? '#fef2f2' : '#fff', color: !form.confere ? '#dc2626' : '#64748b' }}>
+                  ⚠️ Tem divergência
+                </button>
+              </div>
+              {!form.confere && (
+                <textarea className="acn-input" rows={2} style={{ width: '100%', marginTop: 8, resize: 'vertical' }}
+                  value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                  placeholder="Descreva a divergência (qtd errada, item trocado, avaria...)" />
+              )}
+            </div>
+            {!form.confere && (
+              <div style={{ fontSize: 9, color: '#92400e', marginBottom: 8 }}>
+                Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="acn-btn" style={{ background: form.confere ? '#16a34a' : '#dc2626', flex: 1 }} onClick={confirmarRecebimento} disabled={salvando}>
+                {salvando ? 'Salvando...' : form.confere ? '✅ Confirmar Recebimento' : '⚠️ Registrar Divergência'}
+              </button>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setModalReceber(null)} disabled={salvando}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LogisticaTab({ currentUser }) {
   const [abaLog, setAbaLog] = useState('historico');
   const [manifestos, setManifestos] = useState([]);
@@ -1405,15 +1634,17 @@ export default function LogisticaTab({ currentUser }) {
   return (
     <div>
       <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
+        <button style={{flex:1,padding:'8px',background:abaLog==='recebimento'?'#1e293b':'white',color:abaLog==='recebimento'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+          onClick={()=>setAbaLog('recebimento')}>📦 Aguardando Recebimento</button>
         <button style={{flex:1,padding:'8px',background:abaLog==='historico'?'#1e293b':'white',color:abaLog==='historico'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaLog('historico')}>📦 Histórico / Novo Registro</button>
+          onClick={()=>setAbaLog('historico')}>📋 Histórico / Novo Registro</button>
         <button style={{flex:1,padding:'8px',background:abaLog==='relatorio'?'#1e293b':'white',color:abaLog==='relatorio'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaLog('relatorio')}>📊 Relatório IN/OUT</button>
         <button style={{flex:1,padding:'8px',background:abaLog==='fretes'?'#1e293b':'white',color:abaLog==='fretes'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaLog('fretes')}>🚚 Fretes</button>
       </div>
 
-      {abaLog === 'relatorio' ? <RelatorioLogistica /> : abaLog === 'fretes' ? <FretesPanel currentUser={currentUser} /> : <>
+      {abaLog === 'recebimento' ? <PainelRecebimento currentUser={currentUser} /> : abaLog === 'relatorio' ? <RelatorioLogistica /> : abaLog === 'fretes' ? <FretesPanel currentUser={currentUser} /> : <>
       <div className="sec-card">
         <div className="sec-hdr">
           <span>Logistica — Controle de Envio e Recebimento de Mercadorias</span>

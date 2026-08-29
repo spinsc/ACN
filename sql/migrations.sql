@@ -1018,3 +1018,17 @@ ALTER TABLE sac_ordens_servico
 ALTER TABLE pcp_pedidos_serralheria DISABLE ROW LEVEL SECURITY;
 ALTER TABLE oples ADD COLUMN IF NOT EXISTS serralheria_status text;
 COMMENT ON COLUMN oples.serralheria_status IS 'Trilha paralela ao status_geral p/ liberação parcial de BOM à Serralheria: null | Pendente | Concluido | Sanado. Não interfere no fluxo normal Engenharia->PCP.';
+
+-- 2026-08-29 · Painel "📦 Aguardando Recebimento" na Logística In/Out
+-- (LogisticaTab.tsx) — sem DDL nova. pcp_pedidos_compra já tinha as colunas
+-- numero_nf / data_recebimento_real / quantidade_recebida / tem_divergencia
+-- desde sempre, mas nenhuma tela gravava nelas (mais um caso do padrão de
+-- "campo morto" já visto nesta sessão, agora em coluna em vez de componente).
+-- Passam a ser preenchidas quando a Logística recebe um pedido com
+-- status_compra='Comprado': sem divergência fecha pra 'Concluído' e libera
+-- pcp_pedidos_faturamento (mesmo gate que já existia no fluxo antigo de
+-- "+ Novo Registro"); com divergência mantém 'Comprado' e abre uma demanda
+-- em demandas_setoriais (tipo_solicitacao='divergencia_recebimento',
+-- setor_destino='Compras') pro comprador resolver, mesmo padrão usado por
+-- criarDemandaComprasFinalizada (ComprasTab.tsx) e pela liberação parcial de
+-- Serralheria acima.
