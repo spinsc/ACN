@@ -2128,6 +2128,20 @@ export default function ProducaoTab({ currentUser }) {
     fetchAll();
   };
 
+  // Libera para CQ todas as selecionadas que estão "Em Producao" de uma vez
+  // — mesmo cálculo de tempo de produção do botão individual "LIB. CQ".
+  const liberarChecklistEmLote = async () => {
+    const alvos = opls.filter((o: any) => selecionados.has(o.id) && o.status_geral === 'Em Producao');
+    if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Em Produção".'); return; }
+    if (!confirm(`Liberar ${alvos.length} OP(s) selecionada(s) para o CQ?`)) return;
+    setAplicandoIniciarLote(true);
+    for (const opl of alvos) {
+      await liberarChecklist(opl);
+    }
+    setAplicandoIniciarLote(false);
+    setSelecionados(new Set());
+  };
+
   const editarResponsavel = async () => {
     const opl = modalEditResp;
     if (!opl) return;
@@ -2781,6 +2795,9 @@ export default function ProducaoTab({ currentUser }) {
           <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
             onClick={()=>setModalImportarLoteProducao({base:'Seleção', irmaos: opls.filter((o:any)=>selecionados.has(o.id))})}>
             📥 Atribuir Técnicos/Equipes
+          </button>
+          <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} disabled={aplicandoIniciarLote} onClick={liberarChecklistEmLote}>
+            {aplicandoIniciarLote ? 'Aplicando...' : '✅ Liberar Checklist (CQ) em Lote'}
           </button>
           <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>setSelecionados(new Set())}>
             ✕ Limpar seleção
