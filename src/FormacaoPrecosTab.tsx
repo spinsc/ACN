@@ -1338,8 +1338,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   };
 
   const carregarModelo = (m) => {
-    setParams(m.parametros_globais || { ...PARAMS_PADRAO });
-    setItens((m.itens || []).map(x => ({ ...x, _id: Math.random().toString(36).slice(2) })));
+    // Merge com os padrões (não substitui cego pelo JSON salvo) — modelos
+    // salvos antes de algum campo existir (ex: markup_pct) não têm essa
+    // chave, e um valor `undefined` num input controlado dispara o warning
+    // "controlled input to be uncontrolled" do React.
+    setParams({ ...PARAMS_PADRAO, ...(m.parametros_globais || {}) });
+    setItens((m.itens || []).map(x => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) })));
     setNomeCotacao(m.nome);
     if (m.empresa) setEmpresa(m.empresa);
     if (m.plataforma_id && plataformas.length > 0) {
