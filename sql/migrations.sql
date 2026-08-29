@@ -973,3 +973,18 @@ WHERE p.centro_custo IS NOT NULL AND p.centro_custo_id IS NULL
 -- centro de custo ali, não só em pcp_pedidos_compra).
 ALTER TABLE demandas_setoriais
   ADD COLUMN IF NOT EXISTS centro_custo_id uuid REFERENCES centros_custo(id) ON DELETE SET NULL;
+
+-- 2026-08-28 · Fase 8 — lançamento manual de despesa avulsa por Centro de
+-- Custo, sem precisar de um pedido de compra formal.
+CREATE TABLE IF NOT EXISTS centro_custo_despesas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  centro_custo_id uuid NOT NULL REFERENCES centros_custo(id) ON DELETE CASCADE,
+  valor numeric NOT NULL,
+  descricao text NOT NULL,
+  data date NOT NULL DEFAULT CURRENT_DATE,
+  criado_por text,
+  criado_por_nome text,
+  criado_em timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_centro_custo_despesas_centro ON centro_custo_despesas(centro_custo_id);
+ALTER TABLE centro_custo_despesas DISABLE ROW LEVEL SECURITY;

@@ -871,6 +871,7 @@ function RelOplsParadas() {
 // ── REL CENTRO DE CUSTO ──
 function RelCentroCusto() {
   const [rows, setRows] = useState<any[]>([]);
+  const [despesas, setDespesas] = useState<any[]>([]);
   const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandido, setExpandido] = useState<Record<string,boolean>>({});
@@ -878,30 +879,58 @@ function RelCentroCusto() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [{ data, error }, { data: cData }] = await Promise.all([
+      const [{ data, error }, { data: dData }, { data: cData }] = await Promise.all([
         supabase.from('pcp_pedidos_compra')
-          .select('id,numero_pedido,descricao_material,fornecedor,valor_total,centro_custo,centro_custo_id,status_compra,data_pedido')
-          .not('centro_custo','is',null)
-          .order('data_pedido',{ascending:false}),
+          .select('id,numero_pedido,descricao_material,fornecedor,valor_total:valor_compra,centro_custo,centro_custo_id,status_compra,data_pedido:data_criacao')
+          .or('centro_custo.not.is.null,centro_custo_id.not.is.null')
+          .order('data_criacao',{ascending:false}),
+        supabase.from('centro_custo_despesas').select('*').order('data',{ascending:false}),
         supabase.from('centros_custo').select('*'),
       ]);
       if (!error && data) setRows(data);
+      setDespesas(dData || []);
       setCentrosCusto(cData || []);
       setLoading(false);
     })();
   }, []);
 
+  // Normaliza despesas avulsas para o mesmo formato de linha das compras,
+  // para poderem entrar na mesma tabela/agrupamento.
+  const despesasComoLinhas = despesas
+    .filter((d: any) => d.centro_custo_id)
+    .map((d: any) => ({
+      id: `desp-${d.id}`, numero_pedido: null, descricao_material: d.descricao || 'Despesa avulsa',
+      fornecedor: d.criado_por_nome || null, valor_total: d.valor, centro_custo: null,
+      centro_custo_id: d.centro_custo_id, status_compra: 'Despesa avulsa', data_pedido: d.data,
+      isDespesa: true,
+    }));
+  const todasLinhas = [...rows, ...despesasComoLinhas];
+
   // Agrupar por centro de custo — prioriza a FK real (centro_custo_id, com
-  // cadeia hierárquica no rótulo) sobre o texto livre legado.
+  // cadeia hierárquica no rótulo) sobre o texto livre legado, propagando
+  // cada item também para todos os centros ANCESTRAIS (um pedido/despesa de
+  // um centro filho conta também no total do pai, do avô, etc).
+  const centrosPorId = Object.fromEntries(centrosCusto.map((c: any) => [c.id, c]));
+  const ancestraisEDe = (centroId: string) => {
+    const cadeia: any[] = [];
+    let atual = centrosPorId[centroId];
+    let guarda = 0;
+    while (atual && guarda++ < 10) { cadeia.push(atual); atual = atual.parent_id ? centrosPorId[atual.parent_id] : null; }
+    return cadeia;
+  };
   const grupos: Record<string,any[]> = {};
-  for (const r of rows) {
-    let k = r.centro_custo || '—';
-    if (r.centro_custo_id) {
-      const c = centrosCusto.find((x: any) => x.id === r.centro_custo_id);
-      if (c) k = labelHierarquico(c, centrosCusto) + ' — ' + c.nome;
+  for (const r of todasLinhas) {
+    if (r.centro_custo_id && centrosPorId[r.centro_custo_id]) {
+      for (const c of ancestraisEDe(r.centro_custo_id)) {
+        const k = labelHierarquico(c, centrosCusto) + ' — ' + c.nome;
+        if (!grupos[k]) grupos[k] = [];
+        grupos[k].push(r);
+      }
+    } else {
+      const k = r.centro_custo || '—';
+      if (!grupos[k]) grupos[k] = [];
+      grupos[k].push(r);
     }
-    if (!grupos[k]) grupos[k] = [];
-    grupos[k].push(r);
   }
   const centros = Object.keys(grupos).sort();
 
@@ -912,25 +941,25 @@ function RelCentroCusto() {
   const td: any = {padding:'5px 8px',fontSize:10,borderBottom:'1px solid #f1f5f9',verticalAlign:'middle'};
 
   if (loading) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Carregando...</div>;
-  if (centros.length===0) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Nenhuma compra com centro de custo definido.</div>;
+  if (centros.length===0) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Nenhuma compra ou despesa com centro de custo definido.</div>;
 
-  const totalGeral = rows.reduce((s,r)=>s+Number(r.valor_total||0),0);
+  const totalGeral = todasLinhas.reduce((s,r)=>s+Number(r.valor_total||0),0);
 
   return (
     <div>
       {/* Resumo geral */}
       <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
         <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
-          <div style={{fontSize:9,color:'#1d4ed8',fontWeight:700,marginBottom:4}}>CENTROS COM COMPRAS</div>
+          <div style={{fontSize:9,color:'#1d4ed8',fontWeight:700,marginBottom:4}}>CENTROS COM LANÇAMENTOS</div>
           <div style={{fontSize:22,fontWeight:900,color:'#1e40af'}}>{centros.length}</div>
         </div>
         <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
-          <div style={{fontSize:9,color:'#166534',fontWeight:700,marginBottom:4}}>TOTAL COMPRAS</div>
+          <div style={{fontSize:9,color:'#166534',fontWeight:700,marginBottom:4}}>TOTAL GERAL (COMPRAS + DESPESAS)</div>
           <div style={{fontSize:22,fontWeight:900,color:'#15803d'}}>{fmt(totalGeral)}</div>
         </div>
         <div style={{background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
-          <div style={{fontSize:9,color:'#9a3412',fontWeight:700,marginBottom:4}}>PEDIDOS TOTAL</div>
-          <div style={{fontSize:22,fontWeight:900,color:'#c2410c'}}>{rows.length}</div>
+          <div style={{fontSize:9,color:'#9a3412',fontWeight:700,marginBottom:4}}>LANÇAMENTOS TOTAL</div>
+          <div style={{fontSize:22,fontWeight:900,color:'#c2410c'}}>{todasLinhas.length}</div>
         </div>
       </div>
 

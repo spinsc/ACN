@@ -19,7 +19,7 @@ const STATUS_COR: Record<string, string> = {
 };
 
 // ─── Modal CRUD de Centros de Custo ──────────────────────────────────────────
-function ModalCentros({ onClose, onAtualizar }: any) {
+function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2000,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -33,7 +33,7 @@ function ModalCentros({ onClose, onAtualizar }: any) {
           <button onClick={() => { onAtualizar(); onClose(); }} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-          <CentrosCustoManager embutido />
+          <CentrosCustoManager embutido currentUser={currentUser} />
         </div>
       </div>
     </div>
@@ -42,7 +42,7 @@ function ModalCentros({ onClose, onAtualizar }: any) {
 
 // ─── Modal: compras de um centro de custo ─────────────────────────────────────
 function ModalComprasCentro({ centro, compras, onClose }: any) {
-  const total = compras.reduce((s: number, p: any) => s + (Number(p.valor_compra) || 0), 0);
+  const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2100,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -54,7 +54,7 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
           borderRadius: '10px 10px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 13 }}>🛒 Compras — {centro.nome || centro}</div>
-            <div style={{ fontSize: 9, opacity: .8 }}>{compras.length} compra(s) · Total: {fmtR(total)}</div>
+            <div style={{ fontSize: 9, opacity: .8 }}>{compras.length} lançamento(s) · Total: {fmtR(total)}</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
@@ -73,7 +73,28 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
                 </tr>
               </thead>
               <tbody>
-                {compras.map((p: any, i: number) => (
+                {compras.map((p: any, i: number) => p.despesaAvulsa ? (
+                  <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>—</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>{p.descricao || 'Despesa avulsa'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.criado_por_nome || '—'}</td>
+                    <td style={{ padding: '5px 8px' }}>
+                      <span style={{ background: '#fef3c722', color: '#b45309',
+                        padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
+                        💰 Despesa avulsa
+                      </span>
+                    </td>
+                    <td style={{ padding: '5px 8px', fontSize: 10 }}>
+                      <span style={{ color: '#9ca3af' }}>—</span>
+                    </td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: 'monospace' }}>
+                      {fmtR(Number(p.valor) || 0)}
+                    </td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
+                      {fmtDt(p.data)}
+                    </td>
+                  </tr>
+                ) : (
                   <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>{p.numero_pedido || '—'}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>{p.descricao_material || '—'}</td>
@@ -243,6 +264,7 @@ function SecaoFaturamentoCompras({ faturamentos, onAtualizar }: any) {
 export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [centros,  setCentros]  = useState<any[]>([]);
   const [compras,  setCompras]  = useState<any[]>([]);
+  const [despesas, setDespesas] = useState<any[]>([]);
   const [faturamentos, setFaturamentos] = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [modalCentros, setModalCentros] = useState(false);
@@ -258,14 +280,16 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const [{ data: cData }, { data: pData }, { data: fData }] = await Promise.all([
+    const [{ data: cData }, { data: pData }, { data: fData }, { data: dData }] = await Promise.all([
       supabase.from('centros_custo').select('*').order('codigo'),
       supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', { ascending: false }),
       supabase.from('pcp_pedidos_faturamento').select('*').order('criado_em', { ascending: false }),
+      supabase.from('centro_custo_despesas').select('*').order('data', { ascending: false }),
     ]);
     setCentros(cData || []);
     setCompras(pData || []);
     setFaturamentos(fData || []);
+    setDespesas(dData || []);
     setLoading(false);
   }, []);
 
@@ -280,27 +304,59 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     return okMes && okAno && okStatus;
   });
 
+  // Despesas avulsas do mesmo período (data, não data_criacao)
+  const despesasFiltradas = despesas.filter(d => {
+    const dt = d.data ? new Date(d.data + 'T12:00:00') : null;
+    const okMes = !filtroMes || !dt || String(dt.getMonth() + 1).padStart(2, '0') === filtroMes;
+    const okAno = !filtroAno || !dt || String(dt.getFullYear()) === filtroAno;
+    return okMes && okAno;
+  });
+
   // Agrupa por centro de custo — prioriza a FK real (centro_custo_id, com
-  // cadeia hierárquica no rótulo) sobre o texto livre legado, que pode ter
-  // pequenas variações de digitação e nunca agrupa de verdade.
+  // cadeia hierárquica no rótulo) sobre o texto livre legado. Soma tanto
+  // pedidos de compra quanto despesas avulsas, e propaga cada valor também
+  // para todos os ANCESTRAIS do centro (um pedido/despesa de um centro
+  // filho conta também no total do pai, do avô, etc — até a raiz).
+  const centrosPorId = Object.fromEntries(centros.map((c: any) => [c.id, c]));
+  const ancestraisEDe = (centroId: string) => {
+    const cadeia: any[] = [];
+    let atual = centrosPorId[centroId];
+    let guarda = 0;
+    while (atual && guarda++ < 10) { cadeia.push(atual); atual = atual.parent_id ? centrosPorId[atual.parent_id] : null; }
+    return cadeia;
+  };
   const porCentro: Record<string, { nome: string; total: number; count: number; compras: any[] }> = {};
-  for (const p of comprasFiltradas) {
-    let key = p.centro_custo || '(Sem Centro)';
-    if (p.centro_custo_id) {
-      const c = centros.find((x: any) => x.id === p.centro_custo_id);
-      if (c) key = labelHierarquico(c, centros) + ' — ' + c.nome;
-    }
+  const addAoCentro = (centro: any, valor: number, item: any) => {
+    const key = labelHierarquico(centro, centros) + ' — ' + centro.nome;
     if (!porCentro[key]) porCentro[key] = { nome: key, total: 0, count: 0, compras: [] };
-    porCentro[key].total += Number(p.valor_compra) || 0;
+    porCentro[key].total += valor;
     porCentro[key].count++;
-    porCentro[key].compras.push(p);
+    porCentro[key].compras.push(item);
+  };
+  for (const p of comprasFiltradas) {
+    if (p.centro_custo_id && centrosPorId[p.centro_custo_id]) {
+      ancestraisEDe(p.centro_custo_id).forEach(c => addAoCentro(c, Number(p.valor_compra) || 0, p));
+    } else {
+      const key = p.centro_custo || '(Sem Centro)';
+      if (!porCentro[key]) porCentro[key] = { nome: key, total: 0, count: 0, compras: [] };
+      porCentro[key].total += Number(p.valor_compra) || 0;
+      porCentro[key].count++;
+      porCentro[key].compras.push(p);
+    }
+  }
+  for (const d of despesasFiltradas) {
+    if (centrosPorId[d.centro_custo_id]) {
+      ancestraisEDe(d.centro_custo_id).forEach(c => addAoCentro(c, Number(d.valor) || 0, { ...d, despesaAvulsa: true }));
+    }
   }
   const listacentros = Object.entries(porCentro)
     .map(([k, v]) => ({ key: k, ...v }))
     .sort((a, b) => b.total - a.total);
 
-  // KPIs
-  const totalGasto    = comprasFiltradas.reduce((s, p) => s + (Number(p.valor_compra) || 0), 0);
+  // KPIs — total gasto soma compras + despesas avulsas do período
+  const totalGastoCompras  = comprasFiltradas.reduce((s, p) => s + (Number(p.valor_compra) || 0), 0);
+  const totalGastoDespesas = despesasFiltradas.reduce((s, d) => s + (Number(d.valor) || 0), 0);
+  const totalGasto    = totalGastoCompras + totalGastoDespesas;
   const totalConcluidas = comprasFiltradas.filter(p => p.status_compra === 'Concluído').length;
   const totalPendentes  = comprasFiltradas.filter(p => p.status_compra === 'Pendente').length;
   const totalSemCentro  = comprasFiltradas.filter(p => !p.centro_custo).length;
@@ -515,7 +571,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                     <tr style={{ background: '#1e293b', color: '#fff' }}>
                       <td style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11 }}>TOTAL GERAL</td>
                       <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700 }}>
-                        {comprasFiltradas.length}
+                        {comprasFiltradas.length + despesasFiltradas.length}
                       </td>
                       <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, fontSize: 13, fontFamily: 'monospace' }}>
                         {fmtR(totalGasto)}
@@ -535,11 +591,9 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       {/* Modais */}
       {modalCentros && (
         <ModalCentros
+          currentUser={currentUser}
           onClose={() => setModalCentros(false)}
-          onAtualizar={() => {
-            supabase.from('centros_custo').select('*').order('codigo')
-              .then(({ data }) => setCentros(data || []));
-          }}
+          onAtualizar={carregar}
         />
       )}
 

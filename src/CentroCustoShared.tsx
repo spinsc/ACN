@@ -53,6 +53,16 @@ export function labelHierarquico(centro: any, todosCentros: any[]) {
   return cadeia.join(' > ');
 }
 
+// Todos os ids de descendentes de um centro (filhos, netos, ...) — usado
+// para "um pedido/despesa de um centro filho também conta no total do pai"
+// nos relatórios (Financeiro, RelatoriosTab).
+export function idsComDescendentes(centroId: string, todosCentros: any[]): string[] {
+  const resultado = [centroId];
+  const filhos = todosCentros.filter(c => c.parent_id === centroId);
+  filhos.forEach(f => { idsComDescendentes(f.id, todosCentros).forEach(id => resultado.push(id)); });
+  return resultado;
+}
+
 // ─── SELECT REUTILIZÁVEL (formulários de pedido/demanda) ──────────────────
 export function CentroCustoSelect({ value, onChange, permitirNenhum = true, style, className }: any) {
   const [centros, setCentros] = useState<any[]>([]);
@@ -73,13 +83,14 @@ export function CentroCustoSelect({ value, onChange, permitirNenhum = true, styl
 // `embutido` — quando true, renderiza sem o wrapper "sec-card" (uso dentro
 // de um modal já existente em Compras/Financeiro); quando false (padrão),
 // monta como card de página inteira (uso no Admin).
-export function CentrosCustoManager({ embutido = false }: any = {}) {
+export function CentrosCustoManager({ embutido = false, currentUser }: any = {}) {
   const [centros, setCentros]   = useState<any[]>([]);
   const [loading, setLoading]   = useState(false);
   const [form, setForm]         = useState({ codigo:'', nome:'', descricao:'', parent_id:'' });
   const [editando, setEditando] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [modalDespesa, setModalDespesa] = useState<any>(null); // centro selecionado para lançar despesa
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +144,15 @@ export function CentrosCustoManager({ embutido = false }: any = {}) {
         Usados para classificar pedidos de compra e apontar custos. Um centro pode ter um "pai"
         (ex: FLUTUANTE {'>'}  PIER {'>'} ILHA) — o filho aparece indentado abaixo do pai na lista.
       </p>
+
+      {!showForm && (
+        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
+          <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
+            onClick={() => { setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setEditando(null); setShowForm(true); }}>
+            + Novo Centro de Custo
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
@@ -219,6 +239,10 @@ export function CentrosCustoManager({ embutido = false }: any = {}) {
                 </td>
                 <td style={{ padding:'8px 6px' }}>
                   <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                    <button className="acn-btn" style={{ background:'#16a34a', fontSize:9, padding:'2px 8px' }}
+                      onClick={() => setModalDespesa(c)} title="Lançar despesa avulsa neste centro">
+                      💰
+                    </button>
                     <button className="acn-btn" style={{ background: c.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
                       onClick={() => toggleAtivo(c)}>
                       {c.ativo ? 'Desativar' : 'Ativar'}
@@ -237,18 +261,68 @@ export function CentrosCustoManager({ embutido = false }: any = {}) {
     </>
   );
 
-  if (embutido) return <div>{conteudo}</div>;
+  const modalDespesaEl = modalDespesa && (
+    <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser}
+      onClose={() => setModalDespesa(null)} />
+  );
+
+  if (embutido) return <div>{conteudo}{modalDespesaEl}</div>;
 
   return (
     <div className="sec-card">
-      <div className="sec-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+      <div className="sec-header">
         <span>🏷️ Centros de Custo</span>
-        <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
-          onClick={() => { setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setEditando(null); setShowForm(true); }}>
-          + Novo Centro de Custo
-        </button>
       </div>
       <div className="sec-body">{conteudo}</div>
+      {modalDespesaEl}
+    </div>
+  );
+}
+
+// ─── LANÇAR DESPESA AVULSA ─────────────────────────────────────────────────
+function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
+  const [valor, setValor] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [data, setData] = useState(() => new Date().toISOString().slice(0,10));
+  const [salvando, setSalvando] = useState(false);
+
+  const salvar = async () => {
+    const v = parseFloat(String(valor).replace(',', '.'));
+    if (!v || v <= 0) { alert('Informe um valor válido.'); return; }
+    if (!descricao.trim()) { alert('Informe a descrição da despesa.'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('centro_custo_despesas').insert([{
+      centro_custo_id: centro.id, valor: v, descricao: descricao.trim(), data,
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
+    }]);
+    setSalvando(false);
+    if (error) { alert('Erro ao lançar despesa: ' + error.message); return; }
+    alert('✅ Despesa lançada!');
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:400 }}>
+        <div className="modal-title">💰 Lançar Despesa — {centro.codigo}</div>
+        <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>{centro.nome}</div>
+        <label className="acn-label">Valor (R$) *</label>
+        <input className="acn-input" style={{ width:'100%', marginBottom:10 }} placeholder="0,00" inputMode="decimal"
+          value={valor} onChange={e => setValor(e.target.value)} autoFocus />
+        <label className="acn-label">Descrição *</label>
+        <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
+          placeholder="Ex: Manutenção do compressor, material extra..."
+          value={descricao} onChange={e => setDescricao(e.target.value)} />
+        <label className="acn-label">Data</label>
+        <input type="date" className="acn-input" style={{ width:'100%', marginBottom:14 }}
+          value={data} onChange={e => setData(e.target.value)} />
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : '💾 Lançar Despesa'}
+          </button>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
     </div>
   );
 }

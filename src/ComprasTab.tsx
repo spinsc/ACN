@@ -1284,7 +1284,7 @@ export default function ComprasTab({ currentUser }) {
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalGerCentros(false);}}>
           <div className="modal-box" style={{maxWidth:560,maxHeight:'85vh',overflowY:'auto'}}>
             <div className="modal-title">⚙️ Centros de Custo</div>
-            <CentrosCustoManager embutido />
+            <CentrosCustoManager embutido currentUser={currentUser} />
             <div style={{marginTop:14}}>
               <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>{setModalGerCentros(false);loadCentros();}}>Fechar</button>
             </div>
