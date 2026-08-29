@@ -1792,6 +1792,189 @@ function EquipesSection({ currentUser }) {
   );
 }
 
+// ── Importação em lote de Técnico(s)/Equipe por OP desmembrada (Adaptação) ──
+// Cola do Excel (Ctrl+C/Ctrl+V): cada linha identifica a OP pelo chassi e/ou
+// placa (já cadastrados nela) e traz o nome do responsável — que pode ser um
+// técnico (individual), "Técnico A + Técnico B" (dupla) ou o nome de uma
+// equipe já cadastrada (🏷️ Equipes). Não depende da ordem das linhas: casa
+// sempre pelo chassi/placa já vinculado à OP, nunca por posição.
+const REGEX_PLACA_PROD = /^[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}$/i;
+
+function resolverResponsavel(texto, equipesList, colaboradoresList) {
+  const t = (texto || '').trim();
+  if (!t) return null;
+  const norm = (s) => s.trim().toUpperCase();
+  // Dupla: "Fulano + Beltrano" ou "Fulano / Beltrano"
+  if (/[+/]/.test(t)) {
+    const partes = t.split(/[+/]/).map(p => p.trim()).filter(Boolean);
+    if (partes.length >= 2) {
+      const c1 = colaboradoresList.find(c => norm(c.nome) === norm(partes[0]));
+      const c2 = colaboradoresList.find(c => norm(c.nome) === norm(partes[1]));
+      if (c1 && c2) return { modo: 'dupla', nome: c1.nome, id: c1.id, nome2: c2.nome, id2: c2.id };
+    }
+  }
+  // Nome exato de equipe cadastrada sempre ganha (ex: "Head Line Tiago").
+  const eqPorNome = equipesList.find(e => norm(e.nome) === norm(t));
+  if (eqPorNome) return { modo: 'equipe', equipe: eqPorNome };
+  // Nome de um técnico individual ganha do head_line_nome de uma equipe —
+  // "JUNIOR" sozinho deve virar técnico individual, não a equipe dele.
+  const c = colaboradoresList.find(x => norm(x.nome) === norm(t));
+  if (c) return { modo: 'individual', nome: c.nome, id: c.id };
+  // Só cai pra equipe pelo head_line_nome se não bateu como técnico —
+  // cobre o caso de o head line não estar cadastrado em rh_funcionarios.
+  const eqPorHead = equipesList.find(e => norm(e.head_line_nome) === norm(t));
+  if (eqPorHead) return { modo: 'equipe', equipe: eqPorHead };
+  return null;
+}
+
+function calcularPlanoImportacaoTecnicos(linhasRaw, irmaos, equipesList, colaboradoresList) {
+  const linhas = linhasRaw.map(l => l.trim()).filter(Boolean);
+  const plano = [];
+  const naoReconhecidas = [];
+  for (const linha of linhas) {
+    const partes = linha.split(/\t|;/).map(p => p.trim()).filter(Boolean);
+    if (partes.length < 2) { naoReconhecidas.push({ linha, motivo: 'linha incompleta (faltou chassi/placa ou responsável)' }); continue; }
+    const respTexto = partes[partes.length - 1];
+    const chaves = partes.slice(0, -1);
+    const alvo = irmaos.find(o =>
+      chaves.some(k => (o.chassi && o.chassi.trim().toUpperCase() === k.trim().toUpperCase()) ||
+                        (o.placa  && o.placa.trim().toUpperCase()  === k.trim().toUpperCase())));
+    if (!alvo) { naoReconhecidas.push({ linha, motivo: `nenhuma OP do lote tem chassi/placa "${chaves.join(' / ')}"` }); continue; }
+    const resp = resolverResponsavel(respTexto, equipesList, colaboradoresList);
+    if (!resp) { naoReconhecidas.push({ linha, motivo: `"${respTexto}" não é um técnico nem equipe cadastrada` }); continue; }
+    plano.push({ alvo, resp, respTexto });
+  }
+  return { plano, naoReconhecidas };
+}
+
+function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList, currentUser, onClose, onImportado }) {
+  const [texto, setTexto] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+
+  const { plano, naoReconhecidas } = calcularPlanoImportacaoTecnicos(texto.split('\n'), irmaos, equipes, colaboradoresList);
+
+  const confirmar = async () => {
+    setSalvando(true);
+    let ok = 0, falhas = 0;
+    const agora = new Date().toISOString();
+    for (const { alvo, resp } of plano) {
+      let upd = { modo_execucao: resp.modo };
+      if (resp.modo === 'individual') {
+        upd = { ...upd, responsavel_producao: resp.nome, tecnico_producao_id: resp.id,
+                 tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null };
+      } else if (resp.modo === 'dupla') {
+        upd = { ...upd, responsavel_producao: resp.nome, tecnico_producao_id: resp.id,
+                 tecnico_producao_2_nome: resp.nome2, tecnico_producao_2_id: resp.id2, equipe_id: null, equipe_nome: null };
+      } else if (resp.modo === 'equipe') {
+        upd = { ...upd, responsavel_producao: resp.equipe.head_line_nome, tecnico_producao_id: resp.equipe.head_line_id || null,
+                 equipe_id: resp.equipe.id, equipe_nome: resp.equipe.nome, tecnico_producao_2_nome: null, tecnico_producao_2_id: null };
+      }
+      // Só inicia a produção (status + data) se ainda não tinha começado —
+      // reatribuir uma OP já em produção não mexe no status nem reinicia o KPI.
+      if (alvo.status_geral === 'Aguardando Inicio Producao') {
+        upd.status_geral = 'Em Producao';
+        upd.data_inicio_producao = agora;
+      }
+      const { error } = await supabase.from('oples').update(upd).eq('id', alvo.id);
+      if (error) { falhas++; continue; }
+      ok++;
+      const seed = [
+        upd.tecnico_producao_id ? { tecnico_id: upd.tecnico_producao_id, tecnico_nome: upd.responsavel_producao } : null,
+        upd.tecnico_producao_2_id ? { tecnico_id: upd.tecnico_producao_2_id, tecnico_nome: upd.tecnico_producao_2_nome } : null,
+      ].filter(Boolean);
+      if (seed.length > 0) {
+        await supabase.from('responsaveis_producao').insert(seed.map(r => ({
+          tipo: 'op', referencia_id: alvo.id, papel: 'responsavel',
+          tecnico_id: r.tecnico_id, tecnico_nome: r.tecnico_nome,
+          adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
+        })));
+      }
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: alvo.id, numero_opl: alvo.opl, setor: 'Producao',
+        evento: `Responsável definido via importação em lote — ${upd.responsavel_producao}${upd.equipe_nome ? ` (Equipe ${upd.equipe_nome})` : ''}${upd.tecnico_producao_2_nome ? ` + ${upd.tecnico_producao_2_nome}` : ''}.`,
+        status_anterior: alvo.status_geral, status_novo: upd.status_geral || alvo.status_geral,
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      }]);
+    }
+    setSalvando(false);
+    setResultado({ ok, falhas });
+    onImportado();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 640, maxHeight: '85vh', overflowY: 'auto' }}>
+        <div className="modal-title">📥 Importar Técnicos/Equipes — 🔗 {base}</div>
+        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+          {irmaos.length} unidade(s) neste lote. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) — cada linha:
+          <strong> Chassi (ou Placa) [tab] Responsável</strong>, ou <strong>Chassi [tab] Placa [tab] Responsável</strong>.
+          Responsável pode ser um técnico, "Técnico A + Técnico B" (dupla) ou o nome de uma equipe cadastrada.
+          O casamento é sempre pelo chassi/placa já vinculado à OP, nunca pela ordem das linhas.
+        </div>
+
+        <textarea className="acn-input" rows={5} style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 10, marginBottom: 8 }}
+          placeholder={'Ex:\n9BW1234567890\tJUNIOR\nABC1D23\tHead Line Tiago\n9BW...\tFELIPE + JONATAN'}
+          value={texto} onChange={e => setTexto(e.target.value)} />
+
+        {texto.trim() && !resultado && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>
+              Prévia — {plano.length} serão aplicadas, {naoReconhecidas.length} sem correspondência.
+            </div>
+            {plano.length > 0 && (
+              <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, marginBottom: 8 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>OPL destino</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>Responsável</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>Modo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plano.map(({ alvo, resp, respTexto }, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '4px 8px', fontWeight: 700 }}>{alvo.opl}</td>
+                        <td style={{ padding: '4px 8px' }}>{respTexto}</td>
+                        <td style={{ padding: '4px 8px', color: resp.modo === 'equipe' ? '#7c3aed' : '#0369a1', fontWeight: 600 }}>
+                          {resp.modo === 'equipe' ? '🏷️ Equipe' : resp.modo === 'dupla' ? '👥 Dupla' : '👤 Individual'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {naoReconhecidas.length > 0 && (
+              <div style={{ background: '#fef2f2', color: '#dc2626', padding: '8px 10px', borderRadius: 6, fontSize: 10 }}>
+                {naoReconhecidas.map((n, i) => <div key={i}>⚠️ "{n.linha}" — {n.motivo}</div>)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {resultado && (
+          <div style={{ background: '#f0fdf4', color: '#15803d', padding: '10px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
+            ✅ {resultado.ok} unidade(s) atualizada(s){resultado.falhas ? `, ${resultado.falhas} falha(s)` : ''}.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {texto.trim() && !resultado && (
+            <button className="acn-btn" style={{ background: '#16a34a', flex: 1 }} disabled={salvando || plano.length === 0} onClick={confirmar}>
+              {salvando ? 'Aplicando...' : `✅ Confirmar e aplicar (${plano.length})`}
+            </button>
+          )}
+          <button className="acn-btn" style={{ background: '#94a3b8', flex: resultado ? 1 : 'none' }} onClick={onClose}>
+            {resultado ? 'Fechar' : 'Cancelar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProducaoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1805,6 +1988,7 @@ export default function ProducaoTab({ currentUser }) {
   const [filtroEntregaDe, setFiltroEntregaDe]   = useState('');
   const [filtroEntregaAte, setFiltroEntregaAte] = useState('');
   const [lotesExpandidos, setLotesExpandidos] = useState({});
+  const [modalImportarLoteProducao, setModalImportarLoteProducao] = useState<any>(null); // { base, irmaos }
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVerOpl, setModalVerOpl]     = useState<any>(null);
   const [modalAcomp,  setModalAcomp]      = useState<any>(null);
@@ -2264,10 +2448,16 @@ export default function ProducaoTab({ currentUser }) {
                             </div>
                           </td>
                           <td>
-                            <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
-                              onClick={()=>setLotesExpandidos(prev => ({...prev, [grupo.base]: !prev[grupo.base]}))}>
-                              {expandido ? `▲ Ocultar` : `▼ Ver ${grupo.irmaos.length} unidades`}
-                            </button>
+                            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                              <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
+                                onClick={()=>setLotesExpandidos(prev => ({...prev, [grupo.base]: !prev[grupo.base]}))}>
+                                {expandido ? `▲ Ocultar` : `▼ Ver ${grupo.irmaos.length} unidades`}
+                              </button>
+                              <button className="acn-btn" style={{background:'#2563eb',fontSize:10}}
+                                onClick={()=>setModalImportarLoteProducao({base:grupo.base,irmaos:grupo.irmaos})}>
+                                📥 Importar Técnicos/Equipes
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         {expandido && grupo.irmaos.map(o => (
@@ -2517,6 +2707,18 @@ export default function ProducaoTab({ currentUser }) {
 
       {/* MODAL VER OPL */}
       {modalVerOpl && <OplDetalheModal opl={modalVerOpl} onClose={()=>setModalVerOpl(null)} currentUser={currentUser} />}
+
+      {modalImportarLoteProducao && (
+        <ModalImportarTecnicosEquipe
+          base={modalImportarLoteProducao.base}
+          irmaos={modalImportarLoteProducao.irmaos}
+          equipes={equipes}
+          colaboradoresList={colaboradoresList}
+          currentUser={currentUser}
+          onClose={()=>setModalImportarLoteProducao(null)}
+          onImportado={()=>fetchAll()}
+        />
+      )}
 
       {/* MODAL DEVOLVER PCP */}
       {modalDevolver && (
