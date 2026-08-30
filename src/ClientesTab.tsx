@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { ClienteAutocomplete, fmtTelefones, fmtEmails } from './ClienteUtils';
+import RichTextInput from './RichTextInput';
 
 const CLIENTE_VAZIO = {
   nome: '', tipo: 'PF', documento: '', nome_contato: '', cargo_contato: '',
@@ -280,10 +281,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
       {/* Observações */}
       <div>
         {lbl('Observações')}
-        <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical' }}
-          value={f.observacoes||''} disabled={readonly}
-          onChange={e => set('observacoes', e.target.value)}
-          placeholder="Informações adicionais..." />
+        <RichTextInput value={f.observacoes||''} disabled={readonly}
+          onChange={html => set('observacoes', html)}
+          placeholder="Informações adicionais... (selecione um trecho pra formatar)" minHeight={44} />
       </div>
 
       {/* ── PJ: Contatos vinculados (PF) ── */}

@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
-import RichTextInput from './RichTextInput';
+import RichTextInput, { htmlSeguro } from './RichTextInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -22,11 +22,6 @@ const fmtTel = (n: string | null) => {
 
 const waLink = (n: string) => `https://wa.me/${n.replace(/\D/g, '')}`;
 
-// Registros antigos guardaram observacoes como texto puro (antes do
-// RichTextInput); se não parecer HTML (sem nenhuma tag), escapa < > & pra
-// não virar HTML quebrado ao renderizar com dangerouslySetInnerHTML.
-const pareceHtml = (s: string) => /<\/?(b|i|u|strike|span|br|div|p|a|img|font)\b/i.test(s);
-const htmlSeguro = (s: string) => pareceHtml(s) ? s : s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 const initials = (nome: string) =>
   nome.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();

@@ -20,6 +20,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useRef, useState, useEffect } from 'react';
 
+// Só reconhece como HTML já formatado se tiver uma das tags que este editor
+// (ou o execCommand por trás dele) realmente produz — um texto legado tipo
+// "cliente <preferencial>" não deve ser confundido com HTML. Exportado pra
+// quem PRECISA exibir o valor fora deste componente (dangerouslySetInnerHTML
+// em uma lista/card) usar o mesmo critério, sem duplicar a regex por arquivo.
+export const pareceHtmlFormatado = (s: string) => /<\/?(b|i|u|strike|span|br|div|p|a|img|font)\b/i.test(s || '');
+export const htmlSeguro = (s: string) => {
+  const bruto = s || '';
+  return pareceHtmlFormatado(bruto) ? bruto : bruto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+};
+
 const btnStyle: React.CSSProperties = {
   background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer',
   fontSize: 11, padding: '5px 8px', borderRadius: 4, lineHeight: 1,
@@ -42,11 +53,7 @@ export default function RichTextInput({
     const el = editorRef.current;
     if (!el) return;
     const bruto = value || '';
-    // Só reconhece como HTML já formatado se tiver uma das tags que este
-    // editor (ou o execCommand por trás dele) realmente produz — um texto
-    // legado tipo "cliente <preferencial>" não deve ser confundido com HTML.
-    const pareceHtml = /<\/?(b|i|u|strike|span|br|div|p|a|img|font)\b/i.test(bruto);
-    const html = pareceHtml ? bruto : bruto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    const html = pareceHtmlFormatado(bruto) ? bruto : htmlSeguro(bruto).replace(/\n/g, '<br>');
     if (el.innerHTML !== html) el.innerHTML = html;
   }, [value]);
 

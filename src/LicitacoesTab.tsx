@@ -7,6 +7,7 @@ import { useUnread, UnreadBadge } from './useUnread';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
+import RichTextInput, { htmlSeguro } from './RichTextInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -407,8 +408,8 @@ function ContatosSection({ licitacaoId, currentUser }) {
       </div>
       <div style={{ marginBottom:8 }}>
         <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:1 }}>OBSERVAÇÃO</label>
-        <textarea value={form.observacao} onChange={e=>setF('observacao',e.target.value)} rows={2}
-          style={{ ...inputStyle, resize:'none' }} placeholder="Observações..." />
+        <RichTextInput value={form.observacao} onChange={html=>setF('observacao',html)}
+          style={{ ...inputStyle }} minHeight={40} placeholder="Observações... (selecione um trecho pra formatar)" />
       </div>
       <div style={{ display:'flex', gap:6 }}>
         <button onClick={salvar} style={{ flex:1, background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
@@ -477,7 +478,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
                           ))}
                         </div>
                       )}
-                      {c.observacao && <div style={{ fontSize:9, color:'#6b7280', marginTop:2, fontStyle:'italic' }}>{c.observacao}</div>}
+                      {c.observacao && <div style={{ fontSize:9, color:'#6b7280', marginTop:2, fontStyle:'italic', wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: htmlSeguro(c.observacao) }} />}
                     </div>
                     <div style={{ display:'flex', gap:3, flexShrink:0 }}>
                       <button onClick={() => iniciarEdicao(c)}
@@ -1385,7 +1386,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     <div>
                       <div style={{ fontSize:10, fontWeight:700, color:STATUS_COR[h.status]||'#374151' }}>{h.status}</div>
                       <div style={{ fontSize:9, color:'#6b7280' }}>{h.usuario} · {fmtDT(h.data)}</div>
-                      {h.obs && <div style={{ fontSize:9, color:'#374151' }}>{h.obs}</div>}
+                      {h.obs && <div style={{ fontSize:9, color:'#374151', wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: htmlSeguro(h.obs) }} />}
                     </div>
                   </div>
                 ))}
@@ -1544,9 +1545,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <div style={{ fontWeight:700, fontSize:10, marginBottom:5 }}>
                   Mover para: <span style={{ color:STATUS_COR[confirmStatus] }}>{confirmStatus}</span>
                 </div>
-                <textarea value={obsEncerramento} onChange={e=>setObsEncerramento(e.target.value)}
-                  placeholder="Observação (opcional)..." rows={2}
-                  style={{ width:'100%', padding:'4px 7px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, resize:'none', boxSizing:'border-box', marginBottom:5 }} />
+                <RichTextInput value={obsEncerramento} onChange={html=>setObsEncerramento(html)}
+                  placeholder="Observação (opcional)... (selecione um trecho pra formatar)" minHeight={36}
+                  style={{ width:'100%', marginBottom:5 }} />
                 <div style={{ display:'flex', gap:6 }}>
                   <button onClick={() => mudarStatus(confirmStatus)} disabled={salvando}
                     style={{ flex:1, background:STATUS_COR[confirmStatus], color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
