@@ -3,29 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 
-const CANAL_COR: Record<string, string> = {
-  'Geral':        '#0f766e',
-  'Comercial':    '#2563eb',
-  'Licitações':   '#7c3aed',
-  'CRM':          '#db2777',
-  'Engenharia':   '#6d28d9',
-  'PCP':          '#0891b2',
-  'Laboratorio':  '#0d9488',
-  'Producao':     '#ea580c',
-  'Serralheria':  '#b45309',
-  'Chicotes':     '#92400e',
-  'Almoxarifado': '#16a34a',
-  'Qualidade':    '#dc2626',
-  'CQ':           '#dc2626',
-  'Logistica':    '#d97706',
-  'Fiscal':       '#059669',
-  'Compras':      '#0369a1',
-  'RH':           '#be185d',
-  'SAC':          '#9333ea',
-  'Marketing':    '#e11d48',
-  'Telecom':      '#0284c7',
-};
-
 const BROADCAST_CH = 'acn-chat-v1';
 
 function Avatar({ nome, size = 26, bg = '#e2e8f0', color = '#475569' }: any) {
@@ -43,9 +20,7 @@ function Avatar({ nome, size = 26, bg = '#e2e8f0', color = '#475569' }: any) {
 export default function ChatWidget({ currentUser }: any) {
   // ── State ─────────────────────────────────────────────────────────────────
   const [aberto, setAberto]       = useState(false);
-  const [aba, setAba]             = useState<'canais' | 'diretos'>('canais');
   const [view, setView]           = useState<'lista' | 'sala'>('lista');
-  const [canais, setCanais]       = useState<any[]>([]);
   const [diretos, setDiretos]     = useState<any[]>([]);
   const [usuarios, setUsuarios]   = useState<any[]>([]);
   const [salaAtiva, setSalaAtiva] = useState<any>(null);
@@ -64,7 +39,6 @@ export default function ChatWidget({ currentUser }: any) {
   const endRef       = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
   const salaAtivaRef = useRef<any>(null);
-  const canaisRef    = useRef<any[]>([]);
   const diretosRef   = useRef<any[]>([]);
   const broadcastRef = useRef<any>(null);
   const prevCountRef = useRef(-1);
@@ -89,7 +63,7 @@ export default function ChatWidget({ currentUser }: any) {
     if (outros.length > 0) return outros[0].nome || 'Conversa';
     return membros.map((m: any) => m.nome).join(' ↔ ') || 'Conversa';
   };
-  const nomeSala = (sala: any) => sala?.tipo === 'canal' ? `# ${sala.nome}` : nomeDireto(sala);
+  const nomeSala = (sala: any) => nomeDireto(sala);
 
   const fmtHora = (d: any) =>
     d ? new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -140,12 +114,7 @@ export default function ChatWidget({ currentUser }: any) {
     return (u.nome || u.email || '').toLowerCase().includes(buscaL);
   });
 
-  const canaisFiltrados = canais.filter(c =>
-    !busca || (c.nome || '').toLowerCase().includes(buscaL)
-  );
-
   // ── Sync refs ─────────────────────────────────────────────────────────────
-  useEffect(() => { canaisRef.current  = canais;  }, [canais]);
   useEffect(() => { diretosRef.current = diretos; }, [diretos]);
   useEffect(() => { mutadoRef.current  = mutado;  }, [mutado]);
 
@@ -189,15 +158,19 @@ export default function ChatWidget({ currentUser }: any) {
     if (view === 'sala') setTimeout(() => inputRef.current?.focus(), 80);
   }, [view, salaAtiva]);
 
-  // Limpar busca ao mudar de aba
-  useEffect(() => { setBusca(''); }, [aba]);
-
-  // ── Contar não-lidas ──────────────────────────────────────────────────────
+  // ── Contar não-lidas ─────────────────────────────────────────────────────
+  // Só conta mensagens de salas onde o usuário é membro (diretosRef) — antes
+  // buscava chat_mensagens inteiro sem filtro de sala, então qualquer
+  // conversa nunca aberta (inclusive de outras pessoas) contava como
+  // "não lida" e o bullet nunca zerava de verdade.
   const contarNaoLidas = useCallback(async (lista?: any[]) => {
+    const idsMinhasSalas = diretosRef.current.map((d: any) => d.id);
+    if (idsMinhasSalas.length === 0) { setNaoLidas(0); setNaoLidasPorSala({}); return 0; }
     let data = lista;
     if (!data) {
       const res = await supabase.from('chat_mensagens')
         .select('id,sala_id,remetente_id,criado_em')
+        .in('sala_id', idsMinhasSalas)
         .order('criado_em', { ascending: false })
         .limit(500);
       data = res.data || [];
@@ -218,8 +191,11 @@ export default function ChatWidget({ currentUser }: any) {
 
   // ── Polling badge ─────────────────────────────────────────────────────────
   const verificarNovas = useCallback(async () => {
+    const idsMinhasSalas = diretosRef.current.map((d: any) => d.id);
+    if (idsMinhasSalas.length === 0) { setNaoLidas(0); setNaoLidasPorSala({}); prevCountRef.current = 0; return; }
     const { data } = await supabase.from('chat_mensagens')
       .select('id,sala_id,remetente_id,remetente_nome,texto,criado_em')
+      .in('sala_id', idsMinhasSalas)
       .order('criado_em', { ascending: false })
       .limit(500);
 
@@ -238,7 +214,7 @@ export default function ChatWidget({ currentUser }: any) {
     if (prevCountRef.current >= 0 && count > prevCountRef.current && naoLidasList.length > 0) {
       const latest = naoLidasList[0];
       if (!salaAtivaRef.current || salaAtivaRef.current.id !== latest.sala_id) {
-        const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === latest.sala_id);
+        const sala = diretosRef.current.find((s: any) => s.id === latest.sala_id);
         if (sala) {
           setToast({ sala, remetente_nome: latest.remetente_nome, texto: latest.texto });
           playAlerta();
@@ -255,9 +231,9 @@ export default function ChatWidget({ currentUser }: any) {
     // Inicializa: carrega salas, marca salas nunca abertas como "já lidas"
     // para evitar que mensagens antigas apareçam como não-lidas
     const init = async () => {
-      const [todosCanais, todosDiretos] = await Promise.all([fetchCanais(), fetchDiretos()]);
+      const todosDiretos = await fetchDiretos();
       fetchUsuarios();
-      for (const s of [...todosCanais, ...todosDiretos]) {
+      for (const s of todosDiretos) {
         if (!localStorage.getItem(lrKey(s.id))) markRead(s.id);
       }
       const n = await contarNaoLidas();
@@ -269,11 +245,9 @@ export default function ChatWidget({ currentUser }: any) {
       .on('broadcast', { event: 'nova_msg' }, ({ payload }: any) => {
         if (String(payload.sender_id) === uid) return;
 
-        if (payload.sala_tipo === 'direto') {
-          const membro = (payload.membros || []).some((m: any) => String(m.id) === uid);
-          if (!membro) return;
-          fetchDiretos();
-        }
+        const membro = (payload.membros || []).some((m: any) => String(m.id) === uid);
+        if (!membro) return; // não é uma conversa minha — ignora completamente
+        fetchDiretos();
 
         if (salaAtivaRef.current?.id === payload.sala_id) {
           setMensagens(prev => {
@@ -289,8 +263,8 @@ export default function ChatWidget({ currentUser }: any) {
           return;
         }
 
-        const sala = [...canaisRef.current, ...diretosRef.current].find(s => s.id === payload.sala_id)
-          || { id: payload.sala_id, nome: payload.sala_nome, tipo: payload.sala_tipo, membros: payload.membros || [] };
+        const sala = diretosRef.current.find((s: any) => s.id === payload.sala_id)
+          || { id: payload.sala_id, nome: payload.sala_nome, tipo: 'direto', membros: payload.membros || [] };
 
         setToast({ sala, remetente_nome: payload.remetente_nome, texto: payload.texto });
         playAlerta();
@@ -330,19 +304,13 @@ export default function ChatWidget({ currentUser }: any) {
   }, [salaAtiva?.id, aberto]);
 
   // ── Fetches ───────────────────────────────────────────────────────────────
-  const fetchCanais = async (): Promise<any[]> => {
-    const { data } = await supabase.from('chat_salas').select('*').eq('tipo', 'canal').order('nome');
-    const list = data || [];
-    setCanais(list);
-    return list;
-  };
-
+  // Sempre filtra pelas conversas que o usuário realmente participa — mesmo
+  // Admin só vê as próprias, nunca as DMs alheias (antes via isAdmin bypass,
+  // que fazia o badge do Admin contar mensagens de conversas de outras
+  // pessoas, permanentemente "não lidas").
   const fetchDiretos = async (): Promise<any[]> => {
     const { data } = await supabase.from('chat_salas').select('*').eq('tipo', 'direto');
-    const isAdmin = currentUser?.perfil === 'Admin';
-    const lista = isAdmin
-      ? (data || [])
-      : (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
+    const lista = (data || []).filter(s => (s.membros || []).some((m: any) => String(m.id) === uid));
 
     const seen = new Map<string, any>();
     for (const d of lista) {
@@ -417,7 +385,6 @@ export default function ChatWidget({ currentUser }: any) {
 
   const abrirViaToast = (t: any) => {
     setAberto(true);
-    setAba(t.sala?.tipo === 'direto' ? 'diretos' : 'canais');
     abrirSala(t.sala);
   };
 
@@ -479,10 +446,6 @@ export default function ChatWidget({ currentUser }: any) {
   if (!currentUser) return null;
 
   const temNaoLidas = naoLidas > 0;
-
-  // Não-lidas por aba
-  const naoLidasCanais  = canais.reduce((acc, c)  => acc + (naoLidasPorSala[c.id]  || 0), 0);
-  const naoLidasDiretos = diretos.reduce((acc, d) => acc + (naoLidasPorSala[d.id] || 0), 0);
 
   /* ══════════════════════════════════════════════════════════════════════════
      RENDER
@@ -546,19 +509,11 @@ export default function ChatWidget({ currentUser }: any) {
               <>
                 <button onClick={voltarLista}
                   style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1, marginRight: 2 }}>←</button>
-                {salaAtiva?.tipo === 'canal'
-                  ? <span style={{ width: 24, height: 24, borderRadius: '50%', background: CANAL_COR[salaAtiva.nome] || '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 11, flexShrink: 0 }}>
-                      {(salaAtiva.nome || '?')[0]}
-                    </span>
-                  : <Avatar nome={nomeDireto(salaAtiva)} size={24} bg='#dbeafe' color='#1d4ed8' />
-                }
+                <Avatar nome={nomeDireto(salaAtiva)} size={24} bg='#dbeafe' color='#1d4ed8' />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: 'white', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {nomeSala(salaAtiva)}
                   </div>
-                  {salaAtiva?.tipo === 'canal' && (
-                    <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 9 }}>Canal</div>
-                  )}
                 </div>
               </>
             ) : (
@@ -577,30 +532,6 @@ export default function ChatWidget({ currentUser }: any) {
           {view === 'lista' && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#fff' }}>
 
-              {/* Abas com badge */}
-              <div style={{ display: 'flex', borderBottom: '2px solid #e8ecf0', flexShrink: 0 }}>
-                {(['canais', 'diretos'] as const).map(a => {
-                  const badge = a === 'canais' ? naoLidasCanais : naoLidasDiretos;
-                  return (
-                    <button key={a} onClick={() => setAba(a)} style={{
-                      flex: 1, padding: '9px 0', fontSize: 11, fontWeight: 700,
-                      background: aba === a ? '#f0fdfa' : '#fff',
-                      color: aba === a ? '#0f766e' : '#94a3b8',
-                      border: 'none', borderBottom: aba === a ? '2px solid #0f766e' : '2px solid transparent',
-                      cursor: 'pointer', textTransform: 'uppercase', letterSpacing: .5,
-                      marginBottom: -2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}>
-                      {a === 'canais' ? '# Canais' : '✉ Diretos'}
-                      {badge > 0 && (
-                        <span style={{ background: '#ef4444', color: 'white', borderRadius: 9, padding: '0px 5px', fontSize: 9, fontWeight: 700, lineHeight: '16px' }}>
-                          {badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
               {/* Campo de busca */}
               <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0, background: '#fafafa' }}>
                 <div style={{ position: 'relative' }}>
@@ -608,7 +539,7 @@ export default function ChatWidget({ currentUser }: any) {
                   <input
                     value={busca}
                     onChange={e => setBusca(e.target.value)}
-                    placeholder={aba === 'canais' ? 'Filtrar canais...' : 'Buscar conversa ou usuário...'}
+                    placeholder="Buscar conversa ou usuário..."
                     style={{
                       width: '100%', padding: '6px 10px 6px 28px', fontSize: 11,
                       border: '1px solid #e2e8f0', borderRadius: 8, outline: 'none',
@@ -626,48 +557,7 @@ export default function ChatWidget({ currentUser }: any) {
 
               {/* Conteúdo scrollável */}
               <div style={{ flex: 1, overflowY: 'auto' }}>
-
-                {/* ─── CANAIS ─── */}
-                {aba === 'canais' && (
-                  canaisFiltrados.length === 0
-                    ? <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40, padding: '0 20px' }}>
-                        {busca ? 'Nenhum canal encontrado' : 'Nenhum canal disponível'}
-                      </div>
-                    : canaisFiltrados.map(c => {
-                        const unread = naoLidasPorSala[c.id] || 0;
-                        return (
-                          <div key={c.id} onClick={() => abrirSala(c)}
-                            className="chat-row-hover"
-                            style={{
-                              padding: '9px 14px', cursor: 'pointer', display: 'flex',
-                              alignItems: 'center', gap: 11, borderBottom: '1px solid #f8fafc',
-                              background: unread > 0 ? '#f0fdf4' : 'transparent',
-                            }}>
-                            <span style={{
-                              width: 32, height: 32, borderRadius: 8,
-                              background: CANAL_COR[c.nome] || '#0f766e',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: 'white', fontWeight: 700, fontSize: 13, flexShrink: 0,
-                            }}>{(c.nome || '?')[0]}</span>
-                            <div style={{ fontSize: 12, fontWeight: unread > 0 ? 700 : 500, color: '#1e293b', flex: 1 }}>
-                              # {c.nome}
-                            </div>
-                            {unread > 0 && (
-                              <span style={{
-                                background: '#ef4444', color: 'white', borderRadius: 10,
-                                padding: '2px 8px', fontSize: 9, fontWeight: 700, flexShrink: 0,
-                                animation: 'badgePop .3s ease',
-                              }}>{unread}</span>
-                            )}
-                          </div>
-                        );
-                      })
-                )}
-
-                {/* ─── DIRETOS ─── */}
-                {aba === 'diretos' && (
-                  <>
-                    {/* Conversas existentes */}
+                {/* Conversas existentes */}
                     {diretosOrdenados.length > 0 && (
                       <>
                         <div style={{ padding: '8px 14px 4px', fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .7, background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
@@ -784,12 +674,10 @@ export default function ChatWidget({ currentUser }: any) {
                         Nenhum usuário disponível
                       </div>
                     )}
-                    {diretos.length === 0 && usuariosParaNovaDM.length === 0 && !busca && usuarios.length > 0 && (
-                      <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40 }}>
-                        Todas as conversas iniciadas!
-                      </div>
-                    )}
-                  </>
+                {diretos.length === 0 && usuariosParaNovaDM.length === 0 && !busca && usuarios.length > 0 && (
+                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, marginTop: 40 }}>
+                    Todas as conversas iniciadas!
+                  </div>
                 )}
               </div>
             </div>
