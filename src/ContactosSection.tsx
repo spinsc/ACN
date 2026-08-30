@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
+import RichTextInput from './RichTextInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -20,6 +21,12 @@ const fmtTel = (n: string | null) => {
 };
 
 const waLink = (n: string) => `https://wa.me/${n.replace(/\D/g, '')}`;
+
+// Registros antigos guardaram observacoes como texto puro (antes do
+// RichTextInput); se não parecer HTML (sem nenhuma tag), escapa < > & pra
+// não virar HTML quebrado ao renderizar com dangerouslySetInnerHTML.
+const pareceHtml = (s: string) => /<\/?(b|i|u|strike|span|br|div|p|a|img|font)\b/i.test(s);
+const htmlSeguro = (s: string) => pareceHtml(s) ? s : s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 const initials = (nome: string) =>
   nome.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
@@ -438,9 +445,8 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               )}
 
               {c.observacoes && (
-                <div style={{ marginTop:10, padding:'7px 10px', background:'#fffbeb', border:'1px solid #fed7aa', borderRadius:6, fontSize:10, color:'#92400e' }}>
-                  {c.observacoes}
-                </div>
+                <div style={{ marginTop:10, padding:'7px 10px', background:'#fffbeb', border:'1px solid #fed7aa', borderRadius:6, fontSize:10, color:'#92400e', wordBreak:'break-word', whiteSpace:'pre-wrap' }}
+                  dangerouslySetInnerHTML={{ __html: htmlSeguro(c.observacoes) }} />
               )}
 
               {/* Oportunidades ligadas */}
@@ -744,9 +750,9 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               {/* Observações */}
               <div style={{ gridColumn:'1/-1' }}>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
-                <textarea value={formC.observacoes||''} placeholder="Notas importantes sobre este contato..."
-                  onChange={e => setFormC(f => ({...f, observacoes:e.target.value}))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, height:60, resize:'vertical', boxSizing:'border-box' }}
+                <RichTextInput value={formC.observacoes||''} placeholder="Notas importantes sobre este contato... (selecione um trecho pra formatar)"
+                  onChange={html => setFormC(f => ({...f, observacoes:html}))}
+                  style={{ width:'100%' }} minHeight={60}
                 />
               </div>
 
