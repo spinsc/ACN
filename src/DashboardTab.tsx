@@ -543,6 +543,22 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   // currentUser pode não ter campos novos (localStorage antigo) — recarrega do banco
   const [currentUser, setCurrentUser] = useState<any>(currentUserProp);
 
+  // "Ver como" (AdminTab.tsx > Painel de Usuários): quando o admin está
+  // visualizando o sistema com a sessão de outro usuário, admin_sessao_original
+  // guarda a sessão real dele pra poder voltar.
+  const [sessaoOriginalAdmin] = useState<string | null>(() => {
+    try { return localStorage.getItem('admin_sessao_original'); } catch { return null; }
+  });
+  const voltarParaAdmin = () => {
+    try {
+      const orig = localStorage.getItem('admin_sessao_original');
+      if (!orig) return;
+      localStorage.setItem('user', orig);
+      localStorage.removeItem('admin_sessao_original');
+    } catch (_) {}
+    window.location.href = window.location.origin + import.meta.env.BASE_URL;
+  };
+
   useEffect(() => {
     if (!currentUserProp?.id) return;
     supabase.from('auth_usuarios')
@@ -1178,6 +1194,19 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             </div>
           </div>
         </header>
+
+        {/* ── FAIXA "VER COMO" ── visível só enquanto o admin está testando com a sessão de outro usuário */}
+        {sessaoOriginalAdmin && (
+          <div style={{ background:'#7c2d12', color:'#fff', fontSize:10, fontWeight:700,
+            padding:'5px 14px', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexShrink:0 }}>
+            <span>👁️ Visualizando o sistema como <strong>{currentUser?.nome}</strong> ({currentUser?.perfil || '—'})</span>
+            <button onClick={voltarParaAdmin}
+              style={{ background:'#fff', color:'#7c2d12', border:'none', borderRadius:4, padding:'2px 10px',
+                fontWeight:800, cursor:'pointer', fontSize:10 }}>
+              ← Voltar ao Admin
+            </button>
+          </div>
+        )}
 
         {/* ── BODY: SIDEBAR + MAIN ── */}
         <div className="acn-body">

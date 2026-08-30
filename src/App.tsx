@@ -22,6 +22,10 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    // Se o admin estava "vendo como" outro usuário (AdminTab.tsx), sair
+    // encerra tudo — não deixa a sessão original pendurada pra ser
+    // restaurada depois por engano.
+    localStorage.removeItem('admin_sessao_original');
     setUser(null);
   };
 

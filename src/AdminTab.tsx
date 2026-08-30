@@ -218,6 +218,32 @@ function PainelUsuarios() {
     setModalEditar(null); fetchUsuarios();
   };
 
+  // "Ver como" — pra o admin testar o sistema exatamente com o perfil/
+  // permissões de outro usuário, sem precisar saber a senha dele. Salva a
+  // sessão atual (pra poder voltar, ver o banner/botão em DashboardTab.tsx)
+  // e troca a sessão ativa pela do usuário-alvo, montada no mesmo formato
+  // usado no login (ver LoginTab.tsx).
+  const verComoUsuario = (u: any) => {
+    if (!u.ativo) { alert('Este usuário está inativo — reative antes de testar com a sessão dele.'); return; }
+    if (!window.confirm(`Acessar o sistema como "${u.nome}" (${u.perfil})?\n\nVocê pode voltar a qualquer momento pelo botão "Voltar ao Admin" que vai aparecer no topo da tela.`)) return;
+    try {
+      const atual = localStorage.getItem('user');
+      if (atual) localStorage.setItem('admin_sessao_original', atual);
+      localStorage.setItem('user', JSON.stringify({
+        id: u.id, email: u.email, nome: u.nome, perfil: u.perfil,
+        abas_permitidas: Array.isArray(u.abas_permitidas) ? u.abas_permitidas : [],
+        primeiro_acesso: false,
+        pode_autorizar_rh: u.pode_autorizar_rh || false,
+        permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [],
+        permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [],
+        recebe_alerta_analise: u.recebe_alerta_analise || false,
+        pode_enviar_avisos: u.pode_enviar_avisos || false,
+        ultimo_login_anterior: null,
+      }));
+    } catch (e: any) { alert('Erro: ' + e.message); return; }
+    window.location.href = window.location.origin + import.meta.env.BASE_URL;
+  };
+
   const excluirUsuario = async (u) => {
     if (!window.confirm(`Excluir permanentemente "${u.nome}"? Esta ação não pode ser desfeita.`)) return;
     await supabase.from('auth_usuarios').delete().eq('id', u.id);
@@ -573,6 +599,11 @@ function PainelUsuarios() {
                         </td>
                         <td>
                           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                            <button className="acn-btn" style={{background:'#0ea5e9',fontSize:9}}
+                              onClick={()=>verComoUsuario(u)}
+                              title="Acessar o sistema com a sessão deste usuário, pra testar as permissões dele">
+                              👁️ Ver como
+                            </button>
                             <button className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
                               onClick={()=>abrirEditar(u)}>✏️ Editar</button>
                             <button className="acn-btn" style={{background:'#6366f1',fontSize:9}}
