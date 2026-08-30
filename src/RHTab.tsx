@@ -1519,6 +1519,10 @@ function ComissoesRH({ funcionarios, currentUser }) {
   const [modoPeriodo, setModoPeriodo] = useState<'mes'|'intervalo'>('mes');
   const [dataDe, setDataDe] = useState('');
   const [dataAte, setDataAte] = useState('');
+  // Faturada (padrão, comportamento de sempre — data_emissao_nf/data_faturamento
+  // dentro do período) ou A Faturar (já concluído na produção dentro do
+  // período, mas o Fiscal ainda não emitiu a NF — visão do que vem pela frente).
+  const [modoFatura, setModoFatura] = useState<'faturada'|'a_faturar'>('faturada');
   // Origem — Adaptação = OPs (fabricação/transformação veicular) + OS de
   // manutenção veicular; exclui só as demais OS de SAC (rádio/equipamento
   // avulso, não é "carro").
@@ -1534,7 +1538,11 @@ function ComissoesRH({ funcionarios, currentUser }) {
   const meses = [1,2,3,4,5,6,7,8,9,10,11,12];
   const anos = [hoje.getFullYear()-1, hoje.getFullYear(), hoje.getFullYear()+1];
   const fmtMoeda = (v: number) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
-  const fmtDt = (d: any) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  // Aqui a data pode vir tanto como 'date' puro (ex: sac_ordens_servico.data_faturamento,
+  // "2026-08-15") quanto timestamptz completo (data_emissao_nf, data_conclusao_producao/
+  // _manutencao, "2026-08-15T14:32:10+00:00") -- concatenar 'T00:00:00' cegamente nesse
+  // segundo caso gerava uma string inválida ("Invalid Date"). Só completa quando falta o T.
+  const fmtDt = (d: any) => d ? new Date(String(d).includes('T') ? d : d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
   const podeAutorizar = currentUser?.perfil === 'Admin' || currentUser?.pode_autorizar_rh === true;
 
   const calcular = async () => {
@@ -1550,16 +1558,27 @@ function ComissoesRH({ funcionarios, currentUser }) {
       fim    = new Date(ano, mes, 0).toISOString().split('T')[0];
     }
 
+    // Faturada: comportamento de sempre (data_emissao_nf/data_faturamento
+    // dentro do período). A Faturar: já concluído na produção dentro do
+    // período, mas ainda sem NF emitida — dá visão do que vem pela frente.
+    let opQuery = supabase.from('oples')
+      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome')
+      .not('tecnico_producao_id','is',null);
+    opQuery = modoFatura === 'faturada'
+      ? opQuery.gte('data_emissao_nf', inicio).lte('data_emissao_nf', fim)
+      : opQuery.gte('data_conclusao_producao', inicio).lte('data_conclusao_producao', fim).is('data_emissao_nf', null);
+
+    let osQuery = supabase.from('sac_ordens_servico')
+      .select('id,numero_os,cliente_nome,tecnico_producao_id,tecnico_responsavel,valor_total,valor_mao_de_obra,data_faturamento,data_conclusao_manutencao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,is_manutencao_veicular')
+      .not('tecnico_producao_id','is',null);
+    osQuery = modoFatura === 'faturada'
+      ? osQuery.gte('data_faturamento', inicio).lte('data_faturamento', fim)
+      : osQuery.gte('data_conclusao_manutencao', inicio).lte('data_conclusao_manutencao', fim).is('data_faturamento', null);
+
     const [opRes, osRes, fechRes] = await Promise.all([
-      supabase.from('oples')
-        .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome')
-        .gte('data_emissao_nf', inicio).lte('data_emissao_nf', fim)
-        .not('tecnico_producao_id','is',null),
-      supabase.from('sac_ordens_servico')
-        .select('id,numero_os,cliente_nome,tecnico_producao_id,tecnico_responsavel,valor_total,valor_mao_de_obra,data_faturamento,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,is_manutencao_veicular')
-        .gte('data_faturamento', inicio).lte('data_faturamento', fim)
-        .not('tecnico_producao_id','is',null),
-      modoPeriodo === 'mes'
+      opQuery,
+      osQuery,
+      modoPeriodo === 'mes' && modoFatura === 'faturada'
         ? supabase.from('rh_comissoes_fechamento').select('*').eq('mes', mes).eq('ano', ano)
         : Promise.resolve({ data: [] as any[] }),
     ]);
@@ -1576,13 +1595,15 @@ function ComissoesRH({ funcionarios, currentUser }) {
     ops.forEach(op => { itemById[op.id] = {
       tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
       valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
-      valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria, data_faturamento:op.data_emissao_nf,
+      valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria,
+      data_faturamento: modoFatura === 'faturada' ? op.data_emissao_nf : op.data_conclusao_producao,
       modo_execucao:op.modo_execucao, equipe_id:op.equipe_id, equipe_nome:op.equipe_nome,
       tecnico_producao_id:op.tecnico_producao_id, tecnico_producao_2_id:op.tecnico_producao_2_id, tecnico_producao_2_nome:op.tecnico_producao_2_nome,
     }; });
     oss.forEach(os => { itemById[os.id] = {
       tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
-      valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra, data_faturamento:os.data_faturamento,
+      valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra,
+      data_faturamento: modoFatura === 'faturada' ? os.data_faturamento : os.data_conclusao_manutencao,
       modo_execucao:os.modo_execucao, equipe_id:os.equipe_id, equipe_nome:os.equipe_nome,
       tecnico_producao_id:os.tecnico_producao_id, tecnico_producao_2_id:os.tecnico_producao_2_id, tecnico_producao_2_nome:os.tecnico_producao_2_nome,
     }; });
@@ -1746,6 +1767,12 @@ function ComissoesRH({ funcionarios, currentUser }) {
         <div style={{padding:'10px 12px'}}>
           <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
             <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d1d5db'}}>
+              <button onClick={()=>setModoFatura('faturada')} title="OPs/OSs com NF emitida dentro do período" style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
+                background:modoFatura==='faturada'?'#16a34a':'#fff',color:modoFatura==='faturada'?'#fff':'#475569'}}>✅ Faturada</button>
+              <button onClick={()=>setModoFatura('a_faturar')} title="Produção concluída dentro do período, NF ainda não emitida" style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
+                background:modoFatura==='a_faturar'?'#d97706':'#fff',color:modoFatura==='a_faturar'?'#fff':'#475569'}}>⏳ A Faturar</button>
+            </div>
+            <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d1d5db'}}>
               <button onClick={()=>setModoPeriodo('mes')} style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
                 background:modoPeriodo==='mes'?'#2563eb':'#fff',color:modoPeriodo==='mes'?'#fff':'#475569'}}>Mês/Ano</button>
               <button onClick={()=>setModoPeriodo('intervalo')} style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
@@ -1782,9 +1809,13 @@ function ComissoesRH({ funcionarios, currentUser }) {
             </button>
           </div>
           <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
-            Período: {modoPeriodo==='mes' ? `${mesNome(mes)}/${ano}` : `${dataDe||'—'} até ${dataAte||'—'}`} · Apenas OPs/OSs faturadas no período
+            Período: {modoPeriodo==='mes' ? `${mesNome(mes)}/${ano}` : `${dataDe||'—'} até ${dataAte||'—'}`} ·{' '}
+            {modoFatura==='faturada'
+              ? 'OPs/OSs com NF emitida no período'
+              : 'OPs/OSs concluídas no período, NF ainda não emitida'}
             {filtroOrigem==='adaptacao' && <> · 🚗 só OPs (transformação veicular) + OS de manutenção veicular</>}
             {modoPeriodo==='intervalo' && <> · aprovação de fechamento fica disponível só no modo Mês/Ano</>}
+            {modoFatura==='a_faturar' && <> · valores estimados — aprovação de fechamento fica disponível só em Faturada</>}
           </div>
 
           {grupos.length > 0 && (
@@ -1840,7 +1871,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
                     </div>
                     {aprov && <div style={{fontSize:9,color:'#16a34a',fontWeight:600}}>✅ Aprovado por {aprov.aprovado_por}</div>}
                   </div>
-                  {podeAutorizar && !aprov && modoPeriodo === 'mes' && (
+                  {podeAutorizar && !aprov && modoPeriodo === 'mes' && modoFatura === 'faturada' && (
                     <button onClick={()=>aprovar(tec)} disabled={aprovando===tec.tecnicoId}
                       style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:4,padding:'5px 12px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
                       {aprovando===tec.tecnicoId ? '...' : 'Aprovar'}
@@ -1857,7 +1888,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
                     <th style={{padding:'4px 8px',textAlign:'right'}}>Mão de Obra</th>
                     <th style={{padding:'4px 8px',textAlign:'right'}}>Base Cálculo</th>
                     <th style={{padding:'4px 8px',textAlign:'right',color:'#2563eb'}}>Comissão</th>
-                    <th style={{padding:'4px 8px',textAlign:'center'}}>Fat.</th>
+                    <th style={{padding:'4px 8px',textAlign:'center'}}>{modoFatura==='faturada' ? 'Fat.' : 'Concl.'}</th>
                   </tr></thead>
                   <tbody>
                     {allItems.map((item: any, i: number) => (
