@@ -2041,6 +2041,25 @@ function HistoricoComissoes({ funcionarios }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ACESSO RESTRITO — só "💰 Comissões de Técnicos", sem o resto do RH.
+// Usado quando o usuário tem permissoes_rh.includes('comissoes_tecnicos') mas
+// não a aba "rh" inteira liberada (ver isVisible/SIDEBAR_GROUPS em
+// DashboardTab.tsx e a seção "RH — Acesso Restrito" em AdminTab.tsx).
+// ─────────────────────────────────────────────────────────────────────────────
+export function ComissoesTecnicosStandalone({ currentUser }) {
+  const [funcionarios, setFuncionarios] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from('rh_funcionarios').select('*').eq('ativo', true).order('nome')
+      .then(({ data }) => { setFuncionarios(data || []); setLoading(false); });
+  }, []);
+
+  if (loading) return <div className="acn-empty">Carregando...</div>;
+  return <ComissoesRH funcionarios={funcionarios} currentUser={currentUser} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RHTab({ currentUser }) {

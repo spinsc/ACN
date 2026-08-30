@@ -143,7 +143,7 @@ function PainelUsuarios() {
   const [loading, setLoading] = useState(false);
   const [modalPerm, setModalPerm] = useState(null);
   const [modalEditar, setModalEditar] = useState(null);
-  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true, gestor_id: null });
+  const [editForm, setEditForm] = useState({ nome:'', email:'', whatsapp:'', perfil:'', novaSenha:'', abas_permitidas: TODAS_ABAS.map(a=>a.id), pode_autorizar_rh: false, permissoes_crm: [], permissoes_rh: [], recebe_alerta_analise: false, pode_enviar_avisos: false, ver_valores: true, gestor_id: null });
   const [perfisDB, setPerfisDB] = useState([]);
 
   // Perfis disponíveis = padrão + qualquer extra criado no banco
@@ -183,7 +183,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -205,6 +205,7 @@ function PainelUsuarios() {
       pode_autorizar_rh: editForm.pode_autorizar_rh,
       pode_enviar_avisos: editForm.pode_enviar_avisos,
       permissoes_crm: editForm.permissoes_crm,
+      permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
       gestor_id: editForm.gestor_id || null,
     };
@@ -377,6 +378,25 @@ function PainelUsuarios() {
                     <span>{label}</span>
                   </label>
                 ))}
+              </div>
+              {/* RH — acesso restrito a Comissões, sem o resto da aba */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',marginBottom:5}}>💰 RH — Acesso Restrito</div>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={(editForm.permissoes_rh||[]).includes('comissoes_tecnicos')}
+                    onChange={e => setEditForm(f => ({
+                      ...f,
+                      permissoes_rh: e.target.checked
+                        ? [...(f.permissoes_rh||[]), 'comissoes_tecnicos']
+                        : (f.permissoes_rh||[]).filter(p => p !== 'comissoes_tecnicos')
+                    }))}
+                    style={{accentColor:'#7c3aed'}} />
+                  <span>💰 Comissões de Técnicos (sem acesso ao resto do RH)</span>
+                </label>
+                <div style={{fontSize:8,color:'#94a3b8',marginTop:2,marginLeft:22}}>
+                  Só tem efeito se a aba "RH" acima NÃO estiver marcada — se estiver, o usuário já vê Comissões dentro do RH inteiro.
+                </div>
               </div>
               {/* Análise Orçamentária */}
               <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>

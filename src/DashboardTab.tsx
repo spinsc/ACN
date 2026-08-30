@@ -27,7 +27,7 @@ import LicitacoesTab from './LicitacoesTab';
 import CalendarioTab from './CalendarioTab';
 import CrmTab from './CrmTab';
 import ClientesTab from './ClientesTab';
-import RHTab from './RHTab';
+import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
 import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel from './AnaliseInboxPanel';
@@ -102,6 +102,7 @@ const SIDEBAR_GROUPS = [
       { id: 'cadastro_itens',    label: 'Cadastro de Itens' },
       { id: 'cadastro_produtos', label: 'Produto e Mercadorias' },
       { id: 'rh',                label: 'RH' },
+      { id: 'comissoes_tecnicos', label: '💰 Comissões' },
       { id: 'fiscal',     label: 'Fiscal' },
       { id: 'relatorios',      label: 'Relatórios' },
       { id: 'formacao_precos', label: 'Formação de Preços' },
@@ -545,7 +546,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   useEffect(() => {
     if (!currentUserProp?.id) return;
     supabase.from('auth_usuarios')
-      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,recebe_alerta_analise')
+      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise')
       .eq('id', currentUserProp.id)
       .single()
       .then(({ data }) => {
@@ -803,6 +804,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   };
 
   const isVisible = (id: string) => {
+    if (id === 'comissoes_tecnicos') {
+      // Acesso restrito: só aparece pra quem NÃO tem a aba "RH" inteira (que
+      // já mostra Comissões dentro, inclusive Admin) mas tem essa permissão
+      // específica — checado ANTES do bypass geral de Admin, de propósito.
+      const abas = currentUser?.abas_permitidas;
+      const temAbaCompleta = currentUser?.perfil === 'Admin'
+        || (Array.isArray(abas) && abas.length > 0 ? abas.includes('rh') : true);
+      if (temAbaCompleta) return false;
+      return Array.isArray(currentUser?.permissoes_rh) && currentUser.permissoes_rh.includes('comissoes_tecnicos');
+    }
     if (currentUser?.perfil === 'Admin') return true;
     if (id === 'dashboard') return true;
     const abas = currentUser?.abas_permitidas;
@@ -837,6 +848,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'cotacoes':     return <CotacoesTab currentUser={currentUser} onAbrirCrmCard={(id) => { setPendingOpenCrmId(id); setActiveTab('crm'); }} />;
       case 'licitacoes':   return <LicitacoesTab currentUser={currentUser} autoOpenLicitId={pendingOpenLicitId} onAutoOpenConsumed={() => setPendingOpenLicitId(null)} />;
       case 'rh':           return <RHTab currentUser={currentUser} />;
+      case 'comissoes_tecnicos': return <ComissoesTecnicosStandalone currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':      return <RelatoriosTab currentUser={currentUser} />;
       case 'formacao_precos': return <FormacaoPrecosTab currentUser={currentUser} />;

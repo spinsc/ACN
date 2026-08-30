@@ -70,6 +70,7 @@ export default function LoginTab() {
         primeiro_acesso:       primeiroAcesso,
         pode_autorizar_rh:     usuario.pode_autorizar_rh     || false,
         permissoes_crm:        usuario.permissoes_crm        || [],
+        permissoes_rh:         usuario.permissoes_rh         || [],
         recebe_alerta_analise: usuario.recebe_alerta_analise || false,
         pode_enviar_avisos:    usuario.pode_enviar_avisos    || false,
         ultimo_login_anterior: ultimoLoginAnterior,

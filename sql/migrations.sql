@@ -1075,3 +1075,18 @@ COMMENT ON COLUMN chat_mensagens.ref_contexto IS 'Fase 5 -- mesmo valor de "cont
 -- quiser que isso passe a ser automático em toda OP nova do head line,
 -- precisa de uma mudança de código separada (usuário optou por não fazer
 -- isso agora).
+
+-- 2026-08-30 · Acesso restrito só a "Comissões de Técnicos" (Admin > Usuários)
+ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS permissoes_rh text[] DEFAULT '{}'::text[];
+-- Mesmo padrão de permissoes_crm: array de flags, hoje só 'comissoes_tecnicos'.
+-- Usuário sem a aba "rh" completa em abas_permitidas, mas com
+-- permissoes_rh @> '{comissoes_tecnicos}', ganha um item de menu dedicado
+-- "💰 Comissões" (só essa seção, sem colaboradores/autorizações/etc. do RH)
+-- — ver isVisible()/SIDEBAR_GROUPS em DashboardTab.tsx,
+-- ComissoesTecnicosStandalone (export novo) em RHTab.tsx, e o bloco
+-- "RH — Acesso Restrito" no modal de editar usuário em AdminTab.tsx.
+-- Testado ao vivo com usuário descartável (abas_permitidas: ['dashboard'],
+-- permissoes_rh: ['comissoes_tecnicos']): via sidebar só aparecem
+-- "Dashboard" e "💰 Comissões"; a tela mostra só o painel de comissões,
+-- cálculo bate igual ao de um usuário com RH completo. Usuário de teste
+-- removido depois.
