@@ -1223,6 +1223,36 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           <main className="acn-main">
             {activeTab === 'dashboard' ? (
               <div>
+                {/* PIPELINE — resumo de status dos setores, mesmas cores/regra de
+                    getStatus() já usada na tabela abaixo (st-ok/st-warn/st-crit/st-sem-dados) */}
+                {(() => {
+                  const contagem = { ok: 0, warn: 0, crit: 0, sem: 0 };
+                  METRICAS_CONFIG.forEach(m => {
+                    const st = getStatus(realizados[m.key] ?? null, m.meta, m.tol);
+                    if (st.cls === 'st-ok') contagem.ok++;
+                    else if (st.cls === 'st-warn') contagem.warn++;
+                    else if (st.cls === 'st-crit') contagem.crit++;
+                    else contagem.sem++;
+                  });
+                  const cards = [
+                    { label: 'No Prazo',   valor: contagem.ok,   sub: 'dentro da meta',              bg: '#f0fdf4', border: '#bbf7d0', txt: '#15803d', num: '#16a34a' },
+                    { label: 'Em Atenção', valor: contagem.warn, sub: 'acima da meta',                bg: '#fffbeb', border: '#fde68a', txt: '#92400e', num: '#b45309' },
+                    { label: 'Crítico',    valor: contagem.crit, sub: 'ação imediata',                bg: '#fef2f2', border: '#fecaca', txt: '#991b1b', num: '#dc2626' },
+                    { label: 'Sem Dados',  valor: contagem.sem,  sub: 'sem indicador no período',     bg: '#f8fafc', border: '#e2e8f0', txt: '#64748b', num: '#94a3b8' },
+                  ];
+                  return (
+                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:8, marginBottom:8}}>
+                      {cards.map(c => (
+                        <div key={c.label} style={{background:c.bg, border:`1px solid ${c.border}`, borderRadius:6, padding:'10px 12px'}}>
+                          <div style={{fontSize:9, fontWeight:700, color:c.txt, textTransform:'uppercase', letterSpacing:'.4px', marginBottom:4}}>{c.label}</div>
+                          <div style={{fontSize:22, fontWeight:800, color:c.num, lineHeight:1}}>{c.valor}</div>
+                          <div style={{fontSize:9, color:c.txt, marginTop:4, opacity:.85}}>{c.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <div className="sec-card">
                   <div className="sec-hdr">
                     <span>KPIs por Setor — Lead Times Médios</span>
