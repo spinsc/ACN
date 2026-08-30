@@ -26,7 +26,10 @@ function prazoLabel(av: any): string {
 // ─── componente ──────────────────────────────────────────────────────────────
 export default function AvisoSistemaWidget({ currentUser }: any) {
   const [avisos, setAvisos]           = useState<any[]>([]);
-  const [minimizado, setMinimizado]   = useState(false);
+  // Sempre inicia minimizado (só o "📌" no canto do header) — o painel
+  // aberto por padrão a cada login incomodava. Ver também as duas posições
+  // dedicadas (POS_MINIMIZADO/POS_EXPANDIDO) logo abaixo.
+  const [minimizado, setMinimizado]   = useState(true);
   const [mostraForm, setMostraForm]   = useState(false);
   const [form, setForm]               = useState<any>({ ...VAZIO_FORM });
   const [salvando, setSalvando]       = useState(false);
@@ -89,9 +92,16 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
     return () => { supabase.removeChannel(ch); };
   }, [carregar]);
 
-  // posição inicial (canto superior direito)
+  // Duas âncoras fixas no canto superior direito: uma pra quando está
+  // minimizado (o "📌" encostado dentro da faixa do header, entre a busca
+  // e o bloco Motorola/tema/menções) e outra pra quando está expandido (o
+  // painel descendo pra não cobrir o header).
+  const POS_MINIMIZADO = () => ({ x: Math.max(window.innerWidth - 336, 16), y: 4 });
+  const POS_EXPANDIDO  = () => ({ x: Math.max(window.innerWidth - 336, 16), y: 72 });
+
+  // posição inicial — já nasce na âncora do estado minimizado (padrão atual)
   useEffect(() => {
-    setPos({ x: Math.max(window.innerWidth - 336, 16), y: 72 });
+    setPos(POS_MINIMIZADO());
   }, []);
 
   // ── drag ──────────────────────────────────────────────────────────────────
@@ -161,7 +171,11 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
         {minimizado ? (
           <button
             onMouseDown={onHeaderMouseDown}
-            onClick={() => { if (!dragMoved.current) setMinimizado(false); }}
+            onClick={() => {
+              if (dragMoved.current) return;
+              setMinimizado(false);
+              setPos(POS_EXPANDIDO()); // desce o painel pra não cobrir o header
+            }}
             className={pulsar ? 'aviso-pulse' : ''}
             title={avisos.length > 0 ? `${avisos.length} aviso(s) — arraste para mover` : 'Avisos do Sistema — arraste para mover'}
             style={{
@@ -220,7 +234,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                 )}
                 <button
                   onMouseDown={e => e.stopPropagation()}
-                  onClick={() => { setMinimizado(true); setMostraForm(false); }}
+                  onClick={() => { setMinimizado(true); setMostraForm(false); setPos(POS_MINIMIZADO()); }}
                   title="Minimizar"
                   style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 15, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}
                 >
