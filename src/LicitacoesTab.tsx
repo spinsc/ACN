@@ -2007,7 +2007,7 @@ function LicitCard({ l, onClick, unread = false }) {
             background: vencidoDisputa?'#fef2f2': urgente?'#fffbeb':'#f8fafc',
             border:`1px solid ${vencidoDisputa?'#fca5a5':urgente?'#fcd34d':'#e2e8f0'}`,
             borderRadius:3, padding:'1px 6px' }}>
-            ⚡ Disputa: {fmtDT(l.data_disputa)}{l.horario_sessao ? ` ${l.horario_sessao}` : ''}{dias!==null&&dias>=0?` (${dias}d)`:''}
+            ⚡ Disputa: {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` (${dias}d)`:''}
             {vencidoDisputa?' ⚠️':''}
           </span>
         )}
