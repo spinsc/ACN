@@ -195,6 +195,20 @@ const fmtDT = (v: string) => {
   const d = new Date(v);
   return d.toLocaleString('pt-BR',{ day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit' });
 };
+// data_disputa/limites são timestamptz (UTC) no banco, mas os campos
+// <input type="datetime-local"> não carregam fuso — o valor exibido/editado
+// é sempre hora de Brasília. Sem essas conversões, ao ABRIR pra editar um
+// registro já salvo o campo mostrava a hora UTC crua (3h adiantada em
+// relação ao que foi realmente lançado, ex: lançou 06:00 e o campo mostrava
+// 09:00). Brasil não tem mais horário de verão desde 2019, então -03:00 é
+// fixo o ano todo.
+const utcParaInputBR = (v: string) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 16);
+};
+const inputBRParaUtc = (v: string) => v ? `${v}:00-03:00` : null;
 const fmtDate = (v: string) => {
   if (!v) return '—';
   return new Date(v).toLocaleDateString('pt-BR');
@@ -215,14 +229,6 @@ const isDiaDisputa = (v: string) => {
 // timestamptz do banco (ex: "2026-09-15 10:30:00+00") → formato aceito por
 // <input type="datetime-local"> (ex: "2026-09-15T10:30"). Sem isso o input
 // recebe um valor inválido e o browser some com a data digitada.
-function toDatetimeLocalValue(v: string): string {
-  if (!v) return '';
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-}
-
 // Máscara de moeda BR: aceita só dígitos digitados (últimos 2 = centavos) e
 // devolve { display: "1.234,56", raw: "1234.56" } — raw é o que vai pro banco.
 function maskMoedaBR(digitsInput: string): { display: string; raw: string } {
@@ -814,7 +820,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const [minimized, setMinimized] = useState(false);
 
   // ── LEFT FORM ─────────────────────────────────────────────────────────────
-  const [formEdit, setFormEdit] = useState<any>({ ...licit });
+  const [formEdit, setFormEdit] = useState<any>({
+    ...licit,
+    data_limite_esclarecimentos: utcParaInputBR(licit.data_limite_esclarecimentos),
+    data_limite_proposta:        utcParaInputBR(licit.data_limite_proposta),
+    data_disputa:                utcParaInputBR(licit.data_disputa),
+    data_limite_analise_tecnica: utcParaInputBR(licit.data_limite_analise_tecnica),
+  });
   const [salvandoForm, setSalvandoForm] = useState(false);
   const setF = (k: string, v: any) => setFormEdit((f: any) => ({ ...f, [k]: v }));
 
@@ -989,7 +1001,14 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     // modal e nunca é resincronizada, então incluir esses campos aqui sobrescreveria
     // qualquer alteração feita por esses outros caminhos com o valor antigo do mount.
     const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, ...editaveis } = formEdit;
-    const { error } = await supabase.from('licitacoes').update({ ...editaveis, atualizado_em: agora }).eq('id', licit.id);
+    const { error } = await supabase.from('licitacoes').update({
+      ...editaveis,
+      data_limite_esclarecimentos: inputBRParaUtc(editaveis.data_limite_esclarecimentos),
+      data_limite_proposta:        inputBRParaUtc(editaveis.data_limite_proposta),
+      data_disputa:                inputBRParaUtc(editaveis.data_disputa),
+      data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
+      atualizado_em: agora,
+    }).eq('id', licit.id);
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else { onRefresh(); }
     setSalvandoForm(false);
@@ -1772,11 +1791,10 @@ function FInput({ label, value, onChange, type='text' }: { label:string; value:a
       </div>
     );
   }
-  const v = type === 'datetime-local' ? toDatetimeLocalValue(value) : (value||'');
   return (
     <div>
       <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-      <input type={type} value={v} onChange={e=>onChange(e.target.value)}
+      <input type={type} value={value||''} onChange={e=>onChange(e.target.value)}
         style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
     </div>
   );
@@ -1822,11 +1840,11 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       ...form,
       valor_estimado: form.valor_estimado ? parseFloat(form.valor_estimado) : null,
       data_registro: agora,
-      data_limite_esclarecimentos: form.data_limite_esclarecimentos || null,
-      data_limite_proposta: form.data_limite_proposta || null,
-      data_disputa: form.data_disputa || null,
+      data_limite_esclarecimentos: inputBRParaUtc(form.data_limite_esclarecimentos),
+      data_limite_proposta: inputBRParaUtc(form.data_limite_proposta),
+      data_disputa: inputBRParaUtc(form.data_disputa),
       horario_sessao: form.horario_sessao || null,
-      data_limite_analise_tecnica: form.data_limite_analise_tecnica || null,
+      data_limite_analise_tecnica: inputBRParaUtc(form.data_limite_analise_tecnica),
       historico,
       marcadores: [],
       areas_livres: {},
