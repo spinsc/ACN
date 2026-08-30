@@ -1052,3 +1052,26 @@ COMMENT ON COLUMN chat_mensagens.ref_contexto IS 'Fase 5 -- mesmo valor de "cont
 -- tinham, de um trabalho anterior; estes 2 ficaram de fora) -- sem eles, o
 -- "Abrir →" de uma mensagem compartilhada no chat cairia só na aba genérica,
 -- sem abrir o registro certo. Adicionado o mesmo padrão dos outros 6.
+
+-- 2026-08-30 · Comissões — backfill de auxiliares fixos das 3 "Head Line"
+-- (sem migração de schema, só dados em responsaveis_producao). Usuário
+-- informou os pares Tiago->Celio, Junior->Natan, Jonatan->Ronald (1
+-- auxiliar por head line, confirmado via AskUserQuestion depois de uma
+-- inconsistência no pedido original). Cada auxiliar recebe papel='apoio'
+-- em TODAS as OPs onde o respectivo head line já está como
+-- papel='responsavel' (passadas, em produção e faturadas -- pedido
+-- explícito do usuário foi "as atuais em produção, finalizadas e
+-- faturas"), respeitando o cálculo já existente do código (apoio sempre
+-- 0,1% fixo de valor_mao_de_obra, independente do percentual_comissao
+-- individual cadastrado em rh_funcionarios -- ver RHTab.tsx ComissoesRH).
+-- 51 linhas inseridas: CELIO 21, NATAN ESPINDOLA 14, RONALD 16 (todas em
+-- `oples`; nenhuma OS encontrada para esses 3 head lines).
+--
+-- NÃO altera nada para daqui pra frente: a lista "membros" de
+-- producao_equipes existe na tela "Gerenciar Equipes" mas NÃO é lida pelo
+-- código que inicia produção (iniciarProducao em ProducaoTab.tsx só semeia
+-- tecnico_producao_id/tecnico_producao_2_id) -- então isso foi só um
+-- backfill pontual nos dados existentes, não um vínculo permanente. Se
+-- quiser que isso passe a ser automático em toda OP nova do head line,
+-- precisa de uma mudança de código separada (usuário optou por não fazer
+-- isso agora).
