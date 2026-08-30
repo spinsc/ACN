@@ -19,6 +19,8 @@
 // tratar como HTML, não mais como texto puro.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useUsers } from './MencaoTextarea';
 
 // Só reconhece como HTML já formatado se tiver uma das tags que este editor
 // (ou o execCommand por trás dele) realmente produz — um texto legado tipo
@@ -36,13 +38,92 @@ const btnStyle: React.CSSProperties = {
   fontSize: 11, padding: '5px 8px', borderRadius: 4, lineHeight: 1,
 };
 
+// Acha o {node, offset} do DOM correspondente a um offset de texto plano
+// contado desde o início de `root` — caminha os nós de texto na ordem do
+// documento (funciona atravessando tags como <b>/<u> já aplicadas).
+function posicaoDoOffset(root: Node, offset: number): { node: Node; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let acc = 0;
+  let node = walker.nextNode();
+  while (node) {
+    const len = (node.textContent || '').length;
+    if (acc + len >= offset) return { node, offset: offset - acc };
+    acc += len;
+    node = walker.nextNode();
+  }
+  return root.lastChild ? { node: root, offset: root.childNodes.length } : { node: root, offset: 0 };
+}
+
 export default function RichTextInput({
-  value, onChange, placeholder, style, className, minHeight = 60, singleLine = false, disabled = false,
+  value, onChange, placeholder, style, className, minHeight = 60, singleLine = false, disabled = false, mencoes = false,
 }: any) {
   const editorRef = useRef<any>(null);
   const corRef = useRef<any>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const [toolbar, setToolbar] = useState<{ x: number; y: number } | null>(null);
+
+  // ── @menção (opcional, mencoes=true) — mesma UX do MencaoTextarea, só que
+  // usando Range/TreeWalker em vez de selectionStart/setSelectionRange
+  // (contentEditable não tem essas APIs de <textarea>). ──────────────────────
+  const usuarios = useUsers();
+  const [sugestoes, setSugestoes] = useState<any[]>([]);
+  const [showDrop, setShowDrop] = useState(false);
+  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
+  const dropRef = useRef<any>(null);
+  const atRangeRef = useRef<Range | null>(null); // do '@' até o cursor atual (o que será substituído)
+
+  useEffect(() => {
+    if (!mencoes) return;
+    const fn = (e: MouseEvent) => {
+      if (dropRef.current?.contains(e.target as Node)) return;
+      if (editorRef.current?.contains(e.target as Node)) return;
+      setShowDrop(false);
+    };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [mencoes]);
+
+  const verificarMencao = () => {
+    if (!mencoes || !usuarios.length || !editorRef.current) { setShowDrop(false); return; }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.getRangeAt(0).startContainer == null) { setShowDrop(false); return; }
+    const cursorRange = sel.getRangeAt(0);
+    if (!editorRef.current.contains(cursorRange.startContainer)) { setShowDrop(false); return; }
+    const pre = document.createRange();
+    pre.selectNodeContents(editorRef.current);
+    pre.setEnd(cursorRange.startContainer, cursorRange.startOffset);
+    const antes = pre.toString();
+    const idx = antes.lastIndexOf('@');
+    if (idx === -1) { setShowDrop(false); return; }
+    const frag = antes.slice(idx + 1);
+    if (/[\s\n]/.test(frag)) { setShowDrop(false); return; }
+    const filtrados = frag.length === 0
+      ? usuarios.slice(0, 10)
+      : usuarios.filter((u: any) => u.nome?.toLowerCase().includes(frag.toLowerCase())).slice(0, 10);
+    if (!filtrados.length) { setShowDrop(false); return; }
+
+    const pos = posicaoDoOffset(editorRef.current, idx);
+    if (!pos) { setShowDrop(false); return; }
+    const atRange = document.createRange();
+    atRange.setStart(pos.node, pos.offset);
+    atRange.setEnd(cursorRange.startContainer, cursorRange.startOffset);
+    atRangeRef.current = atRange.cloneRange();
+
+    const rect = cursorRange.getBoundingClientRect();
+    setDropStyle({ position: 'fixed', top: rect.bottom + 2, left: rect.left, width: 240, zIndex: 999999 });
+    setSugestoes(filtrados);
+    setShowDrop(true);
+  };
+
+  const selecionarMencao = (u: any) => {
+    if (!atRangeRef.current) return;
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(atRangeRef.current); }
+    editorRef.current?.focus();
+    document.execCommand('insertText', false, `@${u.nome} `);
+    setShowDrop(false);
+    emitChange();
+  };
 
   // Sincroniza o HTML externo -> DOM só quando muda de verdade (evita
   // sobrescrever o cursor enquanto o usuário está digitando). Campos que
@@ -94,7 +175,12 @@ export default function RichTextInput({
     emitChange();
   };
 
-  const handleKeyDown = (e: any) => { if (singleLine && e.key === 'Enter') e.preventDefault(); };
+  const handleKeyDown = (e: any) => {
+    if (singleLine && e.key === 'Enter') e.preventDefault();
+    if (mencoes && e.key === 'Escape') setShowDrop(false);
+  };
+  const handleInput = () => { emitChange(); verificarMencao(); };
+  const handleKeyUp = (e: any) => { mostrarToolbarNaSelecao(); if (mencoes && e.key !== 'Escape') verificarMencao(); };
 
   return (
     <div style={{ position: 'relative' }}>
@@ -103,9 +189,9 @@ export default function RichTextInput({
         contentEditable={!disabled}
         suppressContentEditableWarning
         className={className}
-        onInput={emitChange}
+        onInput={handleInput}
         onMouseUp={mostrarToolbarNaSelecao}
-        onKeyUp={mostrarToolbarNaSelecao}
+        onKeyUp={handleKeyUp}
         onContextMenu={handleContextMenu}
         onBlur={() => setTimeout(() => setToolbar(null), 150)}
         onKeyDown={handleKeyDown}
@@ -132,6 +218,29 @@ export default function RichTextInput({
           <button title="Cor do texto" onMouseDown={e => { e.preventDefault(); salvarSelecao(); corRef.current?.click(); }} style={btnStyle}>🎨</button>
           <input ref={corRef} type="color" style={{ display: 'none' }} onChange={e => aplicar('foreColor', e.target.value)} />
         </div>
+      )}
+      {mencoes && showDrop && sugestoes.length > 0 && typeof document !== 'undefined' && createPortal(
+        <div ref={dropRef} style={{ ...dropStyle, background: '#fff', border: '1.5px solid #c7d2fe', borderRadius: 8,
+          boxShadow: '0 8px 28px rgba(0,0,0,.2)', maxHeight: 240, overflowY: 'auto' }}>
+          <div style={{ padding: '5px 10px', fontSize: 9, color: '#6366f1', fontWeight: 700, borderBottom: '1px solid #e0e7ff',
+            background: '#f5f3ff', borderRadius: '8px 8px 0 0', letterSpacing: .3 }}>
+            👤 MENCIONAR USUÁRIO
+          </div>
+          {sugestoes.map((u: any) => (
+            <div key={u.id} onMouseDown={e => { e.preventDefault(); selecionarMencao(u); }}
+              style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                fontSize: 11, borderBottom: '1px solid #f1f5f9', background: '#fff' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#eef2ff')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+              <span style={{ width: 28, height: 28, borderRadius: '50%', background: '#6366f1', color: 'white', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                {(u.nome || '?')[0].toUpperCase()}
+              </span>
+              <span style={{ fontWeight: 600 }}>@{u.nome}</span>
+            </div>
+          ))}
+        </div>,
+        document.body,
       )}
       <style>{`[data-placeholder]:empty::before { content: attr(data-placeholder); color:#9ca3af; pointer-events:none; }`}</style>
     </div>

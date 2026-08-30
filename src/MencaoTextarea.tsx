@@ -43,7 +43,9 @@ async function loadUsers() {
   }
 }
 
-function useUsers(): any[] {
+// Exportado pra RichTextInput (modo mencoes=true) reaproveitar o mesmo cache
+// singleton em vez de buscar os usuários de novo.
+export function useUsers(): any[] {
   const [users, setUsers] = useState<any[]>(_cache);
   useEffect(() => {
     if (_loaded) { setUsers(_cache); return; }
@@ -65,8 +67,13 @@ export async function salvarMencoes(opts: {
   campo: string;
   abaDestino: string;
 }) {
-  const { texto, mencionanteId, mencionanteNome, contexto, contextoId,
+  const { mencionanteId, mencionanteNome, contexto, contextoId,
           contextoDescricao, campo, abaDestino } = opts;
+  // texto pode vir de um RichTextInput (mencoes=true) e conter tags de
+  // formatação — trabalha sempre em cima do texto puro (sem tags), tanto pra
+  // achar os @nomes quanto pro texto_trecho salvo (senão a notificação de
+  // menção mostraria "<b>" literal pra quem foi mencionado).
+  const texto = (opts.texto || '').replace(/<[^>]*>/g, '');
   if (!texto || !contextoId || !texto.includes('@')) return;
 
   // Busca todos os usuários (nomes têm espaço — "João Silva" — então não dá pra

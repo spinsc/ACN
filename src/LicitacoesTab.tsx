@@ -4,10 +4,10 @@ import { supabase } from './supabaseClient';
 import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
 import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
-import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
-import RichTextInput, { htmlSeguro } from './RichTextInput';
+import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1413,8 +1413,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 {/* Nova entrada */}
                 <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:12 }}>
                   <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:6 }}>✏️ Nova Atualização</div>
-                  <MencaoTextarea value={novoText} onChange={v=>setNovoText(v)}
-                    placeholder="Descreva o andamento... @Nome para mencionar" rows={3}
+                  <RichTextInput mencoes value={novoText} onChange={v=>setNovoText(v)}
+                    placeholder="Descreva o andamento... @Nome para mencionar, selecione um trecho pra formatar" minHeight={54}
                     style={{ fontSize:11 }} />
                   <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                     <label style={{ fontSize:10, color:'#374151', cursor:'pointer', display:'flex', alignItems:'center', gap:4, background:'#e0f2fe', borderRadius:4, padding:'3px 8px', border:'1px solid #7dd3fc' }}>
@@ -1444,8 +1444,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                       <div style={{ flex:1, minWidth:0 }}>
                         {editandoDocId === d.id ? (
                           <div>
-                            <MencaoTextarea value={editandoDocTexto} onChange={v=>setEditandoDocTexto(v)}
-                              rows={3} style={{ fontSize:11 }} />
+                            <RichTextInput mencoes value={editandoDocTexto} onChange={v=>setEditandoDocTexto(v)}
+                              minHeight={54} style={{ fontSize:11 }} />
                             <div style={{ display:'flex', gap:6, marginTop:6 }}>
                               <button onClick={salvarEdicaoAndamento}
                                 style={{ background:'#475569', color:'#fff', border:'none', borderRadius:4, padding:'4px 14px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
@@ -1459,7 +1459,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                           </div>
                         ) : (
                           <>
-                            {d.conteudo && <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={d.conteudo} /></div>}
+                            {d.conteudo && (
+                              pareceHtmlFormatado(d.conteudo)
+                                ? <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }} dangerouslySetInnerHTML={{ __html: d.conteudo }} />
+                                : <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={d.conteudo} /></div>
+                            )}
                             {d.anexo_url && (
                               <a href={d.anexo_url} target="_blank" rel="noreferrer"
                                 style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:'#2563eb', fontWeight:600, marginTop:4 }}>

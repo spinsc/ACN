@@ -8,6 +8,7 @@ import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
 import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import RichTextInput, { pareceHtmlFormatado } from './RichTextInput';
 import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
@@ -3383,11 +3384,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             {/* Nova observação */}
             <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:10, marginBottom:10 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#6d28d9', marginBottom:5 }}>✏️ Nova atualização</div>
-              <MencaoTextarea
+              <RichTextInput
+                mencoes
                 value={novoAndamento}
                 onChange={v => setNovoAndamento(v)}
-                placeholder="Descreva o andamento da negociação... use @Nome para mencionar alguém"
-                rows={3}
+                placeholder="Descreva o andamento da negociação... @Nome pra mencionar, selecione um trecho pra formatar"
+                minHeight={54}
                 style={{ border:'1px solid #c4b5fd', fontSize:11, marginBottom:6 }} />
               <button onClick={salvarAndamentoCrm} disabled={salvandoAndamento||!novoAndamento.trim()}
                 style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 14px',
@@ -3403,7 +3405,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {andamentoHistorico.map((h,i)=>(
                 <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0',
                   borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
-                  <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={h.texto} /></div>
+                  {pareceHtmlFormatado(h.texto)
+                    ? <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }} dangerouslySetInnerHTML={{ __html: h.texto }} />
+                    : <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5 }}><Linkify text={h.texto} /></div>}
                   <div style={{ marginTop:4, fontSize:9, color:'#9ca3af', display:'flex', gap:8 }}>
                     <span>👤 {h.usuario_nome||'—'}</span>
                     <span>🕒 {h.criado_em ? new Date(h.criado_em).toLocaleString('pt-BR') : '—'}</span>
