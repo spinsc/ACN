@@ -371,6 +371,26 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     }
   }, [autoOpenOpId, loading, ops]);
 
+  // Deep-link genérico (Menções, Chat — "Oportunidade X" clicável, contexto
+  // 'crm' -- mesmo contexto já gravado pelas @menções do Andamento CRM, ver
+  // salvarMencoes acima) — mesmo padrão já usado em ComprasTab/SetorDemandaTab/
+  // etc, que faltava aqui: abre o card direto (mesmo modal que abre ao clicar
+  // no card do Kanban) em vez de só cair na aba.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'crm') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('crm_oportunidades').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data: op }) => {
+          if (op) { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }
+        });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   // Carrega nome do cliente ao abrir modal de edição
   useEffect(() => {
     if (modalOp?.cliente_id) {

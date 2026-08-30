@@ -1363,7 +1363,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <AvisoSistemaWidget currentUser={currentUser} />
       <ContatoAlertWidget currentUser={currentUser} />
       <ContatoComercialAlertWidget currentUser={currentUser} />
-      <ChatWidget currentUser={currentUser} />
+      <ChatWidget currentUser={currentUser} onNavigate={setActiveTab} />
 
       {/* ── OPL aberto via busca global (modal flutuante) ── */}
       {globalOplAberto && (

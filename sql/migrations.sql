@@ -1032,3 +1032,23 @@ COMMENT ON COLUMN oples.serralheria_status IS 'Trilha paralela ao status_geral p
 -- setor_destino='Compras') pro comprador resolver, mesmo padrão usado por
 -- criarDemandaComprasFinalizada (ComprasTab.tsx) e pela liberação parcial de
 -- Serralheria acima.
+
+-- 2026-08-30 · Chat — Fases 2-5 (grupos, negrito/prévia, anexos, compartilhar
+-- processo). chat_salas/chat_mensagens já existiam (Fase 1 só removeu os
+-- canais fixos e corrigiu o bug do bullet permanente, sem migração de schema).
+ALTER TABLE chat_salas ADD COLUMN IF NOT EXISTS criado_por text;
+ALTER TABLE chat_salas ADD COLUMN IF NOT EXISTS criado_por_nome text;
+ALTER TABLE chat_mensagens ADD COLUMN IF NOT EXISTS anexo_url text;
+ALTER TABLE chat_mensagens ADD COLUMN IF NOT EXISTS anexo_nome text;
+ALTER TABLE chat_mensagens ADD COLUMN IF NOT EXISTS anexo_tipo text;
+ALTER TABLE chat_mensagens ADD COLUMN IF NOT EXISTS ref_contexto text;
+ALTER TABLE chat_mensagens ADD COLUMN IF NOT EXISTS ref_contexto_id text;
+ALTER TABLE chat_mensagens ADD COLUMN IF NOT EXISTS ref_desc text;
+COMMENT ON COLUMN chat_salas.criado_por IS 'Fase 2 -- id do usuario que criou o grupo (admin do grupo).';
+COMMENT ON COLUMN chat_mensagens.ref_contexto IS 'Fase 5 -- mesmo valor de "contexto" usado em mencoes/acn:abrir-registro (ex: op, licitacao, crm) para abrir o registro compartilhado direto no processo.';
+
+-- Descoberta de passagem: CrmTab.tsx e LicitacoesTab.tsx nunca tinham o
+-- listener window.__acnDeepLink/acn:abrir-registro (6 de 8 arquivos já
+-- tinham, de um trabalho anterior; estes 2 ficaram de fora) -- sem eles, o
+-- "Abrir →" de uma mensagem compartilhada no chat cairia só na aba genérica,
+-- sem abrir o registro certo. Adicionado o mesmo padrão dos outros 6.

@@ -2219,6 +2219,22 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     }
   }, [autoOpenLicitId, loading, licitacoes]);
 
+  // Deep-link genérico (Menções, Chat — "Licitação X" clicável, contexto
+  // 'licitacao') — mesmo padrão já usado em ComprasTab/SetorDemandaTab/etc,
+  // que faltava aqui: abre o detalhe direto em vez de só cair na aba.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'licitacao') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('licitacoes').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setSelected(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   // Registra "últimas visualizadas" — upsert, dispara toda vez que uma
   // licitação diferente é aberta no detalhe.
   useEffect(() => {
