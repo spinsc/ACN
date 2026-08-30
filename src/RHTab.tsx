@@ -1589,17 +1589,45 @@ function ComissoesRH({ funcionarios, currentUser }) {
     const oss: any[] = (osRes.data || []).filter((os: any) => filtroOrigem === 'todos' || os.is_manutencao_veicular === true);
     setFechamentos(fechRes.data || []);
 
+    // OP "mãe" com vários veículos (ex.: OPL A1419.2607/01..90, 90 carros):
+    // cada veículo vira um registro em `oples` (opl = "BASE" ou "BASE/NN"),
+    // mas o valor_total/valor_mao_de_obra lançado é o do LOTE inteiro,
+    // repetido igual em todos os registros — não o valor unitário. Buscamos
+    // a tabela toda (só id/opl/valores, ~poucas centenas de linhas) pra
+    // detectar esses lotes (mesma base, >1 veículo, mesmo valor repetido) e
+    // dividir pelo nº de veículos antes de usar como base de comissão.
+    const { data: todasOpsRaw } = await supabase.from('oples')
+      .select('id,opl,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria');
+    const baseOplDe = (opl: string) => String(opl || '').replace(/\/\d+$/, '');
+    const gruposBase: Record<string, any[]> = {};
+    (todasOpsRaw || []).forEach((o: any) => { (gruposBase[baseOplDe(o.opl)] ||= []).push(o); });
+    const divisorPorBase: Record<string, number> = {};
+    Object.entries(gruposBase).forEach(([base, itens]) => {
+      if (itens.length <= 1) return;
+      const mdoVals = new Set(itens.map((i: any) => i.valor_mao_de_obra).filter((v: any) => v != null));
+      const totVals = new Set(itens.map((i: any) => i.valor_total).filter((v: any) => v != null));
+      // Só divide quando TODOS os veículos do lote compartilham exatamente o
+      // mesmo valor (indício claro de lançamento único pro lote inteiro) —
+      // se já vierem com valores distintos por veículo, respeita como está.
+      if (mdoVals.size <= 1 && totVals.size <= 1) divisorPorBase[base] = itens.length;
+    });
+
     // Mapa auxiliar id -> dados do item (OP ou OS), pra resolver cada linha de
     // responsaveis_producao de volta pro item de onde ela veio.
     const itemById: Record<string, any> = {};
-    ops.forEach(op => { itemById[op.id] = {
-      tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
-      valor_total:op.valor_total, valor_mao_de_obra:op.valor_mao_de_obra,
-      valor_mao_de_obra_serralheria:op.valor_mao_de_obra_serralheria,
-      data_faturamento: modoFatura === 'faturada' ? op.data_emissao_nf : op.data_conclusao_producao,
-      modo_execucao:op.modo_execucao, equipe_id:op.equipe_id, equipe_nome:op.equipe_nome,
-      tecnico_producao_id:op.tecnico_producao_id, tecnico_producao_2_id:op.tecnico_producao_2_id, tecnico_producao_2_nome:op.tecnico_producao_2_nome,
-    }; });
+    ops.forEach(op => {
+      const divisor = divisorPorBase[baseOplDe(op.opl)] || 1;
+      const unit = (v: any) => v != null ? Number(v) / divisor : v;
+      itemById[op.id] = {
+        tipo:'OP', id:op.id, numero:op.opl, cliente:op.cliente_nome,
+        valor_total:unit(op.valor_total), valor_mao_de_obra:unit(op.valor_mao_de_obra),
+        valor_mao_de_obra_serralheria:unit(op.valor_mao_de_obra_serralheria),
+        qtdVeiculosLote: divisor > 1 ? divisor : undefined,
+        data_faturamento: modoFatura === 'faturada' ? op.data_emissao_nf : op.data_conclusao_producao,
+        modo_execucao:op.modo_execucao, equipe_id:op.equipe_id, equipe_nome:op.equipe_nome,
+        tecnico_producao_id:op.tecnico_producao_id, tecnico_producao_2_id:op.tecnico_producao_2_id, tecnico_producao_2_nome:op.tecnico_producao_2_nome,
+      };
+    });
     oss.forEach(os => { itemById[os.id] = {
       tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
       valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra,
@@ -1902,7 +1930,15 @@ function ComissoesRH({ funcionarios, currentUser }) {
                               background:'#fef3c7',color:'#92400e',marginLeft:4}}>APOIO</span>
                           )}
                         </td>
-                        <td style={{padding:'4px 8px',fontWeight:700}}>{item.numero||'—'}</td>
+                        <td style={{padding:'4px 8px',fontWeight:700}}>
+                          {item.numero||'—'}
+                          {item.qtdVeiculosLote > 1 && (
+                            <span title={`Lote de ${item.qtdVeiculosLote} veículos — valor unitário (total do lote ÷ ${item.qtdVeiculosLote})`}
+                              style={{fontSize:8,padding:'1px 5px',borderRadius:8,fontWeight:700,background:'#e0e7ff',color:'#3730a3',marginLeft:4}}>
+                              lote/{item.qtdVeiculosLote}
+                            </span>
+                          )}
+                        </td>
                         <td style={{padding:'4px 8px'}}>{item.cliente||'—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_total != null ? fmtMoeda(item.valor_total) : '—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_mao_de_obra != null ? fmtMoeda(item.valor_mao_de_obra) : '—'}</td>
