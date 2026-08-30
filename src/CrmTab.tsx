@@ -203,6 +203,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
+  const [filtStatusOpl, setFiltStatusOpl] = useState('');
   // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
   // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
   const [lotesExpandidosOpls, setLotesExpandidosOpls] = useState<Record<string,boolean>>({});
@@ -2660,6 +2661,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           setOplsSelecionadas(new Set());
           fetchOplsEmAberto();
         };
+        // Status distintos realmente presentes nas OPLs em aberto — opções do
+        // filtro vêm dos dados, não de uma lista fixa (evita mostrar status
+        // que hoje não tem nenhuma OPL, e cobre automaticamente algum status
+        // novo que apareça no futuro).
+        const statusOplDisponiveis = Array.from(new Set(oplsEmAberto.map(o => o.status_geral).filter(Boolean))).sort();
+
         const oplsFiltradas = oplsEmAberto.filter(o => {
           if (oplsFiltro === 'crm')     return !!o.crm_oportunidade_id;
           if (oplsFiltro === 'sem_crm') return !o.crm_oportunidade_id;
@@ -2669,6 +2676,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           // compartilhada com o Kanban — antes só apareciam na tela sem
           // nunca serem aplicados aqui.
           if (filtResp && o.responsavel_comercial !== filtResp) return false;
+          if (filtStatusOpl && o.status_geral !== filtStatusOpl) return false;
           if (!busca) return true;
           const b = busca.toLowerCase();
           return (
@@ -2688,6 +2696,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   {l}
                 </button>
               ))}
+              <select value={filtStatusOpl} onChange={e => setFiltStatusOpl(e.target.value)}
+                style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', fontWeight:700,
+                  background: filtStatusOpl ? '#0f766e' : '#f8fafc', color: filtStatusOpl ? 'white' : '#64748b' }}>
+                <option value="">Status: Todos</option>
+                {statusOplDisponiveis.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {filtStatusOpl && (
+                <button onClick={() => setFiltStatusOpl('')} title="Limpar filtro de status"
+                  style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', background:'#f8fafc', color:'#64748b' }}>
+                  ✕
+                </button>
+              )}
               <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
                 {oplsFiltradas.length} OPL{oplsFiltradas.length !== 1 ? 's' : ''}
               </span>
