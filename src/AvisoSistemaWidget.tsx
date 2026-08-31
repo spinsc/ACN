@@ -92,12 +92,21 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
     return () => { supabase.removeChannel(ch); };
   }, [carregar]);
 
-  // Duas âncoras fixas no canto superior direito: uma pra quando está
-  // minimizado (o "📌" encostado dentro da faixa do header, entre a busca
-  // e o bloco Motorola/tema/menções) e outra pra quando está expandido (o
-  // painel descendo pra não cobrir o header).
-  const POS_MINIMIZADO = () => ({ x: Math.max(window.innerWidth - 336, 16), y: 4 });
-  const POS_EXPANDIDO  = () => ({ x: Math.max(window.innerWidth - 336, 16), y: 72 });
+  // Minimizado: mede a posição real do bloco de ícones da direita do header
+  // (.acn-right — motorola/tema/menções/análise/usuário) e encosta o pin
+  // logo à esquerda dele. Evita usar um offset fixo de window.innerWidth,
+  // que ficava sobrepondo esses botões conforme o conteúdo do header varia
+  // (nome do usuário, badge de análise visível ou não, etc.).
+  const POS_MINIMIZADO = () => {
+    const rightEl = document.querySelector('.acn-right');
+    if (rightEl) {
+      const r = rightEl.getBoundingClientRect();
+      return { x: Math.max(r.left - 56, 16), y: 4 };
+    }
+    return { x: Math.max(window.innerWidth - 400, 16), y: 4 };
+  };
+  // Expandido: mesmo x do minimizado, mas desce abaixo do header pra não cobri-lo.
+  const POS_EXPANDIDO = () => ({ x: POS_MINIMIZADO().x, y: 72 });
 
   // posição inicial — já nasce na âncora do estado minimizado (padrão atual)
   useEffect(() => {

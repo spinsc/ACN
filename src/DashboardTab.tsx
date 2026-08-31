@@ -454,6 +454,78 @@ body.dark [style*="color:#6b7280"], body.dark [style*="color: #6b7280"],
 body.dark [style*="color:#9ca3af"], body.dark [style*="color: #9ca3af"] { color:#64748b !important; }
 
 /* ──────────────────────────────────────────────────────────────────
+   DARK MODE: cobertura ampla de cores de texto escuras/saturadas
+   Levantado via grep de todo color:'#...' inline em src/*.tsx que
+   ainda não tinha equivalente claro no dark — cada grupo mapeia pro
+   tom claro da MESMA família de cor já usada nos badges acima (①-④),
+   pra manter o significado semântico (verde=sucesso, vermelho=erro,
+   âmbar=atenção, etc.) só invertendo escuro↔claro.
+   ────────────────────────────────────────────────────────────────── */
+/* cinza/neutro */
+body.dark [style*="color:#333"], body.dark [style*="color: #333"],
+body.dark [style*="color:#383d41"], body.dark [style*="color: #383d41"] { color:#94a3b8 !important; }
+body.dark [style*="color:#666"], body.dark [style*="color: #666"],
+body.dark [style*="color:#78716c"], body.dark [style*="color: #78716c"],
+body.dark [style*="color:#4b5563"], body.dark [style*="color: #4b5563"] { color:#64748b !important; }
+/* vermelho (erro/crítico) */
+body.dark [style*="color:#dc2626"], body.dark [style*="color: #dc2626"],
+body.dark [style*="color:#ef4444"], body.dark [style*="color: #ef4444"],
+body.dark [style*="color:#7f1d1d"], body.dark [style*="color: #7f1d1d"],
+body.dark [style*="color:#b91c1c"], body.dark [style*="color: #b91c1c"] { color:#fca5a5 !important; }
+/* rosa/magenta */
+body.dark [style*="color:#9d174d"], body.dark [style*="color: #9d174d"],
+body.dark [style*="color:#831843"], body.dark [style*="color: #831843"] { color:#f9a8d4 !important; }
+/* laranja/marrom (atenção) */
+body.dark [style*="color:#92400e"], body.dark [style*="color: #92400e"],
+body.dark [style*="color:#b45309"], body.dark [style*="color: #b45309"],
+body.dark [style*="color:#78350f"], body.dark [style*="color: #78350f"],
+body.dark [style*="color:#9a3412"], body.dark [style*="color: #9a3412"],
+body.dark [style*="color:#d97706"], body.dark [style*="color: #d97706"],
+body.dark [style*="color:#c2410c"], body.dark [style*="color: #c2410c"],
+body.dark [style*="color:#713f12"], body.dark [style*="color: #713f12"],
+body.dark [style*="color:#f97316"], body.dark [style*="color: #f97316"],
+body.dark [style*="color:#854d0e"], body.dark [style*="color: #854d0e"],
+body.dark [style*="color:#7c2d12"], body.dark [style*="color: #7c2d12"] { color:#fdba74 !important; }
+/* âmbar/amarelo */
+body.dark [style*="color:#856404"], body.dark [style*="color: #856404"] { color:#fde68a !important; }
+/* verde (sucesso) */
+body.dark [style*="color:#16a34a"], body.dark [style*="color: #16a34a"],
+body.dark [style*="color:#15803d"], body.dark [style*="color: #15803d"],
+body.dark [style*="color:#22c55e"], body.dark [style*="color: #22c55e"],
+body.dark [style*="color:#059669"], body.dark [style*="color: #059669"],
+body.dark [style*="color:#155724"], body.dark [style*="color: #155724"],
+body.dark [style*="color:#14532d"], body.dark [style*="color: #14532d"],
+body.dark [style*="color:#065f46"], body.dark [style*="color: #065f46"],
+body.dark [style*="color:#064e3b"], body.dark [style*="color: #064e3b"] { color:#86efac !important; }
+/* teal (marca ACN — 0f766e é usado ~80x como texto) */
+body.dark [style*="color:#0f766e"], body.dark [style*="color: #0f766e"],
+body.dark [style*="color:#0891b2"], body.dark [style*="color: #0891b2"],
+body.dark [style*="color:#0e7490"], body.dark [style*="color: #0e7490"],
+body.dark [style*="color:#0d9488"], body.dark [style*="color: #0d9488"] { color:#2dd4bf !important; }
+/* azul */
+body.dark [style*="color:#2563eb"], body.dark [style*="color: #2563eb"],
+body.dark [style*="color:#0369a1"], body.dark [style*="color: #0369a1"],
+body.dark [style*="color:#1d4ed8"], body.dark [style*="color: #1d4ed8"],
+body.dark [style*="color:#3b82f6"], body.dark [style*="color: #3b82f6"],
+body.dark [style*="color:#1e3a5f"], body.dark [style*="color: #1e3a5f"],
+body.dark [style*="color:#1e3a8a"], body.dark [style*="color: #1e3a8a"],
+body.dark [style*="color:#0ea5e9"], body.dark [style*="color: #0ea5e9"] { color:#93c5fd !important; }
+/* índigo */
+body.dark [style*="color:#6366f1"], body.dark [style*="color: #6366f1"],
+body.dark [style*="color:#1e40af"], body.dark [style*="color: #1e40af"],
+body.dark [style*="color:#4f46e5"], body.dark [style*="color: #4f46e5"],
+body.dark [style*="color:#4338ca"], body.dark [style*="color: #4338ca"],
+body.dark [style*="color:#3730a3"], body.dark [style*="color: #3730a3"] { color:#c7d2fe !important; }
+/* roxo */
+body.dark [style*="color:#7c3aed"], body.dark [style*="color: #7c3aed"],
+body.dark [style*="color:#6d28d9"], body.dark [style*="color: #6d28d9"],
+body.dark [style*="color:#7c6f9c"], body.dark [style*="color: #7c6f9c"],
+body.dark [style*="color:#4c1d95"], body.dark [style*="color: #4c1d95"],
+body.dark [style*="color:#a21caf"], body.dark [style*="color: #a21caf"],
+body.dark [style*="color:#8b5cf6"], body.dark [style*="color: #8b5cf6"],
+body.dark [style*="color:#6b21a8"], body.dark [style*="color: #6b21a8"] { color:#c4b5fd !important; }
+
+/* ──────────────────────────────────────────────────────────────────
    DARK MODE: inline style overrides — fundos claros → escuros
    Cobertos: background (shorthand) e background-color (React camelCase)
    ────────────────────────────────────────────────────────────────── */
