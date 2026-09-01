@@ -175,7 +175,7 @@ const LICIT_VAZIO = {
   classificacao:'Direta', prioridade:'Média',
   faturamento_empresa:'ACN', operador:'', valor_estimado:'',
   data_limite_esclarecimentos:'', data_limite_proposta:'',
-  data_disputa:'', horario_sessao:'',
+  data_disputa:'',
   data_limite_analise_tecnica:'',
   analista_nome:'', analista_email:'',
   coordenador_nome:'', coordenador_email:'',
@@ -584,6 +584,26 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
     autosave();
   };
 
+  // Insere uma tabela em branco, editável célula a célula (mesmo <table>
+  // contentEditable que já funciona pra tabelas coladas do Excel/Word —
+  // ver handlePaste abaixo e o CSS .licit-area-livre table).
+  const inserirTabela = () => {
+    const linhasStr = window.prompt('Quantas linhas?', '3');
+    if (linhasStr === null) return;
+    const colunasStr = window.prompt('Quantas colunas?', '3');
+    if (colunasStr === null) return;
+    const linhas  = Math.max(1, Math.min(50, parseInt(linhasStr, 10)  || 3));
+    const colunas = Math.max(1, Math.min(20, parseInt(colunasStr, 10) || 3));
+    let html = '<table><tbody>';
+    for (let r = 0; r < linhas; r++) {
+      html += '<tr>' + '<td>&nbsp;</td>'.repeat(colunas) + '</tr>';
+    }
+    html += '</tbody></table><p><br></p>';
+    editorRef.current?.focus();
+    document.execCommand('insertHTML', false, html);
+    autosave();
+  };
+
   const handlePaste = (e: any) => {
     const items = Array.from(e.clipboardData?.items || []);
     // Se há HTML no clipboard (Excel/Word), deixa o browser colar a tabela
@@ -652,6 +672,12 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
         </button>
         <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) inserirImagem(f); e.target.value = ''; }} />
+        <button onMouseDown={e => { e.preventDefault(); inserirTabela(); }}
+          title="Inserir tabela editável"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
+          ⊞
+        </button>
         <div style={{ flex:1 }} />
         {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
         {salvo && !salvando && <span style={{ fontSize:9, color:'#16a34a' }}>✓ Salvo</span>}
@@ -1387,7 +1413,6 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" />
                 <FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" />
                 <FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" />
-                <FInput label="Horário da Sessão" value={formEdit.horario_sessao} onChange={v=>setF('horario_sessao',v)} type="time" />
                 <FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" />
               </div>
             </div>
@@ -1843,7 +1868,6 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       data_limite_esclarecimentos: inputBRParaUtc(form.data_limite_esclarecimentos),
       data_limite_proposta: inputBRParaUtc(form.data_limite_proposta),
       data_disputa: inputBRParaUtc(form.data_disputa),
-      horario_sessao: form.horario_sessao || null,
       data_limite_analise_tecnica: inputBRParaUtc(form.data_limite_analise_tecnica),
       historico,
       marcadores: [],
@@ -1961,7 +1985,6 @@ function ModalNova({ currentUser, onClose, onSaved }) {
               <ModalNovaInput label="Limite Esclarecimentos/Impugnação" field="data_limite_esclarecimentos" value={form.data_limite_esclarecimentos} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Limite Cadastro da Proposta" field="data_limite_proposta" value={form.data_limite_proposta} onChange={set} type="datetime-local" />
               <ModalNovaInput label="Data/Hora de Disputa" field="data_disputa" value={form.data_disputa} onChange={set} type="datetime-local" />
-              <ModalNovaInput label="Horário da Sessão" field="horario_sessao" value={form.horario_sessao} onChange={set} type="time" />
               <ModalNovaInput label="Limite Análise Técnica" field="data_limite_analise_tecnica" value={form.data_limite_analise_tecnica} onChange={set} type="datetime-local" />
             </div>
           </div>

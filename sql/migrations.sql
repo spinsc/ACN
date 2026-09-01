@@ -1227,3 +1227,26 @@ ALTER TABLE cotacoes_precos_log DISABLE ROW LEVEL SECURITY;
 -- apoio correto. Novas OPs/OSs continuam sendo semeadas normalmente pelo
 -- fluxo de "👥 Equipe" em ProducaoTab.tsx — este backfill cobre só o
 -- histórico existente até a data do pedido.
+
+-- Pedido do usuário (aba Licitações): recolher a Agenda (mesmo sistema
+-- .sec-card/.sec-hdr usado no resto do app — ver DashboardTab.tsx, listener
+-- global de clique que colapsa qualquer .sec-hdr), abrir por padrão nos
+-- compromissos da semana + filtro de período (Hoje/Semana/Mês/Todos),
+-- agenda pública do setor "licitacoes" (todos veem os compromissos de
+-- todos, cada um só conclui/exclui os próprios — AgendaWidget.tsx), campo
+-- "Horário da Sessão" removido do formulário (não era usado em nenhum
+-- outro lugar do app; Data/Hora de Disputa já é datetime-local e cobre a
+-- hora), botão de inserir tabela editável na toolbar da Área Livre
+-- (LicitacoesTab.tsx, mesmo <table> contentEditable que já funcionava
+-- para tabelas coladas do Excel/Word).
+--
+-- Nenhuma migração de schema nova. A coluna `licitacoes.horario_sessao`
+-- fica no banco sem uso (não foi dropada, pra não arriscar quebrar nada
+-- que ainda não tenha sido migrado) — pode ser removida numa limpeza
+-- futura se confirmado que não há mais leitura dela em lugar nenhum.
+-- Testado ao vivo: colapsar/expandir a Agenda, filtro de período
+-- (semana é o padrão ao abrir), agenda pública mostrando compromisso de
+-- outro usuário sem botões de concluir/excluir, "Horário da Sessão"
+-- ausente do formulário de nova licitação, tabela inserida e removida
+-- de teste na Área Livre "andamento" da PE 90007.2025 (dado real,
+-- limpo imediatamente após o teste, confirmado via SQL).
