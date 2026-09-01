@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
+import { horasUteis } from './utils/horasUteis';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -127,7 +128,7 @@ export default function QualidadeTab({ currentUser }) {
       }).eq('id', row.id);
     } else {
       const iniciosCq = row.data_entrada_cq ? new Date(row.data_entrada_cq) : null;
-      const tempoCq = iniciosCq ? (new Date() - iniciosCq) / 3600000 : null;
+      const tempoCq = iniciosCq ? horasUteis(iniciosCq, new Date()) : null;
       await supabase.from('oples').update({
         status_geral: 'Aprovado CQ - Aguardando Liberacao Comercial',
         data_cq: agora,

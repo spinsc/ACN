@@ -1090,3 +1090,41 @@ ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS permissoes_rh text[] DEFAULT 
 -- "Dashboard" e "💰 Comissões"; a tela mostra só o painel de comissões,
 -- cálculo bate igual ao de um usuário com RH completo. Usuário de teste
 -- removido depois.
+
+-- 2026-08-31 · KPIs de tempo decorrido — horário comercial (Seg-Sex 8h-17:45)
+-- Sem alteração de schema (nenhuma coluna nova). Documentando aqui só porque
+-- os dados HISTÓRICOS de tempo_X_horas foram recalculados via UPDATE em
+-- massa (ver abaixo) -- não é uma migração de estrutura, mas mexeu em dados.
+--
+-- Causa: EngenhariaTab/PCPTab/ProducaoTab/FiscalTab/QualidadeTab calculavam
+-- "tempo_X_horas" com (new Date() - inicio)/3600000 -- diferença de calendário
+-- crua, sem pausar fora do expediente (noites/fins de semana contavam como
+-- tempo de produção/análise/etc.). Outras telas (Chicotes/Serralheria/
+-- Laboratório/Compras/Almoxarifado/Telecom, via SetorDemandaTab.tsx +
+-- AcnTabShared.tsx) já pausavam corretamente, só com o limite errado
+-- (17:30 em vez de 17:45).
+--
+-- Fix de código: nova função compartilhada src/utils/horasUteis.ts (Seg-Sex
+-- 08:00–17:45), usada agora em EngenhariaTab/PCPTab/ProducaoTab/FiscalTab/
+-- QualidadeTab (que antes não pausavam) e reaproveitada por
+-- SetorDemandaTab.tsx/AcnTabShared.tsx (que corrige o limite 17:30→17:45).
+--
+-- Recalculo retroativo dos tempos já gravados (usando as datas de início/fim
+-- de cada etapa ainda salvas no registro), via função temporária
+-- horas_uteis_calc() no banco (criada, usada em 6 UPDATEs, e removida
+-- depois -- não faz parte do schema permanente):
+--   oples.tempo_engenharia_horas  ← horas_uteis(data_inicio_engenharia, data_liberacao_bom)   -- 158 registros
+--   oples.tempo_pcp_horas         ← horas_uteis(data_liberacao_bom, data_liberacao_pcp)         -- 158 registros
+--   oples.tempo_producao_horas    ← horas_uteis(data_inicio_producao, data_conclusao_producao)  -- 98 registros
+--   oples.tempo_qualidade_horas   ← horas_uteis(data_entrada_cq, data_cq)                        -- 97 registros
+--   oples.tempo_fiscal_horas      ← horas_uteis(data_liberacao_comercial, data_emissao_nf)        -- 2 registros
+--   sac_ordens_servico.tempo_fiscal_horas    ← horas_uteis(data_cq, data_emissao_nf)               -- 0 registros (nenhum ainda)
+--   sac_ordens_servico.kpi_execucao_horas    ← horas_uteis(data_inicio_manutencao, data_conclusao_manutencao) -- 0 registros (nenhum ainda)
+-- A função SQL foi verificada contra o algoritmo JS (mesmos resultados até
+-- a 10ª casa decimal, timezone America/Sao_Paulo) antes de rodar os UPDATEs.
+--
+-- tempo_retrabalho_horas (oples) e tempo_execucao_horas histórico de
+-- demandas_setoriais (limite 17:30→17:45) NÃO foram recalculados
+-- retroativamente: o primeiro não tem coluna de "fim" preservada por
+-- registro; o segundo já pausava corretamente antes, a diferença é só
+-- 15min/dia — impacto marginal, fica pra um follow-up se algum dia importar.

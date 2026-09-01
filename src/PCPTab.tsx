@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
+import { horasUteis } from './utils/horasUteis';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -68,7 +69,7 @@ export default function PCPTab({ currentUser }) {
   const liberarProducao = async (opl) => {
     const agora = new Date().toISOString();
     const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
-    const tempoPcp = inicioPcp ? (new Date() - inicioPcp) / 3600000 : null;
+    const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
     await supabase.from('oples').update({
       status_geral: 'Aguardando Inicio Producao',
       data_liberacao_pcp: agora,
@@ -191,7 +192,7 @@ export default function PCPTab({ currentUser }) {
     try {
       for (const opl of pendentes) {
         const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
-        const tempoPcp = inicioPcp ? (new Date() - inicioPcp) / 3600000 : null;
+        const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
         await supabase.from('oples').update({
           status_geral: 'Aguardando Inicio Producao',
           data_liberacao_pcp: agora,

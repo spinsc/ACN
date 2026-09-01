@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
+import { horasUteis } from './utils/horasUteis';
 
 const semDado = (v) => !v || !String(v).trim();
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -89,7 +90,7 @@ export default function FiscalTab({ currentUser }) {
     const jaFaturadasPorOutro = [];
     for (const o of itens) {
       const inicioFiscal = o.data_liberacao_comercial ? new Date(o.data_liberacao_comercial) : null;
-      const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
+      const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
       const { data: upd } = await supabase.from('oples').update({
         status_geral: 'Faturado e Disponivel para Entrega',
         numero_nf: nf,
@@ -127,7 +128,7 @@ export default function FiscalTab({ currentUser }) {
     setFaturandoId(opl.id);
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
-    const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
+    const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
     const { data: upd } = await supabase.from('oples').update({
       status_geral: 'Faturado e Disponivel para Entrega',
       numero_nf: nf.trim(),
@@ -158,7 +159,7 @@ export default function FiscalTab({ currentUser }) {
     if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
     const agora = new Date().toISOString();
     const inicioFiscal = os.data_cq ? new Date(os.data_cq) : null;
-    const tempoFiscal = inicioFiscal ? (new Date() - inicioFiscal) / 3600000 : null;
+    const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
     await supabase.from('sac_ordens_servico').update({
       status: 'Faturada - Aguardando Entrega',
       numero_nf: nf.trim(),

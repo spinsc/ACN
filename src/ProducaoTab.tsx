@@ -8,6 +8,7 @@ import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
+import { horasUteis } from './utils/horasUteis';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -637,7 +638,7 @@ function PainelSacVeicular({ currentUser }) {
     const os = modalConcluirManu;
     const agora = new Date().toISOString();
     const kpi = os.data_inicio_manutencao
-      ? Number(((new Date().getTime()-new Date(os.data_inicio_manutencao).getTime())/3600000).toFixed(2))
+      ? Number(horasUteis(os.data_inicio_manutencao, new Date()).toFixed(2))
       : null;
     const novoTotal = concluirManuForm.itens_usados.reduce((s:number,i:any)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
     const totalAprovado = Number(os.valor_orcamento) || 0;
@@ -2230,7 +2231,7 @@ export default function ProducaoTab({ currentUser }) {
   const liberarChecklist = async (opl) => {
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_producao ? new Date(opl.data_inicio_producao) : null;
-    const tempo = inicio ? (new Date() - inicio) / 3600000 : null;
+    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
     await supabase.from('oples').update({
       status_geral: 'Aguardando CQ',
       data_conclusao_producao: agora,
@@ -2265,7 +2266,7 @@ export default function ProducaoTab({ currentUser }) {
   const concluirRetrabalho = async (opl) => {
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_retrabalho ? new Date(opl.data_inicio_retrabalho) : null;
-    const tempo = inicio ? (new Date() - inicio) / 3600000 : null;
+    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
     await supabase.from('oples').update({
       status_geral: 'Aguardando CQ',
       tempo_retrabalho_horas: tempo,

@@ -5,6 +5,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
+import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -816,42 +817,18 @@ export function DemandaFooter({ setor }: { setor: string }) {
 }
 
 // ─── Utilitários de horário comercial ────────────────────────────────────────
-// Seg-Sex 08:00–17:30. Retorna segundos úteis decorridos desde `startISO`.
-// Se `pausadoSince` informado, para de contar naquele instante.
-// Subtrai `segundosPausados` acumulados.
+// Seg-Sex 08:00–17:45 (ver src/utils/horasUteis.ts — fonte única desse cálculo
+// no sistema todo). Retorna segundos úteis decorridos desde `startISO`. Se
+// `pausadoSince` informado, para de contar naquele instante. Subtrai
+// `segundosPausados` acumulados.
 function bhElapsed(
   startISO: string,
   segundosPausados: number = 0,
   pausadoSince: string | null = null,
 ): number {
-  const start = new Date(startISO);
-  const end   = pausadoSince ? new Date(pausadoSince) : new Date();
-  if (end <= start) return 0;
-
-  let total = 0;
-  let cur   = new Date(start.getTime());
-
-  while (cur < end) {
-    const dow = cur.getDay(); // 0=Dom, 6=Sab
-    // Fim-de-semana: pula para segunda 08:00
-    if (dow === 0 || dow === 6) {
-      const daysAhead = dow === 0 ? 1 : 2;
-      cur.setDate(cur.getDate() + daysAhead);
-      cur.setHours(8, 0, 0, 0);
-      continue;
-    }
-    const bhStart = new Date(cur); bhStart.setHours(8,  0, 0, 0);
-    const bhEnd   = new Date(cur); bhEnd.setHours(17, 30, 0, 0);
-
-    if (cur < bhStart) { cur.setHours(8, 0, 0, 0); continue; }
-    if (cur >= bhEnd)  { cur.setDate(cur.getDate() + 1); cur.setHours(8, 0, 0, 0); continue; }
-
-    const segEnd = new Date(Math.min(end.getTime(), bhEnd.getTime()));
-    total += (segEnd.getTime() - cur.getTime()) / 1000;
-    cur    = new Date(segEnd.getTime());
-    if (cur >= bhEnd && cur < end) { cur.setDate(cur.getDate() + 1); cur.setHours(8, 0, 0, 0); }
-  }
-  return Math.max(0, Math.floor(total) - segundosPausados);
+  const fim = pausadoSince ? new Date(pausadoSince) : new Date();
+  const totalSeg = Math.floor(horasUteis(startISO, fim) * 3600);
+  return Math.max(0, totalSeg - segundosPausados);
 }
 
 function fmtHMS(sec: number): string {
@@ -862,12 +839,7 @@ function fmtHMS(sec: number): string {
 }
 
 function dentroHorarioComercial(): boolean {
-  const now = new Date();
-  const dow = now.getDay();
-  if (dow === 0 || dow === 6) return false;
-  const h = now.getHours(), mn = now.getMinutes();
-  const mins = h * 60 + mn;
-  return mins >= 8 * 60 && mins < 17 * 60 + 30;
+  return dentroDoExpediente();
 }
 
 export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string; cor?: string; currentUser: any }) {

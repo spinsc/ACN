@@ -7,28 +7,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import Linkify from './Linkify';
 import { ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { notificarEvento } from './whatsappHelper';
-
-// ─── Horas Úteis (Seg-Sex 8:00–17:30) ────────────────────────────────────────
-function horasUteis(inicio, fim) {
-  if (!inicio || !fim) return 0;
-  const start = new Date(inicio);
-  const end   = new Date(fim);
-  if (end <= start) return 0;
-  let total = 0;
-  const d = new Date(start); d.setHours(0, 0, 0, 0);
-  while (d < end) {
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) {
-      const dI = new Date(d); dI.setHours(8, 0, 0, 0);
-      const dF = new Date(d); dF.setHours(17, 30, 0, 0);
-      const eI = new Date(Math.max(start.getTime(), dI.getTime()));
-      const eF = new Date(Math.min(end.getTime(),   dF.getTime()));
-      if (eF > eI) total += (eF.getTime() - eI.getTime()) / 3600000;
-    }
-    d.setDate(d.getDate() + 1);
-  }
-  return total;
-}
+import { horasUteis } from './utils/horasUteis';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));

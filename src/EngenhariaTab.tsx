@@ -10,6 +10,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
 import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
 import HorasTarefasTab from './HorasTarefasTab';
+import { horasUteis } from './utils/horasUteis';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -124,7 +125,7 @@ export default function EngenhariaTab({ currentUser }) {
     const opl = modalBom;
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
-    const tempo = inicio ? (new Date() - inicio) / 3600000 : null;
+    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
     await supabase.from('oples').update({
       status_geral: 'Em Espera PCP',
       status_bom: 'BOM Liberado',
@@ -231,7 +232,7 @@ export default function EngenhariaTab({ currentUser }) {
     try {
       for (const opl of selecionados) {
         const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
-        const tempo = inicio ? (new Date() - inicio) / 3600000 : 0;
+        const tempo = inicio ? horasUteis(inicio, new Date()) : 0;
         await supabase.from('oples').update({
           status_geral: 'Em Espera PCP',
           status_bom: 'BOM Liberado',
@@ -349,11 +350,11 @@ export default function EngenhariaTab({ currentUser }) {
                   const renderLinhaOpl = (o) => {
                     const emAndamento = o.status_geral === 'Em Analise Engenharia';
                     const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
-                    const tempo = inicio ? ((new Date() - inicio) / 3600000) : null;
+                    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
                     const envioDireto = isEnvioDireto(o);
                     const emEspera = o.status_geral === 'Em Espera Engenharia';
                     const horasSemIniciar = emEspera && !o.data_inicio_engenharia && o.data_entrada
-                      ? (new Date().getTime() - new Date(o.data_entrada).getTime()) / 3600000
+                      ? horasUteis(o.data_entrada, new Date())
                       : 0;
                     const kpi48h = emEspera && horasSemIniciar > 48;
                     const rowStyle = kpi48h
