@@ -1128,3 +1128,34 @@ ALTER TABLE auth_usuarios ADD COLUMN IF NOT EXISTS permissoes_rh text[] DEFAULT 
 -- retroativamente: o primeiro não tem coluna de "fim" preservada por
 -- registro; o segundo já pausava corretamente antes, a diferença é só
 -- 15min/dia — impacto marginal, fica pra um follow-up se algum dia importar.
+
+-- 2026-09-01 · Botão de pausa manual (Engenharia em análise + Produção/Retrabalho)
+ALTER TABLE oples ADD COLUMN IF NOT EXISTS pausado boolean DEFAULT false;
+ALTER TABLE oples ADD COLUMN IF NOT EXISTS data_pausa timestamptz;
+ALTER TABLE oples ADD COLUMN IF NOT EXISTS tempo_pausado_horas numeric DEFAULT 0;
+COMMENT ON COLUMN oples.pausado IS 'Pausa manual da etapa ativa (Engenharia em análise, Produção, ou Retrabalho -- só uma por vez). Resetado a false no início/fim de cada etapa.';
+COMMENT ON COLUMN oples.data_pausa IS 'Instante em que a pausa manual atual começou (null se não pausado).';
+COMMENT ON COLUMN oples.tempo_pausado_horas IS 'Soma das horas úteis já pausadas manualmente na etapa ativa -- subtraída do tempo_X_horas final ao concluir a etapa.';
+--
+-- Pedido do usuário ("botão de pausa nas tarefas depois de inicializadas,
+-- sumiu... na verdade em todas as abas que tem hoje iniciar e concluir que
+-- conta tempo precisamos do botao de pausar"). Investigado: Produção/
+-- Adaptação nunca teve botão de pausa (cronômetro cru, sempre correndo,
+-- sem opção de pausar) -- era o mesmo bug de fundo já corrigido no cálculo
+-- final (2026-08-31), só que sem UI de pausa manual nem exclusão ao vivo.
+-- PCP/Fiscal/Qualidade não têm "Iniciar" manual (entram na fila
+-- automaticamente), então ficaram fora do escopo por não se encaixarem no
+-- padrão "Iniciar → Concluir" que o usuário descreveu.
+--
+-- Novo src/PausaWidget.tsx: hook useTempoUtil() (cronômetro em horas úteis,
+-- já descontando pausa manual — "fora do expediente" já vem de graça, já
+-- que horasUteis() não soma essas horas) + <BotaoPausar>/<BadgeForaExpediente>
+-- + helpers pausarOpl()/retomarOpl(). Usado em EngenhariaTab.tsx (Em Analise
+-- Engenharia) e ProducaoTab.tsx (Em Producao + Em Retrabalho) -- todos os
+-- pontos de conclusão (liberarBOM, liberarBomLote, liberarChecklist,
+-- concluirRetrabalho) já subtraem tempo_pausado_horas do tempo final e
+-- resetam pausado/data_pausa/tempo_pausado_horas pra próxima etapa.
+-- Testado ao vivo em ambas as telas: pausar mostra "⏸ HH:MM:SS" e troca
+-- pro botão "▶ Retomar"; retomar acumula tempo_pausado_horas corretamente
+-- e limpa pausado/data_pausa. Dados de teste revertidos (tempo_pausado_horas
+-- de volta a 0 nos 2 registros reais usados no teste).

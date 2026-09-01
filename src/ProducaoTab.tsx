@@ -9,6 +9,7 @@ import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
+import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -20,29 +21,17 @@ const semDado = (v) => !v || !String(v).trim();
 // Veicular para não divergir quando o fluxo mudar de novo.
 const STATUSES_VEICULAR_ATIVAS = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
 
-function useTimer(start) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (!start) return;
-    const update = () => setElapsed(Math.floor((Date.now() - new Date(start).getTime()) / 1000));
-    update();
-    const t = setInterval(update, 1000);
-    return () => clearInterval(t);
-  }, [start]);
-  const h = Math.floor(elapsed / 3600).toString().padStart(2, '0');
-  const m = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
-  const s = (elapsed % 60).toString().padStart(2, '0');
-  return `${h}:${m}:${s}`;
-}
-
 function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
   const emProd       = o.status_geral === 'Em Producao';
   const aguardando   = o.status_geral === 'Aguardando Inicio Producao';
   const retrabalho   = o.status_geral === 'Retrabalho';
   const emRetrab     = o.status_geral === 'Em Retrabalho';
 
-  const timerProd  = useTimer(emProd    ? o.data_inicio_producao    : null);
-  const timerRetrab = useTimer(emRetrab ? o.data_inicio_retrabalho  : null);
+  // Cronômetro em horas úteis (Seg-Sex 8h-17:45) -- já desconta pausa manual
+  // (o.pausado/data_pausa/tempo_pausado_horas) e some fora do expediente sem
+  // precisar de nenhum código especial (horasUteis não soma essas horas).
+  const timerProd   = useTempoUtil(emProd   ? o.data_inicio_producao   : null, o.pausado, o.data_pausa, o.tempo_pausado_horas).texto;
+  const timerRetrab = useTempoUtil(emRetrab ? o.data_inicio_retrabalho : null, o.pausado, o.data_pausa, o.tempo_pausado_horas).texto;
 
   const rowStyle = retrabalho || emRetrab
     ? { background: '#fef2f2', borderLeft: '4px solid #ef4444' }
@@ -85,8 +74,22 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
           }
         </td>
         <td>
-          {emProd   && <span style={{fontFamily:'monospace',color:'#2563eb',fontWeight:700,fontSize:12}}>{timerProd}</span>}
-          {emRetrab && <span style={{fontFamily:'monospace',color:'#dc2626',fontWeight:700,fontSize:12}}>{timerRetrab}</span>}
+          {emProd && (
+            <div>
+              <span style={{fontFamily:'monospace',color: o.pausado?'#f59e0b':'#2563eb',fontWeight:700,fontSize:12}}>
+                {o.pausado && '⏸ '}{timerProd}
+              </span>
+              <div><BadgeForaExpediente /></div>
+            </div>
+          )}
+          {emRetrab && (
+            <div>
+              <span style={{fontFamily:'monospace',color: o.pausado?'#f59e0b':'#dc2626',fontWeight:700,fontSize:12}}>
+                {o.pausado && '⏸ '}{timerRetrab}
+              </span>
+              <div><BadgeForaExpediente /></div>
+            </div>
+          )}
           {(aguardando || retrabalho) && '—'}
         </td>
         <td>
@@ -104,6 +107,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
             )}
             {emProd && (
               <>
+                <BotaoPausar pausado={o.pausado} onPausar={()=>onAction('pausar',o)} onRetomar={()=>onAction('retomar',o)} />
                 <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>onAction('checklist',o)}>LIB. CQ</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
                 <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
@@ -112,6 +116,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
             )}
             {emRetrab && (
               <>
+                <BotaoPausar pausado={o.pausado} onPausar={()=>onAction('pausar',o)} onRetomar={()=>onAction('retomar',o)} />
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
                 <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
               </>
@@ -2057,7 +2062,8 @@ export default function ProducaoTab({ currentUser }) {
   const iniciarProducao = async () => {
     const opl = modalIniciar;
     const agora = new Date().toISOString();
-    let upd: any = { status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: modoExecucao };
+    let upd: any = { status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: modoExecucao,
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0 };
     let logResp = '';
 
     if (modoExecucao === 'individual') {
@@ -2116,7 +2122,8 @@ export default function ProducaoTab({ currentUser }) {
     setAplicandoIniciarLote(true);
     const agora = new Date().toISOString();
     for (const opl of alvos) {
-      await supabase.from('oples').update({ status_geral: 'Em Producao', data_inicio_producao: agora }).eq('id', opl.id);
+      await supabase.from('oples').update({ status_geral: 'Em Producao', data_inicio_producao: agora,
+        pausado: false, data_pausa: null, tempo_pausado_horas: 0 }).eq('id', opl.id);
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
         evento: 'Início da produção em lote (ação em massa por seleção) — responsável a definir.',
@@ -2231,12 +2238,13 @@ export default function ProducaoTab({ currentUser }) {
   const liberarChecklist = async (opl) => {
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_producao ? new Date(opl.data_inicio_producao) : null;
-    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
+    const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
     await supabase.from('oples').update({
       status_geral: 'Aguardando CQ',
       data_conclusao_producao: agora,
       data_entrada_cq: agora,
       tempo_producao_horas: tempo,
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
@@ -2253,6 +2261,7 @@ export default function ProducaoTab({ currentUser }) {
     await supabase.from('oples').update({
       status_geral: 'Em Retrabalho',
       data_inicio_retrabalho: agora,
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
@@ -2266,11 +2275,12 @@ export default function ProducaoTab({ currentUser }) {
   const concluirRetrabalho = async (opl) => {
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_retrabalho ? new Date(opl.data_inicio_retrabalho) : null;
-    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
+    const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
     await supabase.from('oples').update({
       status_geral: 'Aguardando CQ',
       tempo_retrabalho_horas: tempo,
       obs_reprovacao_cq: null,
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
@@ -2303,6 +2313,8 @@ export default function ProducaoTab({ currentUser }) {
       setModoExecucao('individual'); setRespNome2(''); setRespId2(null); setEquipeSel(null);
     }
     if (tipo === 'checklist')          liberarChecklist(opl);
+    if (tipo === 'pausar')             pausarOpl(supabase, opl).then(fetchAll);
+    if (tipo === 'retomar')            retomarOpl(supabase, opl).then(fetchAll);
     if (tipo === 'devolver')           { setModalDevolver(opl); setObsDevolver(''); }
     if (tipo === 'ver')                setModalVerOpl(opl);
     if (tipo === 'acomp')              setModalAcomp(opl);

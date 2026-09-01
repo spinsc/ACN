@@ -11,6 +11,7 @@ import AgendaWidget from './AgendaWidget';
 import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './DesenvolvimentoPecasTab';
 import HorasTarefasTab from './HorasTarefasTab';
 import { horasUteis } from './utils/horasUteis';
+import { BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -98,6 +99,7 @@ export default function EngenhariaTab({ currentUser }) {
       status_geral: 'Em Analise Engenharia',
       responsavel_engenharia: responsavelEng,
       data_inicio_engenharia: agora,
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
@@ -125,13 +127,14 @@ export default function EngenhariaTab({ currentUser }) {
     const opl = modalBom;
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
-    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
+    const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
     await supabase.from('oples').update({
       status_geral: 'Em Espera PCP',
       status_bom: 'BOM Liberado',
       obs_liberacao_bom: obsBom,
       data_liberacao_bom: agora,
       tempo_engenharia_horas: tempo,
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
@@ -232,7 +235,7 @@ export default function EngenhariaTab({ currentUser }) {
     try {
       for (const opl of selecionados) {
         const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
-        const tempo = inicio ? horasUteis(inicio, new Date()) : 0;
+        const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : 0;
         await supabase.from('oples').update({
           status_geral: 'Em Espera PCP',
           status_bom: 'BOM Liberado',
@@ -241,6 +244,7 @@ export default function EngenhariaTab({ currentUser }) {
           tempo_engenharia_horas: tempo,
           responsavel_engenharia: opl.responsavel_engenharia || currentUser?.nome,
           data_inicio_engenharia: opl.data_inicio_engenharia || agora,
+          pausado: false, data_pausa: null, tempo_pausado_horas: 0,
         }).eq('id', opl.id);
       }
       await supabase.from('logs_movimentacao_opl').insert(selecionados.map(opl => ({
@@ -350,7 +354,7 @@ export default function EngenhariaTab({ currentUser }) {
                   const renderLinhaOpl = (o) => {
                     const emAndamento = o.status_geral === 'Em Analise Engenharia';
                     const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
-                    const tempo = inicio ? horasUteis(inicio, new Date()) : null;
+                    const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(o.tempo_pausado_horas) || 0)) : null;
                     const envioDireto = isEnvioDireto(o);
                     const emEspera = o.status_geral === 'Em Espera Engenharia';
                     const horasSemIniciar = emEspera && !o.data_inicio_engenharia && o.data_entrada
@@ -402,7 +406,17 @@ export default function EngenhariaTab({ currentUser }) {
                         </td>
                         <td>{o.responsavel_engenharia || '—'}</td>
                         <td>{fmtDt(o.data_inicio_engenharia)}</td>
-                        <td>{emAndamento && tempo ? fmtH(tempo) : '—'}</td>
+                        <td>
+                          {emAndamento && tempo != null && (
+                            <div>
+                              <span style={{color: o.pausado ? '#f59e0b' : undefined, fontWeight: o.pausado ? 700 : undefined}}>
+                                {o.pausado && '⏸ '}{fmtH(tempo)}
+                              </span>
+                              <div><BadgeForaExpediente /></div>
+                            </div>
+                          )}
+                          {!(emAndamento && tempo != null) && '—'}
+                        </td>
                         <td>
                           <div style={{display:'flex',gap:4}}>
                             <OplAnexosWidget opl={o} setor="Engenharia" currentUser={currentUser} tipoFixo="proposta" compact={true} />
@@ -418,6 +432,9 @@ export default function EngenhariaTab({ currentUser }) {
                             )}
                             {emAndamento && (
                               <>
+                                <BotaoPausar pausado={o.pausado}
+                                  onPausar={()=>pausarOpl(supabase,o).then(fetchAll)}
+                                  onRetomar={()=>retomarOpl(supabase,o).then(fetchAll)} />
                                 <button className="acn-btn" style={{background:'#475569'}} onClick={()=>{setModalObs(o);setNovaObs('');}}>
                                   OBS
                                 </button>

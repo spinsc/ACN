@@ -729,7 +729,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
 
             {/* Legenda horas úteis */}
             <div style={{background:'#f0fdf4',borderBottom:'1px solid #bbf7d0',padding:'4px 12px',fontSize:9,color:'#166534',display:'flex',alignItems:'center',gap:8}}>
-              <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:30) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
+              <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:45) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
             </div>
 
             <div className="sec-body" style={{overflowX:'auto',padding:0}}>

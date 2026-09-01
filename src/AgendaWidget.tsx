@@ -305,7 +305,15 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
           Nenhum compromisso agendado
         </div>
       ) : (
-        <div>
+        // maxHeight + scroll próprio -- sem isso, no modo "Todos" (até 50
+        // compromissos de todo mundo) a lista crescia sem limite e "engolia"
+        // a página: como o container pai é flex:1/overflowY:auto (ver
+        // LicitacoesTab.tsx e outras telas que usam este widget), um filho
+        // sem min-height/max-height não encolhe (é o comportamento padrão
+        // de flex-item), então o resto da página ficava espremido/sem
+        // conseguir rolar até o fim. Com isso, o próprio card da Agenda
+        // rola internamente e o layout ao redor fica estável.
+        <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 2 }}>
           {compromissos.map(c => (
             <CompromissoCard key={c.id} item={c} onConcluir={concluir} onExcluir={excluir} />
           ))}
