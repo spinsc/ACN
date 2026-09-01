@@ -1211,3 +1211,19 @@ ALTER TABLE cotacoes_precos_log DISABLE ROW LEVEL SECURITY;
 -- entradas no log; "Registrar Nova Versão Final" cria v2 com
 -- versao_raiz_id=v1.id; "Marcar Vencedora" grava e aparece no histórico.
 -- Dados de teste removidos (cascade apagou os logs junto).
+
+-- Backfill de dados (não é DDL, documentado aqui por rastreabilidade):
+-- pedido do usuário para que os auxiliares de produção recebam comissão
+-- de apoio (0,1% fixo sobre valor_mão_de_obra, ver ComissoesTecnicosStandalone
+-- em RHTab.tsx) em toda OP/OS onde o respectivo "head-liner" já aparece
+-- como responsável principal em `responsaveis_producao`. Duplas
+-- confirmadas com o usuário: TIAGO ↔ CELIO, JUNIOR ↔ NATAN ESPINDOLA,
+-- JONATAN ↔ RONALD. Executado em 2026-08-30 via INSERT em
+-- `responsaveis_producao` (papel='apoio', adicionado_por_nome=
+-- 'Backfill auxiliares 2026-08-30 (via Claude, confirmado pelo usuário)')
+-- para cada referencia_id onde o head já era responsável principal e
+-- ainda não havia apoio cadastrado. Cobertura confirmada em 2026-09-01:
+-- 21/21 OPs/OSs do Tiago, 14/14 do Junior, 16/16 do Jonatan já têm o
+-- apoio correto. Novas OPs/OSs continuam sendo semeadas normalmente pelo
+-- fluxo de "👥 Equipe" em ProducaoTab.tsx — este backfill cobre só o
+-- histórico existente até a data do pedido.
