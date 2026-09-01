@@ -1142,6 +1142,26 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   const [finalizando, setFinalizando]       = useState(false);
   const [editandoId, setEditandoId]         = useState(null); // id da cotação em edição
 
+  // ── Versionamento / log de alterações pós-finalização ──────────────────────
+  // statusCotacao/versaoAtual/etc refletem a linha carregada em editandoId.
+  // Enquanto 'rascunho', edição é livre (sem log). A partir de 'finalizada',
+  // remoção de item / alteração de custo / markup gera entrada em
+  // cotacoes_precos_log automaticamente.
+  const [statusCotacao, setStatusCotacao]       = useState('rascunho');
+  const [versaoAtual, setVersaoAtual]           = useState(1);
+  const [versaoRaizId, setVersaoRaizId]         = useState(null); // id da 1ª versão do grupo (null = esta linha É a raiz)
+  const [finalizadaPorNome, setFinalizadaPorNome] = useState(null);
+  const [finalizadaEm, setFinalizadaEm]         = useState(null);
+  const [vencedoraAtual, setVencedoraAtual]     = useState(false);
+  const [modalSenha, setModalSenha]             = useState(false); // confirmação de senha pra "Registrar Versão Final"
+  const [senhaConfirm, setSenhaConfirm]         = useState('');
+  const [erroSenha, setErroSenha]               = useState('');
+  const [registrandoVersao, setRegistrandoVersao] = useState(false);
+  const [modalHistorico, setModalHistorico]     = useState(false);
+  const [historicoLogs, setHistoricoLogs]       = useState<any[]>([]);
+  const [historicoVersoes, setHistoricoVersoes] = useState<any[]>([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+
   // ── Formações já vinculadas a este processo (modo embutido) ──
   const [formacoesVinculo, setFormacoesVinculo]     = useState<any[]>([]);
   const [carregandoVinculo, setCarregandoVinculo]   = useState(!!vinculo);
@@ -1266,8 +1286,39 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     imposto_pct:    params.imposto_pct,
     custo_fixo_pct: params.custo_fixo_pct,
   }]);
-  const remItem  = (id) => setItens(p => p.filter(x => x._id !== id));
-  const setItem  = (id, k, v) => setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
+  // Grava uma entrada no log de alterações (só chamado quando a cotação já
+  // está 'finalizada' -- rascunho edita livre, sem log).
+  const registrarLog = (tipo: string, descricao: string) => {
+    if (!editandoId) return;
+    supabase.from('cotacoes_precos_log').insert([{
+      cotacao_id: editandoId, tipo, descricao,
+      usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+    }]).then(({ error }) => { if (error) console.error('Erro ao registrar log:', error); });
+  };
+
+  const remItem  = (id) => {
+    if (statusCotacao === 'finalizada') {
+      const item = itens.find(x => x._id === id);
+      if (item) registrarLog('item_removido', `Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);
+    }
+    setItens(p => p.filter(x => x._id !== id));
+  };
+  // Campos que geram log quando alterados pós-finalização, com um rótulo
+  // legível pra descrição do log.
+  const CAMPOS_LOGADOS: Record<string,string> = { custo_unit: 'Custo unitário', markup_pct: 'Markup %' };
+  const setItem  = (id, k, v) => {
+    if (statusCotacao === 'finalizada' && CAMPOS_LOGADOS[k]) {
+      const item = itens.find(x => x._id === id);
+      const antes = item ? item[k] : undefined;
+      if (antes !== undefined && String(antes) !== String(v)) {
+        registrarLog(
+          k === 'custo_unit' ? 'custo_alterado' : 'markup_alterado',
+          `${CAMPOS_LOGADOS[k]} de "${item?.produto || 'item'}": ${antes} → ${v}`,
+        );
+      }
+    }
+    setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
+  };
 
   // Preenche múltiplos campos de uma só vez (ao selecionar do catálogo)
   const fillItem = (id, dados) => setItens(p => p.map(x => x._id === id ? { ...x, ...dados } : x));
@@ -1353,6 +1404,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     }
     // Restaurar campos novos
     setDescontoMax(Number(m.desconto_maximo_pct) || 0);
+    setStatusCotacao(m.status || 'rascunho');
+    setVersaoAtual(m.versao || 1);
+    setVersaoRaizId(m.versao_raiz_id || null);
+    setFinalizadaPorNome(m.finalizada_por_nome || null);
+    setFinalizadaEm(m.finalizada_em || null);
+    setVencedoraAtual(!!m.vencedora);
     if (m.opl_numero) {
       // Busca o objeto completo da OP para vincular
       supabase.from('oples').select('id, opl, cliente_nome, status_geral')
@@ -1380,6 +1437,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     setOplVinculada(null);
     setDescontoMax(0);
     setEditandoId(null);
+    setStatusCotacao('rascunho');
+    setVersaoAtual(1);
+    setVersaoRaizId(null);
+    setFinalizadaPorNome(null);
+    setFinalizadaEm(null);
+    setVencedoraAtual(false);
   };
 
   // Carrega cotação para edição e muda para a aba de formação
@@ -1540,6 +1603,134 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     }
   };
 
+  // ── Registrar como Versão Final (senha + rastreabilidade) ──────────────────
+  // 1ª vez: marca a própria linha como 'finalizada' (versão 1). Da 2ª em
+  // diante (já finalizada, usuário editou de novo depois): cria uma NOVA
+  // linha em cotacoes_precos como próxima versão, preservando a anterior
+  // intacta pra histórico -- e passa a editar a nova.
+  const confirmarSenhaERegistrar = async () => {
+    if (!senhaConfirm.trim()) { setErroSenha('Informe sua senha.'); return; }
+    setRegistrandoVersao(true);
+    setErroSenha('');
+    const { data: user, error: userErr } = await supabase.from('auth_usuarios')
+      .select('senha').eq('id', currentUser?.id).maybeSingle();
+    if (userErr || !user || user.senha !== senhaConfirm) {
+      setErroSenha('Senha incorreta.');
+      setRegistrandoVersao(false);
+      return;
+    }
+    const agora = new Date().toISOString();
+    const payloadBase: any = {
+      nome: nomeCotacao, empresa,
+      plataforma_id: plataformaSelecionada?.id || null,
+      parametros_globais: params,
+      itens: itens.map(({ _id, ...rest }) => rest),
+      opl_id: oplVinculada?.id || null,
+      opl_numero: oplVinculada?.opl || null,
+      desconto_maximo_pct: descontoMaximoPct || 0,
+      status: 'finalizada',
+      finalizada_por: currentUser?.email || null,
+      finalizada_por_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+      finalizada_em: agora,
+    };
+    if (vinculo?.tipo === 'crm')       payloadBase.crm_oportunidade_id = vinculo.id;
+    if (vinculo?.tipo === 'licitacao') payloadBase.licitacao_id        = vinculo.id;
+
+    try {
+      if (statusCotacao !== 'finalizada') {
+        // 1ª finalização — atualiza a própria linha (cria se ainda não existe).
+        let cotacaoId = editandoId;
+        if (cotacaoId) {
+          const { error } = await supabase.from('cotacoes_precos').update({ ...payloadBase, versao: 1 }).eq('id', cotacaoId);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase.from('cotacoes_precos')
+            .insert([{ ...payloadBase, versao: 1, criado_por: currentUser?.nome || 'Sistema' }]).select('id').single();
+          if (error) throw error;
+          cotacaoId = data.id;
+          setEditandoId(cotacaoId);
+        }
+        if (vinculo?.id) {
+          await supabase.from('cotacoes_precos_vinculos')
+            .upsert([{ cotacao_id: cotacaoId, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+        }
+        await supabase.from('cotacoes_precos_log').insert([{
+          cotacao_id: cotacaoId, tipo: 'finalizada',
+          descricao: `Formação de preços registrada como Versão 1 (final).`,
+          usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+        }]);
+        setStatusCotacao('finalizada'); setVersaoAtual(1); setFinalizadaPorNome(payloadBase.finalizada_por_nome); setFinalizadaEm(agora);
+      } else {
+        // Já finalizada antes e foi editada de novo — cria uma NOVA versão,
+        // preservando a linha atual (editandoId) intocada como histórico.
+        const raizId = versaoRaizId || editandoId; // se esta já é a raiz, versaoRaizId é null
+        const { data: irmaos } = await supabase.from('cotacoes_precos')
+          .select('versao').or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
+        const proximaVersao = Math.max(1, ...(irmaos || []).map((r: any) => r.versao || 1)) + 1;
+        const { data, error } = await supabase.from('cotacoes_precos')
+          .insert([{ ...payloadBase, versao: proximaVersao, versao_raiz_id: raizId, criado_por: currentUser?.nome || 'Sistema' }])
+          .select('id').single();
+        if (error) throw error;
+        if (vinculo?.id) {
+          await supabase.from('cotacoes_precos_vinculos')
+            .upsert([{ cotacao_id: data.id, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+        }
+        await supabase.from('cotacoes_precos_log').insert([{
+          cotacao_id: data.id, tipo: 'finalizada',
+          descricao: `Nova versão (v${proximaVersao}) registrada como final.`,
+          usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+        }]);
+        setEditandoId(data.id);
+        setStatusCotacao('finalizada'); setVersaoAtual(proximaVersao); setVersaoRaizId(raizId);
+        setFinalizadaPorNome(payloadBase.finalizada_por_nome); setFinalizadaEm(agora); setVencedoraAtual(false);
+      }
+      setModalSenha(false); setSenhaConfirm(''); setErroSenha('');
+      carregarModelos();
+      alert('✅ Formação de preços registrada como versão final!');
+    } catch (err: any) {
+      alert('Erro ao registrar versão: ' + err.message);
+    } finally {
+      setRegistrandoVersao(false);
+    }
+  };
+
+  // Marca esta versão como a vencedora do pregão/licitação (e desmarca as
+  // demais do mesmo grupo).
+  const marcarVencedora = async () => {
+    if (!editandoId) return;
+    if (!confirm('Marcar esta versão como a VENCEDORA do pregão/licitação?')) return;
+    const raizId = versaoRaizId || editandoId;
+    await supabase.from('cotacoes_precos').update({ vencedora: false }).or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
+    await supabase.from('cotacoes_precos').update({ vencedora: true }).eq('id', editandoId);
+    setVencedoraAtual(true);
+    await supabase.from('cotacoes_precos_log').insert([{
+      cotacao_id: editandoId, tipo: 'vencedora_marcada',
+      descricao: `Versão ${versaoAtual} marcada como vencedora do pregão/licitação.`,
+      usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+    }]);
+    alert('🏆 Versão marcada como vencedora!');
+  };
+
+  // Carrega o histórico completo (versões do grupo + log de alterações de
+  // todas elas) pra exibir no modal.
+  const abrirHistorico = async () => {
+    if (!editandoId) { alert('Salve ou finalize a cotação antes de ver o histórico.'); return; }
+    setCarregandoHistorico(true);
+    setModalHistorico(true);
+    const raizId = versaoRaizId || editandoId;
+    const { data: versoes } = await supabase.from('cotacoes_precos')
+      .select('id,versao,finalizada_por_nome,finalizada_em,vencedora,status')
+      .or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`)
+      .order('versao', { ascending: true });
+    const idsGrupo = (versoes || []).map((v: any) => v.id);
+    const { data: logs } = idsGrupo.length
+      ? await supabase.from('cotacoes_precos_log').select('*').in('cotacao_id', idsGrupo).order('criado_em', { ascending: false })
+      : { data: [] };
+    setHistoricoVersoes(versoes || []);
+    setHistoricoLogs(logs || []);
+    setCarregandoHistorico(false);
+  };
+
   const thStyle = {
     padding: '7px 8px', background: '#1e293b', color: '#fff',
     fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center',
@@ -1617,11 +1808,21 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             <div>
               <div style={{ fontWeight:800, fontSize:16, color:'#1e293b' }}>📊 Formação de Preços</div>
               {nomeCotacao && (
-                <div style={{ fontSize:10, color:'#64748b', marginTop:2, display:'flex', alignItems:'center', gap:6 }}>
+                <div style={{ fontSize:10, color:'#64748b', marginTop:2, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                   {editandoId
                     ? <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>✏️ EDITANDO</span>
                     : null}
                   Modelo: <strong>{nomeCotacao}</strong>
+                  {statusCotacao === 'finalizada' && (
+                    <span style={{ background:'#dcfce7', color:'#166534', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
+                      🔒 Finalizada v{versaoAtual}{finalizadaPorNome ? ` · ${finalizadaPorNome}` : ''}
+                    </span>
+                  )}
+                  {vencedoraAtual && (
+                    <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
+                      🏆 Versão Vencedora
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -1642,6 +1843,23 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
                 onClick={novaQuotacao}>
                 🗒️ Nova Cotação
               </button>
+              {itens.length > 0 && (
+                <button className="acn-btn" style={{ background:'#1e3a5f', fontSize:10 }}
+                  onClick={() => { setSenhaConfirm(''); setErroSenha(''); setModalSenha(true); }}
+                  title="Exige confirmação de senha -- grava seu nome e data como responsável pela versão">
+                  🔒 {statusCotacao === 'finalizada' ? 'Registrar Nova Versão Final' : 'Registrar Versão Final'}
+                </button>
+              )}
+              {editandoId && (
+                <button className="acn-btn" style={{ background:'#0369a1', fontSize:10 }} onClick={abrirHistorico}>
+                  📜 Histórico
+                </button>
+              )}
+              {statusCotacao === 'finalizada' && !vencedoraAtual && (
+                <button className="acn-btn" style={{ background:'#d97706', fontSize:10 }} onClick={marcarVencedora}>
+                  🏆 Marcar Vencedora
+                </button>
+              )}
               {oplVinculada && (
                 <button className="acn-btn"
                   style={{ background: finalizando ? '#94a3b8' : '#dc2626', fontSize:10 }}
@@ -1652,6 +1870,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               )}
             </div>
           </div>
+          {statusCotacao === 'finalizada' && (
+            <div style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'6px 10px', marginBottom:10, fontSize:10, color:'#78350f' }}>
+              ⚠️ Esta formação já foi registrada como final. Alterações de custo, markup ou remoção de item a partir
+              daqui ficam registradas no <strong>Histórico</strong> (📜 acima) para rastreabilidade.
+            </div>
+          )}
 
           {/* ── OP/OS + DESCONTO MÁXIMO ── */}
           <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12,
@@ -1928,6 +2152,100 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               onImportar={importarEVincular}
               onClose={() => setModalImportar(false)}
             />
+          )}
+
+          {modalSenha && (
+            <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalSenha(false); }}>
+              <div className="modal-box" style={{ maxWidth:380 }}>
+                <div className="modal-title">🔒 Confirmar Senha</div>
+                <p style={{ fontSize:11, color:'#64748b', marginBottom:10 }}>
+                  {statusCotacao === 'finalizada'
+                    ? `Isso cria uma nova versão (v${versaoAtual + 1}) registrada em seu nome, mantendo a v${versaoAtual} intacta no histórico.`
+                    : 'Isso registra esta formação como Versão 1 (final), com seu nome e a data/hora gravados para rastreabilidade.'}
+                </p>
+                <label className="acn-label">Sua senha *</label>
+                <input type="password" className="acn-input" style={{ width:'100%', marginBottom:6 }}
+                  value={senhaConfirm} onChange={e => setSenhaConfirm(e.target.value)} autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') confirmarSenhaERegistrar(); }} />
+                {erroSenha && <div style={{ fontSize:10, color:'#dc2626', marginBottom:8 }}>{erroSenha}</div>}
+                <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                  <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} disabled={registrandoVersao} onClick={confirmarSenhaERegistrar}>
+                    {registrandoVersao ? 'Registrando...' : '✅ Confirmar'}
+                  </button>
+                  <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setModalSenha(false)}>Cancelar</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {modalHistorico && (
+            <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalHistorico(false); }}>
+              <div className="modal-box" style={{ maxWidth:640, maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
+                <div className="modal-title">📜 Histórico — {nomeCotacao}</div>
+                {carregandoHistorico ? (
+                  <div style={{ padding:20, textAlign:'center', color:'#94a3b8' }}>Carregando...</div>
+                ) : (
+                  <div style={{ overflowY:'auto', flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', marginBottom:6 }}>Versões</div>
+                    {historicoVersoes.length === 0 ? (
+                      <div style={{ fontSize:10, color:'#94a3b8', marginBottom:14 }}>Nenhuma versão finalizada ainda.</div>
+                    ) : (
+                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, marginBottom:16 }}>
+                        <thead>
+                          <tr style={{ background:'#f8fafc' }}>
+                            <th style={{ padding:'5px 6px', textAlign:'left' }}>Versão</th>
+                            <th style={{ padding:'5px 6px', textAlign:'left' }}>Responsável</th>
+                            <th style={{ padding:'5px 6px', textAlign:'left' }}>Data</th>
+                            <th style={{ padding:'5px 6px', textAlign:'center' }}>Vencedora</th>
+                            <th style={{ padding:'5px 6px' }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historicoVersoes.map((v: any) => (
+                            <tr key={v.id} style={{ borderBottom:'1px solid #f1f5f9', background: v.id === editandoId ? '#eff6ff' : undefined }}>
+                              <td style={{ padding:'5px 6px', fontWeight:700 }}>v{v.versao}{v.id === editandoId ? ' (atual)' : ''}</td>
+                              <td style={{ padding:'5px 6px' }}>{v.finalizada_por_nome || '—'}</td>
+                              <td style={{ padding:'5px 6px' }}>{v.finalizada_em ? new Date(v.finalizada_em).toLocaleString('pt-BR') : '—'}</td>
+                              <td style={{ padding:'5px 6px', textAlign:'center' }}>{v.vencedora ? '🏆' : ''}</td>
+                              <td style={{ padding:'5px 6px', textAlign:'right' }}>
+                                {v.id !== editandoId && (
+                                  <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
+                                    onClick={async () => {
+                                      const { data: full } = await supabase.from('cotacoes_precos').select('*').eq('id', v.id).single();
+                                      if (full) { carregarModelo(full); setEditandoId(full.id); }
+                                      setModalHistorico(false);
+                                    }}>
+                                    Abrir
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', marginBottom:6 }}>Log de Alterações</div>
+                    {historicoLogs.length === 0 ? (
+                      <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhuma alteração registrada.</div>
+                    ) : (
+                      <div>
+                        {historicoLogs.map((l: any) => (
+                          <div key={l.id} style={{ borderBottom:'1px solid #f1f5f9', padding:'6px 2px', fontSize:10 }}>
+                            <div>{l.descricao}</div>
+                            <div style={{ color:'#94a3b8', fontSize:9, marginTop:2 }}>
+                              👤 {l.usuario_nome} · {new Date(l.criado_em).toLocaleString('pt-BR')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div style={{ display:'flex', justifyContent:'flex-end', marginTop:10 }}>
+                  <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => setModalHistorico(false)}>Fechar</button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

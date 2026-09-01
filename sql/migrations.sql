@@ -1159,3 +1159,55 @@ COMMENT ON COLUMN oples.tempo_pausado_horas IS 'Soma das horas úteis já pausad
 -- pro botão "▶ Retomar"; retomar acumula tempo_pausado_horas corretamente
 -- e limpa pausado/data_pausa. Dados de teste revertidos (tempo_pausado_horas
 -- de volta a 0 nos 2 registros reais usados no teste).
+
+-- 2026-09-01 · Formação de Preços — versionamento + log de alterações + senha
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS status text DEFAULT 'rascunho';
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS finalizada_por text;
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS finalizada_por_nome text;
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS finalizada_em timestamptz;
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS versao integer DEFAULT 1;
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS versao_raiz_id uuid REFERENCES cotacoes_precos(id);
+ALTER TABLE cotacoes_precos ADD COLUMN IF NOT EXISTS vencedora boolean DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS cotacoes_precos_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cotacao_id uuid REFERENCES cotacoes_precos(id) ON DELETE CASCADE,
+  tipo text NOT NULL,
+  descricao text NOT NULL,
+  usuario_id uuid,
+  usuario_nome text NOT NULL,
+  criado_em timestamptz DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_cotacoes_precos_log_cotacao ON cotacoes_precos_log(cotacao_id);
+CREATE INDEX IF NOT EXISTS idx_cotacoes_precos_versao_raiz ON cotacoes_precos(versao_raiz_id);
+-- IMPORTANTE: tabelas novas no Supabase nascem com RLS habilitado (sem
+-- nenhuma policy = bloqueia tudo). Todo o resto do app roda com RLS
+-- desabilitado (auth customizada via auth_usuarios, sem sessão real do
+-- Supabase Auth) -- descoberto ao vivo (INSERT silenciosamente bloqueado,
+-- "42501 row violates row-level security policy"), corrigido abaixo.
+ALTER TABLE cotacoes_precos_log DISABLE ROW LEVEL SECURITY;
+
+-- Pedido do usuário: depois de finalizada a 1ª etapa, mudanças de custo/
+-- markup/remoção de item viram log (rastreabilidade); marcar versões e
+-- navegar entre elas; registrar como final exige senha do usuário +
+-- grava o nome de quem autorizou.
+--
+-- Fluxo: "🔒 Registrar Versão Final" (toolbar) abre modal de senha
+-- (confere contra auth_usuarios.senha, mesmo padrão texto-plano do login).
+-- 1ª vez: marca a própria linha (status='finalizada', versao=1,
+-- finalizada_por_nome=usuário, finalizada_em=agora). Da 2ª vez em diante
+-- (já finalizada e editada de novo): cria uma NOVA linha em
+-- cotacoes_precos (versao_raiz_id aponta pra v1), preservando a anterior
+-- intacta -- passa a editar a nova. A partir do momento 'finalizada',
+-- setItem()/remItem() (FormacaoPrecosTab.tsx) gravam automaticamente em
+-- cotacoes_precos_log qualquer alteração de custo_unit/markup_pct/remoção
+-- de item. "🏆 Marcar Vencedora" marca qual versão do grupo venceu o
+-- pregão/licitação (desmarca as demais). "📜 Histórico" lista todas as
+-- versões do grupo (com responsável/data/vencedora, botão pra abrir
+-- qualquer uma) + o log cronológico completo.
+--
+-- Testado ao vivo: senha errada bloqueia corretamente; senha certa
+-- finaliza v1; editar custo (50→75) e remover item pós-finalização geram
+-- entradas no log; "Registrar Nova Versão Final" cria v2 com
+-- versao_raiz_id=v1.id; "Marcar Vencedora" grava e aparece no histórico.
+-- Dados de teste removidos (cascade apagou os logs junto).
