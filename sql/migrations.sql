@@ -1294,3 +1294,19 @@ ALTER TABLE cotacoes_precos_log DISABLE ROW LEVEL SECURITY;
 -- não bug); contadores de Licitações (31 em negociação, 1 perdida)
 -- batem exatamente com a contagem por status no banco (Aberta=18 +
 -- Em Andamento=13 = 31; Perdida=1).
+
+-- Auditoria do "plano grande" de 9 fases (Adaptação/SAC, menções,
+-- reforma completa de Licitações, Centro de Custo): confirmado que
+-- TODAS as 9 fases já estavam implementadas de sessões anteriores,
+-- exceto um item pequeno da Fase 0 — a busca global do topo
+-- (buscarGlobal, DashboardTab.tsx) não incluía Engenharia. Fechado
+-- agora: nova entrada 'engenharia' na busca global (tabela
+-- engenharia_desenvolvimento, campos titulo/numero_opl/cliente_nome/
+-- descricao), clique navega pra aba Engenharia e dispara o evento
+-- 'engenharia:abrir-desenvolvimento' (novo listener em
+-- EngenhariaTab.tsx) que troca pra sub-aba "Desenvolvimento" e
+-- pré-preenche a busca local (DesenvolvimentoPecasTab.tsx, novo prop
+-- `buscaInicial`) com o mesmo termo digitado. Nenhuma migração de
+-- schema. Testado ao vivo com registro descartável em
+-- engenharia_desenvolvimento (criado, buscado, aberto via clique,
+-- removido via SQL após confirmar o fluxo completo).

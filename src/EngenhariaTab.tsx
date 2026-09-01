@@ -17,6 +17,18 @@ const semDado = (v) => !v || !String(v).trim();
 
 export default function EngenhariaTab({ currentUser }) {
   const [abaEng, setAbaEng] = useState('analise');
+  // Deep-link da busca global do topo (DashboardTab.tsx) — clicar num
+  // resultado de "Desenvolvimento (Engenharia)" troca pra essa sub-aba e
+  // pré-preenche a busca local com o mesmo termo digitado.
+  const [buscaDeepLink, setBuscaDeepLink] = useState('');
+  useEffect(() => {
+    const handler = (e) => {
+      setAbaEng('desenvolvimento');
+      setBuscaDeepLink(e.detail?.termo || '');
+    };
+    window.addEventListener('engenharia:abrir-desenvolvimento', handler);
+    return () => window.removeEventListener('engenharia:abrir-desenvolvimento', handler);
+  }, []);
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
@@ -299,7 +311,7 @@ export default function EngenhariaTab({ currentUser }) {
 
       {abaEng === 'desenvolvimento' ? (
         <div style={{ padding:'0 12px' }}>
-          <DesenvolvimentoPecasTab currentUser={currentUser} />
+          <DesenvolvimentoPecasTab currentUser={currentUser} buscaInicial={buscaDeepLink} />
         </div>
       ) : abaEng === 'horas' ? (
         <div style={{ padding:'0 12px' }}>

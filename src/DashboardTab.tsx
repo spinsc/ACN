@@ -981,6 +981,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     } else if (r._tipo === 'produto') {
       if (chk(r.codigo))    return { campo: 'Código',    valor: r.codigo };
       if (chk(r.categoria)) return { campo: 'Categoria', valor: r.categoria };
+    } else if (r._tipo === 'engenharia') {
+      if (chk(r.numero_opl))   return { campo: 'OPL',      valor: r.numero_opl };
+      if (chk(r.cliente_nome)) return { campo: 'Cliente',  valor: r.cliente_nome };
+      if (chk(r.descricao))    return { campo: 'Descrição', valor: r.descricao };
     }
     return null;
   };
@@ -989,7 +993,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     if (!termo.trim() || termo.length < 2) { setGlobalResultados([]); setGlobalBuscando(false); return; }
     setGlobalBuscando(true);
     const t = termo.trim();
-    const [r1, r2, r3, r4, r5, r6] = await Promise.all([
+    const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
       supabase.from('crm_oportunidades')
         .select('id,titulo,numero_edital,orgao,responsavel_nome,funil')
         .or(`titulo.ilike.%${t}%,numero_edital.ilike.%${t}%,orgao.ilike.%${t}%,responsavel_nome.ilike.%${t}%`)
@@ -1014,6 +1018,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         .select('id,codigo,nome,categoria')
         .or(`nome.ilike.%${t}%,codigo.ilike.%${t}%`)
         .limit(6),
+      supabase.from('engenharia_desenvolvimento')
+        .select('id,titulo,numero_opl,cliente_nome,descricao')
+        .or(`titulo.ilike.%${t}%,numero_opl.ilike.%${t}%,cliente_nome.ilike.%${t}%,descricao.ilike.%${t}%`)
+        .limit(6),
     ]);
     const res = [
       ...(r1.data||[]).map(r => ({ _tipo:'crm', ...r })),
@@ -1022,6 +1030,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       ...(r4.data||[]).map(r => ({ _tipo:'licitacao', ...r })),
       ...(r5.data||[]).map(r => ({ _tipo:'item',       ...r })),
       ...(r6.data||[]).map(r => ({ _tipo:'produto',    ...r })),
+      ...(r7.data||[]).map(r => ({ _tipo:'engenharia', ...r })),
     ];
     setGlobalResultados(res);
     setGlobalBuscando(false);
@@ -1036,6 +1045,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   };
 
   const abrirResultado = async (r: any) => {
+    const termoBusca = globalBusca;
     setShowGlobalRes(false);
     setGlobalBusca('');
     setGlobalResultados([]);
@@ -1055,16 +1065,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       setActiveTab('cadastro_itens');
     } else if (r._tipo === 'produto') {
       setActiveTab('cadastro_produtos');
+    } else if (r._tipo === 'engenharia') {
+      setActiveTab('engenharia');
+      setTimeout(() => window.dispatchEvent(new CustomEvent('engenharia:abrir-desenvolvimento', { detail: { termo: termoBusca } })), 400);
     }
   };
 
   const TIPO_META: Record<string, { icon: string; cor: string; label: string }> = {
-    crm:       { icon:'🤝', cor:'#7c3aed', label:'Processo CRM' },
-    opl:       { icon:'🏭', cor:'#0891b2', label:'OP / OPL' },
-    os:        { icon:'🔧', cor:'#0f766e', label:'OS' },
-    licitacao: { icon:'🏛️', cor:'#1d4ed8', label:'Licitação' },
-    item:      { icon:'📦', cor:'#b45309', label:'Item do Catálogo' },
-    produto:   { icon:'🏷️', cor:'#be185d', label:'Produto Formado' },
+    crm:        { icon:'🤝', cor:'#7c3aed', label:'Processo CRM' },
+    opl:        { icon:'🏭', cor:'#0891b2', label:'OP / OPL' },
+    os:         { icon:'🔧', cor:'#0f766e', label:'OS' },
+    licitacao:  { icon:'🏛️', cor:'#1d4ed8', label:'Licitação' },
+    item:       { icon:'📦', cor:'#b45309', label:'Item do Catálogo' },
+    produto:    { icon:'🏷️', cor:'#be185d', label:'Produto Formado' },
+    engenharia: { icon:'🔩', cor:'#0e7490', label:'Desenvolvimento (Engenharia)' },
   };
 
   return (
@@ -1149,7 +1163,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 )}
 
                 {/* Agrupar por tipo */}
-                {(['crm','opl','os','licitacao','item','produto'] as const).map(tipo => {
+                {(['crm','opl','os','licitacao','item','produto','engenharia'] as const).map(tipo => {
                   const grupo = globalResultados.filter(r => r._tipo === tipo);
                   if (!grupo.length) return null;
                   const meta = TIPO_META[tipo];
@@ -1167,6 +1181,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                                      : r._tipo==='os'         ? `OS ${r.numero_os || ''} — ${r.cliente_nome || ''}`
                                      : r._tipo==='licitacao'  ? `${r.numero || ''} — ${r.nome_projeto || ''}`
                                      : r._tipo==='item'       ? `${r.codigo ? r.codigo + ' — ' : ''}${r.nome || ''}`
+                                     : r._tipo==='engenharia' ? `${r.titulo || ''}${r.numero_opl ? ' — ' + r.numero_opl : ''}`
                                      : `${r.codigo ? r.codigo + ' — ' : ''}${r.nome || ''}`;
                         const ctx = getContexto(r, globalBusca);
                         const status = r.status_geral || r.status_os || r.funil || r.status || '';
