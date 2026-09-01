@@ -2206,6 +2206,87 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CARTÕES DE PIPELINE — mesmo conceito/estilo do CRM (CrmTab.tsx,
+// renderResumoCards): Em Negociação / Perdidas / Ganhas / Aguardando
+// Faturamento, com filtro de mês. Mapeamento de status de Licitações
+// (STATUS_LIST) pros conceitos de pipeline do CRM:
+//   Em Negociação = Aberta + Em Andamento
+//   Perdidas       = Perdida  (Descartada fica de fora, é categoria à
+//                    parte, mesmo padrão do CRM que separa Perdido de
+//                    Desistência)
+//   Ganhas         = Vencida (Finalizada NÃO entra — ao contrário do CRM,
+//                    onde Vencido→Faturado é sequencial, em Licitações
+//                    "Vencida" e "Finalizada" são status PARALELOS e
+//                    independentes, ambos alcançáveis direto a partir de
+//                    "Em Andamento" — ver statusAnterior()/botões de
+//                    status acima. "Finalizada" não significa "vencida e
+//                    já faturada", é outro desfecho.
+//   Aguardando Faturamento = mesmo conjunto de "Ganhas" (Vencida) — ao
+//                    contrário do CRM, `licitacoes` não tem nenhum campo
+//                    que diferencie "vencida, aguardando faturar" de
+//                    "vencida, já faturada" (isso acontece só depois, na
+//                    OP/OS gerada a partir da licitação vencida, sem
+//                    vínculo de volta pra cá — oples não tem
+//                    licitacao_id). Cartão fica igual ao de Ganhas até
+//                    que esse rastreamento exista de verdade.
+// Filtro de mês usa `atualizado_em` (data em que entrou no status atual;
+// também é tocado por edições sem troca de status).
+// ─────────────────────────────────────────────────────────────────────────────
+function PipelineCardsLicitacoes({ licitacoes }: any) {
+  const [mesFiltro, setMesFiltro] = useState('');
+  const noMes = (l: any) => !mesFiltro || (l.atualizado_em || '').slice(0,7) === mesFiltro;
+  const valorDe = (l: any) => Number(l.valor_proposta) || Number(l.valor_estimado) || 0;
+
+  const emNegociacao = licitacoes.filter((l:any) => ['Aberta','Em Andamento'].includes(l.status) && noMes(l));
+  const perdidas     = licitacoes.filter((l:any) => l.status === 'Perdida' && noMes(l));
+  const ganhas       = licitacoes.filter((l:any) => l.status === 'Vencida' && noMes(l));
+  const aguardando   = ganhas;
+
+  const totalNegociacao = emNegociacao.reduce((s:number,l:any) => s + valorDe(l), 0);
+  const totalPerdidas    = perdidas.reduce((s:number,l:any) => s + valorDe(l), 0);
+  const totalGanhas      = ganhas.reduce((s:number,l:any) => s + valorDe(l), 0);
+  const totalAguardando  = aguardando.reduce((s:number,l:any) => s + valorDe(l), 0);
+
+  return (
+    <div style={{ padding:'10px 16px 0' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:'#475569' }}>📅 Filtrar pipeline por mês:</span>
+        <input type="month" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
+          style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
+        {mesFiltro && (
+          <button onClick={() => setMesFiltro('')}
+            style={{ background:'#f1f5f9', border:'none', borderRadius:4, padding:'4px 10px', fontSize:9, fontWeight:700, color:'#475569', cursor:'pointer' }}>
+            Limpar
+          </button>
+        )}
+      </div>
+      <div style={{ display:'flex', gap:10, marginBottom:4, flexWrap:'wrap' }}>
+        <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
+          <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>🤝 PIPELINE EM NEGOCIAÇÃO</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{emNegociacao.length}</div>
+          {totalNegociacao > 0 && <div style={{ fontSize:9, color:'#3b82f6', marginTop:2 }}>{fmtValRel(totalNegociacao)}</div>}
+        </div>
+        <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
+          <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PIPELINE PERDIDAS</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{perdidas.length}</div>
+          {totalPerdidas > 0 && <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtValRel(totalPerdidas)}</div>}
+        </div>
+        <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
+          <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 PIPELINE GANHAS</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{ganhas.length}</div>
+          {totalGanhas > 0 && <div style={{ fontSize:9, color:'#16a34a', marginTop:2 }}>{fmtValRel(totalGanhas)}</div>}
+        </div>
+        <div style={{ background:'#fefce8', border:'1px solid #fde68a', borderRadius:6, padding:'8px 14px', minWidth:130 }}>
+          <div style={{ fontSize:8, color:'#a16207', fontWeight:700, marginBottom:2 }}>🕐 GANHAS — AGUARDANDO FATURAMENTO</div>
+          <div style={{ fontSize:22, fontWeight:800, color:'#a16207', lineHeight:1 }}>{aguardando.length}</div>
+          {totalAguardando > 0 && <div style={{ fontSize:9, color:'#a16207', marginTop:2 }}>{fmtValRel(totalAguardando)}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
@@ -2400,6 +2481,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       {/* AGENDA */}
       <div style={{ padding:'12px 16px 0', flexShrink:0 }}>
         <AgendaWidget setor="licitacoes" currentUser={currentUser} />
+      </div>
+
+      {/* PIPELINE — mesmos cartões do Comercial/CRM (Em Negociação / Perdidas / Ganhas / Aguardando Faturamento) */}
+      <div style={{ flexShrink:0 }}>
+        <PipelineCardsLicitacoes licitacoes={licitacoes} />
       </div>
 
       {/* STATUS CHIPS + BOTÃO RELATÓRIO */}

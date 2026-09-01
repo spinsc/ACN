@@ -1250,3 +1250,47 @@ ALTER TABLE cotacoes_precos_log DISABLE ROW LEVEL SECURITY;
 -- ausente do formulário de nova licitação, tabela inserida e removida
 -- de teste na Área Livre "andamento" da PE 90007.2025 (dado real,
 -- limpo imediatamente após o teste, confirmado via SQL).
+
+-- Pedido do usuário: cartões de pipeline (Em Negociação/Perdidas/Ganhas)
+-- ganham filtro por mês no Comercial/CRM, mais um novo cartão "Ganhas —
+-- Aguardando Faturamento"; Licitações ganha o mesmo conjunto de cartões.
+-- Nenhuma migração de schema — usa colunas já existentes (atualizado_em).
+--
+-- CRM (CrmTab.tsx, renderResumoCards): "Ganhas" passa a somar TODO negócio
+-- já vencido (estágio tipo='ganho' OU tipo='faturado' — antes só contava
+-- tipo='ganho', ou seja, o que hoje chamamos de "Aguardando Faturamento",
+-- e sumia do contador assim que ia pra "Faturado"). Novo cartão "🕐 Ganhas
+-- — Aguardando Faturamento" = só tipo='ganho' (ainda não faturado) — é
+-- exatamente o que "Ganhas" media sozinho antes desta mudança. De
+-- quebra, corrigido um bug pré-existente: "Em Negociação" não excluía
+-- explicitamente tipo='faturado', então um negócio já faturado era
+-- contado (errado) como se ainda estivesse em negociação. Filtro de mês
+-- usa `atualizado_em` (data em que entrou no estágio atual, também
+-- tocada por edições sem troca de estágio).
+--
+-- Licitações (LicitacoesTab.tsx, novo componente PipelineCardsLicitacoes,
+-- no topo da lista): mapeamento de STATUS_LIST pros mesmos 4 conceitos —
+-- Em Negociação = Aberta+Em Andamento, Perdidas = Perdida, Ganhas =
+-- Vencida. IMPORTANTE: ao contrário do CRM (onde Vencido→Faturado é uma
+-- progressão sequencial dentro do mesmo negócio), em Licitações "Vencida"
+-- e "Finalizada" são status PARALELOS e independentes — ambos alcançados
+-- direto a partir de "Em Andamento" (ver statusAnterior() em
+-- LicitacoesTab.tsx) — "Finalizada" não significa "vencida e já
+-- faturada", é outro desfecho, então NÃO entra no cartão "Ganhas".
+-- Também não existe hoje nenhum campo em `licitacoes` que diferencie
+-- "vencida, aguardando faturar" de "vencida, já faturada" (isso só
+-- aconteceria na OP/OS gerada a partir da licitação vencida, sem vínculo
+-- de volta — `oples` não tem coluna `licitacao_id`). Por isso, em
+-- Licitações, o cartão "Aguardando Faturamento" fica hoje IGUAL ao de
+-- "Ganhas" (mesmo conjunto: status='Vencida') — se esse rastreamento
+-- separado for necessário de verdade, precisa de um campo/fluxo novo
+-- (ex.: marcar a licitação como "faturada" quando a OP gerada emitir a
+-- NF), fora do escopo desta mudança.
+--
+-- Testado ao vivo: filtro de mês no CRM reduziu corretamente "Em
+-- Negociação" (56→25) mantendo "Ganhas"/"Aguardando Faturamento"
+-- inalterados (confirmado via SQL que as 36 oportunidades ganhas/
+-- faturadas têm atualizado_em em 2026-08, coincidência real dos dados,
+-- não bug); contadores de Licitações (31 em negociação, 1 perdida)
+-- batem exatamente com a contagem por status no banco (Aberta=18 +
+-- Em Andamento=13 = 31; Perdida=1).

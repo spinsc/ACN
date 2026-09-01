@@ -289,6 +289,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
   const [filtResp, setFiltResp]             = useState('');
   const [filtTemp, setFiltTemp]             = useState<''|'frio'|'morno'|'quente'>('');
+  // Filtro de mês dos cartões de pipeline (Em Negociação/Perdidas/Ganhas/
+  // Aguardando Faturamento) — formato 'YYYY-MM', vazio = todos os meses.
+  const [mesFiltroPipeline, setMesFiltroPipeline] = useState('');
   // ── cards colapsados (Set de IDs) ──
   const [cardsExpandidos, setCardsExpandidos] = useState<Set<string>>(new Set());
   // ── modal Nova OP/OS ──
@@ -1928,20 +1931,46 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   };
 
   const renderResumoCards = () => {
-    const opsAtivas      = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)));
-    const opsPerdidas    = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)));
-    const opsGanhas      = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)));
-    const opsDesistencias = opsFiltradas.filter(o => isDesistencia(getEst(o.estagio_id)));
+    // Filtro de mês dos cartões de pipeline — usa atualizado_em (data em que
+    // o registro entrou no estágio atual; também é tocado por edições sem
+    // troca de estágio, é a aproximação mais próxima disponível sem campo
+    // novo). Vazio = todos os meses.
+    const noMes = (o: any) => !mesFiltroPipeline || (o.atualizado_em || '').slice(0,7) === mesFiltroPipeline;
+
+    // "Em Negociação" agora também exclui isFaturado explicitamente — antes
+    // um negócio já faturado (estágio "Faturado", tipo 'faturado') não era
+    // excluído daqui por engano, contando como se ainda estivesse em
+    // negociação.
+    const opsAtivas      = opsFiltradas.filter(o => !isPerdido(getEst(o.estagio_id)) && !isGanho(getEst(o.estagio_id)) && !isFaturado(getEst(o.estagio_id)) && !isDesistencia(getEst(o.estagio_id)) && noMes(o));
+    const opsPerdidas    = opsFiltradas.filter(o => isPerdido(getEst(o.estagio_id)) && noMes(o));
+    const opsDesistencias = opsFiltradas.filter(o => isDesistencia(getEst(o.estagio_id)) && noMes(o));
+    // Ganhas = todo negócio já vencido, faturado ou não. Aguardando
+    // Faturamento = só quem está em "Vencido" e ainda não passou pra
+    // "Faturado" (é o que "Ganhas" sozinho representava antes desta mudança).
+    const opsAguardandoFaturamento = opsFiltradas.filter(o => isGanho(getEst(o.estagio_id)) && noMes(o));
+    const opsGanhas      = opsFiltradas.filter(o => (isGanho(getEst(o.estagio_id)) || isFaturado(getEst(o.estagio_id))) && noMes(o));
     const totalPipeline      = opsAtivas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const totalPipelineACN   = opsAtivas.reduce((s, o) => s + receitaEfetiva(o), 0);
     const totalPerdido       = opsPerdidas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     const totalGanho         = opsGanhas.reduce((s, o) => s + (o.valor_registrado || 0), 0);
+    const totalAguardandoFaturamento = opsAguardandoFaturamento.reduce((s, o) => s + (o.valor_registrado || 0), 0);
     // "Total e por Vendedor" reaproveita o filtro Responsável já existente na
     // barra de ferramentas (filtResp) — opsFiltradas já vem filtrado por ele.
     const recorteLabel = filtResp || 'Total (todos os vendedores)';
 
     return (
       <div style={{ marginBottom:14 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+          <span style={{ fontSize:10, fontWeight:700, color:'#475569' }}>📅 Filtrar pipeline por mês:</span>
+          <input type="month" value={mesFiltroPipeline} onChange={e => setMesFiltroPipeline(e.target.value)}
+            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
+          {mesFiltroPipeline && (
+            <button onClick={() => setMesFiltroPipeline('')}
+              style={{ background:'#f1f5f9', border:'none', borderRadius:4, padding:'4px 10px', fontSize:9, fontWeight:700, color:'#475569', cursor:'pointer' }}>
+              Limpar
+            </button>
+          )}
+        </div>
         <div style={{ display:'flex', gap:10, marginBottom:10, flexWrap:'wrap' }}>
           <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
             <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>🤝 PIPELINE EM NEGOCIAÇÃO</div>
@@ -1952,7 +1981,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
           <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
             <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.length}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.filter(noMes).length}</div>
           </div>
           <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
             <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PIPELINE PERDIDAS</div>
@@ -1970,6 +1999,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
             {podeVer && totalGanho > 0 && (
               <div style={{ fontSize:9, color:'#16a34a', marginTop:2 }}>{fmtMoeda(totalGanho)}</div>
+            )}
+          </div>
+          <div style={{ background:'#fefce8', border:'1px solid #fde68a', borderRadius:6, padding:'8px 14px', minWidth:130 }}>
+            <div style={{ fontSize:8, color:'#a16207', fontWeight:700, marginBottom:2 }}>🕐 GANHAS — AGUARDANDO FATURAMENTO</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#a16207', lineHeight:1 }}>{opsAguardandoFaturamento.length}</div>
+            {podeVer && totalAguardandoFaturamento > 0 && (
+              <div style={{ fontSize:9, color:'#a16207', marginTop:2 }}>{fmtMoeda(totalAguardandoFaturamento)}</div>
             )}
           </div>
         </div>
