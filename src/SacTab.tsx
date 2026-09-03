@@ -8,6 +8,7 @@ import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -155,6 +156,9 @@ export default function SacTab({ currentUser }) {
   const [nfcStatus,    setNfcStatus]    = useState('');
   const [modalNfc,     setModalNfc]     = useState<any>(null);
   const [ordens, setOrdens]             = useState([]);
+  // Linhas/cards com alteração não vista por este usuário — mesmo padrão
+  // usado nas telas de OP (ver AuditSystem.tsx).
+  const { naoLidoSet: ordensNaoLidas } = useUnreadMap('sac_ordens_servico', ordens.map((o: any) => o.id), currentUser);
   const [equipamentos, setEquipamentos] = useState([]);
   const [categorias, setCategorias]     = useState<any[]>([]);
   const [loading, setLoading]           = useState(false);
@@ -516,6 +520,8 @@ export default function SacTab({ currentUser }) {
       data_prevista_pos_aprovacao: aprovForm.data_entrega || null,
       atualizado_em: agora,
     }).eq('id', modalAprov.id);
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalAprov.id, changeType: 'UPDATE',
+      oldRow: { status: modalAprov.status }, newRow: { status: 'Aprovado' }, user: currentUser });
 
     // Auto-criar demanda de EXECUÇÃO para Laboratório
     await supabase.from('demandas_setoriais').insert([{
@@ -736,6 +742,8 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       nome_retirada_saida: nomeRecebeuVeic.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
+      oldRow: { status: os.status }, newRow: { status: 'Entregue' }, user: currentUser });
     notificarEvento('sac_os_entregue', `🚚 *Veículo entregue — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
 Recebido por: ${nomeRecebeuVeic.trim()}`);
@@ -976,6 +984,8 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
       .update({ responsavel_nome: editRespOSNome.trim() })
       .eq('id', modalEditRespOS.id);
     if (error) { alert('Erro: ' + error.message); return; }
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalEditRespOS.id, changeType: 'UPDATE',
+      oldRow: { responsavel_nome: modalEditRespOS.responsavel_nome }, newRow: { responsavel_nome: editRespOSNome.trim() }, user: currentUser });
     setModalEditRespOS(null);
     fetchOrdens();
   };
@@ -1609,12 +1619,14 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
               </tr></thead>
               <tbody>
                 {ordensFiltradas.map(o => (
-                  <tr key={o.id} style={{
-                    background: o.status==='Reprovado' ? '#fef2f2'
-                              : o.status==='Aprovado'  ? '#eff6ff'
-                              : o.status==='Entregue'  ? '#f0fdf4'
-                              : undefined
-                  }}>
+                  <tr key={o.id} style={
+                    ordensNaoLidas.has(String(o.id)) ? { background:'#fffdf0', borderLeft:'4px solid #eab308' } : {
+                      background: o.status==='Reprovado' ? '#fef2f2'
+                                : o.status==='Aprovado'  ? '#eff6ff'
+                                : o.status==='Entregue'  ? '#f0fdf4'
+                                : undefined
+                    }
+                  }>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
                     <td>{o.tipo_avaliacao==='Remota' ? <span style={{fontSize:9,fontWeight:700,color:'#0ea5e9',background:'#e0f2fe',borderRadius:10,padding:'2px 7px'}}>📡 Remota</span> : o.tipo_avaliacao==='Presencial' ? <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',background:'#ede9fe',borderRadius:10,padding:'2px 7px'}}>📍 Presencial</span> : <span style={{color:'#cbd5e1',fontSize:9}}>—</span>}</td>
