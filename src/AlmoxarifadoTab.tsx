@@ -3,12 +3,16 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 const semDado = (v) => !v || !String(v).trim();
 
 export default function AlmoxarifadoTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Linhas com alteração não vista por este usuário ganham borda amarela —
+  // mesmo padrão usado nas outras telas de OP (ver AuditSystem.tsx).
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [modalPend, setModalPend] = useState(null);
   const [obsPend, setObsPend] = useState('');
   const [modalFalta, setModalFalta] = useState(null);
@@ -55,6 +59,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
       responsavel_almox: currentUser?.nome,
       ...extra,
     }).eq('id', opl.id);
+    logChange({ module: 'almoxarifado', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_almox: opl.status_almox, status_geral: opl.status_geral, obs_almox: opl.obs_almox },
+      newRow: { status_almox: statusAlmox, status_geral: statusGeral, obs_almox: obs }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
       evento: `Kiting: ${statusAlmox}${obs ? ' — '+obs : ''}`,
@@ -183,7 +190,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                   }
 
                   const renderLinhaOpl = (o) => (
-                    <tr key={o.id}>
+                    <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'4px solid #eab308'} : {}}>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                       <td style={{fontSize:10}}>
