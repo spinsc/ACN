@@ -12,6 +12,7 @@ import DesenvolvimentoPecasTab, { criarDemandaDesenvolvimento } from './Desenvol
 import HorasTarefasTab from './HorasTarefasTab';
 import { horasUteis } from './utils/horasUteis';
 import { BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -30,6 +31,9 @@ export default function EngenhariaTab({ currentUser }) {
     return () => window.removeEventListener('engenharia:abrir-desenvolvimento', handler);
   }, []);
   const [opls, setOpls] = useState([]);
+  // Linhas com alteração não vista por este usuário ganham borda amarela —
+  // mesmo padrão usado nas outras telas de OP (ver AuditSystem.tsx).
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
   const [obsBom, setObsBom] = useState('');
@@ -113,6 +117,9 @@ export default function EngenhariaTab({ currentUser }) {
       data_inicio_engenharia: agora,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    logChange({ module: 'engenharia', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral, responsavel_engenharia: opl.responsavel_engenharia },
+      newRow: { status_geral: 'Em Analise Engenharia', responsavel_engenharia: responsavelEng }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
       evento: `Inicio da analise de engenharia. Responsavel: ${responsavelEng}`,
@@ -148,6 +155,9 @@ export default function EngenhariaTab({ currentUser }) {
       tempo_engenharia_horas: tempo,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    logChange({ module: 'engenharia', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral, status_bom: opl.status_bom, obs_liberacao_bom: opl.obs_liberacao_bom },
+      newRow: { status_geral: 'Em Espera PCP', status_bom: 'BOM Liberado', obs_liberacao_bom: obsBom }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
       evento: `BOM liberado para PCP/Almoxarifado. Qtd: ${opl.quantidade||1} un. Obs: ${obsBom || 'Sem observacoes'}.`,
@@ -373,9 +383,11 @@ export default function EngenhariaTab({ currentUser }) {
                       ? horasUteis(o.data_entrada, new Date())
                       : 0;
                     const kpi48h = emEspera && horasSemIniciar > 48;
+                    const naoLida = oplsNaoLidas.has(String(o.id));
                     const rowStyle = kpi48h
                       ? { background:'#fef2f2', borderLeft:'4px solid #ef4444' }
-                      : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' } : {};
+                      : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' }
+                      : naoLida ? { background:'#fffdf0', borderLeft:'4px solid #eab308' } : {};
                     return (
                       <tr key={o.id} style={rowStyle}>
                         <td>{fmtDt(o.data_entrada)}</td>
