@@ -453,6 +453,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // Quais cards do quadro têm alteração ainda não vista por este usuário — 2
   // consultas em lote (não N), pra colorir a lateral do card (ver renderCard).
   const { naoLidoSet: cardsNaoLidos, marcarLidoLocal: marcarCardLidoLocal } = useUnreadMap('crm_oportunidades', opsFiltradas.map(o => o.id), currentUser);
+  // Mesmo destaque, agora pra linhas de OPL (tabela "OPLs em Aberto") — ver uso em
+  // oplsFiltradas mais abaixo. A mesma tabela "oples" é editada por praticamente
+  // todos os módulos do sistema, não só aqui — este Set cobre a visão do CRM.
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', oplsEmAberto.map((o: any) => o.id), currentUser);
 
   const getEst       = (id: string) => estagios.find(e => e.id === id);
   const getItensEst  = (estagioId: string) => itens.filter(i => i.estagio_id === estagioId);
@@ -946,7 +950,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       }
     }
 
-    const { error } = await supabase.from('oples').update({
+    const oplPayload = {
       chassi:                oplFormEdit.chassi || null,
       placa:                 oplFormEdit.placa || null,
       modelo:                oplFormEdit.modelo || null,
@@ -958,10 +962,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
       cnpj_faturamento:            oplFormEdit.cnpj_faturamento || null,
       razao_social_faturamento:    oplFormEdit.razao_social_faturamento || null,
-      data_atualizacao:      new Date().toISOString(),
+    };
+    const { error } = await supabase.from('oples').update({
+      ...oplPayload, data_atualizacao: new Date().toISOString(),
     }).eq('id', oplEditando.id);
     setOplSalvando(false);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    logChange({ module: 'comercial', entityType: 'oples', entityId: oplEditando.id, changeType: 'UPDATE',
+      oldRow: oplEditando, newRow: oplPayload, user: currentUser });
     setOplEditando(null);
     fetchOplsEmAberto();
   };
@@ -2864,8 +2872,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                       const renderLinhaOpl = (o: any) => {
                         const atrasada = o.data_prevista_entrega && o.data_prevista_entrega < hoje;
                         const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
+                        const oplNaoLida = oplsNaoLidas.has(String(o.id));
                         return (
-                          <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                          <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9',
+                            background: oplNaoLida ? '#fffdf0' : undefined,
+                            borderLeft: oplNaoLida ? '3px solid #eab308' : '3px solid transparent' }}
+                            title={oplNaoLida ? 'Esta OPL tem alteração(ões) que você ainda não visualizou' : undefined}>
                             <td style={{ padding:'5px 8px', textAlign:'center' }}>
                               <input type="checkbox" checked={oplsSelecionadas.has(o.id)} onChange={()=>toggleOplSelecionada(o.id)} style={{ cursor:'pointer' }} />
                             </td>

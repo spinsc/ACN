@@ -6,6 +6,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
+import { useFieldHighlight, logChange } from './AuditSystem';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -411,6 +412,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // Sincroniza se prop mudar
   useEffect(() => { setOpl(oplProp); }, [oplProp?.id]);
 
+  // Auditoria/colaboração (infra global — ver AuditSystem.tsx): este é o modal
+  // de "👁 Ver" reutilizado por praticamente todos os módulos (Engenharia, PCP,
+  // Almoxarifado, Produção, Comercial/CRM...) — instrumentar aqui uma vez cobre
+  // o destaque visual em todos eles de uma vez, sem duplicar por módulo. Cada
+  // módulo ainda precisa chamar logChange() nos próprios pontos de gravação
+  // (rollout em andamento) — aqui só cobre a gravação que este modal faz.
+  const { campoDestaque, marcarComoLido } = useFieldHighlight('oples', opl?.id, currentUser);
+  const fecharEMarcarLido = () => { marcarComoLido(); onClose(); };
+
   useEffect(() => {
     if (!opl?.id) return;
     setLoading(true);
@@ -440,6 +450,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
       usuario_nome: currentUser?.nome || null, data_hora: agora,
     }]);
+    logChange({ module: 'comercial', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguarda Emissao NF' }, user: currentUser });
     // Atualiza status local sem fechar o modal
     setOpl((o: any) => ({ ...o, status_geral: 'Aguarda Emissao NF' }));
     setLogs(prev => [{
@@ -490,9 +502,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     </div>
   );
 
-  const Campo = ({ label, value, full = false }: { label: string; value: any; full?: boolean }) =>
+  const Campo = ({ label, value, full = false, field }: { label: string; value: any; full?: boolean; field?: string }) =>
     value != null && value !== '' && value !== false ? (
-      <div style={{ marginBottom: 8, gridColumn: full ? '1 / -1' : undefined }}>
+      <div style={{ marginBottom: 8, gridColumn: full ? '1 / -1' : undefined, ...(field ? campoDestaque(field) : {}) }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
         <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
       </div>
@@ -522,7 +534,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             color: '#fff', fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 12, letterSpacing: .3 }}>
             {opl.status_geral || 'Sem status'}
           </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
+          <button onClick={fecharEMarcarLido} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
         </div>
 
         {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
@@ -591,15 +603,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         {/* ── Veículo ── */}
         <Sec title="🚗 Veículo" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Modelo"                    value={opl.modelo} />
-          <Campo label="Chassi"                    value={opl.chassi} />
-          <Campo label="Qtd. Veículos"             value={opl.quantidade} />
-          <Campo label="Data Entrada"              value={fmtDt(opl.data_entrada)} />
-          <Campo label="Recebimento do Veículo"    value={fmtDt(opl.data_chegada_veiculo)} />
-          <Campo label="Previsão de Entrega"       value={fmtDt(opl.data_prevista_entrega)} />
-          <Campo label="Prazo Entrega Comercial"   value={fmtDt(opl.prazo_entrega_comercial)} />
-          <Campo label="Prazo Entrega Produção"    value={fmtDt(opl.prazo_entrega_producao)} />
-          <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} />
+          <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
+          <Campo label="Chassi"                    value={opl.chassi} field="chassi" />
+          <Campo label="Qtd. Veículos"             value={opl.quantidade} field="quantidade" />
+          <Campo label="Data Entrada"              value={fmtDt(opl.data_entrada)} field="data_entrada" />
+          <Campo label="Recebimento do Veículo"    value={fmtDt(opl.data_chegada_veiculo)} field="data_chegada_veiculo" />
+          <Campo label="Previsão de Entrega"       value={fmtDt(opl.data_prevista_entrega)} field="data_prevista_entrega" />
+          <Campo label="Prazo Entrega Comercial"   value={fmtDt(opl.prazo_entrega_comercial)} field="prazo_entrega_comercial" />
+          <Campo label="Prazo Entrega Produção"    value={fmtDt(opl.prazo_entrega_producao)} field="prazo_entrega_producao" />
+          <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} field="data_aceite_cliente" />
         </div>
 
         {/* ── Financeiro ── */}
@@ -612,10 +624,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-                <Campo label="Valor Total"           value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} />
-                <Campo label="Valor M.O."            value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} />
-                <Campo label="Valor M.O. Serralheria" value={opl.valor_mao_de_obra_serralheria != null ? fmtR$(opl.valor_mao_de_obra_serralheria) : null} />
-                <Campo label="Faturamento"           value={opl.faturamento_empresa} />
+                <Campo label="Valor Total"           value={opl.valor_total != null ? fmtR$(opl.valor_total) : null} field="valor_total" />
+                <Campo label="Valor M.O."            value={opl.valor_mao_de_obra != null ? fmtR$(opl.valor_mao_de_obra) : null} field="valor_mao_de_obra" />
+                <Campo label="Valor M.O. Serralheria" value={opl.valor_mao_de_obra_serralheria != null ? fmtR$(opl.valor_mao_de_obra_serralheria) : null} field="valor_mao_de_obra_serralheria" />
+                <Campo label="Faturamento"           value={opl.faturamento_empresa} field="faturamento_empresa" />
               </div>
             )}
           </>
@@ -624,19 +636,20 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         {/* ── Status por Setor ── */}
         <Sec title="📊 Status por Setor" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Status BOM"        value={opl.status_bom} />
-          <Campo label="Status Almox"      value={opl.status_almox} />
+          <Campo label="Status Geral"      value={opl.status_geral} field="status_geral" />
+          <Campo label="Status BOM"        value={opl.status_bom} field="status_bom" />
+          <Campo label="Status Almox"      value={opl.status_almox} field="status_almox" />
         </div>
 
         {/* ── Responsáveis ── */}
         <Sec title="👥 Responsáveis" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
-          <Campo label="Comercial"    value={opl.responsavel_comercial || opl.criado_por_nome} />
-          <Campo label="Engenharia"   value={opl.responsavel_engenharia} />
-          <Campo label="Almoxarifado" value={opl.responsavel_almox} />
-          <Campo label="Produção"     value={opl.responsavel_producao} />
-          <Campo label="Fiscal"       value={opl.responsavel_fiscal} />
-          <Campo label="Qualidade"    value={opl.responsavel_qualidade} />
+          <Campo label="Comercial"    value={opl.responsavel_comercial || opl.criado_por_nome} field="responsavel_comercial" />
+          <Campo label="Engenharia"   value={opl.responsavel_engenharia} field="responsavel_engenharia" />
+          <Campo label="Almoxarifado" value={opl.responsavel_almox} field="responsavel_almox" />
+          <Campo label="Produção"     value={opl.responsavel_producao} field="responsavel_producao" />
+          <Campo label="Fiscal"       value={opl.responsavel_fiscal} field="responsavel_fiscal" />
+          <Campo label="Qualidade"    value={opl.responsavel_qualidade} field="responsavel_qualidade" />
         </div>
 
         {/* ── Seriais de Equipamentos ── */}

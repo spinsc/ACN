@@ -196,8 +196,24 @@ export function useUnreadMap(entityType, entityIds, currentUser) {
     return () => { supabase.removeChannel(ch); };
   }, [entityType, currentUser?.id]);
 
+  // Some com o destaque assim que ESTE usuário marca como lido em QUALQUER
+  // tela (o modal de detalhe genérico, outra aba, outro componente) — sem
+  // isso, uma lista/quadro só percebia via reload (marcarComoLido grava em
+  // entity_views, mas esse Set em memória não sabia disso sozinho).
+  useEffect(() => {
+    if (!entityType || !currentUser?.id) return;
+    const ch = supabase.channel(`views-map-${entityType}-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'entity_views', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
+        const row = payload.new;
+        if (!row || row.entity_type !== entityType) return;
+        setNaoLidoSet(prev => { const next = new Set(prev); next.delete(String(row.entity_id)); return next; });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [entityType, currentUser?.id]);
+
   // Atualização otimista: chamar depois de marcarComoLido() (useMarkAsRead) pra
-  // sumir com o destaque do card/linha na hora, sem esperar um refetch/reload.
+  // sumir com o destaque do card/linha na hora, sem esperar o Realtime/reload.
   const marcarLidoLocal = useCallback((entityId) => {
     setNaoLidoSet(prev => { const next = new Set(prev); next.delete(String(entityId)); return next; });
   }, []);
@@ -217,6 +233,39 @@ export function useMarkAsRead(entityType, entityId, currentUser) {
     }, { onConflict: 'user_id,entity_type,entity_id' });
   }, [entityType, entityId, currentUser?.id]);
   return marcarComoLido;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useFieldHighlight — pacote pronto pra qualquer tela de detalhe/edição:
+// junta useUnreadChanges + useMarkAsRead + os dois helpers de estilo já usados
+// no CRM (campoDestaque pra caixas de campo de formulário, itemNaoLido pra
+// itens de lista tipo comentário/documento). Reduz a instrumentação de um
+// novo módulo a ~3 linhas — ver CrmTab.tsx pra um exemplo completo de uso
+// (campos de formulário, itens de lista, aba com 🟡, fechar marca como lido).
+//
+// Uso típico:
+//   const { camposNaoLidos, campoDestaque, itemNaoLido, marcarComoLido } =
+//     useFieldHighlight('pcp_pedidos_compra', pedido?.id, currentUser);
+//   <div style={campoDestaque('fornecedor')}>...</div>
+//   <div style={itemNaoLido(item.id) ? {background:'#fefce8', border:'1px solid #fde047'} : {}}>...</div>
+//   const fechar = () => { marcarComoLido(); setModal(null); };
+// ─────────────────────────────────────────────────────────────────────────────
+export function useFieldHighlight(entityType, entityId, currentUser) {
+  const { camposNaoLidos, naoLidos, temNaoLidos } = useUnreadChanges(entityType, entityId, currentUser);
+  const marcarComoLido = useMarkAsRead(entityType, entityId, currentUser);
+
+  const campoDestaque = useCallback((field) => ({
+    borderRadius: 5, padding: '4px 6px', margin: '0 -6px 7px -6px',
+    background: camposNaoLidos.has(field) ? '#fefce8' : 'transparent',
+    border: `1px solid ${camposNaoLidos.has(field) ? '#fde047' : 'transparent'}`,
+  }), [camposNaoLidos]);
+
+  const itemNaoLido = useCallback((itemId) => naoLidos.some((n) => n.metadata?.ref_id === itemId), [naoLidos]);
+  const itemDestaque = useCallback((itemId) => itemNaoLido(itemId)
+    ? { background: '#fefce8', border: '1px solid #fde047' }
+    : {}, [itemNaoLido]);
+
+  return { camposNaoLidos, naoLidos, temNaoLidos, campoDestaque, itemNaoLido, itemDestaque, marcarComoLido };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
