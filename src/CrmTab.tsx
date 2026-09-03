@@ -14,6 +14,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared';
 import { CotacoesCrmPanel } from './CotacoesTab';
+import { logChange, useUnreadChanges, useMarkAsRead, ChangeHighlight, AuditHistory } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -38,6 +39,18 @@ const isFaturado    = (e: any) => e?.tipo === 'faturado';
 const isDesistencia = (e: any) => e?.tipo === 'desistencia' || (!e?.tipo && e?.nome?.toLowerCase().includes('desist'));
 const isFinalizada  = (e: any) => e?.tipo === 'faturado'    || (!e?.tipo && e?.nome?.toLowerCase().includes('finaliz'));
 const isPerdido     = (e: any) => e?.tipo === 'perdido'     || (!e?.tipo && e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e));
+
+// Rótulos amigáveis pros campos de crm_oportunidades no painel de Alterações (AuditHistory) —
+// sem entrada aqui, o painel usa o nome bruto da coluna como fallback.
+const CAMPOS_LABEL_AUDITORIA: Record<string,string> = {
+  titulo: 'Título', valor_registrado: 'Valor Estimado', valor_acn: 'Valor ACN/Detech',
+  data_prev_fechamento: 'Previsão de Fechamento', estagio_id: 'Estágio', cliente_id: 'Cliente',
+  responsavel_nome: 'Responsável', empresa_vencedora: 'Empresa Vencedora', motivo_perda: 'Motivo da Perda',
+  nome_contato: 'Nome do Contato', contato: 'Telefone', contato_email: 'E-mail',
+  prox_contato: 'Próximo Contato', hora_prox_contato: 'Hora do Contato',
+  numero_edital: 'Número do Edital', orgao: 'Órgão', data_sessao: 'Data da Sessão',
+  faturamento_empresa: 'Empresa Faturante',
+};
 
 const VAZIO_OP: any = {
   funil: 'venda_direta',
@@ -317,6 +330,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const abrirContainerRef = useRef<any>(null);
   const abrirDragStartX   = useRef(0);
   const abrirDragStartW   = useRef(0);
+
+  // ── auditoria/colaboração (POC — infraestrutura global, ver AuditSystem.tsx) ──
+  const { camposNaoLidos, temNaoLidos } = useUnreadChanges('crm_oportunidades', modalAbrir?.id, currentUser);
+  const marcarComoLido = useMarkAsRead('crm_oportunidades', modalAbrir?.id, currentUser);
+  const fecharModalAbrir = () => { marcarComoLido(); setModalAbrir(null); setAbrirMinimized(false); };
 
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
@@ -714,9 +732,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (modalOp?.id) {
       const { error } = await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalOp.id);
       saveError = error;
+      if (!error) logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalOp.id, changeType: 'UPDATE', oldRow: modalOp, newRow: p, user: currentUser });
     } else {
-      const { error } = await supabase.from('crm_oportunidades').insert(p);
+      const { data: inserido, error } = await supabase.from('crm_oportunidades').insert(p).select('id').single();
       saveError = error;
+      if (!error && inserido) logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: inserido.id, changeType: 'CREATE', newRow: p, user: currentUser });
     }
     setSalvando(false);
     if (saveError) {
@@ -744,6 +764,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     { key:'atestado',     label:'🏅 Atestado' },
     { key:'informacoes',  label:'ℹ️ Informações Importantes' },
     { key:'analise',      label:'🔬 Análise' },
+    { key:'auditoria',    label: temNaoLidos ? '🕐 Alterações 🟡' : '🕐 Alterações' },
   ] as const;
 
   useEffect(() => {
@@ -1248,6 +1269,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // sempre que estagio_id muda, então nenhum insert manual é necessário aqui.
     const entrouEmVencidoAgora = isGanho(getEst(formOp.estagio_id)) && !isGanho(getEst(modalAbrir.estagio_id));
     await supabase.from('crm_oportunidades').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalAbrir.id);
+    // Auditoria/colaboração (POC — ver AuditSystem.tsx): grava o diff campo a campo.
+    logChange({
+      module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+      oldRow: modalAbrir, newRow: p, user: currentUser,
+      formatters: { estagio_id: (v) => getEst(v)?.nome || '—' },
+    });
     let oplCriada: string|null = null;
     if (entrouEmVencidoAgora && formOp.empresa_vencedora) {
       oplCriada = await criarOpAutomatica({ ...formOp, id: modalAbrir.id }, formOp.empresa_vencedora);
@@ -3907,7 +3934,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             style={{ background:'#2563eb', border:'none', color:'#fff', borderRadius:4, padding:'4px 10px', fontSize:10, cursor:'pointer', fontWeight:700 }}>
             ⬆ Restaurar
           </button>
-          <button onClick={() => { setModalAbrir(null); setAbrirMinimized(false); }}
+          <button onClick={fecharModalAbrir}
             style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px' }}>✕</button>
         </div>
       )}
@@ -3929,7 +3956,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 <div style={{ display:'flex', gap:4 }}>
                   <button onClick={() => setAbrirMinimized(true)}
                     title="Minimizar" style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px', lineHeight:1 }}>─</button>
-                  <button onClick={() => setModalAbrir(null)}
+                  <button onClick={fecharModalAbrir}
                     style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'2px 6px' }}>✕</button>
                 </div>
               </div>
@@ -3963,7 +3990,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
                 ] as any[]).map(({ label, key, placeholder, type }) => (
                   <div key={key} style={{ marginBottom:7 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>{label}</div>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
+                      <ChangeHighlight field={key} camposNaoLidos={camposNaoLidos} title={`"${label}" foi alterado — ainda não visualizado`}>{label}</ChangeHighlight>
+                    </div>
                     <input type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
                       onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))}
                       style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
@@ -3971,7 +4000,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 ))}
 
                 <div style={{ marginBottom:7 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Estágio</div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
+                    <ChangeHighlight field="estagio_id" camposNaoLidos={camposNaoLidos} title='"Estágio" foi alterado — ainda não visualizado'>Estágio</ChangeHighlight>
+                  </div>
                   <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
                     style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
                     <option value="">— Selecione —</option>
@@ -4017,7 +4048,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 </div>
 
                 <div style={{ marginBottom:10 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Responsável</div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
+                    <ChangeHighlight field="responsavel_nome" camposNaoLidos={camposNaoLidos} title='"Responsável" foi alterado — ainda não visualizado'>Responsável</ChangeHighlight>
+                  </div>
                   <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o operador" />
                 </div>
 
@@ -4067,7 +4100,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   style={{ flex:1, background:'#0f766e', color:'#fff', border:'none', borderRadius:5, padding:'7px 0', fontWeight:700, fontSize:11, cursor:'pointer', opacity:salvando?.6:1 }}>
                   {salvando ? 'Salvando...' : '💾 Salvar Alterações'}
                 </button>
-                <button onClick={() => setModalAbrir(null)}
+                <button onClick={fecharModalAbrir}
                   style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:5, padding:'7px 12px', fontSize:10, cursor:'pointer' }}>
                   Fechar
                 </button>
@@ -4316,6 +4349,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
                     {/* Área livre (rich text persistido) */}
                     {NotaLivreEditor}
+                  </div>
+                )}
+
+                {/* ── ALTERAÇÕES (auditoria — POC da infraestrutura global, ver AuditSystem.tsx) ── */}
+                {abrirTabDir === 'auditoria' && (
+                  <div>
+                    <div style={{ fontSize:9, color:'#94a3b8', marginBottom:8 }}>
+                      Histórico de alterações deste registro — quem mudou, quando, e o valor antes/depois.
+                    </div>
+                    <AuditHistory entityType="crm_oportunidades" entityId={modalAbrir.id} fieldLabels={CAMPOS_LABEL_AUDITORIA} />
                   </div>
                 )}
 

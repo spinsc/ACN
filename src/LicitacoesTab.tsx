@@ -604,6 +604,22 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
     autosave();
   };
 
+  // Exclui a tabela onde o cursor/seleção está posicionado — antes não existia
+  // NENHUMA forma de remover uma tabela já inserida (só dava pra criar).
+  const excluirTabela = () => {
+    const sel = window.getSelection();
+    const anchor = sel?.anchorNode;
+    const el = anchor && (anchor.nodeType === 3 ? anchor.parentElement : (anchor as HTMLElement));
+    const tabela = el?.closest?.('table');
+    if (!tabela || !editorRef.current?.contains(tabela)) {
+      alert('Posicione o cursor dentro de uma tabela para excluí-la.');
+      return;
+    }
+    if (!window.confirm('Excluir esta tabela? Esta ação não pode ser desfeita.')) return;
+    tabela.remove();
+    autosave();
+  };
+
   const handlePaste = (e: any) => {
     const items = Array.from(e.clipboardData?.items || []);
     // Se há HTML no clipboard (Excel/Word), deixa o browser colar a tabela
@@ -677,6 +693,12 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
           style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
             padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4 }}>
           ⊞
+        </button>
+        <button onMouseDown={e => { e.preventDefault(); excluirTabela(); }}
+          title="Excluir tabela (posicione o cursor dentro dela)"
+          style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
+            padding:'2px 7px', fontSize:11, cursor:'pointer', lineHeight:1.4, color:'#dc2626' }}>
+          ⊟
         </button>
         <div style={{ flex:1 }} />
         {salvando && <span style={{ fontSize:9, color:'#d97706' }}>Salvando...</span>}
