@@ -14,7 +14,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared';
 import { CotacoesCrmPanel } from './CotacoesTab';
-import { logChange, useUnreadChanges, useMarkAsRead, ChangeHighlight, AuditHistory } from './AuditSystem';
+import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -39,18 +39,6 @@ const isFaturado    = (e: any) => e?.tipo === 'faturado';
 const isDesistencia = (e: any) => e?.tipo === 'desistencia' || (!e?.tipo && e?.nome?.toLowerCase().includes('desist'));
 const isFinalizada  = (e: any) => e?.tipo === 'faturado'    || (!e?.tipo && e?.nome?.toLowerCase().includes('finaliz'));
 const isPerdido     = (e: any) => e?.tipo === 'perdido'     || (!e?.tipo && e?.is_final && !isGanho(e) && !isDesistencia(e) && !isFinalizada(e));
-
-// Rótulos amigáveis pros campos de crm_oportunidades no painel de Alterações (AuditHistory) —
-// sem entrada aqui, o painel usa o nome bruto da coluna como fallback.
-const CAMPOS_LABEL_AUDITORIA: Record<string,string> = {
-  titulo: 'Título', valor_registrado: 'Valor Estimado', valor_acn: 'Valor ACN/Detech',
-  data_prev_fechamento: 'Previsão de Fechamento', estagio_id: 'Estágio', cliente_id: 'Cliente',
-  responsavel_nome: 'Responsável', empresa_vencedora: 'Empresa Vencedora', motivo_perda: 'Motivo da Perda',
-  nome_contato: 'Nome do Contato', contato: 'Telefone', contato_email: 'E-mail',
-  prox_contato: 'Próximo Contato', hora_prox_contato: 'Hora do Contato',
-  numero_edital: 'Número do Edital', orgao: 'Órgão', data_sessao: 'Data da Sessão',
-  faturamento_empresa: 'Empresa Faturante',
-};
 
 const VAZIO_OP: any = {
   funil: 'venda_direta',
@@ -332,9 +320,21 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const abrirDragStartW   = useRef(0);
 
   // ── auditoria/colaboração (POC — infraestrutura global, ver AuditSystem.tsx) ──
-  const { camposNaoLidos, temNaoLidos } = useUnreadChanges('crm_oportunidades', modalAbrir?.id, currentUser);
+  const { camposNaoLidos } = useUnreadChanges('crm_oportunidades', modalAbrir?.id, currentUser);
   const marcarComoLido = useMarkAsRead('crm_oportunidades', modalAbrir?.id, currentUser);
-  const fecharModalAbrir = () => { marcarComoLido(); setModalAbrir(null); setAbrirMinimized(false); };
+  const fecharModalAbrir = () => {
+    marcarComoLido();
+    if (modalAbrir?.id) marcarCardLidoLocal(modalAbrir.id); // some o destaque do card na hora, sem esperar reload
+    setModalAbrir(null); setAbrirMinimized(false);
+  };
+  // Caixa de destaque sutil em volta do campo inteiro (rótulo + input) quando ele
+  // mudou e ainda não foi visto por este usuário — sempre com a mesma borda/padding
+  // (transparente quando não destacado) pra não pular o layout ao ler.
+  const campoDestaque = (field: string): React.CSSProperties => ({
+    marginBottom: 7, borderRadius: 5, padding: '4px 6px', margin: '0 -6px 7px -6px',
+    background: camposNaoLidos.has(field) ? '#fefce8' : 'transparent',
+    border: `1px solid ${camposNaoLidos.has(field) ? '#fde047' : 'transparent'}`,
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // CARGA
@@ -445,6 +445,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       o.numero_edital?.toLowerCase().includes(busca.toLowerCase())
     );
   });
+
+  // Quais cards do quadro têm alteração ainda não vista por este usuário — 2
+  // consultas em lote (não N), pra colorir a lateral do card (ver renderCard).
+  const { naoLidoSet: cardsNaoLidos, marcarLidoLocal: marcarCardLidoLocal } = useUnreadMap('crm_oportunidades', opsFiltradas.map(o => o.id), currentUser);
 
   const getEst       = (id: string) => estagios.find(e => e.id === id);
   const getItensEst  = (estagioId: string) => itens.filter(i => i.estagio_id === estagioId);
@@ -751,20 +755,24 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // ABRIR MODAL — split-screen
   // ─────────────────────────────────────────────────────────────────────────
+  // 🟡 sutil no rótulo da aba quando ela tem alteração/adição ainda não vista
+  // (mesmo marcador usado nos campos do formulário e no card do quadro) — a
+  // aba "auditoria" abaixo só existe pra quem quiser ver o histórico completo,
+  // não é o mecanismo principal de aviso.
+  const tabLabel = (key: string, label: string) => camposNaoLidos.has(key) ? `${label} 🟡` : label;
   const TABS_CRM = [
-    { key:'andamento',    label:'📝 Andamento' },
+    { key:'andamento',    label: tabLabel('andamento', '📝 Andamento') },
     ...(modalAbrir?.funil === 'venda_direta' ? [{ key:'quadro_lead' as const, label:'🧾 Quadro Lead' }] : []),
     { key:'cotacoes',     label:'💰 Cotações' },
     { key:'formacao_precos', label:'💲 Formação de Preços' },
-    { key:'processo',     label:'📂 Arquivos de Licitação' },
-    { key:'impugnacoes',  label:'⚠️ Impugnações e Esclarecimentos' },
-    { key:'custos',       label:'💰 Custos e Docs Técnicos' },
-    { key:'docs_enviados',label:'📤 Docs Enviados ao Processo' },
-    { key:'contratos',    label:'📋 Fase de Contrato' },
-    { key:'atestado',     label:'🏅 Atestado' },
-    { key:'informacoes',  label:'ℹ️ Informações Importantes' },
+    { key:'processo',     label: tabLabel('processo', '📂 Arquivos de Licitação') },
+    { key:'impugnacoes',  label: tabLabel('impugnacoes', '⚠️ Impugnações e Esclarecimentos') },
+    { key:'custos',       label: tabLabel('custos', '💰 Custos e Docs Técnicos') },
+    { key:'docs_enviados',label: tabLabel('docs_enviados', '📤 Docs Enviados ao Processo') },
+    { key:'contratos',    label: tabLabel('contratos', '📋 Fase de Contrato') },
+    { key:'atestado',     label: tabLabel('atestado', '🏅 Atestado') },
+    { key:'informacoes',  label: tabLabel('informacoes', 'ℹ️ Informações Importantes') },
     { key:'analise',      label:'🔬 Análise' },
-    { key:'auditoria',    label: temNaoLidos ? '🕐 Alterações 🟡' : '🕐 Alterações' },
   ] as const;
 
   useEffect(() => {
@@ -1110,6 +1118,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       campo: 'andamento_crm',
       abaDestino: 'crm',
     });
+    logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+      oldRow: { andamento: null }, newRow: { andamento: abrirNovoText.slice(0, 120) }, user: currentUser });
     setAbrirNovoText('');
     await fetchAbrirTabContent(modalAbrir, 'andamento');
     setAbrirSalvandoDoc(false);
@@ -1147,6 +1157,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       criado_por_nome: currentUser?.nome,
       criado_em: agora,
     }]);
+    logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+      oldRow: { [abrirTabDir]: null }, newRow: { [abrirTabDir]: nome || abrirUploadDesc.slice(0, 80) }, user: currentUser,
+      formatters: { [abrirTabDir]: (v: string) => v ? `📎 ${v}` : '—' } });
     setAbrirUploadFile(null);
     setAbrirUploadDesc('');
     if (abrirUploadRef.current) abrirUploadRef.current.value = '';
@@ -1667,6 +1680,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const tvend  = totalVendidoOp(op.id);
     const tfat   = totalFaturadoOp(op.id);
     const accent = op.funil === 'licitacao' ? '#7c3aed' : '#0891b2';
+    const naoLido = cardsNaoLidos.has(String(op.id));
     const expandido = cardsExpandidos.has(op.id);
     const toggleExpand = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -1684,16 +1698,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         onDragStart={() => handleDragStart(op.id)}
         onDragEnd={handleDragEnd}
         style={{
-          background: dragging === op.id ? '#e0f2fe' : 'white',
+          background: dragging === op.id ? '#e0f2fe' : naoLido ? '#fffdf0' : 'white',
           borderRadius: 5, padding: '6px 8px',
           boxShadow: '0 1px 3px rgba(0,0,0,.1)',
           cursor: 'grab', marginBottom: 5,
-          borderLeft: `3px solid ${accent}`,
+          borderLeft: `${naoLido ? 4 : 3}px solid ${naoLido ? '#eab308' : accent}`,
           borderTop: dragOverItem === op.id && dragging !== op.id ? '2px dashed #3b82f6' : '2px solid transparent',
           opacity: dragging === op.id ? .6 : 1,
           userSelect: 'none',
           transition: 'border-top .1s',
         }}
+        title={naoLido ? 'Este registro tem alteração(ões) que você ainda não visualizou' : undefined}
       >
         {/* ── Linha do título (sempre visível) ── */}
         <div style={{ display:'flex', alignItems:'center', gap:4 }} onClick={toggleExpand}>
@@ -3989,20 +4004,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
                   { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
                 ] as any[]).map(({ label, key, placeholder, type }) => (
-                  <div key={key} style={{ marginBottom:7 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
-                      <ChangeHighlight field={key} camposNaoLidos={camposNaoLidos} title={`"${label}" foi alterado — ainda não visualizado`}>{label}</ChangeHighlight>
-                    </div>
+                  <div key={key} style={campoDestaque(key)}>
+                    <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>{label}</div>
                     <input type={type||'text'} value={formOp[key]||''} placeholder={placeholder}
                       onChange={e => setFormOp(f => ({...f, [key]: e.target.value}))}
                       style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
                   </div>
                 ))}
 
-                <div style={{ marginBottom:7 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
-                    <ChangeHighlight field="estagio_id" camposNaoLidos={camposNaoLidos} title='"Estágio" foi alterado — ainda não visualizado'>Estágio</ChangeHighlight>
-                  </div>
+                <div style={campoDestaque('estagio_id')}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Estágio</div>
                   <select value={formOp.estagio_id||''} onChange={e => setFormOp(f => ({...f, estagio_id: e.target.value}))}
                     style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
                     <option value="">— Selecione —</option>
@@ -4013,7 +4024,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 </div>
 
                 {isGanho(getEst(formOp.estagio_id)) && (
-                  <div style={{ marginBottom:7 }}>
+                  <div style={campoDestaque('empresa_vencedora')}>
                     <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Empresa Vencedora *</div>
                     <div style={{ display:'flex', gap:6 }}>
                       {(['ACN','DETECH'] as const).map(emp => (
@@ -4030,7 +4041,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 )}
 
                 {isPerdido(getEst(formOp.estagio_id)) && (
-                  <div style={{ marginBottom:7 }}>
+                  <div style={campoDestaque('motivo_perda')}>
                     <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Motivo da Perda</div>
                     <textarea value={formOp.motivo_perda||''} onChange={e => setFormOp(f => ({...f, motivo_perda: e.target.value}))}
                       rows={2} placeholder="Descreva o motivo..."
@@ -4038,7 +4049,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   </div>
                 )}
 
-                <div style={{ marginBottom:7 }}>
+                <div style={campoDestaque('cliente_id')}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Cliente (opcional)</div>
                   <ClienteAutocomplete
                     value={formOp._cliente_nome || ''}
@@ -4047,22 +4058,20 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     placeholder="Vincular cliente..." />
                 </div>
 
-                <div style={{ marginBottom:10 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
-                    <ChangeHighlight field="responsavel_nome" camposNaoLidos={camposNaoLidos} title='"Responsável" foi alterado — ainda não visualizado'>Responsável</ChangeHighlight>
-                  </div>
+                <div style={{ ...campoDestaque('responsavel_nome'), marginBottom:10 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Responsável</div>
                   <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o operador" />
                 </div>
 
                 <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:5, padding:'8px 10px', marginBottom:8 }}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:5 }}>📞 CONTATO</div>
-                  <div style={{ marginBottom:5 }}>
+                  <div style={campoDestaque('nome_contato')}>
                     <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Nome</div>
                     <input className="acn-input" style={{ width:'100%' }} placeholder="Nome do contato"
                       value={formOp.nome_contato||''} onChange={e => setFormOp(f => ({...f, nome_contato: e.target.value}))} />
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
-                    <div>
+                    <div style={campoDestaque('contato')}>
                       <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Telefone</div>
                       <input className="acn-input" style={{ width:'100%' }} placeholder="(99) 99999-9999"
                         value={formOp.contato||''} onChange={e => setFormOp(f => ({...f, contato: e.target.value}))} />
@@ -4073,19 +4082,19 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         </a>
                       )}
                     </div>
-                    <div>
+                    <div style={campoDestaque('contato_email')}>
                       <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>E-mail</div>
                       <input className="acn-input" style={{ width:'100%' }} placeholder="email@exemplo.com"
                         value={formOp.contato_email||''} onChange={e => setFormOp(f => ({...f, contato_email: e.target.value}))} />
                     </div>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-                    <div>
+                    <div style={campoDestaque('prox_contato')}>
                       <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>📅 Próximo Contato</div>
                       <input type="date" className="acn-input" style={{ width:'100%' }}
                         value={formOp.prox_contato||''} onChange={e => setFormOp(f => ({...f, prox_contato: e.target.value}))} />
                     </div>
-                    <div>
+                    <div style={campoDestaque('hora_prox_contato')}>
                       <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>⏰ Hora do Contato</div>
                       <input type="time" className="acn-input" style={{ width:'100%' }}
                         value={formOp.hora_prox_contato||''} onChange={e => setFormOp(f => ({...f, hora_prox_contato: e.target.value}))} />
@@ -4349,16 +4358,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
                     {/* Área livre (rich text persistido) */}
                     {NotaLivreEditor}
-                  </div>
-                )}
-
-                {/* ── ALTERAÇÕES (auditoria — POC da infraestrutura global, ver AuditSystem.tsx) ── */}
-                {abrirTabDir === 'auditoria' && (
-                  <div>
-                    <div style={{ fontSize:9, color:'#94a3b8', marginBottom:8 }}>
-                      Histórico de alterações deste registro — quem mudou, quando, e o valor antes/depois.
-                    </div>
-                    <AuditHistory entityType="crm_oportunidades" entityId={modalAbrir.id} fieldLabels={CAMPOS_LABEL_AUDITORIA} />
                   </div>
                 )}
 

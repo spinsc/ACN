@@ -151,6 +151,60 @@ export function useUnreadChanges(entityType, entityId, currentUser) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// useUnreadMap — versão em lote de useUnreadChanges, pra listas/quadros
+// (Kanban, tabelas) onde N cards precisam saber se têm pendência sem fazer N
+// consultas — 2 consultas no total, independente de quantos itens existem.
+// Retorna um Set<entityId> com os registros que têm alteração não vista pelo
+// usuário atual. Assina Realtime uma única vez (não um canal por card).
+// ─────────────────────────────────────────────────────────────────────────────
+export function useUnreadMap(entityType, entityIds, currentUser) {
+  const [naoLidoSet, setNaoLidoSet] = useState(() => new Set());
+  const idsKey = (entityIds || []).filter(Boolean).map(String).sort().join(',');
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      if (!entityType || !currentUser?.id || !idsKey) { setNaoLidoSet(new Set()); return; }
+      const ids = idsKey.split(',');
+      const { data: watermarks } = await supabase.from('entity_views').select('entity_id,last_seen_at')
+        .eq('user_id', currentUser.id).eq('entity_type', entityType).in('entity_id', ids);
+      const watermarkMap = new Map((watermarks || []).map(w => [w.entity_id, w.last_seen_at]));
+      const { data: mudancas } = await supabase.from('audit_log').select('entity_id,created_at')
+        .eq('entity_type', entityType).in('entity_id', ids).neq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+      const resultado = new Set();
+      for (const m of mudancas || []) {
+        if (resultado.has(m.entity_id)) continue;
+        const marca = watermarkMap.get(m.entity_id);
+        if (!marca || m.created_at > marca) resultado.add(m.entity_id);
+      }
+      if (!cancelado) setNaoLidoSet(resultado);
+    })();
+    return () => { cancelado = true; };
+  }, [entityType, idsKey, currentUser?.id]);
+
+  useEffect(() => {
+    if (!entityType || !currentUser?.id) return;
+    const ch = supabase.channel(`audit-map-${entityType}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log' }, (payload) => {
+        if (payload.new?.entity_type !== entityType) return;
+        if (payload.new?.user_id === currentUser.id) return;
+        setNaoLidoSet(prev => new Set(prev).add(String(payload.new.entity_id)));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [entityType, currentUser?.id]);
+
+  // Atualização otimista: chamar depois de marcarComoLido() (useMarkAsRead) pra
+  // sumir com o destaque do card/linha na hora, sem esperar um refetch/reload.
+  const marcarLidoLocal = useCallback((entityId) => {
+    setNaoLidoSet(prev => { const next = new Set(prev); next.delete(String(entityId)); return next; });
+  }, []);
+
+  return { naoLidoSet, marcarLidoLocal };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // useMarkAsRead — expõe marcarComoLido(), pra chamar explicitamente ao SAIR da
 // tela (fechar modal) — nunca automaticamente só porque os dados carregaram.
 // ─────────────────────────────────────────────────────────────────────────────
