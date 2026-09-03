@@ -71,6 +71,7 @@ export async function logChange({ module, entityType, entityId, changeType, oldR
       ...base, change_type: 'UPDATE', field_name: campo,
       old_value: format ? format(antesNorm) : fmtValor(antesNorm),
       new_value: format ? format(depoisNorm) : fmtValor(depoisNorm),
+      metadata: metadata || null,
     });
   }
   if (linhas.length === 0) return;

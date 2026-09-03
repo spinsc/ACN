@@ -320,7 +320,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const abrirDragStartW   = useRef(0);
 
   // ── auditoria/colaboração (POC — infraestrutura global, ver AuditSystem.tsx) ──
-  const { camposNaoLidos } = useUnreadChanges('crm_oportunidades', modalAbrir?.id, currentUser);
+  const { camposNaoLidos, naoLidos } = useUnreadChanges('crm_oportunidades', modalAbrir?.id, currentUser);
+  // Um item de lista (comentário, documento) é "não lido" se existe uma linha em
+  // audit_log com metadata.ref_id apontando pro id dele — ver salvarAbrirAndamento/
+  // salvarAbrirDoc, que gravam esse vínculo no momento de salvar.
+  const itemNaoLido = (itemId: string) => naoLidos.some((n: any) => n.metadata?.ref_id === itemId);
   const marcarComoLido = useMarkAsRead('crm_oportunidades', modalAbrir?.id, currentUser);
   const fecharModalAbrir = () => {
     marcarComoLido();
@@ -1101,13 +1105,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!abrirNovoText.trim() || !modalAbrir) return;
     setAbrirSalvandoDoc(true);
     const agora = new Date().toISOString();
-    await supabase.from('crm_historico').insert([{
+    const { data: novoAndamento } = await supabase.from('crm_historico').insert([{
       oportunidade_id: modalAbrir.id,
       tipo: 'observacao',
       texto: abrirNovoText,
       usuario_nome: currentUser?.nome,
       criado_em: agora,
-    }]);
+    }]).select('id').single();
     await salvarMencoes({
       texto: abrirNovoText,
       mencionanteId: String(currentUser?.id || ''),
@@ -1119,7 +1123,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       abaDestino: 'crm',
     });
     logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
-      oldRow: { andamento: null }, newRow: { andamento: abrirNovoText.slice(0, 120) }, user: currentUser });
+      oldRow: { andamento: null }, newRow: { andamento: abrirNovoText.slice(0, 120) }, user: currentUser,
+      metadata: { ref_id: novoAndamento?.id } });
     setAbrirNovoText('');
     await fetchAbrirTabContent(modalAbrir, 'andamento');
     setAbrirSalvandoDoc(false);
@@ -1147,7 +1152,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       url = pub.publicUrl;
       nome = abrirUploadFile.name;
     }
-    await supabase.from('licitacao_documentos').insert([{
+    const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
       licitacao_id: modalAbrir.id,
       categoria: abrirTabDir,
       nome: nome || abrirUploadDesc,
@@ -1156,10 +1161,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
       criado_em: agora,
-    }]);
+    }]).select('id').single();
     logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
       oldRow: { [abrirTabDir]: null }, newRow: { [abrirTabDir]: nome || abrirUploadDesc.slice(0, 80) }, user: currentUser,
-      formatters: { [abrirTabDir]: (v: string) => v ? `📎 ${v}` : '—' } });
+      formatters: { [abrirTabDir]: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id } });
     setAbrirUploadFile(null);
     setAbrirUploadDesc('');
     if (abrirUploadRef.current) abrirUploadRef.current.value = '';
@@ -1199,6 +1204,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         conteudo: html, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
         criado_em: new Date().toISOString(),
       }]);
+      logChange({ module: 'crm', entityType: 'crm_oportunidades', entityId: modalAbrir.id, changeType: 'UPDATE',
+        oldRow: { [`nota_${abrirTabDir}`]: null }, newRow: { [`nota_${abrirTabDir}`]: 'editada' }, user: currentUser,
+        formatters: { [`nota_${abrirTabDir}`]: () => '📝 Área Livre editada' } });
     }
     setAbrirNotaSalvando(false);
   };
@@ -2425,8 +2433,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // ÁREA LIVRE (rich text editor reutilizável)
   // ─────────────────────────────────────────────────────────────────────────
+  const notaNaoLida = camposNaoLidos.has(`nota_${abrirTabDir}`);
   const NotaLivreEditor = (
-    <div style={{ marginTop:16, border:'1px solid #d1d5db', borderRadius:6, overflow:'hidden' }}>
+    <div style={{ marginTop:16, border:`1px solid ${notaNaoLida ? '#fde047' : '#d1d5db'}`, borderRadius:6, overflow:'hidden',
+      boxShadow: notaNaoLida ? '0 0 0 3px #fefce8' : 'none' }}>
       <div style={{ background:'#f1f5f9', padding:'5px 8px', borderBottom:'1px solid #d1d5db',
         display:'flex', alignItems:'center', gap:4, flexWrap:'wrap' }}>
         <span style={{ fontSize:9, fontWeight:700, color:'#475569', marginRight:4 }}>📌 Área Livre</span>
@@ -4160,12 +4170,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         Cadastro do Lead
                       </div>
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                        <div>
+                        <div style={campoDestaque('data_aceite_cliente')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data do aceite do cliente</label>
                           <input type="date" className="acn-input" style={{ width:'100%' }}
                             value={formOp.data_aceite_cliente||''} onChange={e=>setFormOp(f=>({...f,data_aceite_cliente:e.target.value}))} />
                         </div>
-                        <div>
+                        <div style={campoDestaque('faturamento_empresa')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Faturamento pela ACN ou DETECH</label>
                           <select className="acn-input" style={{ width:'100%' }}
                             value={formOp.faturamento_empresa||'ACN'} onChange={e=>setFormOp(f=>({...f,faturamento_empresa:e.target.value}))}>
@@ -4173,11 +4183,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                             <option value="Detech">Detech</option>
                           </select>
                         </div>
-                        <div>
+                        <div style={campoDestaque('responsavel_nome')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Vendedor</label>
                           <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o vendedor" />
                         </div>
-                        <div>
+                        <div style={campoDestaque('orgao')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Cliente</label>
                           <input className="acn-input" style={{ width:'100%' }}
                             value={formOp.orgao||''} onChange={e=>setFormOp(f=>({...f,orgao:e.target.value}))} />
@@ -4190,7 +4200,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                           { label:'Quantidade',     key:'quantidade' },
                           { label:'Local',          key:'local_instalacao' },
                         ] as any[]).map(({ label, key }) => (
-                          <div key={key}>
+                          <div key={key} style={campoDestaque(key)}>
                             <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
                             <input className="acn-input" style={{ width:'100%' }}
                               value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
@@ -4201,7 +4211,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                           { label:'Prazo de entrega PRODUÇÃO',    key:'prazo_entrega_producao' },
                           { label:'Prazo de entrega COMERCIAL',   key:'prazo_entrega_comercial' },
                         ] as any[]).map(({ label, key }) => (
-                          <div key={key}>
+                          <div key={key} style={campoDestaque(key)}>
                             <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
                             <input type="date" className="acn-input" style={{ width:'100%' }}
                               value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
@@ -4227,23 +4237,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                           { label:'Protocolo Viagem',        key:'ctrl_protocolo_viagem' },
                           { label:'Controle',                key:'ctrl_controle' },
                         ] as any[]).map(({ label, key }) => (
-                          <div key={key}>
+                          <div key={key} style={campoDestaque(key)}>
                             <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
                             <input className="acn-input" style={{ width:'100%' }}
                               value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
                           </div>
                         ))}
-                        <div>
+                        <div style={campoDestaque('ctrl_data_entrada')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data Entrada</label>
                           <input type="date" className="acn-input" style={{ width:'100%' }}
                             value={formOp.ctrl_data_entrada||''} onChange={e=>setFormOp(f=>({...f,ctrl_data_entrada:e.target.value}))} />
                         </div>
-                        <div>
+                        <div style={campoDestaque('ctrl_data_saida')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data Saída</label>
                           <input type="date" className="acn-input" style={{ width:'100%' }}
                             value={formOp.ctrl_data_saida||''} onChange={e=>setFormOp(f=>({...f,ctrl_data_saida:e.target.value}))} />
                         </div>
-                        <div>
+                        <div style={campoDestaque('ctrl_prazo_garantia')}>
                           <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Prazo de Garantia</label>
                           <input className="acn-input" style={{ width:'100%' }} placeholder="12 MESES"
                             value={formOp.ctrl_prazo_garantia||''} onChange={e=>setFormOp(f=>({...f,ctrl_prazo_garantia:e.target.value}))} />
@@ -4325,8 +4335,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                           Histórico ({abrirDocs.length})
                         </div>
                         {abrirDocs.map((d,i) => (
-                          <div key={d.id||i} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:5,
-                            padding:'8px 10px', borderLeft:'3px solid #7c3aed' }}>
+                          <div key={d.id||i} style={{
+                            background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
+                            border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`,
+                            borderRadius:5, padding:'8px 10px', borderLeft:'3px solid #7c3aed' }}>
                             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:6 }}>
                               <div style={{ flex:1 }}>
                                 {d.conteudo && (
@@ -4380,7 +4392,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:'10px 0' }}>Nenhuma atualização registrada ainda.</div>
                       )}
                       {abrirAndamentoHist.map((h,i) => (
-                        <div key={h.id||i} style={{ padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
+                        <div key={h.id||i} style={{ padding:'8px 10px',
+                          background: itemNaoLido(h.id) ? '#fefce8' : '#fff',
+                          border: `1px solid ${itemNaoLido(h.id) ? '#fde047' : '#e2e8f0'}`,
+                          borderRadius:5, borderLeft:'3px solid #7c3aed' }}>
                           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                             <div style={{ fontSize:11, color:'#1e293b', whiteSpace:'pre-wrap', wordBreak:'break-word', lineHeight:1.5, flex:1 }}><Linkify text={h.texto} /></div>
                             {currentUser?.perfil==='Admin' && (
@@ -4426,7 +4441,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:16 }}>Nenhum documento registrado.</div>
                       )}
                       {abrirDocs.map((d,i) => (
-                        <div key={d.id||i} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, padding:'8px 10px' }}>
+                        <div key={d.id||i} style={{
+                          background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
+                          border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`,
+                          borderRadius:5, padding:'8px 10px' }}>
                           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                             <div style={{ flex:1 }}>
                               {d.url && (
