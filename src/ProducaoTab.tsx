@@ -10,6 +10,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -21,7 +22,7 @@ const semDado = (v) => !v || !String(v).trim();
 // Veicular para não divergir quando o fluxo mudar de novo.
 const STATUSES_VEICULAR_ATIVAS = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
 
-function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
+function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, naoLido }) {
   const emProd       = o.status_geral === 'Em Producao';
   const aguardando   = o.status_geral === 'Aguardando Inicio Producao';
   const retrabalho   = o.status_geral === 'Retrabalho';
@@ -37,6 +38,8 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar }) {
     ? { background: '#fef2f2', borderLeft: '4px solid #ef4444' }
     : o.liberado_divulgacao
     ? { background: '#faf5ff', borderLeft: '3px solid #7c3aed' }
+    : naoLido
+    ? { background: '#fffdf0', borderLeft: '4px solid #eab308' }
     : {};
 
   return (
@@ -2087,6 +2090,9 @@ export default function ProducaoTab({ currentUser }) {
     }
 
     await supabase.from('oples').update(upd).eq('id', opl.id);
+    logChange({ module: 'producao', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral, responsavel_producao: opl.responsavel_producao },
+      newRow: { status_geral: upd.status_geral, responsavel_producao: upd.responsavel_producao }, user: currentUser });
     // Semeia a lista livre de responsáveis (responsaveis_producao) com quem foi
     // definido ao iniciar — daqui pra frente essa lista é editável livremente
     // via "👥 Equipe", sem mexer mais nesses campos legados.
@@ -2178,6 +2184,8 @@ export default function ProducaoTab({ currentUser }) {
     }
 
     await supabase.from('oples').update(upd).eq('id', opl.id);
+    logChange({ module: 'producao', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { responsavel_producao: opl.responsavel_producao }, newRow: { responsavel_producao: upd.responsavel_producao }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
       evento: `Responsavel alterado para: ${logResp}`,
@@ -2355,6 +2363,9 @@ export default function ProducaoTab({ currentUser }) {
     }
     return true;
   });
+  // Mesmo destaque usado em outras telas — linha fica com a lateral amarela
+  // quando a OP tem alteração não vista por este usuário (ver AuditSystem.tsx).
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', oplsFiltradas.map(o => o.id), currentUser);
 
   const filtrosAtivos = filtroBusca || filtroStatus !== 'Todos' || filtroTecnico !== 'Todos' || filtroCliente || filtroEntregaDe || filtroEntregaAte;
   const limparFiltros = () => {
@@ -2492,7 +2503,8 @@ export default function ProducaoTab({ currentUser }) {
                   return itens.map(item => {
                     if (item.tipo === 'single') {
                       return <OplRow key={item.row.id} o={item.row} onAction={handleAction} currentUser={currentUser}
-                        selecionado={selecionados.has(item.row.id)} onToggleSelecionar={toggleSelecionar} />;
+                        selecionado={selecionados.has(item.row.id)} onToggleSelecionar={toggleSelecionar}
+                        naoLido={oplsNaoLidas.has(String(item.row.id))} />;
                     }
                     const grupo = item;
                     const expandido = !!lotesExpandidos[grupo.base];
@@ -2500,9 +2512,10 @@ export default function ProducaoTab({ currentUser }) {
                     const qtdEmProducao  = grupo.irmaos.filter(o => o.status_geral === 'Em Producao').length;
                     const qtdRetrabalho  = grupo.irmaos.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho').length;
                     const todosSelecionados = grupo.irmaos.every((o:any) => selecionados.has(o.id));
+                    const loteNaoLido = grupo.irmaos.some((o:any) => oplsNaoLidas.has(String(o.id)));
                     return (
                       <React.Fragment key={grupo.base}>
-                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                        <tr style={{background:'#f5f3ff',borderLeft: loteNaoLido ? '4px solid #eab308' : '4px solid #7c3aed'}}>
                           <td style={{textAlign:'center'}}>
                             <input type="checkbox" checked={todosSelecionados} title="Selecionar todas as unidades deste lote"
                               onChange={()=>setSelecionados(prev => {
@@ -2537,7 +2550,8 @@ export default function ProducaoTab({ currentUser }) {
                         </tr>
                         {expandido && grupo.irmaos.map(o => (
                           <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser}
-                            selecionado={selecionados.has(o.id)} onToggleSelecionar={toggleSelecionar} />
+                            selecionado={selecionados.has(o.id)} onToggleSelecionar={toggleSelecionar}
+                            naoLido={oplsNaoLidas.has(String(o.id))} />
                         ))}
                       </React.Fragment>
                     );
