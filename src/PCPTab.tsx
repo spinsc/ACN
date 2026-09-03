@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -13,6 +14,9 @@ export default function PCPTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
   const [oplsFalta, setOplsFalta] = useState([]);
   const [loading, setLoading] = useState(false);
+  // Linhas com alteração não vista por este usuário ganham borda amarela —
+  // mesmo padrão usado nas outras telas de OP (ver AuditSystem.tsx).
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [modalDevolver, setModalDevolver] = useState(null);
   const [modalVer, setModalVer] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
@@ -76,6 +80,8 @@ export default function PCPTab({ currentUser }) {
       liberado_producao_por: currentUser?.nome,
       ...(tempoPcp != null ? { tempo_pcp_horas: tempoPcp } : {}),
     }).eq('id', opl.id);
+    logChange({ module: 'pcp', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguardando Inicio Producao' }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
       evento: `OPL liberada para Producao por ${currentUser?.nome}`,
@@ -142,6 +148,8 @@ export default function PCPTab({ currentUser }) {
       data_liberacao_pcp: agora,
       liberado_producao_por: currentUser?.nome,
     }).eq('id', opl.id);
+    logChange({ module: 'pcp', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguardando Almox' }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
       evento: `Liberado para Kiting — Almoxarifado. PCP: ${currentUser?.nome}`,
@@ -459,7 +467,11 @@ export default function PCPTab({ currentUser }) {
                   }
 
                   const renderLinhaOpl = (o) => (
-                    <tr key={o.id} style={isEnvioDireto(o)?{background:'#fffbeb',borderLeft:'3px solid #f59e0b'}:{}}>
+                    <tr key={o.id} style={
+                      isEnvioDireto(o) ? {background:'#fffbeb',borderLeft:'3px solid #f59e0b'}
+                      : oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'4px solid #eab308'}
+                      : {}
+                    }>
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                       <td style={{fontSize:10}}>
