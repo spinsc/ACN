@@ -8,6 +8,7 @@ import { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
+import { logChange } from './AuditSystem';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1049,16 +1050,21 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     // modal e nunca é resincronizada, então incluir esses campos aqui sobrescreveria
     // qualquer alteração feita por esses outros caminhos com o valor antigo do mount.
     const { _cliente_id, _cliente_obj, historico, status, criado_em, criado_por, id, areas_livres, marcadores, ...editaveis } = formEdit;
-    const { error } = await supabase.from('licitacoes').update({
+    const novoRow = {
       ...editaveis,
       data_limite_esclarecimentos: inputBRParaUtc(editaveis.data_limite_esclarecimentos),
       data_limite_proposta:        inputBRParaUtc(editaveis.data_limite_proposta),
       data_disputa:                inputBRParaUtc(editaveis.data_disputa),
       data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
       atualizado_em: agora,
-    }).eq('id', licit.id);
+    };
+    const { error } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
     if (error) { alert('Erro ao salvar: ' + error.message); }
-    else { onRefresh(); }
+    else {
+      logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
+        oldRow: licit, newRow: { ...licit, ...novoRow }, user: currentUser });
+      onRefresh();
+    }
     setSalvandoForm(false);
   };
 
@@ -1200,7 +1206,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     setSalvando(true);
     const agora = new Date().toISOString();
     const hist = [...(licit.historico || []), { status: novoStatus, usuario: currentUser?.nome, data: agora, obs: obsEncerramento || '' }];
-    await supabase.from('licitacoes').update({ status: novoStatus, historico: hist, obs_encerramento: obsEncerramento || null, atualizado_em: agora }).eq('id', licit.id);
+    const novoRow = { status: novoStatus, historico: hist, obs_encerramento: obsEncerramento || null, atualizado_em: agora };
+    await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
+    logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
+      oldRow: licit, newRow: { ...licit, ...novoRow }, user: currentUser });
     setConfirmStatus(null);
     setObsEncerramento('');
     setSalvando(false);
