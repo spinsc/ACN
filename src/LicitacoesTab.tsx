@@ -3,12 +3,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
 import AgendaWidget from './AgendaWidget';
-import { useUnread, UnreadBadge } from './useUnread';
+import { UnreadBadge } from './useUnread';
 import { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
-import { logChange } from './AuditSystem';
+import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -512,7 +512,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
 // ÁREA LIVRE POR ABA — editor rico com suporte a tabelas coladas do Excel/Word
 // Salva em licitacoes.areas_livres[tabKey] como HTML
 // ─────────────────────────────────────────────────────────────────────────────
-function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
+function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, currentUser, naoLida }: any) {
   const editorRef  = useRef<any>(null);
   const imgInputRef = useRef<any>(null);
   const corTextoRef = useRef<any>(null);
@@ -560,6 +560,12 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
       onAreasLivresChange(novasAreas);
       setSalvo(true);
       setTimeout(() => setSalvo(false), 2000);
+      if (currentUser) {
+        const campo = `area_livre_${tabKey}`;
+        logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licitacaoId, changeType: 'UPDATE',
+          oldRow: { [campo]: null }, newRow: { [campo]: 'editada' }, user: currentUser,
+          formatters: { [campo]: () => '📝 Área Livre editada' } });
+      }
     }
   };
 
@@ -638,7 +644,8 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   return (
-    <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden', marginTop:10 }}>
+    <div style={{ background:'#f8fafc', border:`1px solid ${naoLida ? '#fde047' : '#e2e8f0'}`, borderRadius:6, overflow:'hidden', marginTop:10,
+      boxShadow: naoLida ? '0 0 0 3px #fefce8' : 'none' }}>
       {/* Toolbar */}
       <div style={{ background:'#f1f5f9', borderBottom:'1px solid #e2e8f0', padding:'4px 8px',
         display:'flex', alignItems:'center', gap:4 }}>
@@ -747,7 +754,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange }) {
 // visíveis ao mesmo tempo na tela, ao contrário do bloco genérico de
 // documentos que segue a aba única selecionada (tabDir).
 // ─────────────────────────────────────────────────────────────────────────────
-function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeExcluir, areasLivres, onAreasLivresChange }: any) {
+function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeExcluir, areasLivres, onAreasLivresChange, itemNaoLido, areaLivreNaoLida }: any) {
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -782,20 +789,26 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
     const autor = currentUser?.nome || currentUser?.email || 'Usuário';
     try {
       if (uploadFiles.length === 0 && uploadDesc.trim()) {
-        await supabase.from('licitacao_documentos').insert([{
+        const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
           licitacao_id: licitacaoId, categoria,
           nome: uploadDesc.slice(0,80) || 'Documento',
           url: null, conteudo: uploadDesc.trim(),
           criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-        }]);
+        }]).select('id').single();
+        logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licitacaoId, changeType: 'UPDATE',
+          oldRow: { processo: null }, newRow: { processo: (uploadDesc.slice(0,80) || 'Documento') }, user: currentUser,
+          formatters: { processo: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id, categoria } });
       } else {
         for (const file of uploadFiles) {
           const url = await uploadAnexo(file, licitacaoId, categoria);
-          await supabase.from('licitacao_documentos').insert([{
+          const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
             licitacao_id: licitacaoId, categoria, nome: file.name, url,
             conteudo: uploadDesc.trim() || null,
             criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-          }]);
+          }]).select('id').single();
+          logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licitacaoId, changeType: 'UPDATE',
+            oldRow: { processo: null }, newRow: { processo: file.name }, user: currentUser,
+            formatters: { processo: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id, categoria } });
         }
       }
       setUploadFiles([]);
@@ -832,7 +845,9 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
       {loading && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center' }}>Carregando...</div>}
       {!loading && docs.length === 0 && <div style={{ color:'#9ca3af', fontSize:10, textAlign:'center', padding:8 }}>Nenhum documento.</div>}
       {docs.map(d => (
-        <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:6, padding:'6px 8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:4 }}>
+        <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:6, padding:'6px 8px',
+          background: itemNaoLido?.(d.id) ? '#fefce8' : '#f8fafc',
+          border: `1px solid ${itemNaoLido?.(d.id) ? '#fde047' : '#e2e8f0'}`, borderRadius:4 }}>
           <div style={{ flex:1, minWidth:0 }}>
             {d.url ? (
               <a href={d.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb', fontSize:10, fontWeight:600, wordBreak:'break-all' }}>📎 {d.nome}</a>
@@ -847,7 +862,8 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
           )}
         </div>
       ))}
-      <AreaLivre licitacaoId={licitacaoId} tabKey={`processo:${categoria}`} areasLivres={areasLivres} onAreasLivresChange={onAreasLivresChange} />
+      <AreaLivre licitacaoId={licitacaoId} tabKey={`processo:${categoria}`} areasLivres={areasLivres} onAreasLivresChange={onAreasLivresChange}
+        currentUser={currentUser} naoLida={areaLivreNaoLida} />
     </div>
   );
 }
@@ -857,6 +873,25 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // ─────────────────────────────────────────────────────────────────────────────
 function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir }) {
   const [licit, setLicit] = useState<any>(licitProp);
+
+  // ── auditoria/colaboração (mesmo padrão do CRM, ver AuditSystem.tsx) ───────
+  const { camposNaoLidos, naoLidos } = useUnreadChanges('licitacoes', licit?.id, currentUser);
+  // Um item de lista (comentário, documento) é "não lido" se existe uma linha em
+  // audit_log com metadata.ref_id apontando pro id dele — ver salvarAndamento/
+  // salvarDoc/SubQuadroDocumentos.salvar, que gravam esse vínculo ao salvar.
+  const itemNaoLido = (itemId: string) => naoLidos.some((n: any) => n.metadata?.ref_id === itemId);
+  const marcarComoLidoAudit = useMarkAsRead('licitacoes', licit?.id, currentUser);
+  // Caixa de destaque sutil em volta do campo inteiro (rótulo + input) quando ele
+  // mudou e ainda não foi visto por este usuário — mesma receita do CRM.
+  const campoDestaque = (field: string): React.CSSProperties => ({
+    borderRadius: 5, padding: '4px 6px', margin: '0 -6px 0 -6px',
+    background: camposNaoLidos.has(field) ? '#fefce8' : 'transparent',
+    border: `1px solid ${camposNaoLidos.has(field) ? '#fde047' : 'transparent'}`,
+  });
+  // Fecha o modal marcando como lido — nunca automaticamente no mount, só ao
+  // sair da tela. O card na lista (useUnreadMap) se limpa sozinho via Realtime
+  // em entity_views, sem precisar de callback direto pra cá.
+  const fecharModal = () => { marcarComoLidoAudit(); onClose(); };
 
   // ── Resize do painel ──────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(40);
@@ -1082,12 +1117,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         primeiroAnexoUrl = await uploadAnexo(novoAnexoFiles[0], licit.id, 'andamento');
         primeiroAnexoNome = novoAnexoFiles[0].name;
       }
-      const { error } = await supabase.from('licitacao_documentos').insert([{
+      const { data: novoAndamento, error } = await supabase.from('licitacao_documentos').insert([{
         licitacao_id: licit.id, categoria: 'andamento',
         nome: 'Andamento', conteudo: novoText.trim(),
         anexo_url: primeiroAnexoUrl, anexo_nome: primeiroAnexoNome,
         criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-      }]);
+      }]).select('id').single();
+      logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
+        oldRow: { andamento: null }, newRow: { andamento: novoText.trim().slice(0, 120) }, user: currentUser,
+        metadata: { ref_id: novoAndamento?.id } });
       // uploads adicionais (arquivos extras sem texto)
       for (let i = 1; i < novoAnexoFiles.length; i++) {
         const url = await uploadAnexo(novoAnexoFiles[i], licit.id, 'andamento');
@@ -1161,23 +1199,29 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     try {
       if (uploadFiles.length === 0 && uploadDesc.trim()) {
         // só texto, sem arquivo
-        const { error } = await supabase.from('licitacao_documentos').insert([{
+        const { data: novoDoc, error } = await supabase.from('licitacao_documentos').insert([{
           licitacao_id: licit.id, categoria: tabDir,
           nome: uploadDesc.slice(0,80) || 'Documento',
           url: null, conteudo: uploadDesc.trim(),
           criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-        }]);
+        }]).select('id').single();
         if (error) alert('Erro: ' + error.message);
+        else logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
+          oldRow: { [tabDir]: null }, newRow: { [tabDir]: (uploadDesc.slice(0,80) || 'Documento') }, user: currentUser,
+          formatters: { [tabDir]: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id } });
       } else {
         // upload de cada arquivo
         for (const file of uploadFiles) {
           const url = await uploadAnexo(file, licit.id, tabDir);
-          await supabase.from('licitacao_documentos').insert([{
+          const { data: novoDoc } = await supabase.from('licitacao_documentos').insert([{
             licitacao_id: licit.id, categoria: tabDir,
             nome: file.name, url,
             conteudo: uploadDesc.trim() || null,
             criado_por: currentUser?.email, criado_por_nome: autor, criado_em: agora,
-          }]);
+          }]).select('id').single();
+          logChange({ module: 'licitacoes', entityType: 'licitacoes', entityId: licit.id, changeType: 'UPDATE',
+            oldRow: { [tabDir]: null }, newRow: { [tabDir]: file.name }, user: currentUser,
+            formatters: { [tabDir]: (v: string) => v ? `📎 ${v}` : '—' }, metadata: { ref_id: novoDoc?.id } });
         }
       }
       setUploadFiles([]);
@@ -1214,7 +1258,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     setObsEncerramento('');
     setSalvando(false);
     onRefresh();
-    if (novoStatus === 'Vencida') { setShowAcoesVencida(true); } else { onClose(); }
+    if (novoStatus === 'Vencida') { setShowAcoesVencida(true); } else { fecharModal(); }
   };
 
   // ── Emitir Pedido de Compra ───────────────────────────────────────────────
@@ -1327,7 +1371,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 style={{ background:'rgba(255,255,255,.2)', border:'none', color:'#fff', fontSize:14, cursor:'pointer', padding:'3px 6px', borderRadius:3 }}>
                 ─
               </button>
-              <button onClick={onClose}
+              <button onClick={fecharModal}
                 style={{ background:'rgba(255,255,255,.2)', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'3px 6px', borderRadius:3 }}>
                 ✕
               </button>
@@ -1354,7 +1398,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
 
             {/* Faturamento — sempre visível */}
-            <div>
+            <div style={campoDestaque('faturamento_empresa')}>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>ACN / Detech</label>
               <div style={{ display:'flex', gap:6 }}>
                 {FATURAMENTO_OPTIONS.map(opt => (
@@ -1370,8 +1414,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              <FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} />
-              <div>
+              <div style={campoDestaque('numero')}><FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} /></div>
+              <div style={campoDestaque('classificacao')}>
                 <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação</label>
                 <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)}
                   style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
@@ -1380,10 +1424,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
-            <FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} />
-            <FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} />
+            <div style={campoDestaque('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
+            <div style={campoDestaque('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
 
-            <div>
+            <div style={campoDestaque('tipo_objeto')}>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Tipo</label>
               <div style={{ display:'flex', gap:6 }}>
                 {['Registro de Preços','Contrato'].map(opt => (
@@ -1399,8 +1443,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              <FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" />
-              <div>
+              <div style={campoDestaque('valor_estimado')}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
+              <div style={campoDestaque('julgamento')}>
                 <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Julgamento</label>
                 <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
                   {JULGAMENTO_OPCOES.map(opt => {
@@ -1422,7 +1466,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
-            <div>
+            <div style={campoDestaque('forma_disputa')}>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Forma de Disputa</label>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {FORMA_DISPUTA_OPCOES.map(opt => (
@@ -1441,10 +1485,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
               <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>PRAZOS</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" />
-                <FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" />
-                <FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" />
-                <FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" />
+                <div style={campoDestaque('data_limite_esclarecimentos')}><FInput label="Limite Esclarecimentos/Impugnação" value={formEdit.data_limite_esclarecimentos} onChange={v=>setF('data_limite_esclarecimentos',v)} type="datetime-local" /></div>
+                <div style={campoDestaque('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
+                <div style={campoDestaque('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
+                <div style={campoDestaque('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
               </div>
             </div>
 
@@ -1514,7 +1558,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
                 {/* Lista de entradas */}
                 {andDocs.map((d: any) => (
-                  <div key={d.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, borderLeft:'3px solid #2563eb', padding:'10px 12px' }}>
+                  <div key={d.id} style={{
+                    background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
+                    border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`,
+                    borderRadius:6, borderLeft:'3px solid #2563eb', padding:'10px 12px' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                       <div style={{ flex:1, minWidth:0 }}>
                         {editandoDocId === d.id ? (
@@ -1587,7 +1634,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 )}
 
                 {/* Área Livre desta seção */}
-                <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
+                <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
+                  currentUser={currentUser} naoLida={camposNaoLidos.has('area_livre_andamento')} />
               </div>
             </div>
           </div>
@@ -1612,7 +1660,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   style={{ width:'100%', background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4 }}>
                   🏭 Preparar OP no Comercial
                 </button>
-                <button onClick={onClose}
+                <button onClick={fecharModal}
                   style={{ width:'100%', background:'#fff', color:'#374151', border:'1px solid #d1d5db', borderRadius:4, padding:'5px', fontSize:10, cursor:'pointer' }}>
                   Fechar
                 </button>
@@ -1709,7 +1757,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
           <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
             {TABS_DIREITO.map(t => {
-              const destacada = tabDir !== t.key && isAbaDestacada(t.key);
+              const destacada = tabDir !== t.key && (isAbaDestacada(t.key) || camposNaoLidos.has(t.key));
               return (
                 <button key={t.key} onClick={() => { setTabDir(t.key); marcarAbaLida(t.key); }}
                   style={{ flex:'0 0 auto', padding:'8px 11px', border:'none',
@@ -1747,7 +1795,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                       <SubQuadroDocumentos key={sq.categoria}
                         licitacaoId={licit.id} categoria={sq.categoria} label={sq.label}
                         currentUser={currentUser} podeExcluir={podeExcluirAnexos}
-                        areasLivres={areasLivres} onAreasLivresChange={setAreasLivres} />
+                        areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
+                        itemNaoLido={itemNaoLido} areaLivreNaoLida={camposNaoLidos.has(`area_livre_processo:${sq.categoria}`)} />
                     ))}
                   </div>
                 ))}
@@ -1784,7 +1833,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   <div style={{ color:'#9ca3af', fontSize:12, textAlign:'center', padding:24 }}>Nenhum documento nesta categoria.</div>
                 )}
                 {docs.map((d: any) => (
-                  <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'8px 10px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:6 }}>
+                  <div key={d.id} style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'8px 10px',
+                    background: itemNaoLido(d.id) ? '#fefce8' : '#fff',
+                    border: `1px solid ${itemNaoLido(d.id) ? '#fde047' : '#e2e8f0'}`, borderRadius:6 }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       {d.url ? (
                         <a href={d.url} target="_blank" rel="noreferrer"
@@ -2341,8 +2392,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const isAdmin = true;
   const isAnalista = true;
 
-  // Rastreamento de não lidos
-  const { isUnread, marcarLido } = useUnread('licitacoes', licitacoes, currentUser?.email, 'atualizado_em');
+  // Rastreamento de não lidos — mesmo sistema de auditoria/colaboração usado no
+  // CRM (AuditSystem.tsx), substitui o antigo useUnread (baseado só em
+  // atualizado_em, sem saber qual campo mudou) por um destaque granular por
+  // campo/item dentro do modal + borda lateral amarela no card aqui.
+  const { naoLidoSet: licitacoesNaoLidas } = useUnreadMap('licitacoes', licitacoes.map(l => l.id), currentUser);
 
   // Auto-abre licitação quando navegado via Telecom (analise:abrir-origem)
   useEffect(() => {
@@ -2627,11 +2681,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
                   {g.label}
                   <span style={{ background:'#1e3a5f', color:'#fff', borderRadius:10, padding:'1px 8px', fontSize:9, fontWeight:700 }}>{g.itens.length}</span>
                 </div>
-                {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={isUnread(l)} onClick={() => { setSelected(l); marcarLido(String(l.id)); }} />)}
+                {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} />)}
               </div>
             ))
           ) : (
-            lista.map(l => <LicitCard key={l.id} l={l} unread={isUnread(l)} onClick={() => { setSelected(l); marcarLido(String(l.id)); }} />)
+            lista.map(l => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} />)
           )}
         </div>
       )}
