@@ -5,6 +5,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 
@@ -232,6 +233,9 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
 
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
+  // Linhas com alteração não vista por este usuário ganham borda amarela —
+  // mesmo padrão usado nas outras telas (ver AuditSystem.tsx).
+  const { naoLidoSet: pedidosNaoLidos } = useUnreadMap('pcp_pedidos_compra', pedidos.map((p: any) => p.id), currentUser);
   const [loading, setLoading]   = useState(false);
   const [filtro, setFiltro]     = useState('');
   const [mostrarConcluidos, setMostrarConcluidos] = useState(false);
@@ -468,7 +472,11 @@ export default function ComprasTab({ currentUser }) {
     const updates: any = { status_compra: novoStatus };
     const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', p.id);
     if (error) alert('Erro: ' + error.message);
-    else { setFiltro(''); load(); }
+    else {
+      logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: p.id, changeType: 'UPDATE',
+        oldRow: { status_compra: p.status_compra }, newRow: { status_compra: novoStatus }, user: currentUser });
+      setFiltro(''); load();
+    }
   };
 
   // ── Mesa de Cotações ──────────────────────────────────────────────────────
@@ -868,6 +876,9 @@ export default function ComprasTab({ currentUser }) {
     }).eq('id', modalPrazoProm.id);
     setSalvandoPrazoProm(false);
     if (error) { alert('Erro: ' + error.message); return; }
+    logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: modalPrazoProm.id, changeType: 'UPDATE',
+      oldRow: { prazo_prometido_entrega: modalPrazoProm.prazo_prometido_entrega, prazo_prometido_destino: modalPrazoProm.prazo_prometido_destino },
+      newRow: { prazo_prometido_entrega: prazoPromData, prazo_prometido_destino: prazoPromDestino }, user: currentUser });
     setModalPrazoProm(null);
     load();
   };
@@ -891,6 +902,8 @@ export default function ComprasTab({ currentUser }) {
         campo: 'observacoes_compra',
         abaDestino: 'compras',
       });
+      logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: modalObs.id, changeType: 'UPDATE',
+        oldRow: { observacoes: null }, newRow: { observacoes: obsTexto.trim().slice(0,120) }, user: currentUser });
       setModalObs(null); setObsTexto(''); load();
     }
     else alert('Erro: ' + error.message);
@@ -914,8 +927,11 @@ export default function ComprasTab({ currentUser }) {
     const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
     const isEM  = p.status_compra === 'Em Andamento';
     const isAguardandoAprovacao = p.status_compra === 'Aguardando Aprovação';
+    const naoLido = pedidosNaoLidos.has(String(p.id));
     return (
-      <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9', background: isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : undefined}}>
+      <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9',
+        background: naoLido ? '#fffdf0' : isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : undefined,
+        borderLeft: naoLido ? '4px solid #eab308' : undefined}}>
         <td style={td}><strong>{p.numero_pedido}</strong></td>
         <td style={td}>{p.opl||'—'}</td>
         <td style={{...td,maxWidth:150}}>
