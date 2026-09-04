@@ -24,6 +24,12 @@ import { notificarEvento, msg } from './whatsappHelper';
 // ─────────────────────────────────────────────────────────────────────────────
 const fmtMoeda = (v: number | null) =>
   v == null ? '—' : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`;
+// Valor cru do banco (número JS, ponto decimal) -> string editável no padrão
+// brasileiro (vírgula decimal), pro <input> de valor nunca mostrar/receber um
+// "1234.56" que o parser de salvar (que espera formato digitado por humano,
+// "." = milhar / "," = decimal) interpretaria errado.
+const fmtValorEdit = (v: number | string | null | undefined) =>
+  v == null || v === '' ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtData = (v: string | null) =>
   v ? new Date(v + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 const diasAte = (v: string | null) => {
@@ -53,6 +59,7 @@ const VAZIO_OP: any = {
   empresa_vencedora: '',
   valor_registrado: '',
   valor_acn: '',
+  numero_pv: '',
   faturamento_empresa: 'ACN',
   cliente_id: null,
   _cliente_nome: '',   // campo temporário — não vai para o banco
@@ -112,6 +119,16 @@ const VAZIO_COMPRA: any = {
   fornecedor: '',
   observacoes_compra: '',
 };
+
+// Monta o estado editável (formOp) a partir de uma linha crua do banco —
+// usado em todo lugar que abre o modal de oportunidade, pra garantir que
+// valor_registrado/valor_acn sempre entrem no <input> já formatados em
+// pt-BR (ver fmtValorEdit acima).
+const formOpFromOp = (op: any) => ({
+  ...VAZIO_OP, ...op,
+  valor_registrado: fmtValorEdit(op?.valor_registrado),
+  valor_acn:        fmtValorEdit(op?.valor_acn),
+});
 
 // Máscara de formato XXXX.XXXX para número de OP
 function mascaraOp(valor: string): string {
@@ -388,7 +405,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!autoOpenOpId || loading || ops.length === 0) return;
     const op = ops.find((o: any) => o.id === autoOpenOpId);
     if (op) {
-      setFormOp({ ...VAZIO_OP, ...op });
+      setFormOp(formOpFromOp(op));
       setModalAbrir(op);
       setAbrirTabDir('analise');  // abre direto na aba de Análise
       setAbrirNovoText('');
@@ -408,7 +425,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       (window as any).__acnDeepLink = null;
       supabase.from('crm_oportunidades').select('*').eq('id', pend.contextoId).maybeSingle()
         .then(({ data: op }) => {
-          if (op) { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }
+          if (op) { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }
         });
     };
     tentarAbrir();
@@ -648,7 +665,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!modalCompras) return;
     setSalvandoCompra(true);
     const agora = new Date().toISOString();
-    const numRef = modalCompras.numero_edital ? modalCompras.numero_edital.replace(/\D/g,'').slice(-6) : Date.now().toString().slice(-6);
+    // _oplText: presente quando o modal é aberto a partir da tabela "OPLs em
+    // Aberto" (vínculo real ao número da OP) — nesse caso prevalece sobre
+    // numero_edital (que só faz sentido pra oportunidades de licitação).
+    const oplRef = modalCompras._oplText || modalCompras.numero_edital || null;
+    const numRef = oplRef ? oplRef.replace(/\D/g,'').slice(-6) : Date.now().toString().slice(-6);
     const numeroPedido = `PC-CRM-${numRef}`;
     const obsCompleta = [
       `Pedido de Compra — CRM: ${modalCompras.titulo || '—'}`,
@@ -659,38 +680,43 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
     const { error } = await supabase.from('pcp_pedidos_compra').insert([{
       numero_pedido:        numeroPedido,
-      opl:                  modalCompras.numero_edital || null,
+      opl:                  oplRef,
       descricao_material:   formCompras.descricao_material || modalCompras.titulo || '—',
       quantidade:           formCompras.quantidade || 1,
       fornecedor:           formCompras.fornecedor || null,
       status_compra:        'Pendente',
       observacoes_compra:   obsCompleta,
-      oportunidade_id:      modalCompras.id,
+      oportunidade_id:      modalCompras.id || null,
       data_criacao:         agora,
     }]);
     setSalvandoCompra(false);
     if (error) { alert('Erro ao emitir pedido: ' + error.message); return; }
-    // Salva @menções das observações da compra
-    if (formCompras.observacoes_compra?.trim()) {
-      await salvarMencoes({
-        texto: formCompras.observacoes_compra,
-        mencionanteId: String(currentUser?.id || ''),
-        mencionanteNome: currentUser?.nome || 'Sistema',
-        contexto: 'crm',
-        contextoId: String(modalCompras.id),
-        contextoDescricao: `Compra CRM: ${modalCompras.titulo || '—'}`,
-        campo: 'observacoes_compra',
-        abaDestino: 'compras',
+    // Menção/histórico ficam vinculados à oportunidade CRM — só fazem
+    // sentido quando o pedido foi aberto a partir de um card com id real
+    // (a tela "OPLs em Aberto" pode não ter uma oportunidade associada).
+    if (modalCompras.id) {
+      // Salva @menções das observações da compra
+      if (formCompras.observacoes_compra?.trim()) {
+        await salvarMencoes({
+          texto: formCompras.observacoes_compra,
+          mencionanteId: String(currentUser?.id || ''),
+          mencionanteNome: currentUser?.nome || 'Sistema',
+          contexto: 'crm',
+          contextoId: String(modalCompras.id),
+          contextoDescricao: `Compra CRM: ${modalCompras.titulo || '—'}`,
+          campo: 'observacoes_compra',
+          abaDestino: 'compras',
+        });
+      }
+      // Nota no histórico do card
+      await supabase.from('crm_historico').insert({
+        oportunidade_id: modalCompras.id,
+        tipo: 'observacao',
+        texto: `📦 Pedido de Compra ${numeroPedido} emitido para o setor Compras.`,
+        usuario_nome: currentUser?.nome || 'Sistema',
+        criado_em: agora,
       });
     }
-    // Nota no histórico do card
-    await supabase.from('crm_historico').insert({
-      oportunidade_id: modalCompras.id,
-      tipo: 'observacao',
-      texto: `📦 Pedido de Compra ${numeroPedido} emitido para o setor Compras.`,
-      usuario_nome: currentUser?.nome || 'Sistema',
-      criado_em: agora,
-    });
     alert(`✅ Pedido ${numeroPedido} criado! Acompanhe na aba Compras.`);
     setModalCompras(null);
     setFormCompras({ ...VAZIO_COMPRA });
@@ -770,15 +796,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const tabLabel = (key: string, label: string) => camposNaoLidos.has(key) ? `${label} 🟡` : label;
   const TABS_CRM = [
     { key:'andamento',    label: tabLabel('andamento', '📝 Andamento') },
-    ...(modalAbrir?.funil === 'venda_direta' ? [{ key:'quadro_lead' as const, label:'🧾 Quadro Lead' }] : []),
     { key:'cotacoes',     label:'💰 Cotações' },
     { key:'formacao_precos', label:'💲 Formação de Preços' },
-    { key:'processo',     label: tabLabel('processo', '📂 Arquivos de Licitação') },
-    { key:'impugnacoes',  label: tabLabel('impugnacoes', '⚠️ Impugnações e Esclarecimentos') },
+    { key:'processo',     label: tabLabel('processo', '📂 Arquivos') },
     { key:'custos',       label: tabLabel('custos', '💰 Custos e Docs Técnicos') },
-    { key:'docs_enviados',label: tabLabel('docs_enviados', '📤 Docs Enviados ao Processo') },
-    { key:'contratos',    label: tabLabel('contratos', '📋 Fase de Contrato') },
-    { key:'atestado',     label: tabLabel('atestado', '🏅 Atestado') },
     { key:'informacoes',  label: tabLabel('informacoes', 'ℹ️ Informações Importantes') },
     { key:'analise',      label:'🔬 Análise' },
   ] as const;
@@ -1246,8 +1267,27 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       alert('Selecione a empresa vencedora.');
       return;
     }
+    // Nº do PV agora é editável direto no painel (antes só era gravado pelo
+    // gate "Enviar Proposta" do Kanban) — mesma validação/checagem de
+    // duplicidade daquele gate (ver confirmarEnviado).
+    let numeroPvFinal: string | null = null;
+    if (String(formOp.numero_pv || '').trim()) {
+      const pv = String(formOp.numero_pv).replace(/\D/g, '').slice(0, 4);
+      if (!/^\d{4}$/.test(pv)) {
+        alert('Nº do PV precisa ter 4 dígitos.');
+        return;
+      }
+      const { data: dupPv } = await supabase.from('crm_oportunidades').select('id')
+        .eq('numero_pv', pv).neq('id', modalAbrir.id).maybeSingle();
+      if (dupPv) {
+        alert('Já existe outra oportunidade com esse número de PV.');
+        return;
+      }
+      numeroPvFinal = pv;
+    }
     setSalvando(true);
     const p: any = {
+      numero_pv:         numeroPvFinal,
       titulo:            formOp.titulo?.trim() || null,
       tipo_licitacao:    formOp.tipo_licitacao  || 'ordinaria',
       numero_edital:     limpar(formOp.numero_edital),
@@ -1957,7 +1997,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           )}
           {!perdido && !desistiu && (
             <button className="acn-btn" style={{ background:'#0369a1' }}
-              onClick={e => { e.stopPropagation(); setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}>
+              onClick={e => { e.stopPropagation(); setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}>
               📂 Abrir
             </button>
           )}
@@ -2141,7 +2181,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {/* Linhas de ops */}
               {items.map((op, i) => (
                 <div key={op.id}
-                  onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                  onClick={() => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
                   style={{ padding:'7px 12px', borderBottom: i < items.length - 1 ? '1px solid #f1f5f9' : 'none',
                     display:'flex', alignItems:'center', gap:8, cursor:'pointer', transition:'background .1s' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
@@ -2675,7 +2715,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 const op = ops.find(o => o.id === r.registro_id);
                 if (!op) return null;
                 return (
-                  <div key={r.registro_id} onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                  <div key={r.registro_id} onClick={() => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
                     style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', wordBreak:'break-word' }}>{op.titulo}</div>
@@ -2918,7 +2958,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                             </td>
                             <td style={{ padding:'5px 8px' }}>
                               {crmCard ? (
-                                <button onClick={() => { setFormOp({ ...VAZIO_OP, ...crmCard }); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
+                                <button onClick={() => { setFormOp(formOpFromOp(crmCard)); setModalAbrir(crmCard); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
                                   style={{ fontSize:8, padding:'2px 6px', background:'#ede9fe', color:'#7c3aed', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>
                                   🔗 {crmCard.titulo?.slice(0,20)||'CRM'}
                                 </button>
@@ -2953,6 +2993,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                   onClick={() => setOplAcomp(o)}
                                   style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
                                   💬 Notas
+                                </button>
+                                <button title="Solicitar Compra pra esta OP"
+                                  onClick={() => {
+                                    setModalCompras({ id: o.crm_oportunidade_id || null,
+                                      titulo: `OPL ${o.opl} — ${o.cliente_nome || o.modelo || ''}`,
+                                      orgao: null, _oplText: o.opl });
+                                    setFormCompras({ ...VAZIO_COMPRA });
+                                  }}
+                                  style={{ fontSize:9, padding:'2px 7px', background:'#0369a1', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                  📦 Compra
                                 </button>
                                 <OplAnexosWidget opl={o} setor="Comercial/CRM" currentUser={currentUser} compact={true} />
                               </div>
@@ -4023,6 +4073,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                     { label:'Data da Sessão', key:'data_sessao', type:'date' },
                     ...(formOp.tipo_licitacao==='ata' ? [{ label:'Validade da Ata', key:'data_validade_ata', type:'date' }] : []),
                   ] : []),
+                  { label:'Nº do Orçamento (Proposta)', key:'numero_proposta', placeholder:'Ex: 041/2025' },
                   { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
                   { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
                 ] as any[]).map(({ label, key, placeholder, type }) => (
@@ -4033,6 +4084,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                       style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
                   </div>
                 ))}
+
+                {/* Nº do PV — nem todo orçamento vira PV, por isso é um campo
+                    à parte, editável a qualquer momento (não só pelo gate
+                    "Enviar Proposta" do Kanban, que continua funcionando
+                    igual como atalho quando o campo está vazio). */}
+                <div style={campoDestaque('numero_pv')}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Nº do PV (4 dígitos)</div>
+                  <input type="text" value={formOp.numero_pv||''} placeholder="0000" maxLength={4}
+                    onChange={e => setFormOp(f => ({...f, numero_pv: e.target.value.replace(/\D/g, '').slice(0, 4)}))}
+                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+                </div>
 
                 <div style={campoDestaque('estagio_id')}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Estágio</div>
@@ -4173,111 +4235,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
               {/* Conteúdo */}
               <div style={{ flex:1, overflowY:'auto', padding:14 }}>
-
-                {/* ── QUADRO LEAD ── */}
-                {abrirTabDir === 'quadro_lead' && (
-                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                    <div>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#0f766e', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>
-                        Cadastro do Lead
-                      </div>
-                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                        <div style={campoDestaque('data_aceite_cliente')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data do aceite do cliente</label>
-                          <input type="date" className="acn-input" style={{ width:'100%' }}
-                            value={formOp.data_aceite_cliente||''} onChange={e=>setFormOp(f=>({...f,data_aceite_cliente:e.target.value}))} />
-                        </div>
-                        <div style={campoDestaque('faturamento_empresa')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Faturamento pela ACN ou DETECH</label>
-                          <select className="acn-input" style={{ width:'100%' }}
-                            value={formOp.faturamento_empresa||'ACN'} onChange={e=>setFormOp(f=>({...f,faturamento_empresa:e.target.value}))}>
-                            <option value="ACN">ACN</option>
-                            <option value="Detech">Detech</option>
-                          </select>
-                        </div>
-                        <div style={campoDestaque('responsavel_nome')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Vendedor</label>
-                          <ColaboradorSelect value={formOp.responsavel_nome||''} onChange={v => setFormOp(f => ({...f, responsavel_nome: v}))} placeholder="Selecione o vendedor" />
-                        </div>
-                        <div style={campoDestaque('orgao')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Cliente</label>
-                          <input className="acn-input" style={{ width:'100%' }}
-                            value={formOp.orgao||''} onChange={e=>setFormOp(f=>({...f,orgao:e.target.value}))} />
-                        </div>
-                        {([
-                          { label:'Cliente final',  key:'cliente_final' },
-                          { label:'Edital',         key:'numero_edital' },
-                          { label:'Proposta',       key:'numero_proposta' },
-                          { label:'Veículo',        key:'veiculo_modelo' },
-                          { label:'Quantidade',     key:'quantidade' },
-                          { label:'Local',          key:'local_instalacao' },
-                        ] as any[]).map(({ label, key }) => (
-                          <div key={key} style={campoDestaque(key)}>
-                            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
-                            <input className="acn-input" style={{ width:'100%' }}
-                              value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
-                          </div>
-                        ))}
-                        {([
-                          { label:'Data de chegada do veículo',   key:'data_chegada_veiculo' },
-                          { label:'Prazo de entrega PRODUÇÃO',    key:'prazo_entrega_producao' },
-                          { label:'Prazo de entrega COMERCIAL',   key:'prazo_entrega_comercial' },
-                        ] as any[]).map(({ label, key }) => (
-                          <div key={key} style={campoDestaque(key)}>
-                            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
-                            <input type="date" className="acn-input" style={{ width:'100%' }}
-                              value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <hr style={{ border:'none', borderTop:'1px solid #e2e8f0', margin:0 }} />
-
-                    <div>
-                      <div style={{ fontSize:9, fontWeight:700, color:'#0f766e', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>
-                        Controle
-                      </div>
-                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                        {([
-                          { label:'Ordem de Serviço',        key:'ctrl_ordem_servico' },
-                          { label:'Relatório Fotográfico',   key:'ctrl_relatorio_fotografico' },
-                          { label:'Não Conformidades',       key:'ctrl_nao_conformidades' },
-                          { label:'Desenhos',                key:'ctrl_desenhos' },
-                          { label:'Melhorias',               key:'ctrl_melhorias' },
-                          { label:'P.O.P',                   key:'ctrl_pop' },
-                          { label:'Protocolo Viagem',        key:'ctrl_protocolo_viagem' },
-                          { label:'Controle',                key:'ctrl_controle' },
-                        ] as any[]).map(({ label, key }) => (
-                          <div key={key} style={campoDestaque(key)}>
-                            <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>{label}</label>
-                            <input className="acn-input" style={{ width:'100%' }}
-                              value={formOp[key]||''} onChange={e=>setFormOp(f=>({...f,[key]:e.target.value}))} />
-                          </div>
-                        ))}
-                        <div style={campoDestaque('ctrl_data_entrada')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data Entrada</label>
-                          <input type="date" className="acn-input" style={{ width:'100%' }}
-                            value={formOp.ctrl_data_entrada||''} onChange={e=>setFormOp(f=>({...f,ctrl_data_entrada:e.target.value}))} />
-                        </div>
-                        <div style={campoDestaque('ctrl_data_saida')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Data Saída</label>
-                          <input type="date" className="acn-input" style={{ width:'100%' }}
-                            value={formOp.ctrl_data_saida||''} onChange={e=>setFormOp(f=>({...f,ctrl_data_saida:e.target.value}))} />
-                        </div>
-                        <div style={campoDestaque('ctrl_prazo_garantia')}>
-                          <label style={{ fontSize:9, fontWeight:700, color:'#475569', display:'block', marginBottom:3 }}>Prazo de Garantia</label>
-                          <input className="acn-input" style={{ width:'100%' }} placeholder="12 MESES"
-                            value={formOp.ctrl_prazo_garantia||''} onChange={e=>setFormOp(f=>({...f,ctrl_prazo_garantia:e.target.value}))} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ fontSize:9, color:'#94a3b8' }}>
-                      Use "💾 Salvar Alterações" no painel à esquerda para gravar este quadro.
-                    </div>
-                  </div>
-                )}
 
                 {/* ── COTAÇÕES ── */}
                 {abrirTabDir === 'cotacoes' && (
