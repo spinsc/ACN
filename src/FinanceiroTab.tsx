@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { CentrosCustoManager, labelHierarquico } from './CentroCustoShared';
+import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtR = (v: number) =>
@@ -157,10 +158,16 @@ async function uploadNfFornecedor(file: File): Promise<{ url: string; error?: st
   return { url: pub?.publicUrl || '' };
 }
 
-function LinhaFaturamento({ f, onAtualizar }: any) {
+function LinhaFaturamento({ f, onAtualizar, currentUser, naoLido, marcarLidoLocal }: any) {
   const [nfNumero, setNfNumero] = useState(f.nf_fornecedor_numero || '');
   const [arquivo, setArquivo]   = useState<File | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const marcarComoLido = useMarkAsRead('pcp_pedidos_faturamento', f.id, currentUser);
+  // Não há tela de detalhe pra este registro (tudo é feito inline na linha),
+  // então "visto" aqui significa "o usuário interagiu com a linha" — clicar em
+  // qualquer lugar dela (exceto o próprio clique no botão/campo, que já conta
+  // como interação também) marca como lido, sem precisar de um modal pra fechar.
+  const marcarVisto = () => { if (naoLido) { marcarComoLido(); marcarLidoLocal?.(f.id); } };
 
   const marcarPago = async () => {
     if (!nfNumero.trim()) { alert('Informe o número da NF do fornecedor.'); return; }
@@ -174,21 +181,26 @@ function LinhaFaturamento({ f, onAtualizar }: any) {
       if (res.error) { alert('Erro ao enviar NF: ' + res.error); setSalvando(false); return; }
       nfUrl = res.url;
     }
-    const { error } = await supabase.from('pcp_pedidos_faturamento').update({
+    const novoRow = {
       nf_fornecedor_numero: nfNumero.trim(),
       nf_fornecedor_url: nfUrl,
       status_faturamento: 'pago',
       data_pagamento: new Date().toISOString().split('T')[0],
-    }).eq('id', f.id);
+    };
+    const { error } = await supabase.from('pcp_pedidos_faturamento').update(novoRow).eq('id', f.id);
     setSalvando(false);
     if (error) { alert('Erro: ' + error.message); return; }
+    logChange({ module: 'financeiro', entityType: 'pcp_pedidos_faturamento', entityId: f.id, changeType: 'UPDATE',
+      oldRow: f, newRow: { ...f, ...novoRow }, user: currentUser });
     onAtualizar();
   };
 
   const st = STATUS_FAT_LABEL[f.status_faturamento] || STATUS_FAT_LABEL.aguardando_recebimento;
 
   return (
-    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+    <tr onClick={marcarVisto} style={{ borderBottom: '1px solid #f1f5f9',
+      background: naoLido ? '#fffdf0' : 'transparent',
+      boxShadow: naoLido ? 'inset 3px 0 0 #eab308' : 'none' }}>
       <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, color: '#7c3aed', fontFamily: 'monospace' }}>{f.numero_oc || '—'}</td>
       <td style={{ padding: '6px 8px', fontSize: 10 }}>{f.numero_pedido || '—'}</td>
       <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.fornecedor || '—'}</td>
@@ -222,8 +234,9 @@ function LinhaFaturamento({ f, onAtualizar }: any) {
   );
 }
 
-function SecaoFaturamentoCompras({ faturamentos, onAtualizar }: any) {
+function SecaoFaturamentoCompras({ faturamentos, onAtualizar, currentUser }: any) {
   const [filtro, setFiltro] = useState('');
+  const { naoLidoSet, marcarLidoLocal } = useUnreadMap('pcp_pedidos_faturamento', faturamentos.map((f: any) => f.id), currentUser);
   const filtrados = filtro ? faturamentos.filter((f: any) => f.status_faturamento === filtro) : faturamentos;
 
   return (
@@ -251,7 +264,8 @@ function SecaoFaturamentoCompras({ faturamentos, onAtualizar }: any) {
               </tr>
             </thead>
             <tbody>
-              {filtrados.map((f: any) => <LinhaFaturamento key={f.id} f={f} onAtualizar={onAtualizar} />)}
+              {filtrados.map((f: any) => <LinhaFaturamento key={f.id} f={f} onAtualizar={onAtualizar} currentUser={currentUser}
+                naoLido={naoLidoSet.has(String(f.id))} marcarLidoLocal={marcarLidoLocal} />)}
             </tbody>
           </table>
         </div>
@@ -584,7 +598,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
             )}
           </div>
 
-          <SecaoFaturamentoCompras faturamentos={faturamentos} onAtualizar={carregar} />
+          <SecaoFaturamentoCompras faturamentos={faturamentos} onAtualizar={carregar} currentUser={currentUser} />
         </>
       )}
 
