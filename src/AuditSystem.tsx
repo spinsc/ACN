@@ -148,7 +148,12 @@ export function useUnreadChanges(entityType, entityId, currentUser) {
   }, [entityType, entityId, currentUser?.id]);
 
   const camposNaoLidos = new Set(naoLidos.filter(n => n.change_type === 'UPDATE').map(n => n.field_name));
-  return { naoLidos, camposNaoLidos, temNaoLidos: naoLidos.length > 0, loading, recarregar: buscar };
+  // Limpeza otimista local — necessária pra qualquer tela que NÃO desmonta ao
+  // marcar como lido (ex: card expansível que só recolhe, ao contrário de um
+  // modal que fecha). Nos casos que desmontam (CRM/Licitações/RH) isso não
+  // muda nada visualmente, já que o componente some de qualquer forma.
+  const limparLocal = useCallback(() => setNaoLidos([]), []);
+  return { naoLidos, camposNaoLidos, temNaoLidos: naoLidos.length > 0, loading, recarregar: buscar, limparLocal };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -251,8 +256,12 @@ export function useMarkAsRead(entityType, entityId, currentUser) {
 //   const fechar = () => { marcarComoLido(); setModal(null); };
 // ─────────────────────────────────────────────────────────────────────────────
 export function useFieldHighlight(entityType, entityId, currentUser) {
-  const { camposNaoLidos, naoLidos, temNaoLidos } = useUnreadChanges(entityType, entityId, currentUser);
-  const marcarComoLido = useMarkAsRead(entityType, entityId, currentUser);
+  const { camposNaoLidos, naoLidos, temNaoLidos, limparLocal } = useUnreadChanges(entityType, entityId, currentUser);
+  const marcarComoLidoBase = useMarkAsRead(entityType, entityId, currentUser);
+  // Marca no banco E limpa o destaque local na hora — importante pra telas
+  // que não desmontam ao "fechar" (ex: card que só recolhe), onde só marcar
+  // no banco deixaria o destaque preso até o próximo fetch/Realtime.
+  const marcarComoLido = useCallback(() => { marcarComoLidoBase(); limparLocal(); }, [marcarComoLidoBase, limparLocal]);
 
   const campoDestaque = useCallback((field) => ({
     borderRadius: 5, padding: '4px 6px', margin: '0 -6px 7px -6px',

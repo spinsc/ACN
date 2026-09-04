@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { LinkOpl } from './AcnTabShared';
 import Linkify from './Linkify';
+import { logChange, useFieldHighlight, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
 
 const semDado = (v) => !v || !String(v).trim();
@@ -63,27 +64,92 @@ function PipelineStatus({ opl }) {
   );
 }
 
+// Linha de um pedido de registro — componente próprio (não inline no .map)
+// só pra poder chamar useMarkAsRead por linha, igual ao padrão já usado em
+// FinanceiroTab.tsx pra Faturamento de Compras (também sem tela de detalhe:
+// "visto" aqui é clicar em qualquer lugar da linha).
+function LinhaPedido({ p, fmtDtHr, corStatusPedido, atualizarStatusPedido, naoLido, marcarLidoLocal, currentUser }) {
+  const marcarComoLido = useMarkAsRead('mkt_pedidos_registro', p.id, currentUser);
+  const marcarVisto = () => { if (naoLido) { marcarComoLido(); marcarLidoLocal?.(p.id); } };
+  return (
+    <tr onClick={marcarVisto} style={naoLido
+      ? { background:'#fffdf0', boxShadow:'inset 3px 0 0 #eab308' }
+      : { background: p.status==='Pendente'?'#faf5ff': p.status==='Realizado'?'#f0fdf4':'white' }}>
+      <td style={{whiteSpace:'nowrap'}}>{fmtDtHr(p.created_at)}</td>
+      <td>{p.numero_opl || '—'}</td>
+      <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.local_registro || '—'}</td>
+      <td style={{whiteSpace:'nowrap'}}>{p.hora_turno || '—'}</td>
+      <td>
+        <span style={{fontSize:10,fontWeight:700,background: p.tipo==='Video'?'#dbeafe': p.tipo==='Foto e Video'?'#fae8ff':'#dcfce7',
+          color: p.tipo==='Video'?'#1d4ed8': p.tipo==='Foto e Video'?'#7c3aed':'#166534',
+          padding:'1px 6px',borderRadius:10}}>
+          {p.tipo==='Foto'?'📷':p.tipo==='Video'?'🎬':'📷🎬'} {p.tipo}
+        </span>
+      </td>
+      <td>{p.categoria || '—'}</td>
+      <td style={{maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{p.observacoes || '—'}</td>
+      <td style={{fontSize:10}}>{p.criado_por_nome || '—'}</td>
+      <td>
+        <span className="acn-badge" style={{background:corStatusPedido(p.status)}}>{p.status}</span>
+      </td>
+      <td>
+        <div style={{display:'flex',gap:3}}>
+          {p.status === 'Pendente' && (
+            <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>atualizarStatusPedido(p,'Realizado')}>
+              REALIZADO
+            </button>
+          )}
+          {p.status === 'Pendente' && (
+            <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>atualizarStatusPedido(p,'Cancelado')}>
+              CANCELAR
+            </button>
+          )}
+          {p.status !== 'Pendente' && (
+            <button className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>atualizarStatusPedido(p,'Pendente')}>
+              REABRIR
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // Card de uma OPL com intervenções
 function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
   const [expanded, setExpanded] = useState(false);
   const [novaObs, setNovaObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // entity_type próprio do Marketing (não 'oples') — não queremos que abrir/
+  // fechar um card aqui marque como lido alterações de outros módulos no
+  // mesmo OPL, nem vice-versa; é um contexto de leitura independente.
+  const { temNaoLidos, itemNaoLido, marcarComoLido } = useFieldHighlight('mkt_intervencoes_view', opl.id, currentUser);
 
   const minhas = intervencoes.filter(v => v.numero_opl === String(opl.opl));
   const fmtDtHr = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
 
+  const toggleExpand = () => {
+    if (expanded) marcarComoLido(); // fechando = "vi as intervenções"
+    setExpanded(e => !e);
+  };
+
   const salvarIntervencao = async () => {
     if (!novaObs.trim()) { alert('Informe a observacao!'); return; }
     setSalvando(true);
-    const { error } = await supabase.from('mkt_intervencoes').insert([{
+    const { data: nova, error } = await supabase.from('mkt_intervencoes').insert([{
       opl_id: opl.id,
       numero_opl: String(opl.opl),
       observacoes: novaObs,
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
-    }]);
+    }]).select('id').single();
     if (error) { alert('Erro: ' + error.message); }
-    else { setNovaObs(''); onAddIntervencao(); }
+    else {
+      logChange({ module: 'marketing', entityType: 'mkt_intervencoes_view', entityId: opl.id, changeType: 'UPDATE',
+        oldRow: { intervencao: null }, newRow: { intervencao: novaObs.slice(0, 120) }, user: currentUser,
+        metadata: { ref_id: nova?.id } });
+      setNovaObs(''); onAddIntervencao();
+    }
     setSalvando(false);
   };
 
@@ -96,10 +162,12 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
   };
 
   return (
-    <div style={{border:'1px solid #e2e8f0',borderRadius:6,marginBottom:8,overflow:'hidden',background:'white'}}>
+    <div style={{border:`1px solid ${temNaoLidos?'#fde047':'#e2e8f0'}`,
+      borderLeft: temNaoLidos ? '3px solid #eab308' : '1px solid #e2e8f0',
+      borderRadius:6,marginBottom:8,overflow:'hidden',background: temNaoLidos?'#fffdf0':'white'}}>
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#f8fafc',cursor:'pointer',borderBottom: expanded?'1px solid #e2e8f0':'none'}}
-        onClick={()=>setExpanded(!expanded)}>
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background: temNaoLidos?'#fef9c3':'#f8fafc',cursor:'pointer',borderBottom: expanded?'1px solid #e2e8f0':'none'}}
+        onClick={toggleExpand}>
         <div style={{flex:1}}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <LinkOpl opl={opl} currentUser={currentUser} />
@@ -135,7 +203,8 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
           ) : (
             <div style={{maxHeight:180,overflowY:'auto',marginBottom:8}}>
               {minhas.map(v => (
-                <div key={v.id} style={{borderLeft:'3px solid #7c3aed',padding:'5px 8px',marginBottom:5,background:'#faf5ff',borderRadius:'0 4px 4px 0'}}>
+                <div key={v.id} style={{borderLeft:`3px solid ${itemNaoLido(v.id)?'#eab308':'#7c3aed'}`,padding:'5px 8px',marginBottom:5,
+                  background: itemNaoLido(v.id)?'#fefce8':'#faf5ff',borderRadius:'0 4px 4px 0'}}>
                   <div style={{fontSize:9,color:'#94a3b8',marginBottom:2}}>
                     <strong style={{color:'#7c3aed'}}>{v.criado_por_nome || v.criado_por}</strong> — {fmtDtHr(v.created_at)}
                   </div>
@@ -191,18 +260,23 @@ export default function MarketingTab({ currentUser }) {
   const salvarPedido = async () => {
     if (!pedidoForm.local_registro || !pedidoForm.categoria) { alert('Preencha local e categoria!'); return; }
     setSalvandoPedido(true);
-    const { error } = await supabase.from('mkt_pedidos_registro').insert([{
+    const { data: novo, error } = await supabase.from('mkt_pedidos_registro').insert([{
       ...pedidoForm,
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
-    }]);
+    }]).select('id').single();
     if (error) { alert('Erro: ' + error.message); }
-    else { setPedidoForm(PEDIDO_VAZIO); setShowFormPedido(false); fetchAll(); }
+    else {
+      if (novo?.id) logChange({ module: 'marketing', entityType: 'mkt_pedidos_registro', entityId: novo.id, changeType: 'CREATE', newRow: pedidoForm, user: currentUser });
+      setPedidoForm(PEDIDO_VAZIO); setShowFormPedido(false); fetchAll();
+    }
     setSalvandoPedido(false);
   };
 
-  const atualizarStatusPedido = async (id, status) => {
-    await supabase.from('mkt_pedidos_registro').update({ status }).eq('id', id);
+  const atualizarStatusPedido = async (p, status) => {
+    await supabase.from('mkt_pedidos_registro').update({ status }).eq('id', p.id);
+    logChange({ module: 'marketing', entityType: 'mkt_pedidos_registro', entityId: p.id, changeType: 'UPDATE',
+      oldRow: p, newRow: { ...p, status }, user: currentUser });
     fetchAll();
   };
 
@@ -216,6 +290,7 @@ export default function MarketingTab({ currentUser }) {
     : opls.filter(o => !((o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('Faturado')));
 
   const pedidosPendentes = pedidos.filter(p => p.status === 'Pendente').length;
+  const { naoLidoSet: pedidosNaoLidos, marcarLidoLocal: marcarPedidoLidoLocal } = useUnreadMap('mkt_pedidos_registro', pedidos.map(p => p.id), currentUser);
 
   return (
     <div>
@@ -346,44 +421,9 @@ export default function MarketingTab({ currentUser }) {
                   </tr></thead>
                   <tbody>
                     {pedidos.map(p => (
-                      <tr key={p.id} style={{background: p.status==='Pendente'?'#faf5ff': p.status==='Realizado'?'#f0fdf4':'white'}}>
-                        <td style={{whiteSpace:'nowrap'}}>{fmtDtHr(p.created_at)}</td>
-                        <td>{p.numero_opl || '—'}</td>
-                        <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.local_registro || '—'}</td>
-                        <td style={{whiteSpace:'nowrap'}}>{p.hora_turno || '—'}</td>
-                        <td>
-                          <span style={{fontSize:10,fontWeight:700,background: p.tipo==='Video'?'#dbeafe': p.tipo==='Foto e Video'?'#fae8ff':'#dcfce7',
-                            color: p.tipo==='Video'?'#1d4ed8': p.tipo==='Foto e Video'?'#7c3aed':'#166534',
-                            padding:'1px 6px',borderRadius:10}}>
-                            {p.tipo==='Foto'?'📷':p.tipo==='Video'?'🎬':'📷🎬'} {p.tipo}
-                          </span>
-                        </td>
-                        <td>{p.categoria || '—'}</td>
-                        <td style={{maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{p.observacoes || '—'}</td>
-                        <td style={{fontSize:10}}>{p.criado_por_nome || '—'}</td>
-                        <td>
-                          <span className="acn-badge" style={{background:corStatusPedido(p.status)}}>{p.status}</span>
-                        </td>
-                        <td>
-                          <div style={{display:'flex',gap:3}}>
-                            {p.status === 'Pendente' && (
-                              <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>atualizarStatusPedido(p.id,'Realizado')}>
-                                REALIZADO
-                              </button>
-                            )}
-                            {p.status === 'Pendente' && (
-                              <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>atualizarStatusPedido(p.id,'Cancelado')}>
-                                CANCELAR
-                              </button>
-                            )}
-                            {p.status !== 'Pendente' && (
-                              <button className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>atualizarStatusPedido(p.id,'Pendente')}>
-                                REABRIR
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                      <LinhaPedido key={p.id} p={p} fmtDtHr={fmtDtHr} corStatusPedido={corStatusPedido}
+                        atualizarStatusPedido={atualizarStatusPedido} currentUser={currentUser}
+                        naoLido={pedidosNaoLidos.has(String(p.id))} marcarLidoLocal={marcarPedidoLidoLocal} />
                     ))}
                   </tbody>
                 </table>
