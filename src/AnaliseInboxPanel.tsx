@@ -253,7 +253,16 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                       </span>
                       {onNavigate && (
                         <button
-                          onClick={e => { e.stopPropagation(); onNavigate(sol.origem === 'crm' ? 'crm' : 'licitacoes'); }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            // Deep-link — mesmo mecanismo usado em Menções e no
+                            // AnaliseWidget embutido: troca a aba E já abre o
+                            // card específico (não só a aba genérica).
+                            if (sol.origem_id) {
+                              window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem: sol.origem, origemId: sol.origem_id } }));
+                            }
+                            onNavigate(sol.origem === 'crm' ? 'crm' : 'licitacoes');
+                          }}
                           style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:4, border:'none',
                             background: sol.origem === 'crm' ? '#0891b2' : '#7c3aed',
                             color:'white', cursor:'pointer' }}>
