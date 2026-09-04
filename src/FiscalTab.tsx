@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 const semDado = (v) => !v || !String(v).trim();
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -91,16 +92,20 @@ export default function FiscalTab({ currentUser }) {
     for (const o of itens) {
       const inicioFiscal = o.data_liberacao_comercial ? new Date(o.data_liberacao_comercial) : null;
       const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
-      const { data: upd } = await supabase.from('oples').update({
+      const novoRow = {
         status_geral: 'Faturado e Disponivel para Entrega',
         numero_nf: nf,
         data_emissao_nf: agora,
         responsavel_fiscal: currentUser?.nome,
         observacoes_faturamento: obsCombinado,
         ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
-      }).eq('id', o.id).eq('status_geral', 'Aguarda Emissao NF').select();
+      };
+      const { data: upd } = await supabase.from('oples').update(novoRow)
+        .eq('id', o.id).eq('status_geral', 'Aguarda Emissao NF').select();
       if (!upd || upd.length === 0) { jaFaturadasPorOutro.push(o.opl); continue; }
       faturadas.push(o);
+      logChange({ module: 'fiscal', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
+        oldRow: o, newRow: { ...o, ...novoRow }, user: currentUser });
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
         evento: itens.length > 1
@@ -129,19 +134,23 @@ export default function FiscalTab({ currentUser }) {
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
     const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
-    const { data: upd } = await supabase.from('oples').update({
+    const novoRow = {
       status_geral: 'Faturado e Disponivel para Entrega',
       numero_nf: nf.trim(),
       data_emissao_nf: agora,
       responsavel_fiscal: currentUser?.nome,
       ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
-    }).eq('id', opl.id).eq('status_geral', 'Aguarda Emissao NF').select();
+    };
+    const { data: upd } = await supabase.from('oples').update(novoRow)
+      .eq('id', opl.id).eq('status_geral', 'Aguarda Emissao NF').select();
     if (!upd || upd.length === 0) {
       setFaturandoId(null);
       alert(`Esta OP já foi faturada por outra sessão enquanto você digitava. Atualizando a lista.`);
       fetchAll();
       return;
     }
+    logChange({ module: 'fiscal', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `NF-e emitida: ${nf.trim()}. Disponivel para entrega.`,
@@ -160,14 +169,17 @@ export default function FiscalTab({ currentUser }) {
     const agora = new Date().toISOString();
     const inicioFiscal = os.data_cq ? new Date(os.data_cq) : null;
     const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
-    await supabase.from('sac_ordens_servico').update({
+    const novoRow = {
       status: 'Faturada - Aguardando Entrega',
       numero_nf: nf.trim(),
       data_emissao_nf: agora,
       responsavel_fiscal: currentUser?.nome,
       ...(tempoFiscal != null ? { tempo_fiscal_horas: tempoFiscal } : {}),
       atualizado_em: agora,
-    }).eq('id', os.id);
+    };
+    await supabase.from('sac_ordens_servico').update(novoRow).eq('id', os.id);
+    logChange({ module: 'fiscal', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
+      oldRow: os, newRow: { ...os, ...novoRow }, user: currentUser });
     notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, nf.trim(), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[os.id]; return n; });
     fetchAll();
@@ -178,10 +190,10 @@ export default function FiscalTab({ currentUser }) {
     if (!obsDevolver.trim()) { alert('Descreva a inconsistência encontrada.'); return; }
     const opl = modalDevolver;
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
-      status_geral: 'Devolvida Comercial',
-      obs_devolucao: obsDevolver.trim(),
-    }).eq('id', opl.id);
+    const novoRow = { status_geral: 'Devolvida Comercial', obs_devolucao: obsDevolver.trim() };
+    await supabase.from('oples').update(novoRow).eq('id', opl.id);
+    logChange({ module: 'fiscal', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `OPL devolvida para Comercial. Inconsistência: ${obsDevolver.trim()}`,
@@ -198,10 +210,11 @@ export default function FiscalTab({ currentUser }) {
     if (!nomeRecebeu.trim()) { alert('Informe o nome de quem recebeu!'); return; }
     const opl = modalEntregue;
     const agora = new Date().toISOString();
-    const { error } = await supabase.from('oples').update({
-      status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu.trim(), data_entrega: agora,
-    }).eq('id', opl.id);
+    const novoRow = { status_geral: 'Faturado', cliente_recebeu_nome: nomeRecebeu.trim(), data_entrega: agora };
+    const { error } = await supabase.from('oples').update(novoRow).eq('id', opl.id);
     if (error) { alert('Erro ao confirmar entrega: ' + error.message); return; }
+    logChange({ module: 'fiscal', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
       evento: `Equipamento entregue. Recebeu: ${nomeRecebeu.trim()}`,
@@ -221,6 +234,9 @@ export default function FiscalTab({ currentUser }) {
   const osFaturadas  = ordensOS.filter(o => o.status === 'Faturada - Aguardando Entrega');
   const totalPendentes = aguardando.length + osAguardando.length;
   const totalEmitidas  = faturados.length + osFaturadas.length;
+
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', [...aguardando, ...faturados].map(o => o.id), currentUser);
+  const { naoLidoSet: osNaoLidas } = useUnreadMap('sac_ordens_servico', [...osAguardando, ...osFaturadas].map(o => o.id), currentUser);
 
   const contagemPorBase = {};
   aguardando.forEach(o => { const b = baseOplDe(o.opl); contagemPorBase[b] = (contagemPorBase[b]||0) + 1; });
@@ -280,7 +296,9 @@ export default function FiscalTab({ currentUser }) {
               </tr></thead>
               <tbody>
                 {filtrarOpls(aguardando, busca).map(o => (
-                  <tr key={o.id} style={ehLote(o) ? {background:'#faf5ff',borderLeft:'3px solid #7c3aed'} : undefined}>
+                  <tr key={o.id} style={oplsNaoLidas.has(String(o.id))
+                    ? {background:'#fffdf0',borderLeft:'3px solid #eab308'}
+                    : ehLote(o) ? {background:'#faf5ff',borderLeft:'3px solid #7c3aed'} : undefined}>
                     <td>
                       <input type="checkbox" checked={selecionados.has(o.id)} onChange={()=>toggleSelecionado(o.id)} />
                     </td>
@@ -346,7 +364,7 @@ export default function FiscalTab({ currentUser }) {
               </tr></thead>
               <tbody>
                 {faturados.map(o => (
-                  <tr key={o.id}>
+                  <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><LinkOpl opl={o} currentUser={currentUser} color="#22c55e" /></td>
                     <td style={{fontSize:10}}>
                       <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
@@ -389,7 +407,7 @@ export default function FiscalTab({ currentUser }) {
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
               <tbody>
                 {osAguardando.map(o => (
-                  <tr key={o.id}>
+                  <tr key={o.id} style={osNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td style={{fontSize:10}}>
@@ -422,7 +440,7 @@ export default function FiscalTab({ currentUser }) {
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th></tr></thead>
               <tbody>
                 {osFaturadas.map(o => (
-                  <tr key={o.id}>
+                  <tr key={o.id} style={osNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
