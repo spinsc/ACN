@@ -702,7 +702,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return () => clearInterval(iv);
   }, [currentUser?.recebe_alerta_analise]);
 
-  // Badge de menções — contagem de menções não lidas
+  // Badge de menções — contagem de menções PENDENTES (não resolvidas, não só
+  // não lidas — "lida" só significa "vista", "resolvida" é o que de fato tira
+  // a pendência da frente do usuário).
   useEffect(() => {
     if (!currentUser?.id) return;
     const fetchMencoes = async () => {
@@ -717,7 +719,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           .from('mencoes')
           .select('id', { count: 'exact', head: true })
           .or(orFilter)
-          .eq('lida', false);
+          .eq('resolvida', false);
         setMencoesCount(count || 0);
       } catch { /* mencoes table may not exist yet */ }
     };

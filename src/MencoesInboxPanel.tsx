@@ -53,7 +53,7 @@ interface Props {
 export default function MencoesInboxPanel({ currentUser, onClose, onCountChange, onNavigate }: Props) {
   const [mencoes, setMencoes]   = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [filtro, setFiltro]     = useState<'nao_lidas' | 'todas'>('nao_lidas');
+  const [filtro, setFiltro]     = useState<'pendentes' | 'resolvidas' | 'todas'>('pendentes');
   const [marcando, setMarcando] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
@@ -72,15 +72,18 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         .or(orFilter)
         .order('criado_em', { ascending: false })
         .limit(100);
-      if (filtro === 'nao_lidas') q = q.eq('lida', false);
+      if (filtro === 'pendentes') q = q.eq('resolvida', false);
+      if (filtro === 'resolvidas') q = q.eq('resolvida', true);
       const { data, error } = await q;
       if (error) {
         console.error('[MencoesInbox] erro ao carregar:', error.message);
       }
       const lista = data || [];
       setMencoes(lista);
-      const naoLidas = lista.filter(m => !m.lida).length;
-      onCountChange?.(filtro === 'nao_lidas' ? lista.length : naoLidas);
+      // "Pendente" é o que de fato importa pro badge/contador — "lida" só
+      // significa "vista", não que foi resolvida/respondida.
+      const pendentes = lista.filter(m => !m.resolvida).length;
+      onCountChange?.(filtro === 'pendentes' ? lista.length : pendentes);
     } catch (e) {
       console.error('[MencoesInbox] exceção:', e);
     }
@@ -104,7 +107,43 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
     await load();
   };
 
-  const naoLidasCount = mencoes.filter(m => !m.lida).length;
+  // "Resolvida" é o estado que de fato tira a menção do caminho do usuário —
+  // marcar resolvida também marca como lida (resolver implica ter visto).
+  // Nunca apaga nada — só muda o status, sempre reversível via "Reabrir".
+  const marcarResolvida = async (m: any) => {
+    setMarcando(prev => ({ ...prev, [m.id]: true }));
+    await supabase.from('mencoes').update({
+      resolvida: true, resolvida_em: new Date().toISOString(),
+      resolvida_por: currentUser?.nome || currentUser?.email || null,
+      lida: true,
+    }).eq('id', m.id);
+    await load();
+    setMarcando(prev => ({ ...prev, [m.id]: false }));
+  };
+
+  const reabrirMencao = async (m: any) => {
+    setMarcando(prev => ({ ...prev, [m.id]: true }));
+    await supabase.from('mencoes').update({
+      resolvida: false, resolvida_em: null, resolvida_por: null,
+    }).eq('id', m.id);
+    await load();
+    setMarcando(prev => ({ ...prev, [m.id]: false }));
+  };
+
+  const marcarTodasResolvidas = async () => {
+    await supabase.from('mencoes')
+      .update({
+        resolvida: true, resolvida_em: new Date().toISOString(),
+        resolvida_por: currentUser?.nome || currentUser?.email || null,
+        lida: true,
+      })
+      .eq('mencionado_id', currentUser?.id)
+      .eq('resolvida', false);
+    await load();
+  };
+
+  const naoLidasCount   = mencoes.filter(m => !m.lida).length;
+  const pendentesCount  = mencoes.filter(m => !m.resolvida).length;
 
   // Navega pra aba de destino E pede pra ela abrir o registro específico (não só
   // a aba genérica). Guarda num global além de disparar o evento porque, se a aba
@@ -151,12 +190,28 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
             <div>
               <div style={{ fontWeight:700, fontSize:14 }}>💬 Minhas Menções</div>
               <div style={{ fontSize:10, opacity:.85, marginTop:2 }}>
-                {naoLidasCount > 0
-                  ? `${naoLidasCount} menção(ões) não lida(s)`
+                {pendentesCount > 0
+                  ? `${pendentesCount} pendente(s) — ainda não resolvida(s)`
                   : 'Nenhuma menção pendente'}
               </div>
             </div>
-            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <button onClick={onClose}
+              style={{ background:'rgba(255,255,255,.2)', border:'none', color:'white',
+                borderRadius:4, width:28, height:28, cursor:'pointer', fontSize:14, fontWeight:700, flexShrink:0 }}>
+              ✕
+            </button>
+          </div>
+
+          {/* Ações em massa */}
+          {(naoLidasCount > 0 || pendentesCount > 0) && (
+            <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+              {pendentesCount > 0 && (
+                <button onClick={marcarTodasResolvidas}
+                  style={{ fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4,
+                    background:'#22c55e', color:'white', border:'none', cursor:'pointer' }}>
+                  ✓ Marcar todas como resolvidas
+                </button>
+              )}
               {naoLidasCount > 0 && (
                 <button onClick={marcarTodasLidas}
                   style={{ fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4,
@@ -164,17 +219,12 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                   ✓ Todas lidas
                 </button>
               )}
-              <button onClick={onClose}
-                style={{ background:'rgba(255,255,255,.2)', border:'none', color:'white',
-                  borderRadius:4, width:28, height:28, cursor:'pointer', fontSize:14, fontWeight:700 }}>
-                ✕
-              </button>
             </div>
-          </div>
+          )}
 
           {/* Filtro */}
           <div style={{ display:'flex', gap:6, marginTop:10 }}>
-            {(['nao_lidas','todas'] as const).map(f => (
+            {(['pendentes','resolvidas','todas'] as const).map(f => (
               <button key={f} onClick={() => setFiltro(f)}
                 style={{
                   fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
@@ -182,7 +232,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                   color:      filtro===f ? '#6366f1' : 'white',
                   border: 'none',
                 }}>
-                {f === 'nao_lidas' ? 'Não lidas' : 'Todas'}
+                {f === 'pendentes' ? 'Pendentes' : f === 'resolvidas' ? 'Resolvidas' : 'Todas'}
               </button>
             ))}
           </div>
@@ -197,7 +247,9 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
             <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
               <div style={{ fontSize:32, marginBottom:8 }}>💬</div>
               <div style={{ fontSize:11 }}>
-                {filtro === 'nao_lidas' ? 'Nenhuma menção não lida!' : 'Nenhuma menção registrada.'}
+                {filtro === 'pendentes' ? 'Nenhuma menção pendente — tudo resolvido!'
+                  : filtro === 'resolvidas' ? 'Nenhuma menção resolvida ainda.'
+                  : 'Nenhuma menção registrada.'}
               </div>
             </div>
           )}
@@ -209,10 +261,11 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
 
             return (
               <div key={m.id} style={{
-                border: `1px solid ${m.lida ? '#e2e8f0' : '#c7d2fe'}`,
-                borderLeft: `3px solid ${m.lida ? '#cbd5e1' : '#6366f1'}`,
+                border: `1px solid ${m.resolvida ? '#86efac' : m.lida ? '#e2e8f0' : '#c7d2fe'}`,
+                borderLeft: `3px solid ${m.resolvida ? '#22c55e' : m.lida ? '#cbd5e1' : '#6366f1'}`,
                 borderRadius: 8, marginBottom: 8, padding:'10px 12px',
-                background: m.lida ? '#f8fafc' : '#f5f3ff',
+                background: m.resolvida ? '#f0fdf4' : m.lida ? '#f8fafc' : '#f5f3ff',
+                opacity: m.resolvida ? .75 : 1,
               }}>
                 {/* Linha 1: quem mencionou + quando */}
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
@@ -271,7 +324,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                 )}
 
                 {/* Ações */}
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                   {m.aba_destino && onNavigate && (
                     <button
                       onClick={() => abrirRegistro(m)}
@@ -282,7 +335,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                       {abaLabel} →
                     </button>
                   )}
-                  {!m.lida && (
+                  {!m.lida && !m.resolvida && (
                     <button
                       onClick={() => marcarLida(m)}
                       disabled={isMarcando}
@@ -294,8 +347,36 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                       {isMarcando ? '...' : '✓ Marcar lida'}
                     </button>
                   )}
-                  {m.lida && (
+                  {m.lida && !m.resolvida && (
                     <span style={{ fontSize:9, color:'#94a3b8' }}>✓ Lida</span>
+                  )}
+                  {!m.resolvida ? (
+                    <button
+                      onClick={() => marcarResolvida(m)}
+                      disabled={isMarcando}
+                      style={{
+                        fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
+                        background:'#22c55e', color:'white', border:'none',
+                        opacity: isMarcando ? .6 : 1,
+                      }}>
+                      {isMarcando ? '...' : '✓ Marcar como resolvida'}
+                    </button>
+                  ) : (
+                    <>
+                      <span style={{ fontSize:9, color:'#16a34a', fontWeight:700 }}>
+                        ✓ Resolvida{m.resolvida_por ? ` por ${m.resolvida_por}` : ''}
+                      </span>
+                      <button
+                        onClick={() => reabrirMencao(m)}
+                        disabled={isMarcando}
+                        style={{
+                          fontSize:9, padding:'3px 10px', borderRadius:4, cursor:'pointer',
+                          background:'none', color:'#94a3b8', border:'1px solid #e2e8f0',
+                          opacity: isMarcando ? .6 : 1,
+                        }}>
+                        {isMarcando ? '...' : '↺ Reabrir'}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
