@@ -2665,7 +2665,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       {vistaRelatorio ? (
         <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} />
       ) : (
-        <div style={{ height:'100vh', overflowY:'auto', padding:16 }}>
+        <div style={{ height:'90vh', overflowY:'auto', padding:16 }}>
           {loading || (modoRecentes && recentesLicitLoading) ? (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
           ) : !lista.length ? (
