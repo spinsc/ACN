@@ -10,20 +10,20 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ABA_LABEL: Record<string, string> = {
-  comercial:   '🏭 Comercial',
-  engenharia:  '⚙️ Engenharia',
-  pcp:         '📋 PCP',
-  almoxarifado:'📦 Almoxarifado',
-  producao:    '🔧 Produção',
-  qualidade:   '✅ Qualidade',
-  fiscal:      '🧾 Fiscal',
-  logistica:   '🚚 Logística',
-  crm:         '💼 CRM',
-  licitacoes:  '🏛️ Licitações',
-  sac:         '🎧 SAC',
-  rh:          '👥 RH',
-  compras:     '🛒 Compras',
-  admin:       '⚙️ Admin',
+  comercial:   'Comercial',
+  engenharia:  'Engenharia',
+  pcp:         'PCP',
+  almoxarifado:'Almoxarifado',
+  producao:    'Produção',
+  qualidade:   'Qualidade',
+  fiscal:      'Fiscal',
+  logistica:   'Logística',
+  crm:         'CRM',
+  licitacoes:  'Licitações',
+  sac:         'SAC',
+  rh:          'RH',
+  compras:     'Compras',
+  admin:       'Admin',
 };
 
 const CONTEXTO_LABEL: Record<string, string> = {
@@ -100,7 +100,7 @@ async function responderMencao(m: any, texto: string, currentUser: any): Promise
       .update({ logs_demanda: logs, observacoes_execucao: texto.trim() }).eq('id', contextoId);
     if (error) return false;
   } else if (['op', 'os', 'compra'].includes(m.contexto) && m.campo === 'acompanhamento') {
-    const setorLabel = (ABA_LABEL[m.aba_destino] || 'Sistema').replace(/^\S+\s/, ''); // tira o emoji
+    const setorLabel = ABA_LABEL[m.aba_destino] || 'Sistema';
     const { error } = await supabase.from('op_acompanhamentos').insert({
       referencia_id: contextoId, referencia_tipo: m.contexto, referencia_desc: m.contexto_descricao,
       setor: setorLabel, texto: texto.trim(),
@@ -379,9 +379,14 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                   color:      setorFiltro==='todos' ? 'white' : '#6366f1',
                   border: 'none', marginLeft:'auto',
                 }}>
-                <option value="todos">Todos os setores</option>
+                {/* O popup de opções é renderizado pelo navegador/SO com fundo
+                    claro, não pelo nosso CSS — sem cor própria aqui, herdaria o
+                    branco do <select> fechado e ficaria ilegível (texto branco
+                    em fundo claro). Fixo escuro-sobre-claro nas próprias
+                    <option>, independente da cor do controle fechado. */}
+                <option value="todos" style={{ color:'#1e293b', background:'#fff' }}>Todos os setores</option>
                 {setorOpcoes.map(k => (
-                  <option key={k} value={k}>{ABA_LABEL[k]}</option>
+                  <option key={k} value={k} style={{ color:'#1e293b', background:'#fff' }}>{ABA_LABEL[k]}</option>
                 ))}
               </select>
             )}

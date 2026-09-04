@@ -183,9 +183,13 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                   color:      setorFiltro==='todos' ? 'white' : '#b45309',
                   border: 'none', marginLeft:'auto',
                 }}>
-                <option value="todos">Todos os setores</option>
+                {/* Popup de opções é renderizado pelo SO com fundo claro, não
+                    pelo nosso CSS — sem cor própria aqui herdaria o branco do
+                    <select> fechado e ficaria ilegível. Fixo escuro-sobre-claro
+                    nas próprias <option>, independente da cor do controle fechado. */}
+                <option value="todos" style={{ color:'#1e293b', background:'#fff' }}>Todos os setores</option>
                 {setorOpcoes.map(s => (
-                  <option key={s} value={s}>{SETOR_LABEL[s] || s}</option>
+                  <option key={s} value={s} style={{ color:'#1e293b', background:'#fff' }}>{SETOR_LABEL[s] || s}</option>
                 ))}
               </select>
             )}
