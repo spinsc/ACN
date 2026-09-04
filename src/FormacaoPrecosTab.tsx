@@ -27,20 +27,37 @@ function novoItem() {
     custo_unit:     0,
     ipi_pct:        0,
     st_pct:         0,
-    markup_pct:     100,
+    tipo_calculo:   'CUSTO', // 'CUSTO' (markup sobre custo) ou 'TABELA' (desconto sobre preço de tabela)
+    markup_pct:     100,     // reaproveitado nos 2 modos — no modo TABELA representa o desconto %
     difal_pct:      16,
     imposto_pct:    16,
     custo_fixo_pct: 3,
+    // ── informações do produto (só referência, não entram no cálculo) ──
+    prazo_entrega:      '',
+    garantia:           '',
+    fornecedor_regime:  '', // Simples / Lucro real / Lucro presumido / Regime especial
+    ncm:                '',
+    origem_produto:     '', // Nacional / Importado
+    icms_pct:           0,
+    iss_pct:            0,
   };
 }
 
 // ─── CALCULATION ENGINE ───────────────────────────────────────────────────────
+// Regra de negócio da planilha original (célula "VALIDA MARKUP/DESCONTO"):
+// modo CUSTO exige markup mínimo de 65% sobre o custo; modo TABELA exige
+// desconto máximo de 17,5% sobre o preço de tabela. Só avisa (badge OK/ERRO
+// na UI), não bloqueia — igual à planilha.
+const MARKUP_MINIMO_CUSTO_PCT    = 65;
+const DESCONTO_MAXIMO_TABELA_PCT = 17.5;
+
 function calcItem(item, params) {
   const qt             = Number(item.qt)             || 1;
   const custo_unit     = Number(item.custo_unit)     || 0;
   const ipi_pct        = Number(item.ipi_pct)        || 0;
   const st_pct         = Number(item.st_pct)         || 0;
-  const markup_pct     = Number(item.markup_pct)     || 0;
+  const tipo_calculo   = item.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO';
+  const markup_pct     = Number(item.markup_pct)     || 0; // markup (CUSTO) ou desconto (TABELA) — mesmo campo, igual à planilha
   const difal_pct      = Number(item.difal_pct)      || 0;
   const imposto_pct    = Number(item.imposto_pct)    || 0;
   const custo_fixo_pct = Number(item.custo_fixo_pct) || 0;
@@ -51,17 +68,32 @@ function calcItem(item, params) {
 
   const custoUnitBrl = custo_unit * (1 + ipi_pct / 100) * (1 + st_pct / 100) * fx;
   const custoTotal   = custoUnitBrl * qt;
-  const valorUnit    = difal_pct < 100
-    ? custoUnitBrl * (1 + markup_pct / 100) / (1 - difal_pct / 100)
-    : 0;
-  const valorTotal   = valorUnit * qt;
-  const totalDifal   = valorTotal * (difal_pct / 100);
-  const receitaBruta = custoUnitBrl * (1 + markup_pct / 100) * qt;
-  const totalImposto = receitaBruta * (imposto_pct / 100);
-  const margem       = receitaBruta - totalImposto - (custo_fixo_pct / 100 * receitaBruta) - custoTotal;
-  const lucroPct     = (valorTotal - totalDifal) > 0 ? (margem / (valorTotal - totalDifal)) * 100 : 0;
 
-  return { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct };
+  let valorUnit, totalImposto, margem;
+  if (tipo_calculo === 'TABELA') {
+    // Modo TABELA: "custo" informado é o preço de tabela do fabricante, não
+    // o custo real — a planilha original aproxima o custo real como metade
+    // do preço de tabela (custoUnitBrl/2) só no cálculo de margem.
+    valorUnit    = difal_pct < 100 ? custoUnitBrl * (1 - markup_pct / 100) / (1 - difal_pct / 100) : 0;
+    totalImposto = custoUnitBrl * (1 - markup_pct / 100) * qt * (imposto_pct / 100);
+    margem       = (custoUnitBrl / 2 - custoUnitBrl * markup_pct / 100) * qt
+                  - totalImposto
+                  - (custo_fixo_pct / 100) * (custoUnitBrl - custoUnitBrl * markup_pct / 100) * qt;
+  } else {
+    valorUnit    = difal_pct < 100 ? custoUnitBrl * (1 + markup_pct / 100) / (1 - difal_pct / 100) : 0;
+    const receitaBruta = custoUnitBrl * (1 + markup_pct / 100) * qt;
+    totalImposto = receitaBruta * (imposto_pct / 100);
+    margem       = receitaBruta - totalImposto - (custo_fixo_pct / 100 * receitaBruta) - custoTotal;
+  }
+  const valorTotal = valorUnit * qt;
+  const totalDifal = valorTotal * (difal_pct / 100);
+  const lucroPct    = (valorTotal - totalDifal) > 0 ? (margem / (valorTotal - totalDifal)) * 100 : 0;
+
+  const validacao = tipo_calculo === 'CUSTO'
+    ? (markup_pct < MARKUP_MINIMO_CUSTO_PCT ? 'ERRO' : 'OK')
+    : (markup_pct > DESCONTO_MAXIMO_TABELA_PCT ? 'ERRO' : 'OK');
+
+  return { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct, validacao };
 }
 
 // ─── FORMATTERS ───────────────────────────────────────────────────────────────
@@ -428,7 +460,7 @@ function CalcImpostoReverso() {
 function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
   const [form, setForm] = useState({
     nome: nomeInicial || '', marca: '', fornecedor: '', moeda: 'REAL',
-    custo_unit: 0, ipi_pct: 0, st_pct: 0, markup_pct: 30,
+    custo_unit: 0, ipi_pct: 0, st_pct: 0, tipo_calculo: 'CUSTO', markup_pct: 30,
     difal_pct: 16, imposto_pct: 16, custo_fixo_pct: 3, unidade: 'UN', ativo: true,
   });
   const [salvando, setSalvando] = useState(false);
@@ -443,6 +475,7 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
       nome: form.nome.trim(), marca: form.marca?.trim() || '', fornecedor: form.fornecedor?.trim() || '',
       moeda: form.moeda || 'REAL', custo_unit: Number(form.custo_unit) || 0,
       ipi_pct: Number(form.ipi_pct) || 0, st_pct: Number(form.st_pct) || 0,
+      tipo_calculo: form.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
       markup_pct: Number(form.markup_pct) || 30, difal_pct: Number(form.difal_pct) || 16,
       imposto_pct: Number(form.imposto_pct) || 16, custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
       unidade: form.unidade || 'UN', ativo: true,
@@ -475,9 +508,16 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
               </select>
             </div>
             <div><span style={lbl}>Custo Unitário</span><input style={inp} type="number" min={0} step="0.01" value={form.custo_unit} onChange={e=>set('custo_unit',e.target.value)} /></div>
+            <div>
+              <span style={lbl}>Tipo Cálculo</span>
+              <select style={inp} value={form.tipo_calculo} onChange={e=>set('tipo_calculo',e.target.value)}>
+                <option value="CUSTO">CUSTO (markup)</option>
+                <option value="TABELA">TABELA (desconto)</option>
+              </select>
+            </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6 }}>
-            {[['IPI%','ipi_pct'],['ST%','st_pct'],['Markup%','markup_pct'],['DIFAL%','difal_pct'],['Imposto%','imposto_pct']].map(([l,k])=>(
+            {[['IPI%','ipi_pct'],['ST%','st_pct'],[form.tipo_calculo==='TABELA'?'Desconto%':'Markup%','markup_pct'],['DIFAL%','difal_pct'],['Imposto%','imposto_pct']].map(([l,k])=>(
               <div key={k}><span style={lbl}>{l}</span><input style={inp} type="number" min={0} step="0.5" value={form[k]} onChange={e=>set(k,e.target.value)} /></div>
             ))}
           </div>
@@ -514,7 +554,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       setBuscando(true);
       const [{ data: itens }, { data: produtos }] = await Promise.all([
         supabase.from('cadastro_itens')
-          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
+          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
           .eq('ativo', true).ilike('nome', `%${termo}%`).limit(8),
         supabase.from('cadastro_produtos')
           .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
@@ -540,6 +580,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       produto: it.nome, marca: it.marca || '', fornecedor: it.fornecedor || '',
       moeda: normMoeda(it.moeda), custo_unit: it.custo_unit || 0,
       ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
+      tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
       markup_pct: it.markup_pct ?? 30, difal_pct: it.difal_pct ?? 16,
       imposto_pct: it.imposto_pct ?? 16, custo_fixo_pct: it.custo_fixo_pct ?? 3,
     });
@@ -559,7 +600,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
   const expandirBom = async (p) => {
     const { data: bom } = await supabase
       .from('cadastro_produtos_itens')
-      .select('*, cadastro_itens(nome,marca,fornecedor,moeda,custo_unit,ipi_pct,st_pct,markup_pct,difal_pct,imposto_pct,custo_fixo_pct)')
+      .select('*, cadastro_itens(nome,marca,fornecedor,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct)')
       .eq('produto_id', p.id).order('ordem');
     setOpen(false);
     if (!bom || bom.length === 0) { selecionarProdutoKit(p); return; }
@@ -569,6 +610,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
         produto: l.item_nome || it.nome || '', marca: it.marca || '', fornecedor: it.fornecedor || '',
         moeda: normMoeda(it.moeda), qt: Number(l.quantidade) || 1,
         custo_unit: it.custo_unit || 0, ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
+        tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
         markup_pct: it.markup_pct ?? p.markup_pct ?? 30,
         difal_pct: it.difal_pct ?? p.difal_pct ?? 16,
         imposto_pct: it.imposto_pct ?? p.imposto_pct ?? 16,
@@ -706,7 +748,8 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 
 // ─── LINHA DE ITEM ────────────────────────────────────────────────────────────
 function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGlobais, usarMarkupGlobal, params, isVendedor }) {
-  const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct } = result;
+  const { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct, validacao } = result;
+  const modoTabela = item.tipo_calculo === 'TABELA';
   const lucroColor = lucroPct >= 10 ? '#16a34a' : lucroPct >= 5 ? '#d97706' : '#dc2626';
   const [aberto, setAberto] = useState(false);
 
@@ -792,7 +835,20 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
                   min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
               </div>
               <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Markup%</div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Tipo Cálculo</div>
+                <div style={{ display:'flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
+                  {(['CUSTO','TABELA'] as const).map(t => (
+                    <button key={t} type="button" onClick={() => onSet('tipo_calculo', t)}
+                      style={{ padding:'5px 7px', fontSize:9, fontWeight:700, border:'none', cursor:'pointer',
+                        background: (item.tipo_calculo||'CUSTO')===t ? '#0891b2' : '#fff',
+                        color:      (item.tipo_calculo||'CUSTO')===t ? '#fff'    : '#64748b' }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>{modoTabela ? 'Desconto%' : 'Markup%'}</div>
                 <input type="number" className="acn-input"
                   style={{ width:60, ...inp11r,
                     background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
@@ -837,6 +893,64 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
                 <div>
                   <div style={{ fontSize:8, color:'#64748b' }}>Lucro%</div>
                   <div style={{ fontSize:12, fontWeight:800, color: lucroColor }}>{fmtPct(lucroPct)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>
+                    {modoTabela ? `Desc. máx. ${DESCONTO_MAXIMO_TABELA_PCT}%` : `Markup mín. ${MARKUP_MINIMO_CUSTO_PCT}%`}
+                  </div>
+                  <div style={{ fontSize:11, fontWeight:800, color: validacao === 'ERRO' ? '#dc2626' : '#16a34a' }}>
+                    {validacao === 'ERRO' ? '⚠️ ERRO' : '✅ OK'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Informações do Produto (só referência, não entram no cálculo) ── */}
+            <div style={{ marginTop:10, paddingTop:10, borderTop:'1px dashed #e2e8f0' }}>
+              <div style={{ fontSize:8, fontWeight:800, color:'#0f766e', marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>
+                ℹ️ Informações do Produto
+              </div>
+              <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'flex-end' }}>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Prazo de Entrega</div>
+                  <input className="acn-input" style={{ width:100, ...inp11 }}
+                    value={item.prazo_entrega||''} onChange={e=>onSet('prazo_entrega', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Garantia</div>
+                  <input className="acn-input" style={{ width:90, ...inp11 }}
+                    value={item.garantia||''} onChange={e=>onSet('garantia', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Regime do Fornecedor</div>
+                  <select className="acn-input" style={{ width:150, ...inp11 }}
+                    value={item.fornecedor_regime||''} onChange={e=>onSet('fornecedor_regime', e.target.value)}>
+                    <option value="">— Selecione —</option>
+                    {['Simples','Lucro real','Lucro presumido','Regime especial'].map(o=><option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>NCM</div>
+                  <input className="acn-input" style={{ width:90, ...inp11 }}
+                    value={item.ncm||''} onChange={e=>onSet('ncm', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Origem</div>
+                  <select className="acn-input" style={{ width:110, ...inp11 }}
+                    value={item.origem_produto||''} onChange={e=>onSet('origem_produto', e.target.value)}>
+                    <option value="">— Selecione —</option>
+                    {['Nacional','Importado'].map(o=><option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ICMS%</div>
+                  <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                    step="0.1" value={item.icms_pct||0} onChange={e=>onSet('icms_pct', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ISS%</div>
+                  <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                    step="0.1" value={item.iss_pct||0} onChange={e=>onSet('iss_pct', e.target.value)} />
                 </div>
               </div>
             </div>
