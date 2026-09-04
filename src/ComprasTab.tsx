@@ -8,7 +8,10 @@ import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCu
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 
-const VAZIO_COTACAO = { fornecedor_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
+const VAZIO_COTACAO = { fornecedor_nome: '', valor_unitario: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
+// Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
+// (ex: "1.500,00" -> 1500.00) — separador de milhar "." e decimal ",".
+const parseValorBr = (v: any) => parseFloat(String(v ?? '').replace(/\./g,'').replace(',','.')) || null;
 
 async function uploadCotacaoArquivo(file: File): Promise<{ url: string; nome: string; error?: string }> {
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -269,6 +272,10 @@ export default function ComprasTab({ currentUser }) {
   const [novoAnexoCotacao, setNovoAnexoCotacao] = useState<File|null>(null);
   const [enviandoCotacao, setEnviandoCotacao]   = useState(false);
   const [vencedoraId, setVencedoraId]           = useState<string|null>(null);
+  // Corrigir uma cotação já lançada (Admin) — id da cotação em edição + form
+  const [editandoCotacaoId, setEditandoCotacaoId] = useState<string|null>(null);
+  const [editCotacaoForm, setEditCotacaoForm]     = useState<any>({});
+  const [salvandoEdicaoCotacao, setSalvandoEdicaoCotacao] = useState(false);
   // Aprovar cotação com senha (substitui o antigo fluxo de rádio + justificativa + confirmar)
   const [modalConfirmarSenha, setModalConfirmarSenha] = useState<any>(null); // cotação sendo aprovada
   const [senhaConfirmacao, setSenhaConfirmacao] = useState('');
@@ -525,7 +532,8 @@ export default function ComprasTab({ currentUser }) {
     const { error } = await supabase.from('pcp_cotacoes_fornecedores').insert([{
       pedido_id: modalCotacoes.id,
       fornecedor_nome: novaCotacao.fornecedor_nome.trim(),
-      valor: parseFloat(String(novaCotacao.valor).replace(/\./g,'').replace(',','.')) || null,
+      valor_unitario: parseValorBr(novaCotacao.valor_unitario),
+      valor: parseValorBr(novaCotacao.valor),
       condicao_pagamento: novaCotacao.condicao_pagamento.trim() || null,
       prazo_entrega: novaCotacao.prazo_entrega.trim() || null,
       anexo_url: anexo?.url || null,
@@ -585,10 +593,62 @@ export default function ComprasTab({ currentUser }) {
   };
 
   const excluirCotacao = async (id: string) => {
+    // A vencedora, uma vez que a compra já foi Aprovada/Comprada, não pode
+    // simplesmente sumir — se o valor dela estava errado, o caminho é
+    // corrigir (✏️ Editar), não excluir (perderia o registro/rastreio).
+    if (id === vencedoraId && ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra)) {
+      alert('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "✏️ Editar" para corrigir o valor em vez de excluir.');
+      return;
+    }
     if (!confirm('Remover esta cotação?')) return;
     await supabase.from('pcp_cotacoes_fornecedores').delete().eq('id', id);
     if (vencedoraId === id) setVencedoraId(null);
     abrirModalCotacoes(modalCotacoes);
+  };
+
+  const iniciarEdicaoCotacao = (c: any) => {
+    setEditandoCotacaoId(c.id);
+    setEditCotacaoForm({
+      fornecedor_nome: c.fornecedor_nome || '',
+      valor_unitario: c.valor_unitario != null ? String(c.valor_unitario).replace('.', ',') : '',
+      valor: c.valor != null ? String(c.valor).replace('.', ',') : '',
+      condicao_pagamento: c.condicao_pagamento || '',
+      prazo_entrega: c.prazo_entrega || '',
+    });
+  };
+
+  // Corrige uma cotação já lançada (Admin). Se for a vencedora do pedido,
+  // propaga o novo total pra pcp_pedidos_compra.valor_compra — é esse o
+  // campo que Centro de Custo/Financeiro de fato leem, então é aqui que o
+  // erro "entrou errado no centro de custo" se corrige de verdade.
+  const salvarEdicaoCotacao = async (c: any) => {
+    if (!editCotacaoForm.fornecedor_nome?.trim() || !editCotacaoForm.valor) {
+      alert('Informe ao menos o nome do fornecedor e o valor total.'); return;
+    }
+    setSalvandoEdicaoCotacao(true);
+    const novoValorUnitario = parseValorBr(editCotacaoForm.valor_unitario);
+    const novoValorTotal    = parseValorBr(editCotacaoForm.valor);
+    const payload = {
+      fornecedor_nome: editCotacaoForm.fornecedor_nome.trim(),
+      valor_unitario: novoValorUnitario,
+      valor: novoValorTotal,
+      condicao_pagamento: editCotacaoForm.condicao_pagamento.trim() || null,
+      prazo_entrega: editCotacaoForm.prazo_entrega.trim() || null,
+    };
+    const { error } = await supabase.from('pcp_cotacoes_fornecedores').update(payload).eq('id', c.id);
+    if (error) { setSalvandoEdicaoCotacao(false); alert('Erro ao salvar correção: ' + error.message); return; }
+    logChange({ module: 'compras', entityType: 'pcp_cotacoes_fornecedores', entityId: c.id, changeType: 'UPDATE',
+      oldRow: { fornecedor_nome: c.fornecedor_nome, valor_unitario: c.valor_unitario, valor: c.valor },
+      newRow: payload, user: currentUser });
+    if (c.id === vencedoraId && novoValorTotal != null && novoValorTotal !== c.valor) {
+      await supabase.from('pcp_pedidos_compra').update({ valor_compra: novoValorTotal }).eq('id', modalCotacoes.id);
+      logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: modalCotacoes.id, changeType: 'UPDATE',
+        oldRow: { valor_compra: c.valor }, newRow: { valor_compra: novoValorTotal }, user: currentUser });
+    }
+    setSalvandoEdicaoCotacao(false);
+    setEditandoCotacaoId(null);
+    await abrirModalCotacoes(modalCotacoes);
+    setFiltro(''); load();
   };
 
   // ── Alçadas de Aprovação (Fase 2) ─────────────────────────────────────────
@@ -1087,6 +1147,16 @@ export default function ComprasTab({ currentUser }) {
             </button>
           )}
 
+          {/* 🔍 Ver/Corrigir Cotações — depois de Aprovado/Comprado, o botão normal de
+              Cotações some (é pra quando ainda se está decidindo); esse reabre a mesma
+              Mesa de Cotações em modo consulta/correção (edição só Admin, ver excluirCotacao). */}
+          {['Aprovado','Comprado'].includes(p.status_compra) && (
+            <button onClick={()=>abrirModalCotacoes(p)} title="Ver cotações e corrigir valores se necessário"
+              style={{...btn,background:'#6366f1',marginRight:3}}>
+              🔍 Ver/Corrigir Cotações
+            </button>
+          )}
+
           {/* 📦 Comprado → Concluído — só via conferência técnica na Logística (Fase 3) */}
           {p.status_compra==='Comprado' && (
             <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
@@ -1469,12 +1539,62 @@ export default function ComprasTab({ currentUser }) {
                 {cotacoes.length===0 && (
                   <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
                 )}
-                {cotacoes.map((c:any) => (
+                {cotacoes.map((c:any) => {
+                  const compraDecidida = ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra);
+                  const emEdicao = editandoCotacaoId === c.id;
+                  return (
                   <div key={c.id} style={{
                     padding:'8px 10px',borderRadius:6,
                     border: vencedoraId===c.id ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
                     background: vencedoraId===c.id ? '#f0fdf4' : '#fff',
                   }}>
+                    {emEdicao ? (
+                      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                          <div>
+                            <label className="acn-label">Fornecedor *</label>
+                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.fornecedor_nome}
+                              onChange={e=>setEditCotacaoForm(f=>({...f,fornecedor_nome:e.target.value}))} />
+                          </div>
+                          <div />
+                          <div>
+                            <label className="acn-label">Valor Unitário (R$)</label>
+                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.valor_unitario}
+                              placeholder="Ex: 15,00"
+                              onChange={e=>{
+                                const un = e.target.value;
+                                const qtd = Number(modalCotacoes?.quantidade) || 1;
+                                const unNum = parseValorBr(un);
+                                setEditCotacaoForm(f=>({ ...f, valor_unitario: un,
+                                  valor: unNum != null ? String((unNum*qtd).toFixed(2)).replace('.',',') : f.valor }));
+                              }} />
+                          </div>
+                          <div>
+                            <label className="acn-label">Valor Total (R$) *</label>
+                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.valor}
+                              placeholder="Ex: 1.500,00"
+                              onChange={e=>setEditCotacaoForm(f=>({...f,valor:e.target.value}))} />
+                          </div>
+                          <div>
+                            <label className="acn-label">Condição de Pagamento</label>
+                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.condicao_pagamento}
+                              onChange={e=>setEditCotacaoForm(f=>({...f,condicao_pagamento:e.target.value}))} />
+                          </div>
+                          <div>
+                            <label className="acn-label">Prazo de Entrega</label>
+                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.prazo_entrega}
+                              onChange={e=>setEditCotacaoForm(f=>({...f,prazo_entrega:e.target.value}))} />
+                          </div>
+                        </div>
+                        <div style={{display:'flex',gap:6}}>
+                          <button className="acn-btn" style={{background:'#16a34a',flex:1}} disabled={salvandoEdicaoCotacao}
+                            onClick={()=>salvarEdicaoCotacao(c)}>
+                            {salvandoEdicaoCotacao ? 'Salvando...' : '💾 Salvar Correção'}
+                          </button>
+                          <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setEditandoCotacaoId(null)}>Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (<>
                     <div style={{display:'flex',alignItems:'center',gap:10}}>
                       <div style={{flex:1}}>
                         <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
@@ -1482,6 +1602,7 @@ export default function ComprasTab({ currentUser }) {
                           {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
                         </div>
                         <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
+                          {c.valor_unitario ? `${fmt(c.valor_unitario)}/un. · ` : ''}
                           {c.valor ? fmt(c.valor) : '—'}
                           {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
                           {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
@@ -1490,36 +1611,61 @@ export default function ComprasTab({ currentUser }) {
                           <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
                         )}
                       </div>
+                      {currentUser?.perfil==='Admin' && (
+                        <button onClick={()=>iniciarEdicaoCotacao(c)} title="Corrigir valores desta cotação"
+                          style={{...btn,background:'#6366f1',padding:'2px 7px',fontSize:9}}>✏️</button>
+                      )}
                       <button onClick={()=>excluirCotacao(c.id)} title="Remover"
                         style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
                     </div>
                     <CotacaoAreaLivre cotacao={c}
                       onSaved={(html:string)=>setCotacoes(prev=>prev.map(x=>x.id===c.id?{...x,area_livre:html}:x))} />
-                    {!aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
+                    {!compraDecidida && !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
                       <button className="acn-btn" style={{background:'#16a34a',width:'100%',marginTop:6}}
                         onClick={()=>aprovarCotacaoComoVencedora(c)}>
                         ✅ Aprovar esta cotação como vencedora
                       </button>
                     )}
+                    </>)}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
             {/* Nova cotação — escondida enquanto há aprovação de ALÇADA pendente (a vencedora já foi
-                travada). Uma pendência de DEPARTAMENTO não trava, pois ela nasce na 1ª cotação — o
-                comprador ainda precisa poder lançar a 2ª e 3ª enquanto o gestor avalia em paralelo. */}
-            {!aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') ? (<>
+                travada), ou quando a compra já foi Aprovada/Comprada (a essa altura, já foi decidida —
+                pra corrigir um valor errado, usar "✏️ Editar" na cotação vencedora acima). Uma pendência
+                de DEPARTAMENTO não trava, pois ela nasce na 1ª cotação — o comprador ainda precisa poder
+                lançar a 2ª e 3ª enquanto o gestor avalia em paralelo. */}
+            {(!['Aprovado','Comprado'].includes(modalCotacoes?.status_compra) &&
+              !aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento')) ? (<>
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
               <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Fornecedor</div>
+              {modalCotacoes?.quantidade > 1 && (
+                <div style={{fontSize:9,color:'#94a3b8',marginBottom:6}}>Quantidade do pedido: {modalCotacoes.quantidade}</div>
+              )}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                 <div>
                   <label className="acn-label">Fornecedor *</label>
                   <input className="acn-input" style={{width:'100%'}} value={novaCotacao.fornecedor_nome}
                     onChange={e=>setNovaCotacao(f=>({...f,fornecedor_nome:e.target.value}))} />
                 </div>
+                <div />
                 <div>
-                  <label className="acn-label">Valor (R$) *</label>
+                  <label className="acn-label">Valor Unitário (R$)</label>
+                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor_unitario}
+                    placeholder="Ex: 15,00"
+                    onChange={e=>{
+                      const un = e.target.value;
+                      const qtd = Number(modalCotacoes?.quantidade) || 1;
+                      const unNum = parseValorBr(un);
+                      setNovaCotacao(f=>({ ...f, valor_unitario: un,
+                        valor: unNum != null ? String((unNum*qtd).toFixed(2)).replace('.',',') : f.valor }));
+                    }} />
+                </div>
+                <div>
+                  <label className="acn-label">Valor Total (R$) *</label>
                   <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor}
                     placeholder="Ex: 1.500,00"
                     onChange={e=>setNovaCotacao(f=>({...f,valor:e.target.value}))} />
