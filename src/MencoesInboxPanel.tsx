@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { resolverMencoesRespondidas } from './MencaoTextarea';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel Inbox de Menções (@usuário)
@@ -26,12 +27,95 @@ const ABA_LABEL: Record<string, string> = {
 };
 
 const CONTEXTO_LABEL: Record<string, string> = {
-  op:      'OP',
-  os:      'OS',
-  crm:     'CRM',
-  demanda: 'Demanda',
-  sac:     'SAC',
+  op:               'OP',
+  os:               'OS',
+  crm:              'CRM',
+  demanda:          'Demanda',
+  demanda_avulsa:   'Demanda Avulsa',
+  sac:              'SAC',
+  compra:           'Compra',
+  licitacao:        'Licitação',
+  compra_aprovacao: 'Aprovação de Compra',
+  frete_aprovacao:  'Aprovação de Frete',
 };
+
+// Contextos sem "aprovação pendente" real — nesses a menção É o pedido de
+// aprovação em si; ela se resolve sozinha quando alguém aprova/rejeita
+// (ComprasTab.tsx/LogisticaTab.tsx chamam resolverMencoesRespondidas na
+// hora). Não faz sentido oferecer uma caixa de resposta de texto aqui.
+const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao']);
+
+// Responder uma menção — grava a resposta EXATAMENTE no mesmo lugar que a
+// tela de origem gravaria (então ela aparece lá também, não só aqui), e em
+// seguida resolverMencoesRespondidas() cuida de marcar a(s) menção(ões)
+// pendente(s) do autor naquele registro como resolvidas. Um `null` de
+// retorno sinaliza "sem alvo conhecido pra esse contexto" — o chamador cai
+// pro botão manual de "Marcar como resolvida" nesse caso.
+async function responderMencao(m: any, texto: string, currentUser: any): Promise<boolean> {
+  const contextoId = m.contexto_id;
+  const nome = currentUser?.nome || currentUser?.email || 'Usuário';
+  const agora = new Date().toISOString();
+  if (!contextoId || !texto.trim()) return false;
+
+  if (m.contexto === 'crm') {
+    const { error } = await supabase.from('crm_historico').insert({
+      oportunidade_id: contextoId, tipo: 'observacao', texto: texto.trim(),
+      usuario_nome: nome, criado_em: agora,
+    });
+    if (error) return false;
+  } else if (m.contexto === 'licitacao') {
+    const { error } = await supabase.from('licitacao_documentos').insert({
+      licitacao_id: contextoId, categoria: 'andamento', nome: 'Andamento', conteudo: texto.trim(),
+      criado_por: currentUser?.email, criado_por_nome: nome, criado_em: agora,
+    });
+    if (error) return false;
+  } else if (m.contexto === 'compra' && m.campo === 'observacoes_compra') {
+    const { data: pedido } = await supabase.from('pcp_pedidos_compra')
+      .select('observacoes_compra').eq('id', contextoId).maybeSingle();
+    const linha = `[${new Date().toLocaleString('pt-BR')} — ${nome}]: ${texto.trim()}`;
+    const atual = pedido?.observacoes_compra || '';
+    const { error } = await supabase.from('pcp_pedidos_compra')
+      .update({ observacoes_compra: atual ? `${atual}\n${linha}` : linha }).eq('id', contextoId);
+    if (error) return false;
+  } else if (m.contexto === 'sac') {
+    const { data: os } = await supabase.from('sac_ordens_servico')
+      .select('observacoes').eq('id', contextoId).maybeSingle();
+    const linha = `[${new Date().toLocaleString('pt-BR')} — ${nome}]: ${texto.trim()}`;
+    const atual = os?.observacoes || '';
+    const { error } = await supabase.from('sac_ordens_servico')
+      .update({ observacoes: atual ? `${atual}\n${linha}` : linha }).eq('id', contextoId);
+    if (error) return false;
+  } else if (m.contexto === 'demanda_avulsa') {
+    const { data: d } = await supabase.from('demandas_avulsas')
+      .select('informacoes').eq('id', contextoId).maybeSingle();
+    const lista = [...(d?.informacoes || []), { texto: texto.trim(), usuario: nome, data: agora }];
+    const { error } = await supabase.from('demandas_avulsas')
+      .update({ informacoes: lista, atualizado_em: agora }).eq('id', contextoId);
+    if (error) return false;
+  } else if (m.contexto === 'demanda') {
+    const { data: d } = await supabase.from('demandas_setoriais')
+      .select('logs_demanda').eq('id', contextoId).maybeSingle();
+    const logs = [...(d?.logs_demanda || []), { texto: texto.trim(), usuario: nome, hora: agora }];
+    const { error } = await supabase.from('demandas_setoriais')
+      .update({ logs_demanda: logs, observacoes_execucao: texto.trim() }).eq('id', contextoId);
+    if (error) return false;
+  } else if (['op', 'os', 'compra'].includes(m.contexto) && m.campo === 'acompanhamento') {
+    const setorLabel = (ABA_LABEL[m.aba_destino] || 'Sistema').replace(/^\S+\s/, ''); // tira o emoji
+    const { error } = await supabase.from('op_acompanhamentos').insert({
+      referencia_id: contextoId, referencia_tipo: m.contexto, referencia_desc: m.contexto_descricao,
+      setor: setorLabel, texto: texto.trim(),
+      usuario_id: String(currentUser?.id || ''), usuario_nome: nome, criado_em: agora,
+    });
+    if (error) return false;
+  } else {
+    return false; // contexto sem alvo de resposta conhecido
+  }
+
+  await resolverMencoesRespondidas({
+    contexto: m.contexto, contextoId, autorId: currentUser?.id, autorNome: nome,
+  });
+  return true;
+}
 
 const fmtDT = (v: string) => {
   if (!v) return '—';
@@ -55,6 +139,11 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const [loading, setLoading]   = useState(true);
   const [filtro, setFiltro]     = useState<'pendentes' | 'resolvidas' | 'todas'>('pendentes');
   const [marcando, setMarcando] = useState<Record<string, boolean>>({});
+  // Compositor de resposta inline — só um aberto por vez, texto por menção
+  // (assim trocar de card sem enviar não perde o que já foi digitado nos outros).
+  const [respondendoId, setRespondendoId] = useState<string | null>(null);
+  const [textosResposta, setTextosResposta] = useState<Record<string, string>>({});
+  const [enviando, setEnviando] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,6 +228,23 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       })
       .eq('mencionado_id', currentUser?.id)
       .eq('resolvida', false);
+    await load();
+  };
+
+  // Envia a resposta direto pro lugar de origem daquela menção (CRM, Licitação,
+  // Compras, SAC, etc.) — some de lá pra cá igual um comentário normal, e
+  // resolverMencoesRespondidas() (chamado dentro de responderMencao) já marca
+  // a menção como resolvida. Se o contexto não tiver um alvo de resposta
+  // conhecido, avisa e deixa o botão manual de "Marcar como resolvida" cuidar.
+  const enviarResposta = async (m: any) => {
+    const texto = (textosResposta[m.id] || '').trim();
+    if (!texto) return;
+    setEnviando(prev => ({ ...prev, [m.id]: true }));
+    const ok = await responderMencao(m, texto, currentUser);
+    setEnviando(prev => ({ ...prev, [m.id]: false }));
+    if (!ok) { alert('Não foi possível enviar a resposta por aqui — use o botão "Marcar como resolvida" ou responda direto na tela de origem.'); return; }
+    setTextosResposta(prev => ({ ...prev, [m.id]: '' }));
+    setRespondendoId(null);
     await load();
   };
 
@@ -350,6 +456,16 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                   {m.lida && !m.resolvida && (
                     <span style={{ fontSize:9, color:'#94a3b8' }}>✓ Lida</span>
                   )}
+                  {!m.resolvida && !CONTEXTOS_SEM_RESPOSTA.has(m.contexto) && (
+                    <button
+                      onClick={() => setRespondendoId(id => id === m.id ? null : m.id)}
+                      style={{
+                        fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
+                        background: respondendoId===m.id ? '#e0e7ff' : 'none', color:'#4338ca', border:'1px solid #c7d2fe',
+                      }}>
+                      ↩ {respondendoId===m.id ? 'Cancelar resposta' : 'Responder'}
+                    </button>
+                  )}
                   {!m.resolvida ? (
                     <button
                       onClick={() => marcarResolvida(m)}
@@ -379,6 +495,34 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                     </>
                   )}
                 </div>
+
+                {/* Compositor de resposta — grava na tela de origem (CRM,
+                    Licitação, Compras, SAC...) e resolve a menção sozinho. */}
+                {respondendoId === m.id && (
+                  <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid #e0e7ff' }}>
+                    <textarea
+                      autoFocus
+                      value={textosResposta[m.id] || ''}
+                      onChange={e => setTextosResposta(prev => ({ ...prev, [m.id]: e.target.value }))}
+                      placeholder="Escreva sua resposta... ela vai aparecer direto na tela de origem"
+                      rows={2}
+                      style={{ width:'100%', padding:'6px 8px', border:'1px solid #c7d2fe', borderRadius:4,
+                        fontSize:10, resize:'vertical', fontFamily:'inherit', boxSizing:'border-box' }}
+                    />
+                    <div style={{ display:'flex', gap:6, marginTop:6 }}>
+                      <button
+                        onClick={() => enviarResposta(m)}
+                        disabled={enviando[m.id] || !(textosResposta[m.id] || '').trim()}
+                        style={{
+                          fontSize:9, fontWeight:700, padding:'4px 12px', borderRadius:4, cursor:'pointer',
+                          background:'#4338ca', color:'white', border:'none',
+                          opacity: enviando[m.id] || !(textosResposta[m.id]||'').trim() ? .6 : 1,
+                        }}>
+                        {enviando[m.id] ? 'Enviando...' : '➤ Enviar resposta'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

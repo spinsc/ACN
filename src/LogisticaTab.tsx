@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
+import { resolverMencoesRespondidas } from './MencaoTextarea';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -601,6 +602,7 @@ function FretesPanel({ currentUser }: any) {
       status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(),
     }).eq('id', nivelAtivo.id);
+    resolverMencoesRespondidas({ contexto: 'frete_aprovacao', contextoId: modalFrete.id, autorId: currentUser?.id, autorNome: currentUser?.nome });
     const { data: restantes } = await supabase.from('pcp_aprovacoes_fretes')
       .select('*').eq('frete_id', modalFrete.id).eq('status', 'pendente').order('nivel', { ascending: true });
     if (restantes && restantes.length > 0) {
@@ -635,6 +637,7 @@ function FretesPanel({ currentUser }: any) {
       status: 'rejeitado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(), resposta: motivo.trim(),
     }).eq('id', nivelAtivo.id);
+    resolverMencoesRespondidas({ contexto: 'frete_aprovacao', contextoId: modalFrete.id, autorId: currentUser?.id, autorNome: currentUser?.nome });
     await supabase.from('pcp_aprovacoes_fretes').update({ status: 'cancelado' })
       .eq('frete_id', modalFrete.id).eq('status', 'pendente');
     const novoRowRej = { status: 'Cotação', vencedora_id: null, justificativa_vencedora: null };

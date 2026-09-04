@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
@@ -715,6 +715,9 @@ export default function ComprasTab({ currentUser }) {
       status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(),
     }).eq('id', nivelAtivo.id);
+    // Este usuário acabou de agir sobre a pendência dele — resolve a menção
+    // de "aprovação necessária" que o trouxe até aqui.
+    resolverMencoesRespondidas({ contexto: 'compra_aprovacao', contextoId: pedido.id, autorId: currentUser?.id, autorNome: currentUser?.nome });
     const { data: restantes } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', pedido.id).eq('status', 'pendente').order('nivel', { ascending: true });
     if (restantes && restantes.length > 0) {
@@ -779,6 +782,7 @@ export default function ComprasTab({ currentUser }) {
       status: 'rejeitado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(), resposta: motivo.trim(),
     }).eq('id', nivelAtivo.id);
+    resolverMencoesRespondidas({ contexto: 'compra_aprovacao', contextoId: modalCotacoes.id, autorId: currentUser?.id, autorNome: currentUser?.nome });
     await supabase.from('pcp_aprovacoes').update({ status: 'cancelado' })
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
     await supabase.from('pcp_pedidos_compra').update({

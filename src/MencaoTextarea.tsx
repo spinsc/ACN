@@ -56,6 +56,34 @@ export function useUsers(): any[] {
   return users;
 }
 
+// ── resolverMencoesRespondidas: marca como resolvidas as menções pendentes
+// de UM usuário específico num registro específico — chamado tanto quando
+// esse usuário volta e escreve algo naquele mesmo registro (responder =
+// resolver, ver salvarMencoes abaixo) quanto quando ele aprova/rejeita algo
+// que estava pendente pra ele (ver ComprasTab.tsx/LogisticaTab.tsx). Nunca
+// apaga nada — só marca o status, sempre reversível via "Reabrir" no painel.
+export async function resolverMencoesRespondidas(opts: {
+  contexto: string;
+  contextoId: string;
+  autorId: string;
+  autorNome: string;
+}) {
+  const { contexto, contextoId, autorId, autorNome } = opts;
+  if (!contexto || !contextoId || !autorId) return;
+  const uid = String(autorId);
+  let orFilter = `mencionado_id.eq.${uid}`;
+  if (autorNome) orFilter += `,mencionado_nome.ilike.%${autorNome}%`;
+  const { error } = await supabase.from('mencoes')
+    .update({
+      resolvida: true, resolvida_em: new Date().toISOString(),
+      resolvida_por: autorNome || null, lida: true,
+    })
+    .eq('contexto', contexto).eq('contexto_id', String(contextoId))
+    .eq('resolvida', false)
+    .or(orFilter);
+  if (error) console.error('[resolverMencoesRespondidas] erro:', error.message);
+}
+
 // ── salvarMencoes: chamar após salvar o registro pai ─────────────────────────
 export async function salvarMencoes(opts: {
   texto: string;
@@ -74,7 +102,16 @@ export async function salvarMencoes(opts: {
   // achar os @nomes quanto pro texto_trecho salvo (senão a notificação de
   // menção mostraria "<b>" literal pra quem foi mencionado).
   const texto = (opts.texto || '').replace(/<[^>]*>/g, '');
-  if (!texto || !contextoId || !texto.includes('@')) return;
+  if (!contextoId) return;
+
+  // O autor voltou e escreveu algo NESTE MESMO registro — entendemos que ele
+  // respondeu/resolveu qualquer menção pendente que tivesse ali (não precisa
+  // ter usado @ de novo pra isso contar). Roda sempre, mesmo sem @ no texto.
+  await resolverMencoesRespondidas({
+    contexto, contextoId, autorId: mencionanteId, autorNome: mencionanteNome,
+  });
+
+  if (!texto || !texto.includes('@')) return;
 
   // Busca todos os usuários (nomes têm espaço — "João Silva" — então não dá pra
   // extrair o nome mencionado com um regex que para no primeiro \s; em vez disso,
