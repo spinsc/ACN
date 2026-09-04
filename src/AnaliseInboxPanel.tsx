@@ -25,6 +25,23 @@ const fmtDT = (v: string) => {
   try { return new Date(v).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return v; }
 };
 
+// Setor de análise → aba correspondente em abas_permitidas (mesmas chaves
+// usadas no switch de DashboardTab.tsx). 'Orcamento' não tem aba própria —
+// quem abre este painel já passou pelo gate de recebe_alerta_analise, então
+// fica sempre disponível pra quem o vê. 'Comercial' não tem tab própria
+// roteada hoje (ComercialTab.tsx não está no menu) — mapeado pra 'crm', o
+// time que mais lida com esse tipo de pedido na prática.
+const SETOR_ABA: Record<string, string | null> = {
+  Comercial:   'crm',
+  Telecom:     'telecom',
+  Engenharia:  'engenharia',
+  Orcamento:   null,
+  Chicotes:    'chicotes',
+  Serralheria: 'serralheria',
+  Producao:    'producao',
+  Laboratorio: 'laboratorio',
+};
+
 interface Props {
   currentUser: any;
   onClose: () => void;
@@ -39,7 +56,28 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
   const [notas, setNotas]           = useState<Record<string, string>>({});   // setorId → nota
   const [expandido, setExpandido]   = useState<Record<string, boolean>>({});  // solicitacaoId → bool
   const [filtro, setFiltro]         = useState<'pendente' | 'concluidas' | 'tudo'>('pendente');
+  const [setorFiltro, setSetorFiltro] = useState('todos'); // setor de analise_setores selecionado, ou 'todos'
   const [pendentesGlobal, setPendentesGlobal] = useState(0); // total real, independe do filtro selecionado
+
+  // Opções do filtro de setor — só os setores cuja aba correspondente o
+  // usuário tem permissão de ver (mesmo critério de isVisible() em
+  // DashboardTab.tsx: Admin ou sem abas_permitidas configuradas vê tudo).
+  const setorOpcoes = React.useMemo(() => {
+    const abas = currentUser?.abas_permitidas;
+    const semRestricao = currentUser?.perfil === 'Admin' || !Array.isArray(abas) || abas.length === 0;
+    return Object.keys(SETOR_ABA).filter(s => {
+      const aba = SETOR_ABA[s];
+      return aba === null || semRestricao || abas.includes(aba);
+    });
+  }, [currentUser?.abas_permitidas, currentUser?.perfil]);
+
+  // Filtra por setor no cliente — um card (solicitação) pode ter vários
+  // setores, então "filtrar por setor" mantém o card se PELO MENOS um dos
+  // setores dele bater, sem esconder os outros setores do mesmo card.
+  const analisesFiltradas = React.useMemo(() => {
+    if (setorFiltro === 'todos') return analises;
+    return analises.filter(sol => (sol.analise_setores || []).some((s: any) => s.setor === setorFiltro));
+  }, [analises, setorFiltro]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,7 +163,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
           </div>
 
           {/* Filtro */}
-          <div style={{ display:'flex', gap:6, marginTop:10 }}>
+          <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
             {(['pendente','concluidas','tudo'] as const).map(f => (
               <button key={f} onClick={() => setFiltro(f)}
                 style={{
@@ -137,6 +175,20 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                 {f === 'pendente' ? 'Pendentes' : f === 'concluidas' ? 'Concluídas' : 'Todas'}
               </button>
             ))}
+            {setorOpcoes.length > 1 && (
+              <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
+                style={{
+                  fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:4, cursor:'pointer',
+                  background: setorFiltro==='todos' ? 'rgba(255,255,255,.2)' : 'white',
+                  color:      setorFiltro==='todos' ? 'white' : '#b45309',
+                  border: 'none', marginLeft:'auto',
+                }}>
+                <option value="todos">Todos os setores</option>
+                {setorOpcoes.map(s => (
+                  <option key={s} value={s}>{SETOR_LABEL[s] || s}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -145,18 +197,19 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
           {loading && (
             <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:11 }}>Carregando...</div>
           )}
-          {!loading && analises.length === 0 && (
+          {!loading && analisesFiltradas.length === 0 && (
             <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
               <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
               <div style={{ fontSize:11 }}>
-                {filtro === 'pendente' ? 'Nenhuma análise pendente!'
+                {setorFiltro !== 'todos' ? `Nenhuma análise de ${SETOR_LABEL[setorFiltro] || setorFiltro} aqui.`
+                  : filtro === 'pendente' ? 'Nenhuma análise pendente!'
                   : filtro === 'concluidas' ? 'Nenhuma análise concluída ainda.'
                   : 'Nenhuma análise registrada.'}
               </div>
             </div>
           )}
 
-          {analises.map(sol => {
+          {analisesFiltradas.map(sol => {
             const setores: any[] = sol.analise_setores || [];
             const pendentes = setores.filter(s => s.status !== 'analisado').length;
             const exp = expandido[sol.id] !== false; // padrão expandido
@@ -295,7 +348,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
         <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 14px', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between', background:'#f8fafc' }}>
           <span style={{ fontSize:9, color:'#94a3b8' }}>
-            {analises.length} registro(s) exibido(s)
+            {analisesFiltradas.length} registro(s) exibido(s)
           </span>
           <button onClick={load}
             style={{ fontSize:9, fontWeight:700, padding:'4px 12px', borderRadius:4,

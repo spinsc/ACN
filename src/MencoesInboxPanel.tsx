@@ -138,7 +138,18 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const [mencoes, setMencoes]   = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [filtro, setFiltro]     = useState<'pendentes' | 'resolvidas' | 'todas'>('pendentes');
+  const [setorFiltro, setSetorFiltro] = useState('todos'); // aba_destino selecionado, ou 'todos'
+  const [pendentesGlobal, setPendentesGlobal] = useState(0); // total real, independe dos filtros da tela
   const [marcando, setMarcando] = useState<Record<string, boolean>>({});
+
+  // Opções do filtro de setor — só as abas que o usuário tem permissão de
+  // ver (mesmo critério de isVisible() em DashboardTab.tsx: Admin ou sem
+  // abas_permitidas configuradas enxerga tudo; senão, só o que está na lista).
+  const setorOpcoes = React.useMemo(() => {
+    const abas = currentUser?.abas_permitidas;
+    const semRestricao = currentUser?.perfil === 'Admin' || !Array.isArray(abas) || abas.length === 0;
+    return Object.keys(ABA_LABEL).filter(k => semRestricao || abas.includes(k));
+  }, [currentUser?.abas_permitidas, currentUser?.perfil]);
   // Compositor de resposta inline — só um aberto por vez, texto por menção
   // (assim trocar de card sem enviar não perde o que já foi digitado nos outros).
   const [respondendoId, setRespondendoId] = useState<string | null>(null);
@@ -163,23 +174,37 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         .limit(100);
       if (filtro === 'pendentes') q = q.eq('resolvida', false);
       if (filtro === 'resolvidas') q = q.eq('resolvida', true);
+      if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
       const { data, error } = await q;
       if (error) {
         console.error('[MencoesInbox] erro ao carregar:', error.message);
       }
-      const lista = data || [];
-      setMencoes(lista);
-      // "Pendente" é o que de fato importa pro badge/contador — "lida" só
-      // significa "vista", não que foi resolvida/respondida.
-      const pendentes = lista.filter(m => !m.resolvida).length;
-      onCountChange?.(filtro === 'pendentes' ? lista.length : pendentes);
+      setMencoes(data || []);
     } catch (e) {
       console.error('[MencoesInbox] exceção:', e);
     }
     setLoading(false);
-  }, [currentUser?.id, currentUser?.nome, filtro]);
+  }, [currentUser?.id, currentUser?.nome, filtro, setorFiltro]);
+
+  // Contagem do badge do header — sempre o total real pendente, independente
+  // dos filtros de status/setor selecionados na tela (senão o badge cai a
+  // zero só por trocar de aba de filtro, mesmo com pendências reais restando).
+  const refreshBadgeCount = useCallback(async () => {
+    const uid  = String(currentUser?.id   || '');
+    const nome = String(currentUser?.nome || '');
+    let orFilter = `mencionado_id.eq.${uid}`;
+    if (nome) orFilter += `,mencionado_nome.ilike.%${nome}%`;
+    const { count } = await supabase
+      .from('mencoes')
+      .select('id', { count: 'exact', head: true })
+      .or(orFilter)
+      .eq('resolvida', false);
+    setPendentesGlobal(count || 0);
+    onCountChange?.(count || 0);
+  }, [currentUser?.id, currentUser?.nome, onCountChange]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { refreshBadgeCount(); }, [refreshBadgeCount]);
 
   const marcarLida = async (m: any) => {
     setMarcando(prev => ({ ...prev, [m.id]: true }));
@@ -189,10 +214,11 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   };
 
   const marcarTodasLidas = async () => {
-    await supabase.from('mencoes')
-      .update({ lida: true })
-      .eq('mencionado_id', currentUser?.id)
-      .eq('lida', false);
+    // Respeita o filtro de setor ativo — "todas" aqui significa "todas as
+    // visíveis nesta tela", não todas as menções do usuário em qualquer setor.
+    let q = supabase.from('mencoes').update({ lida: true }).eq('mencionado_id', currentUser?.id).eq('lida', false);
+    if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
+    await q;
     await load();
   };
 
@@ -207,6 +233,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       lida: true,
     }).eq('id', m.id);
     await load();
+    await refreshBadgeCount();
     setMarcando(prev => ({ ...prev, [m.id]: false }));
   };
 
@@ -216,19 +243,21 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       resolvida: false, resolvida_em: null, resolvida_por: null,
     }).eq('id', m.id);
     await load();
+    await refreshBadgeCount();
     setMarcando(prev => ({ ...prev, [m.id]: false }));
   };
 
   const marcarTodasResolvidas = async () => {
-    await supabase.from('mencoes')
-      .update({
-        resolvida: true, resolvida_em: new Date().toISOString(),
-        resolvida_por: currentUser?.nome || currentUser?.email || null,
-        lida: true,
-      })
-      .eq('mencionado_id', currentUser?.id)
-      .eq('resolvida', false);
+    // Idem — só resolve o que está filtrado/visível na tela agora.
+    let q = supabase.from('mencoes').update({
+      resolvida: true, resolvida_em: new Date().toISOString(),
+      resolvida_por: currentUser?.nome || currentUser?.email || null,
+      lida: true,
+    }).eq('mencionado_id', currentUser?.id).eq('resolvida', false);
+    if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
+    await q;
     await load();
+    await refreshBadgeCount();
   };
 
   // Envia a resposta direto pro lugar de origem daquela menção (CRM, Licitação,
@@ -246,6 +275,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
     setTextosResposta(prev => ({ ...prev, [m.id]: '' }));
     setRespondendoId(null);
     await load();
+    await refreshBadgeCount();
   };
 
   const naoLidasCount   = mencoes.filter(m => !m.lida).length;
@@ -296,8 +326,8 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
             <div>
               <div style={{ fontWeight:700, fontSize:14 }}>💬 Minhas Menções</div>
               <div style={{ fontSize:10, opacity:.85, marginTop:2 }}>
-                {pendentesCount > 0
-                  ? `${pendentesCount} pendente(s) — ainda não resolvida(s)`
+                {pendentesGlobal > 0
+                  ? `${pendentesGlobal} pendente(s) — ainda não resolvida(s)`
                   : 'Nenhuma menção pendente'}
               </div>
             </div>
@@ -329,7 +359,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
           )}
 
           {/* Filtro */}
-          <div style={{ display:'flex', gap:6, marginTop:10 }}>
+          <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
             {(['pendentes','resolvidas','todas'] as const).map(f => (
               <button key={f} onClick={() => setFiltro(f)}
                 style={{
@@ -341,6 +371,20 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
                 {f === 'pendentes' ? 'Pendentes' : f === 'resolvidas' ? 'Resolvidas' : 'Todas'}
               </button>
             ))}
+            {setorOpcoes.length > 1 && (
+              <select value={setorFiltro} onChange={e => setSetorFiltro(e.target.value)}
+                style={{
+                  fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:4, cursor:'pointer',
+                  background: setorFiltro==='todos' ? 'rgba(255,255,255,.2)' : 'white',
+                  color:      setorFiltro==='todos' ? 'white' : '#6366f1',
+                  border: 'none', marginLeft:'auto',
+                }}>
+                <option value="todos">Todos os setores</option>
+                {setorOpcoes.map(k => (
+                  <option key={k} value={k}>{ABA_LABEL[k]}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
