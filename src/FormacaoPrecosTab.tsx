@@ -14,11 +14,13 @@ const PARAMS_PADRAO = {
   custo_fixo_pct: 3,
   lote_qtd:       1,
   markup_pct:     100,
+  lote_por_grupo: {} as Record<string, number>, // LOTE individual por "Item do edital" (chave = grupo_nome)
 };
 
 function novoItem() {
   return {
     _id: Math.random().toString(36).slice(2),
+    grupo_nome:     'Item 1', // "Item do edital" ao qual este componente pertence (ver tira de abas)
     produto:        '',
     marca:          '',
     fornecedor:     '',
@@ -104,6 +106,22 @@ const fmtR = (v) => {
 const fmtPct = (v) => {
   if (v == null || !isFinite(v) || isNaN(v)) return '—';
   return `${Number(v).toFixed(1)}%`;
+};
+// Nome do "Item do edital" de um componente — sempre passa por aqui (nunca lê
+// item.grupo_nome direto) pra tratar de forma uniforme componentes antigos
+// salvos antes desse campo existir (viram um único grupo "Item 1").
+const grupoDe = (item) => item?.grupo_nome || 'Item 1';
+// Soma um conjunto de resultados de calcItem() nos mesmos totais usados no
+// painel geral — reaproveitado tanto pro resumo geral quanto pro subtotal
+// por Item do edital (tela e PDF).
+const somarResultados = (results) => {
+  const totVendas  = results.reduce((s, r) => s + r.valorTotal,   0);
+  const totCustos  = results.reduce((s, r) => s + r.custoTotal,   0);
+  const totDifal   = results.reduce((s, r) => s + r.totalDifal,   0);
+  const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
+  const totMargem  = results.reduce((s, r) => s + r.margem,       0);
+  const lucroPct   = (totVendas - totDifal) > 0 ? totMargem / (totVendas - totDifal) * 100 : 0;
+  return { totVendas, totCustos, totDifal, totImposto, totMargem, lucroPct };
 };
 
 // ─── OP AUTOCOMPLETE ──────────────────────────────────────────────────────────
@@ -1235,6 +1253,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
 export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: any = {}) {
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
+  const [grupoAtivo, setGrupoAtivo]   = useState('Item 1'); // aba ativa — "Item do edital"
   const [usarGlobais, setUsarGlobais]             = useState(true);
   const [usarMarkupGlobal, setUsarMarkupGlobal]   = useState(false);
   const [modelos, setModelos]         = useState([]);
@@ -1381,12 +1400,18 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
 
   const results    = itens.map(it => calcItem(paramEfetivo(it), params));
   const lote       = Number(params.lote_qtd) || 1;
-  const totVendas  = results.reduce((s, r) => s + r.valorTotal,    0);
-  const totCustos  = results.reduce((s, r) => s + r.custoTotal,    0);
-  const totDifal   = results.reduce((s, r) => s + r.totalDifal,    0);
-  const totImposto = results.reduce((s, r) => s + r.totalImposto,  0);
-  const totMargem  = results.reduce((s, r) => s + r.margem,        0);
-  const lucroGeral = (totVendas - totDifal) > 0 ? totMargem / (totVendas - totDifal) * 100 : 0;
+  const { totVendas, totCustos, totDifal, totImposto, totMargem, lucroPct: lucroGeral } = somarResultados(results);
+
+  // ── Itens do edital (abas) — derivado direto de itens[].grupo_nome, sem
+  // registro separado pra não correr risco de ficar dessincronizado. ──
+  const gruposNomes = [...new Set(itens.map(grupoDe))];
+  if (gruposNomes.length === 0) gruposNomes.push('Item 1');
+  const grupoAtivoValido = gruposNomes.includes(grupoAtivo) ? grupoAtivo : gruposNomes[0];
+  const idxDoGrupo    = itens.map((it, i) => ({ it, i })).filter(({ it }) => grupoDe(it) === grupoAtivoValido).map(({ i }) => i);
+  const itensDoGrupo  = idxDoGrupo.map(i => itens[i]);
+  const resultsDoGrupo = idxDoGrupo.map(i => results[i]);
+  const subtotalGrupo  = somarResultados(resultsDoGrupo);
+  const loteGrupo       = Number(params.lote_por_grupo?.[grupoAtivoValido]) || 1;
 
   const descontoPlatPct  = Number(plataformaSelecionada?.desconto_pct) || 0;
   const retencaoPlatPct  = Number(plataformaSelecionada?.retencao_pct) || 0;
@@ -1396,6 +1421,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
 
   const addItem  = () => setItens(p => [...p, {
     ...novoItem(),
+    grupo_nome:     grupoAtivoValido,
     difal_pct:      params.difal_pct,
     imposto_pct:    params.imposto_pct,
     custo_fixo_pct: params.custo_fixo_pct,
@@ -1413,7 +1439,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   const remItem  = (id) => {
     if (statusCotacao === 'finalizada') {
       const item = itens.find(x => x._id === id);
-      if (item) registrarLog('item_removido', `Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);
+      if (item) registrarLog('item_removido', `[${grupoDe(item)}] Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);
     }
     setItens(p => p.filter(x => x._id !== id));
   };
@@ -1427,11 +1453,44 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
       if (antes !== undefined && String(antes) !== String(v)) {
         registrarLog(
           k === 'custo_unit' ? 'custo_alterado' : 'markup_alterado',
-          `${CAMPOS_LOGADOS[k]} de "${item?.produto || 'item'}": ${antes} → ${v}`,
+          `[${grupoDe(item)}] ${CAMPOS_LOGADOS[k]} de "${item?.produto || 'item'}": ${antes} → ${v}`,
         );
       }
     }
     setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
+  };
+
+  // ── Gerenciamento das abas "Item do edital" ───────────────────────────────
+  const novoGrupoItem = () => {
+    const nome = window.prompt('Nome do novo Item do edital:', `Item ${gruposNomes.length + 1}`);
+    if (!nome || !nome.trim()) return;
+    const nomeFinal = nome.trim();
+    setItens(p => [...p, {
+      ...novoItem(),
+      grupo_nome:     nomeFinal,
+      difal_pct:      params.difal_pct,
+      imposto_pct:    params.imposto_pct,
+      custo_fixo_pct: params.custo_fixo_pct,
+    }]);
+    setGrupoAtivo(nomeFinal);
+  };
+  const renomearGrupoItem = (nomeAtual: string) => {
+    const nome = window.prompt('Renomear Item do edital:', nomeAtual);
+    if (!nome || !nome.trim() || nome.trim() === nomeAtual) return;
+    const nomeFinal = nome.trim();
+    setItens(p => p.map(x => grupoDe(x) === nomeAtual ? { ...x, grupo_nome: nomeFinal } : x));
+    if (grupoAtivoValido === nomeAtual) setGrupoAtivo(nomeFinal);
+  };
+  const removerGrupoItem = (nome: string) => {
+    if (!window.confirm(`Remover o Item "${nome}" e todos os seus ${itens.filter(x=>grupoDe(x)===nome).length} componente(s)?`)) return;
+    setItens(p => {
+      const restante = p.filter(x => grupoDe(x) !== nome);
+      return restante.length > 0 ? restante : [novoItem()]; // nunca fica sem nenhum item
+    });
+    if (grupoAtivoValido === nome) {
+      const restantes = gruposNomes.filter(g => g !== nome);
+      setGrupoAtivo(restantes[0] || 'Item 1');
+    }
   };
 
   // Preenche múltiplos campos de uma só vez (ao selecionar do catálogo)
@@ -1508,7 +1567,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     // chave, e um valor `undefined` num input controlado dispara o warning
     // "controlled input to be uncontrolled" do React.
     setParams({ ...PARAMS_PADRAO, ...(m.parametros_globais || {}) });
-    setItens((m.itens || []).map(x => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) })));
+    const itensCarregados = (m.itens || []).map(x => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) }));
+    setItens(itensCarregados);
+    setGrupoAtivo(grupoDe(itensCarregados[0]) || 'Item 1');
     setNomeCotacao(m.nome);
     if (m.empresa) setEmpresa(m.empresa);
     if (m.plataforma_id && plataformas.length > 0) {
@@ -1545,6 +1606,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     if (!confirm('Limpar cotação atual e iniciar nova?')) return;
     setParams({ ...PARAMS_PADRAO });
     setItens([novoItem()]);
+    setGrupoAtivo('Item 1');
     setNomeCotacao('');
     setEmpresa('ACN');
     setPlataformaSelecionada(null);
@@ -1618,36 +1680,65 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
         y += 6;
       });
 
-      // ── Tabela de itens ──
+      // ── Tabelas de itens — uma seção por Item do edital, com subtotal ──
       const head = [isVendedor
         ? ['Produto / Descrição', 'Marca', 'Qt', 'Valor Unit.', 'Valor Total', 'Imposto']
         : ['Produto / Descrição', 'Marca', 'Qt', 'Custo Unit.', 'Valor Unit.', 'Valor Total', 'DIFAL', 'Imposto', 'Lucro%']
       ];
-      const body = itens.map((item, idx) => {
-        const r = results[idx];
-        if (isVendedor) {
-          return [item.produto || '—', item.marca || '—', item.qt, fmtR(r.valorUnit), fmtR(r.valorTotal), fmtR(r.totalImposto)];
+      const columnStyles = isVendedor
+        ? { 0: { cellWidth: 60 }, 4: { halign: 'right' }, 5: { halign: 'right' } }
+        : { 0: { cellWidth: 50 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } };
+
+      let yCursor = y + 4;
+      gruposNomes.forEach((nomeGrupo) => {
+        const idxsGrupo     = itens.map((it, i) => ({ it, i })).filter(({ it }) => grupoDe(it) === nomeGrupo).map(({ i }) => i);
+        const itensGrupo    = idxsGrupo.map(i => itens[i]);
+        const resultsGrupo  = idxsGrupo.map(i => results[i]);
+        if (itensGrupo.length === 0) return;
+
+        if (yCursor > 265) { doc.addPage(); yCursor = 18; } // evita cabeçalho colado na borda da página
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+        const loteGrupoTxt = Number(params.lote_por_grupo?.[nomeGrupo]) > 1 ? ` - Lote: ${params.lote_por_grupo[nomeGrupo]}` : '';
+        doc.text(`${nomeGrupo}${loteGrupoTxt}`, 14, yCursor);
+        yCursor += 5;
+
+        const body = itensGrupo.map((item, idx) => {
+          const r = resultsGrupo[idx];
+          if (isVendedor) {
+            return [item.produto || '—', item.marca || '—', item.qt, fmtR(r.valorUnit), fmtR(r.valorTotal), fmtR(r.totalImposto)];
+          }
+          return [
+            item.produto || '—', item.marca || '—', item.qt,
+            fmtR(r.custoUnitBrl), fmtR(r.valorUnit), fmtR(r.valorTotal),
+            fmtR(r.totalDifal), fmtR(r.totalImposto), fmtPct(r.lucroPct),
+          ];
+        });
+
+        autoTable(doc, {
+          head, body, startY: yCursor, theme: 'grid',
+          headStyles: { fillColor: [30, 41, 59], fontSize: 7, textColor: 255 },
+          bodyStyles: { fontSize: 7 },
+          columnStyles,
+        });
+        yCursor = (doc as any).lastAutoTable.finalY + 3;
+
+        // Subtotal do item — só imprime linha à parte quando há mais de 1
+        // Item do edital (com 1 só, o resumo geral logo abaixo já é isso).
+        if (gruposNomes.length > 1) {
+          const sub = somarResultados(resultsGrupo);
+          doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(15, 118, 110);
+          const linhaSub = isVendedor
+            ? `Subtotal ${nomeGrupo}: Vendas ${fmtR(sub.totVendas)} · Impostos ${fmtR(sub.totImposto)}`
+            : `Subtotal ${nomeGrupo}: Vendas ${fmtR(sub.totVendas)} · Custos ${fmtR(sub.totCustos)} · DIFAL ${fmtR(sub.totDifal)} · Impostos ${fmtR(sub.totImposto)} · Margem ${fmtR(sub.totMargem)} · Lucro ${fmtPct(sub.lucroPct)}`;
+          doc.text(linhaSub, 14, yCursor);
+          doc.setTextColor(0, 0, 0);
+          yCursor += 7;
+        } else {
+          yCursor += 3;
         }
-        return [
-          item.produto || '—', item.marca || '—', item.qt,
-          fmtR(r.custoUnitBrl), fmtR(r.valorUnit), fmtR(r.valorTotal),
-          fmtR(r.totalDifal), fmtR(r.totalImposto), fmtPct(r.lucroPct),
-        ];
       });
 
-      autoTable(doc, {
-        head,
-        body,
-        startY: y + 4,
-        theme: 'grid',
-        headStyles: { fillColor: [30, 41, 59], fontSize: 7, textColor: 255 },
-        bodyStyles: { fontSize: 7 },
-        columnStyles: isVendedor
-          ? { 0: { cellWidth: 60 }, 4: { halign: 'right' }, 5: { halign: 'right' } }
-          : { 0: { cellWidth: 50 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
-      });
-
-      const finalY = (doc as any).lastAutoTable.finalY + 8;
+      const finalY = yCursor + 5;
 
       // ── Resumo financeiro ──
       doc.setFont('helvetica', 'bold');
@@ -2106,7 +2197,38 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             </div>
           </div>
 
-          {/* ── TABELA DE ITENS ── */}
+          {/* ── ITENS DO EDITAL (abas) ── */}
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:8 }}>
+            {gruposNomes.map(nome => {
+              const qtd = itens.filter(x => grupoDe(x) === nome).length;
+              const ativo = nome === grupoAtivoValido;
+              return (
+                <div key={nome} style={{ display:'flex', alignItems:'stretch', borderRadius:6, overflow:'hidden', border:'1px solid ' + (ativo ? '#0891b2' : '#d1d5db') }}>
+                  <button type="button" onClick={() => setGrupoAtivo(nome)}
+                    onDoubleClick={() => renomearGrupoItem(nome)}
+                    title="Duplo-clique para renomear"
+                    style={{ padding:'6px 10px', fontSize:10, fontWeight:700, border:'none', cursor:'pointer',
+                      background: ativo ? '#0891b2' : '#fff', color: ativo ? '#fff' : '#475569' }}>
+                    {nome} <span style={{ opacity:.75, fontWeight:400 }}>({qtd})</span>
+                  </button>
+                  {gruposNomes.length > 1 && (
+                    <button type="button" onClick={() => removerGrupoItem(nome)} title={`Remover ${nome}`}
+                      style={{ padding:'6px 8px', fontSize:10, border:'none', cursor:'pointer',
+                        background: ativo ? '#0e7490' : '#f1f5f9', color: ativo ? '#fff' : '#dc2626' }}>
+                      🗑
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            <button type="button" onClick={novoGrupoItem}
+              style={{ padding:'6px 10px', fontSize:10, fontWeight:700, border:'1px dashed #94a3b8', borderRadius:6,
+                background:'#fff', color:'#475569', cursor:'pointer' }}>
+              + Item do Edital
+            </button>
+          </div>
+
+          {/* ── TABELA DE ITENS (do Item do edital ativo) ── */}
           <div style={{ marginBottom:12 }}>
             {/* Container — sem overflow-x, colunas essenciais só; custo/impostos/markup
                 ficam num painel expansível por linha (ver ItemRow) */}
@@ -2127,18 +2249,18 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
                 </tr>
               </thead>
               <tbody>
-                {itens.length === 0 && (
+                {itensDoGrupo.length === 0 && (
                   <tr>
                     <td colSpan={7} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
-                      Nenhum item. Clique em <strong>+ Adicionar Item</strong>.
+                      Nenhum item neste Item do edital. Clique em <strong>+ Adicionar Item</strong>.
                     </td>
                   </tr>
                 )}
-                {itens.map((item, idx) => (
+                {itensDoGrupo.map((item, idx) => (
                   <ItemRow
                     key={item._id}
                     item={paramEfetivo(item)}
-                    result={results[idx]}
+                    result={resultsDoGrupo[idx]}
                     onSet={(k, v) => setItem(item._id, k, v)}
                     onFill={(dados) => fillItem(item._id, dados)}
                     onExpand={(linhas) => expandItem(item._id, linhas)}
@@ -2176,13 +2298,55 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             {/* Contador + botão add abaixo da alça */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4, marginBottom:6 }}>
               <span style={{ fontSize:9, color:'#9ca3af' }}>
-                {itens.length} item{itens.length !== 1 ? 'ns' : ''} · arraste a barra cinza para redimensionar
+                {itensDoGrupo.length} item{itensDoGrupo.length !== 1 ? 'ns' : ''} em "{grupoAtivoValido}" · arraste a barra cinza para redimensionar
               </span>
             </div>
           </div>{/* fim wrapper resize */}
 
-          {/* ── PAINEL DE TOTAIS ── */}
+          {/* ── SUBTOTAL DESTE ITEM DO EDITAL ── */}
+          {itensDoGrupo.length > 0 && (
+            <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:8, padding:12, marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:11, color:'#0f766e', marginBottom:8 }}>
+                📦 Subtotal — {grupoAtivoValido}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:8, marginBottom: loteGrupo > 1 ? 10 : 0 }}>
+                {[
+                  { label:'Vendas',    value: fmtR(subtotalGrupo.totVendas),   hide:false },
+                  { label:'Custos',    value: fmtR(subtotalGrupo.totCustos),   hide:isVendedor },
+                  { label:'DIFAL',     value: fmtR(subtotalGrupo.totDifal),    hide:isVendedor },
+                  { label:'Impostos',  value: fmtR(subtotalGrupo.totImposto),  hide:false },
+                  { label:'Margem',    value: fmtR(subtotalGrupo.totMargem),   hide:isVendedor },
+                  { label:'Lucro %',   value: fmtPct(subtotalGrupo.lucroPct),  hide:isVendedor },
+                ].filter(x=>!x.hide).map(({ label, value }) => (
+                  <div key={label} style={{ background:'#fff', border:'1px solid #ccfbf1', borderRadius:6, padding:'6px 10px' }}>
+                    <div style={{ fontSize:8, color:'#0f766e', marginBottom:2 }}>{label}</div>
+                    <div style={{ fontSize:12, fontWeight:800, color:'#134e4a' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                <div>
+                  <div style={{ fontSize:8, color:'#0f766e', marginBottom:2 }}>Lote deste Item</div>
+                  <input type="number" className="acn-input" style={{ width:70, fontSize:10, textAlign:'right' }}
+                    min={1} value={params.lote_por_grupo?.[grupoAtivoValido] ?? 1}
+                    onChange={e => setParams(p => ({ ...p, lote_por_grupo: { ...(p.lote_por_grupo||{}), [grupoAtivoValido]: parseInt(e.target.value)||1 } }))} />
+                </div>
+                {loteGrupo > 1 && (
+                  <div style={{ fontSize:10, color:'#0f766e' }}>
+                    Total p/ {loteGrupo} unid.: <strong>{fmtR(subtotalGrupo.totVendas * loteGrupo)}</strong>
+                    {!isVendedor && <> · Margem: <strong style={{ color: subtotalGrupo.totMargem>=0?'#16a34a':'#dc2626' }}>{fmtR(subtotalGrupo.totMargem * loteGrupo)}</strong></>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── RESUMO GERAL (todos os Itens do edital somados) ── */}
           {itens.length > 0 && (
+            <>
+            <div style={{ fontWeight:800, fontSize:11, color:'#1e293b', marginBottom:6 }}>
+              🧾 Resumo Geral — todos os Itens do edital{gruposNomes.length > 1 ? ` (${gruposNomes.length})` : ''}
+            </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:12 }}>
               {[
                 { label:'Total de Vendas',    value: fmtR(totVendas),    bg:'#1e40af', color:'#fff', hide: false },
@@ -2203,13 +2367,14 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
                 </div>
               ))}
             </div>
+            </>
           )}
 
-          {/* ── TOTAIS POR LOTE ── */}
+          {/* ── TOTAIS POR LOTE (geral) ── */}
           {itens.length > 0 && lote > 1 && (
             <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:12, marginBottom:12 }}>
               <div style={{ fontWeight:700, fontSize:11, color:'#0369a1', marginBottom:6 }}>
-                📦 Totais para {lote} unidade{lote !== 1 ? 's' : ''} (Lote)
+                📦 Totais gerais para {lote} unidade{lote !== 1 ? 's' : ''} (Lote geral)
               </div>
               <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
                 <span style={{ fontSize:11 }}>Vendas: <strong>{fmtR(totVendas * lote)}</strong></span>
