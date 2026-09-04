@@ -410,12 +410,16 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
           {finalizadas.map(sol => (
             <div key={sol.id} style={{ marginTop:6, border:'1px solid #dcfce7', borderRadius:5, padding:'6px 10px', background:'#f0fdf4' }}>
               <div style={{ fontSize:9, color:'#166534', marginBottom:4 }}>Solicitado por {sol.criado_por} · {fmtDT(sol.criado_em)}</div>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {(sol.analise_setores||[]).map((s:any) => (
-                  <span key={s.id} style={{ fontSize:9, background:'#dcfce7', color:'#166534', borderRadius:10, padding:'1px 7px', border:'1px solid #86efac' }}>
-                    ✅ {SETOR_LABEL[s.setor]||s.setor}
-                    {s.notas && <span style={{ fontStyle:'italic' }}> — {s.notas.slice(0,40)}</span>}
-                  </span>
+                  <div key={s.id} style={{ fontSize:9, background:'#dcfce7', color:'#166534', borderRadius:6, padding:'4px 8px', border:'1px solid #86efac' }}>
+                    <div style={{ fontWeight:700 }}>✅ {SETOR_LABEL[s.setor]||s.setor}</div>
+                    {s.notas && (
+                      <div style={{ fontStyle:'italic', marginTop:2, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                        {s.notas}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

@@ -312,7 +312,7 @@ export default function FiscalTab({ currentUser }) {
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                    <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                    <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>{fmtDt(o.data_liberacao_comercial)}</td>
                     <td>

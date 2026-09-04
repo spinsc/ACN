@@ -118,7 +118,7 @@ function RelatoriosSetor({ setor, cor }) {
               <tbody>{dados.map(d=>(
                 <tr key={d.id}>
                   <td>{fmtDt(d.data_abertura)}</td><td>{d.numero_opl||'—'}</td>
-                  <td style={{maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                  <td style={{ maxWidth:180, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
                   <td><span className="acn-badge" style={{background:corS(d.status)}}>{d.status}</span></td>
                   <td>{d.responsavel_nome||'—'}</td><td>{fmtDtHr(d.data_inicio)}</td>
                   <td>{fmtDtHr(d.data_conclusao)}</td><td>{fmtH(d.tempo_execucao_horas)}</td>
@@ -132,7 +132,7 @@ function RelatoriosSetor({ setor, cor }) {
                 <tr key={d.id} style={{background:'#fff5f5'}}>
                   <td style={{color:'#dc2626',fontWeight:600}}>{fmtDt(d.data_abertura)}</td>
                   <td>{d.numero_opl||'—'}</td>
-                  <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                  <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
                   <td><span className="acn-badge" style={{background:'#ef4444'}}>{d.status}</span></td>
                   <td>{d.responsavel_nome||'Nao iniciada'}</td>
                   <td><strong style={{color:'#dc2626'}}>{((agora-new Date(d.data_abertura))/3600000).toFixed(0)}h</strong></td>
@@ -149,7 +149,7 @@ function RelatoriosSetor({ setor, cor }) {
                 <table><thead><tr><th>Descrição</th><th>Status</th><th>Responsável</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
                 <tbody>{itens.map(d=>(
                   <tr key={d.id}>
-                    <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                    <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
                     <td><span className="acn-badge" style={{background:corS(d.status)}}>{d.status}</span></td>
                     <td>{d.responsavel_nome||'—'}</td><td>{fmtDt(d.data_abertura)}</td>
                     <td>{fmtH(d.tempo_execucao_horas)}</td>
@@ -171,7 +171,7 @@ function RelatoriosSetor({ setor, cor }) {
                   <tbody>{itens.map(d=>(
                     <tr key={d.id}>
                       <td>{d.numero_opl||'—'}</td>
-                      <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                      <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
                       <td><span className="acn-badge" style={{background:corS(d.status)}}>{d.status}</span></td>
                       <td>{fmtDt(d.data_abertura)}</td><td>{fmtH(d.tempo_execucao_horas)}</td>
                     </tr>
@@ -671,7 +671,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
           {sacBadge(d)}
           {sacFlagBadge(d)}
           {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
-          <span style={{overflow:'hidden',textOverflow:'ellipsis',display:'block',whiteSpace:'nowrap',maxWidth:180}} title={descExibida}>{descExibida}</span>
+          <span style={{ display:'block', maxWidth:180, wordBreak:'break-word' }} title={descExibida}>{descExibida}</span>
           <button onClick={() => setModalVer(d)}
             style={{marginTop:2,padding:'1px 7px',fontSize:9,fontWeight:700,background:'#e2e8f0',
               color:'#475569',border:'none',borderRadius:3,cursor:'pointer'}}>

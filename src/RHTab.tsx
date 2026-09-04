@@ -930,7 +930,7 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
                       borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>{a.tipo}</span></td>
                     <td>{a.hora_saida||'—'}</td>
                     <td>{a.hora_retorno||'—'}</td>
-                    <td style={{fontSize:10,color:'#6b7280',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.motivo||'—'}</td>
+                    <td style={{ fontSize:10, color:'#6b7280', maxWidth:160, wordBreak:'break-word' }}>{a.motivo||'—'}</td>
                     <td style={{fontSize:10}}>{a.aprovado_por||'—'}</td>
                     <td>
                       <button onClick={()=>onImprimir(a, func)}

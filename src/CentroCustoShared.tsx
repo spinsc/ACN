@@ -227,7 +227,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
                   {'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo}
                 </td>
                 <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
-                <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={c.descricao || ''}>
+                <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, wordBreak:'break-word' }} title={c.descricao || ''}>
                   {c.descricao || '—'}
                 </td>
                 <td style={{ padding:'8px 8px', textAlign:'center' }}>

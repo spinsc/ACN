@@ -939,7 +939,7 @@ export default function ComprasTab({ currentUser }) {
         <td style={td}><strong>{p.numero_pedido}</strong></td>
         <td style={td}>{p.opl||'—'}</td>
         <td style={{...td,maxWidth:150}}>
-          <span style={{display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          <span style={{ display:'block', wordBreak:'break-word' }}>
             {p.descricao_material}
           </span>
         </td>
@@ -959,7 +959,7 @@ export default function ComprasTab({ currentUser }) {
         <td style={{...td,maxWidth:130}}>
           {p.centro_custo ? (
             <div style={{display:'flex',alignItems:'center',gap:5}}>
-              <span style={{background:'#eff6ff',color:'#1d4ed8',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={p.centro_custo}>
+              <span style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:10, padding:'2px 8px', fontSize:9, fontWeight:700, maxWidth:100, wordBreak:'break-word' }} title={p.centro_custo}>
                 {p.centro_custo}
               </span>
               <button onClick={()=>abrirModalCentro(p)} title="Alterar centro de custo"
@@ -979,7 +979,7 @@ export default function ComprasTab({ currentUser }) {
             const dep = departamentosConfig.find((d:any) => d.id === p.departamento_id);
             return dep ? (
               <div style={{display:'flex',alignItems:'center',gap:5}}>
-                <span style={{background:'#f0fdf4',color:'#15803d',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:100}} title={dep.nome}>
+                <span style={{ background:'#f0fdf4', color:'#15803d', borderRadius:10, padding:'2px 8px', fontSize:9, fontWeight:700, maxWidth:100, wordBreak:'break-word' }} title={dep.nome}>
                   {dep.nome}
                 </span>
                 <button onClick={()=>abrirModalDepartamento(p)} title="Alterar departamento"

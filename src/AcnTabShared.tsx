@@ -166,7 +166,7 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
                       return (
                         <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9', background: isAjuste ? '#fffbeb' : undefined }}>
                           <td style={{ padding: '5px 8px', fontWeight: 700, color: '#1e293b' }}>{p.setor_destino || '—'}</td>
-                          <td style={{ padding: '5px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={desc}>
+                          <td style={{ padding: '5px 8px', maxWidth: 200, wordBreak:'break-word' }} title={desc}>
                             {isAjuste && <span style={{ background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 3px', borderRadius: 2, marginRight: 3 }}>AJUSTE</span>}
                             {desc}
                           </td>
@@ -339,7 +339,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                         <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>{fmtDt(l.data_hora)}</td>
                         <td style={{ padding:'5px 8px' }}><strong style={{ color:'#2563eb' }}>{l.numero_opl || '—'}</strong></td>
                         <td style={{ padding:'5px 8px', color:'#475569' }}>{l.setor || '—'}</td>
-                        <td style={{ padding:'5px 8px', maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={l.evento}>
+                        <td style={{ padding:'5px 8px', maxWidth:260, wordBreak:'break-word' }} title={l.evento}>
                           {l.evento || '—'}
                         </td>
                         <td style={{ padding:'5px 8px' }}>
@@ -380,12 +380,12 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                     return (
                       <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9', background: i%2===0 ? 'white' : '#fafafa' }}>
                         <td style={{ padding:'5px 8px' }}><strong style={{ color:'#2563eb' }}>{o.opl}</strong></td>
-                        <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome || '—'}</td>
+                        <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome || '—'}</td>
                         <td style={{ padding:'5px 8px', color:'#64748b' }}>{o.tipo_projeto || '—'}</td>
                         <td style={{ padding:'5px 8px' }}>
                           <span style={{ background:'#3b82f6', color:'white', fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:10 }}>{o.status_geral}</span>
                         </td>
-                        <td style={{ padding:'5px 8px', fontSize:9, color:'#64748b', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        <td style={{ padding:'5px 8px', fontSize:9, color:'#64748b', maxWidth:200, wordBreak:'break-word' }}>
                           {ultimoLog ? `${ultimoLog.evento} — ${fmtDt(ultimoLog.data_hora)}` : '—'}
                         </td>
                         <td style={{ padding:'5px 8px' }}><BotaoPendencias opl={o.opl} opl_id={o.id} /></td>
@@ -717,7 +717,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                   <tr key={l.id || i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                     <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', color: '#64748b' }}>{fmtDtH(l.data_hora)}</td>
                     <td style={{ padding: '4px 8px', color: '#475569' }}>{l.setor || '—'}</td>
-                    <td style={{ padding: '4px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.evento}>
+                    <td style={{ padding: '4px 8px', maxWidth: 220, wordBreak:'break-word' }} title={l.evento}>
                       {l.evento || '—'}
                     </td>
                     <td style={{ padding: '4px 8px' }}>
@@ -1007,7 +1007,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                 <tr key={d.id} style={{ background: isAjuste ? '#fffbeb' : undefined }}>
                   <td>{d.data_abertura ? new Date(d.data_abertura).toLocaleDateString('pt-BR') : '—'}</td>
                   <td>{d.numero_opl || '—'}</td>
-                  <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={desc}>
+                  <td style={{ maxWidth: 180, wordBreak:'break-word' }} title={desc}>
                     {isAjuste && <span style={{ background: '#f59e0b', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 2, marginRight: 4 }}>AJUSTE</span>}
                     {desc}
                   </td>

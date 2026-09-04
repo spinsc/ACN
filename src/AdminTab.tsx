@@ -1497,7 +1497,7 @@ function PainelDados() {
                           style={{cursor:'pointer',accentColor:'#ef4444'}} />
                       </td>
                       <td style={{whiteSpace:'nowrap',color:'#64748b',fontSize:10}}>{fmtDt(getDataCol(r))}</td>
-                      <td style={{fontSize:10,maxWidth:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
+                      <td style={{ fontSize:10, maxWidth:500, wordBreak:'break-word' }}
                         title={getResumo(r)}>{getResumo(r)}</td>
                     </tr>
                   );
@@ -1789,7 +1789,7 @@ function PainelLixeira() {
                           ⏱ {tempo}
                         </span>
                       </td>
-                      <td style={{padding:'5px 8px',fontSize:10,maxWidth:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
+                      <td style={{ padding:'5px 8px', fontSize:10, maxWidth:400, wordBreak:'break-word' }}
                         title={getResumoLixeira(item)}>
                         {getResumoLixeira(item)}
                       </td>
@@ -2783,7 +2783,7 @@ function PainelContratosPadrao() {
                 <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: c.ativo ? 1 : 0.45 }}>
                   <td style={{ padding:'8px 8px', fontWeight:700, color:'#0f766e' }}>{c.tipo}</td>
                   <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
-                  <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={c.descricao || ''}>
+                  <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, wordBreak:'break-word' }} title={c.descricao || ''}>
                     {c.descricao || '—'}
                   </td>
                   <td style={{ padding:'8px 8px', textAlign:'center' }}>

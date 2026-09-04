@@ -472,9 +472,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                 {listacentros.slice(0, 10).map((c, i) => (
                   <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 120, fontSize: 10, fontWeight: 600, color: '#374151',
-                      textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      flexShrink: 0 }}
-                      title={c.nome}>
+                      textAlign: 'right', wordBreak: 'break-word',
+                      flexShrink: 0 }}>
                       {c.nome}
                     </div>
                     <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 4, height: 20, overflow: 'hidden' }}>

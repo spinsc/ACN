@@ -1770,13 +1770,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               </span>
             )}
             {desistiu && op.motivo_desistencia && (
-              <span style={{ fontSize:7, color:'#92400e', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
+              <span style={{ fontSize:7, color:'#92400e', fontStyle:'italic', maxWidth:110, wordBreak:'break-word' }}
                 title={op.motivo_desistencia}>
                 ✋ {op.motivo_desistencia}
               </span>
             )}
             {perdido && op.motivo_perda && (
-              <span style={{ fontSize:7, color:'#991b1b', fontStyle:'italic', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}
+              <span style={{ fontSize:7, color:'#991b1b', fontStyle:'italic', maxWidth:110, wordBreak:'break-word' }}
                 title={op.motivo_perda}>
                 ❌ {op.motivo_perda}
               </span>
@@ -2153,7 +2153,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
                   {/* Info principal */}
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    <div style={{ fontWeight:700, fontSize:11, color:'#1e293b', wordBreak:'break-word' }}>
                       {op.titulo}
                     </div>
                     <div style={{ fontSize:9, color:'#64748b', marginTop:1, display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -2397,7 +2397,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                       {opv?.funil==='licitacao' ? '🏛️ Lic.' : '💼 VD'}
                     </span>
                   </td>
-                  <td style={{ padding:'5px 7px', maxWidth:130, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  <td style={{ padding:'5px 7px', maxWidth:130, wordBreak:'break-word' }}>
                     <strong title={opv?.titulo}>{opv?.titulo || '—'}</strong>
                   </td>
                   <td style={{ padding:'5px 7px' }}>{v.orgao_aderente || opv?.orgao || '—'}</td>
@@ -2678,7 +2678,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   <div key={r.registro_id} onClick={() => { setFormOp({ ...VAZIO_OP, ...op }); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}
                     style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 12px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
                     <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{op.titulo}</div>
+                      <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', wordBreak:'break-word' }}>{op.titulo}</div>
                       <div style={{ fontSize:9, color:'#64748b' }}>{op.orgao || '—'} · {getEst(op.estagio_id)?.nome || '—'}</div>
                     </div>
                     <div style={{ fontSize:9, color:'#94a3b8', flexShrink:0 }}>
@@ -2884,7 +2884,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                             <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
                               <LinkOpl opl={o} currentUser={currentUser} />
                             </td>
-                            <td style={{ padding:'5px 8px', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.cliente_nome||'—'}</td>
+                            <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome||'—'}</td>
                             <td style={{ padding:'5px 8px', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', color:'#475569', fontSize:10 }}>
                               <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
                               <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
@@ -2913,7 +2913,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
                               {atrasada && ' ⚠️'}
                             </td>
-                            <td style={{ padding:'5px 8px', maxWidth:100, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#475569' }}>
+                            <td style={{ padding:'5px 8px', maxWidth:100, color:'#475569', wordBreak:'break-word' }}>
                               {o.responsavel_comercial||'—'}
                             </td>
                             <td style={{ padding:'5px 8px' }}>

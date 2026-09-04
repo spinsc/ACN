@@ -1294,7 +1294,7 @@ export default function ComercialTab({ currentUser }) {
                         <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                         <td>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : o.chassi}</td>
                         <td><span style={{fontWeight:700,color: (o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                        <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                        <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                         <td style={{fontSize:10,color:'#475569'}}>{o.responsavel_comercial || o.criado_por_nome || '—'}</td>
                         <td>{fmtDt(o.data_prevista_entrega)}</td>
                         <td>{atraso?<span className="acn-badge" style={{background:'#f59e0b'}}>{atraso}d</span>:<span style={{color:'#22c55e',fontSize:10}}>No prazo</span>}</td>
@@ -1357,7 +1357,7 @@ export default function ComercialTab({ currentUser }) {
                               </div>
                             ) : <span style={{color:'#16a34a'}}>✓ dados completos</span>}
                           </td>
-                          <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td style={{ maxWidth:120, wordBreak:'break-word' }}>{rep.tipo_projeto}</td>
                           <td style={{fontSize:10,color:'#475569'}}>{rep.responsavel_comercial || rep.criado_por_nome || '—'}</td>
                           <td colSpan={3} style={{fontSize:10,color:'#7c6f9c'}}>Ver unidades para detalhes individuais</td>
                           <td>

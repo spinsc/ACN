@@ -120,7 +120,7 @@ function RelAreaDemandas() {
                     <tr key={d.id} style={atras?{background:'#fef2f2'}:{}}>
                       <td>{fmtData(d.data_abertura)}</td>
                       <td>{d.numero_opl||'—'}</td>
-                      <td style={{maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                      <td style={{ maxWidth:180, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
                       <td><span className="acn-badge" style={{background:STATUS_CORES[d.status]||'#94a3b8'}}>{d.status}</span></td>
                       <td>{d.responsavel_nome||'—'}</td>
                       <td>{fmtDt(d.data_abertura)}</td>
@@ -229,7 +229,7 @@ function RelProducao() {
                       <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
-                        <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                        <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                         <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
                         <td style={{fontSize:9}}>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
                         <td>{fmtDt(o.data_inicio_producao)}</td>
@@ -257,7 +257,7 @@ function RelProducao() {
                       <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
-                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                    <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                     <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
                     <td>{o.responsavel_producao||'—'}</td>
                     <td style={{fontSize:9}}>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
@@ -374,7 +374,7 @@ function RelOplsGeral() {
                       <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
-                      <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                      <td style={{ maxWidth:140, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                       <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
                       <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(o.data_prevista_entrega)}</td>
                       <td>{o.responsavel_engenharia||'—'}</td>
@@ -691,7 +691,7 @@ function RelRecebimentosEnvios() {
                 const atras = dt && dt < hoje && r.status_compra !== 'Concluído';
                 return <tr key={r.id} style={atras?{background:'#fef2f2'}:{}}>
                   <td><strong>{r.numero_pedido||'—'}</strong></td>
-                  <td style={{maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.descricao_material||'—'}</td>
+                  <td style={{ maxWidth:180, wordBreak:'break-word' }}>{r.descricao_material||'—'}</td>
                   <td>{r.fornecedor||'—'}</td>
                   <td>{r.quantidade||'—'}</td>
                   <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(r.data_prevista_recebimento)}</td>
@@ -789,7 +789,7 @@ function RelDemandasAvulsas() {
               <tr key={d.id}>
                 <td>{fmtData(d.data_abertura)}</td>
                 <td>{d.setor_destino||'—'}</td>
-                <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.descricao||'—'}</td>
+                <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
                 <td><span className="acn-badge" style={{background:STATUS_CORES[d.status]||'#94a3b8'}}>{d.status}</span></td>
                 <td>{d.responsavel_nome||'—'}</td>
                 <td>{fmtH(d.tempo_execucao_horas)}</td>
@@ -995,7 +995,7 @@ function RelCentroCusto() {
                   {itens.map(r=>(
                     <tr key={r.id}>
                       <td style={td}><span style={{fontWeight:700,color:'#4f46e5',fontSize:9}}>{r.numero_pedido||'—'}</span></td>
-                      <td style={{...td,maxWidth:180}}><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block',maxWidth:180}}>{r.descricao_material||'—'}</span></td>
+                      <td style={{...td,maxWidth:180}}><span style={{ display:'block', maxWidth:180, wordBreak:'break-word' }}>{r.descricao_material||'—'}</span></td>
                       <td style={td}>{r.fornecedor||'—'}</td>
                       <td style={td}>
                         <span style={{background:'#f1f5f9',borderRadius:10,padding:'2px 7px',fontSize:8,fontWeight:700,color:'#475569'}}>{r.status_compra||'—'}</span>
@@ -1340,7 +1340,7 @@ function RelOpsOssEmServico() {
                       <div style={{color:'#94a3b8'}}>{l.chassi==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${l.chassi}`}</div>
                       <div style={{color:'#94a3b8'}}>{l.placa==='—' ? (l.tipo==='OP' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'var(--text-muted)'}}>—</span>) : `🚘 ${l.placa}`}</div>
                     </td>
-                    <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.cliente}>{l.cliente}</td>
+                    <td style={{ maxWidth:150, wordBreak:'break-word' }} title={l.cliente}>{l.cliente}</td>
                     <td>
                       <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
                         {l.statusLista.map((s,si)=>(
@@ -1350,7 +1350,7 @@ function RelOpsOssEmServico() {
                         ))}
                       </div>
                     </td>
-                    <td style={{maxWidth:240,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.obs}>{l.obs}</td>
+                    <td style={{ maxWidth:240, wordBreak:'break-word' }} title={l.obs}>{l.obs}</td>
                   </tr>
                 ))}
               </tbody>

@@ -754,7 +754,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
                     <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 200 }}>
                       <div style={{ lineHeight: 1.3 }}>{it.nome}</div>
                       {it.descricao && (
-                        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+                        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 2, maxWidth: 200, wordBreak:'break-word' }}>
                           {it.descricao}
                         </div>
                       )}

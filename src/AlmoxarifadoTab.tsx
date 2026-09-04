@@ -199,7 +199,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                         <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                       </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                      <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                       <td>
                         {o.status_bom === 'BOM Liberado'
                           ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>
@@ -211,7 +211,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                         {o.status_almox === 'Falta de Material' && <span className="acn-badge" style={{background:'#ef4444'}}>Falta Mat.</span>}
                         {o.status_almox === 'Liberado com Pendencia' && <span className="acn-badge" style={{background:'#f97316'}}>Com Pendencia</span>}
                       </td>
-                      <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{o.obs_almox || '—'}</td>
+                      <td style={{ maxWidth:150, fontSize:10, wordBreak:'break-word' }}>{o.obs_almox || '—'}</td>
                       <td>{o.responsavel_almox || '—'}</td>
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
@@ -261,7 +261,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                           </td>
                           <td>—</td>
                           <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
-                          <td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td style={{ maxWidth:130, wordBreak:'break-word' }}>{rep.tipo_projeto}</td>
                           <td colSpan={2} style={{fontSize:10}}>
                             {qtdPendente > 0 && <span className="acn-badge" style={{background:'#94a3b8',fontSize:9,marginRight:4}}>{qtdPendente} pendente</span>}
                             {qtdKitOk > 0 && <span className="acn-badge" style={{background:'#22c55e',fontSize:9,marginRight:4}}>{qtdKitOk} kit 100%</span>}

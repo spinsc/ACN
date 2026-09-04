@@ -77,7 +77,7 @@ function LinhaPedido({ p, fmtDtHr, corStatusPedido, atualizarStatusPedido, naoLi
       : { background: p.status==='Pendente'?'#faf5ff': p.status==='Realizado'?'#f0fdf4':'white' }}>
       <td style={{whiteSpace:'nowrap'}}>{fmtDtHr(p.created_at)}</td>
       <td>{p.numero_opl || '—'}</td>
-      <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.local_registro || '—'}</td>
+      <td style={{ maxWidth:120, wordBreak:'break-word' }}>{p.local_registro || '—'}</td>
       <td style={{whiteSpace:'nowrap'}}>{p.hora_turno || '—'}</td>
       <td>
         <span style={{fontSize:10,fontWeight:700,background: p.tipo==='Video'?'#dbeafe': p.tipo==='Foto e Video'?'#fae8ff':'#dcfce7',
@@ -87,7 +87,7 @@ function LinhaPedido({ p, fmtDtHr, corStatusPedido, atualizarStatusPedido, naoLi
         </span>
       </td>
       <td>{p.categoria || '—'}</td>
-      <td style={{maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{p.observacoes || '—'}</td>
+      <td style={{ maxWidth:160, fontSize:10, wordBreak:'break-word' }}>{p.observacoes || '—'}</td>
       <td style={{fontSize:10}}>{p.criado_por_nome || '—'}</td>
       <td>
         <span className="acn-badge" style={{background:corStatusPedido(p.status)}}>{p.status}</span>

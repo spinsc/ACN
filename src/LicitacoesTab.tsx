@@ -927,6 +927,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const [editandoDocId, setEditandoDocId] = useState<string|null>(null);
   const [editandoDocTexto, setEditandoDocTexto] = useState('');
   const novoAnexoRef = useRef<any>(null);
+  // Recolhido por padrão, mesmo padrão hide/show de CONTATOS DO PROCESSO —
+  // histórico é consulta ocasional, não precisa ocupar espaço sempre.
+  const [historicoExpandido, setHistoricoExpandido] = useState(false);
 
   // ── RIGHT PANEL ───────────────────────────────────────────────────────────
   const [tabDir, setTabDir] = useState<string>('processo');
@@ -1362,7 +1365,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           <div style={{ padding:'10px 14px', background:STATUS_COR[s]||'#374151', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:9, opacity:.85, fontWeight:700, letterSpacing:.5 }}>{s.toUpperCase()} · {licit.classificacao} · {formEdit.faturamento_empresa||'ACN'}</div>
-              <div style={{ fontSize:12, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{licit.numero} — {licit.nome_projeto}</div>
+              <div style={{ fontSize:12, fontWeight:700, wordBreak:'break-word' }}>{licit.numero} — {licit.nome_projeto}</div>
               <div style={{ fontSize:9, opacity:.85 }}>{licit.orgao}</div>
             </div>
             <div style={{ display:'flex', gap:4, flexShrink:0 }}>
@@ -1495,11 +1498,14 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             {/* CONTATOS DO PROCESSO */}
             <ContatosSection licitacaoId={licit.id} currentUser={currentUser} />
 
-            {/* HISTÓRICO */}
+            {/* HISTÓRICO — mesmo padrão hide/show de CONTATOS DO PROCESSO, começa recolhido */}
             {(licit.historico||[]).length > 0 && (
               <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:8 }}>
-                <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:6 }}>HISTÓRICO</div>
-                {[...(licit.historico||[])].reverse().slice(0,5).map((h: any, i: number) => (
+                <button onClick={() => setHistoricoExpandido(e => !e)}
+                  style={{ fontSize:9, fontWeight:700, color:'#374151', textTransform:'uppercase', background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:4, marginBottom:6 }}>
+                  {historicoExpandido ? '▼' : '▶'} HISTÓRICO ({licit.historico.length})
+                </button>
+                {historicoExpandido && [...(licit.historico||[])].reverse().slice(0,5).map((h: any, i: number) => (
                   <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
                     <div style={{ width:8, height:8, borderRadius:'50%', background:STATUS_COR[h.status]||'#6b7280', marginTop:3, flexShrink:0 }} />
                     <div>
@@ -2120,7 +2126,7 @@ function LicitCard({ l, onClick, unread = false }) {
           </div>
           <div style={{ fontSize:12, fontWeight:700, color:'#1f2937', marginBottom:2 }}>{l.numero} — {l.nome_projeto}</div>
           <div style={{ fontSize:10, color:'#6b7280' }}>{l.orgao}</div>
-          {(l.tipo_objeto || l.objeto_principal) && <div style={{ fontSize:10, color:'#9ca3af', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.tipo_objeto || l.objeto_principal}</div>}
+          {(l.tipo_objeto || l.objeto_principal) && <div style={{ fontSize:10, color:'#9ca3af', marginTop:1, wordBreak:'break-word' }}>{l.tipo_objeto || l.objeto_principal}</div>}
         </div>
       </div>
       <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -2253,8 +2259,8 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
                       onClick={() => onOpenLicit(l)}>
                       <td style={{ padding:'6px 10px', fontWeight:700, color:'#1e293b', whiteSpace:'nowrap' }}>{l.numero || '—'}</td>
                       <td style={{ padding:'6px 10px', maxWidth:220 }}>
-                        <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.nome_projeto || '—'}</div>
-                        <div style={{ fontSize:9, color:'#94a3b8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.orgao || ''}</div>
+                        <div style={{ fontWeight:600, wordBreak:'break-word' }}>{l.nome_projeto || '—'}</div>
+                        <div style={{ fontSize:9, color:'#94a3b8', wordBreak:'break-word' }}>{l.orgao || ''}</div>
                       </td>
                       <td style={{ padding:'6px 10px', color:'#475569' }}>{l.classificacao || '—'}</td>
                       <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color:'#0f766e' }}>

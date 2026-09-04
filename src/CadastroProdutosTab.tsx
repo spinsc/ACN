@@ -486,7 +486,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
               {catalogoUrl && (
                 <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
                   <a href={catalogoUrl} target="_blank" rel="noreferrer"
-                    style={{ color: '#7c3aed', textDecoration: 'underline', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    style={{ color: '#7c3aed', textDecoration: 'underline', flex: 1, wordBreak:'break-word' }}>
                     📄 Ver catálogo
                   </a>
                   <button onClick={() => setCatalogoUrl('')}
@@ -842,7 +842,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
                     <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: 'monospace', fontSize: 9 }}>{p.codigo || '—'}</td>
                     <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 240 }}>
                       <div>{p.nome}</div>
-                      {p.descricao && <div style={{ fontSize: 9, color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 230 }}>{p.descricao}</div>}
+                      {p.descricao && <div style={{ fontSize: 9, color: '#9ca3af', maxWidth: 230, wordBreak:'break-word' }}>{p.descricao}</div>}
                     </td>
                     <td style={tdStyle}>
                       {p.categoria ? (

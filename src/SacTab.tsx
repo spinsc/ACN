@@ -1630,7 +1630,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
                     <td>{o.tipo_avaliacao==='Remota' ? <span style={{fontSize:9,fontWeight:700,color:'#0ea5e9',background:'#e0f2fe',borderRadius:10,padding:'2px 7px'}}>📡 Remota</span> : o.tipo_avaliacao==='Presencial' ? <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',background:'#ede9fe',borderRadius:10,padding:'2px 7px'}}>📍 Presencial</span> : <span style={{color:'#cbd5e1',fontSize:9}}>—</span>}</td>
-                    <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    <td style={{ maxWidth:140, wordBreak:'break-word' }}>
                       {o.equipamento_nome}
                       <div style={{fontSize:9,marginTop:1}}>
                         {o.is_manutencao_veicular ? (
@@ -1646,7 +1646,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                         )}
                       </div>
                     </td>
-                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.cliente_nome}</td>
+                    <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome}</td>
                     <td style={{fontSize:10}}>{fmtDt(o.data_abertura)}</td>
                     <td style={{fontSize:10,color: o.prazo_orcamento && new Date(o.prazo_orcamento)<new Date() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
                       {fmtDt(o.prazo_orcamento)}
@@ -2202,7 +2202,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                       </a>
                     ) : (
                       <a key={i} href={a.url} target="_blank" rel="noreferrer"
-                        style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:'1px solid #e2e8f0',borderRadius:4,fontSize:10,color:'#0f766e',textDecoration:'none',background:'#f8fafc',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                        style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, color:'#0f766e', textDecoration:'none', background:'#f8fafc', maxWidth:180, wordBreak:'break-word' }}>
                         📄 {a.nome}
                       </a>
                     );
@@ -2925,7 +2925,7 @@ function PrintOS({ os }) {
               return isImg ? (
                 <div key={i} style={{textAlign:'center'}}>
                   <img src={a.url} alt={a.nome} style={{height:70,borderRadius:4,objectFit:'cover',border:'1px solid #e2e8f0',display:'block',marginBottom:2}} />
-                  <div style={{fontSize:8,color:'#64748b',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.nome}</div>
+                  <div style={{ fontSize:8, color:'#64748b', maxWidth:80, wordBreak:'break-word' }}>{a.nome}</div>
                 </div>
               ) : (
                 <a key={i} href={a.url} target="_blank" rel="noreferrer"

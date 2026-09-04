@@ -1005,7 +1005,7 @@ function DemandaCard({ d, onClick }) {
             )}
           </div>
           <div style={{ fontSize:12, fontWeight:700, color:'#1f2937' }}>{d.titulo}</div>
-          {d.descricao && <div style={{ fontSize:10, color:'#6b7280', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:380 }}>{d.descricao}</div>}
+          {d.descricao && <div style={{ fontSize:10, color:'#6b7280', marginTop:1, maxWidth:380, wordBreak:'break-word' }}>{d.descricao}</div>}
 
           {/* Barra de progresso (multi-etapa) */}
           {temEtapas && (

@@ -488,7 +488,7 @@ export default function ClientesTab({ currentUser }) {
                         )}
                       </td>
                       <td style={{ fontSize:10 }}>{fmtTel(c.telefones) || '—'}</td>
-                      <td style={{ fontSize:10, maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      <td style={{ fontSize:10, maxWidth:150, wordBreak:'break-word' }}>
                         {fmtEml(c.emails) || '—'}
                       </td>
                       <td style={{ fontSize:10 }}>

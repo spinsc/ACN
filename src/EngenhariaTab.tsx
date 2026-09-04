@@ -407,7 +407,7 @@ export default function EngenhariaTab({ currentUser }) {
                           <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                         </td>
                         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                        <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                        <td style={{ maxWidth:140, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                         <td>
                           <span className="acn-badge" style={{background: emAndamento?'#3b82f6': kpi48h?'#ef4444':'#f59e0b'}}>
                             {o.status_geral}
@@ -511,7 +511,7 @@ export default function EngenhariaTab({ currentUser }) {
                           </td>
                           <td>—</td>
                           <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
-                          <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td style={{ maxWidth:140, wordBreak:'break-word' }}>{rep.tipo_projeto}</td>
                           <td>
                             {qtdEspera > 0 && <div><span className="acn-badge" style={{background:'#f59e0b',fontSize:9}}>{qtdEspera} aguardando</span></div>}
                             {qtdAndamento > 0 && <div style={{marginTop:2}}><span className="acn-badge" style={{background:'#3b82f6',fontSize:9}}>{qtdAndamento} em análise</span></div>}
@@ -569,7 +569,7 @@ export default function EngenhariaTab({ currentUser }) {
                   return (
                     <tr key={os.id}>
                       <td><strong style={{color:'#0f766e'}}>{os.numero_os}</strong></td>
-                      <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.cliente_nome}</td>
+                      <td style={{ maxWidth:110, wordBreak:'break-word' }}>{os.cliente_nome}</td>
                       <td style={{maxWidth:130,fontSize:10}}>
                         <div>{semDado(os.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : os.modelo}</div>
                         <div style={{color:'#94a3b8'}}>{semDado(os.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${os.chassi}`}</div>

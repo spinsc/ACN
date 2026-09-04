@@ -294,7 +294,7 @@ export default function AjustesProjetoTab({ currentUser }) {
                       <td>{fmtDt(a.data_abertura)}</td>
                       <td>{a.numero_opl || '—'}</td>
                       <td>{a.criado_por_nome || '—'}</td>
-                      <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={desc}>{desc}</td>
+                      <td style={{ maxWidth: 180, wordBreak:'break-word' }} title={desc}>{desc}</td>
                       <td>
                         {a.setor_destino || '—'}
                         {a.setor_destino === 'Compras' && a.tipo_solicitacao && (
@@ -349,7 +349,7 @@ export default function AjustesProjetoTab({ currentUser }) {
                     <td>{fmtDt(a.data_abertura)}</td>
                     <td>{a.numero_opl || '—'}</td>
                     <td>{a.criado_por_nome || '—'}</td>
-                    <td style={{maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={desc}>{desc}</td>
+                    <td style={{ maxWidth:200, wordBreak:'break-word' }} title={desc}>{desc}</td>
                     <td>{a.setor_destino || '—'}</td>
                     <td>{a.responsavel_nome || '—'}</td>
                     <td>{fmtDt(a.data_conclusao)}</td>

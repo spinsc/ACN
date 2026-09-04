@@ -67,7 +67,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
         <td>{o.cliente_nome || '—'}</td>
         <td>{o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-        <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+        <td style={{ maxWidth:110, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
         <td>
           {o.modo_execucao === 'equipe'
             ? <span>🏷️ <strong>{o.equipe_nome || '—'}</strong></span>
@@ -819,9 +819,9 @@ function PainelSacVeicular({ currentUser }) {
                         <strong style={{color:'#0f766e'}}>{os.numero_os}</strong>
                         {os.tipo_avaliacao && <div><span style={{fontSize:8,background:'#e2e8f0',padding:'1px 5px',borderRadius:10}}>{os.tipo_avaliacao}</span></div>}
                       </td>
-                      <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.cliente_nome}</td>
+                      <td style={{ maxWidth:110, wordBreak:'break-word' }}>{os.cliente_nome}</td>
                       <td style={{maxWidth:130,fontSize:10}}>
-                        <div style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{os.equipamento_nome}</div>
+                        <div style={{ wordBreak:'break-word' }}>{os.equipamento_nome}</div>
                         <div>{semDado(os.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : os.modelo}</div>
                         <div style={{color:'#94a3b8'}}>{semDado(os.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${os.chassi}`}</div>
                       </td>

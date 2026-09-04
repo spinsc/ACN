@@ -453,7 +453,7 @@ export function ClienteBuscaModal({
                       {c.documento && <div style={{ color:'#94a3b8' }}>{c.documento}</div>}
                     </td>
                     <td style={{ padding:'8px 9px', color:'#475569' }}>{fmtTelefones(c.telefones) || '—'}</td>
-                    <td style={{ padding:'8px 9px', color:'#475569', maxWidth:130, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    <td style={{ padding:'8px 9px', color:'#475569', maxWidth:130, wordBreak:'break-word' }}>
                       {fmtEmails(c.emails) || '—'}
                     </td>
                     <td style={{ padding:'8px 9px', color:'#475569' }}>{c.cidade || '—'}</td>

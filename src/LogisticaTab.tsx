@@ -927,7 +927,7 @@ function FretesPanel({ currentUser }: any) {
                   ? {borderBottom:'1px solid #f1f5f9',background:'#fffdf0',boxShadow:'inset 3px 0 0 #eab308'}
                   : {borderBottom:'1px solid #f1f5f9'}}>
                   <td style={{padding:'9px 10px'}}>{f.direcao==='outbound' ? '📤 Outbound' : '📥 Inbound'}</td>
-                  <td style={{padding:'9px 10px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.descricao}</td>
+                  <td style={{ padding:'9px 10px', maxWidth:160, wordBreak:'break-word' }}>{f.descricao}</td>
                   <td style={{padding:'9px 10px'}}>
                     {f.transportadora || '—'}
                     {f.transportadora && (f.numero_cte || f.codigo_rastreio) && (
@@ -1333,7 +1333,7 @@ function PainelRecebimento({ currentUser }: any) {
               {pedidos.map(p => (
                 <tr key={p.id} style={atrasado(p) ? { background: '#fef2f2' } : undefined}>
                   <td>{p.numero_pedido || '—'}{p.numero_oc ? <div style={{ fontSize: 9, color: '#64748b' }}>{p.numero_oc}</div> : null}</td>
-                  <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.descricao_material || '—'}</td>
+                  <td style={{ maxWidth: 220, wordBreak:'break-word' }}>{p.descricao_material || '—'}</td>
                   <td>{p.fornecedor || '—'}</td>
                   <td>{p.quantidade ?? '—'}</td>
                   <td>{fmt(p.valor_compra)}</td>
@@ -1834,7 +1834,7 @@ export default function LogisticaTab({ currentUser }) {
                     <td><span className="acn-badge" style={{background:corTipo(m.tipo)}}>{m.tipo}</span></td>
                     <td>{m.remetente}</td>
                     <td>{m.destinatario || '—'}</td>
-                    <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.tipo_mercadoria}: {m.descricao}</td>
+                    <td style={{ maxWidth:140, wordBreak:'break-word' }}>{m.tipo_mercadoria}: {m.descricao}</td>
                     <td>{m.quantidade || '—'}</td>
                     <td>{m.nf_referencia || '—'}</td>
                     <td>{m.veiculo_placa || '—'}</td>
@@ -1845,7 +1845,7 @@ export default function LogisticaTab({ currentUser }) {
                         </button>
                       ) : '—'}
                     </td>
-                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{m.observacoes || '—'}</td>
+                    <td style={{ maxWidth:120, fontSize:10, wordBreak:'break-word' }}>{m.observacoes || '—'}</td>
                     <td style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                       <button className="acn-btn" style={{background:'#0369a1',fontSize:10}} onClick={()=>setModalDetalhes(m)}>👁 Ver</button>
                       <button className="acn-btn" style={{background:'#1e293b',fontSize:10}} onClick={()=>gerarPDF(m)}>PDF</button>

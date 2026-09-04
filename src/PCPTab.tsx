@@ -278,7 +278,7 @@ export default function PCPTab({ currentUser }) {
                       <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
-                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                    <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                     <td>
                       <span className="acn-badge" style={{background: o.status_almox==='Falta de Material'?'#ef4444':'#f97316'}}>
                         {o.status_almox}
@@ -402,7 +402,7 @@ export default function PCPTab({ currentUser }) {
                       <div><span style={{fontSize:9,background:'#f59e0b',color:'#78350f',padding:'1px 5px',borderRadius:10,fontWeight:700}}>ENVIO DIRETO</span></div>
                     </td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:10}}>{o.tipo_projeto}</td>
+                    <td style={{ maxWidth:110, fontSize:10, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                     <td>
                       {!o.status_almox && <span className="acn-badge" style={{background:'#94a3b8'}}>Pendente</span>}
                       {o.status_almox === 'Kit OK' && <span className="acn-badge" style={{background:'#22c55e'}}>Kit 100%</span>}
@@ -480,7 +480,7 @@ export default function PCPTab({ currentUser }) {
                       <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
                     </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.tipo_projeto}</td>
+                      <td style={{ maxWidth:110, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                       <td>
                         {o.status_bom === 'BOM Liberado'
                           ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>
@@ -554,7 +554,7 @@ export default function PCPTab({ currentUser }) {
                           </td>
                           <td>—</td>
                           <td><span style={{fontWeight:700,color:'#7c3aed'}}>{irmaos.length}</span></td>
-                          <td style={{maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{rep.tipo_projeto}</td>
+                          <td style={{ maxWidth:110, wordBreak:'break-word' }}>{rep.tipo_projeto}</td>
                           <td colSpan={3} style={{fontSize:10}}>
                             {qtdEspera > 0 && <span className="acn-badge" style={{background:'#f59e0b',fontSize:9,marginRight:4}}>{qtdEspera} aguard. BOM/kiting</span>}
                             {qtdAguardAlmox > 0 && <span className="acn-badge" style={{background:'#3b82f6',fontSize:9,marginRight:4}}>{qtdAguardAlmox} no Almox</span>}
