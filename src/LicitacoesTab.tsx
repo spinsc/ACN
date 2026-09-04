@@ -2546,7 +2546,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   licitacoes.forEach(l => { conts[l.status] = (conts[l.status]||0) + 1; });
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f4f6f9' }}>
+    <div style={{ display:'flex', flexDirection:'column', background:'#f4f6f9' }}>
       <UndoToast onRestaurado={fetchLicit} />
 
       {/* HEADER */}
@@ -2665,7 +2665,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       {vistaRelatorio ? (
         <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} />
       ) : (
-        <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+        <div style={{ height:'100vh', overflowY:'auto', padding:16 }}>
           {loading || (modoRecentes && recentesLicitLoading) ? (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
           ) : !lista.length ? (
