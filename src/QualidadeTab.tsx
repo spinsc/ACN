@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
+import { logChange, useUnreadMap } from './AuditSystem';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -119,23 +120,29 @@ export default function QualidadeTab({ currentUser }) {
     }]);
 
     if (ehOS) {
-      await supabase.from('sac_ordens_servico').update({
+      const novoRow = {
         status: 'Aguardando Envio Fiscal',
         resultado_cq: 'Aprovado',
         cq_auditor: currentUser?.nome,
         data_cq: agora,
         atualizado_em: agora,
-      }).eq('id', row.id);
+      };
+      await supabase.from('sac_ordens_servico').update(novoRow).eq('id', row.id);
+      logChange({ module: 'qualidade', entityType: 'sac_ordens_servico', entityId: row.id, changeType: 'UPDATE',
+        oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
     } else {
       const iniciosCq = row.data_entrada_cq ? new Date(row.data_entrada_cq) : null;
       const tempoCq = iniciosCq ? horasUteis(iniciosCq, new Date()) : null;
-      await supabase.from('oples').update({
+      const novoRow = {
         status_geral: 'Aprovado CQ - Aguardando Liberacao Comercial',
         data_cq: agora,
         resultado_cq: 'Aprovado',
         cq_auditor: currentUser?.nome,
         ...(tempoCq != null ? { tempo_qualidade_horas: tempoCq } : {}),
-      }).eq('id', row.id);
+      };
+      await supabase.from('oples').update(novoRow).eq('id', row.id);
+      logChange({ module: 'qualidade', entityType: 'oples', entityId: row.id, changeType: 'UPDATE',
+        oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
 
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
@@ -168,22 +175,28 @@ export default function QualidadeTab({ currentUser }) {
     if (ehOS) {
       // OS não tem um status de "Retrabalho" separado — volta direto pra
       // Em Execução, com o resultado da reprovação registrado.
-      await supabase.from('sac_ordens_servico').update({
+      const novoRow = {
         status: 'Em Execução',
         resultado_cq: 'Reprovado',
         obs_reprovacao_cq: obsAudit,
         cq_auditor: currentUser?.nome,
         data_cq: agora,
         atualizado_em: agora,
-      }).eq('id', row.id);
+      };
+      await supabase.from('sac_ordens_servico').update(novoRow).eq('id', row.id);
+      logChange({ module: 'qualidade', entityType: 'sac_ordens_servico', entityId: row.id, changeType: 'UPDATE',
+        oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
     } else {
-      await supabase.from('oples').update({
+      const novoRow = {
         status_geral: 'Retrabalho',
         resultado_cq: 'Reprovado',
         obs_reprovacao_cq: obsAudit,
         cq_auditor: currentUser?.nome,
         data_cq: agora,
-      }).eq('id', row.id);
+      };
+      await supabase.from('oples').update(novoRow).eq('id', row.id);
+      logChange({ module: 'qualidade', entityType: 'oples', entityId: row.id, changeType: 'UPDATE',
+        oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
         evento: `Auditoria CQ REPROVADA. Motivo: ${obsAudit}`,
@@ -195,6 +208,9 @@ export default function QualidadeTab({ currentUser }) {
     notificarEvento('cq_reprovado', msg.cqReprovado(numero, obsAudit, currentUser?.nome));
     setModalAudit(null); fetchAll();
   };
+
+  const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map(o => o.id), currentUser);
+  const { naoLidoSet: osNaoLidas } = useUnreadMap('sac_ordens_servico', ordensOS.map(o => o.id), currentUser);
 
   // Todos respondidos quando cada item é OK, NOK ou N/A (não null)
   const allChecked = checklist.length > 0 && checklist.every(it => checkStates[it.id] !== null && checkStates[it.id] !== undefined);
@@ -215,7 +231,7 @@ export default function QualidadeTab({ currentUser }) {
               </tr></thead>
               <tbody>
                 {filtrarOpls(opls, busca).map(o => (
-                  <tr key={o.id}>
+                  <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                     <td style={{fontSize:10}}>
                       <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
@@ -255,7 +271,7 @@ export default function QualidadeTab({ currentUser }) {
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
               <tbody>
                 {ordensOS.map(o => (
-                  <tr key={o.id}>
+                  <tr key={o.id} style={osNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td style={{fontSize:10}}>
