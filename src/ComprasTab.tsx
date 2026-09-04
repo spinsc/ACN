@@ -312,7 +312,7 @@ export default function ComprasTab({ currentUser }) {
   };
 
   const COR: Record<string,string> = {
-    'Pendente':'#fbbf24','Em Andamento':'#3b82f6','Aguardando Aprovação':'#ea580c','Comprado':'#7c3aed','Concluído':'#22c55e',
+    'Pendente':'#fbbf24','Em Andamento':'#3b82f6','Aguardando Aprovação':'#ea580c','Aprovado':'#0ea5e9','Comprado':'#7c3aed','Concluído':'#22c55e',
   };
 
   useEffect(() => {
@@ -664,7 +664,8 @@ export default function ComprasTab({ currentUser }) {
   };
 
   // Ponto único que decide, ao confirmar uma compra, se ela precisa de aprovação
-  // (alçada disparada pelo valor) ou se pode ir direto pra 'Comprado' como antes.
+  // (alçada disparada pelo valor) ou se pode ir direto pra 'Aprovado' (aguardando
+  // a confirmação real da compra, ver confirmarCompra) como antes.
   const dispararOuConfirmar = async (pedidoId: string, extraUpdates: any) => {
     const valorCompra = extraUpdates.valor_compra;
     const niveis = alcadasConfig
@@ -678,8 +679,7 @@ export default function ComprasTab({ currentUser }) {
     const jaTemPendencia = (pendentesExistentes?.length || 0) > 0;
     if (niveis.length === 0 && !jaTemPendencia) {
       const { error } = await supabase.from('pcp_pedidos_compra')
-        .update({ ...extraUpdates, status_compra: 'Comprado' }).eq('id', pedidoId);
-      if (!error) await criarDemandaComprasFinalizada(pedidoId);
+        .update({ ...extraUpdates, status_compra: 'Aprovado' }).eq('id', pedidoId);
       return { error };
     }
     const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
@@ -728,17 +728,33 @@ export default function ComprasTab({ currentUser }) {
       }
       // linha de departamento: já foi notificada quando criada, nada a fazer aqui.
     } else {
-      // Só fecha a compra se já existe cotação vencedora escolhida — aprovar cedo
-      // a linha de departamento (antes do comprador confirmar a compra) não deve
-      // sozinho fechar o pedido.
+      // Só marca como Aprovado se já existe cotação vencedora escolhida — aprovar
+      // cedo a linha de departamento (antes do comprador confirmar a compra) não
+      // deve sozinho fechar o pedido. A compra em si só fecha em confirmarCompra,
+      // numa ação separada e explícita.
       const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra')
         .select('vencedora_id').eq('id', pedido.id).maybeSingle();
       if (pedidoAtual?.vencedora_id) {
-        await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', pedido.id);
-        await criarDemandaComprasFinalizada(pedido.id);
-        await notificarCriadorPedido(pedido, `Compra aprovada e confirmada — pedido ${pedido.numero_pedido}.`);
+        await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Aprovado' }).eq('id', pedido.id);
+        await notificarCriadorPedido(pedido, `Compra aprovada — aguardando confirmação de compra — pedido ${pedido.numero_pedido}.`);
       }
     }
+  };
+
+  // Ação explícita e separada da aprovação: só aqui a compra de fato "fecha"
+  // (status_compra='Comprado'), gera número de OC (trigger) e cria a demanda de
+  // acompanhamento — antes disso, o pedido fica em 'Aprovado' esperando essa
+  // confirmação, mesmo que quem aprovou também tenha alçada pra isso.
+  const confirmarCompra = async (pedido: any) => {
+    if (!window.confirm(`Confirmar a compra do pedido ${pedido.numero_pedido}? Isso gera a Ordem de Compra e envia pro acompanhamento de recebimento.`)) return;
+    const { error } = await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', pedido.id);
+    if (error) { alert('Erro ao confirmar compra: ' + error.message); return; }
+    logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: pedido.id, changeType: 'UPDATE',
+      oldRow: { status_compra: 'Aprovado' }, newRow: { status_compra: 'Comprado' }, user: currentUser });
+    await criarDemandaComprasFinalizada(pedido.id);
+    await notificarCriadorPedido(pedido, `Compra confirmada — pedido ${pedido.numero_pedido}.`);
+    setFiltro('');
+    load();
   };
 
   // Checa se o usuário logado pode aprovar a pendência atual — mesma regra pra
@@ -916,7 +932,7 @@ export default function ComprasTab({ currentUser }) {
   };
 
   const total = pedidos.length;
-  const kpis = ['Pendente','Em Andamento','Aguardando Aprovação','Comprado','Concluído'].map(s => ({
+  const kpis = ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'].map(s => ({
     label: s, n: pedidos.filter(p=>p.status_compra===s).length, cor: COR[s],
   }));
 
@@ -932,10 +948,11 @@ export default function ComprasTab({ currentUser }) {
     const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
     const isEM  = p.status_compra === 'Em Andamento';
     const isAguardandoAprovacao = p.status_compra === 'Aguardando Aprovação';
+    const isAprovado = p.status_compra === 'Aprovado';
     const naoLido = pedidosNaoLidos.has(String(p.id));
     return (
       <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9',
-        background: naoLido ? '#fffdf0' : isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : undefined,
+        background: naoLido ? '#fffdf0' : isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : isAprovado ? '#f0f9ff' : undefined,
         borderLeft: naoLido ? '4px solid #eab308' : undefined}}>
         <td style={td}><strong>{p.numero_pedido}</strong></td>
         <td style={td}>{p.opl||'—'}</td>
@@ -1063,6 +1080,13 @@ export default function ComprasTab({ currentUser }) {
             </button>
           )}
 
+          {/* 🛒 Aprovado → Comprado — ação explícita e separada da aprovação */}
+          {isAprovado && (
+            <button onClick={()=>confirmarCompra(p)} style={{...btn,background:'#0ea5e9',marginRight:3}}>
+              🛒 Confirmar Compra
+            </button>
+          )}
+
           {/* 📦 Comprado → Concluído — só via conferência técnica na Logística (Fase 3) */}
           {p.status_compra==='Comprado' && (
             <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
@@ -1110,7 +1134,7 @@ export default function ComprasTab({ currentUser }) {
         <select value={filtro} onChange={e=>setFiltro(e.target.value)}
           style={{padding:'5px 10px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11}}>
           <option value="">Todos os status</option>
-          {['Pendente','Em Andamento','Aguardando Aprovação','Comprado','Concluído'].map(s=><option key={s}>{s}</option>)}
+          {['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'].map(s=><option key={s}>{s}</option>)}
         </select>
       </div>
 

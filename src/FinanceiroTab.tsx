@@ -15,6 +15,7 @@ const STATUS_COR: Record<string, string> = {
   'Pendente':              '#f59e0b',
   'Em Andamento':          '#3b82f6',
   'Aguardando Aprovação':  '#ea580c',
+  'Aprovado':              '#0ea5e9',
   'Comprado':              '#7c3aed',
   'Concluído':             '#22c55e',
 };

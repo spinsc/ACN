@@ -1948,7 +1948,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         {ganho && (() => {
           const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
           const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
-          const pendente = pc.find(p => p.status_compra === 'Pendente' || p.status_compra === 'Em Andamento');
+          const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
           if (comprado) return (
             <div style={{ marginTop:4, fontSize:9, color:'#166534', background:'#dcfce7', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block' }}>
               📦 Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
