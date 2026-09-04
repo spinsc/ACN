@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -112,7 +113,9 @@ function imprimirAutorizacao(aut: any, func: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL — CADASTRAR FUNCIONÁRIO
 // ─────────────────────────────────────────────────────────────────────────────
-function ModalFuncionario({ func, onClose, onSaved }) {
+function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
+  const { campoDestaque, marcarComoLido } = useFieldHighlight('rh_funcionarios', func?.id, currentUser);
+  const fecharModal = () => { marcarComoLido(); onClose(); };
   const vazio = {
     nome:'', email:'', cpf:'', cnpj:'', cargo:'', departamento:'', data_admissao:'',
     tipo_colaborador:'Funcionário',
@@ -170,27 +173,32 @@ function ModalFuncionario({ func, onClose, onSaved }) {
     };
     if (func) {
       await supabase.from('rh_funcionarios').update(payload).eq('id', func.id);
+      logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: func.id, changeType: 'UPDATE',
+        oldRow: func, newRow: { ...func, ...payload }, user: currentUser });
     } else {
-      await supabase.from('rh_funcionarios').insert([{ ...payload, status_presenca:'Ativo', ativo:true }]);
+      const { data: novo } = await supabase.from('rh_funcionarios')
+        .insert([{ ...payload, status_presenca:'Ativo', ativo:true }]).select('id').single();
+      if (novo?.id) logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: novo.id, changeType: 'CREATE',
+        newRow: payload, user: currentUser });
     }
-    setSalvando(false); onSaved(); onClose();
+    setSalvando(false); onSaved(); fecharModal();
   };
 
   const isFuncionario = form.tipo_colaborador === 'Funcionário';
 
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      onClick={e=>{ if(e.target===e.currentTarget) fecharModal(); }}>
       <div style={{ background:'#fff', borderRadius:8, width:'min(500px,95vw)', maxHeight:'90vh', overflow:'auto', boxShadow:'0 8px 32px #0004' }}>
         <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between', position:'sticky', top:0, background:'#fff', zIndex:1 }}>
           <span>{func ? '✏️ Editar Colaborador' : '+ Novo Colaborador'}</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
+          <button onClick={fecharModal} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
 
         <div style={{ padding:16, display:'flex', flexDirection:'column', gap:12 }}>
 
           {/* TIPO DE VÍNCULO */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px' }}>
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', ...campoDestaque('tipo_colaborador') }}>
             {lbl('Tipo de Vínculo')}
             {toggle([['Funcionário','🏢 Funcionário','#2563eb'],['Terceiro','🤝 Terceiro','#7c3aed']], 'tipo_colaborador')}
           </div>
@@ -200,15 +208,15 @@ function ModalFuncionario({ func, onClose, onSaved }) {
             <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>📋 Dados do Colaborador</div>
             {[['nome','Nome completo *'],['email','E-mail'],
               ['cargo','Cargo / Função'],['departamento','Departamento / Empresa']].map(([k,l])=>(
-              <div key={k}>{lbl(l)}{inp(k)}</div>
+              <div key={k} style={campoDestaque(k)}>{lbl(l)}{inp(k)}</div>
             ))}
             <div style={{ display:'grid', gridTemplateColumns: isFuncionario ? '1fr' : '1fr 1fr', gap:8 }}>
-              <div>{lbl('CPF')}{inp('cpf','000.000.000-00')}</div>
+              <div style={campoDestaque('cpf')}>{lbl('CPF')}{inp('cpf','000.000.000-00')}</div>
               {!isFuncionario && (
-                <div>{lbl('CNPJ da Empresa')}{inp('cnpj','00.000.000/0001-00')}</div>
+                <div style={campoDestaque('cnpj')}>{lbl('CNPJ da Empresa')}{inp('cnpj','00.000.000/0001-00')}</div>
               )}
             </div>
-            <div>
+            <div style={campoDestaque('data_admissao')}>
               {lbl(isFuncionario ? 'Data de Admissão' : 'Data de Início')}
               <input type="date" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)}
                 style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
@@ -219,14 +227,14 @@ function ModalFuncionario({ func, onClose, onSaved }) {
           <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
             <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:2 }}>💰 Remuneração</div>
             {isFuncionario ? (
-              <div>
+              <div style={campoDestaque('salario')}>
                 {lbl('Salário (R$)')}
                 <input type="number" min="0" step="0.01" value={form.salario} onChange={e=>set('salario',e.target.value)}
                   placeholder="Ex: 3500.00"
                   style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
               </div>
             ) : (
-              <div>
+              <div style={campoDestaque('valor_servicos')}>
                 {lbl('Valor dos Serviços (R$)')}
                 <input type="number" min="0" step="0.01" value={form.valor_servicos} onChange={e=>set('valor_servicos',e.target.value)}
                   placeholder="Ex: 5000.00"
@@ -244,7 +252,7 @@ function ModalFuncionario({ func, onClose, onSaved }) {
               {toggle([['true','✅ Sim','#16a34a'],['false','✗ Não','#dc2626']], 'recebe_comissao_str')}
             </div>
             {/* Use separate boolean toggle */}
-            <div style={{ display:'flex', gap:6 }}>
+            <div style={{ display:'flex', gap:6, ...campoDestaque('recebe_comissao') }}>
               {[['Sim','#16a34a'],['Não','#94a3b8']].map(([label, cor]) => (
                 <button key={label} onClick={()=>set('recebe_comissao', label==='Sim')}
                   style={{ flex:1, padding:'6px 0', border:`2px solid ${(label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor : '#d1d5db'}`,
@@ -257,13 +265,13 @@ function ModalFuncionario({ func, onClose, onSaved }) {
             </div>
             {form.recebe_comissao && (
               <>
-                <div>
+                <div style={campoDestaque('percentual_comissao')}>
                   {lbl('Percentual de Comissão (%)')}
                   <input type="number" min="0" max="100" step="0.1" value={form.percentual_comissao}
                     onChange={e=>set('percentual_comissao',e.target.value)} placeholder="Ex: 5.0"
                     style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                 </div>
-                <div>
+                <div style={campoDestaque('incide_em')}>
                   {lbl('Comissão Incide Sobre')}
                   {toggle([['Faturamento','💼 Faturamento','#2563eb'],['Mão de Obra','🔧 MO Adaptação','#7c3aed'],['Serralheria','⚙️ MO Serralheria','#d97706']], 'incide_em')}
                 </div>
@@ -277,7 +285,7 @@ function ModalFuncionario({ func, onClose, onSaved }) {
         </div>
 
         <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end', position:'sticky', bottom:0, background:'#fff' }}>
-          <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
+          <button onClick={fecharModal} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
           <button onClick={salvar} disabled={salvando}
             style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
             {salvando ? '...' : '✓ Salvar Colaborador'}
@@ -555,15 +563,17 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO — PAINEL DE STATUS
 // ─────────────────────────────────────────────────────────────────────────────
-function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
+function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, currentUser }) {
   const [collapsed, setCollapsed] = useState(false);
+  const ativos = funcionarios.filter(f => f.ativo);
+  const { naoLidoSet } = useUnreadMap('rh_funcionarios', ativos.map(f => f.id), currentUser);
 
-  const alterarStatus = async (id: string, status: string) => {
-    await supabase.from('rh_funcionarios').update({ status_presenca: status }).eq('id', id);
+  const alterarStatus = async (f: any, status: string) => {
+    await supabase.from('rh_funcionarios').update({ status_presenca: status }).eq('id', f.id);
+    logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: f.id, changeType: 'UPDATE',
+      oldRow: f, newRow: { ...f, status_presenca: status }, user: currentUser });
     onRefresh();
   };
-
-  const ativos = funcionarios.filter(f => f.ativo);
 
   return (
     <div className="sec-card">
@@ -591,7 +601,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
             </thead>
             <tbody>
               {ativos.map(f => (
-                <tr key={f.id}>
+                <tr key={f.id} style={naoLidoSet.has(String(f.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                   <td style={{ fontWeight:700, color:'#1f2937' }}>{f.nome}</td>
                   <td>
                     <span style={{
@@ -611,7 +621,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete }) {
                   <td>
                     <select
                       value={f.status_presenca}
-                      onChange={e => alterarStatus(f.id, e.target.value)}
+                      onChange={e => alterarStatus(f, e.target.value)}
                       style={{
                         padding:'3px 6px',
                         border:`1.5px solid ${STATUS_COR[f.status_presenca]||'#d1d5db'}`,
@@ -2145,9 +2155,11 @@ export default function RHTab({ currentUser }) {
             funcionarios={funcionarios}
             onRefresh={fetch}
             onEdit={(f)=>setModalFunc(f)}
+            currentUser={currentUser}
             onDelete={async (f)=>{
               if (!confirm(`Excluir o funcionário "${f.nome}"?\n\nEsta ação irá desativá-lo do sistema.`)) return;
               await supabase.from('rh_funcionarios').update({ ativo: false }).eq('id', f.id);
+              logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: f.id, changeType: 'DELETE', oldRow: f, user: currentUser });
               fetch();
             }}
           />
@@ -2170,6 +2182,7 @@ export default function RHTab({ currentUser }) {
           func={modalFunc === 'new' ? null : modalFunc}
           onClose={()=>setModalFunc(null)}
           onSaved={fetch}
+          currentUser={currentUser}
         />
       )}
       {modalLanc && (
