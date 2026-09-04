@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
+import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 
 
 const TIPOS_SERVICO = [
@@ -55,6 +56,94 @@ function SignatureCanvas({ label, onSave, savedUrl }) {
       <div style={{display:'flex',gap:4,marginTop:4}}>
         <button className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={clear}>Limpar</button>
         <button className="acn-btn" style={{background:'#22c55e',fontSize:10,opacity:has?1:0.5}} onClick={save} disabled={!has}>Salvar</button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODAL VER — extraído em componente próprio (era inline em VistoriasPatio)
+// pra poder usar useFieldHighlight aqui dentro: cada linha da tabela ganha
+// destaque quando o campo mudou e ainda não foi visto por este usuário,
+// mesma receita do CRM/Licitações/RH.
+// ─────────────────────────────────────────────────────────────────────────────
+function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }) {
+  const { campoDestaque, marcarComoLido } = useFieldHighlight('vistorias_patio', v?.id, currentUser);
+  const fechar = () => { marcarComoLido(); onClose(); };
+
+  const linhas = [
+    ['tipo_servico', 'Tipo de Servico', v.tipo_servico],
+    ['veiculo_placa', 'Placa', v.veiculo_placa],
+    ['veiculo_modelo', 'Modelo', v.veiculo_modelo||'—'],
+    ['km_saida', 'KM Saida', v.km_saida||'—'],
+    ['numero_documento', v.tipo_documento||'Documento', v.numero_documento||'—'],
+    ['solicitante', 'Solicitante', v.solicitante||'—'],
+    ['destino', 'Destino', v.destino||'—'],
+    ['responsavel_envio', 'Resp. Envio', v.responsavel_envio||'—'],
+    ['data_saida', 'Data Saida', fmtDt(v.data_saida)],
+    ['previsao_retorno', 'Prev. Retorno', v.previsao_retorno ? new Date(v.previsao_retorno).toLocaleDateString('pt-BR') : '—'],
+    ['status', 'Status', v.status],
+    ...(v.status==='Retornou' ? [
+      ['data_retorno', 'Data Retorno', fmtDt(v.data_retorno)],
+      ['km_retorno', 'KM Retorno', v.km_retorno||'—'],
+      ['responsavel_recebimento', 'Resp. Recebimento', v.responsavel_recebimento||'—'],
+      ['obs_retorno', 'Obs. Retorno', v.obs_retorno||'—'],
+    ] : []),
+    ['observacoes', 'Observacoes', v.observacoes||'—'],
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)fechar();}}>
+      <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+        <div className="modal-title">Vistoria — {v.veiculo_placa}</div>
+        <table style={{fontSize:11,marginBottom:10,width:'100%'}}>
+          <tbody>
+            {linhas.map(([campo,k,val],i) => (
+              <tr key={i} style={{borderBottom:'1px solid #f1f5f9', ...campoDestaque(campo)}}>
+                <td style={{fontWeight:600,color:'#64748b',padding:'4px 8px',whiteSpace:'nowrap'}}>{k}</td>
+                <td style={{padding:'4px 8px'}}>{val}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {/* Fotos */}
+        {Array.isArray(v.fotos_saida) && v.fotos_saida.length > 0 && (
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:10,fontWeight:600,marginBottom:6}}>Fotos de Saida:</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {v.fotos_saida.map((url,i) => (
+                <a key={i} href={url} target="_blank" rel="noreferrer">
+                  <img src={url} alt="foto" style={{width:80,height:60,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Assinaturas */}
+        <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:10}}>
+          {v.assinatura_envio_url && (
+            <div>
+              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Envio:</div>
+              <img src={v.assinatura_envio_url} alt="sig envio" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
+            </div>
+          )}
+          {v.assinatura_recebimento_url && (
+            <div>
+              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Recebimento:</div>
+              <img src={v.assinatura_recebimento_url} alt="sig receb" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
+            </div>
+          )}
+          {v.assinatura_retorno_url && (
+            <div>
+              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Retorno:</div>
+              <img src={v.assinatura_retorno_url} alt="sig retorno" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
+            </div>
+          )}
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={()=>gerarPDF(v)}>Gerar PDF</button>
+          <button className="acn-btn" style={{background:'#94a3b8'}} onClick={fechar}>Fechar</button>
+        </div>
       </div>
     </div>
   );
@@ -120,7 +209,7 @@ export default function VistoriasPatio({ currentUser }) {
     const sigEnvioUrl = await uploadSig(sigEnvio, 'envio');
     const sigRecebUrl = await uploadSig(sigRecebimento, 'recebimento_inicial');
 
-    const { error } = await supabase.from('vistorias_patio').insert([{
+    const novoRow = {
       ...form,
       responsavel_envio: respEnvio,
       fotos_saida: fotosUrls,
@@ -129,8 +218,10 @@ export default function VistoriasPatio({ currentUser }) {
       status: 'Saiu',
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
-    }]);
+    };
+    const { data: nova, error } = await supabase.from('vistorias_patio').insert([novoRow]).select('id').single();
     if (error) { alert('Erro ao salvar: ' + error.message); setUploading(false); return; }
+    if (nova?.id) logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: nova.id, changeType: 'CREATE', newRow: novoRow, user: currentUser });
     setForm(FORM_VAZIO); setFotos([]); setSigEnvio(null); setSigRecebimento(null);
     setShowForm(false); fetchAll();
     setUploading(false);
@@ -139,14 +230,17 @@ export default function VistoriasPatio({ currentUser }) {
   const registrarRetorno = async () => {
     const v = modalRetorno;
     const sigRetUrl = await uploadSig(sigRet, 'retorno');
-    await supabase.from('vistorias_patio').update({
+    const novoRow = {
       status: 'Retornou',
       km_retorno: retornoForm.km_retorno,
       obs_retorno: retornoForm.obs_retorno,
       responsavel_recebimento: retornoForm.responsavel_recebimento,
       data_retorno: new Date().toISOString(),
       assinatura_retorno_url: sigRetUrl,
-    }).eq('id', v.id);
+    };
+    await supabase.from('vistorias_patio').update(novoRow).eq('id', v.id);
+    logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: v.id, changeType: 'UPDATE',
+      oldRow: v, newRow: { ...v, ...novoRow }, user: currentUser });
     setModalRetorno(null); setSigRet(null); setRetornoForm({km_retorno:'',obs_retorno:'',responsavel_recebimento:''}); fetchAll();
   };
 
@@ -280,6 +374,7 @@ export default function VistoriasPatio({ currentUser }) {
   const corStatus = (s) => ({ 'Saiu':'#f59e0b', 'Retornou':'#22c55e' })[s] || '#94a3b8';
   const pendentes = vistorias.filter(v => v.status !== 'Retornou');
   const concluidas = vistorias.filter(v => v.status === 'Retornou');
+  const { naoLidoSet: vistoriasNaoLidas } = useUnreadMap('vistorias_patio', vistorias.map(v => v.id), currentUser);
 
   return (
     <div>
@@ -404,7 +499,7 @@ export default function VistoriasPatio({ currentUser }) {
               </tr></thead>
               <tbody>
                 {pendentes.map(v => (
-                  <tr key={v.id}>
+                  <tr key={v.id} style={vistoriasNaoLidas.has(String(v.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td>{v.tipo_servico}</td>
                     <td>{v.tipo_documento}: <strong>{v.numero_documento||'—'}</strong></td>
                     <td>{v.solicitante||'—'}</td>
@@ -444,7 +539,7 @@ export default function VistoriasPatio({ currentUser }) {
               </tr></thead>
               <tbody>
                 {concluidas.slice(0,30).map(v => (
-                  <tr key={v.id} style={{opacity:0.8}}>
+                  <tr key={v.id} style={vistoriasNaoLidas.has(String(v.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : {opacity:0.8}}>
                     <td>{v.tipo_servico}</td>
                     <td><strong>{v.veiculo_placa}</strong></td>
                     <td>{v.veiculo_modelo||'—'}</td>
@@ -469,80 +564,7 @@ export default function VistoriasPatio({ currentUser }) {
       <DemandaFooter setor="Vistorias de Patio" />
 
       {/* MODAL VER */}
-      {modalVer && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">Vistoria — {modalVer.veiculo_placa}</div>
-            <table style={{fontSize:11,marginBottom:10}}>
-              <tbody>
-                {[
-                  ['Tipo de Servico', modalVer.tipo_servico],
-                  ['Placa', modalVer.veiculo_placa],
-                  ['Modelo', modalVer.veiculo_modelo||'—'],
-                  ['KM Saida', modalVer.km_saida||'—'],
-                  [modalVer.tipo_documento||'Documento', modalVer.numero_documento||'—'],
-                  ['Solicitante', modalVer.solicitante||'—'],
-                  ['Destino', modalVer.destino||'—'],
-                  ['Resp. Envio', modalVer.responsavel_envio||'—'],
-                  ['Data Saida', fmtDt(modalVer.data_saida)],
-                  ['Prev. Retorno', modalVer.previsao_retorno ? new Date(modalVer.previsao_retorno).toLocaleDateString('pt-BR') : '—'],
-                  ['Status', modalVer.status],
-                  ...(modalVer.status==='Retornou' ? [
-                    ['Data Retorno', fmtDt(modalVer.data_retorno)],
-                    ['KM Retorno', modalVer.km_retorno||'—'],
-                    ['Resp. Recebimento', modalVer.responsavel_recebimento||'—'],
-                    ['Obs. Retorno', modalVer.obs_retorno||'—'],
-                  ] : []),
-                  ['Observacoes', modalVer.observacoes||'—'],
-                ].map(([k,v],i) => (
-                  <tr key={i} style={{borderBottom:'1px solid #f1f5f9'}}>
-                    <td style={{fontWeight:600,color:'#64748b',padding:'4px 8px',whiteSpace:'nowrap'}}>{k}</td>
-                    <td style={{padding:'4px 8px'}}>{v}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {/* Fotos */}
-            {Array.isArray(modalVer.fotos_saida) && modalVer.fotos_saida.length > 0 && (
-              <div style={{marginBottom:10}}>
-                <div style={{fontSize:10,fontWeight:600,marginBottom:6}}>Fotos de Saida:</div>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                  {modalVer.fotos_saida.map((url,i) => (
-                    <a key={i} href={url} target="_blank" rel="noreferrer">
-                      <img src={url} alt="foto" style={{width:80,height:60,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Assinaturas */}
-            <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:10}}>
-              {modalVer.assinatura_envio_url && (
-                <div>
-                  <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Envio:</div>
-                  <img src={modalVer.assinatura_envio_url} alt="sig envio" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
-                </div>
-              )}
-              {modalVer.assinatura_recebimento_url && (
-                <div>
-                  <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Recebimento:</div>
-                  <img src={modalVer.assinatura_recebimento_url} alt="sig receb" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
-                </div>
-              )}
-              {modalVer.assinatura_retorno_url && (
-                <div>
-                  <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Retorno:</div>
-                  <img src={modalVer.assinatura_retorno_url} alt="sig retorno" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
-                </div>
-              )}
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={()=>gerarPDF(modalVer)}>Gerar PDF</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalVer(null)}>Fechar</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {modalVer && <ModalVerVistoria vistoria={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} fmtDt={fmtDt} gerarPDF={gerarPDF} />}
 
       {/* MODAL RETORNO */}
       {modalRetorno && (
