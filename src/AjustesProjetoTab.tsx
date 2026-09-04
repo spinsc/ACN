@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
+import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
 
 // Todos os ajustes vivem em demandas_setoriais com descricao prefixada [AJUSTE]
@@ -88,7 +89,7 @@ export default function AjustesProjetoTab({ currentUser }) {
       return;
     }
 
-    const { error } = await supabase.from('demandas_setoriais').insert([{
+    const novoRow = {
       setor_destino: form.setor,
       descricao: `[AJUSTE] ${form.descricao.trim()}`,
       numero_opl: form.opl_referencia || null,
@@ -103,12 +104,14 @@ export default function AjustesProjetoTab({ currentUser }) {
         hora: agora,
         origem: 'ajuste',
       }],
-    }]);
+    };
+    const { data: novo, error } = await supabase.from('demandas_setoriais').insert([novoRow]).select('id').single();
     if (error) {
       alert('Erro ao registrar ajuste: ' + error.message);
       console.error('salvar ajuste error:', error);
       return;
     }
+    if (novo?.id) logChange({ module: 'demandas_gerais', entityType: 'demandas_setoriais', entityId: novo.id, changeType: 'CREATE', newRow: novoRow, user: currentUser });
     // Notifica o setor destino
     const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
     notificarEvento('demanda_criada_setor', mensagemNotif, form.setor);
@@ -123,7 +126,9 @@ export default function AjustesProjetoTab({ currentUser }) {
     const logs = a.logs_demanda || [];
     logs.push({ texto: novaObs, usuario: currentUser?.nome || currentUser?.email, hora: new Date().toISOString() });
     await supabase.from('demandas_setoriais').update({ logs_demanda: logs }).eq('id', a.id);
-    setNovaObs(''); setModalObs(null); fetchAll();
+    logChange({ module: 'demandas_gerais', entityType: 'demandas_setoriais', entityId: a.id, changeType: 'UPDATE',
+      oldRow: { observacao: null }, newRow: { observacao: novaObs.slice(0, 120) }, user: currentUser });
+    setNovaObs(''); fecharModalObs(); fetchAll();
   };
 
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
@@ -153,6 +158,9 @@ export default function AjustesProjetoTab({ currentUser }) {
 
   const abertos = ajustes.filter(a => a.status !== 'Concluido');
   const concluidos = ajustes.filter(a => a.status === 'Concluido');
+  const { naoLidoSet: ajustesNaoLidos, marcarLidoLocal: marcarAjusteLidoLocal } = useUnreadMap('demandas_setoriais', ajustes.map(a => a.id), currentUser);
+  const marcarAjusteLido = useMarkAsRead('demandas_setoriais', modalObs?.id, currentUser);
+  const fecharModalObs = () => { marcarAjusteLido(); if (modalObs?.id) marcarAjusteLidoLocal(modalObs.id); setModalObs(null); };
 
   return (
     <div>
@@ -278,8 +286,11 @@ export default function AjustesProjetoTab({ currentUser }) {
                 {abertos.map(a => {
                   const desc = a.descricao?.replace('[AJUSTE] ', '') || '—';
                   const prio = getPrioridade(a.logs_demanda);
+                  const naoLida = ajustesNaoLidos.has(String(a.id));
                   return (
-                    <tr key={a.id} style={{ background: a.status === 'Em Andamento' ? '#fefce8' : '#fffbeb' }}>
+                    <tr key={a.id} style={naoLida
+                      ? { background:'#fffdf0', boxShadow:'inset 3px 0 0 #eab308' }
+                      : { background: a.status === 'Em Andamento' ? '#fefce8' : '#fffbeb' }}>
                       <td>{fmtDt(a.data_abertura)}</td>
                       <td>{a.numero_opl || '—'}</td>
                       <td>{a.criado_por_nome || '—'}</td>
@@ -373,7 +384,7 @@ export default function AjustesProjetoTab({ currentUser }) {
             placeholder="Adicione uma observacao..." value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
           <div style={{display:'flex',gap:8}}>
             <button className="acn-btn" style={{background:'#1e293b',flex:1}} onClick={addObs}>SALVAR</button>
-            <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalObs(null)}>Fechar</button>
+            <button className="acn-btn" style={{background:'#94a3b8'}} onClick={fecharModalObs}>Fechar</button>
           </div>
         </div>
       </div>
