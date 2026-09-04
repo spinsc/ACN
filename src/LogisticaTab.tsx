@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { notificarEvento } from './whatsappHelper';
+import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -306,6 +307,7 @@ function LicitacaoAutocompleteFrete({ value, onSelect }: any) {
 
 function FretesPanel({ currentUser }: any) {
   const [fretes, setFretes] = useState<any[]>([]);
+  const { naoLidoSet: fretesNaoLidos } = useUnreadMap('pcp_fretes', fretes.map((f:any)=>f.id), currentUser);
   const [pedidosCompra, setPedidosCompra] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -313,6 +315,8 @@ function FretesPanel({ currentUser }: any) {
   const [salvandoFrete, setSalvandoFrete] = useState(false);
 
   const [modalFrete, setModalFrete] = useState<any>(null);
+  const marcarComoLidoFrete = useMarkAsRead('pcp_fretes', modalFrete?.id, currentUser);
+  const fecharModalFrete = () => { marcarComoLidoFrete(); setModalFrete(null); };
   const [cotacoes, setCotacoes] = useState<any[]>([]);
   const [loadingCotacoes, setLoadingCotacoes] = useState(false);
   const [novaCotacao, setNovaCotacao] = useState({ ...VAZIO_COTACAO_FRETE });
@@ -532,31 +536,37 @@ function FretesPanel({ currentUser }: any) {
 
     if (niveis.length === 0) {
       // Sem alçada aplicável — comportamento de sempre, vai direto pra Em Trânsito.
-      const { error } = await supabase.from('pcp_fretes').update({
+      const novoRow = {
         transportadora: vencedora.transportadora_nome,
         valor_frete: vencedora.valor,
         vencedora_id: vencedoraId,
         justificativa_vencedora: justificativa.trim(),
         status: 'Em Trânsito',
         data_coleta: new Date().toISOString(),
-      }).eq('id', modalFrete.id);
+      };
+      const { error } = await supabase.from('pcp_fretes').update(novoRow).eq('id', modalFrete.id);
       setConfirmando(false);
       if (error) { alert('Erro: ' + error.message); return; }
-      setModalFrete(null);
+      logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
+        oldRow: modalFrete, newRow: { ...modalFrete, ...novoRow }, user: currentUser });
+      fecharModalFrete();
       fetchAll();
       return;
     }
 
     // Alçada aplicável — vai pra Aguardando Aprovação e cria as pendências,
     // uma por nível, todas com status 'pendente' (resolvidas em ordem).
-    const { error } = await supabase.from('pcp_fretes').update({
+    const novoRowAprov = {
       transportadora: vencedora.transportadora_nome,
       valor_frete: vencedora.valor,
       vencedora_id: vencedoraId,
       justificativa_vencedora: justificativa.trim(),
       status: 'Aguardando Aprovação',
-    }).eq('id', modalFrete.id);
+    };
+    const { error } = await supabase.from('pcp_fretes').update(novoRowAprov).eq('id', modalFrete.id);
     if (error) { setConfirmando(false); alert('Erro: ' + error.message); return; }
+    logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
+      oldRow: modalFrete, newRow: { ...modalFrete, ...novoRowAprov }, user: currentUser });
     await supabase.from('pcp_aprovacoes_fretes').insert(niveis.map(n => ({
       frete_id: modalFrete.id, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: vencedora.valor,
       status: 'pendente', solicitado_por: currentUser?.email, solicitado_por_nome: currentUser?.nome,
@@ -564,7 +574,7 @@ function FretesPanel({ currentUser }: any) {
     const freteAtualizado = { ...modalFrete, transportadora: vencedora.transportadora_nome, valor_frete: vencedora.valor };
     await notificarAprovadoresNivelFrete(freteAtualizado, niveis[0]);
     setConfirmando(false);
-    setModalFrete(null);
+    fecharModalFrete();
     fetchAll();
   };
 
@@ -597,13 +607,14 @@ function FretesPanel({ currentUser }: any) {
       const proximaAlcada = alcadasFrete.find(a => a.nivel === restantes[0].nivel);
       if (proximaAlcada) await notificarAprovadoresNivelFrete(modalFrete, proximaAlcada);
     } else {
-      await supabase.from('pcp_fretes').update({
-        status: 'Em Trânsito', data_coleta: new Date().toISOString(),
-      }).eq('id', modalFrete.id);
+      const novoRow = { status: 'Em Trânsito', data_coleta: new Date().toISOString() };
+      await supabase.from('pcp_fretes').update(novoRow).eq('id', modalFrete.id);
+      logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
+        oldRow: modalFrete, newRow: { ...modalFrete, ...novoRow }, user: currentUser });
       await notificarCriadorFrete(modalFrete, `Frete aprovado e liberado — ${modalFrete.descricao}.`);
     }
     setRespondendoAprovacao(false);
-    setModalFrete(null);
+    fecharModalFrete();
     fetchAll();
   };
 
@@ -626,13 +637,15 @@ function FretesPanel({ currentUser }: any) {
     }).eq('id', nivelAtivo.id);
     await supabase.from('pcp_aprovacoes_fretes').update({ status: 'cancelado' })
       .eq('frete_id', modalFrete.id).eq('status', 'pendente');
-    await supabase.from('pcp_fretes').update({
-      status: 'Cotação', vencedora_id: null, justificativa_vencedora: null,
-    }).eq('id', modalFrete.id);
+    const novoRowRej = { status: 'Cotação', vencedora_id: null, justificativa_vencedora: null };
+    await supabase.from('pcp_fretes').update(novoRowRej).eq('id', modalFrete.id);
+    logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
+      oldRow: modalFrete, newRow: { ...modalFrete, ...novoRowRej }, user: currentUser,
+      metadata: { motivo_rejeicao: motivo.trim() } });
     await notificarCriadorFrete(modalFrete, `Frete rejeitado (Nível ${nivelAtivo.nivel} — ${nivelAtivo.nivel_nome}). Motivo: ${motivo.trim()}`);
     setRespondendoAprovacao(false);
     setVencedoraId(null);
-    setModalFrete(null);
+    fecharModalFrete();
     fetchAll();
   };
 
@@ -686,26 +699,32 @@ function FretesPanel({ currentUser }: any) {
     setEnviandoCanhoto(true);
     const res = await uploadArquivoFrete(canhotoFile, 'pcp-fretes-canhotos');
     if (res.error) { alert('Erro ao enviar canhoto: ' + res.error); setEnviandoCanhoto(false); return; }
-    const { error } = await supabase.from('pcp_fretes').update({
+    const novoRow = {
       status: 'Entregue',
       data_entrega: new Date().toISOString(),
       canhoto_url: res.url,
       canhoto_nome: res.nome,
-    }).eq('id', modalFrete.id);
+    };
+    const { error } = await supabase.from('pcp_fretes').update(novoRow).eq('id', modalFrete.id);
     setEnviandoCanhoto(false);
     if (error) { alert('Erro: ' + error.message); return; }
+    logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: modalFrete.id, changeType: 'UPDATE',
+      oldRow: modalFrete, newRow: { ...modalFrete, ...novoRow }, user: currentUser });
     await postarAndamentoVinculo(modalFrete);
-    setModalFrete(null);
+    fecharModalFrete();
     fetchAll();
   };
 
   const cancelarFrete = async (f: any) => {
     const motivo = prompt('Motivo do cancelamento:');
     if (motivo === null) return;
-    await supabase.from('pcp_fretes').update({
+    const novoRow = {
       status: 'Cancelado',
       observacoes: [f.observacoes, `Cancelado: ${motivo}`].filter(Boolean).join(' · '),
-    }).eq('id', f.id);
+    };
+    await supabase.from('pcp_fretes').update(novoRow).eq('id', f.id);
+    logChange({ module: 'logistica', entityType: 'pcp_fretes', entityId: f.id, changeType: 'UPDATE',
+      oldRow: f, newRow: { ...f, ...novoRow }, user: currentUser });
     fetchAll();
   };
 
@@ -901,7 +920,9 @@ function FretesPanel({ currentUser }: any) {
             </thead>
             <tbody>
               {fretes.map((f:any) => (
-                <tr key={f.id} style={{borderBottom:'1px solid #f1f5f9'}}>
+                <tr key={f.id} style={fretesNaoLidos.has(String(f.id))
+                  ? {borderBottom:'1px solid #f1f5f9',background:'#fffdf0',boxShadow:'inset 3px 0 0 #eab308'}
+                  : {borderBottom:'1px solid #f1f5f9'}}>
                   <td style={{padding:'9px 10px'}}>{f.direcao==='outbound' ? '📤 Outbound' : '📥 Inbound'}</td>
                   <td style={{padding:'9px 10px',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.descricao}</td>
                   <td style={{padding:'9px 10px'}}>
@@ -940,7 +961,7 @@ function FretesPanel({ currentUser }: any) {
 
       {/* MODAL GERENCIAR FRETE */}
       {modalFrete && (
-        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalFrete(null);}}>
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)fecharModalFrete();}}>
           <div className="modal-box" style={{maxWidth:640}}>
             <div className="modal-title">🚚 Frete — {modalFrete.descricao}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:8}}>
@@ -1056,7 +1077,7 @@ function FretesPanel({ currentUser }: any) {
                 <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarFreteComVencedora} disabled={confirmando}>
                   {confirmando?'Confirmando...':'✅ Confirmar Transportadora'}
                 </button>
-                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
+                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>fecharModalFrete()}>Fechar</button>
               </div>
             </>)}
 
@@ -1095,7 +1116,7 @@ function FretesPanel({ currentUser }: any) {
                     <button className="acn-btn" style={{background:'#dc2626',flex:1}} onClick={rejeitarNivelFreteAtivo} disabled={respondendoAprovacao}>
                       ❌ Rejeitar
                     </button>
-                    <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
+                    <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>fecharModalFrete()}>Fechar</button>
                   </div>
                 )}
               </>);
@@ -1138,7 +1159,7 @@ function FretesPanel({ currentUser }: any) {
                 <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={marcarEntregue} disabled={!canhotoFile || enviandoCanhoto}>
                   {enviandoCanhoto?'Enviando...':!canhotoFile?'✅ Marcar como Entregue (anexe o canhoto)':'✅ Marcar como Entregue'}
                 </button>
-                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFrete(null)}>Fechar</button>
+                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>fecharModalFrete()}>Fechar</button>
               </div>
             </>)}
 
@@ -1155,14 +1176,14 @@ function FretesPanel({ currentUser }: any) {
                 {modalFrete.canhoto_url && (
                   <div style={{marginTop:6}}><a href={modalFrete.canhoto_url} target="_blank" rel="noreferrer">📎 Ver canhoto ({modalFrete.canhoto_nome})</a></div>
                 )}
-                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>setModalFrete(null)}>Fechar</button>
+                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>fecharModalFrete()}>Fechar</button>
               </div>
             )}
 
             {modalFrete.status === 'Cancelado' && (
               <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:12,fontSize:11}}>
                 <div>{modalFrete.observacoes || 'Frete cancelado.'}</div>
-                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>setModalFrete(null)}>Fechar</button>
+                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>fecharModalFrete()}>Fechar</button>
               </div>
             )}
           </div>
