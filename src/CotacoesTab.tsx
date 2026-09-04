@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
+import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -630,11 +631,10 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
 
   const vincularOp = async (op) => {
     setVinculando(true);
-    await supabase.from('cotacoes_precos').update({
-      opl_id:     op.id,
-      opl_numero: op.opl,
-      status:     'vinculada',
-    }).eq('id', cotacao.id);
+    const novoRow = { opl_id: op.id, opl_numero: op.opl, status: 'vinculada' };
+    await supabase.from('cotacoes_precos').update(novoRow).eq('id', cotacao.id);
+    logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: cotacao.id, changeType: 'UPDATE',
+      oldRow: cotacao, newRow: { ...cotacao, ...novoRow }, user: currentUser });
     setOpBusca('');
     setOpOpts([]);
     setVinculando(false);
@@ -652,6 +652,8 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
     }).eq('id', aprov.id);
     if (status === 'aprovado') {
       await supabase.from('cotacoes_precos').update({ status: 'aprovada' }).eq('id', cotacao.id);
+      logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: cotacao.id, changeType: 'UPDATE',
+        oldRow: cotacao, newRow: { ...cotacao, status: 'aprovada' }, user: currentUser });
     }
     const { data } = await supabase.from('cotacoes_aprovacoes').select('*')
       .eq('cotacao_id', cotacao.id).order('solicitado_em', { ascending: false });
@@ -924,6 +926,8 @@ function PainelAprovacoes({ currentUser, onClose }) {
     }).eq('id', aprov.id);
     if (decisao === 'aprovado') {
       await supabase.from('cotacoes_precos').update({ status: 'aprovada' }).eq('id', aprov.cotacao_id);
+      logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: aprov.cotacao_id, changeType: 'UPDATE',
+        oldRow: { status: 'pendente_aprovacao' }, newRow: { status: 'aprovada' }, user: currentUser });
     }
     carregar();
   };
@@ -1353,6 +1357,8 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
 
   const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
   const isVendedor = !isAdmin;
+  const { naoLidoSet: cotacoesNaoLidas, marcarLidoLocal: marcarCotacaoLidaLocal } = useUnreadMap('cotacoes_precos', cotacoes.map(c => c.id), currentUser);
+  const marcarCotacaoLida = useMarkAsRead('cotacoes_precos', modalDetalhe?.id, currentUser);
 
   // Carregar configurações de visibilidade
   const carregarConfig = useCallback(async () => {
@@ -1550,12 +1556,14 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                   const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
                   const impostoPct = totVendas > 0 ? (totImposto / totVendas * 100) : (prms.imposto_pct || 0);
                   const sel = selecionadas.includes(c.id);
+                  const naoLida = cotacoesNaoLidas.has(String(c.id));
 
                   return (
-                    <tr key={c.id} style={{ background: sel ? '#f5f3ff' : i%2===0?'#fff':'#f8fafc',
+                    <tr key={c.id} style={{ background: naoLida ? '#fffdf0' : sel ? '#f5f3ff' : i%2===0?'#fff':'#f8fafc',
+                      boxShadow: naoLida ? 'inset 3px 0 0 #eab308' : 'none',
                       cursor:'pointer', transition:'background .1s' }}
-                      onMouseEnter={e => { if(!sel) e.currentTarget.style.background='#f0fdf4'; }}
-                      onMouseLeave={e => { if(!sel) e.currentTarget.style.background=i%2===0?'#fff':'#f8fafc'; }}>
+                      onMouseEnter={e => { if(!sel && !naoLida) e.currentTarget.style.background='#f0fdf4'; }}
+                      onMouseLeave={e => { if(!sel) e.currentTarget.style.background= naoLida ? '#fffdf0' : i%2===0?'#fff':'#f8fafc'; }}>
                       <td style={{ padding:'7px 6px', textAlign:'center' }}>
                         <input type="checkbox" checked={sel}
                           onChange={e => setSelecionadas(p => e.target.checked ? [...p, c.id] : p.filter(x=>x!==c.id))}
@@ -1617,7 +1625,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
           verCustos={cfg.verCustos}
           verFornec={cfg.verFornec}
           verMarkup={cfg.verMarkup}
-          onClose={() => setModalDetalhe(null)}
+          onClose={() => { marcarCotacaoLida(); if (modalDetalhe?.id) marcarCotacaoLidaLocal(modalDetalhe.id); setModalDetalhe(null); }}
           onAbrirDesconto={() => { setModalDesc(modalDetalhe); setModalDetalhe(null); }}
           onOpenCrm={(opId) => {
             setModalDetalhe(null);
