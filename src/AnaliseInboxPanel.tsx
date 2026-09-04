@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { SETOR_LABEL } from './AnaliseWidget';
+import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel Inbox de Análises Orçamentárias
@@ -38,7 +38,8 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
   const [salvando, setSalvando]     = useState<Record<string, boolean>>({});
   const [notas, setNotas]           = useState<Record<string, string>>({});   // setorId → nota
   const [expandido, setExpandido]   = useState<Record<string, boolean>>({});  // solicitacaoId → bool
-  const [filtro, setFiltro]         = useState<'pendente' | 'tudo'>('pendente');
+  const [filtro, setFiltro]         = useState<'pendente' | 'concluidas' | 'tudo'>('pendente');
+  const [pendentesGlobal, setPendentesGlobal] = useState(0); // total real, independe do filtro selecionado
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,39 +48,33 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
       .select('*, analise_setores(*)')
       .order('criado_em', { ascending: false });
     if (filtro === 'pendente') q.eq('status', 'em_andamento');
+    if (filtro === 'concluidas') q.eq('status', 'finalizada');
 
     const { data } = await q;
     const lista = data || [];
     setAnalises(lista);
-    const pendentes = lista.filter(a => a.status === 'em_andamento').length;
-    onCountChange?.(pendentes);
     setLoading(false);
   }, [filtro]);
 
+  // Contagem do badge do header é sempre "pendentes de verdade", independente
+  // do filtro selecionado na tela — senão o badge some ao trocar de aba.
+  const refreshCount = useCallback(async () => {
+    const { count } = await supabase.from('analise_solicitacoes')
+      .select('id', { count: 'exact', head: true }).eq('status', 'em_andamento');
+    setPendentesGlobal(count || 0);
+    onCountChange?.(count || 0);
+  }, [onCountChange]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { refreshCount(); }, [refreshCount]);
 
   const concluirSetor = async (solicitacao: any, setor: any) => {
     const key = setor.id;
     setSalvando(prev => ({ ...prev, [key]: true }));
     try {
-      await supabase.from('analise_setores').update({
-        status:       'concluido',
-        analisado_por: currentUser?.nome || 'Sistema',
-        analisado_em:  new Date().toISOString(),
-        notas:         notas[key]?.trim() || null,
-      }).eq('id', key);
-
-      // Verifica se todos os setores foram concluídos
-      const setoresAtualizados = (solicitacao.analise_setores || []).map((s: any) =>
-        s.id === key ? { ...s, status: 'concluido' } : s
-      );
-      const todosConcluidos = setoresAtualizados.every((s: any) => s.status === 'concluido');
-      if (todosConcluidos) {
-        await supabase.from('analise_solicitacoes')
-          .update({ status: 'concluido' })
-          .eq('id', solicitacao.id);
-      }
+      await concluirAnaliseSetor(setor, solicitacao, { notas: notas[key], usuario: currentUser?.nome || 'Sistema' });
       await load();
+      await refreshCount();
     } catch (e: any) {
       alert('Erro: ' + e.message);
     }
@@ -87,15 +82,11 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
   };
 
   const reabrirSetor = async (setor: any) => {
-    await supabase.from('analise_setores').update({
-      status: 'pendente', analisado_por: null, analisado_em: null, notas: null,
-    }).eq('id', setor.id);
-    // Garante que a solicitação volta para em_andamento
-    await supabase.from('analise_solicitacoes').update({ status: 'em_andamento' }).eq('id', setor.solicitacao_id);
+    await reabrirAnaliseSetor(setor);
     await load();
+    await refreshCount();
   };
 
-  const pendentesTotal = analises.filter(a => a.status === 'em_andamento').length;
 
   return (
     <div style={{
@@ -121,8 +112,8 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
             <div>
               <div style={{ fontWeight:700, fontSize:14 }}>🔔 Análises Orçamentárias</div>
               <div style={{ fontSize:10, opacity:.85, marginTop:2 }}>
-                {pendentesTotal > 0
-                  ? `${pendentesTotal} solicitação(ões) aguardando análise`
+                {pendentesGlobal > 0
+                  ? `${pendentesGlobal} solicitação(ões) aguardando análise`
                   : 'Nenhuma pendência no momento'}
               </div>
             </div>
@@ -135,7 +126,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
 
           {/* Filtro */}
           <div style={{ display:'flex', gap:6, marginTop:10 }}>
-            {(['pendente','tudo'] as const).map(f => (
+            {(['pendente','concluidas','tudo'] as const).map(f => (
               <button key={f} onClick={() => setFiltro(f)}
                 style={{
                   fontSize:9, fontWeight:700, padding:'3px 10px', borderRadius:4, cursor:'pointer',
@@ -143,7 +134,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                   color:      filtro===f ? '#b45309' : 'white',
                   border: 'none',
                 }}>
-                {f === 'pendente' ? 'Pendentes' : 'Todas'}
+                {f === 'pendente' ? 'Pendentes' : f === 'concluidas' ? 'Concluídas' : 'Todas'}
               </button>
             ))}
           </div>
@@ -158,22 +149,25 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
             <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>
               <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
               <div style={{ fontSize:11 }}>
-                {filtro === 'pendente' ? 'Nenhuma análise pendente!' : 'Nenhuma análise registrada.'}
+                {filtro === 'pendente' ? 'Nenhuma análise pendente!'
+                  : filtro === 'concluidas' ? 'Nenhuma análise concluída ainda.'
+                  : 'Nenhuma análise registrada.'}
               </div>
             </div>
           )}
 
           {analises.map(sol => {
             const setores: any[] = sol.analise_setores || [];
-            const pendentes = setores.filter(s => s.status !== 'concluido').length;
+            const pendentes = setores.filter(s => s.status !== 'analisado').length;
             const exp = expandido[sol.id] !== false; // padrão expandido
             const origem = sol.origem === 'licitacao' ? '🏛️ Licitação' : sol.origem === 'crm' ? '💼 CRM' : sol.origem;
+            const solConcluida = sol.status === 'finalizada';
 
             return (
               <div key={sol.id} style={{
-                border: `1px solid ${sol.status === 'concluido' ? '#d1fae5' : '#fde68a'}`,
+                border: `1px solid ${solConcluida ? '#d1fae5' : '#fde68a'}`,
                 borderRadius: 8, marginBottom: 10, overflow:'hidden',
-                background: sol.status === 'concluido' ? '#f0fdf4' : '#fffbeb',
+                background: solConcluida ? '#f0fdf4' : '#fffbeb',
               }}>
 
                 {/* Cabeçalho do card */}
@@ -191,10 +185,10 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                       )}
                       <span style={{
                         fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:3,
-                        background: sol.status === 'concluido' ? '#d1fae5' : '#fef3c7',
-                        color:      sol.status === 'concluido' ? '#065f46' : '#92400e',
+                        background: solConcluida ? '#d1fae5' : '#fef3c7',
+                        color:      solConcluida ? '#065f46' : '#92400e',
                       }}>
-                        {sol.status === 'concluido' ? '✅ Concluída' : `⏳ ${pendentes} pendente(s)`}
+                        {solConcluida ? '✅ Concluída' : `⏳ ${pendentes} pendente(s)`}
                       </span>
                     </div>
                     <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', marginTop:3 }}>
@@ -225,7 +219,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                       <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhum setor cadastrado para esta análise.</div>
                     )}
                     {setores.map(setor => {
-                      const concluido = setor.status === 'concluido';
+                      const concluido = setor.status === 'analisado';
                       const salvandoSetor = salvando[setor.id];
                       const cor = SETOR_COR[setor.setor] || '#64748b';
                       const label = SETOR_LABEL[setor.setor] || setor.setor;

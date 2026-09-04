@@ -61,6 +61,59 @@ const fmtDT = (v: string) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CONCLUIR / REABRIR SETOR — helpers compartilhados
+// Existem 3 lugares que finalizam a análise de um setor (este arquivo, em 2
+// pontos, e AnaliseInboxPanel.tsx). Cada um reimplementava a mesma lógica com
+// valores de status diferentes ('analisado' vs 'concluido' no setor,
+// 'finalizada' vs 'concluido' na solicitação) — um setor concluído por um
+// caminho não era reconhecido como concluído pelos outros (badge de
+// progresso, painel de análise no card, aba "Todas" do inbox). Centralizando
+// aqui pra garantir uma única verdade, igual fizemos com
+// resolverMencoesRespondidas em MencaoTextarea.tsx.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function concluirAnaliseSetor(setor: any, solicitacao: any, opts: { notas?: string | null; usuario: string }) {
+  const agora = new Date().toISOString();
+  const notas = opts.notas?.trim() || null;
+  await supabase.from('analise_setores').update({
+    status: 'analisado',
+    analisado_por: opts.usuario,
+    analisado_em: agora,
+    notas,
+  }).eq('id', setor.id);
+
+  const { data: todos } = await supabase.from('analise_setores')
+    .select('status').eq('solicitacao_id', solicitacao.id);
+  const todosOk = (todos || []).every((s: any) => s.status === 'analisado');
+  if (todosOk) {
+    await supabase.from('analise_solicitacoes').update({ status: 'finalizada' }).eq('id', solicitacao.id);
+  }
+
+  try {
+    await supabase.from('analise_logs').insert([{
+      solicitacao_id: solicitacao.id,
+      setor_id: setor.id,
+      setor: setor.setor,
+      origem: solicitacao.origem,
+      origem_titulo: solicitacao.origem_titulo,
+      origem_numero: solicitacao.origem_numero,
+      acao: 'analise_finalizada',
+      usuario: opts.usuario,
+      notas,
+      criado_em: agora,
+    }]);
+  } catch (_) { /* tabela pode não existir ainda */ }
+
+  return { todosOk, agora };
+}
+
+export async function reabrirAnaliseSetor(setor: any) {
+  await supabase.from('analise_setores').update({
+    status: 'pendente', analisado_por: null, analisado_em: null, notas: null,
+  }).eq('id', setor.id);
+  await supabase.from('analise_solicitacoes').update({ status: 'em_andamento' }).eq('id', setor.solicitacao_id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MODAL SOLICITAR ANÁLISE  (usado em Licitações e CRM)
 // ─────────────────────────────────────────────────────────────────────────────
 export function ModalSolicitarAnalise({
@@ -252,42 +305,8 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
 
   const concluirSetor = async (setor: any, sol: any) => {
     setFinalizando(setor.id);
-    const agora = new Date().toISOString();
-    const notas = obsSetor[setor.id] || null;
     const usuario = currentUser?.nome || currentUser?.email || 'Sistema';
-
-    // Atualiza setor
-    await supabase.from('analise_setores').update({
-      status: 'analisado',
-      analisado_por: usuario,
-      analisado_em: agora,
-      notas,
-    }).eq('id', setor.id);
-
-    // Verifica se todos os setores da solicitação estão analisados
-    const { data: todos } = await supabase.from('analise_setores')
-      .select('status').eq('solicitacao_id', sol.id);
-    const todosOk = (todos || []).every((s: any) => s.status === 'analisado' || s.id === setor.id);
-    if (todosOk) {
-      await supabase.from('analise_solicitacoes').update({ status: 'finalizada' }).eq('id', sol.id);
-    }
-
-    // Log
-    try {
-      await supabase.from('analise_logs').insert([{
-        solicitacao_id: sol.id,
-        setor_id: setor.id,
-        setor: setor.setor,
-        origem: sol.origem,
-        origem_titulo: sol.origem_titulo,
-        origem_numero: sol.origem_numero,
-        acao: 'analise_finalizada',
-        usuario,
-        notas,
-        criado_em: agora,
-      }]);
-    } catch(_) { /* tabela pode não existir ainda */ }
-
+    await concluirAnaliseSetor(setor, sol, { notas: obsSetor[setor.id], usuario });
     setFinalizando(null);
     setObsSetor(p => { const n = { ...p }; delete n[setor.id]; return n; });
     load();
@@ -456,21 +475,9 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
   const marcarAnalisado = async (item: any) => {
     setAprovando(item.id);
     const nota = notas[item.id] || item.notas || null;
-    await supabase.from('analise_setores').update({
-      status: 'analisado',
-      analisado_por: currentUser?.nome || currentUser?.email || 'Sistema',
-      analisado_em: new Date().toISOString(),
-      notas: nota,
-    }).eq('id', item.id);
-
-    // verifica se todos os setores da solicitacao foram analisados
-    const solId = item.analise_solicitacoes?.id;
-    if (solId) {
-      const { data: todos } = await supabase.from('analise_setores').select('status').eq('solicitacao_id', solId);
-      const todosOk = (todos || []).every((s:any) => s.status === 'analisado');
-      if (todosOk) {
-        await supabase.from('analise_solicitacoes').update({ status: 'finalizada' }).eq('id', solId);
-      }
+    const sol = item.analise_solicitacoes;
+    if (sol) {
+      await concluirAnaliseSetor(item, sol, { notas: nota, usuario: currentUser?.nome || currentUser?.email || 'Sistema' });
     }
     setAprovando(null);
     load();
