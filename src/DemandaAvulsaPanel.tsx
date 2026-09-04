@@ -4,6 +4,8 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { supabase } from './supabaseClient';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
+import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+import type { VinculoValue } from './VinculoPicker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -293,6 +295,9 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [novaInfo, setNovaInfo] = useState('');
   const [editando, setEditando] = useState(false);
   const [editForm, setEditForm] = useState({ titulo: initial.titulo, descricao: initial.descricao || '', observacoes: initial.observacoes || '', prioridade: initial.prioridade });
+  const [vinculo, setVinculo] = useState<VinculoValue | null>(
+    initial.vinculo_tipo ? { tipo: initial.vinculo_tipo, id: initial.vinculo_id, descricao: initial.vinculo_descricao } : null
+  );
   const [designarForm, setDesignarForm] = useState({ responsavel_nome: initial.responsavel_nome || '', responsavel_email: initial.responsavel_email || '', prazo: initial.prazo ? isoToDate(initial.prazo) : '' });
   const [reprogramarForm, setReprogramarForm] = useState({ nova_data: '', motivo: '' });
   const [mostrarReprogramar, setMostrarReprogramar] = useState(false);
@@ -312,10 +317,22 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Mantém o vínculo local em sincronia sempre que `d` for recarregado
+  // (ex.: após salvarEdicao/reload), sem depender de o usuário reabrir o modal.
+  useEffect(() => {
+    setVinculo(d.vinculo_tipo ? { tipo: d.vinculo_tipo, id: d.vinculo_id, descricao: d.vinculo_descricao } : null);
+  }, [d.vinculo_tipo, d.vinculo_id, d.vinculo_descricao]);
+
   // ── Salvar edição básica ─────────────────────────────────────────────────
   const salvarEdicao = async () => {
     setSalvando(true);
-    await supabase.from('demandas_avulsas').update({ ...editForm, atualizado_em: new Date().toISOString() }).eq('id', d.id);
+    await supabase.from('demandas_avulsas').update({
+      ...editForm,
+      vinculo_tipo: vinculo?.tipo || null,
+      vinculo_id: vinculo?.id || null,
+      vinculo_descricao: vinculo?.descricao || null,
+      atualizado_em: new Date().toISOString(),
+    }).eq('id', d.id);
     for (const [campo, texto] of [['descricao', editForm.descricao], ['observacoes', editForm.observacoes]]) {
       if (texto?.trim()) {
         await salvarMencoes({
@@ -326,7 +343,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           contextoId:        String(d.id),
           contextoDescricao: d.titulo || 'Demanda Avulsa',
           campo,
-          abaDestino:        'engenharia',
+          abaDestino:        (d.setor || 'engenharia').toLowerCase(),
         });
       }
     }
@@ -425,7 +442,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       contextoId:        String(d.id),
       contextoDescricao: d.titulo || 'Demanda Avulsa',
       campo:             'informacao_geral',
-      abaDestino:        'engenharia',
+      abaDestino:        (d.setor || 'engenharia').toLowerCase(),
     });
     setNovaInfo('');
     await reload();
@@ -535,6 +552,17 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
 
+          {/* ── Vínculo a um processo já em andamento (opcional) ── */}
+          {!editando && vinculo && (
+            <div onClick={() => abrirVinculo(vinculo)}
+              style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
+                border:'1px solid #93c5fd', background:'#eff6ff', borderRadius:6, fontSize:11, cursor:'pointer' }}>
+              <span style={{ fontWeight:700, color:'#1d4ed8', flexShrink:0 }}>🔗 {TIPO_LABEL[vinculo.tipo] || vinculo.tipo}</span>
+              <span style={{ color:'#1e293b', flex:1, textDecoration:'underline' }}>{vinculo.descricao}</span>
+              <span style={{ color:'#93c5fd', fontSize:9 }}>abrir →</span>
+            </div>
+          )}
+
           {/* ── Designar responsável (demanda simples) ── */}
           {mostrarDesignar && !temEtapas && (
             <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:12 }}>
@@ -631,6 +659,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div>
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULO A UM PROCESSO (OPCIONAL)</label>
+                  <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>
@@ -784,10 +816,11 @@ const etapaVazia = (num: number) => ({
   data_fim: null,
 });
 
-function ModalNova({ currentUser, onClose, onSaved }) {
+function ModalNova({ currentUser, setor, onClose, onSaved }) {
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
   const [qtdEtapas, setQtdEtapas] = useState(1);
   const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
+  const [vinculo, setVinculo] = useState<VinculoValue | null>(null);
   const [salvando, setSalvando] = useState(false);
   const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}));
 
@@ -818,7 +851,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
     const agora = new Date().toISOString();
     const payload: any = {
       ...form,
-      setor: 'Engenharia',
+      setor,
       status: 'Pendente',
       informacoes: [],
       etapas: qtdEtapas > 1 ? etapas.map(e => ({
@@ -829,6 +862,10 @@ function ModalNova({ currentUser, onClose, onSaved }) {
       criado_por_nome: currentUser?.nome,
       criado_em: agora,
       atualizado_em: agora,
+      // Vínculo é sempre opcional — só grava os 3 campos se algo foi selecionado.
+      vinculo_tipo: vinculo?.tipo || null,
+      vinculo_id: vinculo?.id || null,
+      vinculo_descricao: vinculo?.descricao || null,
     };
     // Para demanda simples, deixa campos no nível raiz vazios
     if (qtdEtapas === 1) {
@@ -846,7 +883,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
         contextoId:        String(nova.id),
         contextoDescricao: form.titulo || 'Demanda Avulsa',
         campo:             'descricao',
-        abaDestino:        'engenharia',
+        abaDestino:        setor.toLowerCase(),
       });
     }
     setSalvando(false);
@@ -890,6 +927,14 @@ function ModalNova({ currentUser, onClose, onSaved }) {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Vínculo opcional a um processo já em andamento */}
+          <div>
+            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+              Vincular a um processo (opcional)
+            </label>
+            <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
           </div>
 
           {/* Seletor de quantidade de etapas */}
@@ -1003,6 +1048,11 @@ function DemandaCard({ d, onClick }) {
                 {alerta==='vencida' ? '🔴 VENCIDA' : `🟡 ${diasV}d`}
               </span>
             )}
+            {d.vinculo_tipo && (
+              <span style={{ background:'#eff6ff', color:'#1d4ed8', border:'1px solid #93c5fd', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+                🔗 {TIPO_LABEL[d.vinculo_tipo] || d.vinculo_tipo}: {d.vinculo_descricao}
+              </span>
+            )}
           </div>
           <div style={{ fontSize:12, fontWeight:700, color:'#1f2937' }}>{d.titulo}</div>
           {d.descricao && <div style={{ fontSize:10, color:'#6b7280', marginTop:1, maxWidth:380, wordBreak:'break-word' }}>{d.descricao}</div>}
@@ -1035,7 +1085,7 @@ function DemandaCard({ d, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function DemandaAvulsaPanel({ currentUser }) {
+export default function DemandaAvulsaPanel({ currentUser, setor }) {
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('ativas');
@@ -1047,11 +1097,11 @@ export default function DemandaAvulsaPanel({ currentUser }) {
   const fetch = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
     const { data } = await supabase.from('demandas_avulsas')
-      .select('*').eq('setor', 'Engenharia')
+      .select('*').eq('setor', setor)
       .order('criado_em', { ascending: false });
     setDemandas(data || []);
     if (!silent) setLoading(false);
-  }, []);
+  }, [setor]);
 
   useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 30000); return () => clearInterval(t); }, [fetch]);
 
@@ -1112,7 +1162,7 @@ export default function DemandaAvulsaPanel({ currentUser }) {
     <div className="sec-card" style={{ marginTop:12 }}>
       <div className="sec-hdr">
         <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-          ⚡ Demandas Avulsas — Engenharia
+          ⚡ Demandas Avulsas — {setor}
           {vencidas > 0 && (
             <span onClick={() => setFiltroStatus(filtroStatus==='vencidas'?'ativas':'vencidas')}
               style={{ background:'#dc2626', color:'#fff', borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700, cursor:'pointer',
@@ -1182,7 +1232,7 @@ export default function DemandaAvulsaPanel({ currentUser }) {
       </div>
 
       {modalNova && (
-        <ModalNova currentUser={currentUser} onClose={() => setModalNova(false)} onSaved={fetch} />
+        <ModalNova currentUser={currentUser} setor={setor} onClose={() => setModalNova(false)} onSaved={fetch} />
       )}
       {selected && (
         <ModalDetalhe

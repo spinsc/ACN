@@ -768,6 +768,19 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return () => window.removeEventListener('analise:abrir-origem', handler);
   }, []);
 
+  // Troca de aba genérica disparada por VinculoPicker.tsx's abrirVinculo() —
+  // usado pelo vínculo opcional (OP/OS/PV/Compra/OFI) das Demandas Avulsas.
+  // Só troca a aba; quem escuta 'acn:abrir-registro' na aba de destino (já
+  // roteada aqui embaixo) cuida de abrir o registro específico.
+  useEffect(() => {
+    const handler = (e: any) => {
+      const { aba } = e.detail || {};
+      if (aba) setActiveTab(aba);
+    };
+    window.addEventListener('acn:trocar-aba', handler);
+    return () => window.removeEventListener('acn:trocar-aba', handler);
+  }, []);
+
   // Trocar senha
   const [modalSenha, setModalSenha] = useState(!!currentUser?.primeiro_acesso);
   const [senhaForm, setSenhaForm]   = useState({ atual:'', nova:'', confirmar:'' });

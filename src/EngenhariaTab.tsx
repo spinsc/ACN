@@ -544,7 +544,7 @@ export default function EngenhariaTab({ currentUser }) {
         </div>
       </div>
 
-      <DemandaAvulsaPanel currentUser={currentUser} />
+      <DemandaAvulsaPanel currentUser={currentUser} setor="Engenharia" />
 
       {/* ── ACOMPANHAMENTO SAC VEICULAR ── */}
       {osAcomp.length > 0 && (

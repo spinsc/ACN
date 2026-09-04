@@ -8,6 +8,7 @@ import Linkify from './Linkify';
 import { ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { notificarEvento } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
+import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -23,6 +24,110 @@ const SAC_STATUS_COR = {
   'Aprovado':'#22c55e','Reprovado':'#ef4444','Em Execução':'#8b5cf6',
   'Concluído':'#0d9488','Entregue':'#166534',
 };
+
+// ─── Fila de OFI (Ordem de Fabricação Interna) ────────────────────────────────
+// Mostrada só para setores que fabricam internamente (Chicotes/Serralheria/
+// Laboratorio) — recebe pedidos roteados pelo PCP a partir da Solicitação de
+// Reposição do Almoxarifado (ver AlmoxarifadoTab.tsx/PCPTab.tsx).
+function OfiQueueSection({ setor, cor, currentUser }) {
+  const [ofis, setOfis] = useState<any[]>([]);
+  const [modalVerOfi, setModalVerOfi] = useState<any>(null);
+  const [atualizando, setAtualizando] = useState<string|null>(null);
+
+  const fetchOfis = async () => {
+    const { data } = await supabase.from('ofis').select('*')
+      .eq('setor_destino', setor).neq('status', 'Concluida')
+      .order('criado_em', { ascending: false });
+    setOfis(data || []);
+  };
+
+  useEffect(() => { fetchOfis(); const t = setInterval(fetchOfis, 30000); return () => clearInterval(t); }, [setor]);
+
+  // Deep-link — ver VinculoPicker.tsx's abrirVinculo(). Guardado por
+  // setor_destino porque cada setor monta sua própria instância deste
+  // componente, todas ouvindo o mesmo evento global 'acn:abrir-registro'.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'ofi') return;
+      supabase.from('ofis').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => {
+          if (data && data.setor_destino === setor) {
+            (window as any).__acnDeepLink = null;
+            setModalVerOfi(data);
+          }
+        });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, [setor]);
+
+  const avancarStatus = async (ofi: any) => {
+    const proximo = ofi.status === 'Pendente' ? 'Em Andamento' : 'Concluida';
+    setAtualizando(ofi.id);
+    const patch: any = { status: proximo };
+    if (proximo === 'Concluida') { patch.concluido_em = new Date().toISOString(); patch.responsavel_nome = currentUser?.nome; }
+    await supabase.from('ofis').update(patch).eq('id', ofi.id);
+    setAtualizando(null);
+    fetchOfis();
+  };
+
+  return (
+    <>
+      {ofis.length > 0 && (
+        <div className="sec-card" style={{ marginTop:12 }}>
+          <div className="sec-hdr" style={{ background:`${cor}12`, borderBottom:`2px solid ${cor}` }}>
+            <span style={{ color: cor }}>🏭 Ordens de Fabricação Interna ({ofis.length})</span>
+          </div>
+          <div className="sec-body" style={{ padding:'10px 12px' }}>
+            {ofis.map(ofi => (
+              <div key={ofi.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
+                border:`1px solid ${cor}40`, borderRadius:6, marginBottom:6, fontSize:11 }}>
+                <div style={{ flex:1 }}>
+                  <strong>{ofi.numero_ofi}</strong> — {ofi.descricao} · {ofi.quantidade}
+                  {ofi.vinculo_descricao && (
+                    <div onClick={() => abrirVinculo({ tipo: ofi.vinculo_tipo, id: ofi.vinculo_id, descricao: ofi.vinculo_descricao })}
+                      style={{ fontSize:9, color:'#1d4ed8', cursor:'pointer', textDecoration:'underline', marginTop:2 }}>
+                      🔗 {TIPO_LABEL[ofi.vinculo_tipo] || ofi.vinculo_tipo}: {ofi.vinculo_descricao}
+                    </div>
+                  )}
+                  {ofi.origem === 'almoxarifado' && (
+                    <div style={{ fontSize:9, color:'#9ca3af' }}>origem: solicitação de reposição do Almoxarifado</div>
+                  )}
+                </div>
+                <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:10,
+                  background: ofi.status === 'Pendente' ? '#fef9c3' : '#dbeafe',
+                  color: ofi.status === 'Pendente' ? '#854d0e' : '#1e40af' }}>
+                  {ofi.status}
+                </span>
+                <button className="acn-btn" style={{ background: cor, fontSize:10, padding:'5px 10px' }}
+                  onClick={() => avancarStatus(ofi)} disabled={atualizando === ofi.id}>
+                  {atualizando === ofi.id ? '...' : ofi.status === 'Pendente' ? '▶ Iniciar' : '✅ Concluir'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {modalVerOfi && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget) setModalVerOfi(null);}}>
+          <div className="modal-box" style={{ maxWidth:440 }}>
+            <div className="modal-title">{modalVerOfi.numero_ofi} — {modalVerOfi.setor_destino}</div>
+            <div style={{ fontSize:12, marginBottom:8 }}>{modalVerOfi.descricao} · {modalVerOfi.quantidade}</div>
+            {modalVerOfi.vinculo_descricao && (
+              <div style={{ fontSize:11, color:'#1d4ed8', marginBottom:8 }}>
+                🔗 {TIPO_LABEL[modalVerOfi.vinculo_tipo] || modalVerOfi.vinculo_tipo}: {modalVerOfi.vinculo_descricao}
+              </div>
+            )}
+            <div style={{ fontSize:11, marginBottom:12 }}>Status: <strong>{modalVerOfi.status}</strong></div>
+            <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={()=>setModalVerOfi(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─── Relatórios do Setor ──────────────────────────────────────────────────────
 function RelatoriosSetor({ setor, cor }) {
@@ -760,6 +865,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
               )}
             </div>
           </div>
+
+          {['Chicotes','Serralheria','Laboratorio'].includes(setor) && (
+            <OfiQueueSection setor={setor} cor={cor} currentUser={currentUser} />
+          )}
 
           <AnaliseWidget
             setor={setor}

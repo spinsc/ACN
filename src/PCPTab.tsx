@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
+import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -36,12 +37,17 @@ export default function PCPTab({ currentUser }) {
   const [oplsSerralheria, setOplsSerralheria] = useState([]);
   const [sanandoSerralheria, setSanandoSerralheria] = useState(null);
   const [painelSerralheriaAberto, setPainelSerralheriaAberto] = useState(true);
+  // Solicitações de reposição do Almoxarifado aguardando liberação do PCP —
+  // ver AlmoxarifadoTab.tsx (onde são criadas) e a rota de liberarSolicitacaoAlmox
+  // abaixo (roteia pra OFI se fabricação interna, senão pra Compras).
+  const [solicitacoesAlmox, setSolicitacoesAlmox] = useState([]);
+  const [liberandoSolic, setLiberandoSolic] = useState(null);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const [oplsRes, faltaRes, serralheriaRes] = await Promise.all([
+    const [oplsRes, faltaRes, serralheriaRes, solicRes] = await Promise.all([
       supabase.from('oples').select('*')
         .in('status_geral', ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP','Retrabalho'])
         .order('data_entrada', { ascending: false }),
@@ -49,11 +55,57 @@ export default function PCPTab({ currentUser }) {
         .in('status_almox', ['Falta de Material','Liberado com Pendencia']),
       supabase.from('oples').select('id,opl,chassi,modelo,cliente_nome,status_geral,serralheria_status')
         .in('serralheria_status', ['Pendente','Concluido']).order('data_entrada', { ascending: false }),
+      supabase.from('almoxarifado_solicitacoes_reposicao').select('*')
+        .eq('status', 'Aguardando Liberação PCP').order('criado_em', { ascending: false }),
     ]);
     setOpls(oplsRes.data || []);
     setOplsFalta(faltaRes.data || []);
     setOplsSerralheria(serralheriaRes.data || []);
+    setSolicitacoesAlmox(solicRes.data || []);
     if (!silent) setLoading(false);
+  };
+
+  // Libera a solicitação de reposição do Almoxarifado — roteia sozinho pra
+  // uma OFI (se o item é fabricado internamente) ou pra Compras (senão),
+  // reaproveitando o vínculo opcional que veio junto do pedido.
+  const liberarSolicitacaoAlmox = async (sol) => {
+    setLiberandoSolic(sol.id);
+    const agora = new Date().toISOString();
+    const nome = currentUser?.nome || currentUser?.email || 'PCP';
+    const { data: itemRow } = await supabase.from('cadastro_itens')
+      .select('origem_producao,setor_fabricante').eq('id', sol.item_id).maybeSingle();
+
+    if (itemRow?.origem_producao === 'interna' && itemRow?.setor_fabricante) {
+      const { data: ofi, error } = await supabase.from('ofis').insert([{
+        numero_ofi: `OFI-${Date.now()}`,
+        setor_destino: itemRow.setor_fabricante,
+        descricao: `${sol.item_nome}${sol.motivo ? ' — ' + sol.motivo : ''}`,
+        quantidade: sol.quantidade, item_id: sol.item_id,
+        origem: 'almoxarifado', origem_id: String(sol.id),
+        vinculo_tipo: sol.vinculo_tipo, vinculo_id: sol.vinculo_id, vinculo_descricao: sol.vinculo_descricao,
+        criado_por: sol.criado_por, criado_por_nome: sol.criado_por_nome,
+      }]).select('id').single();
+      if (error) { alert('Erro ao criar OFI: ' + error.message); setLiberandoSolic(null); return; }
+      await supabase.from('almoxarifado_solicitacoes_reposicao').update({
+        status: 'Roteado OFI', ofi_id: ofi.id, liberado_por_nome: nome, liberado_em: agora,
+      }).eq('id', sol.id);
+      notificarEvento('pcp_libera_reposicao', `PCP liberou reposição de "${sol.item_nome}" — OFI aberta para ${itemRow.setor_fabricante}. Liberado por: ${nome}`);
+    } else {
+      const { data: pedido, error } = await supabase.from('pcp_pedidos_compra').insert([{
+        numero_pedido: `PC-ALX-${Date.now()}`,
+        descricao_material: `${sol.item_nome}${sol.motivo ? ' — ' + sol.motivo : ''}`,
+        quantidade: sol.quantidade, status_compra: 'Pendente',
+        criado_por: sol.criado_por, criado_por_nome: sol.criado_por_nome, criado_por_setor: 'Almoxarifado',
+        data_criacao: agora,
+      }]).select('id').single();
+      if (error) { alert('Erro ao criar pedido de compra: ' + error.message); setLiberandoSolic(null); return; }
+      await supabase.from('almoxarifado_solicitacoes_reposicao').update({
+        status: 'Roteado Compras', pedido_compra_id: pedido.id, liberado_por_nome: nome, liberado_em: agora,
+      }).eq('id', sol.id);
+      notificarEvento('pcp_libera_reposicao', `PCP liberou reposição de "${sol.item_nome}" — pedido enviado a Compras. Liberado por: ${nome}`);
+    }
+    setLiberandoSolic(null);
+    fetchAll();
   };
 
   const sanarPendenciaSerralheria = async (opl) => {
@@ -591,7 +643,35 @@ export default function PCPTab({ currentUser }) {
         </div>
       </div>
 
+      {/* LIBERAÇÃO DE REPOSIÇÃO DO ALMOXARIFADO — vira OFI (fabricação interna)
+          ou pedido de Compras, conforme o item, assim que liberado aqui. */}
+      {solicitacoesAlmox.length > 0 && (
+        <div className="sec-card" style={{ marginTop:12 }}>
+          <div className="sec-hdr" style={{ background:'#fef9c3', borderBottom:'2px solid #fde047' }}>
+            <span style={{ color:'#854d0e' }}>📦 Reposição de Estoque — Aguardando Liberação PCP ({solicitacoesAlmox.length})</span>
+          </div>
+          <div className="sec-body" style={{ padding:'10px 12px' }}>
+            {solicitacoesAlmox.map((sol: any) => (
+              <div key={sol.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
+                border:'1px solid #fde047', background:'#fffdf0', borderRadius:6, marginBottom:6, fontSize:11 }}>
+                <div style={{ flex:1 }}>
+                  <strong>{sol.item_nome}</strong> — {sol.quantidade}
+                  {sol.motivo && <div style={{ fontSize:9, color:'#6b7280' }}>{sol.motivo}</div>}
+                  {sol.vinculo_descricao && <div style={{ fontSize:9, color:'#1d4ed8' }}>🔗 {sol.vinculo_descricao}</div>}
+                  <div style={{ fontSize:9, color:'#9ca3af' }}>Solicitado por {sol.criado_por_nome || '—'}</div>
+                </div>
+                <button className="acn-btn" style={{ background:'#16a34a', fontSize:10, padding:'5px 12px' }}
+                  onClick={() => liberarSolicitacaoAlmox(sol)} disabled={liberandoSolic === sol.id}>
+                  {liberandoSolic === sol.id ? '...' : '✅ Liberar'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <OplMovimentadas setor="PCP" />
+      <DemandaAvulsaPanel currentUser={currentUser} setor="PCP" />
       <DemandaFooter setor="PCP" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}

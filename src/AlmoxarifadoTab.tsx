@@ -1,9 +1,12 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
+import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import { VinculoPicker } from './VinculoPicker';
+import type { VinculoValue } from './VinculoPicker';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -37,8 +40,19 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [modalSeriaisLote, setModalSeriaisLote] = useState(null); // { base, irmaos }
   const [seriaisLoteTexto, setSeriaisLoteTexto] = useState('');
   const [aplicandoSeriaisLote, setAplicandoSeriaisLote] = useState(false);
+  // Solicitação de reposição de estoque (nova) — pedido de compra/fabricação
+  // interna que precisa de liberação do PCP antes de cair no setor certo.
+  const [modalReposicao, setModalReposicao] = useState(false);
+  const [minhasSolicitacoes, setMinhasSolicitacoes] = useState([]);
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => { fetchSolicitacoes(); }, []);
+
+  const fetchSolicitacoes = async () => {
+    const { data } = await supabase.from('almoxarifado_solicitacoes_reposicao')
+      .select('*').order('criado_em', { ascending: false }).limit(20);
+    setMinhasSolicitacoes(data || []);
+  };
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
@@ -299,7 +313,45 @@ export default function AlmoxarifadoTab({ currentUser }) {
         </div>
       </div>
 
+      {/* SOLICITAÇÃO DE REPOSIÇÃO DE ESTOQUE — pede fabricação interna (OFI) ao
+          setor que fabrica aquele item, ou Compras quando não é fabricação
+          interna. Passa por liberação do PCP antes de cair na fila certa. */}
+      <div className="sec-card" style={{ marginTop:12 }}>
+        <div className="sec-hdr">
+          <span>📦 Solicitar Reposição de Estoque</span>
+          <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px' }} onClick={() => setModalReposicao(true)}>
+            + Nova Solicitação
+          </button>
+        </div>
+        <div className="sec-body" style={{ padding:'10px 12px' }}>
+          {minhasSolicitacoes.length === 0 ? (
+            <div className="acn-empty">Nenhuma solicitação de reposição ainda.</div>
+          ) : (
+            minhasSolicitacoes.map((s: any) => (
+              <div key={s.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
+                border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6, fontSize:11 }}>
+                <span style={{ flex:1 }}>
+                  <strong>{s.item_nome}</strong> — {s.quantidade}
+                  {s.vinculo_descricao && <span style={{ color:'#1d4ed8' }}> · 🔗 {s.vinculo_descricao}</span>}
+                </span>
+                <span style={{ fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:10,
+                  background: s.status === 'Aguardando Liberação PCP' ? '#fef9c3' : s.status.startsWith('Roteado') ? '#dcfce7' : '#fee2e2',
+                  color: s.status === 'Aguardando Liberação PCP' ? '#854d0e' : s.status.startsWith('Roteado') ? '#166534' : '#991b1b' }}>
+                  {s.status}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      {modalReposicao && (
+        <ModalSolicitarReposicao currentUser={currentUser}
+          onClose={() => setModalReposicao(false)}
+          onSaved={() => { setModalReposicao(false); fetchSolicitacoes(); }} />
+      )}
+
       <DemandasSetorWidget setor="Almoxarifado" cor="#78716c" currentUser={currentUser} />
+      <DemandaAvulsaPanel currentUser={currentUser} setor="Almoxarifado" />
       <OplMovimentadas setor="Almoxarifado" />
       <DemandaFooter setor="Almoxarifado" />
 
@@ -429,6 +481,116 @@ export default function AlmoxarifadoTab({ currentUser }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODAL SOLICITAR REPOSIÇÃO — item + quantidade + motivo + vínculo opcional.
+// Fica "Aguardando Liberação PCP" até alguém do PCP liberar (ver PCPTab.tsx),
+// que então roteia pra uma OFI (fabricação interna) ou pra Compras, conforme
+// cadastro_itens.origem_producao/setor_fabricante daquele item.
+// ─────────────────────────────────────────────────────────────────────────────
+function ModalSolicitarReposicao({ currentUser, onClose, onSaved }) {
+  const [q, setQ] = useState('');
+  const [sugestoes, setSugestoes] = useState<any[]>([]);
+  const [item, setItem] = useState<any>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [quantidade, setQuantidade] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [vinculo, setVinculo] = useState<VinculoValue | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const timerRef = useRef<any>(null);
+
+  const buscarItem = async (texto: string) => {
+    if (!texto || texto.length < 2) { setSugestoes([]); return; }
+    setBuscando(true);
+    const { data } = await supabase.from('cadastro_itens')
+      .select('id,codigo,nome,origem_producao,setor_fabricante')
+      .or(`codigo.ilike.%${texto}%,nome.ilike.%${texto}%`).eq('ativo', true).order('nome').limit(8);
+    setSugestoes(data || []);
+    setBuscando(false);
+  };
+
+  const handleChangeQ = (v: string) => {
+    setQ(v); setItem(null);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => buscarItem(v), 300);
+  };
+
+  const salvar = async () => {
+    if (!item) { alert('Selecione um item do cadastro!'); return; }
+    if (!quantidade || Number(quantidade) <= 0) { alert('Informe a quantidade!'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('almoxarifado_solicitacoes_reposicao').insert([{
+      item_id: item.id, item_codigo: item.codigo, item_nome: item.nome,
+      quantidade: Number(quantidade), motivo: motivo || null,
+      status: 'Aguardando Liberação PCP',
+      vinculo_tipo: vinculo?.tipo || null, vinculo_id: vinculo?.id || null, vinculo_descricao: vinculo?.descricao || null,
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+    }]);
+    setSalvando(false);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    onSaved();
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box" style={{ maxWidth:480 }}>
+        <div className="modal-title">📦 Solicitar Reposição de Estoque</div>
+
+        <label className="acn-label">Item *</label>
+        {item ? (
+          <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', border:'1px solid #86efac',
+            background:'#f0fdf4', borderRadius:6, marginBottom:10, fontSize:11 }}>
+            <span style={{ flex:1 }}><strong>{item.codigo}</strong> — {item.nome}</span>
+            <button onClick={() => setItem(null)} style={{ background:'none', border:'none', color:'#94a3b8', cursor:'pointer' }}>✕</button>
+          </div>
+        ) : (
+          <div style={{ position:'relative', marginBottom:10 }}>
+            <input className="acn-input" style={{ width:'100%' }} value={q} onChange={e=>handleChangeQ(e.target.value)}
+              placeholder="Buscar por código ou nome..." autoFocus />
+            {q.length >= 2 && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:'#fff',
+                border:'1px solid #d1d5db', borderRadius:6, boxShadow:'0 4px 12px #0002', maxHeight:200, overflowY:'auto' }}>
+                {sugestoes.map((it:any) => (
+                  <div key={it.id} onMouseDown={() => { setItem(it); setQ(''); setSugestoes([]); }}
+                    style={{ padding:'7px 10px', cursor:'pointer', borderBottom:'1px solid #f1f5f9', fontSize:11 }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='#f0f9ff')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='#fff')}>
+                    <strong>{it.codigo}</strong> — {it.nome}
+                    {it.origem_producao === 'interna' && (
+                      <span style={{ color:'#7c3aed', fontSize:9 }}> · fabricação interna ({it.setor_fabricante})</span>
+                    )}
+                  </div>
+                ))}
+                {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Buscando...</div>}
+                {!buscando && sugestoes.length===0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8', textAlign:'center' }}>Nada encontrado.</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        <label className="acn-label">Quantidade *</label>
+        <input className="acn-input" type="number" min="0" style={{ width:'100%', marginBottom:10 }}
+          value={quantidade} onChange={e=>setQuantidade(e.target.value)} />
+
+        <label className="acn-label">Motivo</label>
+        <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10 }}
+          placeholder="ex: estoque mínimo atingido" value={motivo} onChange={e=>setMotivo(e.target.value)} />
+
+        <label className="acn-label">Vincular a um processo (opcional)</label>
+        <div style={{ marginBottom:12 }}>
+          <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+        </div>
+
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="acn-btn" style={{ background:'#78716c', flex:1 }} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Enviando...' : '📤 Solicitar'}
+          </button>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose} disabled={salvando}>Cancelar</button>
+        </div>
+      </div>
     </div>
   );
 }

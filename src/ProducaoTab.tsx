@@ -2041,6 +2041,22 @@ export default function ProducaoTab({ currentUser }) {
   const [novoApoioNome, setNovoApoioNome] = useState('');
   const [novoApoioId, setNovoApoioId] = useState<string|null>(null);
 
+  // Deep-link vindo de um chip de vínculo (VinculoPicker.tsx) ou de qualquer
+  // outro lugar que aponte pra uma OP — abre o OplDetalheModal direto, mesmo
+  // padrão já usado em SacTab.tsx/ComprasTab.tsx pros contextos 'sac'/'compra'.
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'op') return;
+      (window as any).__acnDeepLink = null;
+      supabase.from('oples').select('*').eq('id', pend.contextoId).maybeSingle()
+        .then(({ data }) => { if (data) setModalVerOpl(data); });
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
+
   useEffect(() => {
     fetchAll();
     fetchEquipes();

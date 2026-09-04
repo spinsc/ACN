@@ -6,6 +6,7 @@ import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { logChange, useUnreadMap } from './AuditSystem';
+import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 
@@ -1172,6 +1173,8 @@ export default function ComprasTab({ currentUser }) {
           </div>
         ))}
       </div>
+
+      <DemandaAvulsaPanel currentUser={currentUser} setor="Compras" />
 
       {/* MODAL CENTRO DE CUSTO */}
       {modalCentro && (
