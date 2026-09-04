@@ -6,6 +6,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
+import { notificarEvento, msg } from './whatsappHelper';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -88,6 +89,14 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const [mostrarReprog, setMostrarReprog] = useState(false);
   const [reprogData, setReprogData] = useState('');
   const [reprogMotivo, setReprogMotivo] = useState('');
+  const [editandoVinculo, setEditandoVinculo] = useState(false);
+  const etapaVinculo: VinculoValue | null = etapa.vinculo_tipo
+    ? { tipo: etapa.vinculo_tipo, id: etapa.vinculo_id, descricao: etapa.vinculo_descricao }
+    : null;
+  const salvarVinculoEtapa = async (v: VinculoValue | null) => {
+    await onUpdate(idx, { vinculo_tipo: v?.tipo || null, vinculo_id: v?.id || null, vinculo_descricao: v?.descricao || null });
+    setEditandoVinculo(false);
+  };
   const al = etapaVencida(etapa);
   const diasV = diasParaVencer(etapa.prazo);
   const corBorda = al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : STATUS_COR[etapa.status] || '#e2e8f0';
@@ -229,6 +238,32 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
             </div>
           </div>
         </div>
+
+        {/* Vínculo da etapa a um processo (opcional, independente do vínculo da demanda) */}
+        {editandoVinculo ? (
+          <div>
+            <VinculoPicker value={etapaVinculo} onSelect={salvarVinculoEtapa} onClear={() => salvarVinculoEtapa(null)} />
+            <button onClick={() => setEditandoVinculo(false)}
+              style={{ marginTop:4, background:'none', border:'none', color:'#94a3b8', fontSize:9, cursor:'pointer' }}>
+              cancelar
+            </button>
+          </div>
+        ) : etapaVinculo ? (
+          <div onClick={() => abrirVinculo(etapaVinculo)}
+            style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 8px', border:'1px solid #93c5fd',
+              background:'#eff6ff', borderRadius:4, fontSize:10, cursor:'pointer' }}>
+            <span style={{ fontWeight:700, color:'#1d4ed8', flexShrink:0 }}>🔗 {TIPO_LABEL[etapaVinculo.tipo] || etapaVinculo.tipo}</span>
+            <span style={{ color:'#1e293b', flex:1, textDecoration:'underline' }}>{etapaVinculo.descricao}</span>
+            <button onClick={e => { e.stopPropagation(); setEditandoVinculo(true); }}
+              style={{ background:'none', border:'none', color:'#93c5fd', cursor:'pointer', fontSize:9, flexShrink:0 }}>editar</button>
+          </div>
+        ) : (
+          <button onClick={() => setEditandoVinculo(true)}
+            style={{ alignSelf:'flex-start', background:'none', border:'1px dashed #cbd5e1', color:'#6b7280',
+              borderRadius:4, padding:'3px 8px', fontSize:9, cursor:'pointer' }}>
+            🔗 Vincular a um processo (opcional)
+          </button>
+        )}
 
         {etapa.obs_criacao && (
           <div style={{ fontSize:10, color:'#6b7280', background:'#f8fafc', borderRadius:4, padding:'4px 8px' }}>
@@ -814,13 +849,31 @@ const etapaVazia = (num: number) => ({
   status: 'Pendente',
   data_inicio: null,
   data_fim: null,
+  // Vínculo opcional dessa etapa específica a um processo (OP/OS/PV/Compra/OFI)
+  // — independente do vínculo (também opcional) da demanda como um todo.
+  vinculo_tipo: null,
+  vinculo_id: null,
+  vinculo_descricao: null,
 });
 
-function ModalNova({ currentUser, setor, onClose, onSaved }) {
+export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoInicial, onClose, onSaved }: {
+  currentUser: any;
+  setor?: string;
+  // Quando presente com mais de 1 opção, mostra um seletor "Setor de Destino"
+  // no topo do form — substitui o antigo "Enviar Demanda para Setor" (botões
+  // de setor + modal separado) por uma escolha dentro do mesmo formulário rico.
+  setoresDestino?: string[];
+  // Pré-preenche o vínculo ao abrir — usado pelo botão "+Demanda" por OPL
+  // (PCPTab.tsx), que já sabe a qual OP a demanda deve ficar vinculada.
+  vinculoInicial?: VinculoValue | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
+  const [setorAlvo, setSetorAlvo] = useState(setor || setoresDestino?.[0] || '');
   const [qtdEtapas, setQtdEtapas] = useState(1);
   const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
-  const [vinculo, setVinculo] = useState<VinculoValue | null>(null);
+  const [vinculo, setVinculo] = useState<VinculoValue | null>(vinculoInicial || null);
   const [salvando, setSalvando] = useState(false);
   const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}));
 
@@ -839,8 +892,15 @@ function ModalNova({ currentUser, setor, onClose, onSaved }) {
     setEtapas(prev => prev.map((e, i) => i === idx ? { ...e, [k]: v } : e));
   };
 
+  const setEtapaVinculo = (idx: number, v: VinculoValue | null) => {
+    setEtapas(prev => prev.map((e, i) => i === idx
+      ? { ...e, vinculo_tipo: v?.tipo || null, vinculo_id: v?.id || null, vinculo_descricao: v?.descricao || null }
+      : e));
+  };
+
   const salvar = async () => {
     if (!form.titulo.trim()) { alert('Informe o título!'); return; }
+    if (!setorAlvo) { alert('Selecione o setor de destino!'); return; }
     if (qtdEtapas > 1) {
       for (let i = 0; i < etapas.length; i++) {
         if (!etapas[i].responsavel_nome.trim()) { alert(`Informe o responsável da Etapa ${i+1}!`); return; }
@@ -851,7 +911,7 @@ function ModalNova({ currentUser, setor, onClose, onSaved }) {
     const agora = new Date().toISOString();
     const payload: any = {
       ...form,
-      setor,
+      setor: setorAlvo,
       status: 'Pendente',
       informacoes: [],
       etapas: qtdEtapas > 1 ? etapas.map(e => ({
@@ -883,8 +943,14 @@ function ModalNova({ currentUser, setor, onClose, onSaved }) {
         contextoId:        String(nova.id),
         contextoDescricao: form.titulo || 'Demanda Avulsa',
         campo:             'descricao',
-        abaDestino:        setor.toLowerCase(),
+        abaDestino:        setorAlvo.toLowerCase(),
       });
+    }
+    // Painel "de despacho" (tem setoresDestino) — avisa o setor destino, mesmo
+    // aviso que o sistema antigo ("Enviar Demanda para Setor") já mandava.
+    if (setoresDestino && setoresDestino.length > 1) {
+      const nomeCriador = currentUser?.nome || currentUser?.email || 'Usuário';
+      notificarEvento('demanda_criada_setor', msg.demandaCriada(setorAlvo, vinculo?.tipo === 'op' ? vinculo.descricao : '', form.titulo, nomeCriador), setorAlvo);
     }
     setSalvando(false);
     onSaved();
@@ -901,6 +967,27 @@ function ModalNova({ currentUser, setor, onClose, onSaved }) {
         </div>
 
         <div style={{ overflowY:'auto', flex:1, padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+          {/* Setor de destino — só aparece quando o painel permite despachar
+              pra outros setores (substitui o antigo "Enviar Demanda para Setor") */}
+          {setoresDestino && setoresDestino.length > 1 && (
+            <div>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+                Setor de Destino *
+              </label>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {setoresDestino.map(s => (
+                  <button key={s} onClick={() => setSetorAlvo(s)}
+                    style={{ padding:'6px 12px', border:`1.5px solid ${setorAlvo===s?'#2563eb':'#d1d5db'}`,
+                      background: setorAlvo===s ? '#dbeafe' : '#fff',
+                      color: setorAlvo===s ? '#1d4ed8' : '#374151',
+                      borderRadius:4, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Dados principais */}
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             <div>
@@ -985,6 +1072,16 @@ function ModalNova({ currentUser, setor, onClose, onSaved }) {
                   </label>
                   <input type="date" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
                     style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.prazo?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                </div>
+                <div style={{ marginBottom:8 }}>
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                    Vincular esta etapa a um processo (opcional)
+                  </label>
+                  <VinculoPicker
+                    value={e.vinculo_tipo ? { tipo: e.vinculo_tipo, id: e.vinculo_id, descricao: e.vinculo_descricao } : null}
+                    onSelect={v => setEtapaVinculo(i, v)}
+                    onClear={() => setEtapaVinculo(i, null)}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observações</label>
@@ -1085,14 +1182,34 @@ function DemandaCard({ d, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function DemandaAvulsaPanel({ currentUser, setor }) {
+export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino, abrirComVinculo, onAbrirComVinculoConsumido }: {
+  currentUser: any;
+  setor: string;
+  // Quando presente, o "+ Nova Demanda" ganha um seletor de setor de destino
+  // (substitui o antigo "Enviar Demanda para Setor" que existia em algumas telas).
+  setoresDestino?: string[];
+  // Gatilho externo: outro lugar da tela (ex.: botão "+Demanda" numa linha de
+  // OPL em PCPTab.tsx) pode abrir a Nova Demanda já com um vínculo pronto.
+  abrirComVinculo?: VinculoValue | null;
+  onAbrirComVinculoConsumido?: () => void;
+}) {
   const [demandas, setDemandas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('ativas');
   const [filtroResp, setFiltroResp] = useState<string>('');
   const [filtroStatusSpec, setFiltroStatusSpec] = useState<string>('');
   const [modalNova, setModalNova] = useState(false);
+  const [vinculoParaNova, setVinculoParaNova] = useState<VinculoValue | null>(null);
   const [selected, setSelected] = useState<any | null>(null);
+
+  // Abre "Nova Demanda" já com um vínculo pronto quando disparado de fora.
+  useEffect(() => {
+    if (abrirComVinculo) {
+      setVinculoParaNova(abrirComVinculo);
+      setModalNova(true);
+      onAbrirComVinculoConsumido?.();
+    }
+  }, [abrirComVinculo]);
 
   const fetch = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
@@ -1176,7 +1293,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor }) {
             </span>
           )}
         </span>
-        <button onClick={() => setModalNova(true)}
+        <button onClick={() => { setVinculoParaNova(null); setModalNova(true); }}
           style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:4, padding:'4px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
           + Nova Demanda
         </button>
@@ -1232,7 +1349,9 @@ export default function DemandaAvulsaPanel({ currentUser, setor }) {
       </div>
 
       {modalNova && (
-        <ModalNova currentUser={currentUser} setor={setor} onClose={() => setModalNova(false)} onSaved={fetch} />
+        <NovaDemandaModal currentUser={currentUser} setor={setor} setoresDestino={setoresDestino}
+          vinculoInicial={vinculoParaNova}
+          onClose={() => { setModalNova(false); setVinculoParaNova(null); }} onSaved={fetch} />
       )}
       {selected && (
         <ModalDetalhe

@@ -22,9 +22,9 @@ export default function PCPTab({ currentUser }) {
   const [modalVer, setModalVer] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
   const [busca, setBusca] = useState('');
-  const [modalDemanda, setModalDemanda] = useState(null); // null=fechado, false=avulsa, obj=com opl
-  const [descDemanda, setDescDemanda] = useState('');
-  const [setorDemanda, setSetorDemanda] = useState('Chicotes');
+  // Vínculo pronto pra abrir a Nova Demanda Avulsa já ligada àquela OP — ver
+  // botão "+Demanda" por linha da tabela e o painel montado mais abaixo.
+  const [pendingVinculoOP, setPendingVinculoOP] = useState(null);
   // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
   // linha de lote — mesmo padrao da Engenharia (EngenhariaTab.tsx).
   const [lotesExpandidos, setLotesExpandidos] = useState({});
@@ -161,34 +161,6 @@ export default function PCPTab({ currentUser }) {
     setModalDevolver(null); setObsDevolver(''); fetchAll();
   };
 
-  const criarDemanda = async () => {
-    if (!descDemanda.trim()) { alert('Descreva a demanda!'); return; }
-    const opl = modalDemanda;
-    const payload = {
-      setor_destino: setorDemanda,
-      descricao: descDemanda,
-      status: 'Pendente',
-      criado_por: currentUser?.email,
-      criado_por_nome: currentUser?.nome,
-      logs_demanda: [{ texto: `Demanda criada: ${descDemanda}`, usuario: currentUser?.nome, hora: new Date().toISOString() }],
-    };
-    if (opl && opl.id) {
-      // opl_id removido (UUID incompativel com BIGINT); usar numero_opl como referencia textual
-      payload.numero_opl = String(opl.opl);
-    }
-    const { error } = await supabase.from('demandas_setoriais').insert([payload]);
-    if (error) { alert('Erro: ' + error.message); return; }
-    if (opl && opl.id) {
-      await supabase.from('logs_movimentacao_opl').insert([{
-        opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-        evento: `Demanda enviada para ${setorDemanda}: ${descDemanda}`,
-        status_anterior: opl.status_geral, status_novo: opl.status_geral,
-        usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
-      }]);
-    }
-    setModalDemanda(null); setDescDemanda('');
-    alert(`Demanda enviada para ${setorDemanda}!`);
-  };
 
   const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
   const fmtDtHr = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
@@ -411,25 +383,6 @@ export default function PCPTab({ currentUser }) {
         </div>
       )}
 
-      {/* DEMANDA RAPIDA */}
-      <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#f0fdf4',borderBottom:'2px solid #22c55e'}}>
-          <span style={{color:'#166534'}}>Enviar Demanda para Setor</span>
-          <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalDemanda(false);setDescDemanda('');setSetorDemanda('Chicotes');}}>
-            + Demanda Avulsa
-          </button>
-        </div>
-        <div className="sec-body">
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {SETORES.map(s => (
-              <button key={s} className="acn-btn" style={{background:'#1e293b',minWidth:120,padding:'8px 12px'}}
-                onClick={()=>{ setSetorDemanda(s); setModalDemanda(false); setDescDemanda(''); }}>
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
 
       {/* ENVIO DIRETO ALERT */}
       {opls.filter(isEnvioDireto).length > 0 && (
@@ -466,7 +419,7 @@ export default function PCPTab({ currentUser }) {
                     <td>
                       <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                         <button className="acn-btn" style={{background:'#475569',fontSize:10}}
-                          onClick={()=>{setModalDemanda(o);setDescDemanda('');setSetorDemanda('Chicotes');}}>
+                          onClick={()=>setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') })}>
                           + Demanda
                         </button>
                         {kitOk(o) && (
@@ -552,7 +505,7 @@ export default function PCPTab({ currentUser }) {
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                           <button className="acn-btn" style={{background:'#475569',fontSize:10}}
-                            onClick={()=>{setModalDemanda(o);setDescDemanda('');setSetorDemanda('Chicotes');}}>
+                            onClick={()=>setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') })}>
                             + Demanda
                           </button>
                           {o.status_geral === 'Em Espera PCP' && (
@@ -671,41 +624,11 @@ export default function PCPTab({ currentUser }) {
       )}
 
       <OplMovimentadas setor="PCP" />
-      <DemandaAvulsaPanel currentUser={currentUser} setor="PCP" />
+      <DemandaAvulsaPanel currentUser={currentUser} setor="PCP" setoresDestino={['PCP', ...SETORES]}
+        abrirComVinculo={pendingVinculoOP} onAbrirComVinculoConsumido={() => setPendingVinculoOP(null)} />
       <DemandaFooter setor="PCP" />
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
-
-      {/* MODAL DEMANDA SETOR */}
-      {modalDemanda !== null && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">
-              Enviar Demanda{modalDemanda && modalDemanda.opl ? ` — OPL ${modalDemanda.opl}` : ' (Avulsa)'}
-            </div>
-            <div style={{marginBottom:12}}>
-              <label className="acn-label">Setor de Destino</label>
-              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
-                {SETORES.map(s => (
-                  <button key={s} className="acn-btn"
-                    style={{background: setorDemanda===s?'#1e293b':'#94a3b8',flex:1,minWidth:80,padding:'7px'}}
-                    onClick={()=>setSetorDemanda(s)}>{s}</button>
-                ))}
-              </div>
-            </div>
-            <label className="acn-label">Descricao da Demanda *</label>
-            <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:12}}
-              placeholder={`Descreva o que precisa de ${setorDemanda}...`}
-              value={descDemanda} onChange={e=>setDescDemanda(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'8px'}} onClick={criarDemanda}>
-                ENVIAR PARA {setorDemanda.toUpperCase()}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDemanda(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* MODAL DEVOLVER */}
       {modalDevolver && (

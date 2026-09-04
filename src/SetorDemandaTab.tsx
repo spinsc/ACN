@@ -9,6 +9,7 @@ import { ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { notificarEvento } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -869,6 +870,10 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
           {['Chicotes','Serralheria','Laboratorio'].includes(setor) && (
             <OfiQueueSection setor={setor} cor={cor} currentUser={currentUser} />
           )}
+
+          {/* Recebe demandas endereçadas por PCPTab.tsx/AjustesProjetoTab.tsx
+              (que agora despacham pra cá em vez do antigo demandas_setoriais). */}
+          <DemandaAvulsaPanel currentUser={currentUser} setor={setor} />
 
           <AnaliseWidget
             setor={setor}

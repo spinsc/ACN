@@ -2,46 +2,37 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
-import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
+import { NovaDemandaModal } from './DemandaAvulsaPanel';
 
-
-// Todos os ajustes vivem em demandas_setoriais com descricao prefixada [AJUSTE]
-// Nao existe dependencia de ajustes_trabalhos
+// Ajustes registrados ANTES desta unificação vivem em demandas_setoriais
+// com descricao prefixada [AJUSTE] — a tabela abaixo ("Ajustes em Aberto" /
+// "Histórico") continua lendo/agindo sobre eles exatamente como antes, sem
+// mudança, pra não perder o que já existia. A partir de agora, "+ Nova
+// Demanda" abre o formulário unificado de Demandas Avulsas (com vínculo
+// real a OP/OS/PV/Compra/OFI e um setor de destino escolhido no ato) —
+// os novos registros passam a aparecer na tela do setor que recebeu, não
+// mais nesta lista (mesma filosofia do sistema antigo: quem acompanha o
+// andamento é o setor receptor). Campos do formulário antigo sem
+// equivalente direto (Requerente, Tipo de Solicitação, Centro de Custo)
+// saem — o criador já é registrado (currentUser), igual em todo o resto do
+// sistema unificado; Tipo de Solicitação já não era gravado há tempos
+// (sempre null no insert antigo).
+const SETORES_DESTINO = ['Comercial','Serralheria','Chicotes','Laboratorio','Compras','Almoxarifado','Engenharia','Producao','PCP'];
 
 export default function AjustesProjetoTab({ currentUser }) {
   const [ajustes, setAjustes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    opl_referencia: '', requerente: '', descricao: '',
-    prioridade: 'Normal', data_limite: '', setor: 'Serralheria',
-    tipo_solicitacao: 'compra', centro_custo: '',
-  });
+  const [modalNova, setModalNova] = useState(false);
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
-  const [oplesLista, setOplesLista] = useState([]);
-  const [centrosCusto, setCentrosCusto] = useState([]);
   const [tick, setTick] = useState(0);
 
-  useEffect(() => { fetchAll(); fetchOples(); fetchCentrosCusto(); }, []);
+  useEffect(() => { fetchAll(); }, []);
   useEffect(() => {
     const t = setInterval(() => setTick(p => p + 1), 1000);
     return () => clearInterval(t);
   }, []);
-
-  const fetchOples = async () => {
-    const { data } = await supabase
-      .from('oples').select('id, opl, cliente_nome, status_geral')
-      .not('status_geral', 'in', '("Faturado","Cancelado","Entregue")')
-      .order('data_entrada', { ascending: false }).limit(200);
-    setOplesLista(data || []);
-  };
-
-  const fetchCentrosCusto = async () => {
-    const { data } = await supabase.from('centros_custo').select('*').eq('ativo', true).order('codigo');
-    setCentrosCusto(data || []);
-  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -53,71 +44,6 @@ export default function AjustesProjetoTab({ currentUser }) {
     if (error) console.error('AjustesProjetoTab fetchAll:', error);
     setAjustes(data || []);
     setLoading(false);
-  };
-
-  const salvar = async () => {
-    if (!form.descricao.trim()) { alert('Preencha a descricao!'); return; }
-    const agora = new Date().toISOString();
-    const requerente = form.requerente || currentUser?.nome || currentUser?.email || 'Usuario';
-
-    // Compras foi unificado na aba Compras (pcp_pedidos_compra) — não cria mais
-    // uma demanda paralela em demandas_setoriais para esse setor.
-    if (form.setor === 'Compras') {
-      const numero = `PC-AJ-${Date.now()}`;
-      const { error } = await supabase.from('pcp_pedidos_compra').insert([{
-        numero_pedido: numero,
-        opl: form.opl_referencia || null,
-        descricao_material: form.descricao.trim(),
-        quantidade: 1,
-        status_compra: 'Pendente',
-        centro_custo: form.centro_custo || null,
-        criado_por: currentUser?.email,
-        criado_por_nome: requerente,
-        criado_por_setor: 'Demandas Gerais',
-        data_criacao: agora,
-      }]);
-      if (error) {
-        alert('Erro ao registrar pedido de compra: ' + error.message);
-        console.error('salvar pedido compra (ajuste) error:', error);
-        return;
-      }
-      const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
-      notificarEvento('demanda_criada_compras', mensagemNotif, form.setor);
-      setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra', centro_custo: '' });
-      setShowForm(false);
-      fetchAll();
-      return;
-    }
-
-    const novoRow = {
-      setor_destino: form.setor,
-      descricao: `[AJUSTE] ${form.descricao.trim()}`,
-      numero_opl: form.opl_referencia || null,
-      status: 'Pendente',
-      criado_por: currentUser?.email,
-      criado_por_nome: requerente,
-      tipo_solicitacao: null,
-      data_abertura: agora,
-      logs_demanda: [{
-        texto: `Ajuste de Projeto registrado. Requerente: ${requerente}. Prioridade: ${form.prioridade}.${form.data_limite ? ' Data limite: ' + new Date(form.data_limite).toLocaleDateString('pt-BR') : ''}`,
-        usuario: currentUser?.nome || currentUser?.email,
-        hora: agora,
-        origem: 'ajuste',
-      }],
-    };
-    const { data: novo, error } = await supabase.from('demandas_setoriais').insert([novoRow]).select('id').single();
-    if (error) {
-      alert('Erro ao registrar ajuste: ' + error.message);
-      console.error('salvar ajuste error:', error);
-      return;
-    }
-    if (novo?.id) logChange({ module: 'demandas_gerais', entityType: 'demandas_setoriais', entityId: novo.id, changeType: 'CREATE', newRow: novoRow, user: currentUser });
-    // Notifica o setor destino
-    const mensagemNotif = msg.demandaCriada(form.setor, form.opl_referencia, form.descricao.trim(), requerente);
-    notificarEvento('demanda_criada_setor', mensagemNotif, form.setor);
-    setForm({ opl_referencia: '', requerente: '', descricao: '', prioridade: 'Normal', data_limite: '', setor: 'Serralheria', tipo_solicitacao: 'compra', centro_custo: '' });
-    setShowForm(false);
-    fetchAll();
   };
 
   const addObs = async () => {
@@ -167,112 +93,24 @@ export default function AjustesProjetoTab({ currentUser }) {
       <div className="sec-card">
         <div className="sec-hdr" style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b' }}>
           <span style={{ color: '#92400e' }}>Demandas Gerais</span>
-          {!showForm && (
-            <button className="acn-btn" style={{ background: '#1e293b' }} onClick={() => setShowForm(true)}>
-              + Nova Demanda
-            </button>
-          )}
+          <button className="acn-btn" style={{ background: '#1e293b' }} onClick={() => setModalNova(true)}>
+            + Nova Demanda
+          </button>
         </div>
-        {showForm && (
-          <div className="sec-body" style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="acn-label">OPL / Ref. (opcional)</label>
-                <input className="acn-input" style={{ width: '100%' }} list="opl-datalist"
-                  placeholder="Busque ou digite uma OP..."
-                  value={form.opl_referencia}
-                  onChange={e => setForm({ ...form, opl_referencia: e.target.value })} />
-                <datalist id="opl-datalist">
-                  {oplesLista.map(o => (
-                    <option key={o.id} value={o.opl}>
-                      {o.opl} — {o.cliente_nome || ''} ({o.status_geral || ''})
-                    </option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Requerente</label>
-                <input className="acn-input" style={{ width: '100%' }}
-                  value={form.requerente || currentUser?.nome || ''}
-                  onChange={e => setForm({ ...form, requerente: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Setor Responsavel</label>
-                <select className="acn-input" style={{ width: '100%' }}
-                  value={form.setor}
-                  onChange={e => setForm({ ...form, setor: e.target.value })}>
-                  <option>Comercial</option>
-                  <option>Serralheria</option>
-                  <option>Chicotes</option>
-                  <option>Laboratorio</option>
-                  <option>Compras</option>
-                  <option>Almoxarifado</option>
-                  <option>Engenharia</option>
-                  <option>Producao</option>
-                  <option>PCP</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Prioridade</label>
-                <select className="acn-input" style={{ width: '100%' }}
-                  value={form.prioridade}
-                  onChange={e => setForm({ ...form, prioridade: e.target.value })}>
-                  <option>Normal</option><option>Baixa</option><option>Media</option><option>Alta</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Data Limite</label>
-                <input type="date" className="acn-input" style={{ width: '100%' }}
-                  value={form.data_limite}
-                  onChange={e => setForm({ ...form, data_limite: e.target.value })} />
-              </div>
-              {form.setor === 'Compras' && (
-                <>
-                  <div className="form-group">
-                    <label className="acn-label">Centro de Custo (opcional)</label>
-                    <select className="acn-input" style={{ width: '100%' }}
-                      value={form.centro_custo}
-                      onChange={e => setForm({ ...form, centro_custo: e.target.value })}>
-                      <option value="">— Não informar —</option>
-                      {centrosCusto.map(c => (
-                        <option key={c.id} value={`${c.codigo} — ${c.nome}`}>{c.codigo} — {c.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <div style={{ fontSize: 9, color: '#0f766e', background:'#f0fdfa', border:'1px solid #99f6e4',
-                      borderRadius: 5, padding: '6px 10px' }}>
-                      🛒 Este pedido será criado direto na aba <strong>Compras</strong>, onde o comprador monta a
-                      mesa de cotações com os fornecedores.
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="form-row">
-              <div style={{ flex: 1 }}>
-                <label className="acn-label">Descricao do Ajuste *</label>
-                <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
-                  placeholder="Descreva detalhadamente o ajuste necessario..."
-                  value={form.descricao}
-                  onChange={e => setForm({ ...form, descricao: e.target.value })} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-              <button className="acn-btn" style={{ background: '#22c55e', flex: 1 }} onClick={salvar}>
-                + Registrar Ajuste
-              </button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setShowForm(false)}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="sec-body" style={{ fontSize: 10, color: '#92400e' }}>
+          Vincule a uma OP/OS/PV/Compra/OFI se for o caso, escolha o setor de destino e a demanda já cai
+          direto na tela daquele setor — mesmo formulário rico usado em Engenharia/Almoxarifado/PCP/Compras.
+        </div>
       </div>
 
-      {/* AJUSTES ABERTOS */}
+      {modalNova && (
+        <NovaDemandaModal currentUser={currentUser} setoresDestino={SETORES_DESTINO}
+          onClose={() => setModalNova(false)} onSaved={() => setModalNova(false)} />
+      )}
+
+      {/* AJUSTES ABERTOS — histórico do sistema antigo, registrado antes desta unificação */}
       <div className="sec-card">
-        <div className="sec-hdr"><span>Ajustes em Aberto ({abertos.length})</span></div>
+        <div className="sec-hdr"><span>Ajustes em Aberto (histórico) ({abertos.length})</span></div>
         <div className="sec-body" style={{ overflowX: 'auto' }}>
           {loading ? <div className="acn-empty">Carregando...</div> : abertos.length === 0 ? (
             <div className="acn-empty">Nenhum ajuste em aberto.</div>
