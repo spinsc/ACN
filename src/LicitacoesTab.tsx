@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
+import { ModalSolicitarAnalise, AnaliseStatusPanel } from './AnaliseWidget';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import AgendaWidget from './AgendaWidget';
 import { UnreadBadge } from './useUnread';
@@ -2095,10 +2095,10 @@ function ModalNova({ currentUser, onClose, onSaved }) {
 // CARD DE LICITAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
 function LicitCard({ l, onClick, unread = false, markup = undefined }) {
-  const marcadores: string[] = l.marcadores || [];
   const dias = diasRestantes(l.data_disputa);
   const urgente = isDiaDisputa(l.data_disputa);
   const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Andamento'].includes(l.status);
+  const orgaoEhLink = !!l.orgao && /^https?:\/\//i.test(l.orgao.trim());
 
   return (
     <div onClick={onClick} style={{ background: unread ? '#fefce8' : '#fff',
@@ -2109,56 +2109,43 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
       transition:'box-shadow .15s' }}
       onMouseEnter={e=>(e.currentTarget.style.boxShadow='0 3px 8px #0002')}
       onMouseLeave={e=>(e.currentTarget.style.boxShadow=unread?'0 0 0 1px #fcd34d40':'0 1px 3px #0001')}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginBottom:3 }}>
-            {unread && <UnreadBadge show />}
-            <span style={{ background:STATUS_COR[l.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{l.status}</span>
-            {l.forma_disputa && (
-              <span style={{ background:'#f1f5f9', color:'#475569', border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>⚖️ {l.forma_disputa}</span>
-            )}
-            <span style={{ background:'#f1f5f9', color:'#475569', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:600 }}>{l.classificacao}</span>
-            {l.faturamento_empresa && l.faturamento_empresa !== 'ACN' && (
-              <span style={{ background:'#ede9fe', color:'#6d28d9', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:600 }}>{l.faturamento_empresa}</span>
-            )}
-            {marcadores.map(m => (
-              <span key={m} style={{ background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:3, padding:'1px 5px', fontSize:8, fontWeight:700 }}>{m}</span>
-            ))}
-          </div>
-          <div style={{ fontSize:12, fontWeight:700, color:'#1f2937', marginBottom:2 }}>{l.numero} — {l.nome_projeto}</div>
-          <div style={{ fontSize:10, color:'#6b7280' }}>{l.orgao}</div>
-          {(l.tipo_objeto || l.objeto_principal) && <div style={{ fontSize:10, color:'#9ca3af', marginTop:1, wordBreak:'break-word' }}>{l.tipo_objeto || l.objeto_principal}</div>}
-        </div>
-      </div>
-      <div style={{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
+        {unread && <UnreadBadge show />}
+        <span style={{ background:STATUS_COR[l.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{l.status}</span>
+        {l.data_limite_proposta && (
+          <span style={{ fontSize:9, color:'#6b7280', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 6px' }}>
+            📋 {fmtDT(l.data_limite_proposta)}
+          </span>
+        )}
         {l.data_disputa && (
           <span style={{ fontSize:9, fontWeight:700,
             color: vencidoDisputa?'#dc2626': urgente?'#d97706':'#374151',
             background: vencidoDisputa?'#fef2f2': urgente?'#fffbeb':'#f8fafc',
             border:`1px solid ${vencidoDisputa?'#fca5a5':urgente?'#fcd34d':'#e2e8f0'}`,
             borderRadius:3, padding:'1px 6px' }}>
-            ⚡ Disputa: {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` (${dias}d)`:''}
+            ⚡ {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` (${dias}d)`:''}
             {vencidoDisputa?' ⚠️':''}
           </span>
         )}
-        {l.data_limite_proposta && (
-          <span style={{ fontSize:9, color:'#6b7280', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 6px' }}>
-            📋 Proposta: {fmtDT(l.data_limite_proposta)}
-          </span>
-        )}
       </div>
-      <div style={{ marginTop:4, display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
-        <span style={{ fontSize:9, color:'#9ca3af' }}>
-          {l.operador || l.analista_nome ? `👤 ${l.operador || l.analista_nome}` : ''}
-        </span>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <MarkupBadge pct={markup} />
-          <AnaliseStatusBadge origemId={l.id} />
-          <button onClick={e => { e.stopPropagation(); onClick(); }}
-            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 8px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
-            ⬆ Atualizar
-          </button>
-        </div>
+      <div style={{ marginTop:6 }}>
+        {l.orgao ? (
+          orgaoEhLink ? (
+            <a href={l.orgao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+              style={{ fontSize:10, color:'#2563eb', fontWeight:600, wordBreak:'break-all' }}>
+              🔗 {l.orgao}
+            </a>
+          ) : (
+            <span style={{ fontSize:10, color:'#6b7280' }}>{l.orgao}</span>
+          )
+        ) : null}
+      </div>
+      <div style={{ marginTop:8, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
+        <MarkupBadge pct={markup} />
+        <button onClick={e => { e.stopPropagation(); onClick(); }}
+          style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 8px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
+          ⬆ Atualizar
+        </button>
       </div>
     </div>
   );
@@ -2387,7 +2374,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
   const [markupPorLicit, setMarkupPorLicit] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState<string>('todas');
+  const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
   const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
