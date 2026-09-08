@@ -2114,7 +2114,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
         <span style={{ background:STATUS_COR[l.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{l.status}</span>
         {l.data_limite_proposta && (
           <span style={{ fontSize:9, color:'#6b7280', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 6px' }}>
-            📋 {fmtDT(l.data_limite_proposta)}
+            📋 Proposta: {fmtDT(l.data_limite_proposta)}
           </span>
         )}
         {l.data_disputa && (
@@ -2123,7 +2123,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
             background: vencidoDisputa?'#fef2f2': urgente?'#fffbeb':'#f8fafc',
             border:`1px solid ${vencidoDisputa?'#fca5a5':urgente?'#fcd34d':'#e2e8f0'}`,
             borderRadius:3, padding:'1px 6px' }}>
-            ⚡ {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` (${dias}d)`:''}
+            ⚡ Disputa: {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` (${dias}d)`:''}
             {vencidoDisputa?' ⚠️':''}
           </span>
         )}
