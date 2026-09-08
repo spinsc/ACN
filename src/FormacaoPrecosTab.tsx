@@ -784,195 +784,199 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
   // Vendedor não vê custo/impostos/markup — não há nada pra expandir.
   const temDetalhe = !isVendedor;
 
-  // Rótulo de seção reutilizável nas 3 seções do corpo expandido
-  const secao = (label) => (
-    <div style={{ fontSize:9, fontWeight:800, color:'#0f766e', marginBottom:6, marginTop:12, textTransform:'uppercase', letterSpacing:.4 }}>
-      {label}
-    </div>
-  );
-  const campoGrid = { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))', gap:10 };
-  const valor = (label, cor, texto) => (
-    <div>
-      <div style={{ fontSize:8, color:'#64748b' }}>{label}</div>
-      <div style={{ fontSize:11, color:cor, fontWeight:600 }}>{texto}</div>
-    </div>
-  );
-
   return (
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:8, overflow:'hidden' }}>
-      {/* ── Cabeçalho do item — sempre visível ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', flexWrap:'wrap' }}>
-        <div style={{ flex:'2 1 220px', minWidth:180, position:'relative' }}>
+    <>
+      <tr style={{ borderBottom: aberto ? 'none' : '1px solid #e8ecf0' }}>
+        {/* Produto */}
+        <td style={{ padding:'6px 8px', minWidth:180, position:'relative' }}>
           <ProdutoAutocomplete
             value={item.produto}
             params={params}
             onFill={dados => onFill(dados)}
             onExpand={linhas => onExpand(linhas)}
           />
-        </div>
-        <div style={{ flex:'1 1 100px', minWidth:90 }}>
+        </td>
+        {/* Marca */}
+        <td style={{ padding:'6px 6px', minWidth:90 }}>
           <input className="acn-input" style={{ width:'100%', ...inp11 }}
             placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
-        </div>
-        <div style={{ width:56 }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Qt</div>
-          <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+        </td>
+        {/* Qt */}
+        <td style={{ padding:'6px 6px', width:54 }}>
+          <input type="number" className="acn-input" style={{ width:48, ...inp11r }}
             min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
-        </div>
-        <div style={{ minWidth:90, textAlign:'right' }}>
-          <div style={{ fontSize:8, color:'#94a3b8' }}>Valor Unit.</div>
-          <div style={{ fontSize:12, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</div>
-        </div>
-        <div style={{ minWidth:100, textAlign:'right' }}>
-          <div style={{ fontSize:8, color:'#94a3b8' }}>Valor Total</div>
-          <div style={{ fontSize:13, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</div>
-        </div>
-        {temDetalhe && (
-          <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
-            style={{ background: aberto ? '#f0fdfa' : 'none', border:'1px solid ' + (aberto ? '#5eead4' : '#e2e8f0'),
-              color:'#0f766e', fontSize:9, fontWeight:700, cursor:'pointer', padding:'4px 8px', borderRadius:4 }}>
-            {aberto ? '▾ Menos' : '▸ Custo/impostos/markup'}
+        </td>
+        {/* Valor Unit (calculado) */}
+        <td style={{ padding:'6px 8px', width:100, textAlign:'right', fontSize:11, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
+        {/* Valor Total (calculado) */}
+        <td style={{ padding:'6px 8px', width:110, textAlign:'right', fontSize:12, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</td>
+        {/* Toggle detalhe */}
+        <td style={{ padding:'6px 4px', width:28, textAlign:'center' }}>
+          {temDetalhe && (
+            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
+              style={{ background:'none', border:'none', color:'#64748b', fontSize:12, cursor:'pointer', padding:2 }}>
+              {aberto ? '▾' : '▸'}
+            </button>
+          )}
+        </td>
+        {/* Remover */}
+        <td style={{ padding:'6px 6px', width:32, textAlign:'center' }}>
+          <button onClick={onRemove}
+            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 7px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
+            ✕
           </button>
-        )}
-        <button onClick={onRemove}
-          style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
-          ✕
-        </button>
-      </div>
-
-      {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
+        </td>
+      </tr>
       {aberto && temDetalhe && (
-        <div style={{ borderTop:'1px solid #e8ecf0', background:'#f8fafc', padding:'4px 12px 12px' }}>
-
-          {secao('💰 Precificação')}
-          <div style={campoGrid}>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Moeda</div>
-              <select className="acn-input" style={{ width:'100%', ...inp11 }}
-                value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
-                {MOEDAS.map(m=><option key={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Custo Unit.</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
-                min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>IPI%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
-                min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ST%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
-                min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Tipo Cálculo</div>
-              <div style={{ display:'flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
-                {(['CUSTO','TABELA'] as const).map(t => (
-                  <button key={t} type="button" onClick={() => onSet('tipo_calculo', t)}
-                    style={{ flex:1, padding:'5px 0', fontSize:9, fontWeight:700, border:'none', cursor:'pointer',
-                      background: (item.tipo_calculo||'CUSTO')===t ? '#0891b2' : '#fff',
-                      color:      (item.tipo_calculo||'CUSTO')===t ? '#fff'    : '#64748b' }}>
-                    {t}
-                  </button>
-                ))}
+        <tr style={{ borderBottom:'1px solid #e8ecf0', background:'#f8fafc' }}>
+          <td colSpan={7} style={{ padding:'8px 12px' }}>
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'flex-end' }}>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Moeda</div>
+                <select className="acn-input" style={{ width:78, ...inp11 }}
+                  value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
+                  {MOEDAS.map(m=><option key={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Custo Unit.</div>
+                <input type="number" className="acn-input" style={{ width:88, ...inp11r }}
+                  min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>IPI%</div>
+                <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                  min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ST%</div>
+                <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                  min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Tipo Cálculo</div>
+                <div style={{ display:'flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
+                  {(['CUSTO','TABELA'] as const).map(t => (
+                    <button key={t} type="button" onClick={() => onSet('tipo_calculo', t)}
+                      style={{ padding:'5px 7px', fontSize:9, fontWeight:700, border:'none', cursor:'pointer',
+                        background: (item.tipo_calculo||'CUSTO')===t ? '#0891b2' : '#fff',
+                        color:      (item.tipo_calculo||'CUSTO')===t ? '#fff'    : '#64748b' }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>{modoTabela ? 'Desconto%' : 'Markup%'}</div>
+                <input type="number" className="acn-input"
+                  style={{ width:60, ...inp11r,
+                    background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
+                    color: usarMarkupGlobal ? '#7c3aed' : undefined }}
+                  step="0.1" value={item.markup_pct}
+                  onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+                  readOnly={!!usarMarkupGlobal} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>DIFAL%</div>
+                <input type="number" className="acn-input"
+                  style={{ width:56, ...globStyle() }}
+                  step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                  onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+                  readOnly={usarParamsGlobais} />
+              </div>
+              <div>
+                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Imposto%</div>
+                <input type="number" className="acn-input"
+                  style={{ width:60, ...globStyle() }}
+                  step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
+                  onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
+                  readOnly={usarParamsGlobais} />
+              </div>
+              <div style={{ borderLeft:'1px solid #e2e8f0', paddingLeft:14, display:'flex', gap:14, flexWrap:'wrap' }}>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Custo c/Imp. Unit</div>
+                  <div style={{ fontSize:11, color:'#0f766e', fontWeight:600 }}>{fmtR(custoUnitBrl)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Custo Total</div>
+                  <div style={{ fontSize:11, color:'#0f766e' }}>{fmtR(custoTotal)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>DIFAL Total</div>
+                  <div style={{ fontSize:11, color:'#b45309' }}>{fmtR(totalDifal)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Imposto Total</div>
+                  <div style={{ fontSize:11, color:'#9d174d' }}>{fmtR(totalImposto)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>Lucro%</div>
+                  <div style={{ fontSize:12, fontWeight:800, color: lucroColor }}>{fmtPct(lucroPct)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b' }}>
+                    {modoTabela ? `Desc. máx. ${DESCONTO_MAXIMO_TABELA_PCT}%` : `Markup mín. ${MARKUP_MINIMO_CUSTO_PCT}%`}
+                  </div>
+                  <div style={{ fontSize:11, fontWeight:800, color: validacao === 'ERRO' ? '#dc2626' : '#16a34a' }}>
+                    {validacao === 'ERRO' ? '⚠️ ERRO' : '✅ OK'}
+                  </div>
+                </div>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>{modoTabela ? 'Desconto%' : 'Markup%'}</div>
-              <input type="number" className="acn-input"
-                style={{ width:'100%', ...inp11r,
-                  background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
-                  color: usarMarkupGlobal ? '#7c3aed' : undefined }}
-                step="0.1" value={item.markup_pct}
-                onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-                readOnly={!!usarMarkupGlobal} />
-            </div>
-          </div>
 
-          {secao('🧾 Impostos & Validação')}
-          <div style={campoGrid}>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>DIFAL%</div>
-              <input type="number" className="acn-input"
-                style={{ width:'100%', ...globStyle() }}
-                step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
-                onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
-                readOnly={usarParamsGlobais} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Imposto%</div>
-              <input type="number" className="acn-input"
-                style={{ width:'100%', ...globStyle() }}
-                step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
-                onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
-                readOnly={usarParamsGlobais} />
-            </div>
-            {valor('Custo c/Imp. Unit', '#0f766e', fmtR(custoUnitBrl))}
-            {valor('Custo Total', '#0f766e', fmtR(custoTotal))}
-            {valor('DIFAL Total', '#b45309', fmtR(totalDifal))}
-            {valor('Imposto Total', '#9d174d', fmtR(totalImposto))}
-            {valor('Lucro%', lucroColor, fmtPct(lucroPct))}
-            <div>
-              <div style={{ fontSize:8, color:'#64748b' }}>
-                {modoTabela ? `Desc. máx. ${DESCONTO_MAXIMO_TABELA_PCT}%` : `Markup mín. ${MARKUP_MINIMO_CUSTO_PCT}%`}
+            {/* ── Informações do Produto (só referência, não entram no cálculo) ── */}
+            <div style={{ marginTop:10, paddingTop:10, borderTop:'1px dashed #e2e8f0' }}>
+              <div style={{ fontSize:8, fontWeight:800, color:'#0f766e', marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>
+                ℹ️ Informações do Produto
               </div>
-              <div style={{ fontSize:11, fontWeight:800, color: validacao === 'ERRO' ? '#dc2626' : '#16a34a' }}>
-                {validacao === 'ERRO' ? '⚠️ ERRO' : '✅ OK'}
+              <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'flex-end' }}>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Prazo de Entrega</div>
+                  <input className="acn-input" style={{ width:100, ...inp11 }}
+                    value={item.prazo_entrega||''} onChange={e=>onSet('prazo_entrega', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Garantia</div>
+                  <input className="acn-input" style={{ width:90, ...inp11 }}
+                    value={item.garantia||''} onChange={e=>onSet('garantia', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Regime do Fornecedor</div>
+                  <select className="acn-input" style={{ width:150, ...inp11 }}
+                    value={item.fornecedor_regime||''} onChange={e=>onSet('fornecedor_regime', e.target.value)}>
+                    <option value="">— Selecione —</option>
+                    {['Simples','Lucro real','Lucro presumido','Regime especial'].map(o=><option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>NCM</div>
+                  <input className="acn-input" style={{ width:90, ...inp11 }}
+                    value={item.ncm||''} onChange={e=>onSet('ncm', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Origem</div>
+                  <select className="acn-input" style={{ width:110, ...inp11 }}
+                    value={item.origem_produto||''} onChange={e=>onSet('origem_produto', e.target.value)}>
+                    <option value="">— Selecione —</option>
+                    {['Nacional','Importado'].map(o=><option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ICMS%</div>
+                  <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                    step="0.1" value={item.icms_pct||0} onChange={e=>onSet('icms_pct', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ISS%</div>
+                  <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
+                    step="0.1" value={item.iss_pct||0} onChange={e=>onSet('iss_pct', e.target.value)} />
+                </div>
               </div>
             </div>
-          </div>
-
-          {secao('ℹ️ Informações do Produto (só referência, não entram no cálculo)')}
-          <div style={campoGrid}>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Prazo de Entrega</div>
-              <input className="acn-input" style={{ width:'100%', ...inp11 }}
-                value={item.prazo_entrega||''} onChange={e=>onSet('prazo_entrega', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Garantia</div>
-              <input className="acn-input" style={{ width:'100%', ...inp11 }}
-                value={item.garantia||''} onChange={e=>onSet('garantia', e.target.value)} />
-            </div>
-            <div style={{ gridColumn:'span 2' }}>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Regime do Fornecedor</div>
-              <select className="acn-input" style={{ width:'100%', ...inp11 }}
-                value={item.fornecedor_regime||''} onChange={e=>onSet('fornecedor_regime', e.target.value)}>
-                <option value="">— Selecione —</option>
-                {['Simples','Lucro real','Lucro presumido','Regime especial'].map(o=><option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>NCM</div>
-              <input className="acn-input" style={{ width:'100%', ...inp11 }}
-                value={item.ncm||''} onChange={e=>onSet('ncm', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Origem</div>
-              <select className="acn-input" style={{ width:'100%', ...inp11 }}
-                value={item.origem_produto||''} onChange={e=>onSet('origem_produto', e.target.value)}>
-                <option value="">— Selecione —</option>
-                {['Nacional','Importado'].map(o=><option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ICMS%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
-                step="0.1" value={item.icms_pct||0} onChange={e=>onSet('icms_pct', e.target.value)} />
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ISS%</div>
-              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
-                step="0.1" value={item.iss_pct||0} onChange={e=>onSet('iss_pct', e.target.value)} />
-            </div>
-          </div>
-        </div>
+          </td>
+        </tr>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1704,6 +1708,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo: vinculoProp, e
     setCarregandoHistorico(false);
   };
 
+  const thStyle = {
+    padding: '7px 8px', background: '#1e293b', color: '#fff',
+    fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center',
+    position: 'sticky' as const, top: 0, zIndex: 2,
+  };
   const lucroGeralColor = lucroGeral >= 10 ? '#16a34a' : lucroGeral >= 5 ? '#d97706' : '#dc2626';
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
@@ -1995,34 +2004,51 @@ export default function FormacaoPrecosTab({ currentUser, vinculo: vinculoProp, e
             </button>
           </div>
 
-          {/* ── LISTA DE ITENS (do Item do edital ativo) ── */}
+          {/* ── TABELA DE ITENS (do Item do edital ativo) ── */}
           <div style={{ marginBottom:12 }}>
-            {/* Container com scroll — cada item é um cartão vertical (ver ItemRow),
-                custo/impostos/markup ficam num painel expansível dentro do cartão */}
+            {/* Container — sem overflow-x, colunas essenciais só; custo/impostos/markup
+                ficam num painel expansível por linha (ver ItemRow) */}
             <div style={{
-              background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
-              overflowY:'auto', height: tableHeight, padding:8,
+              background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
+              overflowY:'auto', height: tableHeight,
             }}>
-              {itensDoGrupo.length === 0 && (
-                <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
-                  Nenhum item neste Item do edital. Clique em <strong>+ Adicionar Item</strong>.
-                </div>
-              )}
-              {itensDoGrupo.map((item, idx) => (
-                <ItemRow
-                  key={item._id}
-                  item={paramEfetivo(item)}
-                  result={resultsDoGrupo[idx]}
-                  onSet={(k, v) => setItem(item._id, k, v)}
-                  onFill={(dados) => fillItem(item._id, dados)}
-                  onExpand={(linhas) => expandItem(item._id, linhas)}
-                  onRemove={() => remItem(item._id)}
-                  usarParamsGlobais={usarGlobais}
-                  usarMarkupGlobal={usarMarkupGlobal}
-                  params={params}
-                  isVendedor={isVendedor}
-                />
-              ))}
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{...thStyle, textAlign:'left'}}>Produto / Descrição</th>
+                  <th style={{...thStyle, fontSize:10}}>Marca</th>
+                  <th style={{...thStyle, fontSize:10}}>Qt</th>
+                  <th style={{...thStyle, fontSize:10, background:'#1e40af'}}>Valor Unit.</th>
+                  <th style={{...thStyle, fontSize:10, background:'#1e40af'}}>Valor Total</th>
+                  <th style={{...thStyle, fontSize:9}} />
+                  <th style={{...thStyle, fontSize:10}}>✕</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensDoGrupo.length === 0 && (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+                      Nenhum item neste Item do edital. Clique em <strong>+ Adicionar Item</strong>.
+                    </td>
+                  </tr>
+                )}
+                {itensDoGrupo.map((item, idx) => (
+                  <ItemRow
+                    key={item._id}
+                    item={paramEfetivo(item)}
+                    result={resultsDoGrupo[idx]}
+                    onSet={(k, v) => setItem(item._id, k, v)}
+                    onFill={(dados) => fillItem(item._id, dados)}
+                    onExpand={(linhas) => expandItem(item._id, linhas)}
+                    onRemove={() => remItem(item._id)}
+                    usarParamsGlobais={usarGlobais}
+                    usarMarkupGlobal={usarMarkupGlobal}
+                    params={params}
+                    isVendedor={isVendedor}
+                  />
+                ))}
+              </tbody>
+            </table>
             </div>{/* fim scroll */}
 
             {/* ── Alça de resize ── */}
