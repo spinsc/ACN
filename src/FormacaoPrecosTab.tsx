@@ -799,7 +799,11 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
   );
 
   return (
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:8, overflow:'hidden' }}>
+    // Sem overflow:hidden aqui de propósito — o dropdown de busca de produto
+    // (ProdutoAutocomplete, position:absolute) precisa poder "vazar" pra fora
+    // do cartão pra aparecer inteiro; um ancestral com overflow:hidden cortava
+    // a lista de sugestões numa faixa minúscula, impossível de usar.
+    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:8 }}>
       {/* ── Cabeçalho do item — sempre visível ── */}
       <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', flexWrap:'wrap' }}>
         <div style={{ flex:'2 1 200px', minWidth:160, position:'relative' }}>
@@ -846,7 +850,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
 
       {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
       {aberto && temDetalhe && (
-        <div style={{ borderTop:'1px solid #e8ecf0', background:'#f8fafc', padding:'4px 12px 12px' }}>
+        <div style={{ borderTop:'1px solid #e8ecf0', background:'#f8fafc', padding:'4px 12px 12px', borderRadius:'0 0 7px 7px' }}>
 
           {secao('💰 Precificação')}
           <div style={campoGrid}>
