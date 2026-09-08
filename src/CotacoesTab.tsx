@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
+import FormacaoPrecosTab from './FormacaoPrecosTab';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -1103,235 +1104,6 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
   );
 }
 
-// ─── Modal: Nova Cotação a partir do Catálogo de Produtos ────────────────────
-function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
-  const [nomeCliente,  setNomeCliente]  = useState('');
-  const [opNumero,     setOpNumero]     = useState('');
-  const [busca,        setBusca]        = useState('');
-  const [resultados,   setResultados]   = useState([]);
-  const [selecionados, setSelecionados] = useState([]); // {produto, qt}
-  const [salvando,     setSalvando]     = useState(false);
-  const busRef = useRef(null);
-
-  useEffect(() => {
-    if (!busca.trim()) { setResultados([]); return; }
-    clearTimeout(busRef.current);
-    busRef.current = setTimeout(async () => {
-      const { data } = await supabase.from('cadastro_produtos')
-        .select('id,codigo,nome,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,fotos,catalogo_url,garantia_meses')
-        .eq('ativo', true)
-        .ilike('nome', `%${busca.trim()}%`)
-        .limit(10);
-      setResultados(data || []);
-    }, 250);
-    return () => clearTimeout(busRef.current);
-  }, [busca]);
-
-  const addProduto = (prod) => {
-    if (selecionados.find(s => s.produto.id === prod.id)) return;
-    setSelecionados(prev => [...prev, { produto: prod, qt: 1 }]);
-    setBusca('');
-    setResultados([]);
-  };
-
-  const removeItem = (id) => setSelecionados(prev => prev.filter(s => s.produto.id !== id));
-  const setQt = (id, qt) =>
-    setSelecionados(prev => prev.map(s => s.produto.id === id ? { ...s, qt: Math.max(1, Number(qt)||1) } : s));
-
-  const salvar = async () => {
-    if (!nomeCliente.trim() || selecionados.length === 0) return;
-    setSalvando(true);
-
-    // Para cada produto, busca custo do BOM
-    const itensComCusto = await Promise.all(selecionados.map(async ({ produto, qt }) => {
-      const { data: bom } = await supabase
-        .from('cadastro_produtos_itens')
-        .select('quantidade, cadastro_itens(custo_unit, ipi_pct, st_pct)')
-        .eq('produto_id', produto.id);
-      const custoUnit = (bom || []).reduce((acc, l) => {
-        const item = l.cadastro_itens || {};
-        const cu = Number(item.custo_unit) || 0;
-        const cu_c = cu * (1 + (Number(item.ipi_pct)||0)/100) * (1 + (Number(item.st_pct)||0)/100);
-        return acc + cu_c * (Number(l.quantidade)||1);
-      }, 0);
-      return {
-        produto:        produto.nome,
-        produto_id:     produto.id,
-        codigo:         produto.codigo || '',
-        qt,
-        unidade:        produto.unidade || 'UN',
-        custo_unit:     custoUnit,
-        ipi_pct:        0,
-        st_pct:         0,
-        markup_pct:     Number(produto.markup_pct) || 30,
-        difal_pct:      Number(produto.difal_pct) || 16,
-        imposto_pct:    Number(produto.imposto_pct) || 16,
-        custo_fixo_pct: Number(produto.custo_fixo_pct) || 3,
-        moeda:          'REAL',
-        fotos:          produto.fotos || [],
-        catalogo_url:   produto.catalogo_url || null,
-        garantia_meses: produto.garantia_meses || 12,
-      };
-    }));
-
-    const now = new Date();
-    const nn = `COT-${String(now.getFullYear()).slice(-2)}${String(now.getMonth()+1).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
-
-    const { error } = await supabase.from('cotacoes_precos').insert([{
-      numero_cotacao:     nn,
-      nome:               `${nomeCliente.trim()} — ${selecionados.map(s=>s.produto.nome).join(', ')}`,
-      tipo:               'Produto',
-      empresa:            'ACN',
-      status:             'rascunho',
-      itens:              itensComCusto,
-      parametros_globais: { ptax_dolar: 5.85, ptax_euro: 6.40 },
-      desconto_maximo_pct: 10,
-      opl_numero:         opNumero.trim() || null,
-      orgao_cliente:      nomeCliente.trim(),
-      criado_por:         currentUser?.email,
-    }]);
-
-    setSalvando(false);
-    if (error) { alert('Erro ao salvar: ' + error.message); return; }
-    onSalvo();
-    onClose();
-  };
-
-  const prms = { ptax_dolar: 5.85, ptax_euro: 6.40 };
-
-  const inp: React.CSSProperties = {
-    width:'100%', border:'1px solid #d1d5db', borderRadius:6, padding:'7px 10px', fontSize:11, boxSizing:'border-box',
-  };
-  const lbl: React.CSSProperties = { display:'block', fontSize:9, fontWeight:700, color:'#64748b', marginBottom:4 };
-
-  return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:2500,
-      display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:10, width:'min(660px,95vw)', maxHeight:'88vh',
-        boxShadow:'0 8px 32px rgba(0,0,0,.3)', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-
-        <div style={{ background:'#0f766e', color:'#fff', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:13 }}>📋 Nova Cotação — Catálogo de Produtos</div>
-            <div style={{ fontSize:9, opacity:.85, marginTop:1 }}>Selecione produtos do catálogo configurado</div>
-          </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer' }}>✕</button>
-        </div>
-
-        <div style={{ padding:16, flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
-          {/* Dados da cotação */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div>
-              <label style={lbl}>CLIENTE / ÓRGÃO *</label>
-              <input value={nomeCliente} onChange={e=>setNomeCliente(e.target.value)}
-                placeholder="Nome do cliente..." style={inp} />
-            </div>
-            <div>
-              <label style={lbl}>OP/OS (opcional)</label>
-              <input value={opNumero} onChange={e=>setOpNumero(e.target.value)}
-                placeholder="Ex: 1212.2608" style={inp} />
-            </div>
-          </div>
-
-          {/* Busca de produtos */}
-          <div style={{ position:'relative' }}>
-            <label style={lbl}>🔍 BUSCAR PRODUTO DO CATÁLOGO</label>
-            <input value={busca} onChange={e=>setBusca(e.target.value)}
-              placeholder="Digite o nome do produto..."
-              style={inp} />
-            {resultados.length > 0 && (
-              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'#fff',
-                border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 8px 24px rgba(0,0,0,.15)',
-                zIndex:10, maxHeight:220, overflowY:'auto' }}>
-                {resultados.map(p => (
-                  <div key={p.id} onClick={() => addProduto(p)}
-                    style={{ padding:'8px 12px', cursor:'pointer', borderBottom:'1px solid #f1f5f9',
-                      display:'flex', justifyContent:'space-between', alignItems:'center' }}
-                    onMouseEnter={e=>e.currentTarget.style.background='#f0fdf4'}
-                    onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
-                    <div>
-                      <div style={{ fontWeight:600, fontSize:11 }}>{p.nome}</div>
-                      <div style={{ fontSize:9, color:'#9ca3af' }}>
-                        {p.codigo ? `${p.codigo} · ` : ''}{p.unidade} · Garantia: {p.garantia_meses}m
-                      </div>
-                    </div>
-                    <div style={{ fontSize:11, fontWeight:700, color:'#15803d', whiteSpace:'nowrap', marginLeft:12 }}>
-                      {p.preco_venda ? `R$ ${Number(p.preco_venda).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Produtos selecionados */}
-          {selecionados.length > 0 && (
-            <div style={{ border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-              <div style={{ background:'#1e293b', color:'#cbd5e1', padding:'6px 10px', fontSize:9, fontWeight:700 }}>
-                📦 PRODUTOS SELECIONADOS ({selecionados.length})
-              </div>
-              {selecionados.map(({ produto, qt }) => (
-                <div key={produto.id} style={{ display:'flex', alignItems:'center', gap:10,
-                  padding:'8px 10px', borderBottom:'1px solid #f1f5f9' }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:11 }}>{produto.nome}</div>
-                    <div style={{ fontSize:9, color:'#9ca3af' }}>
-                      {produto.unidade} · markup {produto.markup_pct}% · garantia {produto.garantia_meses}m
-                      {Array.isArray(produto.fotos) && produto.fotos.length > 0 && ` · 📸 ${produto.fotos.length} foto(s)`}
-                      {produto.catalogo_url && ' · 📄 catálogo'}
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <label style={{ fontSize:9, color:'#64748b' }}>Qtd:</label>
-                    <input type="number" min={1} value={qt} onChange={e=>setQt(produto.id, e.target.value)}
-                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:11, textAlign:'right' }} />
-                  </div>
-                  <div style={{ fontSize:11, fontWeight:700, color:'#15803d', minWidth:80, textAlign:'right' }}>
-                    {produto.preco_venda
-                      ? `R$ ${(Number(produto.preco_venda)*qt).toLocaleString('pt-BR',{minimumFractionDigits:2})}`
-                      : '—'}
-                  </div>
-                  <button onClick={() => removeItem(produto.id)}
-                    style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:14 }}>✕</button>
-                </div>
-              ))}
-              <div style={{ padding:'8px 10px', background:'#f0fdf4', display:'flex', justifyContent:'flex-end' }}>
-                <div style={{ fontWeight:800, fontSize:12, color:'#15803d' }}>
-                  Total estimado: R$ {selecionados.reduce((acc, {produto, qt}) => acc + (Number(produto.preco_venda)||0)*qt, 0)
-                    .toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {selecionados.length === 0 && (
-            <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11,
-              border:'2px dashed #e2e8f0', borderRadius:8, fontStyle:'italic' }}>
-              Nenhum produto selecionado. Busque acima para adicionar.
-            </div>
-          )}
-        </div>
-
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'flex-end', gap:8, flexShrink:0, background:'#fafafa' }}>
-          <button onClick={onClose}
-            style={{ padding:'7px 18px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>
-            Cancelar
-          </button>
-          <button onClick={salvar}
-            disabled={salvando || !nomeCliente.trim() || selecionados.length === 0}
-            style={{ padding:'7px 22px', background: (!nomeCliente.trim()||selecionados.length===0) ? '#9ca3af' : '#0f766e',
-              color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11,
-              cursor: (!nomeCliente.trim()||selecionados.length===0) ? 'not-allowed' : 'pointer',
-              opacity: salvando ? .6 : 1 }}>
-            {salvando ? 'Criando...' : '✅ Criar Cotação'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── MAIN: CotacoesTab ────────────────────────────────────────────────────────
 export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [cotacoes,    setCotacoes]    = useState([]);
@@ -1346,7 +1118,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const [simplificada, setSimplificada] = useState(false);
   const [selecionadas,  setSelecionadas]  = useState<string[]>([]);
   const [modalCombinar, setModalCombinar] = useState(false);
-  const [modalNovaCotacao, setModalNovaCotacao] = useState(false);
+  const [criandoCotacao, setCriandoCotacao] = useState(false); // abre FormacaoPrecosTab standalone (sempre com vínculo obrigatório)
 
   // Visibilidade controlada pelo admin
   const [cfg, setCfg] = useState({
@@ -1419,6 +1191,19 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
 
   const statusOpcoes = [...new Set(cotacoes.map(c => c.status).filter(Boolean))];
 
+  // "Nova Cotação" abre o editor completo (item-a-item) em tela cheia, no
+  // lugar da lista — mesmo componente usado embutido no CRM/Licitação, aqui
+  // em modo standalone (sem prop `vinculo`: ele mesmo pede pra escolher um
+  // antes de liberar a edição, já que toda cotação precisa nascer vinculada).
+  if (criandoCotacao) {
+    return (
+      <FormacaoPrecosTab
+        currentUser={currentUser}
+        onClose={() => { setCriandoCotacao(false); carregarCotacoes(); }}
+      />
+    );
+  }
+
   return (
     <div style={{ padding:'0 0 24px', fontFamily:'system-ui,sans-serif' }}>
       {/* Header */}
@@ -1456,7 +1241,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                 color: simplificada ? '#fff' : '#475569', cursor:'pointer', fontWeight:700 }}>
               {simplificada ? '📋 Completo' : '📊 Simplificado'}
             </button>
-            <button onClick={() => setModalNovaCotacao(true)}
+            <button onClick={() => setCriandoCotacao(true)}
               style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:5,
                 padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
               ➕ Nova Cotação
@@ -1662,13 +1447,6 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
         />
       )}
 
-      {modalNovaCotacao && (
-        <ModalNovaCotacao
-          currentUser={currentUser}
-          onClose={() => setModalNovaCotacao(false)}
-          onSalvo={() => { setModalNovaCotacao(false); carregarCotacoes(); }}
-        />
-      )}
     </div>
   );
 }

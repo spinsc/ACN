@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
+import { VinculoPicker, resolverDescricaoVinculo } from './VinculoPicker';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -979,278 +980,28 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
   );
 }
 
-// ─── ABA PREÇOS FORMADOS (Vendedores + Todos) ─────────────────────────────────
-function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
-  const [cotacoes, setCotacoes]         = useState([]);
-  const [carregando, setCarregando]     = useState(true);
-  const [cotacaoAberta, setAberta]      = useState(null);
-  const [desconto, setDesconto]         = useState(0);
-  const [obs, setObs]                   = useState('');
-  const [salvando, setSalvando]         = useState(false);
-  const [propostas, setPropostas]       = useState([]);
-
-  const carregarCotacoes = useCallback(async () => {
-    setCarregando(true);
-    const { data } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
-    setCotacoes(data || []);
-    setCarregando(false);
-  }, []);
-
-  useEffect(() => { carregarCotacoes(); }, [carregarCotacoes]);
-
-  const abrirCotacao = async (m) => {
-    setAberta(m);
-    setDesconto(0);
-    setObs('');
-    const { data } = await supabase.from('cotacoes_propostas')
-      .select('*').eq('cotacao_id', m.id).order('criado_em', { ascending: false });
-    setPropostas(data || []);
-  };
-
-  const salvarProposta = async () => {
-    if (!cotacaoAberta) return;
-    const maxDesc = Number(cotacaoAberta.desconto_maximo_pct) || 0;
-    if (desconto > maxDesc) { alert(`Desconto máximo permitido é ${maxDesc}%.`); return; }
-    setSalvando(true);
-    const prms  = cotacaoAberta.parametros_globais || {};
-    const items = (cotacaoAberta.itens || []);
-    const results = items.map(it => calcItem(it, prms));
-    const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
-    const valorComDesconto = totVendas * (1 - desconto / 100);
-    const { error } = await supabase.from('cotacoes_propostas').insert([{
-      cotacao_id:          cotacaoAberta.id,
-      cotacao_nome:        cotacaoAberta.nome,
-      opl_numero:          cotacaoAberta.opl_numero || null,
-      desconto_pct:        desconto,
-      valor_total:         totVendas,
-      valor_com_desconto:  valorComDesconto,
-      criado_por:          currentUser?.nome,
-      observacoes:         obs,
-    }]);
-    if (error) { alert('Erro: ' + error.message); }
-    else {
-      alert('✅ Proposta salva!');
-      const { data } = await supabase.from('cotacoes_propostas')
-        .select('*').eq('cotacao_id', cotacaoAberta.id).order('criado_em', { ascending: false });
-      setPropostas(data || []);
-    }
-    setSalvando(false);
-  };
-
-  // ── Detalhe de cotação aberta ──
-  if (cotacaoAberta) {
-    const prms  = cotacaoAberta.parametros_globais || {};
-    const items = (cotacaoAberta.itens || []).map(it => ({ ...it, _id: Math.random().toString(36).slice(2) }));
-    const results  = items.map(it => calcItem(it, prms));
-    const totVendas  = results.reduce((s, r) => s + r.valorTotal, 0);
-    const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
-    const totDifal   = results.reduce((s, r) => s + r.totalDifal, 0);
-    const maxDesc    = Number(cotacaoAberta.desconto_maximo_pct) || 0;
-    const descontoValor    = totVendas * desconto / 100;
-    const valorComDesconto = totVendas * (1 - desconto / 100);
-
-    return (
-      <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-          <button className="acn-btn" style={{ background:'#64748b', fontSize:10 }} onClick={() => setAberta(null)}>← Voltar</button>
-          <div>
-            <div style={{ fontWeight:800, fontSize:14, color:'#1e293b' }}>{cotacaoAberta.nome}</div>
-            <div style={{ fontSize:10, color:'#64748b' }}>
-              {cotacaoAberta.tipo} · {cotacaoAberta.empresa}
-              {cotacaoAberta.opl_numero ? ` · OP: ${cotacaoAberta.opl_numero}` : ''}
-              {' '}· por {cotacaoAberta.criado_por}
-              {maxDesc > 0 ? <span style={{ marginLeft:8, color:'#dc2626', fontWeight:700 }}>Desc.máx: {maxDesc}%</span> : ''}
-            </div>
-          </div>
-        </div>
-
-        {/* Tabela de itens */}
-        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:12, overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'left' }}>Produto / Descrição</th>
-                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'center' }}>Qt</th>
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Unit.</th>}
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Total</th>}
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#92400e', color:'#fff', fontSize:9, textAlign:'right' }}>DIFAL</th>}
-                <th style={{ padding:'5px 8px', background:'#1e40af', color:'#fff', fontSize:9, textAlign:'right' }}>Valor Unit.</th>
-                <th style={{ padding:'5px 8px', background:'#1e40af', color:'#fff', fontSize:9, textAlign:'right' }}>Valor Total</th>
-                <th style={{ padding:'5px 8px', background:'#831843', color:'#fff', fontSize:9, textAlign:'right' }}>Imposto</th>
-                {!isVendedor && <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'right' }}>Lucro%</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, idx) => {
-                const r = results[idx];
-                const lucroColor = r.lucroPct >= 10 ? '#16a34a' : r.lucroPct >= 5 ? '#d97706' : '#dc2626';
-                return (
-                  <tr key={item._id} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                    <td style={{ padding:'5px 8px', fontSize:10 }}>
-                      {item.produto || '—'}{item.marca ? <span style={{ color:'#94a3b8' }}> ({item.marca})</span> : ''}
-                    </td>
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'center' }}>{item.qt}</td>
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#0f766e' }}>{fmtR(r.custoUnitBrl)}</td>}
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#0f766e' }}>{fmtR(r.custoTotal)}</td>}
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#b45309' }}>{fmtR(r.totalDifal)}</td>}
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#1d4ed8', fontWeight:600 }}>{fmtR(r.valorUnit)}</td>
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#1d4ed8', fontWeight:700 }}>{fmtR(r.valorTotal)}</td>
-                    <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', color:'#9d174d' }}>{fmtR(r.totalImposto)}</td>
-                    {!isVendedor && <td style={{ padding:'5px 8px', fontSize:10, textAlign:'right', fontWeight:800, color:lucroColor }}>{fmtPct(r.lucroPct)}</td>}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totais + simulação de desconto */}
-        <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:14, marginBottom:12 }}>
-          <div style={{ fontWeight:700, fontSize:11, color:'#475569', marginBottom:10, textTransform:'uppercase' }}>💰 Simulação de Desconto</div>
-          <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
-            <div>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total de Vendas</div>
-              <div style={{ fontSize:18, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total Impostos</div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#831843' }}>{fmtR(totImposto)}</div>
-            </div>
-            {!isVendedor && (
-              <div>
-                <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Total DIFAL</div>
-                <div style={{ fontSize:14, fontWeight:700, color:'#92400e' }}>{fmtR(totDifal)}</div>
-              </div>
-            )}
-            <div style={{ borderLeft:'1px solid #e2e8f0', paddingLeft:20 }}>
-              <div style={{ fontSize:9, color:'#64748b', marginBottom:4 }}>
-                Desconto % &nbsp;
-                {maxDesc > 0
-                  ? <span>(máx autorizado: <strong style={{ color:'#dc2626' }}>{maxDesc}%</strong>)</span>
-                  : <span style={{ color:'#94a3b8' }}>(sem desconto definido)</span>}
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <input type="number" className="acn-input" style={{ width:80, fontSize:12, textAlign:'right' }}
-                  min={0} max={maxDesc > 0 ? maxDesc : 100} step="0.1" value={desconto}
-                  onChange={e => {
-                    const v = parseFloat(e.target.value) || 0;
-                    setDesconto(maxDesc > 0 ? Math.min(v, maxDesc) : v);
-                  }} />
-                <span style={{ fontSize:11, color:'#64748b' }}>%</span>
-              </div>
-            </div>
-            {desconto > 0 && (
-              <>
-                <div>
-                  <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Desconto (R$)</div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#dc2626' }}>- {fmtR(descontoValor)}</div>
-                </div>
-                <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'8px 14px' }}>
-                  <div style={{ fontSize:9, color:'#166534', marginBottom:2 }}>Total c/ Desconto</div>
-                  <div style={{ fontSize:20, fontWeight:800, color:'#16a34a' }}>{fmtR(valorComDesconto)}</div>
-                </div>
-              </>
-            )}
-          </div>
-          <div style={{ marginTop:12 }}>
-            <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>Observações da proposta</div>
-            <textarea className="acn-input" style={{ width:'100%', height:60, resize:'vertical', fontSize:10 }}
-              placeholder="Condições especiais, validade da proposta, notas..."
-              value={obs} onChange={e => setObs(e.target.value)} />
-          </div>
-          <div style={{ marginTop:8 }}>
-            <button className="acn-btn" style={{ background:'#16a34a' }} onClick={salvarProposta} disabled={salvando}>
-              {salvando ? 'Salvando...' : '💾 Salvar Proposta'}
-            </button>
-          </div>
-        </div>
-
-        {/* Histórico de propostas */}
-        {propostas.length > 0 && (
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:14 }}>
-            <div style={{ fontWeight:700, fontSize:11, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>📋 Propostas Salvas</div>
-            {propostas.map(p => (
-              <div key={p.id} style={{ display:'flex', gap:12, alignItems:'center', padding:'6px 0',
-                borderBottom:'1px solid #f1f5f9', flexWrap:'wrap', fontSize:10 }}>
-                <span style={{ color:'#64748b' }}>{new Date(p.criado_em).toLocaleDateString('pt-BR')}</span>
-                <span>Desc.: <strong>{p.desconto_pct}%</strong></span>
-                <span>Total: <strong style={{ color:'#1e40af' }}>{fmtR(p.valor_total)}</strong></span>
-                <span>c/ Desc.: <strong style={{ color:'#16a34a' }}>{fmtR(p.valor_com_desconto)}</strong></span>
-                <span style={{ color:'#64748b' }}>por {p.criado_por}</span>
-                {p.observacoes && <span style={{ fontSize:9, color:'#94a3b8', fontStyle:'italic' }}><Linkify text={p.observacoes} /></span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Lista de cotações ──
-  return (
-    <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
-      <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', marginBottom:14 }}>📋 Preços Formados</div>
-      {carregando && <div style={{ textAlign:'center', color:'#64748b', padding:30 }}>Carregando...</div>}
-      {!carregando && cotacoes.length === 0 && (
-        <div style={{ textAlign:'center', color:'#9ca3af', fontSize:12, padding:40 }}>Nenhuma cotação salva.</div>
-      )}
-      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        {cotacoes.map(m => {
-          const prms    = m.parametros_globais || {};
-          const items   = m.itens || [];
-          const results = items.map(it => calcItem(it, prms));
-          const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
-          return (
-            <div key={m.id}
-              style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px',
-                display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700, fontSize:12 }}>{m.nome}</div>
-                <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
-                  {m.tipo} · {m.empresa} · {items.length} {items.length === 1 ? 'item' : 'itens'}
-                  {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
-                  {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
-                  {' '}· por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
-                </div>
-              </div>
-              <div style={{ textAlign:'right', minWidth:100 }}>
-                <div style={{ fontSize:9, color:'#64748b' }}>Total de Vendas</div>
-                <div style={{ fontSize:13, fontWeight:800, color:'#1e40af' }}>{fmtR(totVendas)}</div>
-              </div>
-              <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-                {!isVendedor && onEditar && (
-                  <button className="acn-btn" style={{ background:'#f59e0b', fontSize:9 }}
-                    onClick={() => onEditar(m)}>
-                    ✏️ Editar
-                  </button>
-                )}
-                {!isVendedor && onClonar && (
-                  <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9 }}
-                    onClick={() => onClonar(m)}>
-                    ⎘ Clonar
-                  </button>
-                )}
-                <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
-                  onClick={() => abrirCotacao(m)}>
-                  Abrir →
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
-// `vinculo` — { tipo:'crm'|'licitacao', id, label? } — quando informado, o
-// componente roda "embutido" dentro do processo (CrmTab.tsx/LicitacoesTab.tsx):
-// mostra só a aba de edição (sem o navegador de abas/Preços Formados), lista
-// as formações já vinculadas àquele processo pra carregar, e ao salvar grava
-// o vínculo automaticamente (crm_oportunidade_id/licitacao_id), sem precisar
-// procurar manualmente na tela cheia.
-export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: any = {}) {
+// `vinculo` — { tipo, id, descricao? }, tipo em 'crm'|'licitacao'|'op'|'os'|
+// 'compra'|'ofi' — quando informado via prop, o componente roda "embutido"
+// dentro do processo (CrmTab.tsx/LicitacoesTab.tsx). Em modo standalone
+// (chamado de CotacoesTab.tsx, sem prop `vinculo`), o próprio usuário escolhe
+// via VinculoPicker antes de poder editar — toda cotação nasce sempre
+// vinculada a algum processo. Lista as formações já vinculadas àquele
+// processo pra carregar, e ao salvar grava o vínculo automaticamente
+// (crm_oportunidade_id/licitacao_id como atalho de leitura pros 2 tipos
+// legados, e sempre em cotacoes_precos_vinculos — esse sim vale pros 6 tipos).
+export default function FormacaoPrecosTab({ currentUser, vinculo: vinculoProp, embutido, onClose }: any = {}) {
+  // Modo standalone (não embutido): o vínculo não vem pronto de um card CRM/
+  // Licitação — o próprio usuário escolhe (VinculoPicker) antes de editar.
+  // `vinculo` abaixo funciona igual pros dois modos: todo o resto do arquivo
+  // (~20 usos) já lê essa variável sem saber se veio de prop ou de escolha.
+  const [vinculoEscolhido, setVinculoEscolhido] = useState<any>(null);
+  // VinculoPicker.tsx usa 'pv' pra oportunidade CRM (mesmo vocabulário de
+  // Demandas Avulsas/Almoxarifado); cotacoes_precos_vinculos e
+  // MarkupTermometro.tsx (já em produção) usam 'crm' pro mesmo conceito —
+  // traduz aqui, uma vez só, pros ~20 usos de `vinculo` abaixo lerem certo.
+  const vinculoBruto = vinculoProp || vinculoEscolhido;
+  const vinculo = vinculoBruto?.tipo === 'pv' ? { ...vinculoBruto, tipo: 'crm' } : vinculoBruto;
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
   const [grupoAtivo, setGrupoAtivo]   = useState('Item 1'); // aba ativa — "Item do edital"
@@ -1518,6 +1269,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   }, []);
 
   const salvarModelo = async (nome, tipo) => {
+    // Toda cotação nasce (e continua) sempre vinculada a um processo — em
+    // modo embutido o vínculo já vem pronto via prop; em modo standalone tem
+    // que ter sido escolhido no VinculoPicker antes de chegar aqui.
+    if (!vinculo?.id) { alert('Escolha um vínculo (PV, OP, OS, Licitação, Compra ou OFI) antes de salvar.'); return; }
     setSalvando(true);
     const payload: any = {
       nome,
@@ -1546,9 +1301,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
       error = insErr;
       novaCotacaoId = data?.id || null;
     }
-    if (!error && novaCotacaoId && vinculo?.id) {
+    // Grava o vínculo tanto ao criar quanto ao atualizar — antes só rodava na
+    // criação (novaCotacaoId), então editar uma cotação legada sem vínculo
+    // (ou trocar de vínculo) nunca chegava a gravar em cotacoes_precos_vinculos.
+    if (!error && vinculo?.id) {
       await supabase.from('cotacoes_precos_vinculos')
-        .upsert([{ cotacao_id: novaCotacaoId, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+        .upsert([{ cotacao_id: novaCotacaoId || editandoId, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
     }
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
@@ -1592,6 +1350,19 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
         .then(({ data }) => setOplVinculada(data || null));
     } else {
       setOplVinculada(null);
+    }
+    // Modo standalone: resolve o vínculo real desta cotação (se tiver) —
+    // sem isso o editor ficaria pedindo um vínculo que ela já tem.
+    if (!vinculoProp) {
+      supabase.from('cotacoes_precos_vinculos').select('tipo,processo_id').eq('cotacao_id', m.id).limit(1)
+        .then(async ({ data }) => {
+          const v = data?.[0];
+          if (!v) { setVinculoEscolhido(null); return; }
+          // Traduz de volta pro vocabulário do VinculoPicker (crm -> pv)
+          const tipoUi = v.tipo === 'crm' ? 'pv' : v.tipo;
+          const descricao = await resolverDescricaoVinculo(tipoUi, v.processo_id);
+          setVinculoEscolhido({ tipo: tipoUi, id: v.processo_id, descricao });
+        });
     }
     setModalCarregar(false);
   };
@@ -1814,6 +1585,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   // linha em cotacoes_precos como próxima versão, preservando a anterior
   // intacta pra histórico -- e passa a editar a nova.
   const confirmarSenhaERegistrar = async () => {
+    if (!vinculo?.id) { setErroSenha('Escolha um vínculo (PV, OP, OS, Licitação, Compra ou OFI) antes de registrar.'); return; }
     if (!senhaConfirm.trim()) { setErroSenha('Informe sua senha.'); return; }
     setRegistrandoVersao(true);
     setErroSenha('');
@@ -1947,38 +1719,42 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   return (
     <div style={{ fontFamily:'system-ui,sans-serif', minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
 
-      {/* ── NAVEGAÇÃO DE ABAS — some no modo embutido, só a edição importa ── */}
-      {!embutido && (
-        <div style={{ display:'flex', borderBottom:'2px solid #e2e8f0', background:'#fff', paddingLeft:14, paddingTop:8 }}>
-          {[
-            { id:'formacao',       label:'📊 Formação de Preços' },
-            { id:'precos_formados', label:'📋 Preços Formados' },
-          ].map(tab => (
-            <button key={tab.id}
-              onClick={() => setAbaAtiva(tab.id)}
-              style={{
-                padding:'8px 18px', fontSize:11, fontWeight: abaAtiva === tab.id ? 800 : 500,
-                border:'none', borderBottom: abaAtiva === tab.id ? '3px solid #2563eb' : '3px solid transparent',
-                background:'none', cursor:'pointer',
-                color: abaAtiva === tab.id ? '#2563eb' : '#64748b',
-                marginBottom:-2,
-              }}>
-              {tab.label}
-            </button>
-          ))}
+      {/* ── Voltar pra lista de Cotações (modo standalone, chamado por CotacoesTab.tsx) ── */}
+      {!embutido && onClose && (
+        <div style={{ padding:'10px 14px 0' }}>
+          <button className="acn-btn" style={{ background:'#64748b', fontSize:10 }} onClick={onClose}>
+            ← Voltar pra Cotações
+          </button>
         </div>
       )}
 
-      {/* ── ABA PREÇOS FORMADOS ── */}
-      {!embutido && abaAtiva === 'precos_formados' && (
-        <AbaPrecoFormados currentUser={currentUser} isVendedor={isVendedor} onEditar={editarCotacao} onClonar={clonarCotacao} />
+      {/* ── Exige vínculo antes de liberar a edição (modo standalone) — toda
+          cotação passa a nascer sempre vinculada a um processo (PV/OP/OS/
+          Licitação/Compra/OFI), pra sempre poder aparecer no termômetro de
+          markup e na navegação cruzada ── */}
+      {!embutido && !vinculo && (
+        <div style={{ padding:14, maxWidth:480 }}>
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:16 }}>
+            <div style={{ fontWeight:800, fontSize:12, color:'#1e293b', marginBottom:4 }}>🔗 Vincular a um processo</div>
+            <div style={{ fontSize:10, color:'#64748b', marginBottom:10 }}>
+              Toda cotação precisa estar vinculada a um PV, OP, OS, Licitação, Compra ou OFI — escolha abaixo pra continuar.
+            </div>
+            <VinculoPicker value={vinculoEscolhido} onSelect={setVinculoEscolhido} onClear={() => setVinculoEscolhido(null)} />
+            <div style={{ marginTop:12, paddingTop:10, borderTop:'1px solid #f1f5f9' }}>
+              <button className="acn-btn" style={{ background:'#0891b2', fontSize:10 }}
+                onClick={() => { setModalCarregar(true); carregarModelos(); }}>
+                📂 ou carregar uma cotação existente
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* ── ABA FORMAÇÃO DE PREÇOS ── */}
-      {(embutido || abaAtiva === 'formacao') && (
+      {/* ── FORMAÇÃO DE PREÇOS (editor de itens) ── */}
+      {(embutido || vinculo) && (
         <div style={{ padding: embutido ? 0 : 14 }}>
 
-          {/* ── SELETOR DE FORMAÇÕES VINCULADAS (modo embutido) ── */}
+          {/* ── SELETOR DE FORMAÇÕES VINCULADAS (quando já existem cotações pra este processo) ── */}
           {vinculo && (
             <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
               {carregandoVinculo ? (
@@ -2411,16 +2187,6 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               editando={!!editandoId}
             />
           )}
-          {modalCarregar && (
-            <ModalCarregar
-              modelos={modelos}
-              carregando={carregando}
-              onCarregar={carregarModelo}
-              onExcluir={excluirModelo}
-              onClose={() => setModalCarregar(false)}
-            />
-          )}
-
           {modalImportar && vinculo && (
             <ModalImportar
               modelos={modelos}
@@ -2527,6 +2293,18 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Carregar cotação existente — disponível mesmo antes de escolher um
+          vínculo novo, já que carregarModelo() resolve o vínculo real dela ── */}
+      {modalCarregar && (
+        <ModalCarregar
+          modelos={modelos}
+          carregando={carregando}
+          onCarregar={carregarModelo}
+          onExcluir={excluirModelo}
+          onClose={() => setModalCarregar(false)}
+        />
       )}
     </div>
   );

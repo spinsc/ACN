@@ -20,7 +20,6 @@ import CadastroProdutosTab from './CadastroProdutosTab';
 import CotacoesTab from './CotacoesTab';
 import AdminTab from './AdminTab';
 import RelatoriosTab from './RelatoriosTab';
-import FormacaoPrecosTab from './FormacaoPrecosTab';
 import SacTab from './SacTab';
 import VeiculosNfcTab from './VeiculosNfcTab';
 import LicitacoesTab from './LicitacoesTab';
@@ -105,7 +104,6 @@ const SIDEBAR_GROUPS = [
       { id: 'comissoes_tecnicos', label: '💰 Comissões' },
       { id: 'fiscal',     label: 'Fiscal' },
       { id: 'relatorios',      label: 'Relatórios' },
-      { id: 'formacao_precos', label: 'Formação de Preços' },
     ],
   },
   {
@@ -954,7 +952,6 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'comissoes_tecnicos': return <ComissoesTecnicosStandalone currentUser={currentUser} />;
       case 'fiscal':       return <FiscalTab currentUser={currentUser} />;
       case 'relatorios':      return <RelatoriosTab currentUser={currentUser} />;
-      case 'formacao_precos': return <FormacaoPrecosTab currentUser={currentUser} />;
       case 'admin':           return <AdminTab />;
       default: return null;
     }
