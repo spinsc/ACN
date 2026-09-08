@@ -989,9 +989,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       if (chk(r.veiculo))      return { campo: 'Veículo', valor: r.veiculo };
       if (chk(r.modelo))       return { campo: 'Modelo',  valor: r.modelo };
     } else if (r._tipo === 'os') {
-      if (chk(r.cliente_nome)) return { campo: 'Cliente', valor: r.cliente_nome };
-      if (chk(r.veiculo))      return { campo: 'Veículo', valor: r.veiculo };
-      if (chk(r.modelo))       return { campo: 'Modelo',  valor: r.modelo };
+      if (chk(r.cliente_nome))     return { campo: 'Cliente',     valor: r.cliente_nome };
+      if (chk(r.veiculo_modelo))   return { campo: 'Veículo',     valor: r.veiculo_modelo };
+      if (chk(r.equipamento_nome)) return { campo: 'Equipamento', valor: r.equipamento_nome };
     } else if (r._tipo === 'licitacao') {
       if (chk(r.orgao))  return { campo: 'Órgão',  valor: r.orgao };
       if (chk(r.numero)) return { campo: 'Número', valor: r.numero };
@@ -1013,35 +1013,41 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const buscarGlobal = async (termo: string) => {
     if (!termo.trim() || termo.length < 2) { setGlobalResultados([]); setGlobalBuscando(false); return; }
     setGlobalBuscando(true);
-    const t = termo.trim();
+    // Busca pelas colunas *_norm (geradas no banco via normalizar_busca —
+    // lower+unaccent) em vez das colunas cruas — ignora acento/maiúscula.
+    // O termo digitado também precisa ir normalizado, senão "É"/"e" nunca
+    // bateriam com o que foi salvo em minúsculo sem acento na coluna gerada.
+    const t = normalizarBusca(termo);
     const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
       supabase.from('crm_oportunidades')
         .select('id,titulo,numero_edital,orgao,responsavel_nome,funil')
-        .or(`titulo.ilike.%${t}%,numero_edital.ilike.%${t}%,orgao.ilike.%${t}%,responsavel_nome.ilike.%${t}%`)
+        .or(`titulo_norm.ilike.%${t}%,numero_edital_norm.ilike.%${t}%,orgao_norm.ilike.%${t}%,responsavel_nome_norm.ilike.%${t}%`)
         .limit(6),
       supabase.from('oples')
         .select('id,opl,cliente_nome,modelo,veiculo,status_geral,tipo_projeto')
-        .or(`opl.ilike.%${t}%,cliente_nome.ilike.%${t}%,modelo.ilike.%${t}%,veiculo.ilike.%${t}%`)
+        .or(`opl_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,modelo_norm.ilike.%${t}%,veiculo_norm.ilike.%${t}%`)
         .limit(6),
+      // colunas certas dessa tabela são veiculo_modelo/equipamento_nome (não
+      // veiculo/modelo, que não existem aqui — corrigido de brinde)
       supabase.from('sac_ordens_servico')
-        .select('id,numero_os,cliente_nome,veiculo,modelo,status_os')
-        .or(`numero_os.ilike.%${t}%,cliente_nome.ilike.%${t}%,veiculo.ilike.%${t}%,modelo.ilike.%${t}%`)
+        .select('id,numero_os,cliente_nome,veiculo_modelo,equipamento_nome,status_os')
+        .or(`numero_os_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,veiculo_modelo_norm.ilike.%${t}%,equipamento_nome_norm.ilike.%${t}%`)
         .limit(6),
       supabase.from('licitacoes')
         .select('id,numero,nome_projeto,orgao,status')
-        .or(`numero.ilike.%${t}%,nome_projeto.ilike.%${t}%,orgao.ilike.%${t}%`)
+        .or(`numero_norm.ilike.%${t}%,nome_projeto_norm.ilike.%${t}%,orgao_norm.ilike.%${t}%`)
         .limit(6),
       supabase.from('cadastro_itens')
         .select('id,codigo,nome,marca,fornecedor')
-        .or(`nome.ilike.%${t}%,codigo.ilike.%${t}%,marca.ilike.%${t}%`)
+        .or(`nome_norm.ilike.%${t}%,codigo_norm.ilike.%${t}%,marca_norm.ilike.%${t}%`)
         .limit(6),
       supabase.from('cadastro_produtos')
         .select('id,codigo,nome,categoria')
-        .or(`nome.ilike.%${t}%,codigo.ilike.%${t}%`)
+        .or(`nome_norm.ilike.%${t}%,codigo_norm.ilike.%${t}%`)
         .limit(6),
       supabase.from('engenharia_desenvolvimento')
         .select('id,titulo,numero_opl,cliente_nome,descricao')
-        .or(`titulo.ilike.%${t}%,numero_opl.ilike.%${t}%,cliente_nome.ilike.%${t}%,descricao.ilike.%${t}%`)
+        .or(`titulo_norm.ilike.%${t}%,numero_opl_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,descricao_norm.ilike.%${t}%`)
         .limit(6),
     ]);
     const res = [
