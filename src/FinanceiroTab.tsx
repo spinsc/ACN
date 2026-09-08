@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
-import { CentrosCustoManager, labelHierarquico } from './CentroCustoShared';
+import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao } from './CentroCustoShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -43,8 +43,17 @@ function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
 }
 
 // ─── Modal: compras de um centro de custo ─────────────────────────────────────
-function ModalComprasCentro({ centro, compras, onClose }: any) {
+function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar }: any) {
   const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
+  const [modalMedicao, setModalMedicao] = useState<any>(null); // contrato "Parcelado" selecionado
+  // soma de medições por contrato — feito no cliente a partir da própria lista
+  // (as medições já vêm junto em `compras`, mesmo centro_custo_id do contrato)
+  const pagoPorContrato: Record<string, number> = {};
+  compras.forEach((p: any) => {
+    if (p.despesaAvulsa && p.despesa_pai_id) {
+      pagoPorContrato[p.despesa_pai_id] = (pagoPorContrato[p.despesa_pai_id] || 0) + (Number(p.valor) || 0);
+    }
+  });
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2100,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -69,7 +78,7 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
-                  {['Nº Pedido', 'Descrição', 'Fornecedor', 'Status', 'Ordem de Compra', 'Valor', 'Data'].map(h => (
+                  {['Nº Pedido', 'Descrição', 'Fornecedor', 'Status', 'Ordem de Compra', 'Valor', 'Data', 'Ações'].map(h => (
                     <th key={h} style={{ padding: '6px 8px', fontSize: 9, fontWeight: 700, textAlign: 'left' }}>{h}</th>
                   ))}
                 </tr>
@@ -78,22 +87,57 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
                 {compras.map((p: any, i: number) => p.despesaAvulsa ? (
                   <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>—</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>{p.descricao || 'Despesa avulsa'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>
+                      {p.despesa_pai_id ? <span style={{ color:'#94a3b8' }}>↳ medição — </span> : null}
+                      {p.descricao || 'Despesa avulsa'}
+                    </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.criado_por_nome || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
-                      <span style={{ background: '#fef3c722', color: '#b45309',
-                        padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                        💰 Despesa avulsa
-                      </span>
+                      {p.parcelado ? (
+                        (() => {
+                          const totalNeg = Number(p.valor_total_negociado) || 0;
+                          const pago = pagoPorContrato[p.id] || 0;
+                          const pct = totalNeg > 0 ? Math.min(100, Math.round(pago / totalNeg * 100)) : 0;
+                          return (
+                            <div style={{ minWidth:130 }}>
+                              <div style={{ fontSize:9, fontWeight:700, color: pago > totalNeg ? '#dc2626' : '#0f766e', marginBottom:2 }}>
+                                🧾 Pago {fmtR(pago)} de {fmtR(totalNeg)} ({pct}%)
+                              </div>
+                              <div style={{ background:'#e2e8f0', borderRadius:4, height:5, overflow:'hidden' }}>
+                                <div style={{ width:`${pct}%`, background: pago > totalNeg ? '#dc2626' : '#0f766e', height:'100%' }} />
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : p.despesa_pai_id ? (
+                        <span style={{ background:'#f1f5f9', color:'#64748b',
+                          padding:'2px 7px', borderRadius:10, fontSize:9, fontWeight:700 }}>
+                          Medição
+                        </span>
+                      ) : (
+                        <span style={{ background: '#fef3c722', color: '#b45309',
+                          padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
+                          💰 Despesa avulsa
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>
                       <span style={{ color: '#9ca3af' }}>—</span>
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: 'monospace' }}>
-                      {fmtR(Number(p.valor) || 0)}
+                      {p.parcelado ? '—' : fmtR(Number(p.valor) || 0)}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
                       {fmtDt(p.data)}
+                    </td>
+                    <td style={{ padding: '5px 8px' }}>
+                      {p.parcelado && (
+                        <button onClick={() => setModalMedicao(p)}
+                          style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
+                            padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                          + Medição
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -125,6 +169,7 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
                       {fmtDt(p.data_criacao)}
                     </td>
+                    <td />
                   </tr>
                 ))}
               </tbody>
@@ -133,12 +178,18 @@ function ModalComprasCentro({ centro, compras, onClose }: any) {
                   <td colSpan={5} style={{ padding: '6px 8px', fontWeight: 700, fontSize: 11, textAlign: 'right' }}>TOTAL</td>
                   <td style={{ padding: '6px 8px', fontWeight: 800, fontSize: 13, textAlign: 'right', fontFamily: 'monospace' }}>{fmtR(total)}</td>
                   <td />
+                  <td />
                 </tr>
               </tfoot>
             </table>
           )}
         </div>
       </div>
+      {modalMedicao && (
+        <ModalLancarMedicao contrato={modalMedicao} currentUser={currentUser}
+          onClose={() => setModalMedicao(null)}
+          onSaved={() => { setModalMedicao(null); onAtualizar?.(); onClose(); }} />
+      )}
     </div>
   );
 }
@@ -615,6 +666,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
         <ModalComprasCentro
           centro={modalCompras.centro}
           compras={modalCompras.compras}
+          currentUser={currentUser}
+          onAtualizar={carregar}
           onClose={() => setModalCompras(null)}
         />
       )}

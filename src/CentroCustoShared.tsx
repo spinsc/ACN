@@ -280,7 +280,16 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
 }
 
 // ─── LANÇAR DESPESA AVULSA ─────────────────────────────────────────────────
+// "Parcelado" grava só o CONTRATO (valor:0, valor_total_negociado:X) — os
+// pagamentos parciais em si (medições) são lançados depois, um a um, via
+// ModalLancarMedicao (abaixo), a partir da lista de despesas do centro
+// (ver ModalComprasCentro em FinanceiroTab.tsx). Ver plano "Pagamentos
+// parcelados no Centro de Custo" — soma de despesas do centro já soma
+// TODAS as linhas desta tabela, então o contrato (valor:0) não infla nada
+// e cada medição conta como o pagamento real que é, sem mexer em nenhuma
+// fórmula de totais existente.
 function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
+  const [parcelado, setParcelado] = useState(false);
   const [valor, setValor] = useState('');
   const [descricao, setDescricao] = useState('');
   const [data, setData] = useState(() => new Date().toISOString().slice(0,10));
@@ -288,16 +297,18 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
 
   const salvar = async () => {
     const v = parseFloat(String(valor).replace(',', '.'));
-    if (!v || v <= 0) { alert('Informe um valor válido.'); return; }
+    if (!v || v <= 0) { alert(parcelado ? 'Informe o valor total negociado.' : 'Informe um valor válido.'); return; }
     if (!descricao.trim()) { alert('Informe a descrição da despesa.'); return; }
     setSalvando(true);
+    const payload: any = parcelado
+      ? { centro_custo_id: centro.id, valor: 0, valor_total_negociado: v, parcelado: true, descricao: descricao.trim(), data }
+      : { centro_custo_id: centro.id, valor: v, descricao: descricao.trim(), data };
     const { error } = await supabase.from('centro_custo_despesas').insert([{
-      centro_custo_id: centro.id, valor: v, descricao: descricao.trim(), data,
-      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
+      ...payload, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
     }]);
     setSalvando(false);
     if (error) { alert('Erro ao lançar despesa: ' + error.message); return; }
-    alert('✅ Despesa lançada!');
+    alert(parcelado ? '✅ Contrato parcelado criado! Lance as medições (pagamentos) depois, na lista de despesas do centro.' : '✅ Despesa lançada!');
     onClose();
   };
 
@@ -306,9 +317,24 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
       <div className="modal-box" style={{ maxWidth:400 }}>
         <div className="modal-title">💰 Lançar Despesa — {centro.codigo}</div>
         <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>{centro.nome}</div>
-        <label className="acn-label">Valor (R$) *</label>
+        <div style={{ display:'flex', gap:4, marginBottom:12 }}>
+          {([[false,'À Vista'],[true,'Parcelado']] as const).map(([v,label]) => (
+            <button key={label} type="button" onClick={() => setParcelado(v)}
+              style={{ flex:1, padding:'6px', fontSize:10, fontWeight:700, borderRadius:4, cursor:'pointer',
+                border:`1.5px solid ${parcelado===v ? '#0f766e' : '#d1d5db'}`,
+                background: parcelado===v ? '#ccfbf1' : '#fff', color: parcelado===v ? '#0f766e' : '#6b7280' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="acn-label">{parcelado ? 'Valor Total Negociado (R$) *' : 'Valor (R$) *'}</label>
         <input className="acn-input" style={{ width:'100%', marginBottom:10 }} placeholder="0,00" inputMode="decimal"
           value={valor} onChange={e => setValor(e.target.value)} autoFocus />
+        {parcelado && (
+          <div style={{ fontSize:9, color:'#0f766e', marginTop:-6, marginBottom:10 }}>
+            Isso só registra o valor combinado. Os pagamentos parciais (medições) são lançados depois, um a um.
+          </div>
+        )}
         <label className="acn-label">Descrição *</label>
         <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
           placeholder="Ex: Manutenção do compressor, material extra..."
@@ -318,7 +344,73 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
           value={data} onChange={e => setData(e.target.value)} />
         <div style={{ display:'flex', gap:8 }}>
           <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
-            {salvando ? 'Salvando...' : '💾 Lançar Despesa'}
+            {salvando ? 'Salvando...' : parcelado ? '💾 Criar Contrato' : '💾 Lançar Despesa'}
+          </button>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LANÇAR MEDIÇÃO (pagamento parcial contra um contrato "Parcelado") ────
+export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: any) {
+  const [jaPago, setJaPago]   = useState<number | null>(null);
+  const [valor, setValor]     = useState('');
+  const [obs, setObs]         = useState('');
+  const [data, setData]       = useState(() => new Date().toISOString().slice(0,10));
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    supabase.from('centro_custo_despesas').select('valor').eq('despesa_pai_id', contrato.id)
+      .then(({ data }) => setJaPago((data || []).reduce((s: number, r: any) => s + (Number(r.valor) || 0), 0)));
+  }, [contrato.id]);
+
+  const totalNegociado = Number(contrato.valor_total_negociado) || 0;
+  const vNum = parseFloat(String(valor).replace(',', '.')) || 0;
+  const somaComEsta = (jaPago || 0) + vNum;
+  const excedente = somaComEsta - totalNegociado;
+
+  const salvar = async () => {
+    if (!vNum || vNum <= 0) { alert('Informe um valor válido.'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('centro_custo_despesas').insert([{
+      centro_custo_id: contrato.centro_custo_id, despesa_pai_id: contrato.id, valor: vNum,
+      descricao: obs.trim() || `Medição — ${contrato.descricao || ''}`, data,
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
+    }]);
+    setSalvando(false);
+    if (error) { alert('Erro ao lançar medição: ' + error.message); return; }
+    onSaved?.();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:400 }}>
+        <div className="modal-title">🧾 Lançar Medição — {contrato.descricao}</div>
+        <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>
+          Total negociado: <strong>R$ {totalNegociado.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
+          {' · '}Já pago: <strong>{jaPago == null ? '...' : `R$ ${jaPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}</strong>
+        </div>
+        <label className="acn-label">Valor desta Medição (R$) *</label>
+        <input className="acn-input" style={{ width:'100%', marginBottom:6 }} placeholder="0,00" inputMode="decimal"
+          value={valor} onChange={e => setValor(e.target.value)} autoFocus />
+        {vNum > 0 && excedente > 0 && (
+          <div style={{ fontSize:10, fontWeight:700, color:'#dc2626', background:'#fef2f2', border:'1px solid #fecaca',
+            borderRadius:4, padding:'6px 8px', marginBottom:10 }}>
+            ⚠️ Isso ultrapassa o valor total negociado em R$ {excedente.toLocaleString('pt-BR',{minimumFractionDigits:2})}.
+          </div>
+        )}
+        <label className="acn-label">Observação</label>
+        <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
+          placeholder="Ex: 1ª parcela, referente à etapa X..."
+          value={obs} onChange={e => setObs(e.target.value)} />
+        <label className="acn-label">Data</label>
+        <input type="date" className="acn-input" style={{ width:'100%', marginBottom:14 }}
+          value={data} onChange={e => setData(e.target.value)} />
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : '💾 Lançar Medição'}
           </button>
           <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
         </div>
