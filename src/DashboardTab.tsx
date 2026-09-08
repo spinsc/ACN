@@ -36,6 +36,7 @@ import AvisoSistemaWidget from './AvisoSistemaWidget';
 import ContatoAlertWidget from './ContatoAlertWidget';
 import ContatoComercialAlertWidget from './ContatoComercialAlertWidget';
 import { OplDetalheModal } from './AcnTabShared';
+import { normalizarBusca } from './SearchUtils';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -964,7 +965,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const hilite = (text: string, termo: string) => {
     if (!text || !termo) return text || '—';
     const s = String(text);
-    const idx = s.toLowerCase().indexOf(termo.toLowerCase());
+    // normalizarBusca preserva o tamanho/posição da string original pra
+    // caracteres acentuados comuns do português (confirmado: NFD decompõe 1
+    // caractere acentuado em base+marca, e a marca removida é exatamente o
+    // que o NFD acrescentou) — então o índice encontrado no texto
+    // normalizado aponta certo pro texto original, com acento e tudo.
+    const idx = normalizarBusca(s).indexOf(normalizarBusca(termo));
     if (idx === -1) return s;
     return (
       <>{s.slice(0, idx)}<mark style={{ background:'#fef08a', padding:0, borderRadius:2, fontWeight:700 }}>{s.slice(idx, idx + termo.length)}</mark>{s.slice(idx + termo.length)}</>
@@ -972,8 +978,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   };
 
   const getContexto = (r: any, termo: string): { campo: string; valor: string } | null => {
-    const t = termo.toLowerCase();
-    const chk = (v: string) => v && v.toLowerCase().includes(t);
+    const t = normalizarBusca(termo);
+    const chk = (v: string) => v && normalizarBusca(v).includes(t);
     if (r._tipo === 'crm') {
       if (chk(r.numero_edital)) return { campo: 'Edital', valor: r.numero_edital };
       if (chk(r.orgao))         return { campo: 'Órgão',  valor: r.orgao };

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
+import { normalizarBusca } from './SearchUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1359,7 +1360,7 @@ function RelatorioTecnicos({ funcionarios }) {
   const STC = { 'Em Execucao':'#8b5cf6','Manutencao Concluida':'#0d9488','Aguardando Inicio':'#f59e0b' };
   const stcOf = (s) => { for (const k of Object.keys(STC)) if (s && s.includes(k.split(' ')[0])) return STC[k]; return '#94a3b8'; };
 
-  const filtrado = dados.filter(t => !filtroNome || t.nome.toLowerCase().includes(filtroNome.toLowerCase()));
+  const filtrado = dados.filter(t => !filtroNome || normalizarBusca(t.nome).includes(normalizarBusca(filtroNome)));
 
   const imprimir = () => {
     const rows = filtrado.map(tec =>

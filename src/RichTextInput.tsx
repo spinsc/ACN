@@ -21,6 +21,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useUsers } from './MencaoTextarea';
+import { normalizarBusca } from './SearchUtils';
 
 // Só reconhece como HTML já formatado se tiver uma das tags que este editor
 // (ou o execCommand por trás dele) realmente produz — um texto legado tipo
@@ -99,7 +100,7 @@ export default function RichTextInput({
     if (/[\s\n]/.test(frag)) { setShowDrop(false); return; }
     const filtrados = frag.length === 0
       ? usuarios.slice(0, 10)
-      : usuarios.filter((u: any) => u.nome?.toLowerCase().includes(frag.toLowerCase())).slice(0, 10);
+      : usuarios.filter((u: any) => normalizarBusca(u.nome).includes(normalizarBusca(frag))).slice(0, 10);
     if (!filtrados.length) { setShowDrop(false); return; }
 
     const pos = posicaoDoOffset(editorRef.current, idx);

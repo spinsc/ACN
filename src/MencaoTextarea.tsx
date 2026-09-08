@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { normalizarBusca } from './SearchUtils';
 
 // ── Cache singleton – carrega 1x e compartilha entre todas as instâncias ─────
 let _cache: any[]         = [];
@@ -201,7 +202,7 @@ export default function MencaoTextarea({ value, onChange, rows = 3, placeholder,
 
     const filtrados = frag.length === 0
       ? users.slice(0, 10)
-      : users.filter(u => u.nome?.toLowerCase().includes(frag.toLowerCase())).slice(0, 10);
+      : users.filter(u => normalizarBusca(u.nome).includes(normalizarBusca(frag))).slice(0, 10);
 
     if (!filtrados.length) { setShowDrop(false); return; }
 

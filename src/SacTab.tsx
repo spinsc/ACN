@@ -5,6 +5,7 @@ import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
+import { normalizarBusca } from './SearchUtils';
 import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
@@ -795,8 +796,8 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
     if (filtroAvaliacao === 'Presencial' && o.tipo_avaliacao !== 'Presencial') return false;
     if (filtroAvaliacao === 'Veicular' && !o.is_manutencao_veicular) return false;
     if (busca) {
-      const b = busca.toLowerCase();
-      return o.numero_os?.toLowerCase().includes(b) || o.cliente_nome?.toLowerCase().includes(b) || o.equipamento_nome?.toLowerCase().includes(b);
+      const b = normalizarBusca(busca);
+      return normalizarBusca(o.numero_os).includes(b) || normalizarBusca(o.cliente_nome).includes(b) || normalizarBusca(o.equipamento_nome).includes(b);
     }
     return true;
   });

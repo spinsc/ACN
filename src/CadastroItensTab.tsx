@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
+import { normalizarBusca } from './SearchUtils';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -430,13 +431,13 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
     if (filtAtivo === 'inativo' &&  it.ativo) return false;
     if (filtCat && it.categoria !== filtCat) return false;
     if (busca.trim()) {
-      const t = busca.toLowerCase();
+      const t = normalizarBusca(busca);
       return (
-        it.nome?.toLowerCase().includes(t) ||
-        it.codigo?.toLowerCase().includes(t) ||
-        it.marca?.toLowerCase().includes(t) ||
-        it.fornecedor?.toLowerCase().includes(t) ||
-        it.ncm?.toLowerCase().includes(t)
+        normalizarBusca(it.nome).includes(t) ||
+        normalizarBusca(it.codigo).includes(t) ||
+        normalizarBusca(it.marca).includes(t) ||
+        normalizarBusca(it.fornecedor).includes(t) ||
+        normalizarBusca(it.ncm).includes(t)
       );
     }
     return true;

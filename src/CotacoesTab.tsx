@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
+import { normalizarBusca } from './SearchUtils';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -1405,11 +1406,12 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   }, [carregarConfig, carregarCotacoes, carregarPendentes]);
 
   const cotacoesFiltradas = cotacoes.filter(c => {
+    const okBuscaTermo = normalizarBusca(busca);
     const ok_busca = !busca ||
-      (c.nome || '').toLowerCase().includes(busca.toLowerCase()) ||
-      (c.numero_cotacao || '').toLowerCase().includes(busca.toLowerCase()) ||
-      (c.opl_numero || '').toLowerCase().includes(busca.toLowerCase()) ||
-      (c.criado_por || '').toLowerCase().includes(busca.toLowerCase());
+      normalizarBusca(c.nome).includes(okBuscaTermo) ||
+      normalizarBusca(c.numero_cotacao).includes(okBuscaTermo) ||
+      normalizarBusca(c.opl_numero).includes(okBuscaTermo) ||
+      normalizarBusca(c.criado_por).includes(okBuscaTermo);
     const ok_status = !filtroStatus || c.status === filtroStatus;
     const ok_aba    = abaLista === 'todas' || !c.crm_oportunidade_id;
     return ok_busca && ok_status && ok_aba;

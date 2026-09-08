@@ -9,6 +9,7 @@ import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
+import { normalizarBusca } from './SearchUtils';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 
@@ -2370,12 +2371,12 @@ export default function ProducaoTab({ currentUser }) {
       const tec = o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao;
       if (tec !== filtroTecnico) return false;
     }
-    if (filtroCliente.trim() && !o.cliente_nome?.toLowerCase().includes(filtroCliente.trim().toLowerCase())) return false;
+    if (filtroCliente.trim() && !normalizarBusca(o.cliente_nome).includes(normalizarBusca(filtroCliente))) return false;
     if (filtroEntregaDe && (!o.data_prevista_entrega || o.data_prevista_entrega < filtroEntregaDe)) return false;
     if (filtroEntregaAte && (!o.data_prevista_entrega || o.data_prevista_entrega > filtroEntregaAte)) return false;
     if (filtroBusca.trim()) {
-      const t = filtroBusca.trim().toLowerCase();
-      if (!(o.opl?.toLowerCase().includes(t) || o.chassi?.toLowerCase().includes(t) || o.cliente_nome?.toLowerCase().includes(t))) return false;
+      const t = normalizarBusca(filtroBusca);
+      if (!(normalizarBusca(o.opl).includes(t) || normalizarBusca(o.chassi).includes(t) || normalizarBusca(o.cliente_nome).includes(t))) return false;
     }
     return true;
   });

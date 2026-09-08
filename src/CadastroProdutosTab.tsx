@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { normalizarBusca } from './SearchUtils';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -724,8 +725,8 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
     if (filtAtivo === 'inativo' &&  p.ativo) return false;
     if (filtCat && p.categoria !== filtCat) return false;
     if (busca.trim()) {
-      const t = busca.toLowerCase();
-      return p.nome?.toLowerCase().includes(t) || p.codigo?.toLowerCase().includes(t) || p.categoria?.toLowerCase().includes(t);
+      const t = normalizarBusca(busca);
+      return normalizarBusca(p.nome).includes(t) || normalizarBusca(p.codigo).includes(t) || normalizarBusca(p.categoria).includes(t);
     }
     return true;
   });

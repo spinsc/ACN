@@ -20,6 +20,7 @@ import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo } from './VinculoPicker';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
+import { normalizarBusca } from './SearchUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -465,10 +466,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (filtResp && o.responsavel_nome !== filtResp) return false;
     if (filtTemp && o.temperatura !== filtTemp) return false;
     if (!busca) return true;
+    const buscaNorm = normalizarBusca(busca);
     return (
-      o.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
-      o.orgao?.toLowerCase().includes(busca.toLowerCase()) ||
-      o.numero_edital?.toLowerCase().includes(busca.toLowerCase())
+      normalizarBusca(o.titulo).includes(buscaNorm) ||
+      normalizarBusca(o.orgao).includes(buscaNorm) ||
+      normalizarBusca(o.numero_edital).includes(buscaNorm)
     );
   });
 
@@ -2849,11 +2851,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           if (filtResp && o.responsavel_comercial !== filtResp) return false;
           if (filtStatusOpl && o.status_geral !== filtStatusOpl) return false;
           if (!busca) return true;
-          const b = busca.toLowerCase();
+          const b = normalizarBusca(busca);
           return (
-            o.opl?.toLowerCase().includes(b) ||
-            o.cliente_nome?.toLowerCase().includes(b) ||
-            o.modelo?.toLowerCase().includes(b)
+            normalizarBusca(o.opl).includes(b) ||
+            normalizarBusca(o.cliente_nome).includes(b) ||
+            normalizarBusca(o.modelo).includes(b)
           );
         });
         return (

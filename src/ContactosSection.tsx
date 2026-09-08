@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
+import { normalizarBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,12 +141,12 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
     if (!isGerente && c.operador_nome !== currentUser?.nome) return false;
     if (filtroOp && c.operador_nome !== filtroOp) return false;
     if (busca) {
-      const b = busca.toLowerCase();
-      return c.nome?.toLowerCase().includes(b)
-          || c.empresa?.toLowerCase().includes(b)
-          || c.cargo?.toLowerCase().includes(b)
+      const b = normalizarBusca(busca);
+      return normalizarBusca(c.nome).includes(b)
+          || normalizarBusca(c.empresa).includes(b)
+          || normalizarBusca(c.cargo).includes(b)
           || c.whatsapp?.includes(b)
-          || c.email?.toLowerCase().includes(b);
+          || normalizarBusca(c.email).includes(b);
     }
     return true;
   });

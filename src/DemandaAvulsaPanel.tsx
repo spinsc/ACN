@@ -4,6 +4,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { supabase } from './supabaseClient';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
+import { normalizarBusca } from './SearchUtils';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -1256,8 +1257,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
     if (filtroStatusSpec && d.status !== filtroStatusSpec) return false;
     // Filtro por responsável
     if (filtroResp) {
-      const resp = d.responsavel_nome || '';
-      if (!resp.toLowerCase().includes(filtroResp.toLowerCase())) return false;
+      if (!normalizarBusca(d.responsavel_nome).includes(normalizarBusca(filtroResp))) return false;
     }
     return true;
   });

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { normalizarBusca } from './SearchUtils';
 
 const supabase = createClient(
   'https://qgemelnuqdilnggxmrdw.supabase.co',
@@ -1081,13 +1082,13 @@ export default function VeiculosNfcTab({ currentUser }) {
   };
 
   const veiculosFiltrados = veiculos.filter(v => {
-    const q = busca.toLowerCase();
+    const q = normalizarBusca(busca);
     const ok_busca = !busca ||
-      (v.chassi||'').toLowerCase().includes(q) ||
-      (v.placa||'').toLowerCase().includes(q) ||
-      (v.modelo||'').toLowerCase().includes(q) ||
-      (v.orgao_cliente||'').toLowerCase().includes(q) ||
-      (v.opl_numero||'').toLowerCase().includes(q);
+      normalizarBusca(v.chassi).includes(q) ||
+      normalizarBusca(v.placa).includes(q) ||
+      normalizarBusca(v.modelo).includes(q) ||
+      normalizarBusca(v.orgao_cliente).includes(q) ||
+      normalizarBusca(v.opl_numero).includes(q);
     const ativa = calcGarantia(v.data_fim_garantia);
     const ok_gar = !filtroGar ||
       (filtroGar === 'ativa' && ativa === true) ||

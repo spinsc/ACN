@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl } from './AcnTabShared';
+import { normalizarBusca } from './SearchUtils';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import OplAnexosWidget from './OplAnexosWidget';
@@ -869,9 +870,9 @@ export default function ComercialTab({ currentUser }) {
     if (filtroHistDataFim && (o.data_entrada || '') > filtroHistDataFim + 'T') return false;
     if (filtroTipo && (o.tipo_projeto || '') !== filtroTipo) return false;
     if (filtroBusca) {
-      const termo = filtroBusca.toLowerCase().trim();
+      const termo = normalizarBusca(filtroBusca.trim());
       const match = Object.values(o).some(v =>
-        v != null && typeof v !== 'object' && String(v).toLowerCase().includes(termo)
+        v != null && typeof v !== 'object' && normalizarBusca(String(v)).includes(termo)
       );
       if (!match) return false;
     }

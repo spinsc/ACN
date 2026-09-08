@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
+import { normalizarBusca } from './SearchUtils';
 
 const BROADCAST_CH = 'acn-chat-v1';
 
@@ -147,13 +148,13 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   };
 
   // ── Dados derivados ───────────────────────────────────────────────────────
-  const buscaL = busca.toLowerCase();
+  const buscaL = normalizarBusca(busca);
 
   // Lista unificada (diretos + grupos), ordenada por atividade mais recente
   // primeiro — igual WhatsApp. O badge/negrito continuam sinalizando não-lida,
   // mas não reordenam mais a lista.
   const salasOrdenadas = [...salas]
-    .filter(s => !busca || nomeSala(s).toLowerCase().includes(buscaL))
+    .filter(s => !busca || normalizarBusca(nomeSala(s)).includes(buscaL))
     .sort((a, b) => {
       const ta = ultimasMsg[a.id]?.criado_em || a.criado_em || '';
       const tb = ultimasMsg[b.id]?.criado_em || b.criado_em || '';
@@ -175,7 +176,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     const id = String(u.id || u.email);
     if (idsComDM.has(id)) return false;
     if (!busca) return true;
-    return (u.nome || u.email || '').toLowerCase().includes(buscaL);
+    return normalizarBusca(u.nome || u.email).includes(buscaL);
   });
 
   // ── Sync refs ─────────────────────────────────────────────────────────────
@@ -1126,7 +1127,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                   style={{ width: '100%', padding: '6px 9px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 11, boxSizing: 'border-box', marginBottom: 4 }} />
                 {addMembroBusca.trim().length > 0 && usuariosVisiveis
                   .filter(u => !(salaAtiva.membros || []).some((m: any) => String(m.id) === String(u.id || u.email)))
-                  .filter(u => (u.nome || '').toLowerCase().includes(addMembroBusca.toLowerCase()))
+                  .filter(u => normalizarBusca(u.nome).includes(normalizarBusca(addMembroBusca)))
                   .slice(0, 5)
                   .map(u => (
                     <div key={u.id || u.email} onClick={() => { adicionarMembroGrupo(u); setAddMembroBusca(''); }}
