@@ -40,6 +40,7 @@ const TODAS_ABAS = [
   { id:'cotacoes',     label:'Cotações' },
   { id:'rh',           label:'RH' },
   { id:'relatorios',      label:'Relatorios' },
+  { id:'formacao_precos', label:'Formação de Preços' },
   { id:'admin',           label:'Admin' },
 ];
 

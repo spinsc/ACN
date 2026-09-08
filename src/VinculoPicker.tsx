@@ -1,9 +1,9 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
 // VinculoPicker — seletor compartilhado de "vínculo opcional a um processo já
-// em andamento" (OP / OS / PV / Licitação / Compra / OFI). Usado por qualquer
-// tela que grave um vinculo_tipo/vinculo_id/vinculo_descricao (Demandas
-// Avulsas, Solicitação de Reposição do Almoxarifado, OFIs, Cotações...).
+// em andamento" (OP / OS / PV / Compra / OFI). Usado por qualquer tela que
+// grave um vinculo_tipo/vinculo_id/vinculo_descricao (Demandas Avulsas,
+// Solicitação de Reposição do Almoxarifado, OFIs...).
 //
 // Mesma forma de props de ClienteAutocomplete (ClienteUtils.tsx): entrega o
 // registro escolhido via onSelect, quem chama decide o que fazer com ele.
@@ -14,21 +14,20 @@ import { supabase } from './supabaseClient';
 export interface VinculoValue { tipo: string; id: string; descricao: string; }
 
 const TIPOS = [
-  { id: 'op',        label: 'OP' },
-  { id: 'os',        label: 'OS' },
-  { id: 'pv',        label: 'PV' },
-  { id: 'licitacao', label: 'Licitação' },
-  { id: 'compra',    label: 'Compra' },
-  { id: 'ofi',       label: 'OFI' },
+  { id: 'op',     label: 'OP' },
+  { id: 'os',     label: 'OS' },
+  { id: 'pv',     label: 'PV' },
+  { id: 'compra', label: 'Compra' },
+  { id: 'ofi',    label: 'OFI' },
 ];
 
-export const TIPO_LABEL: Record<string, string> = { op: 'OP', os: 'OS', pv: 'PV', licitacao: 'Licitação', compra: 'Compra', ofi: 'OFI' };
+export const TIPO_LABEL: Record<string, string> = { op: 'OP', os: 'OS', pv: 'PV', compra: 'Compra', ofi: 'OFI' };
 
 // contexto do deep-link (acn:abrir-registro) e aba de destino por tipo —
 // reaproveita os listeners que já existem em ProducaoTab/SacTab/CrmTab/
-// ComprasTab/LicitacoesTab, nenhum listener novo fora do que o plano previu.
-const TIPO_CONTEXTO: Record<string, string> = { op: 'op', os: 'sac', pv: 'crm', licitacao: 'licitacao', compra: 'compra', ofi: 'ofi' };
-const TIPO_ABA: Record<string, string | null> = { op: 'producao', os: 'sac', pv: 'crm', licitacao: 'licitacoes', compra: 'compras', ofi: null };
+// ComprasTab, nenhum listener novo fora do que o plano previu.
+const TIPO_CONTEXTO: Record<string, string> = { op: 'op', os: 'sac', pv: 'crm', compra: 'compra', ofi: 'ofi' };
+const TIPO_ABA: Record<string, string | null> = { op: 'producao', os: 'sac', pv: 'crm', compra: 'compras', ofi: null };
 const SETOR_DESTINO_ABA: Record<string, string> = { Chicotes: 'chicotes', Serralheria: 'serralheria', Laboratorio: 'laboratorio' };
 
 // Dispara o deep-link já estabelecido no app pra abrir o registro vinculado —
@@ -77,12 +76,6 @@ async function buscarPorTipo(tipo: string, q: string): Promise<{ id: string; des
         .order('criado_em', { ascending: false }).limit(8);
       return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero_pv || r.titulo || '—'} — ${r.cliente_final || ''}`.replace(/ — $/, '') }));
     }
-    if (tipo === 'licitacao') {
-      const { data } = await supabase.from('licitacoes').select('id,numero,nome_projeto,orgao')
-        .or(`numero.ilike.${like},nome_projeto.ilike.${like},orgao.ilike.${like}`)
-        .order('criado_em', { ascending: false }).limit(8);
-      return (data || []).map((r: any) => ({ id: String(r.id), descricao: `${r.numero || '—'} — ${r.nome_projeto || r.orgao || ''}`.replace(/ — $/, '') }));
-    }
     if (tipo === 'compra') {
       const { data } = await supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material')
         .or(`numero_pedido.ilike.${like},descricao_material.ilike.${like}`)
@@ -97,30 +90,6 @@ async function buscarPorTipo(tipo: string, q: string): Promise<{ id: string; des
     }
   } catch (_) { /* tabela pode não existir em algum ambiente antigo — falha silenciosa */ }
   return [];
-}
-
-// Resolve a descrição de UM registro já conhecido (id certo, sem busca por
-// texto) — usado quando um vínculo já existe e só falta mostrar o rótulo
-// (ex: FormacaoPrecosTab.tsx carregando uma cotação e recuperando o vínculo
-// dela já salvo em cotacoes_precos_vinculos).
-export async function resolverDescricaoVinculo(tipo: string, id: string): Promise<string> {
-  const TABELAS: Record<string, { tabela: string; sel: string; num: string; nome: string }> = {
-    op:        { tabela: 'oples',              sel: 'opl,cliente_nome,modelo',        num: 'opl',          nome: 'cliente_nome' },
-    os:        { tabela: 'sac_ordens_servico',  sel: 'numero_os,cliente_nome',         num: 'numero_os',    nome: 'cliente_nome' },
-    pv:        { tabela: 'crm_oportunidades',   sel: 'numero_pv,titulo,cliente_final', num: 'numero_pv',    nome: 'cliente_final' },
-    licitacao: { tabela: 'licitacoes',          sel: 'numero,nome_projeto,orgao',      num: 'numero',       nome: 'nome_projeto' },
-    compra:    { tabela: 'pcp_pedidos_compra',  sel: 'numero_pedido,descricao_material', num: 'numero_pedido', nome: 'descricao_material' },
-    ofi:       { tabela: 'ofis',                sel: 'numero_ofi,descricao',           num: 'numero_ofi',   nome: 'descricao' },
-  };
-  const cfg = TABELAS[tipo];
-  if (!cfg || !id) return '—';
-  try {
-    const { data } = await supabase.from(cfg.tabela).select(cfg.sel).eq('id', id).maybeSingle();
-    if (!data) return '—';
-    return `${(data as any)[cfg.num] || '—'} — ${(data as any)[cfg.nome] || ''}`.replace(/ — $/, '');
-  } catch (_) {
-    return '—';
-  }
 }
 
 export function VinculoPicker({ value, onSelect, onClear }: {
