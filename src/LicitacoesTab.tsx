@@ -2128,6 +2128,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
           </span>
         )}
       </div>
+      <div style={{ fontSize:12, fontWeight:700, color:'#1f2937', marginTop:5 }}>{l.numero} — {l.nome_projeto}</div>
       <div style={{ marginTop:6 }}>
         {l.orgao ? (
           orgaoEhLink ? (
