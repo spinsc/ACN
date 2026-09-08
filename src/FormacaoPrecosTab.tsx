@@ -426,7 +426,12 @@ function CalcMarkupReverso() {
           <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>DIFAL %</div>
           <input className="acn-input" style={{ width:70 }} value={difal} onChange={e=>setDifal(e.target.value)} />
         </div>
-        <button className="acn-btn" style={{ background:'#0891b2' }} onClick={calcular}>Calcular</button>
+        {/* Rótulo "fantasma" — sem ele o botão (menor que um input) ficava
+            visualmente flutuando mais baixo que os campos ao lado */}
+        <div>
+          <div style={{ fontSize:9, color:'transparent', marginBottom:2 }}>·</div>
+          <button className="acn-btn" style={{ background:'#0891b2', fontSize:10, padding:'5px 12px' }} onClick={calcular}>Calcular</button>
+        </div>
         {resultado != null && (
           <div style={{ fontWeight:800, fontSize:13, color: resultado >= 0 ? '#16a34a' : '#dc2626', marginLeft:4 }}>
             Markup = {fmtPct(resultado)}
@@ -464,7 +469,10 @@ function CalcImpostoReverso() {
           <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Imposto %</div>
           <input className="acn-input" style={{ width:70 }} value={imposto} onChange={e=>setImposto(e.target.value)} />
         </div>
-        <button className="acn-btn" style={{ background:'#7c3aed' }} onClick={calcular}>Calcular</button>
+        <div>
+          <div style={{ fontSize:9, color:'transparent', marginBottom:2 }}>·</div>
+          <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10, padding:'5px 12px' }} onClick={calcular}>Calcular</button>
+        </div>
         {resultado != null && (
           <div style={{ fontWeight:700, fontSize:11, color:'#7c3aed', marginLeft:4 }}>
             Sem imposto: <strong>{fmtR(resultado.semImposto)}</strong> &nbsp;|&nbsp; Imposto: <strong>{fmtR(resultado.valorImposto)}</strong>
@@ -804,9 +812,14 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
     // do cartão pra aparecer inteiro; um ancestral com overflow:hidden cortava
     // a lista de sugestões numa faixa minúscula, impossível de usar.
     <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:8 }}>
-      {/* ── Cabeçalho do item — sempre visível ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', flexWrap:'wrap' }}>
+      {/* ── Cabeçalho do item — sempre visível. Todo campo segue a mesma
+          estrutura (rótulo pequeno + linha de conteúdo) e a linha usa
+          alignItems:'flex-end' — com todos os blocos da mesma altura, os
+          rótulos ficam alinhados no topo e os campos/botões alinhados
+          embaixo, tudo na mesma linha de base ── */}
+      <div style={{ display:'flex', alignItems:'flex-end', gap:10, padding:'8px 10px', flexWrap:'wrap' }}>
         <div style={{ flex:'2 1 200px', minWidth:160, position:'relative' }}>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Produto / Descrição</div>
           <ProdutoAutocomplete
             value={item.produto}
             params={params}
@@ -815,12 +828,14 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           />
         </div>
         <div style={{ flex:'1 1 90px', minWidth:80 }}>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Marca</div>
           <input className="acn-input" style={{ width:'100%', ...inp11 }}
-            placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
+            value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
         </div>
         <div style={{ flex:'1 1 90px', minWidth:80 }}>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Modelo</div>
           <input className="acn-input" style={{ width:'100%', ...inp11 }}
-            placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
+            value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
         </div>
         <div style={{ width:56 }}>
           <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Qt</div>
@@ -828,24 +843,32 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
         </div>
         <div style={{ minWidth:90, textAlign:'right' }}>
-          <div style={{ fontSize:8, color:'#94a3b8' }}>Valor Unit.</div>
-          <div style={{ fontSize:12, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</div>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Valor Unit.</div>
+          <div style={{ fontSize:12, color:'#1d4ed8', fontWeight:600, padding:'5px 0' }}>{fmtR(valorUnit)}</div>
         </div>
         <div style={{ minWidth:100, textAlign:'right' }}>
-          <div style={{ fontSize:8, color:'#94a3b8' }}>Valor Total</div>
-          <div style={{ fontSize:13, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</div>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Valor Total</div>
+          <div style={{ fontSize:13, color:'#1d4ed8', fontWeight:800, padding:'5px 0' }}>{fmtR(valorTotal)}</div>
         </div>
+        {/* Rótulo "fantasma" (mesma altura, invisível) nos botões — sem isso
+            eles ficariam mais altos que os campos, fora da linha de base */}
         {temDetalhe && (
-          <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
-            style={{ background: aberto ? '#f0fdfa' : 'none', border:'1px solid ' + (aberto ? '#5eead4' : '#e2e8f0'),
-              color:'#0f766e', fontSize:9, fontWeight:700, cursor:'pointer', padding:'4px 8px', borderRadius:4 }}>
-            {aberto ? '▾ Menos' : '▸ Custo/impostos/markup'}
-          </button>
+          <div>
+            <div style={{ fontSize:8, color:'transparent', marginBottom:2 }}>·</div>
+            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
+              style={{ background: aberto ? '#f0fdfa' : 'none', border:'1px solid ' + (aberto ? '#5eead4' : '#e2e8f0'),
+                color:'#0f766e', fontSize:9, fontWeight:700, cursor:'pointer', padding:'5px 8px', borderRadius:4 }}>
+              {aberto ? '▾ Menos' : '▸ Custo/impostos/markup'}
+            </button>
+          </div>
         )}
-        <button onClick={onRemove}
-          style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
-          ✕
-        </button>
+        <div>
+          <div style={{ fontSize:8, color:'transparent', marginBottom:2 }}>·</div>
+          <button onClick={onRemove}
+            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'5px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
@@ -2086,7 +2109,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               Um card só (antes eram 2 caixas separadas) — mesmo assunto,
               "quem é esta cotação", com uma linha divisória entre os 2 blocos. */}
           <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
-            <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+            {/* alignItems:'flex-start' (não 'flex-end') — o bloco Desconto tem
+                uma 3ª linha de legenda que o de OP/OS não tem; bottom-align
+                fazia os rótulos ficarem em alturas diferentes */}
+            <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-start' }}>
               <div>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔗 OP/OS Vinculada</div>
                 <OplAutocomplete value={oplVinculada} onSelect={setOplVinculada} />
@@ -2110,7 +2136,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
               )}
             </div>
 
-            <div style={{ borderTop:'1px solid #f1f5f9', marginTop:12, paddingTop:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+            <div style={{ borderTop:'1px solid #f1f5f9', marginTop:12, paddingTop:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-start' }}>
               <div>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
                 <div style={{ display:'flex', gap:4 }}>
