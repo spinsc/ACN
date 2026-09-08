@@ -34,6 +34,24 @@ export function corMarkup(pct: number | null | undefined) {
   return banda || MARKUP_BANDAS[3]; // pct === 100 exatamente cai aqui (verde)
 }
 
+// Média de markup_pct dos itens em modo CUSTO de uma cotação (itens em modo
+// TABELA usam markup_pct como campo de desconto, não entram na média).
+// Extraído de carregarMarkupPorProcesso pra ser reaproveitado também pelo
+// relatório "Markup por Vendedor" (RelatoriosTab.tsx), sem duplicar a conta.
+export function mediaMarkupItens(itens: any[] | null | undefined): number | null {
+  const itensCusto = (itens || []).filter((it: any) => it.tipo_calculo !== 'TABELA');
+  if (!itensCusto.length) return null;
+  const soma = itensCusto.reduce((s: number, it: any) => s + (Number(it.markup_pct) || 0), 0);
+  return soma / itensCusto.length;
+}
+
+// Dada uma lista de cotações de um mesmo processo, escolhe a vencedora, ou a
+// de maior versão se nenhuma estiver marcada — mesma regra em todo lugar.
+export function cotacaoAlvo(cotacoes: any[]): any | null {
+  if (!cotacoes || !cotacoes.length) return null;
+  return cotacoes.find(c => c.vencedora) || [...cotacoes].sort((a, b) => (b.versao || 1) - (a.versao || 1))[0];
+}
+
 // ── Carrega o mapa processoId -> markup médio, para um tipo (crm|licitacao) ──
 export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Promise<Record<string, number>> {
   const { data: vinc } = await supabase
@@ -59,14 +77,38 @@ export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Prom
 
   const resultado: Record<string, number> = {};
   Object.entries(cotacoesPorProcesso).forEach(([processoId, cots]) => {
-    const alvo = cots.find(c => c.vencedora) || [...cots].sort((a, b) => (b.versao || 1) - (a.versao || 1))[0];
+    const alvo = cotacaoAlvo(cots);
     if (!alvo) return;
-    const itensCusto = (alvo.itens || []).filter((it: any) => it.tipo_calculo !== 'TABELA');
-    if (!itensCusto.length) return;
-    const soma = itensCusto.reduce((s: number, it: any) => s + (Number(it.markup_pct) || 0), 0);
-    resultado[processoId] = soma / itensCusto.length;
+    const media = mediaMarkupItens(alvo.itens);
+    if (media !== null) resultado[processoId] = media;
   });
   return resultado;
+}
+
+// ── Ícone SVG de termômetro — tubo + bulbo, preenchido até a % e colorido
+// pela faixa. Escala: 0%-130% mapeado pra 0%-100% de altura do tubo
+// (clampado nas pontas), pra dar pra distinguir visualmente um 60% "quase
+// vazio" de um 105% "quase cheio/dourado". ──
+export function Termometro({ pct, size = 14 }: { pct: number | null | undefined; size?: number }) {
+  const banda = corMarkup(pct);
+  const valor = pct === null || pct === undefined || Number.isNaN(pct) ? 0 : pct;
+  const fracao = Math.max(0, Math.min(1, valor / 130));
+  const W = 14, H = 30;
+  const tuboTopo = 4, tuboBase = 19; // região do tubo que preenche (o bulbo cobre o resto embaixo)
+  const alturaFill = fracao * (tuboBase - tuboTopo);
+  const yFill = tuboBase - alturaFill;
+  const escala = size / H;
+  return (
+    <svg width={W * escala} height={H * escala} viewBox={`0 0 ${W} ${H}`} style={{ flexShrink: 0, display: 'block' }}>
+      {/* tubo e bulbo vazios (fundo) */}
+      <rect x={4.5} y={tuboTopo} width={5} height={19} rx={2.5} fill="#e2e8f0" stroke={banda.borda} strokeWidth={0.6} />
+      <circle cx={7} cy={24} r={5.5} fill="#e2e8f0" stroke={banda.borda} strokeWidth={0.6} />
+      {/* mercúrio — tubo preenchido até yFill, sempre alcançando o bulbo */}
+      <rect x={5} y={yFill} width={4} height={tuboBase - yFill + 6} rx={2} fill={banda.cor} />
+      {/* bulbo sempre cheio, por cima, pra ficar limpo */}
+      <circle cx={7} cy={24} r={4.5} fill={banda.cor} />
+    </svg>
+  );
 }
 
 // ── Badge pequeno pro card individual (Kanban CRM / LicitCard) ──
@@ -75,11 +117,12 @@ export function MarkupBadge({ pct }: { pct: number | null | undefined }) {
   const banda = corMarkup(pct);
   return (
     <span title={`Markup médio da cotação: ${banda.label}`} style={{
-      fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: 9, fontWeight: 700, padding: '1px 5px 1px 3px', borderRadius: 3,
       background: banda.bg, color: banda.cor, border: `1px solid ${banda.borda}`,
-      display: 'inline-block',
     }}>
-      🌡️ {pct.toFixed(1)}%
+      <Termometro pct={pct} size={13} />
+      {pct.toFixed(1)}%
     </span>
   );
 }

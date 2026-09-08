@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { labelHierarquico } from './CentroCustoShared';
+import { MARKUP_BANDAS, corMarkup, mediaMarkupItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -1018,6 +1019,182 @@ function RelCentroCusto() {
   );
 }
 
+// ── RELATÓRIO DE MARKUP POR VENDEDOR ──
+// Agrupa as cotações vinculadas (cotacoes_precos_vinculos) por vendedor —
+// responsável no Comercial/CRM, operador/analista em Licitações — usando a
+// mesma regra de "cotação alvo" (vencedora, senão a de maior versão) e a
+// mesma média por item que já alimenta o termômetro nos cards
+// (mediaMarkupItens/cotacaoAlvo, MarkupTermometro.tsx — sem duplicar a conta).
+function RelMarkupVendedor() {
+  const hoje = new Date();
+  const [mes, setMes]     = useState(`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`);
+  const [funil, setFunil] = useState('todos'); // 'todos' | 'crm' | 'licitacao'
+  const [linhas, setLinhas] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const carregar = async () => {
+      setLoading(true);
+      const tipos = funil === 'todos' ? ['crm', 'licitacao'] : [funil];
+      const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+        .select('cotacao_id, processo_id, tipo').in('tipo', tipos);
+      if (!vinc || !vinc.length) { setLinhas([]); setLoading(false); return; }
+
+      const cotacaoIds = [...new Set(vinc.map((v) => v.cotacao_id))];
+      const { data: cotacoes } = await supabase.from('cotacoes_precos')
+        .select('id, itens, vencedora, versao, criado_em').in('id', cotacaoIds);
+      const cotacaoPorId = {};
+      (cotacoes || []).forEach((c) => { cotacaoPorId[c.id] = c; });
+
+      // Agrupa por processo (tipo+id) — pode haver várias versões da mesma cotação
+      const cotsPorProcesso = {};
+      vinc.forEach((v) => {
+        const c = cotacaoPorId[v.cotacao_id];
+        if (!c) return;
+        const chave = `${v.tipo}:${v.processo_id}`;
+        (cotsPorProcesso[chave] ||= []).push(c);
+      });
+
+      // Resolve a cotação alvo de cada processo, filtra por mês (criado_em) e
+      // calcula a média — separa os ids por tipo pra buscar o nome do vendedor
+      const processosCrm = [], processosLic = [];
+      const alvoPorProcesso = {};
+      Object.entries(cotsPorProcesso).forEach(([chave, cots]) => {
+        const [tipo, processoId] = chave.split(':');
+        const alvo = cotacaoAlvo(cots);
+        if (!alvo) return;
+        if (mes && (alvo.criado_em || '').slice(0, 7) !== mes) return;
+        const media = mediaMarkupItens(alvo.itens);
+        if (media === null) return;
+        alvoPorProcesso[chave] = { tipo, processoId, media };
+        (tipo === 'crm' ? processosCrm : processosLic).push(processoId);
+      });
+
+      const [{ data: crmData }, { data: licData }] = await Promise.all([
+        processosCrm.length ? supabase.from('crm_oportunidades').select('id, responsavel_nome').in('id', processosCrm) : Promise.resolve({ data: [] }),
+        processosLic.length ? supabase.from('licitacoes').select('id, operador, analista_nome').in('id', processosLic) : Promise.resolve({ data: [] }),
+      ]);
+      const nomeCrm = {}; (crmData || []).forEach((o) => { nomeCrm[o.id] = o.responsavel_nome || null; });
+      const nomeLic = {}; (licData || []).forEach((l) => { nomeLic[l.id] = l.operador || l.analista_nome || null; });
+
+      // Agrupa por vendedor (nome + funil, pra não misturar quem atua nos 2)
+      const porVendedor = {};
+      Object.values(alvoPorProcesso).forEach(({ tipo, processoId, media }) => {
+        const nome = tipo === 'crm' ? nomeCrm[processoId] : nomeLic[processoId];
+        if (!nome) return;
+        const chave = `${nome}__${tipo}`;
+        if (!porVendedor[chave]) porVendedor[chave] = { nome, funil: tipo, qtd: 0, soma: 0, porFaixa: {} };
+        const v = porVendedor[chave];
+        v.qtd++; v.soma += media;
+        const banda = corMarkup(media).id;
+        v.porFaixa[banda] = (v.porFaixa[banda] || 0) + 1;
+      });
+
+      const resultado = Object.values(porVendedor)
+        .map((v) => ({ ...v, mediaMarkup: v.soma / v.qtd }))
+        .sort((a, b) => b.qtd - a.qtd);
+      setLinhas(resultado);
+      setLoading(false);
+    };
+    carregar();
+  }, [mes, funil]);
+
+  const [anoLabel, mesNumLabel] = mes ? mes.split('-') : [null, null];
+  const nomesMes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const labelMes = mes ? `${nomesMes[Number(mesNumLabel) - 1]}/${anoLabel}` : 'todos os períodos';
+
+  const FUNIS = [
+    { id: 'todos', label: 'Todos' },
+    { id: 'crm', label: 'Comercial/CRM' },
+    { id: 'licitacao', label: 'Licitações' },
+  ];
+
+  return (
+    <div style={{ padding: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Mês de Referência</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="month" value={mes} onChange={(e) => setMes(e.target.value)}
+              style={{ padding: '5px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11 }} />
+            {mes && (
+              <button onClick={() => setMes('')}
+                style={{ background: '#f1f5f9', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 9, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                Todos
+              </button>
+            )}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Funil</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {FUNIS.map((f) => (
+              <button key={f.id} onClick={() => setFunil(f.id)}
+                style={{ padding: '5px 10px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+                  border: '1px solid ' + (funil === f.id ? '#0891b2' : '#d1d5db'),
+                  background: funil === f.id ? '#0891b2' : '#fff', color: funil === f.id ? '#fff' : '#475569' }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {!loading && (
+          <div style={{ fontSize: 10, color: '#64748b' }}>
+            {linhas.length} vendedor(es) com cotação vinculada em {labelMes}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>Carregando...</div>
+      ) : linhas.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#9ca3af', padding: 24, fontSize: 11 }}>
+          Nenhuma cotação vinculada encontrada nesse período/funil.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#64748b' }}>Vendedor</th>
+                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#64748b' }}>Funil</th>
+                <th style={{ textAlign: 'center', padding: '6px 10px', color: '#64748b' }}>Propostas</th>
+                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#64748b' }}>Markup Médio</th>
+                {MARKUP_BANDAS.map((b) => (
+                  <th key={b.id} style={{ textAlign: 'center', padding: '6px 8px', color: b.cor }} title={b.label}>
+                    {b.id === 'dourado' ? '🥇' : '●'}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((v, idx) => (
+                <tr key={v.nome + v.funil} style={{ borderTop: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <td style={{ padding: '6px 10px', fontWeight: 700, color: '#1e293b' }}>{v.nome}</td>
+                  <td style={{ padding: '6px 10px', color: '#64748b' }}>{v.funil === 'crm' ? 'Comercial/CRM' : 'Licitações'}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700 }}>{v.qtd}</td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <Termometro pct={v.mediaMarkup} size={16} />
+                      <strong style={{ color: corMarkup(v.mediaMarkup).cor }}>{v.mediaMarkup.toFixed(1)}%</strong>
+                    </span>
+                  </td>
+                  {MARKUP_BANDAS.map((b) => (
+                    <td key={b.id} style={{ padding: '6px 8px', textAlign: 'center',
+                      color: v.porFaixa[b.id] ? b.cor : '#cbd5e1', fontWeight: v.porFaixa[b.id] ? 800 : 400 }}>
+                      {v.porFaixa[b.id] || 0}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── RELATÓRIO DE COMISSÕES ──
 function RelComissoes() {
   const hoje = new Date();
@@ -1377,6 +1554,7 @@ export default function RelatoriosTab({ currentUser }) {
     {id:'producao',   label:'Produção'},
     {id:'centrocusto',label:'Centro Custo'},
     {id:'comissoes',  label:'Comissões'},
+    {id:'markup',     label:'Markup Vendedor'},
   ];
 
   return (
@@ -1403,6 +1581,7 @@ export default function RelatoriosTab({ currentUser }) {
       {aba==='producao'    && <RelProducao />}
       {aba==='centrocusto' && <RelCentroCusto />}
       {aba==='comissoes'   && <RelComissoes />}
+      {aba==='markup'      && <RelMarkupVendedor />}
     </div>
   );
 }
