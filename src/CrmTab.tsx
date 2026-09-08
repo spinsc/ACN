@@ -19,6 +19,7 @@ import FormacaoPrecosTab from './FormacaoPrecosTab';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo } from './VinculoPicker';
+import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -292,6 +293,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
   const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
+  const [markupPorOp, setMarkupPorOp]       = useState<Record<string, number>>({});
   const [salvandoCompra, setSalvandoCompra] = useState(false);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
@@ -381,6 +383,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       .select('*')
       .not('oportunidade_id','is',null);
     setPedidosCompra(pcData || []);
+    // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
+    carregarMarkupPorProcesso('crm').then(setMarkupPorOp);
     if (!silent) setLoading(false);
   }, []);
 
@@ -1965,6 +1969,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           return null;
         })()}
 
+        {markupPorOp[op.id] !== undefined && (
+          <div style={{ marginTop:4 }}>
+            <MarkupBadge pct={markupPorOp[op.id]} />
+          </div>
+        )}
+
         <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
           {ganho && (
             <>
@@ -2138,6 +2148,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 <div style={{ fontSize:15, fontWeight:800, color:'#dc2626', lineHeight:1.4 }}>{fmtMoeda(totalPerdido)}</div>
               </div>
             </div>
+            <MarkupBarraDistribuicao valores={opsAtivas.map(o => markupPorOp[o.id])} />
           </div>
         )}
       </div>

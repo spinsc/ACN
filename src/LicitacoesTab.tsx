@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ModalSolicitarAnalise, AnaliseStatusPanel, AnaliseStatusBadge } from './AnaliseWidget';
+import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import AgendaWidget from './AgendaWidget';
 import { UnreadBadge } from './useUnread';
 import { salvarMencoes } from './MencaoTextarea';
@@ -2093,7 +2094,7 @@ function ModalNova({ currentUser, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CARD DE LICITAÇÃO
 // ─────────────────────────────────────────────────────────────────────────────
-function LicitCard({ l, onClick, unread = false }) {
+function LicitCard({ l, onClick, unread = false, markup = undefined }) {
   const marcadores: string[] = l.marcadores || [];
   const dias = diasRestantes(l.data_disputa);
   const urgente = isDiaDisputa(l.data_disputa);
@@ -2151,6 +2152,7 @@ function LicitCard({ l, onClick, unread = false }) {
           {l.operador || l.analista_nome ? `👤 ${l.operador || l.analista_nome}` : ''}
         </span>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <MarkupBadge pct={markup} />
           <AnaliseStatusBadge origemId={l.id} />
           <button onClick={e => { e.stopPropagation(); onClick(); }}
             style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 8px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
@@ -2178,7 +2180,7 @@ const GRUPOS_RELATORIO = [
   { label:'⏸️ Suspensas',    key:'Suspenso',     cor:'#d97706', bgCor:'#fffbeb' },
 ];
 
-function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
+function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {} }) {
   const [anoFiltro, setAnoFiltro] = useState('');
 
   const anos = [...new Set(
@@ -2227,6 +2229,10 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit }) {
           );
         })}
       </div>
+
+      <MarkupBarraDistribuicao valores={
+        filtradas.filter(l => l.status === 'Em Andamento' || l.status === 'Aberta').map(l => markupPorLicit[l.id])
+      } />
 
       {/* Tabelas por grupo */}
       {GRUPOS_RELATORIO.map(g => {
@@ -2379,6 +2385,7 @@ function PipelineCardsLicitacoes({ licitacoes }: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
+  const [markupPorLicit, setMarkupPorLicit] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('todas');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
@@ -2466,6 +2473,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     setLoading(true);
     const { data } = await supabase.from('licitacoes').select('*').order('criado_em', { ascending: false });
     setLicitacoes(data || []);
+    // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
+    carregarMarkupPorProcesso('licitacao').then(setMarkupPorLicit);
     setLoading(false);
   }, []);
 
@@ -2669,7 +2678,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
       {/* LISTA ou RELATÓRIO */}
       {vistaRelatorio ? (
-        <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} />
+        <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} markupPorLicit={markupPorLicit} />
       ) : (
         <div style={{ height:'90vh', overflowY:'auto', padding:16 }}>
           {loading || (modoRecentes && recentesLicitLoading) ? (
@@ -2687,11 +2696,11 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
                   {g.label}
                   <span style={{ background:'#1e3a5f', color:'#fff', borderRadius:10, padding:'1px 8px', fontSize:9, fontWeight:700 }}>{g.itens.length}</span>
                 </div>
-                {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} />)}
+                {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} markup={markupPorLicit[l.id]} />)}
               </div>
             ))
           ) : (
-            lista.map(l => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} />)
+            lista.map(l => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} markup={markupPorLicit[l.id]} />)
           )}
         </div>
       )}
