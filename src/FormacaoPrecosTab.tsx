@@ -23,6 +23,7 @@ function novoItem() {
     grupo_nome:     'Item 1', // "Item do edital" ao qual este componente pertence (ver tira de abas)
     produto:        '',
     marca:          '',
+    modelo:         '', // igual à coluna MODELO da planilha original (separada de Marca/Produto)
     fornecedor:     '',
     qt:             1,
     moeda:          'REAL',
@@ -783,199 +784,199 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
   // Vendedor não vê custo/impostos/markup — não há nada pra expandir.
   const temDetalhe = !isVendedor;
 
+  // Rótulo de seção reutilizável nas 3 seções do corpo expandido
+  const secao = (label) => (
+    <div style={{ fontSize:9, fontWeight:800, color:'#0f766e', marginBottom:6, marginTop:12, textTransform:'uppercase', letterSpacing:.4 }}>
+      {label}
+    </div>
+  );
+  const campoGrid = { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))', gap:10 };
+  const valor = (label, cor, texto) => (
+    <div>
+      <div style={{ fontSize:8, color:'#64748b' }}>{label}</div>
+      <div style={{ fontSize:11, color:cor, fontWeight:600 }}>{texto}</div>
+    </div>
+  );
+
   return (
-    <>
-      <tr style={{ borderBottom: aberto ? 'none' : '1px solid #e8ecf0' }}>
-        {/* Produto */}
-        <td style={{ padding:'6px 8px', minWidth:180, position:'relative' }}>
+    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, marginBottom:8, overflow:'hidden' }}>
+      {/* ── Cabeçalho do item — sempre visível ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', flexWrap:'wrap' }}>
+        <div style={{ flex:'2 1 200px', minWidth:160, position:'relative' }}>
           <ProdutoAutocomplete
             value={item.produto}
             params={params}
             onFill={dados => onFill(dados)}
             onExpand={linhas => onExpand(linhas)}
           />
-        </td>
-        {/* Marca */}
-        <td style={{ padding:'6px 6px', minWidth:90 }}>
+        </div>
+        <div style={{ flex:'1 1 90px', minWidth:80 }}>
           <input className="acn-input" style={{ width:'100%', ...inp11 }}
             placeholder="Marca" value={item.marca} onChange={e=>onSet('marca',e.target.value)} />
-        </td>
-        {/* Qt */}
-        <td style={{ padding:'6px 6px', width:54 }}>
-          <input type="number" className="acn-input" style={{ width:48, ...inp11r }}
+        </div>
+        <div style={{ flex:'1 1 90px', minWidth:80 }}>
+          <input className="acn-input" style={{ width:'100%', ...inp11 }}
+            placeholder="Modelo" value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
+        </div>
+        <div style={{ width:56 }}>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Qt</div>
+          <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
             min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
-        </td>
-        {/* Valor Unit (calculado) */}
-        <td style={{ padding:'6px 8px', width:100, textAlign:'right', fontSize:11, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</td>
-        {/* Valor Total (calculado) */}
-        <td style={{ padding:'6px 8px', width:110, textAlign:'right', fontSize:12, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</td>
-        {/* Toggle detalhe */}
-        <td style={{ padding:'6px 4px', width:28, textAlign:'center' }}>
-          {temDetalhe && (
-            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
-              style={{ background:'none', border:'none', color:'#64748b', fontSize:12, cursor:'pointer', padding:2 }}>
-              {aberto ? '▾' : '▸'}
-            </button>
-          )}
-        </td>
-        {/* Remover */}
-        <td style={{ padding:'6px 6px', width:32, textAlign:'center' }}>
-          <button onClick={onRemove}
-            style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 7px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
-            ✕
+        </div>
+        <div style={{ minWidth:90, textAlign:'right' }}>
+          <div style={{ fontSize:8, color:'#94a3b8' }}>Valor Unit.</div>
+          <div style={{ fontSize:12, color:'#1d4ed8', fontWeight:600 }}>{fmtR(valorUnit)}</div>
+        </div>
+        <div style={{ minWidth:100, textAlign:'right' }}>
+          <div style={{ fontSize:8, color:'#94a3b8' }}>Valor Total</div>
+          <div style={{ fontSize:13, color:'#1d4ed8', fontWeight:800 }}>{fmtR(valorTotal)}</div>
+        </div>
+        {temDetalhe && (
+          <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
+            style={{ background: aberto ? '#f0fdfa' : 'none', border:'1px solid ' + (aberto ? '#5eead4' : '#e2e8f0'),
+              color:'#0f766e', fontSize:9, fontWeight:700, cursor:'pointer', padding:'4px 8px', borderRadius:4 }}>
+            {aberto ? '▾ Menos' : '▸ Custo/impostos/markup'}
           </button>
-        </td>
-      </tr>
-      {aberto && temDetalhe && (
-        <tr style={{ borderBottom:'1px solid #e8ecf0', background:'#f8fafc' }}>
-          <td colSpan={7} style={{ padding:'8px 12px' }}>
-            <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'flex-end' }}>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Moeda</div>
-                <select className="acn-input" style={{ width:78, ...inp11 }}
-                  value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
-                  {MOEDAS.map(m=><option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Custo Unit.</div>
-                <input type="number" className="acn-input" style={{ width:88, ...inp11r }}
-                  min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>IPI%</div>
-                <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
-                  min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ST%</div>
-                <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
-                  min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Tipo Cálculo</div>
-                <div style={{ display:'flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
-                  {(['CUSTO','TABELA'] as const).map(t => (
-                    <button key={t} type="button" onClick={() => onSet('tipo_calculo', t)}
-                      style={{ padding:'5px 7px', fontSize:9, fontWeight:700, border:'none', cursor:'pointer',
-                        background: (item.tipo_calculo||'CUSTO')===t ? '#0891b2' : '#fff',
-                        color:      (item.tipo_calculo||'CUSTO')===t ? '#fff'    : '#64748b' }}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>{modoTabela ? 'Desconto%' : 'Markup%'}</div>
-                <input type="number" className="acn-input"
-                  style={{ width:60, ...inp11r,
-                    background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
-                    color: usarMarkupGlobal ? '#7c3aed' : undefined }}
-                  step="0.1" value={item.markup_pct}
-                  onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-                  readOnly={!!usarMarkupGlobal} />
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>DIFAL%</div>
-                <input type="number" className="acn-input"
-                  style={{ width:56, ...globStyle() }}
-                  step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
-                  onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
-                  readOnly={usarParamsGlobais} />
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Imposto%</div>
-                <input type="number" className="acn-input"
-                  style={{ width:60, ...globStyle() }}
-                  step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
-                  onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
-                  readOnly={usarParamsGlobais} />
-              </div>
-              <div style={{ borderLeft:'1px solid #e2e8f0', paddingLeft:14, display:'flex', gap:14, flexWrap:'wrap' }}>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b' }}>Custo c/Imp. Unit</div>
-                  <div style={{ fontSize:11, color:'#0f766e', fontWeight:600 }}>{fmtR(custoUnitBrl)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b' }}>Custo Total</div>
-                  <div style={{ fontSize:11, color:'#0f766e' }}>{fmtR(custoTotal)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b' }}>DIFAL Total</div>
-                  <div style={{ fontSize:11, color:'#b45309' }}>{fmtR(totalDifal)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b' }}>Imposto Total</div>
-                  <div style={{ fontSize:11, color:'#9d174d' }}>{fmtR(totalImposto)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b' }}>Lucro%</div>
-                  <div style={{ fontSize:12, fontWeight:800, color: lucroColor }}>{fmtPct(lucroPct)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b' }}>
-                    {modoTabela ? `Desc. máx. ${DESCONTO_MAXIMO_TABELA_PCT}%` : `Markup mín. ${MARKUP_MINIMO_CUSTO_PCT}%`}
-                  </div>
-                  <div style={{ fontSize:11, fontWeight:800, color: validacao === 'ERRO' ? '#dc2626' : '#16a34a' }}>
-                    {validacao === 'ERRO' ? '⚠️ ERRO' : '✅ OK'}
-                  </div>
-                </div>
-              </div>
-            </div>
+        )}
+        <button onClick={onRemove}
+          style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'4px 8px', fontSize:11, cursor:'pointer', fontWeight:700 }}>
+          ✕
+        </button>
+      </div>
 
-            {/* ── Informações do Produto (só referência, não entram no cálculo) ── */}
-            <div style={{ marginTop:10, paddingTop:10, borderTop:'1px dashed #e2e8f0' }}>
-              <div style={{ fontSize:8, fontWeight:800, color:'#0f766e', marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>
-                ℹ️ Informações do Produto
-              </div>
-              <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'flex-end' }}>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Prazo de Entrega</div>
-                  <input className="acn-input" style={{ width:100, ...inp11 }}
-                    value={item.prazo_entrega||''} onChange={e=>onSet('prazo_entrega', e.target.value)} />
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Garantia</div>
-                  <input className="acn-input" style={{ width:90, ...inp11 }}
-                    value={item.garantia||''} onChange={e=>onSet('garantia', e.target.value)} />
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Regime do Fornecedor</div>
-                  <select className="acn-input" style={{ width:150, ...inp11 }}
-                    value={item.fornecedor_regime||''} onChange={e=>onSet('fornecedor_regime', e.target.value)}>
-                    <option value="">— Selecione —</option>
-                    {['Simples','Lucro real','Lucro presumido','Regime especial'].map(o=><option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>NCM</div>
-                  <input className="acn-input" style={{ width:90, ...inp11 }}
-                    value={item.ncm||''} onChange={e=>onSet('ncm', e.target.value)} />
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Origem</div>
-                  <select className="acn-input" style={{ width:110, ...inp11 }}
-                    value={item.origem_produto||''} onChange={e=>onSet('origem_produto', e.target.value)}>
-                    <option value="">— Selecione —</option>
-                    {['Nacional','Importado'].map(o=><option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ICMS%</div>
-                  <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
-                    step="0.1" value={item.icms_pct||0} onChange={e=>onSet('icms_pct', e.target.value)} />
-                </div>
-                <div>
-                  <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ISS%</div>
-                  <input type="number" className="acn-input" style={{ width:56, ...inp11r }}
-                    step="0.1" value={item.iss_pct||0} onChange={e=>onSet('iss_pct', e.target.value)} />
-                </div>
+      {/* ── Corpo expandido — reorganizado em 3 seções rotuladas ── */}
+      {aberto && temDetalhe && (
+        <div style={{ borderTop:'1px solid #e8ecf0', background:'#f8fafc', padding:'4px 12px 12px' }}>
+
+          {secao('💰 Precificação')}
+          <div style={campoGrid}>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Moeda</div>
+              <select className="acn-input" style={{ width:'100%', ...inp11 }}
+                value={item.moeda} onChange={e=>onSet('moeda', e.target.value)}>
+                {MOEDAS.map(m=><option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Custo Unit.</div>
+              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+                min={0} step="0.01" value={item.custo_unit} onChange={e=>onSet('custo_unit', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>IPI%</div>
+              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+                min={0} step="0.1" value={item.ipi_pct} onChange={e=>onSet('ipi_pct', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ST%</div>
+              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+                min={0} step="0.1" value={item.st_pct} onChange={e=>onSet('st_pct', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Tipo Cálculo</div>
+              <div style={{ display:'flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
+                {(['CUSTO','TABELA'] as const).map(t => (
+                  <button key={t} type="button" onClick={() => onSet('tipo_calculo', t)}
+                    style={{ flex:1, padding:'5px 0', fontSize:9, fontWeight:700, border:'none', cursor:'pointer',
+                      background: (item.tipo_calculo||'CUSTO')===t ? '#0891b2' : '#fff',
+                      color:      (item.tipo_calculo||'CUSTO')===t ? '#fff'    : '#64748b' }}>
+                    {t}
+                  </button>
+                ))}
               </div>
             </div>
-          </td>
-        </tr>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>{modoTabela ? 'Desconto%' : 'Markup%'}</div>
+              <input type="number" className="acn-input"
+                style={{ width:'100%', ...inp11r,
+                  background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
+                  color: usarMarkupGlobal ? '#7c3aed' : undefined }}
+                step="0.1" value={item.markup_pct}
+                onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+                readOnly={!!usarMarkupGlobal} />
+            </div>
+          </div>
+
+          {secao('🧾 Impostos & Validação')}
+          <div style={campoGrid}>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>DIFAL%</div>
+              <input type="number" className="acn-input"
+                style={{ width:'100%', ...globStyle() }}
+                step="0.1" value={usarParamsGlobais ? params.difal_pct : item.difal_pct}
+                onChange={e=>{ if(!usarParamsGlobais) onSet('difal_pct', e.target.value); }}
+                readOnly={usarParamsGlobais} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Imposto%</div>
+              <input type="number" className="acn-input"
+                style={{ width:'100%', ...globStyle() }}
+                step="0.1" value={usarParamsGlobais ? params.imposto_pct : item.imposto_pct}
+                onChange={e=>{ if(!usarParamsGlobais) onSet('imposto_pct', e.target.value); }}
+                readOnly={usarParamsGlobais} />
+            </div>
+            {valor('Custo c/Imp. Unit', '#0f766e', fmtR(custoUnitBrl))}
+            {valor('Custo Total', '#0f766e', fmtR(custoTotal))}
+            {valor('DIFAL Total', '#b45309', fmtR(totalDifal))}
+            {valor('Imposto Total', '#9d174d', fmtR(totalImposto))}
+            {valor('Lucro%', lucroColor, fmtPct(lucroPct))}
+            <div>
+              <div style={{ fontSize:8, color:'#64748b' }}>
+                {modoTabela ? `Desc. máx. ${DESCONTO_MAXIMO_TABELA_PCT}%` : `Markup mín. ${MARKUP_MINIMO_CUSTO_PCT}%`}
+              </div>
+              <div style={{ fontSize:11, fontWeight:800, color: validacao === 'ERRO' ? '#dc2626' : '#16a34a' }}>
+                {validacao === 'ERRO' ? '⚠️ ERRO' : '✅ OK'}
+              </div>
+            </div>
+          </div>
+
+          {secao('ℹ️ Informações do Produto (só referência, não entram no cálculo)')}
+          <div style={campoGrid}>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Prazo de Entrega</div>
+              <input className="acn-input" style={{ width:'100%', ...inp11 }}
+                value={item.prazo_entrega||''} onChange={e=>onSet('prazo_entrega', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Garantia</div>
+              <input className="acn-input" style={{ width:'100%', ...inp11 }}
+                value={item.garantia||''} onChange={e=>onSet('garantia', e.target.value)} />
+            </div>
+            <div style={{ gridColumn:'span 2' }}>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Regime do Fornecedor</div>
+              <select className="acn-input" style={{ width:'100%', ...inp11 }}
+                value={item.fornecedor_regime||''} onChange={e=>onSet('fornecedor_regime', e.target.value)}>
+                <option value="">— Selecione —</option>
+                {['Simples','Lucro real','Lucro presumido','Regime especial'].map(o=><option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>NCM</div>
+              <input className="acn-input" style={{ width:'100%', ...inp11 }}
+                value={item.ncm||''} onChange={e=>onSet('ncm', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>Origem</div>
+              <select className="acn-input" style={{ width:'100%', ...inp11 }}
+                value={item.origem_produto||''} onChange={e=>onSet('origem_produto', e.target.value)}>
+                <option value="">— Selecione —</option>
+                {['Nacional','Importado'].map(o=><option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ICMS%</div>
+              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+                step="0.1" value={item.icms_pct||0} onChange={e=>onSet('icms_pct', e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>ISS%</div>
+              <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
+                step="0.1" value={item.iss_pct||0} onChange={e=>onSet('iss_pct', e.target.value)} />
+            </div>
+          </div>
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -1936,11 +1937,6 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     setCarregandoHistorico(false);
   };
 
-  const thStyle = {
-    padding: '7px 8px', background: '#1e293b', color: '#fff',
-    fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'center',
-    position: 'sticky' as const, top: 0, zIndex: 2,
-  };
   const lucroGeralColor = lucroGeral >= 10 ? '#16a34a' : lucroGeral >= 5 ? '#d97706' : '#dc2626';
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
@@ -2082,118 +2078,118 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             </div>
           )}
 
-          {/* ── OP/OS + DESCONTO MÁXIMO ── */}
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12,
-            display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
-            {/* OP Vinculada */}
-            <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔗 OP/OS Vinculada</div>
-              <OplAutocomplete value={oplVinculada} onSelect={setOplVinculada} />
-              {oplVinculada && (
-                <div style={{ fontSize:9, color:'#16a34a', marginTop:3 }}>
-                  ✓ {oplVinculada.opl} — {oplVinculada.cliente_nome}
+          {/* ── IDENTIFICAÇÃO: OP/OS, Desconto Máx., Empresa, Plataforma ──
+              Um card só (antes eram 2 caixas separadas) — mesmo assunto,
+              "quem é esta cotação", com uma linha divisória entre os 2 blocos. */}
+          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
+            <div style={{ display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔗 OP/OS Vinculada</div>
+                <OplAutocomplete value={oplVinculada} onSelect={setOplVinculada} />
+                {oplVinculada && (
+                  <div style={{ fontSize:9, color:'#16a34a', marginTop:3 }}>
+                    ✓ {oplVinculada.opl} — {oplVinculada.cliente_nome}
+                  </div>
+                )}
+              </div>
+              {!isVendedor && (
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔒 Desconto Máx. (%)</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <input type="number" className="acn-input" style={{ width:80, fontSize:11, textAlign:'right' }}
+                      min={0} max={100} step="0.5" value={descontoMaximoPct}
+                      onChange={e => setDescontoMax(parseFloat(e.target.value) || 0)} />
+                    <span style={{ fontSize:10, color:'#64748b' }}>%</span>
+                  </div>
+                  <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>Limite para o vendedor negociar</div>
                 </div>
               )}
             </div>
-            {/* Desconto máximo */}
-            {!isVendedor && (
+
+            <div style={{ borderTop:'1px solid #f1f5f9', marginTop:12, paddingTop:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
               <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🔒 Desconto Máx. (%)</div>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <input type="number" className="acn-input" style={{ width:80, fontSize:11, textAlign:'right' }}
-                    min={0} max={100} step="0.5" value={descontoMaximoPct}
-                    onChange={e => setDescontoMax(parseFloat(e.target.value) || 0)} />
-                  <span style={{ fontSize:10, color:'#64748b' }}>%</span>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
+                <div style={{ display:'flex', gap:4 }}>
+                  {['ACN', 'DETECH'].map(emp => (
+                    <button key={emp} className="acn-btn"
+                      style={{ background: empresa===emp ? '#1e293b' : '#e2e8f0', color: empresa===emp ? '#fff' : '#374151', fontSize:10, minWidth:64 }}
+                      onClick={() => setEmpresa(emp)}>
+                      {emp}
+                    </button>
+                  ))}
                 </div>
-                <div style={{ fontSize:9, color:'#94a3b8', marginTop:2 }}>Limite para o vendedor negociar</div>
               </div>
-            )}
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏪 Plataforma</div>
+                <select className="acn-input" style={{ minWidth:200, fontSize:10 }}
+                  value={plataformaSelecionada?.id || ''}
+                  onChange={e => setPlataformaSelecionada(plataformas.find(x => x.id === e.target.value) || null)}>
+                  <option value="">— Sem Plataforma —</option>
+                  {plataformas.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}{p.desconto_pct ? ` (desc: ${p.desconto_pct}%)` : ''}{p.retencao_pct ? ` (ret: ${p.retencao_pct}%)` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {plataformaSelecionada && (
+                <div style={{ fontSize:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 12px', display:'flex', gap:12 }}>
+                  <span style={{ color:'#059669', fontWeight:700 }}>Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
+                  <span style={{ color:'#dc2626', fontWeight:700 }}>Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
+                  <span style={{ color:'#0f766e', fontWeight:800 }}>Líquido: {fmtR(totalLiquidoPlat)}</span>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* ── EMPRESA + PLATAFORMA ── */}
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12, display:'flex', gap:20, flexWrap:'wrap', alignItems:'flex-end' }}>
-            <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏢 Empresa</div>
-              <div style={{ display:'flex', gap:4 }}>
-                {['ACN', 'DETECH'].map(emp => (
-                  <button key={emp} className="acn-btn"
-                    style={{ background: empresa===emp ? '#1e293b' : '#e2e8f0', color: empresa===emp ? '#fff' : '#374151', fontSize:10, minWidth:64 }}
-                    onClick={() => setEmpresa(emp)}>
-                    {emp}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4, textTransform:'uppercase' }}>🏪 Plataforma</div>
-              <select className="acn-input" style={{ minWidth:200, fontSize:10 }}
-                value={plataformaSelecionada?.id || ''}
-                onChange={e => setPlataformaSelecionada(plataformas.find(x => x.id === e.target.value) || null)}>
-                <option value="">— Sem Plataforma —</option>
-                {plataformas.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.nome}{p.desconto_pct ? ` (desc: ${p.desconto_pct}%)` : ''}{p.retencao_pct ? ` (ret: ${p.retencao_pct}%)` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {plataformaSelecionada && (
-              <div style={{ fontSize:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 12px', display:'flex', gap:12 }}>
-                <span style={{ color:'#059669', fontWeight:700 }}>Desconto: {descontoPlatPct}% = {fmtR(descontoPlat)}</span>
-                <span style={{ color:'#dc2626', fontWeight:700 }}>Retenção: {retencaoPlatPct}% = {fmtR(retencaoPlat)}</span>
-                <span style={{ color:'#0f766e', fontWeight:800 }}>Líquido: {fmtR(totalLiquidoPlat)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* ── PARÂMETROS GLOBAIS ── */}
+          {/* ── PARÂMETROS GLOBAIS — grid fixo em vez de flex-wrap, alinha certinho ── */}
           <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:12, marginBottom:12 }}>
             <div style={{ fontWeight:700, fontSize:10, color:'#475569', marginBottom:8, textTransform:'uppercase' }}>
               ⚙️ Parâmetros Globais
             </div>
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))', gap:12, marginBottom:12 }}>
               {[
-                { label:'PTAX USD (R$)',  k:'ptax_dolar',     w:90,  step:'0.0001' },
-                { label:'PTAX EUR (R$)',  k:'ptax_euro',      w:90,  step:'0.0001' },
-                { label:'DIFAL %',        k:'difal_pct',      w:70,  step:'0.1' },
-                { label:'Imposto %',      k:'imposto_pct',    w:70,  step:'0.1' },
-                { label:'Custo Fixo %',  k:'custo_fixo_pct', w:80,  step:'0.1' },
-                { label:'Markup Global %',k:'markup_pct',     w:80,  step:'0.1' },
-                { label:'Qtd. Lote',      k:'lote_qtd',       w:70,  step:'1' },
-              ].map(({ label, k, w, step }) => (
+                { label:'PTAX USD (R$)',  k:'ptax_dolar',     step:'0.0001' },
+                { label:'PTAX EUR (R$)',  k:'ptax_euro',      step:'0.0001' },
+                { label:'DIFAL %',        k:'difal_pct',      step:'0.1' },
+                { label:'Imposto %',      k:'imposto_pct',    step:'0.1' },
+                { label:'Custo Fixo %',  k:'custo_fixo_pct', step:'0.1' },
+                { label:'Markup Global %',k:'markup_pct',     step:'0.1' },
+                { label:'Qtd. Lote',      k:'lote_qtd',       step:'1' },
+              ].map(({ label, k, step }) => (
                 <div key={k}>
                   <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>{label}</div>
-                  <input type="number" className="acn-input" style={{ width:w, fontSize:10, textAlign:'right' }}
+                  <input type="number" className="acn-input" style={{ width:'100%', fontSize:10, textAlign:'right' }}
                     step={step} value={params[k]}
                     onChange={e => setP(k, parseFloat(e.target.value) || 0)} />
                 </div>
               ))}
-              <div style={{ display:'flex', flexDirection:'column', gap:6, paddingBottom:2 }}>
-                <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
-                  <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
-                    style={{ accentColor:'#0891b2' }} />
-                  Usar globais (DIFAL/Imp/CF)
-                </label>
-                <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
-                  <input type="checkbox" checked={usarMarkupGlobal} onChange={e=>setUsarMarkupGlobal(e.target.checked)}
-                    style={{ accentColor:'#7c3aed' }} />
-                  <span style={{ color: usarMarkupGlobal ? '#7c3aed' : undefined, fontWeight: usarMarkupGlobal ? 700 : undefined }}>
-                    Markup Global (sem impostos)
-                  </span>
-                </label>
-                <button
-                  onClick={() => { setItens(p => p.map(x => ({
-                    ...x,
-                    difal_pct:      params.difal_pct,
-                    imposto_pct:    params.imposto_pct,
-                    custo_fixo_pct: params.custo_fixo_pct,
-                  }))); setUsarGlobais(false); }}
-                  style={{ fontSize:9, fontWeight:700, padding:'4px 10px', background:'#0891b2', color:'#fff',
-                    border:'none', borderRadius:4, cursor:'pointer' }}
-                  title="Copia os globais para cada linha e desbloqueia edição individual">
-                  ↻ Copiar globais → linhas
-                </button>
-              </div>
+            </div>
+            <div style={{ display:'flex', gap:16, flexWrap:'wrap', alignItems:'center', borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                <input type="checkbox" checked={usarGlobais} onChange={e=>setUsarGlobais(e.target.checked)}
+                  style={{ accentColor:'#0891b2' }} />
+                Usar globais (DIFAL/Imp/CF)
+              </label>
+              <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, cursor:'pointer' }}>
+                <input type="checkbox" checked={usarMarkupGlobal} onChange={e=>setUsarMarkupGlobal(e.target.checked)}
+                  style={{ accentColor:'#7c3aed' }} />
+                <span style={{ color: usarMarkupGlobal ? '#7c3aed' : undefined, fontWeight: usarMarkupGlobal ? 700 : undefined }}>
+                  Markup Global (sem impostos)
+                </span>
+              </label>
+              <button
+                onClick={() => { setItens(p => p.map(x => ({
+                  ...x,
+                  difal_pct:      params.difal_pct,
+                  imposto_pct:    params.imposto_pct,
+                  custo_fixo_pct: params.custo_fixo_pct,
+                }))); setUsarGlobais(false); }}
+                style={{ fontSize:9, fontWeight:700, padding:'4px 10px', background:'#0891b2', color:'#fff',
+                  border:'none', borderRadius:4, cursor:'pointer' }}
+                title="Copia os globais para cada linha e desbloqueia edição individual">
+                ↻ Copiar globais → linhas
+              </button>
             </div>
           </div>
 
@@ -2228,51 +2224,34 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             </button>
           </div>
 
-          {/* ── TABELA DE ITENS (do Item do edital ativo) ── */}
+          {/* ── LISTA DE ITENS (do Item do edital ativo) ── */}
           <div style={{ marginBottom:12 }}>
-            {/* Container — sem overflow-x, colunas essenciais só; custo/impostos/markup
-                ficam num painel expansível por linha (ver ItemRow) */}
+            {/* Container com scroll — cada item é um cartão vertical (ver ItemRow),
+                custo/impostos/markup ficam num painel expansível dentro do cartão */}
             <div style={{
-              background:'#fff', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
-              overflowY:'auto', height: tableHeight,
+              background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:'8px 8px 0 0',
+              overflowY:'auto', height: tableHeight, padding:8,
             }}>
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{...thStyle, textAlign:'left'}}>Produto / Descrição</th>
-                  <th style={{...thStyle, fontSize:10}}>Marca</th>
-                  <th style={{...thStyle, fontSize:10}}>Qt</th>
-                  <th style={{...thStyle, fontSize:10, background:'#1e40af'}}>Valor Unit.</th>
-                  <th style={{...thStyle, fontSize:10, background:'#1e40af'}}>Valor Total</th>
-                  <th style={{...thStyle, fontSize:9}} />
-                  <th style={{...thStyle, fontSize:10}}>✕</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itensDoGrupo.length === 0 && (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
-                      Nenhum item neste Item do edital. Clique em <strong>+ Adicionar Item</strong>.
-                    </td>
-                  </tr>
-                )}
-                {itensDoGrupo.map((item, idx) => (
-                  <ItemRow
-                    key={item._id}
-                    item={paramEfetivo(item)}
-                    result={resultsDoGrupo[idx]}
-                    onSet={(k, v) => setItem(item._id, k, v)}
-                    onFill={(dados) => fillItem(item._id, dados)}
-                    onExpand={(linhas) => expandItem(item._id, linhas)}
-                    onRemove={() => remItem(item._id)}
-                    usarParamsGlobais={usarGlobais}
-                    usarMarkupGlobal={usarMarkupGlobal}
-                    params={params}
-                    isVendedor={isVendedor}
-                  />
-                ))}
-              </tbody>
-            </table>
+              {itensDoGrupo.length === 0 && (
+                <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
+                  Nenhum item neste Item do edital. Clique em <strong>+ Adicionar Item</strong>.
+                </div>
+              )}
+              {itensDoGrupo.map((item, idx) => (
+                <ItemRow
+                  key={item._id}
+                  item={paramEfetivo(item)}
+                  result={resultsDoGrupo[idx]}
+                  onSet={(k, v) => setItem(item._id, k, v)}
+                  onFill={(dados) => fillItem(item._id, dados)}
+                  onExpand={(linhas) => expandItem(item._id, linhas)}
+                  onRemove={() => remItem(item._id)}
+                  usarParamsGlobais={usarGlobais}
+                  usarMarkupGlobal={usarMarkupGlobal}
+                  params={params}
+                  isVendedor={isVendedor}
+                />
+              ))}
             </div>{/* fim scroll */}
 
             {/* ── Alça de resize ── */}
@@ -2303,41 +2282,52 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
             </div>
           </div>{/* fim wrapper resize */}
 
-          {/* ── SUBTOTAL DESTE ITEM DO EDITAL ── */}
+          {/* ── SUBTOTAL DESTE ITEM DO EDITAL — tabela Total × Unitário, como o
+              painel CONSOLIDADO da planilha original ── */}
           {itensDoGrupo.length > 0 && (
             <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:8, padding:12, marginBottom:12 }}>
-              <div style={{ fontWeight:800, fontSize:11, color:'#0f766e', marginBottom:8 }}>
-                📦 Subtotal — {grupoAtivoValido}
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:8, marginBottom: loteGrupo > 1 ? 10 : 0 }}>
-                {[
-                  { label:'Vendas',    value: fmtR(subtotalGrupo.totVendas),   hide:false },
-                  { label:'Custos',    value: fmtR(subtotalGrupo.totCustos),   hide:isVendedor },
-                  { label:'DIFAL',     value: fmtR(subtotalGrupo.totDifal),    hide:isVendedor },
-                  { label:'Impostos',  value: fmtR(subtotalGrupo.totImposto),  hide:false },
-                  { label:'Margem',    value: fmtR(subtotalGrupo.totMargem),   hide:isVendedor },
-                  { label:'Lucro %',   value: fmtPct(subtotalGrupo.lucroPct),  hide:isVendedor },
-                ].filter(x=>!x.hide).map(({ label, value }) => (
-                  <div key={label} style={{ background:'#fff', border:'1px solid #ccfbf1', borderRadius:6, padding:'6px 10px' }}>
-                    <div style={{ fontSize:8, color:'#0f766e', marginBottom:2 }}>{label}</div>
-                    <div style={{ fontSize:12, fontWeight:800, color:'#134e4a' }}>{value}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                <div>
-                  <div style={{ fontSize:8, color:'#0f766e', marginBottom:2 }}>Lote deste Item</div>
-                  <input type="number" className="acn-input" style={{ width:70, fontSize:10, textAlign:'right' }}
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8, marginBottom:8 }}>
+                <div style={{ fontWeight:800, fontSize:11, color:'#0f766e' }}>
+                  📦 Subtotal — {grupoAtivoValido}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:9, color:'#0f766e' }}>Lote deste Item</span>
+                  <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
                     min={1} value={params.lote_por_grupo?.[grupoAtivoValido] ?? 1}
                     onChange={e => setParams(p => ({ ...p, lote_por_grupo: { ...(p.lote_por_grupo||{}), [grupoAtivoValido]: parseInt(e.target.value)||1 } }))} />
                 </div>
-                {loteGrupo > 1 && (
-                  <div style={{ fontSize:10, color:'#0f766e' }}>
-                    Total p/ {loteGrupo} unid.: <strong>{fmtR(subtotalGrupo.totVendas * loteGrupo)}</strong>
-                    {!isVendedor && <> · Margem: <strong style={{ color: subtotalGrupo.totMargem>=0?'#16a34a':'#dc2626' }}>{fmtR(subtotalGrupo.totMargem * loteGrupo)}</strong></>}
-                  </div>
-                )}
               </div>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign:'left', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }} />
+                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Total</th>
+                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Unitário (÷ lote)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { label:'Vendas',    total: subtotalGrupo.totVendas,   fmt: fmtR,   hide:false },
+                    { label:'Custos',    total: subtotalGrupo.totCustos,   fmt: fmtR,   hide:isVendedor },
+                    { label:'DIFAL',     total: subtotalGrupo.totDifal,    fmt: fmtR,   hide:isVendedor },
+                    { label:'Impostos',  total: subtotalGrupo.totImposto,  fmt: fmtR,   hide:false },
+                    { label:'Margem',    total: subtotalGrupo.totMargem,   fmt: fmtR,   hide:isVendedor },
+                    { label:'Lucro %',   total: subtotalGrupo.lucroPct,    fmt: fmtPct, hide:isVendedor, semUnitario:true },
+                  ].filter(x=>!x.hide).map(({ label, total, fmt, semUnitario }) => (
+                    <tr key={label} style={{ borderTop:'1px solid #ccfbf1' }}>
+                      <td style={{ fontSize:10, color:'#134e4a', padding:'4px 6px' }}>{label}</td>
+                      <td style={{ fontSize:11, fontWeight:800, color:'#134e4a', textAlign:'right', padding:'4px 6px' }}>{fmt(total)}</td>
+                      <td style={{ fontSize:10, color:'#0f766e', textAlign:'right', padding:'4px 6px' }}>{semUnitario ? '—' : fmt(total / loteGrupo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {loteGrupo > 1 && (
+                <div style={{ fontSize:10, color:'#0f766e', marginTop:8, paddingTop:8, borderTop:'1px dashed #99f6e4' }}>
+                  Total p/ {loteGrupo} unid. (× lote): <strong>{fmtR(subtotalGrupo.totVendas * loteGrupo)}</strong>
+                  {!isVendedor && <> · Margem: <strong style={{ color: subtotalGrupo.totMargem>=0?'#16a34a':'#dc2626' }}>{fmtR(subtotalGrupo.totMargem * loteGrupo)}</strong></>}
+                </div>
+              )}
             </div>
           )}
 
