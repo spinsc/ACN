@@ -7,6 +7,7 @@ import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { useFieldHighlight, logChange } from './AuditSystem';
+import { abrirVinculo } from './VinculoPicker';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -409,8 +410,24 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [logs, setLogs]     = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [liberando, setLiberando] = useState(false);
+  const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
   // Sincroniza se prop mudar
   useEffect(() => { setOpl(oplProp); }, [oplProp?.id]);
+
+  // Pedidos de compra ligados a esta OP — por vínculo direto (oportunidade_id,
+  // quando a compra nasceu com vínculo real) ou por número da OP em texto
+  // (opl não tem FK pra oples — ver VinculoPicker.tsx/plano de navegação cruzada).
+  useEffect(() => {
+    if (!opl?.opl && !opl?.crm_oportunidade_id) { setComprasVinculadas([]); return; }
+    const filtros = [
+      opl?.opl ? `opl.eq.${opl.opl}` : null,
+      opl?.crm_oportunidade_id ? `oportunidade_id.eq.${opl.crm_oportunidade_id}` : null,
+    ].filter(Boolean).join(',');
+    if (!filtros) { setComprasVinculadas([]); return; }
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,status_compra,valor_compra')
+      .or(filtros).order('data_criacao', { ascending: false })
+      .then(({ data }) => setComprasVinculadas(data || []));
+  }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
 
   // Auditoria/colaboração (infra global — ver AuditSystem.tsx): este é o modal
   // de "👁 Ver" reutilizado por praticamente todos os módulos (Engenharia, PCP,
@@ -598,6 +615,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="NF-e"              value={opl.numero_nf} />
           <Campo label="Criado por"        value={opl.criado_por_nome || opl.criado_por} />
           <Campo label="Cadastrado em"     value={fmtDtH(opl.criado_em)} />
+          {opl.crm_oportunidade_id && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Proposta</div>
+              <button onClick={() => abrirVinculo({ tipo: 'pv', id: opl.crm_oportunidade_id, descricao: opl.opl })}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', fontWeight: 700, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+                🔗 Proposta CRM
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Veículo ── */}
@@ -630,6 +656,33 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 <Campo label="Faturamento"           value={opl.faturamento_empresa} field="faturamento_empresa" />
               </div>
             )}
+          </>
+        )}
+
+        {/* ── Compras Vinculadas ── */}
+        {comprasVinculadas.length > 0 && (
+          <>
+            <Sec title="📦 Compras Vinculadas" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              {comprasVinculadas.map(c => (
+                <button key={c.id} onClick={() => abrirVinculo({ tipo: 'compra', id: c.id, descricao: c.numero_pedido })}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '7px 10px',
+                    cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>
+                    🔗 {c.numero_pedido} — {c.descricao_material}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {currentUser?.ver_valores !== false && c.valor_compra != null && (
+                      <span style={{ fontSize: 10, color: '#166534', fontWeight: 700 }}>{fmtR$(c.valor_compra)}</span>
+                    )}
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', background: '#e2e8f0', borderRadius: 10, padding: '2px 8px' }}>
+                      {c.status_compra}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </>
         )}
 

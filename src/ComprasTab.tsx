@@ -7,6 +7,7 @@ import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import { abrirVinculo } from './VinculoPicker';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor_unitario: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
@@ -1015,7 +1016,25 @@ export default function ComprasTab({ currentUser }) {
         background: naoLido ? '#fffdf0' : isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : isAprovado ? '#f0f9ff' : undefined,
         borderLeft: naoLido ? '4px solid #eab308' : undefined}}>
         <td style={td}><strong>{p.numero_pedido}</strong></td>
-        <td style={td}>{p.opl||'—'}</td>
+        <td style={td}>
+          {p.opl ? (
+            <button onClick={async () => {
+              const { data } = await supabase.from('oples').select('id').eq('opl', p.opl).maybeSingle();
+              if (!data) { alert(`OP ${p.opl} não encontrada no cadastro.`); return; }
+              abrirVinculo({ tipo:'op', id: data.id, descricao: p.opl });
+            }} style={{ background:'none', border:'none', padding:0, color:'#2563eb', fontWeight:700, cursor:'pointer', textDecoration:'underline', font:'inherit' }}>
+              {p.opl}
+            </button>
+          ) : '—'}
+          {p.oportunidade_id && (
+            <div>
+              <button onClick={()=>abrirVinculo({ tipo:'pv', id:p.oportunidade_id, descricao:p.numero_pedido })}
+                style={{ background:'none', border:'none', padding:0, color:'#7c3aed', fontSize:9, fontWeight:700, cursor:'pointer', textDecoration:'underline' }}>
+                🔗 Proposta
+              </button>
+            </div>
+          )}
+        </td>
         <td style={{...td,maxWidth:150}}>
           <span style={{ display:'block', wordBreak:'break-word' }}>
             {p.descricao_material}

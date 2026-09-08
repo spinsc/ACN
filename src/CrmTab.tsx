@@ -18,6 +18,7 @@ import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './Audi
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
+import { abrirVinculo } from './VinculoPicker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -1950,14 +1951,16 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
           const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
           if (comprado) return (
-            <div style={{ marginTop:4, fontSize:9, color:'#166534', background:'#dcfce7', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block' }}>
+            <button onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}
+              style={{ marginTop:4, fontSize:9, color:'#166534', background:'#dcfce7', border:'none', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block', cursor:'pointer' }}>
               📦 Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-            </div>
+            </button>
           );
           if (pendente) return (
-            <div style={{ marginTop:4, fontSize:9, color:'#92400e', background:'#fef3c7', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block' }}>
+            <button onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: pendente.id, descricao: pendente.numero_pedido }); }}
+              style={{ marginTop:4, fontSize:9, color:'#92400e', background:'#fef3c7', border:'none', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block', cursor:'pointer' }}>
               📦 Compra em andamento
-            </div>
+            </button>
           );
           return null;
         })()}
