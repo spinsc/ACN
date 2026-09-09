@@ -131,6 +131,43 @@ async function lerArquivoItens(file: File): Promise<any[]> {
 }
 
 // ─── Modal de criação/edição ──────────────────────────────────────────────────
+// Section/Row/Field e os estilos ficam em escopo de MODULO de proposito.
+// Enquanto estavam declarados dentro de ItemModal, cada render criava funcoes
+// novas; para o React isso e um tipo de componente diferente, entao ele
+// desmontava e remontava a arvore inteira em vez de atualizar. Como Field
+// envolve os campos do formulario, cada tecla digitada remontava o <input> e o
+// foco era perdido -- tinha que clicar de novo a cada caractere. Nao mover isto
+// de volta para dentro do componente.
+const inp: React.CSSProperties = {
+  width: '100%', padding: '5px 7px', border: '1px solid #d1d5db',
+  borderRadius: 4, fontSize: 11, boxSizing: 'border-box', background: '#fff', color: '#374151',
+};
+const lbl: React.CSSProperties = {
+  display: 'block', fontSize: 9, fontWeight: 700, color: '#6b7280',
+  marginBottom: 2, textTransform: 'uppercase', letterSpacing: '.4px',
+};
+
+const Section = ({ title }: { title: string }) => (
+  <div style={{
+    fontSize: 9, fontWeight: 800, color: '#0f766e', textTransform: 'uppercase',
+    letterSpacing: '.6px', borderBottom: '1px solid #e2e8f0', paddingBottom: 3,
+    marginBottom: 8, marginTop: 14,
+  }}>
+    {title}
+  </div>
+);
+
+const Row = ({ children }: { children: React.ReactNode }) => (
+  <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>{children}</div>
+);
+
+const Field = ({ label, width = 'auto', flex = 1, children }: any) => (
+  <div style={{ flex, minWidth: 90, width }}>
+    <span style={lbl}>{label}</span>
+    {children}
+  </div>
+);
+
 function ItemModal({
   item, onSave, onClose, categorias, currentUser,
 }: {
@@ -142,15 +179,6 @@ function ItemModal({
   const isEdit = !!item?.id;
 
   const set = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
-
-  const inp: React.CSSProperties = {
-    width: '100%', padding: '5px 7px', border: '1px solid #d1d5db',
-    borderRadius: 4, fontSize: 11, boxSizing: 'border-box', background: '#fff', color: '#374151',
-  };
-  const lbl: React.CSSProperties = {
-    display: 'block', fontSize: 9, fontWeight: 700, color: '#6b7280',
-    marginBottom: 2, textTransform: 'uppercase', letterSpacing: '.4px',
-  };
 
   const handleSave = async () => {
     if (!form.nome?.trim()) return;
@@ -178,27 +206,6 @@ function ItemModal({
     await onSave({ id: form.id, ...payload });
     setSalvando(false);
   };
-
-  const Section = ({ title }: { title: string }) => (
-    <div style={{
-      fontSize: 9, fontWeight: 800, color: '#0f766e', textTransform: 'uppercase',
-      letterSpacing: '.6px', borderBottom: '1px solid #e2e8f0', paddingBottom: 3,
-      marginBottom: 8, marginTop: 14,
-    }}>
-      {title}
-    </div>
-  );
-
-  const Row = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>{children}</div>
-  );
-
-  const Field = ({ label, width = 'auto', flex = 1, children }: any) => (
-    <div style={{ flex, minWidth: 90, width }}>
-      <span style={lbl}>{label}</span>
-      {children}
-    </div>
-  );
 
   // Calcula preço final estimado
   const precoFinal = (() => {
