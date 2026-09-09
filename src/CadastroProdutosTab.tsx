@@ -736,7 +736,8 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
   const sortBy = (col: string) =>
     setOrdenar(prev => ({ col, dir: prev.col === col && prev.dir === 'asc' ? 'desc' : 'asc' }));
 
-  const SortIcon = ({ col }: { col: string }) =>
+  // Funcao de render (nao componente) - ver mesma correcao em CadastroItensTab.
+  const sortIcon = (col: string) =>
     ordenar.col !== col ? <span style={{ opacity: .3 }}>⇅</span> : <span>{ordenar.dir === 'asc' ? '↑' : '↓'}</span>;
 
   const excluir = async (id: string) => {
@@ -826,13 +827,13 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={thStyle} onClick={() => sortBy('codigo')}>Código <SortIcon col="codigo" /></th>
-                  <th style={thStyle} onClick={() => sortBy('nome')}>Nome do Produto <SortIcon col="nome" /></th>
-                  <th style={thStyle} onClick={() => sortBy('categoria')}>Categoria <SortIcon col="categoria" /></th>
+                  <th style={thStyle} onClick={() => sortBy('codigo')}>Código {sortIcon('codigo')}</th>
+                  <th style={thStyle} onClick={() => sortBy('nome')}>Nome do Produto {sortIcon('nome')}</th>
+                  <th style={thStyle} onClick={() => sortBy('categoria')}>Categoria {sortIcon('categoria')}</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Un.</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Custo BOM</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Markup%</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }} onClick={() => sortBy('preco_venda')}>Preço Venda <SortIcon col="preco_venda" /></th>
+                  <th style={{ ...thStyle, textAlign: 'right' }} onClick={() => sortBy('preco_venda')}>Preço Venda {sortIcon('preco_venda')}</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Ativo</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Ações</th>
                 </tr>

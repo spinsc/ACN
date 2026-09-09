@@ -545,10 +545,11 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
     setPagina(0);
   };
 
-  const SortIcon = ({ col }: { col: string }) => {
-    if (ordenar.col !== col) return <span style={{ opacity: .3 }}>⇅</span>;
-    return <span>{ordenar.dir === 'asc' ? '↑' : '↓'}</span>;
-  };
+  // Funcao de render (nao componente): declarado aqui dentro, viraria um tipo
+  // novo a cada render e o React remontaria o icone em vez de atualiza-lo.
+  const sortIcon = (col: string) => ordenar.col !== col
+    ? <span style={{ opacity: .3 }}>⇅</span>
+    : <span>{ordenar.dir === 'asc' ? '↑' : '↓'}</span>;
 
   // ── Estatísticas ────────────────────────────────────────────────────────────
   const stats = {
@@ -737,14 +738,14 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={thStyle} onClick={() => sortBy('codigo')}>Código <SortIcon col="codigo" /></th>
-                  <th style={thStyle} onClick={() => sortBy('nome')}>Nome / Produto <SortIcon col="nome" /></th>
-                  <th style={thStyle} onClick={() => sortBy('categoria')}>Categoria <SortIcon col="categoria" /></th>
-                  <th style={thStyle} onClick={() => sortBy('marca')}>Marca <SortIcon col="marca" /></th>
-                  <th style={thStyle} onClick={() => sortBy('fornecedor')}>Fornecedor <SortIcon col="fornecedor" /></th>
+                  <th style={thStyle} onClick={() => sortBy('codigo')}>Código {sortIcon('codigo')}</th>
+                  <th style={thStyle} onClick={() => sortBy('nome')}>Nome / Produto {sortIcon('nome')}</th>
+                  <th style={thStyle} onClick={() => sortBy('categoria')}>Categoria {sortIcon('categoria')}</th>
+                  <th style={thStyle} onClick={() => sortBy('marca')}>Marca {sortIcon('marca')}</th>
+                  <th style={thStyle} onClick={() => sortBy('fornecedor')}>Fornecedor {sortIcon('fornecedor')}</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Un.</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Moeda</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }} onClick={() => sortBy('custo_unit')}>Custo Unit. <SortIcon col="custo_unit" /></th>
+                  <th style={{ ...thStyle, textAlign: 'right' }} onClick={() => sortBy('custo_unit')}>Custo Unit. {sortIcon('custo_unit')}</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>IPI%</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>ST%</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>Markup%</th>

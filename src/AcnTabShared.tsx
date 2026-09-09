@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
@@ -406,6 +406,16 @@ export function OplMovimentadas({ setor }: { setor: string }) {
 
 
 // ─── Modal de Detalhes da OPL ────────────────────────────────────────────────
+// Sec fica em escopo de MODULO: declarado dentro do componente, cada render
+// criava uma funcao nova e o React remontava a arvore em vez de atualizar.
+// Nao tem dependencia nenhuma do componente, entao subir e a correcao certa.
+const Sec = ({ title }: { title: string }) => (
+  <div style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase',
+    letterSpacing: '.6px', margin: '14px 0 8px', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>
+    {title}
+  </div>
+);
+
 export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: any; onClose: () => void; currentUser?: any }) {
   const [opl, setOpl]       = useState<any>(oplProp);
   const [logs, setLogs]     = useState<any[]>([]);
@@ -513,20 +523,20 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     : '—';
   const fmtR$ = (v: any) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 
-  const Sec = ({ title }: { title: string }) => (
-    <div style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase',
-      letterSpacing: '.6px', margin: '14px 0 8px', borderBottom: '1px solid #e2e8f0', paddingBottom: 4 }}>
-      {title}
-    </div>
-  );
-
-  const Campo = ({ label, value, full = false, field }: { label: string; value: any; full?: boolean; field?: string }) =>
-    value != null && value !== '' && value !== false ? (
-      <div style={{ marginBottom: 8, gridColumn: full ? '1 / -1' : undefined, ...(field ? campoDestaque(field) : {}) }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
-      </div>
-    ) : null;
+  // Campo depende de campoDestaque (vem do hook useFieldHighlight), entao nao
+  // da pra subir pro escopo de modulo como o Sec. O useMemo resolve o mesmo
+  // problema: mantem a MESMA identidade de componente entre renders, senao o
+  // React trataria cada render como um tipo novo e remontaria os 30 campos do
+  // modal a cada mudanca de estado. campoDestaque ja e estavel (useCallback).
+  const Campo = useMemo(() =>
+    ({ label, value, full = false, field }: { label: string; value: any; full?: boolean; field?: string }) =>
+      value != null && value !== '' && value !== false ? (
+        <div style={{ marginBottom: 8, gridColumn: full ? '1 / -1' : undefined, ...(field ? campoDestaque(field) : {}) }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+          <div style={{ fontSize: 12, color: '#1e293b', fontWeight: 600 }}>{String(value)}</div>
+        </div>
+      ) : null,
+  [campoDestaque]);
 
   const temServTerceiro = !!opl.servico_terceiro;
   // Suporte a múltiplos tipos (novo) e fallback ao campo único (legado)

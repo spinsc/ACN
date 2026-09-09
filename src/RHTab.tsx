@@ -1055,6 +1055,60 @@ function somarTotais(linhas: any[]) {
   }), {});
 }
 
+// TabelaPreview fica em escopo de MODULO: dentro do componente, cada render
+// criava uma funcao nova e o React remontava a tabela inteira em vez de
+// atualiza-la. So depende de props e de helpers de modulo (somarTotais,
+// fmtMin), entao subir e a correcao certa.
+const TabelaPreview = ({ linhas }: { linhas: any[] }) => {
+  if (linhas.length === 0) return <div className="acn-empty">Selecione os filtros acima.</div>;
+  const totais = somarTotais(linhas);
+  return (
+    <div style={{overflowX:'auto'}}>
+      <table>
+        <thead><tr>
+          <th>Funcionário</th>
+          <th style={{textAlign:'center'}}>Créditos</th>
+          <th style={{textAlign:'center'}}>Débitos</th>
+          <th style={{textAlign:'center'}}>Saldo</th>
+          <th style={{textAlign:'center',color:'#fca5a5'}}>Faltas</th>
+          <th style={{textAlign:'center'}}>Atestados</th>
+          <th style={{textAlign:'center',color:'#fde68a'}}>Declarações</th>
+          <th style={{textAlign:'center'}}>Saídas Ant.</th>
+          <th style={{textAlign:'center'}}>Entradas Ant.</th>
+        </tr></thead>
+        <tbody>
+          {linhas.map((l,i) => (
+            <tr key={i}>
+              <td><strong>{l.nome}</strong></td>
+              <td style={{textAlign:'center',color:'#16a34a',fontWeight:700}}>{fmtMin(l.credito)}</td>
+              <td style={{textAlign:'center',color:'#dc2626',fontWeight:700}}>{l.debito>0?fmtMin(-l.debito):'—'}</td>
+              <td style={{textAlign:'center',fontWeight:800,color:l.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(l.saldo)}</td>
+              <td style={{textAlign:'center'}}>{l.faltas>0?<span style={{background:'#fde8e8',color:'#dc2626',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.faltas}</span>:'—'}</td>
+              <td style={{textAlign:'center'}}>{l.atestados>0?<span style={{background:'#f1f5f9',color:'#6b7280',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.atestados}</span>:'—'}</td>
+              <td style={{textAlign:'center'}}>{l.declaracoes>0?<span style={{background:'#fffbeb',color:'#d97706',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.declaracoes}</span>:'—'}</td>
+              <td style={{textAlign:'center'}}>{l.saidasAnt>0?<span style={{background:'#fef2f2',color:'#ef4444',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.saidasAnt}</span>:'—'}</td>
+              <td style={{textAlign:'center'}}>{l.entradasAnt>0?<span style={{background:'#f0fdf4',color:'#16a34a',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.entradasAnt}</span>:'—'}</td>
+            </tr>
+          ))}
+          {linhas.length > 1 && (
+            <tr style={{background:'#f1f5f9',fontWeight:700}}>
+              <td>TOTAL</td>
+              <td style={{textAlign:'center',color:'#16a34a'}}>{fmtMin(totais.credito)}</td>
+              <td style={{textAlign:'center',color:'#dc2626'}}>{totais.debito>0?fmtMin(-totais.debito):'—'}</td>
+              <td style={{textAlign:'center',color:totais.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(totais.saldo)}</td>
+              <td style={{textAlign:'center'}}>{totais.faltas||'—'}</td>
+              <td style={{textAlign:'center'}}>{totais.atestados||'—'}</td>
+              <td style={{textAlign:'center'}}>{totais.declaracoes||'—'}</td>
+              <td style={{textAlign:'center'}}>{totais.saidasAnt||'—'}</td>
+              <td style={{textAlign:'center'}}>{totais.entradasAnt||'—'}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 function imprimirRelatorio(titulo: string, periodoLabel: string, linhas: any[]) {
   const totais = somarTotais(linhas);
   const html = gerarHtmlRelatorio(titulo, periodoLabel, linhas, totais);
@@ -1134,55 +1188,6 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
     </select>
   );
 
-  const TabelaPreview = ({ linhas }: { linhas: any[] }) => {
-    if (linhas.length === 0) return <div className="acn-empty">Selecione os filtros acima.</div>;
-    const totais = somarTotais(linhas);
-    return (
-      <div style={{overflowX:'auto'}}>
-        <table>
-          <thead><tr>
-            <th>Funcionário</th>
-            <th style={{textAlign:'center'}}>Créditos</th>
-            <th style={{textAlign:'center'}}>Débitos</th>
-            <th style={{textAlign:'center'}}>Saldo</th>
-            <th style={{textAlign:'center',color:'#fca5a5'}}>Faltas</th>
-            <th style={{textAlign:'center'}}>Atestados</th>
-            <th style={{textAlign:'center',color:'#fde68a'}}>Declarações</th>
-            <th style={{textAlign:'center'}}>Saídas Ant.</th>
-            <th style={{textAlign:'center'}}>Entradas Ant.</th>
-          </tr></thead>
-          <tbody>
-            {linhas.map((l,i) => (
-              <tr key={i}>
-                <td><strong>{l.nome}</strong></td>
-                <td style={{textAlign:'center',color:'#16a34a',fontWeight:700}}>{fmtMin(l.credito)}</td>
-                <td style={{textAlign:'center',color:'#dc2626',fontWeight:700}}>{l.debito>0?fmtMin(-l.debito):'—'}</td>
-                <td style={{textAlign:'center',fontWeight:800,color:l.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(l.saldo)}</td>
-                <td style={{textAlign:'center'}}>{l.faltas>0?<span style={{background:'#fde8e8',color:'#dc2626',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.faltas}</span>:'—'}</td>
-                <td style={{textAlign:'center'}}>{l.atestados>0?<span style={{background:'#f1f5f9',color:'#6b7280',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.atestados}</span>:'—'}</td>
-                <td style={{textAlign:'center'}}>{l.declaracoes>0?<span style={{background:'#fffbeb',color:'#d97706',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.declaracoes}</span>:'—'}</td>
-                <td style={{textAlign:'center'}}>{l.saidasAnt>0?<span style={{background:'#fef2f2',color:'#ef4444',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.saidasAnt}</span>:'—'}</td>
-                <td style={{textAlign:'center'}}>{l.entradasAnt>0?<span style={{background:'#f0fdf4',color:'#16a34a',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.entradasAnt}</span>:'—'}</td>
-              </tr>
-            ))}
-            {linhas.length > 1 && (
-              <tr style={{background:'#f1f5f9',fontWeight:700}}>
-                <td>TOTAL</td>
-                <td style={{textAlign:'center',color:'#16a34a'}}>{fmtMin(totais.credito)}</td>
-                <td style={{textAlign:'center',color:'#dc2626'}}>{totais.debito>0?fmtMin(-totais.debito):'—'}</td>
-                <td style={{textAlign:'center',color:totais.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(totais.saldo)}</td>
-                <td style={{textAlign:'center'}}>{totais.faltas||'—'}</td>
-                <td style={{textAlign:'center'}}>{totais.atestados||'—'}</td>
-                <td style={{textAlign:'center'}}>{totais.declaracoes||'—'}</td>
-                <td style={{textAlign:'center'}}>{totais.saidasAnt||'—'}</td>
-                <td style={{textAlign:'center'}}>{totais.entradasAnt||'—'}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
 
   return (
     <div className="sec-card">
