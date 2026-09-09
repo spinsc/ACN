@@ -116,6 +116,22 @@ const VAZIO_VENDA: any = {
   observacoes: '',
 };
 
+// Mesma lista usada na criacao de OP (NovaOpOsModal.tsx) - so os rotulos, que
+// e o que fica gravado em oples.tipo_projeto.
+const TIPOS_PROJETO_OPL = [
+  'Transformacao Veicular Ostensiva',
+  'Transformacao Veicular Discreta',
+  'Radio',
+  'Modulo Expansivel',
+  'Flutuante',
+  'Manutencao',
+  'Garantia',
+  'Orcamento',
+  'Execucao por Terceiro',
+  'Envio de Material para Terceiro',
+  'Envio de Produto Vendido',
+];
+
 const VAZIO_COMPRA: any = {
   descricao_material: '',
   quantidade: 1,
@@ -979,6 +995,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     }
 
     const oplPayload = {
+      cliente_nome:          oplFormEdit.cliente_nome || null,
+      data_entrada:          oplFormEdit.data_entrada || null,
+      tipo_projeto:          oplFormEdit.tipo_projeto || null,
+      veiculo:               oplFormEdit.veiculo || null,
       chassi:                oplFormEdit.chassi || null,
       placa:                 oplFormEdit.placa || null,
       modelo:                oplFormEdit.modelo || null,
@@ -1110,7 +1130,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
@@ -2925,11 +2945,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                         }
                       }
 
+                      // Edicao acontece na propria linha (nao ha mais modal): a linha
+                      // em edicao troca as celulas por campos e ganha uma linha extra
+                      // logo abaixo com o resto (quantidade, centro de custo, dados de
+                      // faturamento, observacoes).
+                      const inpLinha: React.CSSProperties = {
+                        width:'100%', boxSizing:'border-box', padding:'3px 5px',
+                        border:'1px solid #cbd5e1', borderRadius:3, fontSize:10, fontFamily:'inherit',
+                      };
+                      const setEd = (k: string, v: any) => setOplFormEdit((f:any)=>({ ...f, [k]: v }));
+                      const campoLbl: React.CSSProperties = { fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 };
+
                       const renderLinhaOpl = (o: any) => {
                         const atrasada = o.data_prevista_entrega && o.data_prevista_entrega < hoje;
                         const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
                         const oplNaoLida = oplsNaoLidas.has(String(o.id));
-                        return (
+                        const emEdicao = oplEditando?.id === o.id;
+                        const linha = (
                           <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9',
                             background: oplNaoLida ? '#fffdf0' : undefined,
                             borderLeft: oplNaoLida ? '3px solid #eab308' : '3px solid transparent' }}
@@ -2940,20 +2972,42 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                             <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
                               <LinkOpl opl={o} currentUser={currentUser} />
                             </td>
-                            <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome||'—'}</td>
+                            <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>
+                              {emEdicao
+                                ? <input style={inpLinha} value={oplFormEdit.cliente_nome||''} onChange={e=>setEd('cliente_nome', e.target.value)} placeholder="Cliente" />
+                                : (o.cliente_nome||'—')}
+                            </td>
                             <td style={{ padding:'5px 8px', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', color:'#475569', fontSize:10 }}>
-                              <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
-                              <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-                              <div style={{ color:'#94a3b8' }}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-                              <div style={{ color:'#94a3b8' }}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                              {emEdicao ? (
+                                <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                                  <select style={inpLinha} value={oplFormEdit.tipo_projeto||''} onChange={e=>setEd('tipo_projeto', e.target.value)}>
+                                    <option value="">— Tipo de projeto —</option>
+                                    {TIPOS_PROJETO_OPL.map(t => <option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                  <input style={inpLinha} value={oplFormEdit.modelo||''} onChange={e=>setEd('modelo', e.target.value)} placeholder="Modelo" />
+                                  <input style={inpLinha} value={oplFormEdit.chassi||''} onChange={e=>setEd('chassi', e.target.value)} placeholder="Chassi" />
+                                  <input style={inpLinha} value={oplFormEdit.placa||''} onChange={e=>setEd('placa', e.target.value)} placeholder="Placa" />
+                                </div>
+                              ) : (<>
+                                <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
+                                <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                                <div style={{ color:'#94a3b8' }}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                                <div style={{ color:'#94a3b8' }}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                              </>)}
                               {!semDado(o.cnpj_faturamento) && <div style={{ color:'#7c3aed', fontWeight:700 }}>🏢 {o.cnpj_faturamento}</div>}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                              <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
-                                background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
-                                color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
-                                {o.faturamento_empresa||'ACN'}
-                              </span>
+                              {emEdicao ? (
+                                <select style={inpLinha} value={oplFormEdit.faturamento_empresa||'ACN'} onChange={e=>setEd('faturamento_empresa', e.target.value)}>
+                                  <option>ACN</option><option>Detech</option>
+                                </select>
+                              ) : (
+                                <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
+                                  background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
+                                  color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                                  {o.faturamento_empresa||'ACN'}
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
                               <span style={{ fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:3, color:'white',
@@ -2962,15 +3016,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               </span>
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
-                              {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                              {emEdicao
+                                ? <input type="date" style={inpLinha} value={(oplFormEdit.data_entrada||'').slice(0,10)} onChange={e=>setEd('data_entrada', e.target.value)} />
+                                : (o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—')}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap', fontWeight: atrasada ? 700 : 400,
                               color: atrasada ? '#dc2626' : '#64748b' }}>
-                              {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
-                              {atrasada && ' ⚠️'}
+                              {emEdicao
+                                ? <input type="date" style={inpLinha} value={(oplFormEdit.data_prevista_entrega||'').slice(0,10)} onChange={e=>setEd('data_prevista_entrega', e.target.value)} />
+                                : <>
+                                    {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                                    {atrasada && ' ⚠️'}
+                                  </>}
                             </td>
                             <td style={{ padding:'5px 8px', maxWidth:100, color:'#475569', wordBreak:'break-word' }}>
-                              {o.responsavel_comercial||'—'}
+                              {emEdicao
+                                ? <ColaboradorSelect value={oplFormEdit.responsavel_comercial||''} onChange={v=>setEd('responsavel_comercial', v)} placeholder="Selecione..." />
+                                : (o.responsavel_comercial||'—')}
                             </td>
                             <td style={{ padding:'5px 8px' }}>
                               {crmCard ? (
@@ -3000,11 +3062,24 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                     ✅ CONFIRMAR ENTREGA
                                   </button>
                                 )}
-                                <button title="Editar OPL"
-                                  onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
-                                  style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                  ✏️ Editar
-                                </button>
+                                {emEdicao ? (
+                                  <>
+                                    <button title="Salvar alterações" disabled={oplSalvando} onClick={salvarOplEdit}
+                                      style={{ fontSize:9, padding:'2px 7px', background:'#16a34a', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, opacity: oplSalvando?.6:1 }}>
+                                      {oplSalvando ? '⏳' : '💾 Salvar'}
+                                    </button>
+                                    <button title="Cancelar edição" disabled={oplSalvando} onClick={() => setOplEditando(null)}
+                                      style={{ fontSize:9, padding:'2px 7px', background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                      ✕
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button title="Editar OPL nesta linha"
+                                    onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
+                                    style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                    ✏️ Editar
+                                  </button>
+                                )}
                                 <button title="Acompanhamentos / Notas"
                                   onClick={() => setOplAcomp(o)}
                                   style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
@@ -3024,6 +3099,45 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                               </div>
                             </td>
                           </tr>
+                        );
+                        if (!emEdicao) return linha;
+                        return (
+                          <React.Fragment key={o.id}>
+                            {linha}
+                            <tr style={{ background:'#f0fdfa', borderBottom:'2px solid #99f6e4' }}>
+                              <td colSpan={11} style={{ padding:'8px 12px' }}>
+                                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:8 }}>
+                                  <div>
+                                    <div style={campoLbl}>Qtd. Veículos</div>
+                                    <input type="number" min={1} style={inpLinha} value={oplFormEdit.quantidade||1} onChange={e=>setEd('quantidade', e.target.value)} />
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>Equipamento / Veículo</div>
+                                    <input style={inpLinha} value={oplFormEdit.veiculo||''} onChange={e=>setEd('veiculo', e.target.value)} placeholder="Ex: Rádio Motorola APX" />
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>🏷️ Centro de Custo</div>
+                                    <select style={inpLinha} value={oplFormEdit.centro_custo||''} onChange={e=>setEd('centro_custo', e.target.value)}>
+                                      <option value="">— Não definido —</option>
+                                      {centrosCusto.map((c:any) => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>CNPJ / CPF Faturamento</div>
+                                    <input style={inpLinha} value={oplFormEdit.cnpj_faturamento||''} onChange={e=>setEd('cnpj_faturamento', e.target.value)} placeholder="Pode diferir do cliente" />
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>Razão Social Faturamento</div>
+                                    <input style={inpLinha} value={oplFormEdit.razao_social_faturamento||''} onChange={e=>setEd('razao_social_faturamento', e.target.value)} />
+                                  </div>
+                                  <div style={{ gridColumn:'1 / -1' }}>
+                                    <div style={campoLbl}>Observações</div>
+                                    <textarea rows={2} style={{ ...inpLinha, resize:'vertical' }} value={oplFormEdit.observacoes_comercial||''} onChange={e=>setEd('observacoes_comercial', e.target.value)} />
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </React.Fragment>
                         );
                       };
 
@@ -4465,88 +4579,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       )}
 
     {/* ── Modal Editar OPL (aba OPLs em Aberto) ── */}
-    {oplEditando && (
-      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center' }}
-        onClick={e => { if (e.target===e.currentTarget) setOplEditando(null); }}>
-        <div style={{ background:'white', borderRadius:8, width:'min(520px,96vw)', maxHeight:'90vh', overflow:'auto', padding:'18px 20px', boxShadow:'0 8px 32px #0004' }}>
-          <div style={{ fontWeight:700, fontSize:13, color:'#1e293b', marginBottom:14 }}>✏️ Editar OPL {oplEditando.opl}</div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Chassi</div>
-              <input className="acn-input" value={oplFormEdit.chassi||''} onChange={e=>setOplFormEdit((f:any)=>({...f,chassi:e.target.value}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Placa</div>
-              <input className="acn-input" value={oplFormEdit.placa||''} onChange={e=>setOplFormEdit((f:any)=>({...f,placa:e.target.value}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Modelo</div>
-              <input className="acn-input" value={oplFormEdit.modelo||''} onChange={e=>setOplFormEdit((f:any)=>({...f,modelo:e.target.value}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Quantidade</div>
-              <input className="acn-input" type="number" min={1} value={oplFormEdit.quantidade||1} onChange={e=>setOplFormEdit((f:any)=>({...f,quantidade:e.target.value}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Prazo de Entrega</div>
-              <input className="acn-input" type="date" value={oplFormEdit.data_prevista_entrega||''} onChange={e=>setOplFormEdit((f:any)=>({...f,data_prevista_entrega:e.target.value}))} style={{ width:'100%' }} />
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>🏷️ Centro de Custo</div>
-              <select className="acn-input" value={oplFormEdit.centro_custo||''} onChange={e=>setOplFormEdit((f:any)=>({...f,centro_custo:e.target.value}))} style={{ width:'100%' }}>
-                <option value="">— Não definido —</option>
-                {centrosCusto.map((c:any) => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Empresa</div>
-              <select className="acn-input" value={oplFormEdit.faturamento_empresa||'ACN'} onChange={e=>setOplFormEdit((f:any)=>({...f,faturamento_empresa:e.target.value}))} style={{ width:'100%' }}>
-                <option>ACN</option><option>Detech</option>
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Responsável Comercial</div>
-              <ColaboradorSelect value={oplFormEdit.responsavel_comercial||''} onChange={v=>setOplFormEdit((f:any)=>({...f,responsavel_comercial:v}))} placeholder="Selecione..." />
-            </div>
-          </div>
-
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', letterSpacing:1, textTransform:'uppercase', marginBottom:6, paddingBottom:4, borderBottom:'2px solid #0f766e' }}>
-              Dados de Faturamento (Fiscal / NF)
-            </div>
-            <div style={{ fontSize:9, color:'#94a3b8', marginBottom:6 }}>
-              Por unidade — cada veículo desmembrado pode ter seu próprio CNPJ, diferente do cliente.
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:10 }}>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>CNPJ / CPF Faturamento</div>
-                <input className="acn-input" placeholder="Pode ser diferente do cliente"
-                  value={oplFormEdit.cnpj_faturamento||''} onChange={e=>setOplFormEdit((f:any)=>({...f,cnpj_faturamento:e.target.value}))} style={{ width:'100%' }} />
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Razão Social / Nome Faturamento</div>
-                <input className="acn-input"
-                  value={oplFormEdit.razao_social_faturamento||''} onChange={e=>setOplFormEdit((f:any)=>({...f,razao_social_faturamento:e.target.value}))} style={{ width:'100%' }} />
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
-            <textarea className="acn-input" rows={3} value={oplFormEdit.observacoes_comercial||''} onChange={e=>setOplFormEdit((f:any)=>({...f,observacoes_comercial:e.target.value}))} style={{ width:'100%', resize:'vertical' }} />
-          </div>
-
-          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-            <button onClick={() => setOplEditando(null)} style={{ padding:'7px 16px', border:'1px solid #e2e8f0', borderRadius:5, background:'#f8fafc', cursor:'pointer', fontSize:11 }}>Cancelar</button>
-            <button onClick={salvarOplEdit} disabled={oplSalvando}
-              style={{ padding:'7px 18px', border:'none', borderRadius:5, background:'#0f766e', color:'white', fontWeight:700, cursor:'pointer', fontSize:11, opacity:oplSalvando?.6:1 }}>
-              {oplSalvando ? 'Salvando...' : '💾 Salvar'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
 
     {/* ── Modal Lançamento em Lote (chassi/placa/CNPJ por unidade desmembrada) ── */}
     {modalLote && (
