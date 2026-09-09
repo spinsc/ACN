@@ -1334,6 +1334,120 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [resolvendoConflito, setResolvendoConflito] = useState(false);
   const [ultimaAlteracao, setUltimaAlteracao] = useState<any | null>(null); // { em, por }
 
+  // ── Rascunho automático (rede de segurança) ────────────────────────────────
+  // Tudo o que está na tela só existia na memória do navegador até alguém
+  // clicar em salvar: fechar a aba, cair a energia ou o navegador travar
+  // perdia o trabalho inteiro. Agora o estado editável é gravado no próprio
+  // navegador a cada alteração (com atraso, pra não gravar a cada tecla) e
+  // oferecido de volta ao reabrir a formação.
+  const chaveRascunho = (id: any) =>
+    `acn:formacao-rascunho:${vinculo?.tipo || 'avulso'}:${vinculo?.id || '-'}:${id || 'nova'}`;
+  const [rascunhoPendente, setRascunhoPendente] = useState<any | null>(null);
+  const [temNaoSalvo, setTemNaoSalvo] = useState(false);
+  // "geração" muda a cada carregar/salvar; a primeira passada do efeito depois
+  // disso é o próprio carregamento (não é edição do usuário) e serve só pra
+  // fotografar o estado-base de comparação.
+  const geracaoRef      = useRef(0);
+  const geracaoVistaRef = useRef(-1);
+  const baseSerializadaRef = useRef('');
+
+  const edicaoAtual = () => ({
+    nome: nomeCotacao || '',
+    empresa,
+    plataforma_id: plataformaSelecionada?.id || null,
+    params,
+    itens: itens.map(({ _id, ...rest }) => rest),
+    desconto_maximo_pct: descontoMaximoPct || 0,
+  });
+
+  // Marca "não salvo" e grava o rascunho, com 1,2s de espera depois da última
+  // tecla. Só grava quando o conteúdo realmente difere do que foi carregado —
+  // assim todo rascunho que existe no navegador representa trabalho de fato
+  // não salvo, e o aviso de restaurar nunca aparece à toa.
+  useEffect(() => {
+    const atual = JSON.stringify(edicaoAtual());
+    if (geracaoVistaRef.current !== geracaoRef.current) {
+      geracaoVistaRef.current = geracaoRef.current;
+      baseSerializadaRef.current = atual;
+      setTemNaoSalvo(false);
+      return;
+    }
+    const mudou = atual !== baseSerializadaRef.current;
+    setTemNaoSalvo(mudou);
+    if (!mudou) {
+      // Voltou a ser igual ao que está salvo (o usuário desfez na mão): o
+      // rascunho não representa mais nada e some, senão reapareceria depois
+      // oferecendo "restaurar" um conteúdo idêntico ao já salvo.
+      try { localStorage.removeItem(chaveRascunho(editandoId)); } catch { /* ignore */ }
+      return;
+    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(chaveRascunho(editandoId), JSON.stringify({
+          conteudo: JSON.parse(atual),
+          salvoEm: new Date().toISOString(),
+          usuario: currentUser?.nome || currentUser?.email || null,
+        }));
+      } catch { /* cota cheia / modo privado — rascunho é best-effort */ }
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itens, params, nomeCotacao, empresa, plataformaSelecionada, descontoMaximoPct, editandoId]);
+
+  // Avisa antes de fechar/recarregar a aba com alterações não salvas.
+  // (Sair da tela por dentro do sistema não passa por aqui — nesse caso quem
+  // protege é o rascunho acima, que é oferecido de volta ao reabrir.)
+  useEffect(() => {
+    if (!temNaoSalvo) return;
+    const aviso = (e: any) => { e.preventDefault(); e.returnValue = ''; return ''; };
+    window.addEventListener('beforeunload', aviso);
+    return () => window.removeEventListener('beforeunload', aviso);
+  }, [temNaoSalvo]);
+
+  // Chamado depois de gravar de verdade: refotografa o estado-base e apaga o
+  // aviso de "não salvo". Não dá pra deixar isso a cargo do efeito — ele só
+  // roda quando algum campo muda, e depois de salvar nada mudou na tela, então
+  // o aviso ficaria aceso para sempre. `nomeSalvo` vem por fora porque o
+  // setNomeCotacao() da mesma função ainda não refletiu no closure.
+  const marcarComoSalvo = (nomeSalvo?: string) => {
+    baseSerializadaRef.current = JSON.stringify({
+      ...edicaoAtual(),
+      nome: nomeSalvo ?? (nomeCotacao || ''),
+    });
+    geracaoRef.current += 1;
+    geracaoVistaRef.current = geracaoRef.current; // já fotografado aqui
+    setTemNaoSalvo(false);
+  };
+
+  const descartarRascunho = (id: any) => {
+    try { localStorage.removeItem(chaveRascunho(id)); } catch { /* ignore */ }
+    setRascunhoPendente(null);
+  };
+
+  // Procura rascunho não salvo desta formação (chamado ao carregá-la).
+  const verificarRascunho = (id: any) => {
+    try {
+      const bruto = localStorage.getItem(chaveRascunho(id));
+      setRascunhoPendente(bruto ? { ...JSON.parse(bruto), id } : null);
+    } catch { setRascunhoPendente(null); }
+  };
+
+  // Traz o rascunho de volta pra tela.
+  const restaurarRascunho = () => {
+    const c = rascunhoPendente?.conteudo;
+    if (!c) return;
+    setParams({ ...PARAMS_PADRAO, ...(c.params || {}) });
+    const itensRestaurados = (c.itens || []).map((x: any) => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) }));
+    setItens(itensRestaurados.length ? itensRestaurados : [novoItem()]);
+    setGrupoAtivo(grupoDe(itensRestaurados[0]) || 'Item 1');
+    setNomeCotacao(c.nome || '');
+    if (c.empresa) setEmpresa(c.empresa);
+    setPlataformaSelecionada(plataformas.find((x: any) => x.id === c.plataforma_id) || null);
+    setDescontoMax(Number(c.desconto_maximo_pct) || 0);
+    setRascunhoPendente(null);
+    // não mexe na geração: isto É uma alteração não salva, deve continuar marcada
+  };
+
   // ── Formações já vinculadas a este processo (modo embutido) ──
   const [formacoesVinculo, setFormacoesVinculo]     = useState<any[]>([]);
   const [carregandoVinculo, setCarregandoVinculo]   = useState(!!vinculo);
@@ -1625,6 +1739,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // intacta a versão que a outra pessoa salvou. É a saída padrão do conflito.
   const gravarComoNovaVersao = async (payload: any) => {
     setResolvendoConflito(true);
+    const idAnterior = editandoId;
     try {
       const raizId = versaoRaizId || editandoId;
       const { data: irmaos } = await supabase.from('cotacoes_precos')
@@ -1654,6 +1769,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       setTravaAtualizadoEm(data.atualizado_em);
       setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
       setConflito(null);
+      descartarRascunho(idAnterior);
+      marcarComoSalvo(payload?.nome);
       carregarModelos();
       if (vinculo?.id) carregarFormacoesVinculo();
       alert(`✅ Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.`);
@@ -1667,9 +1784,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // Descarta o trabalho local e recarrega o que a outra pessoa salvou.
   const descartarERecarregar = async () => {
     setResolvendoConflito(true);
+    descartarRascunho(editandoId); // o trabalho local foi descartado de propósito
     const { data } = await supabase.from('cotacoes_precos').select('*').eq('id', editandoId).maybeSingle();
     if (data) carregarModelo(data);
     setConflito(null);
+    setRascunhoPendente(null);
     setResolvendoConflito(false);
   };
 
@@ -1724,6 +1843,14 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     else {
       alert(editandoId ? '✅ Cotação atualizada!' : '✅ Modelo salvo!');
       setModalSalvar(false);
+      // O nome digitado no modal ia só pro banco: a tela continuava achando
+      // que a formação era "sem nome", então o salvamento seguinte pedia o
+      // nome de novo e o cabeçalho seguia mostrando "sem nome".
+      setNomeCotacao(nome);
+      // Gravou: o rascunho local cumpriu o papel e sai de cena.
+      descartarRascunho(editandoId);
+      if (novaCotacaoId) descartarRascunho(null); // era a chave "nova"
+      marcarComoSalvo(nome);
       // Continua editando a MESMA formação depois de salvar. Antes zerava
       // (`setEditandoId(null)`), então o "Salvar" seguinte inseria uma linha
       // NOVA em vez de atualizar a mesma — espalhando cópias soltas do mesmo
@@ -1763,6 +1890,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     // mais tiver alterado esta linha desde este carregamento.
     setTravaAtualizadoEm(m.atualizado_em || null);
     setUltimaAlteracao(m.atualizado_em ? { em: m.atualizado_em, por: m.atualizado_por || m.criado_por || null } : null);
+    // Nova geração: a próxima passada do efeito é o carregamento em si, não
+    // edição — e é ali que o estado-base de comparação é fotografado.
+    geracaoRef.current += 1;
+    verificarRascunho(m.id);
     if (m.opl_numero) {
       // Busca o objeto completo da OP para vincular
       supabase.from('oples').select('id, opl, cliente_nome, status_geral')
@@ -1799,6 +1930,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setVencedoraAtual(false);
     setTravaAtualizadoEm(null);
     setUltimaAlteracao(null);
+    geracaoRef.current += 1;
+    verificarRascunho(null);
   };
 
   // Carrega cotação para edição e muda para a aba de formação
@@ -2093,6 +2226,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         setFinalizadaPorNome(payloadBase.finalizada_por_nome); setFinalizadaEm(agora); setVencedoraAtual(false);
       }
       setModalSenha(false); setSenhaConfirm(''); setErroSenha('');
+      descartarRascunho(editandoId);
+      marcarComoSalvo(nomeFinal);
       carregarModelos();
       alert('✅ Formação de preços registrada como versão final!');
     } catch (err: any) {
@@ -2230,6 +2365,36 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           )}
 
+          {/* ── RASCUNHO NÃO SALVO ENCONTRADO ──
+              Só aparece quando existe trabalho gravado no navegador que nunca
+              chegou a ser salvo no sistema (fechou a aba, caiu a energia,
+              saiu da tela sem salvar). */}
+          {rascunhoPendente && (
+            <div style={{ background:'#fffbeb', border:'1.5px solid #fcd34d', borderRadius:8,
+              padding:'10px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:220, fontSize:11, color:'#92400e' }}>
+                <strong>📝 Há alterações não salvas desta formação neste computador</strong>
+                <div style={{ fontSize:10, marginTop:2, color:'#b45309' }}>
+                  Guardadas automaticamente em{' '}
+                  {rascunhoPendente.salvoEm
+                    ? new Date(rascunhoPendente.salvoEm).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+                    : '—'}
+                  {rascunhoPendente.usuario ? ` · ${rascunhoPendente.usuario}` : ''}. Elas não estão no sistema ainda.
+                </div>
+              </div>
+              <button onClick={restaurarRascunho}
+                style={{ background:'#d97706', color:'#fff', border:'none', borderRadius:6,
+                  padding:'7px 14px', fontSize:11, fontWeight:800, cursor:'pointer' }}>
+                ↩️ Restaurar
+              </button>
+              <button onClick={() => descartarRascunho(rascunhoPendente.id)}
+                style={{ background:'none', color:'#92400e', border:'1px solid #fcd34d', borderRadius:6,
+                  padding:'7px 12px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                Descartar
+              </button>
+            </div>
+          )}
+
           {/* ── SELETOR DE FORMAÇÕES VINCULADAS (modo embutido) ── */}
           {vinculo && (
             <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
@@ -2276,7 +2441,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   de 08/09) ficavam sem NENHUM indicador: nem "editando", nem
                   "finalizada v3", nem última alteração. Agora aparece sempre
                   que há uma formação carregada; o nome é que é opcional. */}
-              {(nomeCotacao || editandoId) && (
+              {(nomeCotacao || editandoId || temNaoSalvo) && (
                 <div style={{ fontSize:10, color:'#64748b', marginTop:2, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                   {editandoId
                     ? <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>✏️ EDITANDO</span>
@@ -2290,6 +2455,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   {vencedoraAtual && (
                     <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
                       🏆 Versão Vencedora
+                    </span>
+                  )}
+                  {temNaoSalvo && (
+                    <span style={{ background:'#fef2f2', color:'#b91c1c', border:'1px solid #fca5a5', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
+                      ● Alterações não salvas
                     </span>
                   )}
                   {ultimaAlteracao?.em && (
