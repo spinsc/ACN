@@ -377,7 +377,14 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
   const inputStyle = { width:'100%', padding:'4px 7px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' as const };
 
-  const FormContato = () => (
+  // NAO voltar a usar isto como componente JSX: por estar definido dentro de
+  // ContatosSection, cada render cria uma funcao nova, o React trata como um
+  // tipo diferente e desmonta/remonta a arvore inteira. Como o form e
+  // controlado, cada tecla disparava setForm -> render -> remount, e o input
+  // perdia o foco: era preciso clicar de novo a cada caractere digitado.
+  // Chamado como funcao, o JSX entra na arvore do proprio ContatosSection e
+  // os inputs mantem identidade entre renders.
+  const renderFormContato = () => (
     <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:8 }}>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:6 }}>
         <div>
@@ -448,13 +455,13 @@ function ContatosSection({ licitacaoId, currentUser }) {
 
       {expandido && (
         <div>
-          {(adicionando && !editandoId) && <FormContato />}
+          {(adicionando && !editandoId) && renderFormContato()}
 
           {loading && <div style={{ fontSize:10, color:'#9ca3af', padding:4 }}>Carregando...</div>}
 
           {contatos.map((c: any) => (
             <div key={c.id}>
-              {editandoId === c.id ? <FormContato /> : (
+              {editandoId === c.id ? renderFormContato() : (
                 <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:5, padding:'7px 10px', marginBottom:6 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                     <div style={{ flex:1 }}>
