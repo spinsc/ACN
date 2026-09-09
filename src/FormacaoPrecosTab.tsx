@@ -1278,7 +1278,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
 // as formações já vinculadas àquele processo pra carregar, e ao salvar grava
 // o vínculo automaticamente (crm_oportunidade_id/licitacao_id), sem precisar
 // procurar manualmente na tela cheia.
-export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: any = {}) {
+export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotulo }: any = {}) {
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
   const [grupoAtivo, setGrupoAtivo]   = useState('Item 1'); // aba ativa — "Item do edital"
@@ -1326,6 +1326,23 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
   // ── Formações já vinculadas a este processo (modo embutido) ──
   const [formacoesVinculo, setFormacoesVinculo]     = useState<any[]>([]);
   const [carregandoVinculo, setCarregandoVinculo]   = useState(!!vinculo);
+
+  // Rótulo do botão de cada formação no seletor. Antes mostrava só `m.nome` —
+  // e como nada obrigava a preencher nome, formações salvas sem nome viravam
+  // pílulas VAZIAS de ~24x10px (invisíveis na prática). Agora sempre há texto:
+  // versão, data, autor e os selos de finalizada/vencedora.
+  const rotuloFormacao = (m: any) => {
+    const dt = m.criado_em
+      ? new Date(m.criado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+      : '';
+    const partes = [
+      `v${m.versao || 1}`,
+      (m.nome || '').trim() || null,
+      dt || null,
+      m.criado_por || null,
+    ].filter(Boolean);
+    return `${partes.join(' · ')}${m.status === 'finalizada' ? ' 🔒' : ''}${m.vencedora ? ' 🏆' : ''}`;
+  };
 
   const carregarFormacoesVinculo = useCallback(async () => {
     if (!vinculo?.id) return;
@@ -1389,15 +1406,31 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     carregarModelos();
   };
 
-  // Se só existe 1 formação vinculada a este processo, já carrega ela
-  // direto pra edição — evita o usuário ter que clicar no seletor.
+  // Ao abrir o processo, carrega automaticamente a formação mais recente
+  // (a lista vem ordenada por criado_em desc, então [0] é a última versão).
+  //
+  // ⚠️ Antes daqui só carregava quando havia EXATAMENTE 1 formação vinculada.
+  // Como cada "Registrar Versão Final" cria uma linha nova, bastava existir a
+  // v2 pra essa condição falhar e a tela abrir VAZIA — o trabalho continuava
+  // salvo no banco, mas sumia da tela (incidente relatado em 08/09/2026, em que
+  // v1/v2/v3 de uma licitação pareceram perdidas). O auto-carregamento agora
+  // vale pra qualquer quantidade de versões.
+  //
+  // O ref garante que isso rode UMA vez por processo: sem ele, o reload da
+  // lista disparado por "Salvar" reabriria a versão mais recente por cima do
+  // que o usuário estivesse editando (inclusive de uma "+ Nova formação"
+  // ainda não salva).
+  const autoCarregouRef = useRef<string | null>(null);
   useEffect(() => {
-    if (formacoesVinculo.length === 1 && !editandoId) {
-      carregarModelo(formacoesVinculo[0]);
-      setEditandoId(formacoesVinculo[0].id);
-    }
+    const chave = vinculo?.id || null;
+    if (!chave || autoCarregouRef.current === chave) return;
+    if (editandoId) { autoCarregouRef.current = chave; return; }
+    if (!formacoesVinculo.length) return; // ainda carregando, ou nenhuma ainda
+    autoCarregouRef.current = chave;
+    carregarModelo(formacoesVinculo[0]);
+    setEditandoId(formacoesVinculo[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formacoesVinculo]);
+  }, [formacoesVinculo, vinculo?.id]);
 
   const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
@@ -1582,7 +1615,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
     else {
       alert(editandoId ? '✅ Cotação atualizada!' : '✅ Modelo salvo!');
       setModalSalvar(false);
-      setEditandoId(null);
+      // Continua editando a MESMA formação depois de salvar. Antes zerava
+      // (`setEditandoId(null)`), então o "Salvar" seguinte inseria uma linha
+      // NOVA em vez de atualizar a mesma — espalhando cópias soltas do mesmo
+      // trabalho e dando a impressão de que o registro certo tinha sumido.
+      if (novaCotacaoId) setEditandoId(novaCotacaoId);
       carregarModelos();
       if (vinculo?.id) carregarFormacoesVinculo();
     }
@@ -1853,8 +1890,16 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
       return;
     }
     const agora = new Date().toISOString();
+    // Nunca finaliza sem nome: sem isso a formação ficava com nome vazio e
+    // aparecia em branco no seletor de versões, na tela de Cotações e na aba
+    // "Preços Formados". Usa o rótulo do processo (nº da licitação / título da
+    // oportunidade) quando o usuário não nomeou.
+    const nomeFinal = (nomeCotacao || '').trim()
+      || (rotulo || '').trim()
+      || `Formação ${new Date().toLocaleDateString('pt-BR')}`;
+    if (nomeFinal !== nomeCotacao) setNomeCotacao(nomeFinal);
     const payloadBase: any = {
-      nome: nomeCotacao, empresa,
+      nome: nomeFinal, empresa,
       plataforma_id: plataformaSelecionada?.id || null,
       parametros_globais: params,
       itens: itens.map(({ _id, ...rest }) => rest),
@@ -2008,12 +2053,19 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido }: an
                 <span style={{ fontSize:10, color:'#94a3b8' }}>Carregando formações vinculadas...</span>
               ) : (
                 <>
+                  {formacoesVinculo.length > 0 && (
+                    <span style={{ fontSize:9, fontWeight:700, color:'#64748b', textTransform:'uppercase', marginRight:2 }}>
+                      Versões ({formacoesVinculo.length})
+                    </span>
+                  )}
                   {formacoesVinculo.map((m: any) => (
                     <button key={m.id} onClick={() => { carregarModelo(m); setEditandoId(m.id); }}
-                      style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'none',
+                      title={rotuloFormacao(m)}
+                      style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer',
+                        border: m.vencedora ? '1.5px solid #f59e0b' : '1px solid #bfdbfe',
                         background: editandoId === m.id ? '#1e40af' : '#eff6ff',
                         color: editandoId === m.id ? '#fff' : '#1e40af' }}>
-                      {m.nome}
+                      {rotuloFormacao(m)}
                     </button>
                   ))}
                   <button onClick={novaQuotacao}

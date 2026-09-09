@@ -4265,6 +4265,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   <FormacaoPrecosTab
                     currentUser={currentUser}
                     vinculo={{ tipo:'crm', id: modalAbrir.id }}
+                    rotulo={modalAbrir.titulo || ''}
                     embutido
                   />
                 )}

@@ -1789,6 +1789,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               <FormacaoPrecosTab
                 currentUser={currentUser}
                 vinculo={{ tipo:'licitacao', id: licit.id }}
+                rotulo={licit.numero || licit.nome_projeto || ''}
                 embutido
               />
             )}
