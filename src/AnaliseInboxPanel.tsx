@@ -319,7 +319,8 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
 
                           {/* Nota do setor concluído */}
                           {concluido && setor.notas && (
-                            <div style={{ fontSize:9, color:'#475569', marginTop:4, fontStyle:'italic' }}>
+                            <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
+                              whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
                               📝 {setor.notas}
                             </div>
                           )}
@@ -327,12 +328,14 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                           {/* Campo nota + botão concluir (apenas pendentes) */}
                           {!concluido && (
                             <div style={{ marginTop:6 }}>
-                              <input
+                              <textarea
                                 value={notas[setor.id] || ''}
                                 onChange={e => setNotas(prev => ({ ...prev, [setor.id]: e.target.value }))}
                                 placeholder="Observação / resultado da análise (opcional)..."
-                                style={{ width:'100%', padding:'4px 8px', border:'1px solid #d1d5db',
-                                  borderRadius:4, fontSize:9, boxSizing:'border-box', marginBottom:6 }}
+                                rows={4}
+                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db',
+                                  borderRadius:4, fontSize:11, lineHeight:1.55, boxSizing:'border-box',
+                                  marginBottom:6, resize:'vertical', fontFamily:'inherit' }}
                               />
                               <button
                                 onClick={() => concluirSetor(sol, setor)}

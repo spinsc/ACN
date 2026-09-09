@@ -372,7 +372,8 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                     )}
                   </div>
                   {s.status==='analisado' && s.notas && (
-                    <div style={{ fontSize:9, color:'#4b5563', marginTop:4, fontStyle:'italic' }}>📝 {s.notas}</div>
+                    <div style={{ fontSize:11, color:'#334155', marginTop:4, lineHeight:1.55,
+                      whiteSpace:'pre-wrap', wordBreak:'break-word' }}>📝 {s.notas}</div>
                   )}
                   {s.status !== 'analisado' && (
                     <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
@@ -380,9 +381,9 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                         value={obsSetor[s.id] || ''}
                         onChange={e => setObsSetor(p => ({ ...p, [s.id]: e.target.value }))}
                         placeholder="Observações da análise (opcional)..."
-                        rows={2}
-                        style={{ width:'100%', boxSizing:'border-box', padding:'4px 7px', border:'1px solid #fde047',
-                          borderRadius:4, fontSize:10, resize:'none', fontFamily:'inherit' }}
+                        rows={4}
+                        style={{ width:'100%', boxSizing:'border-box', padding:'6px 8px', border:'1px solid #fde047',
+                          borderRadius:4, fontSize:11, lineHeight:1.55, resize:'vertical', fontFamily:'inherit' }}
                       />
                       <button
                         onClick={() => concluirSetor(s, sol)}
@@ -403,7 +404,7 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
 
       {/* Histórico finalizado */}
       {finalizadas.length > 0 && (
-        <details>
+        <details open>
           <summary style={{ fontSize:10, color:'#6b7280', cursor:'pointer', userSelect:'none' }}>
             ✅ {finalizadas.length} análise{finalizadas.length>1?'s':''} finalizada{finalizadas.length>1?'s':''}
           </summary>
@@ -412,11 +413,24 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
               <div style={{ fontSize:9, color:'#166534', marginBottom:4 }}>Solicitado por {sol.criado_por} · {fmtDT(sol.criado_em)}</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {(sol.analise_setores||[]).map((s:any) => (
-                  <div key={s.id} style={{ fontSize:9, background:'#dcfce7', color:'#166534', borderRadius:6, padding:'4px 8px', border:'1px solid #86efac' }}>
-                    <div style={{ fontWeight:700 }}>✅ {SETOR_LABEL[s.setor]||s.setor}</div>
-                    {s.notas && (
-                      <div style={{ fontStyle:'italic', marginTop:2, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                  <div key={s.id} style={{ fontSize:10, background:'#dcfce7', color:'#166534', borderRadius:6, padding:'6px 10px', border:'1px solid #86efac' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                      <span style={{ fontWeight:700 }}>✅ {SETOR_LABEL[s.setor]||s.setor}</span>
+                      {s.analisado_por && <span style={{ fontSize:9, color:'#15803d' }}>por {s.analisado_por}</span>}
+                      {s.analisado_em && <span style={{ fontSize:9, color:'#22c55e' }}>{fmtDT(s.analisado_em)}</span>}
+                    </div>
+                    {/* O parecer e o que interessa ler aqui: fundo branco, corpo de
+                        texto legivel e quebras de linha preservadas. Antes saia em
+                        9px italico, do mesmo tamanho do rotulo do setor. */}
+                    {s.notas ? (
+                      <div style={{ marginTop:5, fontSize:11, color:'#14532d', lineHeight:1.55,
+                        whiteSpace:'pre-wrap', wordBreak:'break-word',
+                        background:'#fff', border:'1px solid #bbf7d0', borderRadius:5, padding:'7px 9px' }}>
                         {s.notas}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop:4, fontSize:10, color:'#15803d', fontStyle:'italic' }}>
+                        Este setor concluiu sem escrever observação.
                       </div>
                     )}
                   </div>
