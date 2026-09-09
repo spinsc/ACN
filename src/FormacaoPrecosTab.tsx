@@ -1323,6 +1323,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [historicoVersoes, setHistoricoVersoes] = useState<any[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
+  // ── Trava otimista contra edição simultânea ────────────────────────────────
+  // `travaAtualizadoEm` guarda o `atualizado_em` da linha no momento em que ela
+  // foi carregada na tela. Todo UPDATE vai com `.eq('atualizado_em', trava)`:
+  // se outra pessoa salvou nesse meio tempo o banco recusa (0 linhas afetadas)
+  // em vez de sobrescrever calado — que era como o trabalho de um apagava o do
+  // outro quando duas pessoas mexiam na mesma formação (incidente de 08/09).
+  const [travaAtualizadoEm, setTravaAtualizadoEm] = useState<string | null>(null);
+  const [conflito, setConflito] = useState<any | null>(null); // { payload, dono, quando }
+  const [resolvendoConflito, setResolvendoConflito] = useState(false);
+  const [ultimaAlteracao, setUltimaAlteracao] = useState<any | null>(null); // { em, por }
+
   // ── Formações já vinculadas a este processo (modo embutido) ──
   const [formacoesVinculo, setFormacoesVinculo]     = useState<any[]>([]);
   const [carregandoVinculo, setCarregandoVinculo]   = useState(!!vinculo);
@@ -1578,6 +1589,90 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setCarregando(false);
   }, []);
 
+  // Atualiza a linha SÓ se ninguém mexeu nela desde que foi carregada.
+  // Retorna { conflito:true } em vez de gravar quando alguém mexeu — a decisão
+  // do que fazer fica com quem chamou (ver `abrirConflito`).
+  const atualizarComTrava = async (id: string, payload: any) => {
+    let q = supabase.from('cotacoes_precos')
+      .update({ ...payload, atualizado_por: currentUser?.nome || currentUser?.email || 'Sistema' })
+      .eq('id', id);
+    // Linhas antigas podem não ter token (não deveria acontecer após a
+    // migração, que preencheu todas) — sem token, grava sem trava.
+    if (travaAtualizadoEm) q = q.eq('atualizado_em', travaAtualizadoEm);
+    const { data, error } = await q.select('id, atualizado_em, atualizado_por');
+    if (error) return { erro: error };
+    if (!data || data.length === 0) return { conflito: true };
+    setTravaAtualizadoEm(data[0].atualizado_em);
+    setUltimaAlteracao({ em: data[0].atualizado_em, por: data[0].atualizado_por });
+    return { ok: true };
+  };
+
+  // Descobre quem salvou por cima e abre o aviso de conflito, guardando o
+  // payload pendente pra poder gravá-lo como nova versão se o usuário quiser.
+  const abrirConflito = async (payload: any) => {
+    const { data: atual } = await supabase.from('cotacoes_precos')
+      .select('atualizado_em, atualizado_por, criado_por, versao').eq('id', editandoId).maybeSingle();
+    setConflito({
+      payload,
+      dono: atual?.atualizado_por || atual?.criado_por || 'outra pessoa',
+      quando: atual?.atualizado_em
+        ? new Date(atual.atualizado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+        : null,
+    });
+  };
+
+  // Grava o trabalho pendente como uma NOVA versão do mesmo grupo, preservando
+  // intacta a versão que a outra pessoa salvou. É a saída padrão do conflito.
+  const gravarComoNovaVersao = async (payload: any) => {
+    setResolvendoConflito(true);
+    try {
+      const raizId = versaoRaizId || editandoId;
+      const { data: irmaos } = await supabase.from('cotacoes_precos')
+        .select('versao').or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
+      const proximaVersao = Math.max(1, ...(irmaos || []).map((r: any) => r.versao || 1)) + 1;
+      const { data, error } = await supabase.from('cotacoes_precos')
+        .insert([{ ...payload, versao: proximaVersao, versao_raiz_id: raizId,
+                   criado_por: currentUser?.nome || 'Sistema',
+                   atualizado_por: currentUser?.nome || currentUser?.email || 'Sistema' }])
+        .select('id, atualizado_em, atualizado_por').single();
+      if (error) throw error;
+      if (vinculo?.id) {
+        await supabase.from('cotacoes_precos_vinculos')
+          .upsert([{ cotacao_id: data.id, tipo: vinculo.tipo, processo_id: vinculo.id }],
+                  { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+      }
+      await supabase.from('cotacoes_precos_log').insert([{
+        cotacao_id: data.id, tipo: 'conflito_nova_versao',
+        descricao: `Versão ${proximaVersao} criada para não sobrescrever alteração salva por ${conflito?.dono || 'outra pessoa'}.`,
+        usuario_id: currentUser?.id || null,
+        usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+      }]);
+      setEditandoId(data.id);
+      setVersaoAtual(proximaVersao);
+      setVersaoRaizId(raizId);
+      setVencedoraAtual(false);
+      setTravaAtualizadoEm(data.atualizado_em);
+      setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
+      setConflito(null);
+      carregarModelos();
+      if (vinculo?.id) carregarFormacoesVinculo();
+      alert(`✅ Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.`);
+    } catch (err: any) {
+      alert('Erro ao gravar como nova versão: ' + err.message);
+    } finally {
+      setResolvendoConflito(false);
+    }
+  };
+
+  // Descarta o trabalho local e recarrega o que a outra pessoa salvou.
+  const descartarERecarregar = async () => {
+    setResolvendoConflito(true);
+    const { data } = await supabase.from('cotacoes_precos').select('*').eq('id', editandoId).maybeSingle();
+    if (data) carregarModelo(data);
+    setConflito(null);
+    setResolvendoConflito(false);
+  };
+
   const salvarModelo = async (nome, tipo) => {
     setSalvando(true);
     const payload: any = {
@@ -1598,14 +1693,28 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (vinculo?.tipo === 'licitacao') payload.licitacao_id        = vinculo.id;
     let error, novaCotacaoId: string | null = null;
     if (editandoId) {
-      // Atualiza a cotação existente
-      ({ error } = await supabase.from('cotacoes_precos').update(payload).eq('id', editandoId));
+      // Atualiza a cotação existente — com trava: se outra pessoa salvou desde
+      // que esta tela carregou, NÃO sobrescreve; abre o aviso de conflito.
+      const r = await atualizarComTrava(editandoId, payload);
+      if (r.conflito) {
+        setSalvando(false);
+        setModalSalvar(false);
+        await abrirConflito(payload);
+        return;
+      }
+      error = r.erro;
     } else {
       // Cria nova cotação
       const { data, error: insErr } = await supabase.from('cotacoes_precos')
-        .insert([{ ...payload, criado_por: currentUser?.nome || 'Sistema' }]).select('id').single();
+        .insert([{ ...payload, criado_por: currentUser?.nome || 'Sistema',
+                   atualizado_por: currentUser?.nome || currentUser?.email || 'Sistema' }])
+        .select('id, atualizado_em, atualizado_por').single();
       error = insErr;
       novaCotacaoId = data?.id || null;
+      if (data) {
+        setTravaAtualizadoEm(data.atualizado_em);
+        setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
+      }
     }
     if (!error && novaCotacaoId && vinculo?.id) {
       await supabase.from('cotacoes_precos_vinculos')
@@ -1650,6 +1759,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setFinalizadaPorNome(m.finalizada_por_nome || null);
     setFinalizadaEm(m.finalizada_em || null);
     setVencedoraAtual(!!m.vencedora);
+    // Token da trava otimista — a partir daqui, salvar só grava se ninguém
+    // mais tiver alterado esta linha desde este carregamento.
+    setTravaAtualizadoEm(m.atualizado_em || null);
+    setUltimaAlteracao(m.atualizado_em ? { em: m.atualizado_em, por: m.atualizado_por || m.criado_por || null } : null);
     if (m.opl_numero) {
       // Busca o objeto completo da OP para vincular
       supabase.from('oples').select('id, opl, cliente_nome, status_geral')
@@ -1684,6 +1797,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setFinalizadaPorNome(null);
     setFinalizadaEm(null);
     setVencedoraAtual(false);
+    setTravaAtualizadoEm(null);
+    setUltimaAlteracao(null);
   };
 
   // Carrega cotação para edição e muda para a aba de formação
@@ -1919,14 +2034,25 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         // 1ª finalização — atualiza a própria linha (cria se ainda não existe).
         let cotacaoId = editandoId;
         if (cotacaoId) {
-          const { error } = await supabase.from('cotacoes_precos').update({ ...payloadBase, versao: 1 }).eq('id', cotacaoId);
-          if (error) throw error;
+          // Mesma trava do salvarModelo: não finaliza por cima do trabalho de
+          // outra pessoa sem avisar.
+          const r = await atualizarComTrava(cotacaoId, { ...payloadBase, versao: 1 });
+          if (r.conflito) {
+            setModalSenha(false); setSenhaConfirm(''); setRegistrandoVersao(false);
+            await abrirConflito({ ...payloadBase, versao: 1 });
+            return;
+          }
+          if (r.erro) throw r.erro;
         } else {
           const { data, error } = await supabase.from('cotacoes_precos')
-            .insert([{ ...payloadBase, versao: 1, criado_por: currentUser?.nome || 'Sistema' }]).select('id').single();
+            .insert([{ ...payloadBase, versao: 1, criado_por: currentUser?.nome || 'Sistema',
+                       atualizado_por: currentUser?.nome || currentUser?.email || 'Sistema' }])
+            .select('id, atualizado_em, atualizado_por').single();
           if (error) throw error;
           cotacaoId = data.id;
           setEditandoId(cotacaoId);
+          setTravaAtualizadoEm(data.atualizado_em);
+          setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
         }
         if (vinculo?.id) {
           await supabase.from('cotacoes_precos_vinculos')
@@ -1946,9 +2072,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           .select('versao').or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
         const proximaVersao = Math.max(1, ...(irmaos || []).map((r: any) => r.versao || 1)) + 1;
         const { data, error } = await supabase.from('cotacoes_precos')
-          .insert([{ ...payloadBase, versao: proximaVersao, versao_raiz_id: raizId, criado_por: currentUser?.nome || 'Sistema' }])
-          .select('id').single();
+          .insert([{ ...payloadBase, versao: proximaVersao, versao_raiz_id: raizId,
+                     criado_por: currentUser?.nome || 'Sistema',
+                     atualizado_por: currentUser?.nome || currentUser?.email || 'Sistema' }])
+          .select('id, atualizado_em, atualizado_por').single();
         if (error) throw error;
+        setTravaAtualizadoEm(data.atualizado_em);
+        setUltimaAlteracao({ em: data.atualizado_em, por: data.atualizado_por });
         if (vinculo?.id) {
           await supabase.from('cotacoes_precos_vinculos')
             .upsert([{ cotacao_id: data.id, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
@@ -1979,8 +2109,16 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (!confirm('Marcar esta versão como a VENCEDORA do pregão/licitação?')) return;
     const raizId = versaoRaizId || editandoId;
     await supabase.from('cotacoes_precos').update({ vencedora: false }).or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
-    await supabase.from('cotacoes_precos').update({ vencedora: true }).eq('id', editandoId);
+    const { data: marcada } = await supabase.from('cotacoes_precos')
+      .update({ vencedora: true }).eq('id', editandoId).select('atualizado_em, atualizado_por').single();
     setVencedoraAtual(true);
+    // Estes dois UPDATEs também disparam o gatilho de atualizado_em; sem
+    // renovar o token aqui, o próximo "Salvar" acusaria conflito do usuário
+    // consigo mesmo.
+    if (marcada) {
+      setTravaAtualizadoEm(marcada.atualizado_em);
+      setUltimaAlteracao({ em: marcada.atualizado_em, por: marcada.atualizado_por });
+    }
     await supabase.from('cotacoes_precos_log').insert([{
       cotacao_id: editandoId, tipo: 'vencedora_marcada',
       descricao: `Versão ${versaoAtual} marcada como vencedora do pregão/licitação.`,
@@ -2046,6 +2184,52 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       {(embutido || abaAtiva === 'formacao') && (
         <div style={{ padding: embutido ? 0 : 14 }}>
 
+          {/* ── AVISO DE EDIÇÃO SIMULTÂNEA ──
+              Aparece quando o banco recusou o UPDATE porque outra pessoa
+              salvou esta mesma formação depois que esta tela a carregou.
+              Nada foi sobrescrito: o trabalho local continua na tela e o
+              usuário escolhe o que fazer com ele. */}
+          {conflito && (
+            <div style={{ position:'fixed', inset:0, background:'#0009', zIndex:9999,
+              display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+              <div style={{ background:'#fff', borderRadius:10, maxWidth:520, width:'100%', padding:20,
+                boxShadow:'0 10px 40px #0004' }}>
+                <div style={{ fontSize:15, fontWeight:800, color:'#b45309', marginBottom:8 }}>
+                  ⚠️ Alguém salvou esta formação enquanto você editava
+                </div>
+                <div style={{ fontSize:12, color:'#334155', lineHeight:1.6, marginBottom:14 }}>
+                  <strong>{conflito.dono}</strong>
+                  {conflito.quando ? ` salvou uma alteração às ${conflito.quando}` : ' salvou uma alteração'},
+                  depois que esta tela foi aberta.
+                  <br /><br />
+                  <strong>Nada foi perdido</strong> — o seu trabalho continua aqui na tela e a
+                  versão dele continua salva. Escolha como seguir:
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  <button disabled={resolvendoConflito}
+                    onClick={() => gravarComoNovaVersao(conflito.payload)}
+                    style={{ background:'#059669', color:'#fff', border:'none', borderRadius:6,
+                      padding:'10px 14px', fontSize:12, fontWeight:800, cursor:'pointer', textAlign:'left' }}>
+                    ✅ Gravar o meu como uma NOVA versão
+                    <div style={{ fontSize:10, fontWeight:500, opacity:.9, marginTop:2 }}>
+                      Preserva os dois trabalhos. Recomendado.
+                    </div>
+                  </button>
+                  <button disabled={resolvendoConflito} onClick={descartarERecarregar}
+                    style={{ background:'#f1f5f9', color:'#334155', border:'1px solid #cbd5e1', borderRadius:6,
+                      padding:'10px 14px', fontSize:12, fontWeight:700, cursor:'pointer', textAlign:'left' }}>
+                    ↺ Descartar o meu e abrir a versão de {conflito.dono}
+                  </button>
+                  <button disabled={resolvendoConflito} onClick={() => setConflito(null)}
+                    style={{ background:'none', color:'#64748b', border:'none',
+                      padding:'6px', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                    Cancelar e continuar editando
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── SELETOR DE FORMAÇÕES VINCULADAS (modo embutido) ── */}
           {vinculo && (
             <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
@@ -2087,12 +2271,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12, flexWrap:'wrap', gap:8 }}>
             <div>
               <div style={{ fontWeight:800, fontSize:16, color:'#1e293b' }}>📊 Formação de Preços</div>
-              {nomeCotacao && (
+              {/* Antes esta faixa inteira só aparecia se a formação tivesse
+                  nome — então justamente as salvas sem nome (as do incidente
+                  de 08/09) ficavam sem NENHUM indicador: nem "editando", nem
+                  "finalizada v3", nem última alteração. Agora aparece sempre
+                  que há uma formação carregada; o nome é que é opcional. */}
+              {(nomeCotacao || editandoId) && (
                 <div style={{ fontSize:10, color:'#64748b', marginTop:2, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                   {editandoId
                     ? <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>✏️ EDITANDO</span>
                     : null}
-                  Modelo: <strong>{nomeCotacao}</strong>
+                  {nomeCotacao ? <>Modelo: <strong>{nomeCotacao}</strong></> : <em style={{ color:'#94a3b8' }}>sem nome</em>}
                   {statusCotacao === 'finalizada' && (
                     <span style={{ background:'#dcfce7', color:'#166534', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
                       🔒 Finalizada v{versaoAtual}{finalizadaPorNome ? ` · ${finalizadaPorNome}` : ''}
@@ -2101,6 +2290,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   {vencedoraAtual && (
                     <span style={{ background:'#fef3c7', color:'#92400e', borderRadius:3, padding:'1px 6px', fontWeight:700, fontSize:9 }}>
                       🏆 Versão Vencedora
+                    </span>
+                  )}
+                  {ultimaAlteracao?.em && (
+                    <span style={{ background:'#f1f5f9', color:'#475569', borderRadius:3, padding:'1px 6px', fontWeight:600, fontSize:9 }}>
+                      🕐 Última alteração: {new Date(ultimaAlteracao.em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                      {ultimaAlteracao.por ? ` · ${ultimaAlteracao.por}` : ''}
                     </span>
                   )}
                 </div>
