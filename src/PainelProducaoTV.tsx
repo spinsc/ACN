@@ -11,7 +11,7 @@
 // linhas numa TV ninguém lê. Mostra as mais urgentes que cabem e diz quantas
 // ficaram de fora — senão o painel vira parede de texto e perde a função.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { temSerralheria } from './FluxoEntrega';
 
@@ -39,6 +39,66 @@ export default function PainelProducaoTV() {
   const [rodando, setRodando]           = useState(false);
   const [restante, setRestante]         = useState(SEG_ROTACAO);
   const [atualizadoEm, setAtualizadoEm] = useState(null);
+
+  // ── TELA CHEIA ─────────────────────────────────────────────────────────
+  // Usa a API de tela cheia do NAVEGADOR no próprio painel, e não um overlay
+  // por CSS: só ela esconde também as abas e a barra de endereço. Como o
+  // elemento em tela cheia é este painel, menu, cabeçalho e os widgets
+  // flutuantes do sistema (chat, avisos) ficam de fora sozinhos.
+  //
+  // Sai com um clique em qualquer lugar do painel. O ESC não dá para bloquear
+  // — é trava de segurança do navegador. No Chrome/Edge dá para chegar perto:
+  // o Keyboard Lock faz um toque rápido no ESC não sair mais; só SEGURAR o ESC
+  // por uns 2 segundos sai (e o próprio navegador avisa isso na tela).
+  const raizRef = useRef(null);
+  const [telaCheia, setTelaCheia]       = useState(false);
+  const [cursorOculto, setCursorOculto] = useState(false);
+
+  // O estado acompanha o navegador, não o botão: se sair pelo ESC segurado,
+  // o painel tem que voltar a mostrar os controles.
+  useEffect(() => {
+    const sync = () => {
+      const ativo = !!raizRef.current && document.fullscreenElement === raizRef.current;
+      setTelaCheia(ativo);
+      if (!ativo) { try { navigator.keyboard?.unlock?.(); } catch {} }
+    };
+    document.addEventListener('fullscreenchange', sync);
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      // saiu da tela do painel ainda em tela cheia: não deixa o navegador preso
+      if (raizRef.current && document.fullscreenElement === raizRef.current) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  const entrarTelaCheia = async (e) => {
+    e.stopPropagation();   // o mesmo clique não pode chegar no "clique para sair"
+    try {
+      await raizRef.current.requestFullscreen({ navigationUI: 'hide' });
+      try { await navigator.keyboard?.lock?.(['Escape']); } catch {}
+    } catch (err) {
+      alert('O navegador não permitiu a tela cheia: ' + (err?.message || err));
+    }
+  };
+
+  const sairTelaCheia = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  };
+
+  // Seta do mouse parada no meio da TV incomoda: some depois de 3s sem mexer
+  // e volta ao mover, para quem for clicar enxergar onde está.
+  useEffect(() => {
+    if (!telaCheia) { setCursorOculto(false); return; }
+    let t = setTimeout(() => setCursorOculto(true), 3000);
+    const mexeu = () => {
+      setCursorOculto(false);
+      clearTimeout(t);
+      t = setTimeout(() => setCursorOculto(true), 3000);
+    };
+    window.addEventListener('mousemove', mexeu);
+    return () => { clearTimeout(t); window.removeEventListener('mousemove', mexeu); };
+  }, [telaCheia]);
 
   const carregar = useCallback(async () => {
     const { data } = await supabase.from('oples')
@@ -98,28 +158,60 @@ export default function PainelProducaoTV() {
   const responsavelDe = (o) => (o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao) || null;
 
   return (
-    <div style={{ background: '#0f172a', minHeight: '100vh', color: '#f8fafc', padding: '18px 22px', fontFamily: 'system-ui,sans-serif' }}>
+    <div ref={raizRef} onClick={telaCheia ? sairTelaCheia : undefined}
+      title={telaCheia ? 'Clique para sair da tela cheia' : undefined}
+      style={{ background: '#0f172a', minHeight: '100vh', color: '#f8fafc', padding: '18px 22px',
+        fontFamily: 'system-ui,sans-serif', boxSizing: 'border-box', overflowY: 'auto',
+        cursor: telaCheia ? (cursorOculto ? 'none' : 'pointer') : undefined }}>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ fontSize: 26, fontWeight: 900 }}>🏭 Painel de Produção</div>
-        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          {LISTAS.map(l => (
-            <button key={l.id} onClick={() => { setAtiva(l.id); setRodando(false); }}
+        {telaCheia ? (
+          // Em tela cheia qualquer clique sai — então aqui nada é botão, senão
+          // escolher uma lista tiraria a TV da tela cheia sem querer. Mostra
+          // só em que lista está e quanto falta para a próxima.
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+            {LISTAS.map(l => (
+              <span key={l.id}
+                style={{ fontSize: 13, fontWeight: 800, padding: '6px 14px', borderRadius: 20,
+                  border: '2px solid ' + l.cor,
+                  background: ativa === l.id ? l.cor : 'transparent',
+                  color: ativa === l.id ? '#0f172a' : l.cor }}>
+                {l.titulo} ({separar(l.id).length})
+              </span>
+            ))}
+            {rodando && (
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#22c55e', marginLeft: 4 }}>
+                próxima em {restante}s
+              </span>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+            {LISTAS.map(l => (
+              <button key={l.id} onClick={() => { setAtiva(l.id); setRodando(false); }}
+                style={{ fontSize: 13, fontWeight: 800, padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+                  border: '2px solid ' + l.cor,
+                  background: ativa === l.id ? l.cor : 'transparent',
+                  color: ativa === l.id ? '#0f172a' : l.cor }}>
+                {l.titulo} ({separar(l.id).length})
+              </button>
+            ))}
+            <button onClick={() => setRodando(r => !r)}
               style={{ fontSize: 13, fontWeight: 800, padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
-                border: '2px solid ' + l.cor,
-                background: ativa === l.id ? l.cor : 'transparent',
-                color: ativa === l.id ? '#0f172a' : l.cor }}>
-              {l.titulo} ({separar(l.id).length})
+                border: '2px solid #22c55e',
+                background: rodando ? '#22c55e' : 'transparent',
+                color: rodando ? '#0f172a' : '#22c55e' }}>
+              {rodando ? '⏸ Alternando (' + restante + 's)' : '▶ Alternar a cada 30s'}
             </button>
-          ))}
-          <button onClick={() => setRodando(r => !r)}
-            style={{ fontSize: 13, fontWeight: 800, padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
-              border: '2px solid #22c55e',
-              background: rodando ? '#22c55e' : 'transparent',
-              color: rodando ? '#0f172a' : '#22c55e' }}>
-            {rodando ? '⏸ Alternando (' + restante + 's)' : '▶ Alternar a cada 30s'}
-          </button>
-        </div>
+            <button onClick={entrarTelaCheia}
+              title="Mostra só o painel, sem menu nem abas. Para sair, clique em qualquer lugar dele."
+              style={{ fontSize: 13, fontWeight: 800, padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+                border: '2px solid #e2e8f0', background: 'transparent', color: '#e2e8f0' }}>
+              ⛶ Tela cheia
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ background: lista.fundo, border: '3px solid ' + lista.cor, borderRadius: 12, overflow: 'hidden' }}>
@@ -186,7 +278,9 @@ export default function PainelProducaoTV() {
       </div>
 
       <div style={{ marginTop: 10, fontSize: 12, color: '#64748b', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-        <span>Adaptação e Serralheria · somente leitura</span>
+        <span>{telaCheia
+          ? 'Adaptação e Serralheria · clique em qualquer lugar para sair da tela cheia'
+          : 'Adaptação e Serralheria · somente leitura'}</span>
         <span style={{ marginLeft: 'auto' }}>
           {'Atualiza sozinho a cada ' + (SEG_REFRESH / 60) + ' min'
             + (atualizadoEm ? ' · última: ' + atualizadoEm.toLocaleTimeString('pt-BR') : '')}
