@@ -62,3 +62,35 @@ export const soEnvio            = (v: any) => filaDe(v) === 'envio';
 
 export const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SERRALHERIA
+// Nas palavras do usuário: "faz parte da adaptação, mas não sendo exatamente
+// adaptação". Os dados confirmam duas realidades diferentes:
+//  1) etapa DENTRO de uma OP de adaptação — 25 OPs de Transformação Veicular,
+//     Instalação e Manutenção têm mão de obra de serralheria lançada;
+//  2) fabricação do item INTEIRO — as 27 carretinhas (tipo "Reboque"), que
+//     hoje têm ZERO registro de trabalho de serralheria, apesar de serem
+//     fabricadas por ela. É esse fluxo físico que estava invisível.
+// Por isso a fila não olha só o fluxo_entrega: uma OP entra na fila da
+// serralheria por qualquer um dos três sinais abaixo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SERRALHERIA_STATUS = ['Pendente', 'Em Execucao', 'Concluido'] as const;
+
+export function temSerralheria(o: any): boolean {
+  if (!o) return false;
+  return o.fluxo_entrega === 'fabricacao_serralheria_envio'
+      || Number(o.valor_mao_de_obra_serralheria) > 0
+      || (o.tipo_projeto || '') === 'Reboque';
+}
+
+/** Motivo pelo qual a OP está na fila — ajuda quem trabalha a entender se é
+ *  o item inteiro ou só uma etapa dentro de outra coisa. */
+export function motivoSerralheria(o: any): string {
+  if (o?.fluxo_entrega === 'fabricacao_serralheria_envio') return 'Fabricação da serralheria (item inteiro)';
+  if ((o?.tipo_projeto || '') === 'Reboque')               return 'Reboque / carretinha';
+  if (Number(o?.valor_mao_de_obra_serralheria) > 0)        return 'Etapa dentro da adaptação';
+  return 'Serralheria';
+}

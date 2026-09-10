@@ -10,7 +10,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
-import { FLUXOS, filaDe, fluxoLabel } from './FluxoEntrega';
+import { FLUXOS, filaDe, fluxoLabel, temSerralheria, motivoSerralheria, SERRALHERIA_STATUS } from './FluxoEntrega';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 
@@ -24,7 +24,7 @@ const semDado = (v) => !v || !String(v).trim();
 // Veicular para não divergir quando o fluxo mudar de novo.
 const STATUSES_VEICULAR_ATIVAS = ['Em Provisionamento','Aguardando Aceite SAC','Provisionada','Aguardando Início','Verificação e Orçamento','Aguardando Aprovação Cliente','Em Manutenção','Em Execução'];
 
-function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, naoLido }) {
+function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, naoLido, onSerralheria }) {
   const emProd       = o.status_geral === 'Em Producao';
   const aguardando   = o.status_geral === 'Aguardando Inicio Producao';
   const retrabalho   = o.status_geral === 'Retrabalho';
@@ -59,6 +59,29 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
           )}
           {(retrabalho || emRetrab) && (
             <div><span style={{fontSize:9,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>🔁 RETRABALHO</span></div>
+          )}
+          {/* Andamento da serralheria — visível em qualquer fila, porque numa
+              adaptação ela é etapa e quem acompanha precisa ver ali mesmo. */}
+          {temSerralheria(o) && (
+            <div style={{ marginTop:3 }}>
+              <div title={motivoSerralheria(o)}
+                style={{ fontSize:8, fontWeight:800, background:'#e0e7ff', color:'#3730a3',
+                  border:'1px solid #a5b4fc', borderRadius:3, padding:'1px 5px', display:'inline-block' }}>
+                🔩 {o.serralheria_status || 'Pendente'}
+              </div>
+              {onSerralheria && (
+                <div style={{ display:'flex', gap:3, marginTop:2, flexWrap:'wrap' }}>
+                  {SERRALHERIA_STATUS.filter(st => st !== (o.serralheria_status || 'Pendente')).map(st => (
+                    <button key={st} onClick={()=>onSerralheria(o, st)}
+                      title={`Marcar serralheria como ${st}`}
+                      style={{ fontSize:8, padding:'1px 6px', borderRadius:3, cursor:'pointer',
+                        border:'1px solid #a5b4fc', background:'#fff', color:'#3730a3', fontWeight:700 }}>
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </td>
         <td style={{fontSize:10}}>
@@ -2372,10 +2395,26 @@ export default function ProducaoTab({ currentUser }) {
   // Fila: separa o que é adaptação do que é fabricação para envio. Antes tudo
   // caía junto aqui, inclusive item que só seria separado e enviado.
   // Fluxo vazio conta como 'adaptacao' (OP anterior à regra) — ver FluxoEntrega.ts.
-  const contaFila = (f: string) => opls.filter(o => filaDe(o.fluxo_entrega) === f).length;
+  const contaFila = (f: string) =>
+    f === 'serralheria' ? opls.filter(temSerralheria).length
+                        : opls.filter(o => filaDe(o.fluxo_entrega) === f).length;
+
+  // Marca/avanca o andamento da serralheria naquela OP. Usa a coluna
+  // serralheria_status, que ja existia e estava praticamente sem uso (1 linha).
+  const setSerralheria = async (opl: any, novoStatus: string) => {
+    await supabase.from('oples').update({ serralheria_status: novoStatus }).eq('id', opl.id);
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
+      evento: `Serralheria: ${novoStatus} (${motivoSerralheria(opl)})`,
+      status_anterior: opl.serralheria_status || '—', status_novo: novoStatus,
+      usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+    }]);
+    fetchAll(true);
+  };
 
   const oplsFiltradas = opls.filter(o => {
-    if (filaAtiva !== 'todas' && filaDe(o.fluxo_entrega) !== filaAtiva) return false;
+    if (filaAtiva === 'serralheria') { if (!temSerralheria(o)) return false; }
+    else if (filaAtiva !== 'todas' && filaDe(o.fluxo_entrega) !== filaAtiva) return false;
     if (filtroStatus !== 'Todos' && o.status_geral !== filtroStatus) return false;
     if (filtroTecnico !== 'Todos') {
       const tec = o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao;
@@ -2502,6 +2541,7 @@ export default function ProducaoTab({ currentUser }) {
           ['adaptacao',  '🔧 Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
           ['fabricacao', '🏭 Fabricação', 'Fabricação interna e serralheria, para envio depois'],
           ['envio',      '📦 Envio',      'Não passa por produção — só separar, embalar e enviar'],
+          ['serralheria','🔩 Serralheria','Tudo que passa pela serralheria: carretinhas inteiras e etapa dentro de adaptações'],
           ['todas',      'Todas',         'Mostra as três filas juntas'],
         ] as const).map(([v, label, ajuda]) => {
           const n = v === 'todas' ? opls.length : contaFila(v);
@@ -2553,7 +2593,7 @@ export default function ProducaoTab({ currentUser }) {
                     if (item.tipo === 'single') {
                       return <OplRow key={item.row.id} o={item.row} onAction={handleAction} currentUser={currentUser}
                         selecionado={selecionados.has(item.row.id)} onToggleSelecionar={toggleSelecionar}
-                        naoLido={oplsNaoLidas.has(String(item.row.id))} />;
+                        naoLido={oplsNaoLidas.has(String(item.row.id))} onSerralheria={setSerralheria} />;
                     }
                     const grupo = item;
                     const expandido = !!lotesExpandidos[grupo.base];
@@ -2598,7 +2638,7 @@ export default function ProducaoTab({ currentUser }) {
                           </td>
                         </tr>
                         {expandido && grupo.irmaos.map(o => (
-                          <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser}
+                          <OplRow key={o.id} o={o} onAction={handleAction} currentUser={currentUser} onSerralheria={setSerralheria}
                             selecionado={selecionados.has(o.id)} onToggleSelecionar={toggleSelecionar}
                             naoLido={oplsNaoLidas.has(String(o.id))} />
                         ))}

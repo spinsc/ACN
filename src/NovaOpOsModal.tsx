@@ -68,6 +68,12 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
 }
 
 // Fluxo de entrega (rota da venda) — decide em qual fila a OP cai depois.
+// Tipo de Projeto diz O QUE e o produto. Como e entregue passou a ser o
+// Fluxo de Entrega (FluxoEntrega.ts), entao 'Execucao por Terceiro',
+// 'Envio de Material para Terceiro' e 'Envio de Produto Vendido' sairam
+// daqui: eram rota, nao produto, e manter os dois criterios faria eles
+// divergirem (tipo dizendo envio e fluxo dizendo adaptacao, por exemplo).
+// OPs antigas com esses valores continuam validas - ver TIPO_LEGADO abaixo.
 const TIPOS_PROJETO = [
   { emoji:'🚔', label:'Transformacao Veicular Ostensiva' },
   { emoji:'🥷', label:'Transformacao Veicular Discreta' },
@@ -77,9 +83,6 @@ const TIPOS_PROJETO = [
   { emoji:'🔧', label:'Manutencao' },
   { emoji:'⚠️', label:'Garantia' },
   { emoji:'📋', label:'Orcamento' },
-  { emoji:'🔨', label:'Execucao por Terceiro' },
-  { emoji:'📤', label:'Envio de Material para Terceiro' },
-  { emoji:'🛒', label:'Envio de Produto Vendido' },
   { emoji:'🔀', label:'Demanda Direta para Engenharia' },
   { emoji:'🚚', label:'Reboque' },
 ];
@@ -488,6 +491,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     {TIPOS_PROJETO.map(t => (
                       <option key={t.label} value={t.label}>{t.emoji} {t.label}</option>
                     ))}
+                    {/* OP antiga com tipo que saiu da lista continua exibindo o
+                        proprio valor, em vez de aparecer em branco. */}
+                    {form.tipo_projeto && !TIPOS_PROJETO.some(t => t.label === form.tipo_projeto) && (
+                      <option value={form.tipo_projeto}>{form.tipo_projeto} (descontinuado)</option>
+                    )}
                   </select>
                 </div>
                 <div>

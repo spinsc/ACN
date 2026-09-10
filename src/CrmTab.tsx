@@ -128,9 +128,6 @@ const TIPOS_PROJETO_OPL = [
   'Manutencao',
   'Garantia',
   'Orcamento',
-  'Execucao por Terceiro',
-  'Envio de Material para Terceiro',
-  'Envio de Produto Vendido',
 ];
 
 const VAZIO_COMPRA: any = {
@@ -2992,6 +2989,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                   <select style={inpLinha} value={oplFormEdit.tipo_projeto||''} onChange={e=>setEd('tipo_projeto', e.target.value)}>
                                     <option value="">— Tipo de projeto —</option>
                                     {TIPOS_PROJETO_OPL.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {oplFormEdit.tipo_projeto && !TIPOS_PROJETO_OPL.includes(oplFormEdit.tipo_projeto) && (
+                                      <option value={oplFormEdit.tipo_projeto}>{oplFormEdit.tipo_projeto} (descontinuado)</option>
+                                    )}
                                   </select>
                                   <input style={inpLinha} value={oplFormEdit.modelo||''} onChange={e=>setEd('modelo', e.target.value)} placeholder="Modelo" />
                                   <input style={inpLinha} value={oplFormEdit.chassi||''} onChange={e=>setEd('chassi', e.target.value)} placeholder="Chassi" />

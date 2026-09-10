@@ -25,7 +25,16 @@ const STATUS_COR: Record<string,string> = {
   'Descartada':   '#6b7280',
   'Suspenso':     '#d97706',
 };
-const MARCADORES = ['Em Recurso','Em Defesa','Impugnado'];
+// Marcadores. Os 3 primeiros sao situacoes juridicas (ja existiam); os de
+// baixo sao situacoes operacionais que as pessoas vinham escrevendo NO NOME
+// do processo ("CADASTRADO - PE 55/2026...", "PEGAR ATA - ...") por falta
+// de campo. Escrever no nome quebra busca e relatorio, entao viraram
+// marcador de verdade.
+const MARCADORES = ['Em Recurso','Em Defesa','Impugnado','Cadastrado','Pendente','Pegar ATA'];
+// prefixos legados detectados nos nomes, usados pra sugerir a limpeza
+const PREFIXOS_LEGADOS: Record<string,string> = {
+  'CADASTRADO': 'Cadastrado', 'PENDENTE': 'Pendente', 'PEGAR ATA': 'Pegar ATA',
+};
 const PRIORIDADES = ['Alta','Média','Baixa'];
 const PRIO_COR: Record<string,string> = { 'Alta':'#dc2626','Média':'#d97706','Baixa':'#16a34a' };
 const FATURAMENTO_OPTIONS = ['ACN','Detech','ACN e Detech'];
@@ -193,6 +202,15 @@ const FORMA_DISPUTA_OPCOES = ['Aberto e Fechado','Aberto','Randômico'];
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+// Ano fora de faixa quase sempre e digito a mais (ja houve prazo gravado no
+// ano 62026, que virava "Invalid Date" na tela). Barra na hora de salvar.
+const ANO_MIN = 2020, ANO_MAX = 2035;
+function dataForaDeFaixa(v: any): boolean {
+  if (!v) return false;
+  const ano = Number(String(v).slice(0, 4));
+  return !Number.isFinite(ano) || ano < ANO_MIN || ano > ANO_MAX;
+}
+
 const fmtDT = (v: string) => {
   if (!v) return '—';
   const d = new Date(v);
@@ -1090,6 +1108,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   // ── Salvar form esquerdo ──────────────────────────────────────────────────
   const salvarForm = async () => {
+    // Barra data absurda antes de gravar (digito a mais no ano)
+    const camposData: [string,string][] = [
+      ['data_limite_esclarecimentos','Limite de Esclarecimentos'],
+      ['data_limite_proposta','Limite de Proposta'],
+      ['data_disputa','Data da Disputa'],
+      ['data_limite_analise_tecnica','Limite de Análise Técnica'],
+    ];
+    for (const [campo, rotulo] of camposData) {
+      if (dataForaDeFaixa((formEdit as any)[campo])) {
+        alert(`${rotulo}: ano fora da faixa (${ANO_MIN}–${ANO_MAX}). Confira se não sobrou um dígito a mais.`);
+        return;
+      }
+    }
     setSalvandoForm(true);
     const agora = new Date().toISOString();
     // areas_livres e marcadores são salvos por caminhos próprios (AreaLivre.salvarConteudo
