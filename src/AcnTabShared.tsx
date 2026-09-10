@@ -10,6 +10,7 @@ import { normalizarBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
 import { soEnvio } from './FluxoEntrega';
+import { ResumoKit } from './KitVendaEnvio';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -655,6 +656,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} field="data_aceite_cliente" />
           <Campo label="🛡️ Prazo de Garantia"      value={opl.prazo_garantia} field="prazo_garantia" />
         </div>
+
+        {/* ── Kit vendido (Venda para Envio) ── */}
+        {Array.isArray(opl.kit_itens) && opl.kit_itens.length > 0 && (
+          <>
+            <Sec title="🧰 Kit Vendido" />
+            <ResumoKit opl={opl} />
+          </>
+        )}
 
         {/* ── Financeiro ── */}
         {(opl.valor_total != null || opl.valor_mao_de_obra != null || opl.valor_mao_de_obra_serralheria != null) && (

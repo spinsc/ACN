@@ -5,7 +5,7 @@ import { normalizarBusca } from './SearchUtils';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
-  'Kit Instalação', 'Adaptação Veicular', 'Rastreamento', 'Comunicação',
+  'Kit Instalação', 'Kit para Envio', 'Adaptação Veicular', 'Rastreamento', 'Comunicação',
   'Segurança', 'Câmera', 'Elétrico', 'Mecânico', 'Acessório', 'Serviço', 'Outro',
 ];
 

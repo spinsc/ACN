@@ -103,6 +103,15 @@ export function serralheriaEncerraProducao(o: any): boolean {
   return o?.fluxo_entrega === 'fabricacao_serralheria_envio';
 }
 
+/** Tipo de Projeto que JÁ define a rota: kit vendido para envio. Com ele o
+ *  Fluxo de Entrega é sempre 'envio_material', e perguntar seria redundante. */
+export const TIPO_VENDA_ENVIO = 'Venda para Envio';
+
+/** Fluxo que vale de fato para a OP, considerando o tipo de projeto. */
+export function fluxoEfetivo(tipoProjeto: string | null | undefined, fluxo: string | null | undefined): string {
+  return tipoProjeto === TIPO_VENDA_ENVIO ? 'envio_material' : (fluxo || '');
+}
+
 export const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 

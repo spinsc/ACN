@@ -125,7 +125,7 @@ const TIPOS_PROJETO_OPL = [
   'Transformacao Veicular Discreta',
   'Radio',
   'Modulo Expansivel',
-  'Kit de Itens',
+  'Venda para Envio',
   'Flutuante',
   'Manutencao',
   'Garantia',

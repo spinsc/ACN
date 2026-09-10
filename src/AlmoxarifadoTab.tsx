@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
 import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
+import { ResumoKit } from './KitVendaEnvio';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -303,12 +304,23 @@ export default function AlmoxarifadoTab({ currentUser }) {
                         )}
                       </td>
                       <td style={{fontSize:10}}>
-                        <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-                        <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-                        <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                        {/* Envio (kit, material) não tem veículo: os alertas "sem modelo/chassi/
+                            placa" ali seriam falso alarme para o almoxarife. */}
+                        {soEnvio(o.fluxo_entrega) ? (
+                          <div style={{color:'#94a3b8'}}>— sem veículo (envio)</div>
+                        ) : (<>
+                          <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
+                          <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                          <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                        </>)}
                       </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
+                      <td style={{ maxWidth:200, wordBreak:'break-word' }}>
+                        {o.tipo_projeto}
+                        {/* Venda para Envio: a lista do que separar, já multiplicada
+                            pela quantidade de kits — é o que o almoxarife precisa. */}
+                        <ResumoKit opl={o} compacto />
+                      </td>
                       <td>
                         {o.status_bom === 'BOM Liberado'
                           ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>

@@ -6,7 +6,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ClienteAutocomplete } from './ClienteUtils';
-import { FLUXOS, UFS, soEnvio } from './FluxoEntrega';
+import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo } from './FluxoEntrega';
+import KitVendaEnvio from './KitVendaEnvio';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { dividirValorEmUnidades } from './AcnTabShared';
 
@@ -79,7 +80,7 @@ const TIPOS_PROJETO = [
   { emoji:'🥷', label:'Transformacao Veicular Discreta' },
   { emoji:'📻', label:'Radio' },
   { emoji:'📦', label:'Modulo Expansivel' },
-  { emoji:'🧰', label:'Kit de Itens' },
+  { emoji:'🧰', label:'Venda para Envio' },
   { emoji:'⚓', label:'Flutuante' },
   { emoji:'🔧', label:'Manutencao' },
   { emoji:'⚠️', label:'Garantia' },
@@ -123,6 +124,7 @@ const VAZIO = {
   valor_mao_de_obra_serralheria: '',
   prazo_entrega:          '',
   prazo_garantia:         '',   // texto livre: "12 meses a partir da entrega", etc.
+  kit:                    null as any, // Venda para Envio: { produto_id, nome, garantia_meses, itens }
   data_chegada_veiculo:   '',
   observacoes:            '',
 
@@ -157,6 +159,10 @@ interface Props {
 
 export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, crmCard }: Props) {
   const [form, setForm]       = useState({ ...VAZIO });
+  // Venda para Envio já define a rota (envio de material): o campo Fluxo de
+  // Entrega some e tudo que depende do fluxo usa este valor.
+  const ehVendaEnvio = form.tipo_projeto === TIPO_VENDA_ENVIO;
+  const fluxoEf = fluxoEfetivo(form.tipo_projeto, form.fluxo_entrega);
 
   // Dados vindos de uma Licitação vencida ("Preparar OP"): ela grava um
   // prefill no localStorage. Isso existia mas ninguém lia — o único leitor era
@@ -245,7 +251,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
     // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
     // Adaptação por omissão — que é justamente o problema que isto resolve.
-    if (form.tipo === 'OP' && !form.fluxo_entrega) { setErro('Selecione o Fluxo de Entrega.'); return; }
+    if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
+    if (form.tipo === 'OP' && ehVendaEnvio && !(form.kit?.itens?.length)) { setErro('Escolha ou crie o kit vendido.'); return; }
 
     setSalvando(true);
     try {
@@ -256,7 +263,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         // produção. Venda que vai direto para envio (kit, material) não entra
         // na produção: desmembrar só criaria N OPs, N embalagens e N pedidos
         // de frete para uma remessa só. Nesse caso sai UMA OP com a quantidade.
-        const semLote = soEnvio(form.fluxo_entrega);
+        const semLote = soEnvio(fluxoEf);
         const desmembrar = qty > 1 && !semLote;
 
         // Verificar duplicata da base
@@ -274,7 +281,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           tipo_op:                'OPL',
           faturamento_empresa:    form.empresa,
           tipo_projeto:           form.tipo_projeto,
-          fluxo_entrega:          form.fluxo_entrega || null,
+          fluxo_entrega:          fluxoEf || null,
+          // fotografia do kit na venda — editar o kit depois não muda esta OP
+          kit_produto_id:         ehVendaEnvio ? (form.kit?.produto_id || null) : null,
+          kit_nome:               ehVendaEnvio ? (form.kit?.nome || null) : null,
+          kit_itens:              ehVendaEnvio ? (form.kit?.itens || null) : null,
           destino_cidade:         form.destino_cidade?.trim() || null,
           destino_uf:             form.destino_uf || null,
           destino_cep:            form.destino_cep?.trim() || null,
@@ -483,12 +494,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     color: form.opl ? '#166534' : '#9ca3af', letterSpacing:1, minHeight:30,
                     display:'flex', alignItems:'center' }}>
                     {form.opl || 'PPPP.AAММ'}
-                    {form.opl && Number(form.quantidade) > 1 && !soEnvio(form.fluxo_entrega) && (
+                    {form.opl && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
                       <span style={{ fontSize:9, marginLeft:6, color:'#7c3aed', fontWeight:700 }}>
                         → /01…/{String(form.quantidade).padStart(2,'0')}
                       </span>
                     )}
-                    {form.opl && Number(form.quantidade) > 1 && soEnvio(form.fluxo_entrega) && (
+                    {form.opl && Number(form.quantidade) > 1 && soEnvio(fluxoEf) && (
                       <span style={{ fontSize:9, marginLeft:6, color:'#0f766e', fontWeight:700 }}>
                         · 1 OP com {form.quantidade} un.
                       </span>
@@ -513,7 +524,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 </div>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                    {soEnvio(form.fluxo_entrega) ? 'Quantidade' : 'Qtd. Veículos'}
+                    {ehVendaEnvio ? 'Qtd. de Kits' : soEnvio(fluxoEf) ? 'Quantidade' : 'Qtd. Veículos'}
                   </div>
                   <input className="acn-input" style={{ width:'100%' }} type="number" min={1} max={99}
                     value={form.quantidade} onChange={e => setF('quantidade', e.target.value)} />
@@ -522,6 +533,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
               {/* Fluxo de entrega — é o que impede que item de puro envio caia na
                   fila da Adaptação. Sem isso preenchido a OP não é criada. */}
+              {ehVendaEnvio ? (
+                <div style={{ marginBottom:8, fontSize:9, color:'#0369a1' }}>
+                  🚦 Fluxo de entrega: <strong>Envio de material</strong> (automático em Venda para Envio)
+                </div>
+              ) : (
               <div style={{ marginBottom:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'8px 10px' }}>
                 <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:3 }}>🚦 Fluxo de Entrega *</div>
                 <select className="acn-input" style={{ width:'100%' }} value={form.fluxo_entrega}
@@ -535,6 +551,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
                 </div>
               </div>
+              )}
+
+              {ehVendaEnvio && (
+                <KitVendaEnvio kit={form.kit} qtdKits={form.quantidade} currentUser={currentUser}
+                  onChange={(k) => {
+                    setF('kit', k);
+                    // garantia do cadastro do kit vira sugestão, sem apagar o que já foi digitado
+                    if (k?.garantia_meses) setForm(f => f.prazo_garantia ? f : { ...f, prazo_garantia: `${k.garantia_meses} meses` });
+                  }} />
+              )}
 
               {/* Destino — pode ficar em branco agora e ser completado depois na
                   própria OPL; é o dado que o aproveitamento de frete vai usar. */}
@@ -561,7 +587,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
               {/* Envio direto: quantidade é só um número na mesma OP — sem lote
                   e sem dados por veículo. Avisa, para não parecer que sumiu. */}
-              {Number(form.quantidade) > 1 && soEnvio(form.fluxo_entrega) && (
+              {Number(form.quantidade) > 1 && soEnvio(fluxoEf) && !ehVendaEnvio && (
                 <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:7,
                   padding:'8px 10px', marginBottom:10, fontSize:10, color:'#0f766e' }}>
                   📦 <strong>Envio:</strong> será criada <strong>1 OP com quantidade {form.quantidade}</strong>, sem lote —
@@ -570,7 +596,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               )}
 
               {/* Veículos individuais quando qty > 1 e a OP vai gerar lote */}
-              {Number(form.quantidade) > 1 && !soEnvio(form.fluxo_entrega) && (
+              {Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
                 <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:7,
                   padding:10, marginBottom:10 }}>
                   <div style={{ fontSize:9, fontWeight:800, color:'#7c3aed', marginBottom:8, textTransform:'uppercase' }}>
