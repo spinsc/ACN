@@ -8,6 +8,7 @@ import AjustesProjetoTab from './AjustesProjetoTab';
 import PCPTab from './PCPTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
 import ProducaoTab from './ProducaoTab';
+import PainelProducaoTV from './PainelProducaoTV';
 import QualidadeTab from './QualidadeTab';
 import FiscalTab from './FiscalTab';
 import LogisticaTab from './LogisticaTab';
@@ -85,6 +86,7 @@ const SIDEBAR_GROUPS = [
     section: 'Produção',
     items: [
       { id: 'producao',    label: 'Adaptação' },
+      { id: 'painel_tv',   label: '🏭 Painel (TV)' },
       { id: 'serralheria', label: 'Serralheria' },
       { id: 'chicotes',    label: 'Chicotes' },
       { id: 'laboratorio', label: 'Laboratório' },
@@ -920,6 +922,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     }
     if (currentUser?.perfil === 'Admin') return true;
     if (id === 'dashboard') return true;
+    // Painel de TV e so leitura e serve a producao inteira (gerente e tecnicos),
+    // entao fica visivel a todos, independente das abas liberadas.
+    if (id === 'painel_tv') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -941,6 +946,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'cadastro_produtos': return <CadastroProdutosTab currentUser={currentUser} />;
       case 'almoxarifado': return <AlmoxarifadoTab currentUser={currentUser} />;
       case 'producao':     return <ProducaoTab currentUser={currentUser} />;
+      case 'painel_tv':    return <PainelProducaoTV />;
       case 'qualidade':    return <QualidadeTab currentUser={currentUser} />;
       case 'logistica':    return <LogisticaTab currentUser={currentUser} />;
       case 'vistorias':    return <VistoriasPatio currentUser={currentUser} />;
