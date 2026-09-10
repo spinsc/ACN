@@ -11,6 +11,7 @@ import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, filaDe, fluxoLabel, temSerralheria, motivoSerralheria, SERRALHERIA_STATUS } from './FluxoEntrega';
+import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 
@@ -136,7 +137,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
             {emProd && (
               <>
                 <BotaoPausar pausado={o.pausado} onPausar={()=>onAction('pausar',o)} onRetomar={()=>onAction('retomar',o)} />
-                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>onAction('checklist',o)}>LIB. CQ</button>
+                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>onAction('checklist',o)}>✅ CONCLUIR</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
                 <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
                 <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>onAction('devolver',o)}>DEV. PCP</button>
@@ -2023,7 +2024,30 @@ export default function ProducaoTab({ currentUser }) {
   const [filtroBusca, setFiltroBusca]     = useState('');
   // Fila padrão = Adaptação: quem trabalha aqui abre a tela e vê só o que de
   // fato é adaptado. Fabricação e Envio ficam em abas próprias.
-  const [filaAtiva, setFilaAtiva]         = useState<'adaptacao'|'fabricacao'|'envio'|'todas'>('adaptacao');
+  const [filaAtiva, setFilaAtiva]         = useState<'adaptacao'|'fabricacao'|'envio'|'serralheria'|'todas'>('adaptacao');
+  const [visao, setVisao]                 = useState<'tabela'|'kanban'>('tabela');
+
+  // Prioridade e so desempate entre OPs do MESMO dia (definicao do usuario):
+  // a data manda, porque e contratual por causa das licitacoes.
+  const definirPrioridade = async (opl: any) => {
+    const atual = opl.prioridade_dia == null ? '' : String(opl.prioridade_dia);
+    const dia = opl.data_prevista_entrega
+      ? opl.data_prevista_entrega.split('-').reverse().join('/')
+      : 'sem prazo';
+    const txt = window.prompt(
+      'Prioridade de ' + opl.opl + ' no dia ' + dia + ':' + '\n\n'
+      + 'Menor numero vem primeiro (1 = primeira). Deixe vazio para tirar a prioridade.' + '\n'
+      + 'Isso so muda a ordem entre OPs que vencem no mesmo dia.', atual);
+    if (txt === null) return;
+    const limpo = txt.trim();
+    let valor: number | null = null;
+    if (limpo !== '') {
+      valor = parseInt(limpo, 10);
+      if (!Number.isFinite(valor) || valor < 1 || valor > 99) { alert('Informe um numero de 1 a 99, ou deixe vazio.'); return; }
+    }
+    await supabase.from('oples').update({ prioridade_dia: valor }).eq('id', opl.id);
+    fetchAll(true);
+  };
   const [filtroStatus, setFiltroStatus]   = useState('Todos');
   const [filtroTecnico, setFiltroTecnico] = useState('Todos');
   const [filtroCliente, setFiltroCliente] = useState('');
@@ -2536,7 +2560,18 @@ export default function ProducaoTab({ currentUser }) {
 
       {/* Abas de fila — separam adaptação de fabricação e de envio. Item que só
           será separado e enviado não polui mais a fila de quem adapta. */}
-      <div style={{ display:'flex', gap:6, flexWrap:'wrap', margin:'0 0 10px' }}>
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', margin:'0 0 10px', alignItems:'center' }}>
+        {/* Tabela x Kanban — as duas visões olham a MESMA lista já filtrada,
+            então trocar de visão não muda o que está sendo mostrado. */}
+        <div style={{ display:'flex', gap:0, marginRight:6, border:'1px solid #cbd5e1', borderRadius:6, overflow:'hidden' }}>
+          {([['tabela','☰ Tabela'],['kanban','▦ Kanban']] as const).map(([v,l]) => (
+            <button key={v} onClick={()=>setVisao(v)}
+              style={{ fontSize:10, fontWeight:800, padding:'5px 12px', cursor:'pointer', border:'none',
+                background: visao===v ? '#1e293b' : '#fff', color: visao===v ? '#fff' : '#64748b' }}>
+              {l}
+            </button>
+          ))}
+        </div>
         {([
           ['adaptacao',  '🔧 Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
           ['fabricacao', '🏭 Fabricação', 'Fabricação interna e serralheria, para envio depois'],
@@ -2557,7 +2592,21 @@ export default function ProducaoTab({ currentUser }) {
         })}
       </div>
 
-      <div className="sec-card">
+      {visao === 'kanban' && (
+        <div className="sec-card">
+          <div className="sec-hdr">
+            <span>OPLs em Producao / Retrabalho ({oplsFiltradas.length}{oplsFiltradas.length !== opls.length ? ` de ${opls.length}` : ''})</span>
+            <span style={{ fontSize:9, color:'#94a3b8' }}>Ordenado por data de entrega · prioridade desempata o mesmo dia</span>
+          </div>
+          <div className="sec-body">
+            {loading ? <div className="acn-empty">Carregando...</div>
+              : <ProducaoKanban opls={oplsFiltradas} onAction={handleAction}
+                  onPrioridade={definirPrioridade} currentUser={currentUser} />}
+          </div>
+        </div>
+      )}
+
+      <div className="sec-card" style={{ display: visao === 'tabela' ? undefined : 'none' }}>
         <div className="sec-hdr">
           <span>OPLs em Producao / Retrabalho ({oplsFiltradas.length}{oplsFiltradas.length !== opls.length ? ` de ${opls.length}` : ''})</span>
           {emRetrabalho.length > 0 && (
