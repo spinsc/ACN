@@ -28,7 +28,9 @@ async function resolverUsuarios(nomes: string[], emails: string[]): Promise<Map<
   const emailsLimpos = [...new Set(emails.filter(Boolean).map(e => String(e).trim().toLowerCase()))];
   if (!nomesLimpos.length && !emailsLimpos.length) return mapa;
 
-  const buscas: Promise<any>[] = [];
+  // any[] e nao Promise<any>[]: o builder do supabase-js e thenable, mas
+  // nao e uma Promise (nao tem catch/finally), e o tsc reclama.
+  const buscas: any[] = [];
   if (nomesLimpos.length)  buscas.push(supabase.from('auth_usuarios').select('id,nome,email').in('nome', nomesLimpos));
   if (emailsLimpos.length) buscas.push(supabase.from('auth_usuarios').select('id,nome,email').in('email', emailsLimpos));
   const resultados = await Promise.all(buscas);

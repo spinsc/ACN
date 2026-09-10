@@ -1,3 +1,9 @@
+// ATENCAO: este arquivo NAO checa nada sozinho. Ele so aponta para os
+// outros dois ("files": [] + references), entao `tsc --noEmit -p tsconfig.json`
+// termina com exit 0 mesmo com erro de sintaxe no src -- ja enganou mais de uma
+// vez, com a tela em branco em producao e o tsc dizendo que estava tudo certo.
+//
+// Para checar de verdade:  npm run typecheck   (usa tsconfig.app.json)
 {
   "files": [],
   "references": [

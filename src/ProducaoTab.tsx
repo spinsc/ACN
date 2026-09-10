@@ -2689,7 +2689,7 @@ export default function ProducaoTab({ currentUser }) {
         </div>
         {([
           ['adaptacao',  '🔧 Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
-          ['fabricacao', '🏭 Fabricação', 'Fabricação interna e serralheria, para envio depois'],
+          ['fabricacao', '🏭 Fabricação', 'Serralheria fabricando o item inteiro; ao concluir, vai para embalagem e frete'],
           ['envio',      '📦 Envio',      'Não passa por produção — só separar, embalar e enviar'],
           ['serralheria','🔩 Serralheria','Tudo que passa pela serralheria: carretinhas inteiras e etapa dentro de adaptações'],
           ['todas',      'Todas',         'Mostra as três filas juntas'],

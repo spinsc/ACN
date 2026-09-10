@@ -16,7 +16,6 @@
 export type FluxoEntrega =
   | 'adaptacao_matriz'
   | 'adaptacao_externa'
-  | 'fabricacao_interna_envio'
   | 'fabricacao_serralheria_envio'
   | 'envio_adaptacao_terceiro'
   | 'envio_material';
@@ -30,8 +29,6 @@ export const FLUXOS: { valor: FluxoEntrega; label: string; fila: DestinoFila; aj
     ajuda:'Veículo vem para a matriz e é adaptado aqui.' },
   { valor:'adaptacao_externa',            label:'Adaptação externa',                    fila:'adaptacao',
     ajuda:'Nossa equipe se desloca até o local e adapta lá.' },
-  { valor:'fabricacao_interna_envio',     label:'Fabricação interna para envio',        fila:'fabricacao',
-    ajuda:'Fabricado aqui e depois embalado e enviado ao cliente.' },
   { valor:'fabricacao_serralheria_envio', label:'Fabricação serralheria com envio',     fila:'fabricacao',
     ajuda:'Serralheria fabrica (ex: carretinhas) e depois segue para envio.' },
   { valor:'envio_adaptacao_terceiro',     label:'Envio para adaptação de terceiro',     fila:'envio',
@@ -40,11 +37,23 @@ export const FLUXOS: { valor: FluxoEntrega; label: string; fila: DestinoFila; aj
     ajuda:'Só separar, embalar e enviar. Não passa por produção.' },
 ];
 
+// APOSENTADO: 'fabricacao_interna_envio' saiu da lista a pedido do usuário --
+// hoje a serralheria é a única fabricação que termina em envio; o resto já é
+// item pronto, que cai em 'envio_material'. Nenhum registro usava o valor
+// (0 em oples, licitações e CRM), mas a opção esteve no ar desde a Fase 1,
+// então o valor continua sendo RECONHECIDO aqui: se alguém tiver escolhido
+// nesse meio-tempo, a OP vai para a fila certa em vez de cair calada na
+// adaptação. Só não aparece mais para escolher.
+const APOSENTADOS: Record<string, DestinoFila> = {
+  fabricacao_interna_envio: 'fabricacao',
+};
+
 const PORVALOR: Record<string, typeof FLUXOS[number]> =
   Object.fromEntries(FLUXOS.map(f => [f.valor, f]));
 
 export function fluxoLabel(v: string | null | undefined): string {
   if (!v) return 'Não classificado';
+  if (v === 'fabricacao_interna_envio') return 'Fabricação interna para envio (aposentado)';
   return PORVALOR[v]?.label || v;
 }
 
@@ -52,7 +61,7 @@ export function fluxoLabel(v: string | null | undefined): string {
  *  é o comportamento antigo, que as OPs em andamento dependem. */
 export function filaDe(v: string | null | undefined): DestinoFila {
   if (!v) return 'adaptacao';
-  return PORVALOR[v]?.fila || 'adaptacao';
+  return PORVALOR[v]?.fila || APOSENTADOS[v] || 'adaptacao';
 }
 
 export const vaiParaAdaptacao  = (v: any) => filaDe(v) === 'adaptacao';
