@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ClienteAutocomplete } from './ClienteUtils';
-import { FLUXOS, UFS } from './FluxoEntrega';
+import { FLUXOS, UFS, soEnvio } from './FluxoEntrega';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { dividirValorEmUnidades } from './AcnTabShared';
 
@@ -79,6 +79,7 @@ const TIPOS_PROJETO = [
   { emoji:'🥷', label:'Transformacao Veicular Discreta' },
   { emoji:'📻', label:'Radio' },
   { emoji:'📦', label:'Modulo Expansivel' },
+  { emoji:'🧰', label:'Kit de Itens' },
   { emoji:'⚓', label:'Flutuante' },
   { emoji:'🔧', label:'Manutencao' },
   { emoji:'⚠️', label:'Garantia' },
@@ -121,6 +122,7 @@ const VAZIO = {
   valor_mao_de_obra:      '',
   valor_mao_de_obra_serralheria: '',
   prazo_entrega:          '',
+  prazo_garantia:         '',   // texto livre: "12 meses a partir da entrega", etc.
   data_chegada_veiculo:   '',
   observacoes:            '',
 
@@ -250,7 +252,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       if (form.tipo === 'OP') {
         const baseOpl = form.opl.trim();
         const qty = Math.max(1, parseInt(String(form.quantidade)) || 1);
-        const desmembrar = qty > 1;
+        // O lote (/01, /02...) existe para acompanhar CADA VEÍCULO pela
+        // produção. Venda que vai direto para envio (kit, material) não entra
+        // na produção: desmembrar só criaria N OPs, N embalagens e N pedidos
+        // de frete para uma remessa só. Nesse caso sai UMA OP com a quantidade.
+        const semLote = soEnvio(form.fluxo_entrega);
+        const desmembrar = qty > 1 && !semLote;
 
         // Verificar duplicata da base
         const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
@@ -274,12 +281,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           chassi:                 (veiculo?.chassi || form.chassi) || null,
           placa:                  (veiculo?.placa  || form.placa)  || null,
           modelo:                 form.modelo || null,
-          quantidade:             1,
+          quantidade:             semLote ? qty : 1,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
           valor_mao_de_obra:      valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra),
           valor_mao_de_obra_serralheria: valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria),
           data_entrada:           form.data_entrada,
           data_prevista_entrega:  form.prazo_entrega || null,
+          prazo_garantia:         form.prazo_garantia?.trim() || null,
           data_chegada_veiculo:   form.data_chegada_veiculo || null,
           cliente_nome:           form.cliente_nome.trim(),
           responsavel_comercial:  form.responsavel.trim(),
@@ -475,9 +483,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     color: form.opl ? '#166534' : '#9ca3af', letterSpacing:1, minHeight:30,
                     display:'flex', alignItems:'center' }}>
                     {form.opl || 'PPPP.AAММ'}
-                    {form.opl && Number(form.quantidade) > 1 && (
+                    {form.opl && Number(form.quantidade) > 1 && !soEnvio(form.fluxo_entrega) && (
                       <span style={{ fontSize:9, marginLeft:6, color:'#7c3aed', fontWeight:700 }}>
                         → /01…/{String(form.quantidade).padStart(2,'0')}
+                      </span>
+                    )}
+                    {form.opl && Number(form.quantidade) > 1 && soEnvio(form.fluxo_entrega) && (
+                      <span style={{ fontSize:9, marginLeft:6, color:'#0f766e', fontWeight:700 }}>
+                        · 1 OP com {form.quantidade} un.
                       </span>
                     )}
                   </div>
@@ -499,7 +512,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Qtd. Veículos</div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
+                    {soEnvio(form.fluxo_entrega) ? 'Quantidade' : 'Qtd. Veículos'}
+                  </div>
                   <input className="acn-input" style={{ width:'100%' }} type="number" min={1} max={99}
                     value={form.quantidade} onChange={e => setF('quantidade', e.target.value)} />
                 </div>
@@ -544,8 +559,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 </div>
               </div>
 
-              {/* Veículos individuais quando qty > 1 */}
-              {Number(form.quantidade) > 1 && (
+              {/* Envio direto: quantidade é só um número na mesma OP — sem lote
+                  e sem dados por veículo. Avisa, para não parecer que sumiu. */}
+              {Number(form.quantidade) > 1 && soEnvio(form.fluxo_entrega) && (
+                <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:7,
+                  padding:'8px 10px', marginBottom:10, fontSize:10, color:'#0f766e' }}>
+                  📦 <strong>Envio:</strong> será criada <strong>1 OP com quantidade {form.quantidade}</strong>, sem lote —
+                  como não passa pela produção, não há veículo para acompanhar um a um.
+                </div>
+              )}
+
+              {/* Veículos individuais quando qty > 1 e a OP vai gerar lote */}
+              {Number(form.quantidade) > 1 && !soEnvio(form.fluxo_entrega) && (
                 <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:7,
                   padding:10, marginBottom:10 }}>
                   <div style={{ fontSize:9, fontWeight:800, color:'#7c3aed', marginBottom:8, textTransform:'uppercase' }}>
@@ -744,6 +769,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 value={form.prazo_entrega} onChange={e => setF('prazo_entrega', e.target.value)} />
             </div>
           </div>
+
+          {form.tipo === 'OP' && (
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Prazo de Garantia</div>
+              <input className="acn-input" style={{ width:'100%' }} maxLength={300}
+                placeholder="Ex: 12 meses a partir da entrega · 90 dias mão de obra, 1 ano equipamento"
+                value={form.prazo_garantia} onChange={e => setF('prazo_garantia', e.target.value)} />
+            </div>
+          )}
 
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Responsável *</div>

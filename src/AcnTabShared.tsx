@@ -9,6 +9,7 @@ import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
+import { soEnvio } from './FluxoEntrega';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -645,13 +646,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
           <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
           <Campo label="Chassi"                    value={opl.chassi} field="chassi" />
-          <Campo label="Qtd. Veículos"             value={opl.quantidade} field="quantidade" />
+          <Campo label={soEnvio(opl.fluxo_entrega) ? "Quantidade" : "Qtd. Veículos"} value={opl.quantidade} field="quantidade" />
           <Campo label="Data Entrada"              value={fmtDt(opl.data_entrada)} field="data_entrada" />
           <Campo label="Recebimento do Veículo"    value={fmtDt(opl.data_chegada_veiculo)} field="data_chegada_veiculo" />
           <Campo label="Previsão de Entrega"       value={fmtDt(opl.data_prevista_entrega)} field="data_prevista_entrega" />
           <Campo label="Prazo Entrega Comercial"   value={fmtDt(opl.prazo_entrega_comercial)} field="prazo_entrega_comercial" />
           <Campo label="Prazo Entrega Produção"    value={fmtDt(opl.prazo_entrega_producao)} field="prazo_entrega_producao" />
           <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} field="data_aceite_cliente" />
+          <Campo label="🛡️ Prazo de Garantia"      value={opl.prazo_garantia} field="prazo_garantia" />
         </div>
 
         {/* ── Financeiro ── */}

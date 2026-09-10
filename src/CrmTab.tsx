@@ -22,7 +22,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo } from './VinculoPicker';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import { normalizarBusca } from './SearchUtils';
-import { FLUXOS, fluxoLabel, UFS } from './FluxoEntrega';
+import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -125,10 +125,13 @@ const TIPOS_PROJETO_OPL = [
   'Transformacao Veicular Discreta',
   'Radio',
   'Modulo Expansivel',
+  'Kit de Itens',
   'Flutuante',
   'Manutencao',
   'Garantia',
   'Orcamento',
+  'Demanda Direta para Engenharia',
+  'Reboque',
 ];
 
 const VAZIO_COMPRA: any = {
@@ -893,7 +896,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // tabelas, então não é seguro renomear uma OP já em andamento). Mesmo
     // padrão de sufixo da criação (NovaOpOsModal.tsx). Só oferece a opção
     // se esta OP não for ela mesma já um sufixo /NN de outra.
-    if (qtdNova > qtdAnterior && qtdNova > 1 && !jaEhSufixo) {
+    // Envio direto (kit, material) não desmembra: não passa pela produção,
+    // então não há veículo para acompanhar um a um — só muda a quantidade.
+    const ehEnvio = soEnvio(oplFormEdit.fluxo_entrega || oplEditando.fluxo_entrega);
+    if (qtdNova > qtdAnterior && qtdNova > 1 && !jaEhSufixo && !ehEnvio) {
       const desmembrar = confirm(
         `Quantidade aumentou de ${qtdAnterior} para ${qtdNova}.\n\n` +
         `Deseja DESMEMBRAR agora em ${qtdNova} OPs separadas (uma por veículo/unidade)? ` +
@@ -1007,6 +1013,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       modelo:                oplFormEdit.modelo || null,
       quantidade:            qtdNova,
       data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
+      prazo_garantia:        oplFormEdit.prazo_garantia || null,
       centro_custo:          oplFormEdit.centro_custo || null,
       responsavel_comercial: oplFormEdit.responsavel_comercial || null,
       observacoes_comercial: oplFormEdit.observacoes_comercial || null,
@@ -1133,7 +1140,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
@@ -1441,6 +1448,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       criado_por_nome:       currentUser?.nome,
       criado_por:            currentUser?.email,
       crm_oportunidade_id:   op.id,
+      fluxo_entrega:         op.fluxo_entrega || null,
+      destino_cidade:        op.destino_cidade || null,
+      destino_uf:            op.destino_uf || null,
+      destino_cep:           op.destino_cep || null,
     }]).select().single();
     if (error) { console.error('Erro ao gerar OP automática:', error); return null; }
     if (novaOp) {
@@ -1468,7 +1479,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       if (tipoConverter === 'op') {
         const baseOpl = numOp.trim();
         const qty = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
-        const desmembrar = qty > 1;
+        // Mesma regra da abertura (NovaOpOsModal): envio direto não gera lote.
+        const semLote = soEnvio(op.fluxo_entrega);
+        const desmembrar = qty > 1 && !semLote;
 
         // Checa duplicata antes de inserir
         const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
@@ -1492,6 +1505,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           criado_por:            currentUser?.email,
           crm_oportunidade_id:   op.id,
           resumo_servicos:       resumoConv.trim() || null,
+          // Antes a OP nascia daqui SEM fluxo de entrega — e fluxo vazio é
+          // tratado como adaptação, então venda de envio caía na fila errada.
+          fluxo_entrega:         op.fluxo_entrega || null,
+          destino_cidade:        op.destino_cidade || null,
+          destino_uf:            op.destino_uf || null,
+          destino_cep:           op.destino_cep || null,
+          quantidade:            semLote ? qty : 1,
         });
 
         if (desmembrar) {
@@ -1553,7 +1573,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         setSalvando(false);
         return;
       }
-      const qtyFinal = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
+      const qtyDigitada = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
+      const qtyFinal = soEnvio(op.fluxo_entrega) ? 1 : qtyDigitada;  // envio = 1 OP só
       setModalConverter(null);
       setNumOp('');
       setResumoConv('');
@@ -3144,8 +3165,12 @@ const SUB_STATUS_COR: Record<string,string> = {
                               <td colSpan={11} style={{ padding:'8px 12px' }}>
                                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:8 }}>
                                   <div>
-                                    <div style={campoLbl}>Qtd. Veículos</div>
+                                    <div style={campoLbl}>{soEnvio(oplFormEdit.fluxo_entrega) ? 'Quantidade' : 'Qtd. Veículos'}</div>
                                     <input type="number" min={1} style={inpLinha} value={oplFormEdit.quantidade||1} onChange={e=>setEd('quantidade', e.target.value)} />
+                                  </div>
+                                  <div style={{ gridColumn:'span 2' }}>
+                                    <div style={campoLbl}>🛡️ Prazo de Garantia</div>
+                                    <input style={inpLinha} maxLength={300} value={oplFormEdit.prazo_garantia||''} onChange={e=>setEd('prazo_garantia', e.target.value)} placeholder="Ex: 12 meses a partir da entrega" />
                                   </div>
                                   <div>
                                     <div style={campoLbl}>Equipamento / Veículo</div>
@@ -3979,7 +4004,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             {tipoConverter === 'op' && (
               <div style={{ marginBottom:10 }}>
                 <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
-                  Qtd. Veículos
+                  {soEnvio(modalConverter?.fluxo_entrega) ? 'Quantidade' : 'Qtd. Veículos'}
                 </label>
                 <input className="acn-input" style={{ width:'100%', fontSize:11 }} type="number" min={1} max={99}
                   value={qtdVeiculosConv}
@@ -3988,7 +4013,12 @@ const SUB_STATUS_COR: Record<string,string> = {
                     setQtdVeiculosConv(qty);
                     setVeiculosConv(prev => Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'' }));
                   }} />
-                {qtdVeiculosConv > 1 && (
+                {qtdVeiculosConv > 1 && soEnvio(modalConverter?.fluxo_entrega) && (
+                  <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:6, padding:8, marginTop:6, fontSize:9, color:'#0f766e' }}>
+                    📦 <strong>Envio:</strong> será criada 1 OP com quantidade {qtdVeiculosConv}, sem lote.
+                  </div>
+                )}
+                {qtdVeiculosConv > 1 && !soEnvio(modalConverter?.fluxo_entrega) && (
                   <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:8, marginTop:6 }}>
                     <div style={{ fontSize:8, fontWeight:800, color:'#7c3aed', marginBottom:6, textTransform:'uppercase' }}>
                       🚗 Dados por Veículo (desmembramento em {qtdVeiculosConv} OPs)
