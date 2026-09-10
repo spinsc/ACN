@@ -1,16 +1,66 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
-// COLUNA DE KANBAN COM PAGINAÇÃO
-// Mostra no máximo N cards por vez (padrão 10) e pagina dentro da própria
-// coluna, no estilo do Trello — em vez de virar uma coluna infinita que obriga
-// a rolar sem fim e esconde o rodapé das outras.
+// COLUNA DE KANBAN COM ROLAGEM
+// A coluna tem a altura de 10 cards. Passando disso ela ROLA — como no Trello,
+// onde a coluna nunca cresce até o infinito nem obriga a trocar de página pra
+// ver o resto. A altura é medida do card real, não chutada: card de OP e card
+// de oportunidade têm alturas diferentes, e uma altura fixa em pixels
+// cortaria um e sobraria no outro.
 //
-// Usada por todos os kanbans do sistema para o comportamento ficar igual em
-// todos: Produção, CRM e Licitações.
+// (Antes isto era paginado, com ‹ › no rodapé. Rolagem é o que foi pedido, e é
+// melhor mesmo: com página, arrastar um card para outro que estava na página
+// seguinte era impossível.)
+//
+// Usada pelos kanbans do sistema para o comportamento ficar igual em todos.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 
-export const CARDS_POR_PAGINA = 10;
+export const CARDS_VISIVEIS = 10;
+
+/**
+ * Mede a altura que N cards ocupam e devolve [ref, altura] para virar
+ * `maxHeight` do container que rola. Devolve altura null quando cabe tudo —
+ * aí a coluna não ganha barra nenhuma.
+ *
+ * Roda a cada render de propósito: o conteúdo do card muda (badge que aparece,
+ * nome que quebra em duas linhas) e a altura tem que acompanhar. Não faz laço
+ * infinito porque o setState com valor igual não re-renderiza, e a margem de
+ * 2px absorve o tremor de meio pixel que a barra de rolagem causa.
+ */
+export function useAlturaDeCards(quantosCabem = CARDS_VISIVEIS) {
+  const ref = useRef(null);
+  const [altura, setAltura] = useState(null);
+
+  const medir = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const filhos = Array.from(el.children);
+    if (filhos.length <= quantosCabem) {
+      setAltura(a => (a === null ? a : null));
+      return;
+    }
+    const topo   = el.getBoundingClientRect().top;
+    const ultimo = filhos[quantosCabem - 1].getBoundingClientRect().bottom;
+    // + el.scrollTop: getBoundingClientRect enxerga a posição JÁ rolada, então
+    // sem isso a altura mudaria conforme o usuário rolasse a coluna.
+    // + 10: deixa o 11º card espiando embaixo, que é o aviso de que há mais.
+    const nova = Math.round(ultimo - topo + el.scrollTop) + 10;
+    setAltura(a => (a !== null && Math.abs(a - nova) <= 2 ? a : nova));
+  }, [quantosCabem]);
+
+  // Toda renderização: o conteúdo do card muda (badge que aparece, nome que
+  // quebra em duas linhas) e a altura tem que acompanhar.
+  useLayoutEffect(medir);
+
+  // E quando a janela muda de tamanho, que NÃO gera renderização sozinha —
+  // sem isto a coluna fica com a altura medida no tamanho antigo.
+  useEffect(() => {
+    window.addEventListener('resize', medir);
+    return () => window.removeEventListener('resize', medir);
+  }, [medir]);
+
+  return [ref, altura];
+}
 
 export default function KanbanColuna({
   titulo,
@@ -18,21 +68,13 @@ export default function KanbanColuna({
   fundo = '#f8fafc',
   itens = [],
   renderCard,
-  porPagina = CARDS_POR_PAGINA,
+  visiveis = CARDS_VISIVEIS,
   larguraMin = 260,
   vazio = 'Nada aqui',
   rodape = null,
 }: any) {
-  const [pagina, setPagina] = useState(0);
+  const [refLista, maxAltura] = useAlturaDeCards(visiveis);
   const total = itens.length;
-  const paginas = Math.max(1, Math.ceil(total / porPagina));
-
-  // Se a lista encolher (filtro, item movido), a página atual pode deixar de
-  // existir — sem isto a coluna ficaria em branco até alguém clicar.
-  useEffect(() => { if (pagina > paginas - 1) setPagina(paginas - 1); }, [paginas, pagina]);
-
-  const inicio = pagina * porPagina;
-  const visiveis = itens.slice(inicio, inicio + porPagina);
 
   return (
     <div style={{ flex: `1 1 ${larguraMin}px`, minWidth: larguraMin, maxWidth: 420,
@@ -44,31 +86,19 @@ export default function KanbanColuna({
         <span style={{ fontSize: 11, fontWeight: 800, background: '#ffffff33', borderRadius: 10, padding: '0 7px' }}>{total}</span>
       </div>
 
-      <div style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+      <div ref={refLista}
+        style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 6, flex: 1,
+          boxSizing: 'border-box',
+          maxHeight: maxAltura || undefined,
+          overflowY: maxAltura ? 'auto' : 'visible',
+          // Reserva o espaço da barra desde sempre: sem isto ela aparece, o
+          // card fica mais estreito, o texto quebra diferente e a altura medida
+          // muda — a coluna ficaria piscando.
+          scrollbarGutter: 'stable' }}>
         {total === 0 ? (
           <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', padding: '14px 4px' }}>{vazio}</div>
-        ) : visiveis.map(renderCard)}
+        ) : itens.map(renderCard)}
       </div>
-
-      {/* Paginação só aparece quando existe mais de uma página */}
-      {paginas > 1 && (
-        <div style={{ borderTop: `1px solid ${cor}33`, padding: '4px 8px', display: 'flex',
-          alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-          <button onClick={() => setPagina(p => Math.max(0, p - 1))} disabled={pagina === 0}
-            style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, cursor: pagina === 0 ? 'default' : 'pointer',
-              border: `1px solid ${cor}55`, background: '#fff', color: cor, opacity: pagina === 0 ? .35 : 1 }}>
-            ‹
-          </button>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
-            {inicio + 1}–{Math.min(inicio + porPagina, total)} de {total}
-          </span>
-          <button onClick={() => setPagina(p => Math.min(paginas - 1, p + 1))} disabled={pagina >= paginas - 1}
-            style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, cursor: pagina >= paginas - 1 ? 'default' : 'pointer',
-              border: `1px solid ${cor}55`, background: '#fff', color: cor, opacity: pagina >= paginas - 1 ? .35 : 1 }}>
-            ›
-          </button>
-        </div>
-      )}
 
       {rodape}
     </div>

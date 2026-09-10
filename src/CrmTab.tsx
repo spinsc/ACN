@@ -16,6 +16,7 @@ import { OplDetalheModal, LinkOpl, dividirValorEmUnidades } from './AcnTabShared
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
+import { useAlturaDeCards } from './KanbanColuna';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo } from './VinculoPicker';
@@ -2275,7 +2276,21 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     suspenso:  '📄 Documental',
     aguardando:'💰 Orçamentária',
   };
-  const SUB_STATUS_COR: Record<string,string> = {
+  /** Área de cards de uma coluna do kanban: altura de 10 cards, rola daí pra
+ *  frente. Fica no escopo do módulo (e não dentro do CrmTab) porque componente
+ *  declarado dentro de componente remonta a cada render — a coluna voltaria
+ *  pro topo sozinha a cada digitada no filtro. */
+function ColunaRolavel({ children }: any) {
+  const [ref, maxAltura] = useAlturaDeCards();
+  return (
+    <div ref={ref} style={{ boxSizing:'border-box', maxHeight: maxAltura || undefined,
+      overflowY: maxAltura ? 'auto' : 'visible', scrollbarGutter:'stable' }}>
+      {children}
+    </div>
+  );
+}
+
+const SUB_STATUS_COR: Record<string,string> = {
     andamento: '#2563eb',
     suspenso:  '#7c3aed',
     aguardando:'#0891b2',
@@ -2301,10 +2316,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       estDrop:  () => est.id,
     }));
 
-  // Pagina de cada coluna do kanban (10 cards por vez, como nos demais
-  // kanbans do sistema). Guardado por coluna: cada uma navega sozinha.
-  const [paginaCol, setPaginaCol] = useState<Record<string, number>>({});
-  const POR_PAGINA_CRM = 10;
+  // Cada coluna tem a altura de 10 cards e rola daí pra frente, como nos
+  // demais kanbans do sistema (ver KanbanColuna.tsx). Aqui a coluna não usa o
+  // componente porque ela carrega drag-and-drop, chips de sub-status e o
+  // "+ Adicionar" — só a medida da altura é compartilhada.
 
   const renderKanban = () => (
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
@@ -2312,13 +2327,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         const cards = opsFiltradas.filter(col.match);
         const estId = col.estDrop();
         const isDragOver = dragOver === col.id;
-        // Pagina apenas a exibição: `cards` (lista inteira) continua sendo o
-        // que o arrastar-e-soltar usa pra reordenar, senão mover um card
-        // quebraria ao trocar de página.
-        const totalPags = Math.max(1, Math.ceil(cards.length / POR_PAGINA_CRM));
-        const pagAtual = Math.min(paginaCol[col.id] || 0, totalPags - 1);
-        const inicioCol = pagAtual * POR_PAGINA_CRM;
-        const cardsVisiveis = cards.slice(inicioCol, inicioCol + POR_PAGINA_CRM);
 
         return (
           <div key={col.id} style={{ width: 205, flexShrink:0 }}>
@@ -2355,7 +2363,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 border: isDragOver ? '2px dashed #3b82f6' : '2px solid transparent',
               }}
             >
-              {cardsVisiveis.map(op => (
+              <ColunaRolavel>
+              {cards.map(op => (
                 <div key={op.id}
                   onDragEnter={e => { e.preventDefault(); if (dragging && dragging !== op.id) setDragOverItem(op.id); }}
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
@@ -2403,25 +2412,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                   )}
                 </div>
               ))}
+              </ColunaRolavel>
 
-              {/* Botão Adicionar (só em Aberto) */}
-              {/* Navegação da coluna — só aparece quando passa de uma página */}
-              {totalPags > 1 && (
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4, marginTop:4 }}>
-                  <button onClick={() => setPaginaCol(p => ({ ...p, [col.id]: Math.max(0, pagAtual - 1) }))}
-                    disabled={pagAtual === 0}
-                    style={{ fontSize:10, fontWeight:800, padding:'1px 7px', borderRadius:4, cursor: pagAtual===0?'default':'pointer',
-                      border:'1px solid #cbd5e1', background:'#fff', color:'#475569', opacity: pagAtual===0?.35:1 }}>‹</button>
-                  <span style={{ fontSize:8, fontWeight:700, color:'#64748b' }}>
-                    {inicioCol + 1}–{Math.min(inicioCol + POR_PAGINA_CRM, cards.length)} de {cards.length}
-                  </span>
-                  <button onClick={() => setPaginaCol(p => ({ ...p, [col.id]: Math.min(totalPags - 1, pagAtual + 1) }))}
-                    disabled={pagAtual >= totalPags - 1}
-                    style={{ fontSize:10, fontWeight:800, padding:'1px 7px', borderRadius:4, cursor: pagAtual>=totalPags-1?'default':'pointer',
-                      border:'1px solid #cbd5e1', background:'#fff', color:'#475569', opacity: pagAtual>=totalPags-1?.35:1 }}>›</button>
-                </div>
-              )}
-
+              {/* Botão Adicionar (só em Aberto) — fica FORA da área que rola,
+                  senão numa coluna cheia ele sumiria lá no fim da rolagem. */}
               {!col.terminal && estId && (
                 <div onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: estId }); setModalOp({}); }}
                   style={{ background:'white', border:'1px dashed #cbd5e1', borderRadius:5, padding:'5px 8px',

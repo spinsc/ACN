@@ -9,8 +9,8 @@
 // A prioridade é só DESEMPATE entre OPs do mesmo dia, como definido pelo
 // usuário: ordena por data e, dentro do mesmo dia, pelo número de prioridade.
 //
-// Cada coluna mostra 10 cards e pagina (KanbanColuna), senão "Atrasadas" —
-// que hoje tem 70 — viraria uma coluna sem fim.
+// Cada coluna tem a altura de 10 cards e rola (KanbanColuna), senão
+// "Atrasadas" — que hoje tem 70 — viraria uma coluna sem fim.
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
 import KanbanColuna from './KanbanColuna';
