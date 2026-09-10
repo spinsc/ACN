@@ -118,13 +118,25 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
                 border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e' }}>
               ⇅
             </button>
-            {o.status_geral === 'Aguardando Inicio Producao' && (
-              <button onClick={() => onAction('iniciar', o)}
+            {/* 💬 fica sempre visível: é por onde sai a informação que o
+                vendedor precisa, e escondê-lo é o mesmo que não existir. */}
+            <button onClick={() => onAction('acomp', o)} title="Dar um recado sobre esta OP (1 clique)"
+              style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
+                border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca' }}>
+              💬
+            </button>
+            {o.status_geral === 'Aguardando Inicio Producao' && (<>
+              <button onClick={() => onAction('iniciar', o)} title="Inicia agora com você como responsável"
                 style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 3, cursor: 'pointer',
                   border: 'none', background: '#16a34a', color: '#fff' }}>
                 ▶ INICIAR
               </button>
-            )}
+              <button onClick={() => onAction('iniciar_opcoes', o)} title="Iniciar em dupla ou com uma equipe"
+                style={{ fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
+                  border: '1px solid #16a34a', background: '#fff', color: '#16a34a' }}>
+                👥
+              </button>
+            </>)}
             {emProd && (
               <button onClick={() => onAction('checklist', o)} title="Conclui a produção e envia para o Controle de Qualidade"
                 style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 3, cursor: 'pointer',

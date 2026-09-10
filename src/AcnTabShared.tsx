@@ -34,6 +34,9 @@ const OPL_PIPELINE: { match: string[]; pct: number; label: string; retrabalho?: 
   { match: ['Em Producao'], pct: 70, label: 'Em Produção' },
   { match: ['Em Retrabalho', 'Retrabalho'], pct: 70, label: 'Em Retrabalho', retrabalho: true },
   { match: ['Aguardando CQ'], pct: 80, label: 'Controle de Qualidade' },
+  // Fluxos que terminam em envio: produzido -> embalar -> frete.
+  { match: ['Aguardando Embalagem'], pct: 80, label: 'Embalagem — Almoxarifado' },
+  { match: ['Aguardando Cotacao Frete'], pct: 85, label: 'Cotação de Frete — Logística' },
   { match: ['Aprovado CQ - Aguardando Liberacao Comercial', 'Aguardando Liberacao Comercial'], pct: 90, label: 'Aguardando Liberação Comercial' },
   { match: ['Aguarda Emissao NF'], pct: 95, label: 'Fiscal — Emissão de NF' },
   { match: ['Faturado', 'Faturado e Disponivel para Entrega'], pct: 100, label: 'Faturado' },

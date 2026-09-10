@@ -2,7 +2,8 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
-import { soEnvio, fluxoLabel, UFS } from './FluxoEntrega';
+import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM } from './FluxoEntrega';
+import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -58,7 +59,11 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
     const { data } = await supabase.from('oples').select('*')
-      .in('status_geral', ['Aguardando Almox'])
+      // 'Aguardando Embalagem' = OP que JA foi produzida (hoje: fabricação da
+      // serralheria com envio) e voltou só para ser pesada, medida e embalada.
+      // É uma segunda passagem pelo Almoxarifado, com trabalho diferente do
+      // kiting — por isso status próprio (ver FluxoEntrega.ts).
+      .in('status_geral', ['Aguardando Almox', STATUS_EMBALAGEM])
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
     if (!silent) setLoading(false);
@@ -142,6 +147,22 @@ export default function AlmoxarifadoTab({ currentUser }) {
       observacoes: f.observacoes || null,
       criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
     }]);
+    // 3) quem vendeu precisa poder responder ao cliente sem perguntar a
+    //    ninguém: "embalado, foi para cotação de frete" é exatamente o
+    //    recado que falta hoje. Registra no acompanhamento e notifica.
+    const recado = `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${[f.destino_cidade, f.destino_uf].filter(Boolean).join('/')}. Solicitação de frete aberta para a Logística cotar.`;
+    await supabase.from('op_acompanhamentos').insert({
+      referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`,
+      setor: 'Almoxarifado', texto: recado,
+      usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
+      criado_em: new Date().toISOString(),
+    });
+    await notificarEnvolvidosOp({
+      ref: opl.opl, texto: recado, assunto: 'Embalagem e frete',
+      autorId: currentUser?.id ? String(currentUser.id) : null,
+      autorNome: currentUser?.nome || null,
+    });
+
     setSalvandoEmb(false);
     if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
     else { alert(`✅ Embalagem registrada. Solicitação de frete aberta para a Logística cotar (OP ${opl.opl}).`); }
@@ -271,7 +292,16 @@ export default function AlmoxarifadoTab({ currentUser }) {
                   const renderLinhaOpl = (o) => (
                     <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'4px solid #eab308'} : {}}>
                       <td>{fmtDt(o.data_entrada)}</td>
-                      <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                      <td>
+                        <LinkOpl opl={o} currentUser={currentUser} />
+                        {/* Sem isto a linha fica idêntica a uma de kiting — e
+                            o "Status Kit" dela já é Kit 100% da primeira
+                            passagem, o que faria parecer que não há o que fazer. */}
+                        {o.status_geral === STATUS_EMBALAGEM && (
+                          <div><span style={{ fontSize:9, fontWeight:800, background:'#0f766e', color:'#fff',
+                            padding:'1px 5px', borderRadius:10 }}>📦 EMBALAR — PRODUÇÃO CONCLUÍDA</span></div>
+                        )}
+                      </td>
                       <td style={{fontSize:10}}>
                         <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
                         <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
@@ -294,6 +324,18 @@ export default function AlmoxarifadoTab({ currentUser }) {
                       <td>{o.responsavel_almox || '—'}</td>
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                          {/* OP que voltou da produção só para embalar não tem
+                              kiting nem falta de material: o material já virou
+                              produto. A única ação é fechar a caixa — e o
+                              status_almox dela já é 'Kit OK' desde a primeira
+                              passagem, então essa checagem não serve aqui. */}
+                          {o.status_geral === STATUS_EMBALAGEM ? (
+                            <button className="acn-btn" style={{background:'#0f766e'}}
+                              title="Produção concluída: pesar, medir e abrir a cotação de frete"
+                              onClick={()=>abrirModalEmbalagem(o)}>
+                              📦 EMBALAR E ENVIAR
+                            </button>
+                          ) : (<>
                           {o.status_almox !== 'Kit OK' && (
                             soEnvio(o.fluxo_entrega) ? (
                               <button className="acn-btn" style={{background:'#0f766e'}}
@@ -318,6 +360,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                               SANAR PENDENCIA
                             </button>
                           )}
+                          </>)}
                           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                         </div>
                       </td>
@@ -465,7 +508,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
       )}
 
       {/* MODAL SERIAIS — obrigatorio para confirmar Kiting 100% (ou sanar pendencia) */}
-      {/* Modal de embalagem — só aparece para OP de fluxo "envio". */}
+      {/* Modal de embalagem — para OP de fluxo "envio" (que nem passa por
+          produção) e para OP que voltou da produção só para ser embalada. */}
       {modalEmbalagem && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
           onClick={e=>{ if(e.target===e.currentTarget) setModalEmbalagem(null); }}>
@@ -474,7 +518,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
               📦 Embalar e enviar — OP {modalEmbalagem.opl}
             </div>
             <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
-              {modalEmbalagem.cliente_nome} · {fluxoLabel(modalEmbalagem.fluxo_entrega)} · não passa por produção
+              {modalEmbalagem.cliente_nome} · {fluxoLabel(modalEmbalagem.fluxo_entrega)} ·{' '}
+              {modalEmbalagem.status_geral === STATUS_EMBALAGEM ? 'produção concluída' : 'não passa por produção'}
             </div>
 
             <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Números de série *</div>

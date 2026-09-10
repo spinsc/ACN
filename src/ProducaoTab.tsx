@@ -10,7 +10,9 @@ import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
-import { FLUXOS, filaDe, fluxoLabel, temSerralheria, motivoSerralheria, SERRALHERIA_STATUS } from './FluxoEntrega';
+import { FLUXOS, filaDe, fluxoLabel, temSerralheria, motivoSerralheria, SERRALHERIA_STATUS,
+         serralheriaEncerraProducao, STATUS_EMBALAGEM } from './FluxoEntrega';
+import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -19,6 +21,19 @@ import { logChange, useUnreadMap } from './AuditSystem';
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 const semDado = (v) => !v || !String(v).trim();
+
+// Recados prontos da produção. São as respostas que o vendedor precisa dar ao
+// cliente — "e a minha adaptação?" — escritas de um jeito que possa ser
+// repassado sem tradução. Um clique registra no histórico da OP e notifica
+// quem abriu, a engenharia, quem vendeu e os administradores.
+const RECADOS_PRODUCAO = [
+  'Em execução, dentro do prazo.',
+  'Aguardando peça/material para continuar.',
+  'Em acabamento — entrando na reta final.',
+  'Serralheria em execução.',
+  'Aguardando o veículo chegar.',
+  'Atrasado — vou detalhar o motivo em seguida.',
+];
 
 // Statuses ativos do fluxo de OS de manutenção veicular (pós-reformulação
 // 169d90d, 2026-08-21) — usado tanto pelo Calendário quanto pelo Painel SAC
@@ -132,7 +147,12 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
             <OplAnexosWidget opl={o} setor="Producao" currentUser={currentUser} compact={true} />
             <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('acomp',o)}>💬 ACOMP.</button>
             {aguardando && (
-              <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>onAction('iniciar',o)}>INICIAR</button>
+              <>
+                <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>onAction('iniciar',o)}
+                  title="Inicia agora com você como responsável">▶ INICIAR</button>
+                <button className="acn-btn" style={{background:'#1d4ed8',fontSize:9}} onClick={()=>onAction('iniciar_opcoes',o)}
+                  title="Iniciar em dupla ou com uma equipe">👥</button>
+              </>
             )}
             {emProd && (
               <>
@@ -2157,6 +2177,15 @@ export default function ProducaoTab({ currentUser }) {
       logResp = `Equipe ${equipeSel.nome} (Head: ${equipeSel.head_line_nome})`;
     }
 
+    await aplicarInicio(opl, upd, logResp, agora);
+    setModalIniciar(null); setRespNome(''); setRespId(null); setRespNome2(''); setRespId2(null);
+    setModoExecucao('individual'); setEquipeSel(null);
+  };
+
+  // Grava o início da produção. Existe separado porque duas portas levam aqui:
+  // o botão INICIAR (1 clique, individual) e o modal de dupla/equipe. Uma
+  // função só evita que as duas portas gravem coisas diferentes.
+  const aplicarInicio = async (opl: any, upd: any, logResp: string, agora: string) => {
     await supabase.from('oples').update(upd).eq('id', opl.id);
     logChange({ module: 'producao', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral, responsavel_producao: opl.responsavel_producao },
@@ -2181,8 +2210,29 @@ export default function ProducaoTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Em Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    setModalIniciar(null); setRespNome(''); setRespId(null); setRespNome2(''); setRespId2(null);
-    setModoExecucao('individual'); setEquipeSel(null); fetchAll();
+    await registrarAndamento(opl, `Produção iniciada. Responsável: ${logResp}.`);
+    fetchAll();
+  };
+
+  // INICIAR em 1 clique: assume execução individual com quem clicou. Era um
+  // modal com 3 modos + seleção de técnico para toda OP, e o resultado prático
+  // disso foi 82 das 89 OPs da fila sem responsável nenhum — o caminho caro
+  // não estava sendo percorrido. Quem trabalha em dupla ou equipe usa o botão
+  // 👥 ao lado, e trocar depois continua possível por ✏️ RESP. / 👥 EQUIPE.
+  const iniciarRapido = async (opl: any) => {
+    const agora = new Date().toISOString();
+    const resp = currentUser?.nome || 'Não informado';
+    // tecnico_producao_id aponta para `colaboradores`, NÃO para o usuário
+    // logado — é o mesmo id que o ColaboradorSelect do modal grava. Quem tem
+    // login mas não é colaborador cadastrado fica sem id, e é isso mesmo: o
+    // nome, que é o que a tela mostra, continua gravado.
+    const colab = colaboradoresList.find((c: any) => c.nome === currentUser?.nome);
+    await aplicarInicio(opl, {
+      status_geral: 'Em Producao', data_inicio_producao: agora, modo_execucao: 'individual',
+      pausado: false, data_pausa: null, tempo_pausado_horas: 0,
+      responsavel_producao: resp, tecnico_producao_id: colab?.id || null,
+      tecnico_producao_2_nome: null, tecnico_producao_2_id: null, equipe_id: null, equipe_nome: null,
+    }, resp, agora);
   };
 
   // Inicia produção de todas as selecionadas de uma vez, sem definir
@@ -2329,6 +2379,7 @@ export default function ProducaoTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     notificarEvento('producao_finaliza', msg.producaoFinalizada(opl.opl, currentUser?.nome));
+    await registrarAndamento(opl, 'Produção concluída. OP liberada para o Controle de Qualidade.');
     fetchAll();
   };
 
@@ -2345,6 +2396,8 @@ export default function ProducaoTab({ currentUser }) {
       status_anterior: 'Retrabalho', status_novo: 'Em Retrabalho',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    await registrarAndamento(opl,
+      `Retrabalho iniciado${opl.obs_reprovacao_cq ? '. Motivo apontado pelo CQ: ' + opl.obs_reprovacao_cq : ''}.`);
     fetchAll();
   };
 
@@ -2364,6 +2417,7 @@ export default function ProducaoTab({ currentUser }) {
       status_anterior: 'Em Retrabalho', status_novo: 'Aguardando CQ',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    await registrarAndamento(opl, 'Retrabalho concluído. OP voltou para o Controle de Qualidade.');
     fetchAll();
   };
 
@@ -2384,7 +2438,8 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const handleAction = (tipo, opl) => {
-    if (tipo === 'iniciar')            {
+    if (tipo === 'iniciar')            iniciarRapido(opl);
+    if (tipo === 'iniciar_opcoes')     {
       setModalIniciar(opl); setRespNome(currentUser?.nome || '');
       setModoExecucao('individual'); setRespNome2(''); setRespId2(null); setEquipeSel(null);
     }
@@ -2423,16 +2478,76 @@ export default function ProducaoTab({ currentUser }) {
     f === 'serralheria' ? opls.filter(temSerralheria).length
                         : opls.filter(o => filaDe(o.fluxo_entrega) === f).length;
 
+  // ── ANDAMENTO AUTOMÁTICO ────────────────────────────────────────────────
+  // O gerente de produção precisa atualizar muita OP em pouco tempo, e o
+  // vendedor precisa saber o que dizer ao cliente. Os dois só se resolvem
+  // juntos se a informação sair da AÇÃO, não de um texto que alguém tem que
+  // lembrar de escrever: quem inicia, conclui ou fecha a serralheria já disse
+  // o que aconteceu — o sistema é que registra e avisa.
+  //
+  // O número que motivou isto: das 89 OPs na fila de produção, ZERO tinham
+  // acompanhamento registrado; a produção escreveu 1 acompanhamento na
+  // história inteira do sistema. Pedir mais digitação não ia mudar isso.
+  const registrarAndamento = async (opl: any, texto: string) => {
+    if (!opl?.opl) return;
+    const { error } = await supabase.from('op_acompanhamentos').insert({
+      referencia_id:   opl.opl,
+      referencia_tipo: 'op',
+      referencia_desc: `OP ${opl.opl}`,
+      setor:           'Producao',
+      texto,
+      usuario_id:      String(currentUser?.id || ''),
+      usuario_nome:    currentUser?.nome || 'Sistema',
+      criado_em:       new Date().toISOString(),
+    });
+    // Falha em silêncio de propósito: a ação principal (iniciar, concluir)
+    // já foi gravada, e travar por causa do recado seria pior.
+    if (error) { console.warn('[registrarAndamento]', error.message); return; }
+    await notificarEnvolvidosOp({
+      ref: opl.opl, texto,
+      autorId: currentUser?.id ? String(currentUser.id) : null,
+      autorNome: currentUser?.nome || null,
+    });
+  };
+
   // Marca/avanca o andamento da serralheria naquela OP. Usa a coluna
   // serralheria_status, que ja existia e estava praticamente sem uso (1 linha).
   const setSerralheria = async (opl: any, novoStatus: string) => {
-    await supabase.from('oples').update({ serralheria_status: novoStatus }).eq('id', opl.id);
-    await supabase.from('logs_movimentacao_opl').insert([{
+    const agora = new Date().toISOString();
+    // Venda marcada como "fabricação serralheria com envio": quando a
+    // serralheria termina, a produção daquela OP acabou — o item está pronto e
+    // o que falta é embalar e enviar. Ela sai da fila da produção e vai para o
+    // Almoxarifado pesar/medir a caixa, que é o que abre a cotação de frete.
+    // Quando a serralheria é só uma etapa dentro de uma adaptação, nada disso
+    // acontece: a OP continua na adaptação até a adaptação acabar.
+    const encerra = novoStatus === 'Concluido' && serralheriaEncerraProducao(opl);
+    if (encerra && !confirm(
+      `Concluir a serralheria da OP ${opl.opl}?\n\n` +
+      `Como esta venda é "fabricação serralheria com envio", a OP sai da fila da produção ` +
+      `e vai para o Almoxarifado embalar e abrir a cotação de frete.`)) return;
+
+    const upd: any = { serralheria_status: novoStatus };
+    if (encerra) { upd.status_geral = STATUS_EMBALAGEM; upd.data_conclusao_producao = agora; }
+    await supabase.from('oples').update(upd).eq('id', opl.id);
+
+    const logs: any[] = [{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
       evento: `Serralheria: ${novoStatus} (${motivoSerralheria(opl)})`,
       status_anterior: opl.serralheria_status || '—', status_novo: novoStatus,
-      usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
-    }]);
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }];
+    if (encerra) logs.push({
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
+      evento: 'Serralheria concluída — OP liberada para embalagem e cotação de frete.',
+      status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    });
+    await supabase.from('logs_movimentacao_opl').insert(logs);
+
+    if (encerra) {
+      await registrarAndamento(opl,
+        'Serralheria concluída. Item pronto — seguiu para o Almoxarifado embalar e cotar o frete.');
+    }
     fetchAll(true);
   };
 
@@ -2994,6 +3109,7 @@ export default function ProducaoTab({ currentUser }) {
           referenciaType="op"
           setor="Producao"
           currentUser={currentUser}
+          sugestoes={RECADOS_PRODUCAO}
           onClose={() => setModalAcomp(null)}
         />
       )}

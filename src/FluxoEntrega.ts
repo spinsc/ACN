@@ -60,6 +60,40 @@ export const vaiParaFabricacao = (v: any) => filaDe(v) === 'fabricacao';
 /** Não passa por produção: do Almoxarifado direto pra embalagem e frete. */
 export const soEnvio            = (v: any) => filaDe(v) === 'envio';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SAÍDA PARA O FRETE
+// Fluxo que termina em envio precisa de uma parada extra DEPOIS da produção:
+// alguém pesa e mede a caixa, e é isso que abre a cotação de frete. Sem essa
+// parada a OP ia de produção direto pro CQ/faturamento e o pedido de frete
+// nunca nascia.
+//
+// Por que um status próprio e não reaproveitar "Aguardando Almox": a OP passa
+// pelo Almoxarifado DUAS vezes — antes da produção (kiting) e depois dela
+// (embalagem). Com um status só, o Almoxarifado não teria como saber qual das
+// duas coisas está sendo pedida, e mostraria "EMBALAR E ENVIAR" numa OP que
+// ainda nem foi produzida.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** OP parada no Almoxarifado esperando ser pesada/medida e embalada. */
+export const STATUS_EMBALAGEM = 'Aguardando Embalagem';
+/** Embalagem feita, pedido de frete aberto, Logística cotando. */
+export const STATUS_COTACAO_FRETE = 'Aguardando Cotacao Frete';
+
+/** Termina com a mercadoria saindo daqui — ou seja, em algum momento precisa
+ *  de embalagem e frete. Só as duas adaptações ficam de fora. */
+export function terminaEmEnvio(v: string | null | undefined): boolean {
+  if (!v) return false;                       // OP antiga: comportamento antigo
+  return filaDe(v) !== 'adaptacao';
+}
+
+/** A serralheria, quando fabrica o item INTEIRO para envio (carretinha, por
+ *  exemplo), encerra a produção: terminou lá, vai direto para a embalagem e o
+ *  frete. Quando ela é só uma etapa dentro de uma adaptação, não — a OP
+ *  continua na adaptação até a adaptação acabar. */
+export function serralheriaEncerraProducao(o: any): boolean {
+  return o?.fluxo_entrega === 'fabricacao_serralheria_envio';
+}
+
 export const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 

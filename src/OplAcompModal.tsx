@@ -48,10 +48,15 @@ interface Props {
   setor:          string;
   currentUser:    any;
   onClose:        () => void;
+  /** Recados prontos, de 1 clique. Existem porque digitar é justamente o
+   *  custo que fazia a produção não registrar nada: das 89 OPs na fila,
+   *  nenhuma tinha acompanhamento. Um clique aqui já vira histórico na OP e
+   *  notificação para quem vendeu. */
+  sugestoes?:     string[];
 }
 
 export default function OplAcompModal({
-  referenciaId, referenciaDesc, referenciaType, setor, currentUser, onClose,
+  referenciaId, referenciaDesc, referenciaType, setor, currentUser, onClose, sugestoes,
 }: Props) {
   const [lista,    setLista]    = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
@@ -73,8 +78,9 @@ export default function OplAcompModal({
 
   useEffect(() => { load(); }, [referenciaId, referenciaType]);
 
-  const salvar = async () => {
-    if (!texto.trim() || salvando) return;
+  const salvar = async (textoPronto?: string) => {
+    const conteudo = (typeof textoPronto === 'string' ? textoPronto : texto).trim();
+    if (!conteudo || salvando) return;
     setSalvando(true);
 
     const { error } = await supabase.from('op_acompanhamentos').insert({
@@ -82,7 +88,7 @@ export default function OplAcompModal({
       referencia_tipo: referenciaType,
       referencia_desc: referenciaDesc,
       setor,
-      texto:           texto.trim(),
+      texto:           conteudo,
       usuario_id:      String(currentUser?.id || ''),
       usuario_nome:    currentUser?.nome || 'Sistema',
       criado_em:       new Date().toISOString(),
@@ -102,7 +108,7 @@ export default function OplAcompModal({
     if (referenciaType === 'op' && /produ|adapta|serralher/i.test(String(setor || ''))) {
       await notificarEnvolvidosOp({
         ref: String(referenciaId),
-        texto: texto.trim(),
+        texto: conteudo,
         autorId: currentUser?.id ? String(currentUser.id) : null,
         autorNome: currentUser?.nome || null,
       });
@@ -110,7 +116,7 @@ export default function OplAcompModal({
 
     // Salva @menções para o inbox de menções
     await salvarMencoes({
-      texto:               texto.trim(),
+      texto:               conteudo,
       mencionanteId:       String(currentUser?.id || ''),
       mencionanteNome:     currentUser?.nome || 'Sistema',
       contexto:            referenciaType,
@@ -226,6 +232,26 @@ export default function OplAcompModal({
           <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: .4, marginBottom: 4 }}>
             📝 Novo acompanhamento
           </div>
+
+          {/* Recados de 1 clique: registram e notificam na hora, sem digitar. */}
+          {sugestoes && sugestoes.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 4 }}>
+                Recado rápido — registra e avisa os envolvidos em 1 clique:
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {sugestoes.map(sug => (
+                  <button key={sug} onClick={() => salvar(sug)} disabled={salvando} title={sug}
+                    style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 14,
+                      cursor: salvando ? 'default' : 'pointer', border: '1px solid ' + cor,
+                      background: '#fff', color: cor, opacity: salvando ? .5 : 1 }}>
+                    {sug}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <MencaoTextarea
             value={texto}
             onChange={setTexto}
@@ -246,7 +272,7 @@ export default function OplAcompModal({
                 background: cor, fontSize: 10, padding: '4px 14px',
                 opacity: texto.trim() && !salvando ? 1 : 0.5,
               }}
-              onClick={salvar}
+              onClick={() => salvar()}
               disabled={!texto.trim() || salvando}
             >
               {salvando ? 'Salvando...' : '+ Registrar'}

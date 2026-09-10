@@ -55,6 +55,9 @@ export async function notificarEnvolvidosOp(opts: {
   texto: string;            // o que foi escrito na atualização
   autorId?: string | null;
   autorNome?: string | null;
+  /** Cabeçalho da notificação. Nem toda atualização vem da adaptação — a
+   *  embalagem e o frete também interessam a quem vendeu. */
+  assunto?: string;
 }): Promise<number> {
   try {
     const ref = String(opts.ref || '').trim();
@@ -112,7 +115,7 @@ export async function notificarEnvolvidosOp(opts: {
       contexto_id: String(op.id),
       contexto_descricao: `OP ${op.opl}${op.cliente_nome ? ' — ' + op.cliente_nome : ''}`,
       campo: 'acompanhamento',
-      texto_trecho: `Atualização da adaptação na OP ${op.opl}: ${trecho}`,
+      texto_trecho: `${opts.assunto || 'Atualização da adaptação'} na OP ${op.opl}: ${trecho}`,
       aba_destino: 'producao',
       lida: false,
       criado_em: agora,
