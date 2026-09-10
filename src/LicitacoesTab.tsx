@@ -777,7 +777,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB-QUADRO DE DOCUMENTOS — usado dentro de "Arquivos de Licitação", um por
 // categoria fixa (edital_anexos, impugnacao, impugnacao_decisao, etc). Autônomo
-// (upload/lista/exclusão/Área Livre próprios) porque vários quadros ficam
+// (upload/lista/exclusão próprios) porque vários quadros ficam
 // visíveis ao mesmo tempo na tela, ao contrário do bloco genérico de
 // documentos que segue a aba única selecionada (tabDir).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -788,6 +788,10 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
   const [uploadDesc, setUploadDesc] = useState('');
   const [salvando, setSalvando] = useState(false);
   const uploadRef = useRef<any>(null);
+
+  const htmlAntigo = (areasLivres || {})[`processo:${categoria}`] || '';
+  const temLetra = htmlAntigo.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+  const textoAntigo = temLetra ? htmlAntigo : '';
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
@@ -889,8 +893,21 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
           )}
         </div>
       ))}
-      <AreaLivre licitacaoId={licitacaoId} tabKey={`processo:${categoria}`} areasLivres={areasLivres} onAreasLivresChange={onAreasLivresChange}
-        currentUser={currentUser} naoLida={areaLivreNaoLida} />
+      {/* Sem campo de texto livre nesta aba, a pedido do usuário: aqui é só
+          arquivo. Mas 3 licitações tinham texto escrito na antiga "Área Livre"
+          destes quadros (uma tabela de itens colada do Excel, inclusive), e
+          apagar o editor sem mais nada deixaria esse conteúdo invisível. Então
+          o que já existe aparece para LEITURA; não dá mais para escrever.
+          Nada foi apagado do banco (licitacoes.areas_livres). */}
+      {textoAntigo && (
+        <div style={{ background:'#f8fafc', border:'1px dashed #cbd5e1', borderRadius:4, padding:'6px 8px' }}>
+          <div style={{ fontSize:8, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', marginBottom:3 }}>
+            Anotação antiga (somente leitura)
+          </div>
+          <div style={{ fontSize:10, color:'#475569', wordBreak:'break-word', overflowX:'auto' }}
+            dangerouslySetInnerHTML={{ __html: htmlSeguro(textoAntigo) }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -900,6 +917,22 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // ─────────────────────────────────────────────────────────────────────────────
 function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir }) {
   const [licit, setLicit] = useState<any>(licitProp);
+
+  // Marcadores têm estado PRÓPRIO. `licit` acima é uma cópia tirada só na
+  // abertura do card e nunca é atualizada, então ler os marcadores dele dava
+  // dois defeitos: (1) o botão não acendia ao clicar — só ao fechar e abrir de
+  // novo; (2) perda de dado — marcar "Em Recurso" e depois "Pegar ATA"
+  // gravava só "Pegar ATA", porque o segundo clique partia da lista congelada.
+  // O ref guarda sempre a lista mais recente, mesmo com cliques seguidos antes
+  // de o React re-renderizar.
+  // A coluna é jsonb: um valor que não seja lista (objeto, texto) derrubaria
+  // a tela. Hoje os 59 registros são listas, mas um só fora do formato basta.
+  const marcadoresIniciais = Array.isArray(licitProp?.marcadores) ? licitProp.marcadores : [];
+  const [marcadores, setMarcadores] = useState<string[]>(marcadoresIniciais);
+  const marcadoresRef = useRef<string[]>(marcadoresIniciais);
+  // Gravações em fila: duas requisições em paralelo podem chegar ao banco fora
+  // de ordem, e a mais antiga sobrescreveria a mais nova.
+  const filaMarcadoresRef = useRef<Promise<any>>(Promise.resolve());
 
   // ── auditoria/colaboração (mesmo padrão do CRM, ver AuditSystem.tsx) ───────
   const { camposNaoLidos, naoLidos } = useUnreadChanges('licitacoes', licit?.id, currentUser);
@@ -1342,15 +1375,28 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   };
 
   // ── Toggle marcador ───────────────────────────────────────────────────────
-  const toggleMarcador = async (m: string) => {
-    const atuais: string[] = licit.marcadores || [];
-    const novos = atuais.includes(m) ? atuais.filter(x => x !== m) : [...atuais, m];
-    await supabase.from('licitacoes').update({ marcadores: novos, atualizado_em: new Date().toISOString() }).eq('id', licit.id);
-    onRefresh();
+  const alternar = (lista: string[], m: string) =>
+    lista.includes(m) ? lista.filter(x => x !== m) : [...lista, m];
+
+  const toggleMarcador = (m: string) => {
+    const novos = alternar(marcadoresRef.current, m);
+    marcadoresRef.current = novos;
+    setMarcadores(novos);                       // acende/apaga NA HORA
+    filaMarcadoresRef.current = filaMarcadoresRef.current.then(async () => {
+      const { error } = await supabase.from('licitacoes')
+        .update({ marcadores: novos, atualizado_em: new Date().toISOString() }).eq('id', licit.id);
+      if (error) {
+        // desfaz só este marcador, sem perder os outros cliques
+        marcadoresRef.current = alternar(marcadoresRef.current, m);
+        setMarcadores(marcadoresRef.current);
+        alert('Não foi possível salvar o marcador "' + m + '": ' + error.message);
+        return;
+      }
+      onRefresh();                               // atualiza o card na lista
+    });
   };
 
   const s = licit.status;
-  const marcadores: string[] = licit.marcadores || [];
 
   const botaoProximoStatus = () => {
     if (s === 'Aberta' && isAnalista) return { label:'🚀 Iniciar Andamento', next:'Em Andamento' };
@@ -2204,7 +2250,20 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
           </span>
         )}
       </div>
-      <div style={{ fontSize:12, fontWeight:700, color:'#1f2937', marginTop:5 }}>{l.numero} — {l.nome_projeto}</div>
+      {/* Identificação: os marcadores que estão ligados + o nome do projeto.
+          O órgão saiu daqui a pedido do usuário. Atenção aos nomes de coluna,
+          que são antigos e enganam: `numero` é o que a tela chama de "Nome do
+          Projeto", e `nome_projeto` é o "Nome completo do Órgão" — por isso o
+          título usa `numero`, e não `nome_projeto`. */}
+      <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:5 }}>
+        {(Array.isArray(l.marcadores) ? l.marcadores : []).map(m => (
+          <span key={m} style={{ border:'1.5px solid #dc2626', background:'#fef2f2', color:'#dc2626',
+            borderRadius:4, padding:'0 6px', fontSize:9, fontWeight:700 }}>
+            {m}
+          </span>
+        ))}
+        <span style={{ fontSize:12, fontWeight:700, color:'#1f2937' }}>{l.numero || '—'}</span>
+      </div>
       <div style={{ marginTop:6 }}>
         {l.orgao ? (
           orgaoEhLink ? (
