@@ -21,6 +21,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo } from './VinculoPicker';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import { normalizarBusca } from './SearchUtils';
+import { FLUXOS, fluxoLabel, UFS } from './FluxoEntrega';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -999,6 +1000,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       data_entrada:          oplFormEdit.data_entrada || null,
       tipo_projeto:          oplFormEdit.tipo_projeto || null,
       veiculo:               oplFormEdit.veiculo || null,
+      fluxo_entrega:         oplFormEdit.fluxo_entrega || null,
+      destino_cidade:        oplFormEdit.destino_cidade || null,
+      destino_uf:            oplFormEdit.destino_uf || null,
+      destino_cep:           oplFormEdit.destino_cep || null,
       chassi:                oplFormEdit.chassi || null,
       placa:                 oplFormEdit.placa || null,
       modelo:                oplFormEdit.modelo || null,
@@ -1130,7 +1135,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
@@ -2980,6 +2985,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                             <td style={{ padding:'5px 8px', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', color:'#475569', fontSize:10 }}>
                               {emEdicao ? (
                                 <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                                  <select style={{ ...inpLinha, borderColor:'#0f766e' }} value={oplFormEdit.fluxo_entrega||''} onChange={e=>setEd('fluxo_entrega', e.target.value)}>
+                                    <option value="">🚦 — Fluxo de entrega —</option>
+                                    {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
+                                  </select>
                                   <select style={inpLinha} value={oplFormEdit.tipo_projeto||''} onChange={e=>setEd('tipo_projeto', e.target.value)}>
                                     <option value="">— Tipo de projeto —</option>
                                     {TIPOS_PROJETO_OPL.map(t => <option key={t} value={t}>{t}</option>)}
@@ -2989,6 +2998,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                   <input style={inpLinha} value={oplFormEdit.placa||''} onChange={e=>setEd('placa', e.target.value)} placeholder="Placa" />
                                 </div>
                               ) : (<>
+                                <div style={{ fontSize:9, fontWeight:700,
+                                  color: o.fluxo_entrega ? '#0f766e' : '#b45309' }}>
+                                  🚦 {fluxoLabel(o.fluxo_entrega)}
+                                </div>
                                 <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
                                 <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
                                 <div style={{ color:'#94a3b8' }}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
@@ -3114,6 +3127,21 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                                   <div>
                                     <div style={campoLbl}>Equipamento / Veículo</div>
                                     <input style={inpLinha} value={oplFormEdit.veiculo||''} onChange={e=>setEd('veiculo', e.target.value)} placeholder="Ex: Rádio Motorola APX" />
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>Cidade de Entrega</div>
+                                    <input style={inpLinha} value={oplFormEdit.destino_cidade||''} onChange={e=>setEd('destino_cidade', e.target.value)} placeholder="Destino do envio" />
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>UF</div>
+                                    <select style={inpLinha} value={oplFormEdit.destino_uf||''} onChange={e=>setEd('destino_uf', e.target.value)}>
+                                      <option value="">—</option>
+                                      {UFS.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <div style={campoLbl}>CEP de Entrega</div>
+                                    <input style={inpLinha} value={oplFormEdit.destino_cep||''} onChange={e=>setEd('destino_cep', e.target.value)} placeholder="00000-000" />
                                   </div>
                                   <div>
                                     <div style={campoLbl}>🏷️ Centro de Custo</div>

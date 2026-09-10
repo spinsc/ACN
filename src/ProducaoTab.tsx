@@ -10,6 +10,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
+import { FLUXOS, filaDe, fluxoLabel } from './FluxoEntrega';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 
@@ -1997,6 +1998,9 @@ export default function ProducaoTab({ currentUser }) {
 
   // Filtros da lista de Produção
   const [filtroBusca, setFiltroBusca]     = useState('');
+  // Fila padrão = Adaptação: quem trabalha aqui abre a tela e vê só o que de
+  // fato é adaptado. Fabricação e Envio ficam em abas próprias.
+  const [filaAtiva, setFilaAtiva]         = useState<'adaptacao'|'fabricacao'|'envio'|'todas'>('adaptacao');
   const [filtroStatus, setFiltroStatus]   = useState('Todos');
   const [filtroTecnico, setFiltroTecnico] = useState('Todos');
   const [filtroCliente, setFiltroCliente] = useState('');
@@ -2365,7 +2369,13 @@ export default function ProducaoTab({ currentUser }) {
     opls.map(o => o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao).filter(Boolean)
   )].sort();
 
+  // Fila: separa o que é adaptação do que é fabricação para envio. Antes tudo
+  // caía junto aqui, inclusive item que só seria separado e enviado.
+  // Fluxo vazio conta como 'adaptacao' (OP anterior à regra) — ver FluxoEntrega.ts.
+  const contaFila = (f: string) => opls.filter(o => filaDe(o.fluxo_entrega) === f).length;
+
   const oplsFiltradas = opls.filter(o => {
+    if (filaAtiva !== 'todas' && filaDe(o.fluxo_entrega) !== filaAtiva) return false;
     if (filtroStatus !== 'Todos' && o.status_geral !== filtroStatus) return false;
     if (filtroTecnico !== 'Todos') {
       const tec = o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao;
@@ -2483,6 +2493,28 @@ export default function ProducaoTab({ currentUser }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Abas de fila — separam adaptação de fabricação e de envio. Item que só
+          será separado e enviado não polui mais a fila de quem adapta. */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', margin:'0 0 10px' }}>
+        {([
+          ['adaptacao',  '🔧 Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
+          ['fabricacao', '🏭 Fabricação', 'Fabricação interna e serralheria, para envio depois'],
+          ['envio',      '📦 Envio',      'Não passa por produção — só separar, embalar e enviar'],
+          ['todas',      'Todas',         'Mostra as três filas juntas'],
+        ] as const).map(([v, label, ajuda]) => {
+          const n = v === 'todas' ? opls.length : contaFila(v);
+          return (
+            <button key={v} onClick={() => setFilaAtiva(v)} title={ajuda}
+              style={{ fontSize:10, fontWeight:700, padding:'5px 12px', borderRadius:20, cursor:'pointer',
+                border:`1px solid ${filaAtiva===v ? '#0f766e' : '#e2e8f0'}`,
+                background: filaAtiva===v ? '#0f766e' : '#f8fafc',
+                color: filaAtiva===v ? '#fff' : '#64748b' }}>
+              {label} ({n})
+            </button>
+          );
+        })}
       </div>
 
       <div className="sec-card">

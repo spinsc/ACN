@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ClienteAutocomplete } from './ClienteUtils';
+import { FLUXOS, UFS } from './FluxoEntrega';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { dividirValorEmUnidades } from './AcnTabShared';
 
@@ -66,6 +67,7 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
   );
 }
 
+// Fluxo de entrega (rota da venda) — decide em qual fila a OP cai depois.
 const TIPOS_PROJETO = [
   { emoji:'🚔', label:'Transformacao Veicular Ostensiva' },
   { emoji:'🥷', label:'Transformacao Veicular Discreta' },
@@ -103,6 +105,10 @@ const VAZIO = {
   pedido_venda:           '',   // 4 dígitos — gera o número da OP automaticamente
   opl:                    '',   // derivado: PPPP.YYMMM  (ou PPPP.YYMMM/01, /02...)
   tipo_projeto:           'Transformacao Veicular Ostensiva',
+  fluxo_entrega:          '',   // obrigatório: decide se cai na Adaptação, na Fabricação ou vai direto pra envio
+  destino_cidade:         '',
+  destino_uf:             '',
+  destino_cep:            '',
   chassi:                 '',
   placa:                  '',   // sempre ativo
   modelo:                 '',
@@ -218,6 +224,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (form.tipo === 'OS' && !form.descricao_problema.trim()) { setErro('Descreva o problema/serviço.'); return; }
     if (!form.prazo_entrega) { setErro('Informe o prazo de entrega.'); return; }
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
+    // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
+    // Adaptação por omissão — que é justamente o problema que isto resolve.
+    if (form.tipo === 'OP' && !form.fluxo_entrega) { setErro('Selecione o Fluxo de Entrega.'); return; }
 
     setSalvando(true);
     try {
@@ -241,6 +250,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           tipo_op:                'OPL',
           faturamento_empresa:    form.empresa,
           tipo_projeto:           form.tipo_projeto,
+          fluxo_entrega:          form.fluxo_entrega || null,
+          destino_cidade:         form.destino_cidade?.trim() || null,
+          destino_uf:             form.destino_uf || null,
+          destino_cep:            form.destino_cep?.trim() || null,
           chassi:                 (veiculo?.chassi || form.chassi) || null,
           placa:                  (veiculo?.placa  || form.placa)  || null,
           modelo:                 form.modelo || null,
@@ -467,6 +480,45 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Qtd. Veículos</div>
                   <input className="acn-input" style={{ width:'100%' }} type="number" min={1} max={99}
                     value={form.quantidade} onChange={e => setF('quantidade', e.target.value)} />
+                </div>
+              </div>
+
+              {/* Fluxo de entrega — é o que impede que item de puro envio caia na
+                  fila da Adaptação. Sem isso preenchido a OP não é criada. */}
+              <div style={{ marginBottom:10, background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'8px 10px' }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#0369a1', marginBottom:3 }}>🚦 Fluxo de Entrega *</div>
+                <select className="acn-input" style={{ width:'100%' }} value={form.fluxo_entrega}
+                  onChange={e => setF('fluxo_entrega', e.target.value)}>
+                  <option value="">— Selecione como esta venda será entregue —</option>
+                  {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
+                </select>
+                <div style={{ fontSize:9, color:'#0369a1', marginTop:3 }}>
+                  {form.fluxo_entrega
+                    ? FLUXOS.find(f => f.valor === form.fluxo_entrega)?.ajuda
+                    : 'Define se a OP vai para a Adaptação, para a Fabricação, ou direto para separação e envio.'}
+                </div>
+              </div>
+
+              {/* Destino — pode ficar em branco agora e ser completado depois na
+                  própria OPL; é o dado que o aproveitamento de frete vai usar. */}
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Cidade de Entrega</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="Opcional — pode preencher depois"
+                    value={form.destino_cidade} onChange={e => setF('destino_cidade', e.target.value)} />
+                </div>
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>UF</div>
+                  <select className="acn-input" style={{ width:'100%' }} value={form.destino_uf}
+                    onChange={e => setF('destino_uf', e.target.value)}>
+                    <option value="">—</option>
+                    {UFS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>CEP</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="00000-000"
+                    value={form.destino_cep} onChange={e => setF('destino_cep', e.target.value)} />
                 </div>
               </div>
 
