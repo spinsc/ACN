@@ -2480,10 +2480,6 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 onClick={() => setModalSalvar(true)}>
                 {editandoId ? '✏️ Atualizar Cotação' : '💾 Salvar Modelo'}
               </button>
-              <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10 }}
-                onClick={addItem}>
-                + Adicionar Item
-              </button>
               <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10 }}
                 onClick={novaQuotacao}>
                 🗒️ Nova Cotação
@@ -2681,7 +2677,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             }}>
               {itensDoGrupo.length === 0 && (
                 <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>
-                  Nenhum item neste Item do edital. Clique em <strong>+ Adicionar Item</strong>.
+                  Nenhum item neste Item do edital. Use o botão <strong>+ Adicionar Item</strong>, logo abaixo da lista.
                 </div>
               )}
               {itensDoGrupo.map((item, idx) => (
@@ -2726,6 +2722,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               <span style={{ fontSize:9, color:'#9ca3af' }}>
                 {itensDoGrupo.length} item{itensDoGrupo.length !== 1 ? 'ns' : ''} em "{grupoAtivoValido}" · arraste a barra cinza para redimensionar
               </span>
+              {/* O botao de adicionar item fica AQUI, colado na lista, e nao
+                  la em cima junto dos botoes que agem sobre a formacao
+                  inteira (salvar, versao final, carregar modelo): quem esta
+                  montando o preco trabalha nesta altura da tela. */}
+              <button className="acn-btn" style={{ background:'#7c3aed', fontSize:10 }}
+                onClick={addItem}
+                title={'Adiciona uma linha em "' + grupoAtivoValido + '"'}>
+                + Adicionar Item
+              </button>
             </div>
           </div>{/* fim wrapper resize */}
 
