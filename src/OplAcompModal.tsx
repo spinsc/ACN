@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 
@@ -92,6 +93,19 @@ export default function OplAcompModal({
       alert('Erro ao registrar: ' + error.message);
       setSalvando(false);
       return;
+    }
+
+    // Atualização da adaptação avisa os envolvidos na OP (quem abriu, quem
+    // analisou na engenharia, quem vendeu e os administradores) — sem depender
+    // de alguém lembrar de marcar as pessoas na mão. Só para OP e só quando a
+    // atualização vem da produção/adaptação, que é o combinado.
+    if (referenciaType === 'op' && /produ|adapta|serralher/i.test(String(setor || ''))) {
+      await notificarEnvolvidosOp({
+        ref: String(referenciaId),
+        texto: texto.trim(),
+        autorId: currentUser?.id ? String(currentUser.id) : null,
+        autorNome: currentUser?.nome || null,
+      });
     }
 
     // Salva @menções para o inbox de menções

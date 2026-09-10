@@ -95,7 +95,7 @@ export default function PainelProducaoTV() {
   const itens     = separar(ativa);
   const mostrados = itens.slice(0, MAX_LINHAS);
   const ocultos   = itens.length - mostrados.length;
-  const responsavelDe = (o) => (o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao) || '—';
+  const responsavelDe = (o) => (o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao) || null;
 
   return (
     <div style={{ background: '#0f172a', minHeight: '100vh', color: '#f8fafc', padding: '18px 22px', fontFamily: 'system-ui,sans-serif' }}>
@@ -151,8 +151,19 @@ export default function PainelProducaoTV() {
                       + (temSerralheria(o) ? ' · 🔩 ' + (o.serralheria_status || 'Serralheria pendente') : '')}
                   </div>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#cbd5e1', minWidth: 130, textAlign: 'right' }}>
-                  {responsavelDe(o)}
+                {/* "Ninguém pegou" x "alguém está tocando" é o sinal mais
+                    acionável do painel: a primeira é decisão pendente do
+                    gerente, a segunda é acompanhamento. Antes as duas
+                    apareciam iguais, com um traço. */}
+                <div style={{ minWidth: 150, textAlign: 'right' }}>
+                  {responsavelDe(o) ? (
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#cbd5e1' }}>👤 {responsavelDe(o)}</div>
+                  ) : (
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#fdba74',
+                      border: '1px dashed #fdba74', borderRadius: 6, padding: '2px 8px', display: 'inline-block' }}>
+                      SEM RESPONSÁVEL
+                    </div>
+                  )}
                 </div>
                 <div style={{ minWidth: 118, textAlign: 'right' }}>
                   <div style={{ fontSize: 17, fontWeight: 900 }}>{fmt(o.data_prevista_entrega)}</div>

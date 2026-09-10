@@ -2301,12 +2301,24 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       estDrop:  () => est.id,
     }));
 
+  // Pagina de cada coluna do kanban (10 cards por vez, como nos demais
+  // kanbans do sistema). Guardado por coluna: cada uma navega sozinha.
+  const [paginaCol, setPaginaCol] = useState<Record<string, number>>({});
+  const POR_PAGINA_CRM = 10;
+
   const renderKanban = () => (
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
       {SUPER_COLS.map(col => {
         const cards = opsFiltradas.filter(col.match);
         const estId = col.estDrop();
         const isDragOver = dragOver === col.id;
+        // Pagina apenas a exibição: `cards` (lista inteira) continua sendo o
+        // que o arrastar-e-soltar usa pra reordenar, senão mover um card
+        // quebraria ao trocar de página.
+        const totalPags = Math.max(1, Math.ceil(cards.length / POR_PAGINA_CRM));
+        const pagAtual = Math.min(paginaCol[col.id] || 0, totalPags - 1);
+        const inicioCol = pagAtual * POR_PAGINA_CRM;
+        const cardsVisiveis = cards.slice(inicioCol, inicioCol + POR_PAGINA_CRM);
 
         return (
           <div key={col.id} style={{ width: 205, flexShrink:0 }}>
@@ -2343,7 +2355,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 border: isDragOver ? '2px dashed #3b82f6' : '2px solid transparent',
               }}
             >
-              {cards.map(op => (
+              {cardsVisiveis.map(op => (
                 <div key={op.id}
                   onDragEnter={e => { e.preventDefault(); if (dragging && dragging !== op.id) setDragOverItem(op.id); }}
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
@@ -2393,6 +2405,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               ))}
 
               {/* Botão Adicionar (só em Aberto) */}
+              {/* Navegação da coluna — só aparece quando passa de uma página */}
+              {totalPags > 1 && (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4, marginTop:4 }}>
+                  <button onClick={() => setPaginaCol(p => ({ ...p, [col.id]: Math.max(0, pagAtual - 1) }))}
+                    disabled={pagAtual === 0}
+                    style={{ fontSize:10, fontWeight:800, padding:'1px 7px', borderRadius:4, cursor: pagAtual===0?'default':'pointer',
+                      border:'1px solid #cbd5e1', background:'#fff', color:'#475569', opacity: pagAtual===0?.35:1 }}>‹</button>
+                  <span style={{ fontSize:8, fontWeight:700, color:'#64748b' }}>
+                    {inicioCol + 1}–{Math.min(inicioCol + POR_PAGINA_CRM, cards.length)} de {cards.length}
+                  </span>
+                  <button onClick={() => setPaginaCol(p => ({ ...p, [col.id]: Math.min(totalPags - 1, pagAtual + 1) }))}
+                    disabled={pagAtual >= totalPags - 1}
+                    style={{ fontSize:10, fontWeight:800, padding:'1px 7px', borderRadius:4, cursor: pagAtual>=totalPags-1?'default':'pointer',
+                      border:'1px solid #cbd5e1', background:'#fff', color:'#475569', opacity: pagAtual>=totalPags-1?.35:1 }}>›</button>
+                </div>
+              )}
+
               {!col.terminal && estId && (
                 <div onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: estId }); setModalOp({}); }}
                   style={{ background:'white', border:'1px dashed #cbd5e1', borderRadius:5, padding:'5px 8px',
