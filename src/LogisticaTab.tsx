@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { acharAproveitamentos } from './AproveitamentoFrete';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { notificarEvento } from './whatsappHelper';
@@ -338,6 +339,45 @@ function FretesPanel({ currentUser }: any) {
   const [alcadasFrete, setAlcadasFrete]         = useState<any[]>([]);
   const [aprovacoesFrete, setAprovacoesFrete]   = useState<any[]>([]);
   const [respondendoAprovacao, setRespondendoAprovacao] = useState(false);
+
+  // ── Aproveitamento de frete ───────────────────────────────────────────────
+  // Sugere juntar envios da mesma região com entrega no mesmo período (ex:
+  // várias carretinhas pra mesma região na mesma semana cabem num caminhão só).
+  // Só sugere — juntar é decisão do usuário.
+  const [janelaDias, setJanelaDias] = useState(7);
+  const [juntando, setJuntando] = useState<string|null>(null);
+  const aproveitamentos = acharAproveitamentos(fretes, janelaDias);
+
+  const juntarGrupo = async (g: any) => {
+    if (!confirm(
+      `Juntar ${g.fretes.length} envios para ${g.regiao} numa carga só?
+
+` +
+      `Entregas entre ${g.dataMin.split('-').reverse().join('/')} e ${g.dataMax.split('-').reverse().join('/')}.
+` +
+      `Peso somado: ${g.pesoTotal} kg · ${g.volumesTotal} volume(s).
+
+` +
+      `Eles continuam como solicitações separadas, mas ficam marcados como a mesma carga para cotar juntos.`
+    )) return;
+    setJuntando(g.chave);
+    const grupoId = crypto.randomUUID();
+    const obs = `Carga agrupada: ${g.fretes.length} envios para ${g.regiao}`;
+    const { error } = await supabase.from('pcp_fretes')
+      .update({ grupo_envio_id: grupoId, grupo_envio_obs: obs })
+      .in('id', g.fretes.map((f:any) => f.id));
+    setJuntando(null);
+    if (error) { alert('Erro ao agrupar: ' + error.message); return; }
+    alert(`✅ ${g.fretes.length} envios agrupados. Cote uma vez só para a carga inteira.`);
+    fetchAll();
+  };
+
+  const desfazerGrupo = async (grupoId: string) => {
+    if (!confirm('Desfazer este agrupamento? Os envios voltam a ser cotados separadamente.')) return;
+    await supabase.from('pcp_fretes')
+      .update({ grupo_envio_id: null, grupo_envio_obs: null }).eq('grupo_envio_id', grupoId);
+    fetchAll();
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -736,7 +776,62 @@ function FretesPanel({ currentUser }: any) {
   const fmtDt = (d: string) => d ? new Date(d.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   const fmtDtHr = (d: string) => d ? new Date(d).toLocaleString('pt-BR') : '—';
 
+  const fmtBR = (d: string) => d ? d.split('-').reverse().join('/') : '—';
+
   return (
+    <>
+    {/* ── APROVEITAMENTO DE FRETE ──
+        Aparece só quando existe oportunidade real. Envio sem data prevista fica
+        de fora de propósito: sem data não dá pra afirmar que é o mesmo período,
+        e sugerir junção errada sai mais caro que não sugerir. */}
+    {aproveitamentos.length > 0 && (
+      <div className="sec-card" style={{ border:'2px solid #f59e0b', marginBottom:12 }}>
+        <div className="sec-hdr" style={{ background:'#fffbeb', borderBottom:'2px solid #f59e0b' }}>
+          <span style={{ color:'#78350f', fontWeight:800 }}>
+            💡 Aproveitamento de frete — {aproveitamentos.length} oportunidade(s)
+          </span>
+          <span style={{ fontSize:10, color:'#92400e' }}>
+            Mesma região, entrega em até{' '}
+            <select value={janelaDias} onChange={e=>setJanelaDias(Number(e.target.value))}
+              style={{ fontSize:10, padding:'1px 4px', borderRadius:4, border:'1px solid #fcd34d' }}>
+              <option value={7}>7 dias (mesma semana)</option>
+              <option value={15}>15 dias</option>
+              <option value={30}>30 dias</option>
+            </select>
+          </span>
+        </div>
+        <div className="sec-body" style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {aproveitamentos.map(g => (
+            <div key={g.chave} style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'8px 12px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                <div>
+                  <div style={{ fontWeight:800, fontSize:12, color:'#78350f' }}>
+                    📍 {g.regiao} — {g.fretes.length} envios
+                  </div>
+                  <div style={{ fontSize:10, color:'#92400e', marginTop:2 }}>
+                    Entregas entre {fmtBR(g.dataMin)} e {fmtBR(g.dataMax)} · {g.pesoTotal} kg · {g.volumesTotal} volume(s)
+                  </div>
+                </div>
+                <button className="acn-btn" style={{ background:'#d97706' }}
+                  disabled={juntando === g.chave} onClick={()=>juntarGrupo(g)}>
+                  {juntando === g.chave ? 'Agrupando...' : '🚛 Juntar numa carga'}
+                </button>
+              </div>
+              <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:3 }}>
+                {g.fretes.map((f:any) => (
+                  <div key={f.id} style={{ fontSize:10, color:'#78350f', background:'#fff',
+                    border:'1px solid #fde68a', borderRadius:4, padding:'3px 8px' }}>
+                    {f.descricao} · prev. {fmtBR(f.data_prevista)}
+                    {f.peso_total ? ` · ${f.peso_total} kg` : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
     <div className="sec-card">
       <div className="sec-hdr">
         <span>🚚 Fretes — Cotação de Transportadoras e Acompanhamento até Entrega</span>
@@ -927,7 +1022,24 @@ function FretesPanel({ currentUser }: any) {
                   ? {borderBottom:'1px solid #f1f5f9',background:'#fffdf0',boxShadow:'inset 3px 0 0 #eab308'}
                   : {borderBottom:'1px solid #f1f5f9'}}>
                   <td style={{padding:'9px 10px'}}>{f.direcao==='outbound' ? '📤 Outbound' : '📥 Inbound'}</td>
-                  <td style={{ padding:'9px 10px', maxWidth:160, wordBreak:'break-word' }}>{f.descricao}</td>
+                  <td style={{ padding:'9px 10px', maxWidth:160, wordBreak:'break-word' }}>
+                    {f.descricao}
+                    {/* quem for cotar precisa saber que este envio vai junto com outros */}
+                    {f.grupo_envio_id && (
+                      <div style={{ marginTop:3, display:'flex', alignItems:'center', gap:4, flexWrap:'wrap' }}>
+                        <span title={f.grupo_envio_obs || 'Agrupado com outros envios'}
+                          style={{ fontSize:8, fontWeight:800, background:'#fef3c7', color:'#92400e',
+                            border:'1px solid #fcd34d', borderRadius:3, padding:'1px 5px' }}>
+                          🚛 CARGA AGRUPADA
+                        </span>
+                        <button onClick={()=>desfazerGrupo(f.grupo_envio_id)}
+                          title="Desfazer agrupamento"
+                          style={{ fontSize:8, background:'none', border:'none', color:'#92400e', cursor:'pointer', textDecoration:'underline', padding:0 }}>
+                          desfazer
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td style={{padding:'9px 10px'}}>
                     {f.transportadora || '—'}
                     {f.transportadora && (f.numero_cte || f.codigo_rastreio) && (
@@ -1193,6 +1305,7 @@ function FretesPanel({ currentUser }: any) {
         </div>
       )}
     </div>
+    </>
   );
 }
 

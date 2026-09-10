@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
+import { soEnvio, fluxoLabel } from './FluxoEntrega';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -271,13 +272,26 @@ export default function PCPTab({ currentUser }) {
 
   // PCP só pode liberar quando Almox concluiu (100% OK ou com pendência aceita)
   // Falta de Material = PCP vê o alerta mas NÃO pode liberar — aguarda reposição
+  // OP de fluxo de envio NUNCA vai pra linha de producao, nem pela porta dos
+  // fundos do "Liberado com Pendencia": ela e separada, embalada e enviada.
+  // Sem esta guarda, faltar material num envio permitia o PCP mandar pra
+  // Adaptacao assim mesmo -- exatamente o que o fluxo_entrega existe pra evitar.
   const podeLiberar = (o) =>
-    o.status_geral === 'Kit OK - Aguardando PCP' ||           // Almox liberou 100%
-    o.status_almox === 'Liberado com Pendencia';              // Almox liberou c/ pendência
+    !soEnvio(o.fluxo_entrega) && (
+      o.status_geral === 'Kit OK - Aguardando PCP' ||         // Almox liberou 100%
+      o.status_almox === 'Liberado com Pendencia'             // Almox liberou c/ pendência
+    );
   const kitOk = (o) => podeLiberar(o); // mantido por compatibilidade com Envio Direto
 
+  // Criterio unico de "nao tem linha de producao": vale o fluxo_entrega quando
+  // estiver preenchido. O casamento por texto do tipo_projeto (criterio antigo,
+  // frágil) fica so como reserva pras OPs anteriores a esta regra, que estao
+  // sem fluxo -- senao os dois criterios discordariam entre si.
   const TIPOS_ENVIO_DIRETO = ['Envio de Material para Terceiro','Envio de Produto Vendido','Demanda Direta para Engenharia'];
-  const isEnvioDireto = (o) => o.item_envio === true || TIPOS_ENVIO_DIRETO.some(t => (o.tipo_projeto||'').includes(t));
+  const isEnvioDireto = (o) =>
+    o.fluxo_entrega
+      ? soEnvio(o.fluxo_entrega)
+      : (o.item_envio === true || TIPOS_ENVIO_DIRETO.some(t => (o.tipo_projeto||'').includes(t)));
 
   return (
     <div>
