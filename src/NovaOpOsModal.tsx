@@ -152,6 +152,20 @@ interface Props {
 
 export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, crmCard }: Props) {
   const [form, setForm]       = useState({ ...VAZIO });
+
+  // Dados vindos de uma Licitação vencida ("Preparar OP"): ela grava um
+  // prefill no localStorage. Isso existia mas ninguém lia — o único leitor era
+  // ComercialTab.tsx, que não é mais renderizado desde a unificação no CRM.
+  // Sem isto, o Fluxo de Entrega definido na licitação se perdia no caminho.
+  useEffect(() => {
+    try {
+      const bruto = localStorage.getItem('acn_nova_op_prefill');
+      if (!bruto) return;
+      localStorage.removeItem('acn_nova_op_prefill');
+      const pre = JSON.parse(bruto);
+      setForm(f => ({ ...f, ...pre }));
+    } catch { /* prefill é conveniência: se falhar, abre em branco mesmo */ }
+  }, []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState('');
   const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos

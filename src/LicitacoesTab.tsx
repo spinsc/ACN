@@ -7,6 +7,7 @@ import AgendaWidget from './AgendaWidget';
 import { UnreadBadge } from './useUnread';
 import { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
+import { FLUXOS, UFS } from './FluxoEntrega';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
@@ -1298,10 +1299,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     const prefill = {
       cliente_nome: licit.nome_projeto || '',
       modelo: licit.numero || '',
-      observacoes_comercial: `${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} vencida: ${licit.numero} — ${licit.nome_projeto}`,
+      // o que foi definido aqui no primeiro card segue com a OP
+      fluxo_entrega:  licit.fluxo_entrega  || '',
+      destino_cidade: licit.destino_cidade || '',
+      destino_uf:     licit.destino_uf     || '',
+      destino_cep:    licit.destino_cep    || '',
+      observacoes: `${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} vencida: ${licit.numero} — ${licit.nome_projeto}`,
     };
     localStorage.setItem('acn_nova_op_prefill', JSON.stringify(prefill));
-    alert('✅ Dados salvos!\n\nVá para a aba Comercial e clique em "+ Nova OP".');
+    alert('Dados salvos!' + '\n\n' + 'Va em Comercial/CRM e clique em "Nova OP / OS" - o formulario ja abre preenchido' + (licit.fluxo_entrega ? ', inclusive com o Fluxo de Entrega.' : '.' + '\n\n' + 'Atencao: o Fluxo de Entrega nao foi definido nesta licitacao - sera preciso escolher na criacao da OP.'));
   };
 
   // ── Toggle marcador ───────────────────────────────────────────────────────
@@ -1433,6 +1439,37 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
                 </select>
               </div>
+            </div>
+
+            {/* Fluxo de Entrega — mesma classificação usada na OP. Definida já aqui,
+                no primeiro card, para o processo nascer sabendo se vai ser adaptado
+                ou apenas separado e enviado. */}
+            <div style={{ ...campoDestaque('fluxo_entrega'), background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'7px 9px', marginBottom:6 }}>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#0369a1', textTransform:'uppercase', marginBottom:2 }}>Fluxo de Entrega</label>
+              <select value={formEdit.fluxo_entrega||''} onChange={e=>setF('fluxo_entrega',e.target.value)}
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #7dd3fc', borderRadius:4, fontSize:11 }}>
+                <option value="">— Ainda não definido —</option>
+                {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
+              </select>
+              <div style={{ fontSize:9, color:'#0369a1', marginTop:3 }}>
+                {formEdit.fluxo_entrega
+                  ? FLUXOS.find(f => f.valor === formEdit.fluxo_entrega)?.ajuda
+                  : 'Define se, ao virar OP, o processo vai para a Adaptação, para a Fabricação ou direto para envio.'}
+              </div>
+            </div>
+
+            {/* Destino — alimenta o aproveitamento de frete (mesma região/período) */}
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8 }}>
+              <div style={campoDestaque('destino_cidade')}><FInput label="Cidade de Entrega" value={formEdit.destino_cidade} onChange={v=>setF('destino_cidade',v)} /></div>
+              <div style={campoDestaque('destino_uf')}>
+                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>UF</label>
+                <select value={formEdit.destino_uf||''} onChange={e=>setF('destino_uf',e.target.value)}
+                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                  <option value="">—</option>
+                  {UFS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div style={campoDestaque('destino_cep')}><FInput label="CEP de Entrega" value={formEdit.destino_cep} onChange={v=>setF('destino_cep',v)} /></div>
             </div>
 
             <div style={campoDestaque('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
