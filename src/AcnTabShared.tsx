@@ -421,6 +421,36 @@ const Sec = ({ title }: { title: string }) => (
   </div>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VEÍCULO OU KIT — a célula "Veículo" das listas de OP.
+// OP de "Venda para Envio" não tem veículo: mostrar "⚠️ sem modelo / sem
+// chassi / sem placa" em vermelho seria falso alarme em toda tela por onde ela
+// passa (Engenharia, PCP, Almoxarifado, Fiscal, relatórios). No lugar, o kit.
+// Envio de material sem kit também não tem veículo: fica só a indicação.
+// Uma implementação só, para as telas não divergirem.
+// ─────────────────────────────────────────────────────────────────────────────
+export function VeiculoOuKit({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
+  const vazio = (v: any) => !v || !String(v).trim();
+  const alerta = (t: string) => <span style={{ color:'#dc2626', fontWeight:700 }}>⚠️ {t}</span>;
+  if (Array.isArray(o?.kit_itens) && o.kit_itens.length > 0) {
+    return (
+      <div style={{ color:'#0f766e', fontWeight:700 }}>
+        🧰 {o.kit_nome || 'Kit'} × {o.quantidade || 1}
+      </div>
+    );
+  }
+  if (soEnvio(o?.fluxo_entrega)) {
+    return <div style={{ color:'#94a3b8' }}>— sem veículo (envio)</div>;
+  }
+  return (
+    <>
+      <div>{vazio(o?.modelo) ? alerta('sem modelo') : o.modelo}</div>
+      <div style={{ color:'#94a3b8' }}>{vazio(o?.chassi) ? alerta('sem chassi') : `🔧 ${o.chassi}`}</div>
+      {!semPlaca && <div style={{ color:'#94a3b8' }}>{vazio(o?.placa) ? alerta('sem placa') : `🚘 ${o.placa}`}</div>}
+    </>
+  );
+}
+
 export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: any; onClose: () => void; currentUser?: any }) {
   const [opl, setOpl]       = useState<any>(oplProp);
   const [logs, setLogs]     = useState<any[]>([]);
@@ -643,7 +673,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         </div>
 
         {/* ── Veículo ── */}
-        <Sec title="🚗 Veículo" />
+        <Sec title={Array.isArray(opl.kit_itens) && opl.kit_itens.length ? "📦 Envio" : "🚗 Veículo"} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
           <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
           <Campo label="Chassi"                    value={opl.chassi} field="chassi" />

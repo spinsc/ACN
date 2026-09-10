@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuKit } from './AcnTabShared';
 import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { ResumoKit } from './KitVendaEnvio';
@@ -304,15 +304,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                         )}
                       </td>
                       <td style={{fontSize:10}}>
-                        {/* Envio (kit, material) não tem veículo: os alertas "sem modelo/chassi/
-                            placa" ali seriam falso alarme para o almoxarife. */}
-                        {soEnvio(o.fluxo_entrega) ? (
-                          <div style={{color:'#94a3b8'}}>— sem veículo (envio)</div>
-                        ) : (<>
-                          <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-                          <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-                          <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
-                        </>)}
+                        <VeiculoOuKit o={o} />
                       </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{ maxWidth:200, wordBreak:'break-word' }}>

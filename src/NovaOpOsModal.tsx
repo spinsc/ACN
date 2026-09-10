@@ -253,6 +253,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Adaptação por omissão — que é justamente o problema que isto resolve.
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
     if (form.tipo === 'OP' && ehVendaEnvio && !(form.kit?.itens?.length)) { setErro('Escolha ou crie o kit vendido.'); return; }
+    if (form.tipo === 'OP' && ehVendaEnvio && !(parseInt(String(form.quantidade)) >= 1)) { setErro('Informe a quantidade de kits vendidos.'); return; }
 
     setSalvando(true);
     try {
@@ -289,17 +290,17 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           destino_cidade:         form.destino_cidade?.trim() || null,
           destino_uf:             form.destino_uf || null,
           destino_cep:            form.destino_cep?.trim() || null,
-          chassi:                 (veiculo?.chassi || form.chassi) || null,
-          placa:                  (veiculo?.placa  || form.placa)  || null,
-          modelo:                 form.modelo || null,
+          chassi:                 ehVendaEnvio ? null : ((veiculo?.chassi || form.chassi) || null),
+          placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
+          modelo:                 ehVendaEnvio ? null : (form.modelo || null),
           quantidade:             semLote ? qty : 1,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
-          valor_mao_de_obra:      valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra),
-          valor_mao_de_obra_serralheria: valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria),
+          valor_mao_de_obra:      ehVendaEnvio ? null : (valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra)),
+          valor_mao_de_obra_serralheria: ehVendaEnvio ? null : (valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria)),
           data_entrada:           form.data_entrada,
           data_prevista_entrega:  form.prazo_entrega || null,
           prazo_garantia:         form.prazo_garantia?.trim() || null,
-          data_chegada_veiculo:   form.data_chegada_veiculo || null,
+          data_chegada_veiculo:   ehVendaEnvio ? null : (form.data_chegada_veiculo || null),
           cliente_nome:           form.cliente_nome.trim(),
           responsavel_comercial:  form.responsavel.trim(),
           observacoes_comercial:  form.observacoes || null,
@@ -307,12 +308,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
           crm_oportunidade_id:    crmCard?.id || null,
-          servico_terceiro:       !!form.servico_terceiro,
-          ...(form.servico_terceiro && form.tipos_servico_terceiro.length > 0
+          servico_terceiro:       !ehVendaEnvio && !!form.servico_terceiro,
+          ...(!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length > 0
             ? { tipos_servico_terceiro: form.tipos_servico_terceiro }
             : {}),
-          tipo_servico_terceiro:  form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
-          obs_servico_terceiro:   (form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
+          tipo_servico_terceiro:  !ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
+          obs_servico_terceiro:   (!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
           resumo_servicos:        form.resumo_servicos || null,
         });
 
@@ -507,7 +508,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   </div>
                 </div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:10, marginBottom:10 }}>
+              <div style={{ display:'grid', gridTemplateColumns: ehVendaEnvio ? '1fr' : '2fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo de Projeto *</div>
                   <select className="acn-input" style={{ width:'100%' }} value={form.tipo_projeto}
@@ -522,13 +523,16 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     )}
                   </select>
                 </div>
+                {/* Na Venda para Envio a quantidade é de KITS e mora no bloco do kit */}
+                {!ehVendaEnvio && (
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
-                    {ehVendaEnvio ? 'Qtd. de Kits' : soEnvio(fluxoEf) ? 'Quantidade' : 'Qtd. Veículos'}
+                    {soEnvio(fluxoEf) ? 'Quantidade' : 'Qtd. Veículos'}
                   </div>
                   <input className="acn-input" style={{ width:'100%' }} type="number" min={1} max={99}
                     value={form.quantidade} onChange={e => setF('quantidade', e.target.value)} />
                 </div>
+                )}
               </div>
 
               {/* Fluxo de entrega — é o que impede que item de puro envio caia na
@@ -553,14 +557,6 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               </div>
               )}
 
-              {ehVendaEnvio && (
-                <KitVendaEnvio kit={form.kit} qtdKits={form.quantidade} currentUser={currentUser}
-                  onChange={(k) => {
-                    setF('kit', k);
-                    // garantia do cadastro do kit vira sugestão, sem apagar o que já foi digitado
-                    if (k?.garantia_meses) setForm(f => f.prazo_garantia ? f : { ...f, prazo_garantia: `${k.garantia_meses} meses` });
-                  }} />
-              )}
 
               {/* Destino — pode ficar em branco agora e ser completado depois na
                   própria OPL; é o dado que o aproveitamento de frete vai usar. */}
@@ -624,6 +620,23 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                 </div>
               )}
 
+              {/* Venda para Envio: não há veículo. Placa, chassi, modelo, mão de obra,
+                  recebimento do veículo e serviço de terceiro (película, blindagem...)
+                  não se aplicam — no lugar deles, o kit vendido e a quantidade de kits. */}
+              {ehVendaEnvio ? (<>
+                <KitVendaEnvio kit={form.kit} currentUser={currentUser}
+                  qtdKits={form.quantidade} onQtdKits={(v) => setF('quantidade', v)}
+                  onChange={(k) => {
+                    setF('kit', k);
+                    // garantia do cadastro do kit vira sugestão, sem apagar o que já foi digitado
+                    if (k?.garantia_meses) setForm(f => f.prazo_garantia ? f : { ...f, prazo_garantia: `${k.garantia_meses} meses` });
+                  }} />
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor Total (R$)</div>
+                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 45000"
+                    value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
+                </div>
+              </>) : (<>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Placa</div>
@@ -735,6 +748,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   </div>
                 )}
               </div>
+              </>)}
             </>
           )}
 

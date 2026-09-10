@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { LinkOpl } from './AcnTabShared';
+import { LinkOpl, VeiculoOuKit } from './AcnTabShared';
 import Linkify from './Linkify';
 import { logChange, useFieldHighlight, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
@@ -180,9 +180,7 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
           <div style={{marginTop:3}}><PipelineStatus opl={opl} /></div>
           <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{opl.tipo_projeto}</div>
           <div style={{fontSize:10,marginTop:2}}>
-            <div>{semDado(opl.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : opl.modelo}</div>
-            <div style={{color:'#94a3b8'}}>{semDado(opl.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${opl.chassi}`}</div>
-            <div style={{color:'#94a3b8'}}>{semDado(opl.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${opl.placa}`}</div>
+            <VeiculoOuKit o={opl} />
           </div>
         </div>
         <div style={{textAlign:'right',minWidth:80}}>

@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, VeiculoOuKit } from './AcnTabShared';
 import OplAnexosWidget from './OplAnexosWidget';
 import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
@@ -101,9 +101,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
           )}
         </td>
         <td style={{fontSize:10}}>
-          <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-          <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-          <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+          <VeiculoOuKit o={o} />
         </td>
         <td>{o.cliente_nome || '—'}</td>
         <td>{o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
@@ -226,7 +224,7 @@ function CalendarioManutencao({ currentUser }) {
   const load = async () => {
     const [agRes, aguRes, sacRes] = await Promise.all([
       supabase.from('agendamentos_manutencao').select('*').order('data_agendamento', { ascending: true }),
-      supabase.from('oples').select('id,opl,chassi,cliente_nome,modelo,data_prevista_entrega')
+      supabase.from('oples').select('id,opl,chassi,cliente_nome,modelo,data_prevista_entrega,fluxo_entrega,quantidade,kit_nome,kit_itens')
         .in('status_geral', ['Aguardando Agendamento Manutenção','Manutenção Agendada'])
         .order('data_entrada', { ascending: false }),
       supabase.from('sac_ordens_servico').select('id,numero_os,cliente_nome,veiculo_modelo,numero_serie,data_provisionamento,periodo_provisionamento,status')

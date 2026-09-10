@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuKit } from './AcnTabShared';
 import { soEnvio, fluxoLabel } from './FluxoEntrega';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
@@ -52,9 +52,9 @@ export default function PCPTab({ currentUser }) {
       supabase.from('oples').select('*')
         .in('status_geral', ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP','Retrabalho'])
         .order('data_entrada', { ascending: false }),
-      supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_almox,obs_almox,responsavel_almox,data_kiting')
+      supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_almox,obs_almox,responsavel_almox,data_kiting,fluxo_entrega,quantidade,kit_nome,kit_itens')
         .in('status_almox', ['Falta de Material','Liberado com Pendencia']),
-      supabase.from('oples').select('id,opl,chassi,modelo,cliente_nome,status_geral,serralheria_status')
+      supabase.from('oples').select('id,opl,chassi,modelo,cliente_nome,status_geral,serralheria_status,fluxo_entrega,quantidade,kit_nome,kit_itens')
         .in('serralheria_status', ['Pendente','Concluido']).order('data_entrada', { ascending: false }),
       supabase.from('almoxarifado_solicitacoes_reposicao').select('*')
         .eq('status', 'Aguardando Liberação PCP').order('criado_em', { ascending: false }),
@@ -312,9 +312,7 @@ export default function PCPTab({ currentUser }) {
                   <tr key={o.id} style={{background: o.status_almox==='Falta de Material'?'#fff5f5':'#fff7ed'}}>
                     <td><strong style={{color:'#dc2626'}}>{o.opl}</strong></td>
                     <td style={{fontSize:10}}>
-                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                      <VeiculoOuKit o={o} />
                     </td>
                     <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                     <td>
@@ -365,8 +363,7 @@ export default function PCPTab({ currentUser }) {
                     <tr key={o.id} style={{background: o.serralheria_status==='Concluido' ? '#f0fdf4' : '#faf5ff'}}>
                       <td><strong style={{color:'#6d28d9'}}>{o.opl}</strong></td>
                       <td style={{fontSize:10}}>
-                        <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-                        <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                        <VeiculoOuKit o={o} semPlaca />
                       </td>
                       <td>{o.cliente_nome || '—'}</td>
                       <td><span style={{fontSize:9,color:'#64748b'}}>{o.status_geral}</span></td>
@@ -494,9 +491,7 @@ export default function PCPTab({ currentUser }) {
                       <td>{fmtDt(o.data_entrada)}</td>
                       <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                       <td style={{fontSize:10}}>
-                      <div>{semDado(o.modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.modelo}</div>
-                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-                      <div style={{color:'#94a3b8'}}>{semDado(o.placa) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : `🚘 ${o.placa}`}</div>
+                      <VeiculoOuKit o={o} />
                     </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                       <td style={{ maxWidth:110, wordBreak:'break-word' }}>{o.tipo_projeto}</td>

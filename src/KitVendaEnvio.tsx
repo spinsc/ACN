@@ -183,8 +183,20 @@ function CriarKit({ currentUser, onCriado, onCancelar }) {
   );
 }
 
+// Quantidade de kits vendidos — mora DENTRO do bloco do kit: na Venda para
+// Envio ela substitui a "Qtd. Veículos", que não se aplica.
+function CampoQtdKits({ qtdKits, onQtdKits }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+      <span style={{ fontSize:9, fontWeight:700, color:'#475569' }}>Quantidade de kits vendidos *</span>
+      <input className="acn-input" type="number" min={1} max={9999} style={{ width:90, textAlign:'right' }}
+        value={qtdKits} onChange={e => onQtdKits(e.target.value)} />
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
-export default function KitVendaEnvio({ kit, onChange, qtdKits, currentUser }) {
+export default function KitVendaEnvio({ kit, onChange, qtdKits, onQtdKits, currentUser }) {
   const [modo, setModo] = useState('escolher');   // 'escolher' | 'criar'
   const [kits, setKits] = useState([]);
   const [filtro, setFiltro] = useState('');
@@ -216,6 +228,7 @@ export default function KitVendaEnvio({ kit, onChange, qtdKits, currentUser }) {
           <div style={rotulo}>🧰 Kit vendido: {kit.nome}</div>
           <button type="button" onClick={() => onChange(null)} style={btn('#0f766e', false)}>Trocar kit</button>
         </div>
+        <CampoQtdKits qtdKits={qtdKits} onQtdKits={onQtdKits} />
         <TabelaKit itens={kit.itens} qtdKits={qtdKits} />
       </div>
     );
@@ -231,6 +244,10 @@ export default function KitVendaEnvio({ kit, onChange, qtdKits, currentUser }) {
         {modo === 'escolher'
           ? <button type="button" onClick={() => setModo('criar')} style={btn('#0f766e')}>+ Criar novo kit</button>
           : null}
+      </div>
+      <CampoQtdKits qtdKits={qtdKits} onQtdKits={onQtdKits} />
+      <div style={{ fontSize:9, color:'#64748b', marginBottom:6 }}>
+        Escolha um kit pré-configurado abaixo, ou crie e configure um agora.
       </div>
 
       {modo === 'criar' ? (
