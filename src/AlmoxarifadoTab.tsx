@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls } from './AcnTabShared';
+import { soEnvio, fluxoLabel, UFS } from './FluxoEntrega';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -82,6 +83,70 @@ export default function AlmoxarifadoTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: statusGeral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+  };
+
+  // ── Embalagem (Fase 2) ─────────────────────────────────────────────────────
+  // Só para OP de fluxo "envio": não vai pra Produção, vai ser embalada e
+  // enviada. Aqui o Almoxarifado fecha a caixa (peso/medidas/volumes) e isso
+  // CRIA a solicitação de frete em pcp_fretes — que é o que faltava pro módulo
+  // de Fretes (existe desde ago/2026 e estava com 0 linhas) ser alimentado.
+  const [modalEmbalagem, setModalEmbalagem] = useState<any|null>(null);
+  const [embForm, setEmbForm] = useState<any>({});
+  const [salvandoEmb, setSalvandoEmb] = useState(false);
+
+  const abrirModalEmbalagem = (opl) => {
+    setEmbForm({
+      seriais: opl.seriais_equipamentos || '',
+      peso_total: '', volumes: '1',
+      altura: '', largura: '', comprimento: '',
+      destino_cidade: opl.destino_cidade || '',
+      destino_uf: opl.destino_uf || '',
+      destino_cep: opl.destino_cep || '',
+      observacoes: '',
+    });
+    setModalEmbalagem(opl);
+  };
+
+  const confirmarEmbalagem = async () => {
+    const f = embForm;
+    if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
+    if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
+    if (!f.destino_cidade?.trim() || !f.destino_uf) {
+      alert('Informe a cidade e a UF de entrega — sem isso a Logística não consegue cotar o frete.'); return;
+    }
+    setSalvandoEmb(true);
+    const opl = modalEmbalagem;
+    const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
+
+    // 1) a OP sai do caminho da produção e passa a aguardar a cotação de frete
+    await setAlmox(opl, 'Kit OK', 'Aguardando Cotacao Frete', f.observacoes || '', {
+      seriais_equipamentos: f.seriais.trim(),
+      destino_cidade: f.destino_cidade.trim(),
+      destino_uf: f.destino_uf,
+      destino_cep: f.destino_cep?.trim() || null,
+    });
+
+    // 2) nasce a solicitação de frete (status default 'Cotação') pra Logística
+    const { error } = await supabase.from('pcp_fretes').insert([{
+      direcao: 'outbound',
+      descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim(),
+      destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
+      cep_destino: f.destino_cep?.trim() || null,
+      data_prevista: opl.data_prevista_entrega || null,
+      quantidade_volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
+      peso_total:         num(f.peso_total),
+      medida_altura:      num(f.altura),
+      medida_largura:     num(f.largura),
+      medida_comprimento: num(f.comprimento),
+      vinculo_tipo: 'opl', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}`,
+      observacoes: f.observacoes || null,
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+    }]);
+    setSalvandoEmb(false);
+    if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
+    else { alert(`✅ Embalagem registrada. Solicitação de frete aberta para a Logística cotar (OP ${opl.opl}).`); }
+    setModalEmbalagem(null);
+    fetchAll();
   };
 
   const abrirModalSeriais = (opl, pendenciaSanada=false) => {
@@ -230,9 +295,17 @@ export default function AlmoxarifadoTab({ currentUser }) {
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                           {o.status_almox !== 'Kit OK' && (
-                            <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirModalSeriais(o)}>
-                              KITING 100%
-                            </button>
+                            soEnvio(o.fluxo_entrega) ? (
+                              <button className="acn-btn" style={{background:'#0f766e'}}
+                                title="Esta OP não passa por produção: separar, embalar e enviar"
+                                onClick={()=>abrirModalEmbalagem(o)}>
+                                📦 EMBALAR E ENVIAR
+                              </button>
+                            ) : (
+                              <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirModalSeriais(o)}>
+                                KITING 100%
+                              </button>
+                            )
                           )}
                           <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalFalta(o);setObsFalta('');}}>
                             FALTA MATERIAL
@@ -392,6 +465,92 @@ export default function AlmoxarifadoTab({ currentUser }) {
       )}
 
       {/* MODAL SERIAIS — obrigatorio para confirmar Kiting 100% (ou sanar pendencia) */}
+      {/* Modal de embalagem — só aparece para OP de fluxo "envio". */}
+      {modalEmbalagem && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+          onClick={e=>{ if(e.target===e.currentTarget) setModalEmbalagem(null); }}>
+          <div style={{ background:'#fff', borderRadius:8, width:'min(560px,96vw)', maxHeight:'92vh', overflow:'auto', padding:'18px 20px' }}>
+            <div style={{ fontWeight:800, fontSize:14, color:'#0f766e', marginBottom:2 }}>
+              📦 Embalar e enviar — OP {modalEmbalagem.opl}
+            </div>
+            <div style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
+              {modalEmbalagem.cliente_nome} · {fluxoLabel(modalEmbalagem.fluxo_entrega)} · não passa por produção
+            </div>
+
+            <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Números de série *</div>
+            <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10 }}
+              value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
+              placeholder="Um por linha" />
+
+            <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
+              Embalagem (vai para a cotação de frete)
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8, marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Peso total (kg) *</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.peso_total||''}
+                  onChange={e=>setEmbForm(f=>({...f, peso_total:e.target.value}))} placeholder="Ex: 12,5" />
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Volumes</div>
+                <input className="acn-input" type="number" min={1} style={{width:'100%'}} value={embForm.volumes||'1'}
+                  onChange={e=>setEmbForm(f=>({...f, volumes:e.target.value}))} />
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Altura (cm)</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.altura||''}
+                  onChange={e=>setEmbForm(f=>({...f, altura:e.target.value}))} />
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Largura (cm)</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.largura||''}
+                  onChange={e=>setEmbForm(f=>({...f, largura:e.target.value}))} />
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Comprimento (cm)</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.comprimento||''}
+                  onChange={e=>setEmbForm(f=>({...f, comprimento:e.target.value}))} />
+              </div>
+            </div>
+
+            <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
+              Destino da entrega
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8, marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Cidade *</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cidade||''}
+                  onChange={e=>setEmbForm(f=>({...f, destino_cidade:e.target.value}))} />
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>UF *</div>
+                <select className="acn-input" style={{width:'100%'}} value={embForm.destino_uf||''}
+                  onChange={e=>setEmbForm(f=>({...f, destino_uf:e.target.value}))}>
+                  <option value="">—</option>
+                  {UFS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>CEP</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cep||''}
+                  onChange={e=>setEmbForm(f=>({...f, destino_cep:e.target.value}))} placeholder="00000-000" />
+              </div>
+            </div>
+
+            <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
+            <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:14 }}
+              value={embForm.observacoes||''} onChange={e=>setEmbForm(f=>({...f, observacoes:e.target.value}))} />
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEmbalagem(null)}>Cancelar</button>
+              <button className="acn-btn" style={{background:'#0f766e'}} disabled={salvandoEmb} onClick={confirmarEmbalagem}>
+                {salvandoEmb ? 'Salvando...' : '📦 Finalizar e solicitar frete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalSeriais && (
         <div className="modal-overlay">
           <div className="modal-box">
