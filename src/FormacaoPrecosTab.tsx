@@ -1825,6 +1825,31 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     return [...prev.slice(0, idx), ...novas, ...prev.slice(idx + 1)];
   });
 
+  // Troca de versão pelo seletor. Num <select> as setas do teclado trocam a
+  // opção na hora — dá para mudar de versão sem querer, o que as antigas
+  // "pílulas" não permitiam. Por isso, se há alteração não salva: confirma e
+  // grava o rascunho JÁ (o automático espera 1,2s sem digitar, e a troca
+  // cancelaria essa gravação pendente). Sem alteração, troca direto.
+  const trocarVersao = (id: string) => {
+    const m = formacoesVinculo.find((x: any) => x.id === id);
+    if (!m || m.id === editandoId) return;
+    if (temNaoSalvo) {
+      if (!window.confirm(
+        'Esta formação tem alterações NÃO salvas.\n\n' +
+        'Trocar de versão mesmo assim? As alterações ficam no rascunho desta versão ' +
+        'e são oferecidas de volta quando você abri-la de novo.')) return;
+      try {
+        localStorage.setItem(chaveRascunho(editandoId), JSON.stringify({
+          conteudo: edicaoAtual(),
+          salvoEm: new Date().toISOString(),
+          usuario: currentUser?.nome || currentUser?.email || null,
+        }));
+      } catch { /* rascunho é best-effort */ }
+    }
+    carregarModelo(m);
+    setEditandoId(m.id);
+  };
+
   const carregarModelos = useCallback(async () => {
     setCarregando(true);
     const { data } = await supabase.from('cotacoes_precos').select('*').order('criado_em', { ascending: false });
@@ -2541,16 +2566,26 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                       Versões ({formacoesVinculo.length})
                     </span>
                   )}
-                  {formacoesVinculo.map((m: any) => (
-                    <button key={m.id} onClick={() => { carregarModelo(m); setEditandoId(m.id); }}
-                      title={rotuloFormacao(m)}
-                      style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer',
-                        border: m.vencedora ? '1.5px solid #f59e0b' : '1px solid #bfdbfe',
-                        background: editandoId === m.id ? '#1e40af' : '#eff6ff',
-                        color: editandoId === m.id ? '#fff' : '#1e40af' }}>
-                      {rotuloFormacao(m)}
-                    </button>
-                  ))}
+                  {/* Versões num seletor (antes eram "pílulas" lado a lado, que
+                      com várias versões ocupavam várias linhas). Mesmo
+                      carregamento de antes — ver trocarVersao. */}
+                  {formacoesVinculo.length > 0 && (() => {
+                    const atual = formacoesVinculo.find((m: any) => m.id === editandoId);
+                    return (
+                      <select value={atual ? atual.id : ''} onChange={e => trocarVersao(e.target.value)}
+                        title={atual ? rotuloFormacao(atual) : 'Escolha a versão'}
+                        style={{ flex:'1 1 320px', maxWidth:560, minWidth:0, padding:'5px 10px', fontSize:11, fontWeight:700,
+                          borderRadius:6, cursor:'pointer', background:'#eff6ff', color:'#1e40af',
+                          border: atual?.vencedora ? '1.5px solid #f59e0b' : '1px solid #93c5fd' }}>
+                        {!atual && (
+                          <option value="">{editandoId ? '— outra formação carregada —' : '— Nova formação (ainda não salva) —'}</option>
+                        )}
+                        {formacoesVinculo.map((m: any) => (
+                          <option key={m.id} value={m.id}>{rotuloFormacao(m)}</option>
+                        ))}
+                      </select>
+                    );
+                  })()}
                   <button onClick={novaQuotacao}
                     style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px dashed #94a3b8',
                       background:'#f8fafc', color:'#64748b' }}>
