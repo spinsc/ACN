@@ -9,8 +9,7 @@ import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
-import { soEnvio } from './FluxoEntrega';
-import { ResumoKit } from './KitVendaEnvio';
+import { soEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -422,22 +421,17 @@ const Sec = ({ title }: { title: string }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VEÍCULO OU KIT — a célula "Veículo" das listas de OP.
-// OP de "Venda para Envio" não tem veículo: mostrar "⚠️ sem modelo / sem
-// chassi / sem placa" em vermelho seria falso alarme em toda tela por onde ela
-// passa (Engenharia, PCP, Almoxarifado, Fiscal, relatórios). No lugar, o kit.
-// Envio de material sem kit também não tem veículo: fica só a indicação.
+// VEÍCULO OU ENVIO — a célula "Veículo" das listas de OP.
+// Venda para Envio (e envio de material em geral) não tem veículo: mostrar
+// "⚠️ sem modelo / sem chassi / sem placa" em vermelho seria falso alarme em
+// toda tela por onde a OP passa. No lugar, o que ela é e a quantidade.
 // Uma implementação só, para as telas não divergirem.
 // ─────────────────────────────────────────────────────────────────────────────
-export function VeiculoOuKit({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
+export function VeiculoOuEnvio({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
   const vazio = (v: any) => !v || !String(v).trim();
   const alerta = (t: string) => <span style={{ color:'#dc2626', fontWeight:700 }}>⚠️ {t}</span>;
-  if (Array.isArray(o?.kit_itens) && o.kit_itens.length > 0) {
-    return (
-      <div style={{ color:'#0f766e', fontWeight:700 }}>
-        🧰 {o.kit_nome || 'Kit'} × {o.quantidade || 1}
-      </div>
-    );
+  if (o?.tipo_projeto === TIPO_VENDA_ENVIO) {
+    return <div style={{ color:'#0f766e', fontWeight:700 }}>📦 Venda para envio · {o.quantidade || 1} un.</div>;
   }
   if (soEnvio(o?.fluxo_entrega)) {
     return <div style={{ color:'#94a3b8' }}>— sem veículo (envio)</div>;
@@ -673,7 +667,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         </div>
 
         {/* ── Veículo ── */}
-        <Sec title={Array.isArray(opl.kit_itens) && opl.kit_itens.length ? "📦 Envio" : "🚗 Veículo"} />
+        <Sec title={soEnvio(opl.fluxo_entrega) ? "📦 Envio" : "🚗 Veículo"} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
           <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
           <Campo label="Chassi"                    value={opl.chassi} field="chassi" />
@@ -686,14 +680,6 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} field="data_aceite_cliente" />
           <Campo label="🛡️ Prazo de Garantia"      value={opl.prazo_garantia} field="prazo_garantia" />
         </div>
-
-        {/* ── Kit vendido (Venda para Envio) ── */}
-        {Array.isArray(opl.kit_itens) && opl.kit_itens.length > 0 && (
-          <>
-            <Sec title="🧰 Kit Vendido" />
-            <ResumoKit opl={opl} />
-          </>
-        )}
 
         {/* ── Financeiro ── */}
         {(opl.valor_total != null || opl.valor_mao_de_obra != null || opl.valor_mao_de_obra_serralheria != null) && (

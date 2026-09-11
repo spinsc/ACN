@@ -1,10 +1,9 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuKit } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
-import { ResumoKit } from './KitVendaEnvio';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -304,15 +303,10 @@ export default function AlmoxarifadoTab({ currentUser }) {
                         )}
                       </td>
                       <td style={{fontSize:10}}>
-                        <VeiculoOuKit o={o} />
+                        <VeiculoOuEnvio o={o} />
                       </td>
                       <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                      <td style={{ maxWidth:200, wordBreak:'break-word' }}>
-                        {o.tipo_projeto}
-                        {/* Venda para Envio: a lista do que separar, já multiplicada
-                            pela quantidade de kits — é o que o almoxarife precisa. */}
-                        <ResumoKit opl={o} compacto />
-                      </td>
+                      <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                       <td>
                         {o.status_bom === 'BOM Liberado'
                           ? <span className="acn-badge" style={{background:'#22c55e'}}>BOM OK</span>

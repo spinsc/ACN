@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuKit } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
@@ -402,7 +402,7 @@ export default function EngenhariaTab({ currentUser }) {
                           )}
                         </td>
                         <td style={{fontSize:10}}>
-                          <VeiculoOuKit o={o} />
+                          <VeiculoOuEnvio o={o} />
                         </td>
                         <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                         <td style={{ maxWidth:140, wordBreak:'break-word' }}>{o.tipo_projeto}</td>

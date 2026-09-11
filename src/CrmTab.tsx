@@ -12,7 +12,7 @@ import RichTextInput, { pareceHtmlFormatado } from './RichTextInput';
 import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
-import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuKit } from './AcnTabShared';
+import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
@@ -1140,7 +1140,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,kit_nome,kit_itens')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOplsEmAberto(data || []);
@@ -3047,7 +3047,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                                   🚦 {fluxoLabel(o.fluxo_entrega)}
                                 </div>
                                 <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
-                                <VeiculoOuKit o={o} />
+                                <VeiculoOuEnvio o={o} />
                               </>)}
                               {!semDado(o.cnpj_faturamento) && <div style={{ color:'#7c3aed', fontWeight:700 }}>🏢 {o.cnpj_faturamento}</div>}
                             </td>

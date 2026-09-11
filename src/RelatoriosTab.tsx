@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import { VeiculoOuKit } from './AcnTabShared';
+import { VeiculoOuEnvio } from './AcnTabShared';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { labelHierarquico } from './CentroCustoShared';
@@ -151,7 +151,7 @@ function RelProducao() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples').select(
-      'id,opl,chassi,modelo,placa,tipo_projeto,status_geral,responsavel_producao,tecnicos_producao,data_inicio_producao,data_fim_producao,tempo_producao_horas,fluxo_entrega,quantidade,kit_nome,kit_itens'
+      'id,opl,chassi,modelo,placa,tipo_projeto,status_geral,responsavel_producao,tecnicos_producao,data_inicio_producao,data_fim_producao,tempo_producao_horas,fluxo_entrega,quantidade'
     )
       .gte('data_entrada', ini+'T00:00:00')
       .lte('data_entrada', fim+'T23:59:59')
@@ -227,7 +227,7 @@ function RelProducao() {
                       <tr key={o.id}>
                         <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                         <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                         <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                         <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
@@ -253,7 +253,7 @@ function RelProducao() {
                   <tr key={o.id}>
                     <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                     <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                     <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                     <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
@@ -289,7 +289,7 @@ function RelOplsGeral() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples').select(
-      'id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,tempo_producao_horas,responsavel_engenharia,responsavel_producao,fluxo_entrega,quantidade,kit_nome,kit_itens'
+      'id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,tempo_producao_horas,responsavel_engenharia,responsavel_producao,fluxo_entrega,quantidade'
     )
       .gte('data_entrada', ini+'T00:00:00')
       .lte('data_entrada', fim+'T23:59:59')
@@ -368,7 +368,7 @@ function RelOplsGeral() {
                       <td>{fmtData(o.data_entrada)}</td>
                       <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                       <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                       <td style={{ maxWidth:140, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
                       <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
@@ -399,7 +399,7 @@ function RelOplsFinalizadas() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,data_entrega,data_fim_producao,cliente_nome,responsavel_producao,fluxo_entrega,quantidade,kit_nome,kit_itens')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,data_entrega,data_fim_producao,cliente_nome,responsavel_producao,fluxo_entrega,quantidade')
       .in('status_geral', STATUS_FINAL)
       .gte('data_entrada', ini+'T00:00:00')
       .lte('data_entrada', fim+'T23:59:59')
@@ -443,7 +443,7 @@ function RelOplsFinalizadas() {
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                   <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td style={{fontSize:9}}>{o.tipo_projeto}</td>
@@ -480,7 +480,7 @@ function RelOplsPorSetor() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,fluxo_entrega,quantidade,kit_nome,kit_itens')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,fluxo_entrega,quantidade')
       .not('status_geral','in','("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     setOps(data || []);
@@ -529,7 +529,7 @@ function RelOplsPorSetor() {
               return <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                 <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td style={{fontSize:9}}>{o.tipo_projeto}</td>
@@ -556,7 +556,7 @@ function RelOplsAtrasadas() {
     setCarregando(true);
     const agora = new Date().toISOString();
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao,fluxo_entrega,quantidade,kit_nome,kit_itens')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao,fluxo_entrega,quantidade')
       .not('status_geral','in','("Faturado","Cancelado","Faturado e Disponivel para Entrega")')
       .lt('data_prevista_entrega', agora)
       .not('data_prevista_entrega','is',null)
@@ -604,7 +604,7 @@ function RelOplsAtrasadas() {
               <tr key={o.id} style={{background:'#fef2f2'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                 <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td><strong style={{color:'#dc2626'}}>{porSetor(o)}</strong></td>
@@ -636,7 +636,7 @@ function RelRecebimentosEnvios() {
         .gte('data_prevista_recebimento', ini)
         .lte('data_prevista_recebimento', fim)
         .order('data_prevista_recebimento', { ascending: true }),
-      supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrega,data_prevista_entrega,cliente_nome,fluxo_entrega,quantidade,kit_nome,kit_itens')
+      supabase.from('oples').select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrega,data_prevista_entrega,cliente_nome,fluxo_entrega,quantidade')
         .in('status_geral',['Faturado e Disponivel para Entrega','Faturado'])
         .gte('data_entrada', ini+'T00:00:00')
         .lte('data_entrada', fim+'T23:59:59')
@@ -705,7 +705,7 @@ function RelRecebimentosEnvios() {
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                   <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                   <td>{o.cliente_nome||'—'}</td>
                   <td style={{fontSize:9}}>{o.tipo_projeto}</td>
@@ -800,7 +800,7 @@ function RelOplsParadas() {
   const buscar = async () => {
     setCarregando(true);
     const { data } = await supabase.from('oples')
-      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao,fluxo_entrega,quantidade,kit_nome,kit_itens')
+      .select('id,opl,chassi,modelo,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,cliente_nome,responsavel_engenharia,responsavel_producao,fluxo_entrega,quantidade')
       .in('status_geral', STATUS_PARADA)
       .order('data_entrada', { ascending: true });
     setOps(data || []);
@@ -838,7 +838,7 @@ function RelOplsParadas() {
               <tr key={o.id} style={{background:'#fff7ed'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
                 <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                 <td>{o.cliente_nome||'—'}</td>
                 <td><span className="acn-badge" style={{background:'#f97316',fontSize:8}}>{o.status_geral}</span></td>
@@ -1405,7 +1405,7 @@ function RelOpsOssEmServico() {
     setCarregando(true);
     const [opsRes, ossRes] = await Promise.all([
       supabase.from('oples').select(
-        'id,opl,placa,chassi,modelo,cliente_nome,status_geral,observacoes_atencao,obs_devolucao,obs_devolucao_pcp,obs_devolucao_producao,obs_reprovacao_cq,obs_almox,fluxo_entrega,quantidade,kit_nome,kit_itens'
+        'id,opl,placa,chassi,modelo,cliente_nome,status_geral,observacoes_atencao,obs_devolucao,obs_devolucao_pcp,obs_devolucao_producao,obs_reprovacao_cq,obs_almox,fluxo_entrega,quantidade,tipo_projeto'
       ).order('opl'),
       supabase.from('sac_ordens_servico').select(
         'id,numero_os,numero_serie,modelo,cliente_nome,status,observacoes,observacoes_manutencao,observacoes_lab,motivo_reprovacao,obs_reprovacao_cq'
@@ -1499,7 +1499,7 @@ function RelOpsOssEmServico() {
                     <td style={{textAlign:'center',fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
                     <td style={{fontSize:10}}>
                       {/* OP: mesma célula das demais listas (kit/envio não têm veículo) */}
-                      {l.tipo === 'OP' && l._op ? <VeiculoOuKit o={l._op} /> : (<>
+                      {l.tipo === 'OP' && l._op ? <VeiculoOuEnvio o={l._op} /> : (<>
                       <div>{l.modelo==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : l.modelo}</div>
                       <div style={{color:'#94a3b8'}}>{l.chassi==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${l.chassi}`}</div>
                       <div style={{color:'#94a3b8'}}>{l.placa==='—' ? (l.tipo==='OP' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'var(--text-muted)'}}>—</span>) : `🚘 ${l.placa}`}</div>

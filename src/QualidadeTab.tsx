@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuKit } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -234,7 +234,7 @@ export default function QualidadeTab({ currentUser }) {
                   <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><LinkOpl opl={o} currentUser={currentUser} /></td>
                     <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>

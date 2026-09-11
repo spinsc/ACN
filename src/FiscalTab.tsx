@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuKit } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
@@ -307,7 +307,7 @@ export default function FiscalTab({ currentUser }) {
                       {ehLote(o) && <div><span style={{fontSize:8,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10}}>🔗 LOTE</span></div>}
                     </td>
                     <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                     <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
                     <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
@@ -365,7 +365,7 @@ export default function FiscalTab({ currentUser }) {
                   <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
                     <td><LinkOpl opl={o} currentUser={currentUser} color="#22c55e" /></td>
                     <td style={{fontSize:10}}>
-                      <VeiculoOuKit o={o} />
+                      <VeiculoOuEnvio o={o} />
                     </td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>
