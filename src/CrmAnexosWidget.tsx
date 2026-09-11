@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { contentTypeUpload } from './FormatosArquivo';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -69,10 +70,8 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
       const f = files[i];
       const safe = sanitize(f.name);
       const path = `crm-anexos/${op.id}/${Date.now()}_${safe}`;
-      // Office files: força octet-stream (mais compatível com o bucket do
-      // que o content-type que o navegador reporta pra .doc/.docx/.xlsx/etc)
-      const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
-      const ct = officeExts.test(f.name) ? 'application/octet-stream' : f.type;
+      // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
+      const ct = contentTypeUpload(f);
       const { data: up, error } = await supabase.storage
         .from('acn-media')
         .upload(path, f, { upsert: true, contentType: ct });

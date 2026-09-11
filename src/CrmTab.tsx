@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { contentTypeUpload } from './FormatosArquivo';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
@@ -1209,9 +1210,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (abrirUploadFile) {
       const ext = abrirUploadFile.name.split('.').pop();
       const path = `crm-docs/${modalAbrir.id}/${abrirTabDir}/${Date.now()}.${ext}`;
-      // Office files: força octet-stream, mesmo ajuste já usado em CrmAnexosWidget.tsx
-      const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
-      const ct = officeExts.test(abrirUploadFile.name) ? 'application/octet-stream' : abrirUploadFile.type;
+      // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
+      const ct = contentTypeUpload(abrirUploadFile);
       const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
       if (upErr) {
         alert(`❌ Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);

@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
 import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo } from './FluxoEntrega';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -23,8 +24,7 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
       const safe = oplNumero.replace(/[^a-zA-Z0-9-]/g, '_');
       const safeName = f.name.replace(/[^a-zA-Z0-9_\-\.]/g, '_').slice(0, 100);
       const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
-      const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
-      const ct = officeExts.test(f.name) ? 'application/octet-stream' : f.type;
+      const ct = contentTypeUpload(f);
       const { data: up, error } = await supabase.storage.from('acn-media').upload(path, f, { upsert: true, contentType: ct });
       if (!error && up) {
         const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
@@ -47,7 +47,7 @@ function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
         padding:'7px 16px', fontSize:11, fontWeight:700, marginBottom:10 }}>
         {uploading ? 'Enviando...' : '📎 Selecionar Arquivos'}
         <input ref={ref} type="file" multiple disabled={uploading}
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+          accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.txt`}
           onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
           style={{ display:'none' }} />
       </label>

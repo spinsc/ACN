@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
 import { normalizarBusca } from './SearchUtils';
+import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
+import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -97,20 +99,24 @@ function parseValorBool(v: any) {
 
 function parseNumero(v: any) {
   if (v === '' || v == null) return 0;
-  const n = Number(String(v).replace(',', '.'));
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  // Texto (CSV/TXT, célula formatada como texto): aceita "R$ 1.234,56", "16%",
+  // "10,5" e também o americano "1,234.56" — o separador que aparece por
+  // último é o decimal; o outro é de milhar.
+  let s = String(v).replace(/[R$%\s]/g, '');
+  const virgula = s.lastIndexOf(','), ponto = s.lastIndexOf('.');
+  if (virgula > ponto) s = s.replace(/\./g, '').replace(',', '.');
+  else if (virgula >= 0) s = s.replace(/,/g, '');
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 
-// Lê um arquivo .xlsx/.xls/.csv e retorna os itens já mapeados para o schema de cadastro_itens
+// Lê a planilha (qualquer formato — ver LerPlanilha.ts) e retorna os itens já
+// mapeados para o schema de cadastro_itens
 async function lerArquivoItens(file: File): Promise<any[]> {
-  const ehCsv = /\.csv$/i.test(file.name);
-  // CSV é texto puro sem metadado de encoding — decodifica como UTF-8 explicitamente
-  // (o parser binário do XLSX assume codepage 1252 para CSV e corrompe acentos/cabeçalhos).
-  const wb = ehCsv
-    ? XLSX.read(await file.text(), { type: 'string' })
-    : XLSX.read(await file.arrayBuffer(), { type: 'array' });
-  const primeiraAba = wb.SheetNames[0];
-  const linhas: any[] = XLSX.utils.sheet_to_json(wb.Sheets[primeiraAba], { defval: '' });
+  const wb = await lerPlanilha(file);
+  const aba = primeiraAbaComDados(wb);
+  const linhas: any[] = aba ? XLSX.utils.sheet_to_json(aba, { defval: '' }) : [];
 
   return linhas.map(linha => {
     const item: any = { codigo: null, nome: '', unidade: 'UN', moeda: 'REAL', ativo: true };
@@ -601,14 +607,14 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept={EXT_PLANILHAS_IMPORTACAO}
             onChange={handleArquivoSelecionado}
             style={{ display: 'none' }}
           />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importando}
-            title="Importar itens de planilha Excel (.xlsx) ou CSV"
+            title="Importar itens de planilha (Excel .xlsx/.xlsm/.xlsb/.xls, LibreOffice .ods, Numbers, CSV...)"
             style={{
               padding: '7px 12px', background: '#fff', color: '#0f766e', border: '1px solid #0f766e',
               borderRadius: 6, cursor: importando ? 'wait' : 'pointer', fontWeight: 700, fontSize: 11,

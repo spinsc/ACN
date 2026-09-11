@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { supabase } from './supabaseClient';
+import { EXT_PLANILHAS } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { normalizarBusca } from './SearchUtils';
@@ -768,7 +769,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               <label style={{ fontSize:10, color:'#6b7280', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
                 📎 Anexar arquivo
                 <input type="file" multiple ref={fileRef}
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp"
+                  accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp`}
                   onChange={e => { if (e.target.files?.length) uploadFiles(e.target.files); }}
                   style={{ display:'none' }} />
               </label>

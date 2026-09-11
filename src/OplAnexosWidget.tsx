@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -42,9 +43,8 @@ async function uploadOplAnexo(file: File, oplNumero: string): Promise<string | n
   const safe = oplNumero.replace(/[^a-zA-Z0-9-]/g, '_');
   const safeName = sanitizeFileName(file.name);
   const path = `opl-anexos/${safe}/${Date.now()}_${safeName}`;
-  // Force octet-stream for Office files to bypass bucket MIME restrictions
-  const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
-  const contentType = officeExts.test(file.name) ? 'application/octet-stream' : file.type;
+  // Office/planilhas sobem como octet-stream — ver FormatosArquivo.ts
+  const contentType = contentTypeUpload(file);
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
   if (error || !data) { console.error('Upload erro Supabase:', error?.message); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
@@ -127,11 +127,11 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
             border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700 }}>
             {uploading ? 'Enviando...'
               : isChecklistMode ? '📎 Anexar Checklist (PDF)'
-              : tipoFixo === 'proposta' ? '📋 Anexar Proposta (.docx / .xlsx)'
-              : tipoFixo === 'orcamento' ? '💰 Anexar Orçamento (.docx / .xlsx)'
+              : tipoFixo === 'proposta' ? '📋 Anexar Proposta (Word / planilha)'
+              : tipoFixo === 'orcamento' ? '💰 Anexar Orçamento (Word / planilha)'
               : '📎 Anexar Arquivo'}
             <input ref={fileRef} type="file" multiple
-              accept={isChecklistMode ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? '.doc,.docx,.xls,.xlsx,.pdf,.txt' : '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.txt'}
+              accept={isChecklistMode ? '.pdf' : (tipoFixo === 'proposta' || tipoFixo === 'orcamento') ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt` : `.pdf,.doc,.docx,${EXT_PLANILHAS},.png,.jpg,.jpeg,.gif,.webp,.txt`}
               onChange={e => { if (e.target.files?.length) upload(e.target.files); }}
               style={{ display:'none' }} disabled={uploading} />
           </label>
@@ -139,7 +139,7 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
             <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Aceita apenas PDF</span>
           )}
           {(tipoFixo === 'proposta' || tipoFixo === 'orcamento') && (
-            <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Word (.docx) e Excel (.xlsx)</span>
+            <span style={{ marginLeft:10, fontSize:9, color:'#6b7280' }}>Word (.doc/.docx), PDF e planilhas (.xlsx, .xlsm, .xlsb, .xls, .ods, .csv...)</span>
           )}
         </div>
 
@@ -262,8 +262,8 @@ export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = nu
     : '📎';
   const btnBg      = TIPO_COR[tipoFixo || 'documento'] ?? '#475569';
   const acceptAttr = isChecklist ? '.pdf'
-    : (isProposta || isOrcamento) ? '.doc,.docx,.xls,.xlsx,.pdf,.txt'
-    : '.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.xls,.xlsx,.txt';
+    : (isProposta || isOrcamento) ? `.doc,.docx,${EXT_PLANILHAS},.pdf,.txt`
+    : `.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,${EXT_PLANILHAS},.txt`;
 
   return (
     <>

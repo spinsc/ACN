@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ModalSolicitarAnalise, AnaliseStatusPanel } from './AnaliseWidget';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import AgendaWidget from './AgendaWidget';
@@ -278,8 +279,7 @@ function sanitizeFileName(name: string): string {
 async function uploadAnexo(file: File, licitacaoId: string, tipo: string): Promise<string|null> {
   const safeName = sanitizeFileName(file.name);
   const path = `licitacoes/${licitacaoId}/${tipo}/${Date.now()}_${safeName}`;
-  const officeExts = /\.(docx?|xlsx?|pptx?)$/i;
-  const contentType = officeExts.test(file.name) ? 'application/octet-stream' : file.type;
+  const contentType = contentTypeUpload(file);
   const { data, error } = await supabase.storage.from('acn-media').upload(path, file, { upsert: true, contentType });
   if (error || !data) { console.error('Upload erro:', error?.message); return null; }
   const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
@@ -865,7 +865,7 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
     <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:10, display:'flex', flexDirection:'column', gap:8, minWidth:0, flex:'1 1 260px' }}>
       <div style={{ fontWeight:700, fontSize:10, color:'#374151' }}>{label}</div>
       <input type="file" ref={uploadRef} multiple
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar"
+        accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar`}
         onChange={e => setUploadFiles(Array.from(e.target.files||[]))}
         style={{ width:'100%', fontSize:9 }} />
       {uploadFiles.length > 0 && <div style={{ fontSize:9, color:'#0369a1' }}>📎 {uploadFiles.length} arquivo(s)</div>}
@@ -1670,7 +1670,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     <label style={{ fontSize:10, color:'#374151', cursor:'pointer', display:'flex', alignItems:'center', gap:4, background:'#e0f2fe', borderRadius:4, padding:'3px 8px', border:'1px solid #7dd3fc' }}>
                       📎 Vincular arquivo(s)
                       <input type="file" ref={novoAnexoRef} style={{ display:'none' }} multiple
-                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+                        accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg`}
                         onChange={e => setNovoAnexoFiles(Array.from(e.target.files||[]))} />
                     </label>
                     {novoAnexoFiles.length > 0 && (
@@ -1959,7 +1959,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     + Adicionar em {TABS_DIREITO.find(t=>t.key===tabDir)?.label}
                   </div>
                   <input type="file" ref={uploadRef} multiple
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar"
+                    accept={`.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.png,.jpg,.jpeg,.gif,.webp,.zip,.rar`}
                     onChange={e => setUploadFiles(Array.from(e.target.files||[]))}
                     style={{ width:'100%', fontSize:11, marginBottom:8 }} />
                   {uploadFiles.length > 0 && (

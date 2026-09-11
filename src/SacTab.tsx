@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { EXT_PLANILHAS } from './FormatosArquivo';
 import React, { useState, useEffect, useRef } from 'react';
 import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
@@ -2215,7 +2216,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
             {/* Upload novos */}
             <div style={{border:'2px dashed #cbd5e1',borderRadius:6,padding:'14px',textAlign:'center',marginBottom:14,background:'#f8fafc'}}>
               <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Imagens, PDFs, Word, Excel…</div>
-              <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+              <input type="file" multiple accept={`image/*,.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.zip`}
                 onChange={e=>setAnexarFiles(Array.from(e.target.files||[]))}
                 style={{fontSize:11}} />
               {anexarFiles.length > 0 && (
