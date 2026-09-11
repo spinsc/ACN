@@ -9,6 +9,7 @@ import { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { FLUXOS, UFS } from './FluxoEntrega';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
+import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 
@@ -955,6 +956,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   // ── Resize do painel ──────────────────────────────────────────────────────
   const [leftWidth, setLeftWidth] = useState(40);
+  // dividido / só formulário / só abas — ver ModoSplit.tsx (esconde sem desmontar)
+  const [modoSplit, setModoSplit] = useModoSplit('licitacao');
+  const estSplit = estilosSplit(modoSplit, leftWidth, 260);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<any>(null);
   const dragStartX = useRef(0);
@@ -1450,7 +1454,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       <div ref={containerRef} style={{ display:'flex', width:'100%', height:'100%', cursor: isDragging ? 'col-resize' : 'default', userSelect: isDragging ? 'none' : 'auto' }}>
 
         {/* ══ PAINEL ESQUERDO: Formulário ══ */}
-        <div style={{ width:`${leftWidth}%`, minWidth:260, display:'flex', flexDirection:'column', background:'#fff', overflow:'hidden' }}>
+        <div style={{ display:'flex', flexDirection:'column', background:'#fff', overflow:'hidden', ...estSplit.esquerda }}>
 
           {/* Header */}
           <div style={{ padding:'10px 14px', background:STATUS_COR[s]||'#374151', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
@@ -1459,7 +1463,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               <div style={{ fontSize:12, fontWeight:700, wordBreak:'break-word' }}>{licit.numero} — {licit.nome_projeto}</div>
               <div style={{ fontSize:9, opacity:.85 }}>{licit.orgao}</div>
             </div>
-            <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+            <div style={{ display:'flex', gap:4, flexShrink:0, alignItems:'center' }}>
+              <SeletorModoSplit modo={modoSplit} onModo={setModoSplit} escuro />
               <button onClick={() => setMinimized(true)}
                 title="Minimizar"
                 style={{ background:'rgba(255,255,255,.2)', border:'none', color:'#fff', fontSize:14, cursor:'pointer', padding:'3px 6px', borderRadius:3 }}>
@@ -1874,13 +1879,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
         {/* ══ DIVISOR REDIMENSIONÁVEL ══ */}
         <div
           onMouseDown={onDividerMouseDown}
-          style={{ width:6, background: isDragging ? '#2563eb40' : '#e2e8f0', cursor:'col-resize', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s' }}
+          style={{ width:6, background: isDragging ? '#2563eb40' : '#e2e8f0', cursor:'col-resize', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', transition:'background .15s', ...estSplit.divisor }}
         >
           <div style={{ width:2, height:40, background:'#c0c0c0', borderRadius:1 }} />
         </div>
 
         {/* ══ PAINEL DIREITO: Abas ══ */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden' }}>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden', ...estSplit.direita }}>
 
           {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
           <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
@@ -1900,6 +1905,17 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 </button>
               );
             })}
+            {modoSplit === 'direita' && (
+              <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, padding:'0 8px' }}>
+                <span title={licit.numero} style={{ fontSize:10, fontWeight:700, color:'#334155', maxWidth:260,
+                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{licit.numero}</span>
+                <SeletorModoSplit modo={modoSplit} onModo={setModoSplit} />
+                <button onClick={() => setMinimized(true)} title="Minimizar"
+                  style={{ background:'none', border:'none', color:'#475569', fontSize:14, cursor:'pointer', padding:'2px 5px' }}>─</button>
+                <button onClick={fecharModal} title="Fechar"
+                  style={{ background:'none', border:'none', color:'#475569', fontSize:16, cursor:'pointer', padding:'2px 5px' }}>✕</button>
+              </div>
+            )}
           </div>
 
           {/* Conteúdo da aba */}

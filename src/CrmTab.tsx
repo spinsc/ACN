@@ -17,6 +17,7 @@ import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { useAlturaDeCards } from './KanbanColuna';
+import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo } from './VinculoPicker';
@@ -352,6 +353,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [abrirNotaSalvando, setAbrirNotaSalvando] = useState(false);
   // ── resize + minimize do modal Abrir ──
   const [abrirLeftWidth, setAbrirLeftWidth]   = useState(42);
+  // dividido / só formulário / só abas — ver ModoSplit.tsx (esconde sem desmontar)
+  const [abrirModoSplit, setAbrirModoSplit]   = useModoSplit('crm');
+  const abrirEstSplit = estilosSplit(abrirModoSplit, abrirLeftWidth, 280);
   const [abrirIsDragging, setAbrirIsDragging] = useState(false);
   const [abrirMinimized, setAbrirMinimized]   = useState(false);
   const abrirContainerRef = useRef<any>(null);
@@ -4239,7 +4243,7 @@ const SUB_STATUS_COR: Record<string,string> = {
           <div ref={abrirContainerRef} style={{ display:'flex', width:'100%', height:'100%' }}>
 
             {/* ── ESQUERDO: formulário editável ── */}
-            <div style={{ width:`${abrirLeftWidth}%`, minWidth:280, display:'flex', flexDirection:'column', background:'#fff', boxShadow:'2px 0 12px #0002' }}>
+            <div style={{ display:'flex', flexDirection:'column', background:'#fff', boxShadow:'2px 0 12px #0002', ...abrirEstSplit.esquerda }}>
               {/* Header */}
               <div style={{ padding:'12px 14px', background:'#1e3a5f', color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
                 <div>
@@ -4249,7 +4253,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                   <div style={{ fontSize:13, fontWeight:700 }}>{modalAbrir.titulo}</div>
                   {modalAbrir.orgao && <div style={{ fontSize:9, opacity:.85 }}>{modalAbrir.orgao}</div>}
                 </div>
-                <div style={{ display:'flex', gap:4 }}>
+                <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+                  <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} escuro />
                   <button onClick={() => setAbrirMinimized(true)}
                     title="Minimizar" style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px', lineHeight:1 }}>─</button>
                   <button onClick={fecharModalAbrir}
@@ -4422,12 +4427,12 @@ const SUB_STATUS_COR: Record<string,string> = {
                 abrirDragStartW.current = abrirLeftWidth;
               }}
               style={{ width:6, background: abrirIsDragging ? '#93c5fd' : '#e2e8f0', cursor:'col-resize',
-                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'background .15s' }}>
+                display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'background .15s', ...abrirEstSplit.divisor }}>
               <div style={{ width:2, height:40, background:'#c0c0c0', borderRadius:1 }} />
             </div>
 
             {/* ── DIREITO: abas de documentos ── */}
-            <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden' }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', background:'#f4f6f9', overflow:'hidden', ...abrirEstSplit.direita }}>
 
               {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
               <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
@@ -4440,6 +4445,17 @@ const SUB_STATUS_COR: Record<string,string> = {
                     {t.label}
                   </button>
                 ))}
+                {abrirModoSplit === 'direita' && (
+                  <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, padding:'0 8px' }}>
+                    <span title={modalAbrir.titulo} style={{ fontSize:10, fontWeight:700, color:'#334155', maxWidth:260,
+                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{modalAbrir.titulo}</span>
+                    <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} />
+                    <button onClick={() => setAbrirMinimized(true)} title="Minimizar"
+                      style={{ background:'none', border:'none', color:'#475569', fontSize:14, cursor:'pointer', padding:'2px 5px' }}>─</button>
+                    <button onClick={fecharModalAbrir} title="Fechar"
+                      style={{ background:'none', border:'none', color:'#475569', fontSize:16, cursor:'pointer', padding:'2px 5px' }}>✕</button>
+                  </div>
+                )}
               </div>
 
               {/* Conteúdo */}
