@@ -175,17 +175,26 @@ export function ContratoEntregas({ licit, currentUser }) {
     if (!c || !Array.isArray(c.itens) || c.itens.length === 0) {
       alert('Esta licitação não tem Formação de Preço com itens para importar. Adicione os itens com "+ Item".'); return;
     }
-    const grupos = [];
-    for (const it of c.itens) { const g = it.grupo_nome || 'Item 1'; if (!grupos.includes(g)) grupos.push(g); }
-    const lotes = c.parametros_globais?.lote_por_grupo || {};
-    const linhas = grupos.map((g, i) => {
-      const produtos = c.itens.filter(it => (it.grupo_nome || 'Item 1') === g).map(it => it.produto).filter(Boolean);
+    // A formação é Lote → Item → Produtos (componente sem lote = "Lote 1").
+    const loteDe = (it) => it.lote_nome || 'Lote 1';
+    const grupoDe = (it) => it.grupo_nome || 'Item 1';
+    const pares = [];
+    for (const it of c.itens) {
+      if (!pares.some(x => x.lote === loteDe(it) && x.grupo === grupoDe(it))) pares.push({ lote: loteDe(it), grupo: grupoDe(it) });
+    }
+    const variosLotes = new Set(pares.map(x => x.lote)).size > 1;
+    // "Quantidade do item": chave "lote::item"; formação antiga usa só o item
+    const qtds = c.parametros_globais?.lote_por_grupo || {};
+    const qtdDe = (lote, grupo) => Number(qtds[`${lote}::${grupo}`] ?? (lote === 'Lote 1' ? qtds[grupo] : undefined)) || 0;
+    const linhas = pares.map(({ lote, grupo }, i) => {
+      const produtos = c.itens.filter(it => loteDe(it) === lote && grupoDe(it) === grupo).map(it => it.produto).filter(Boolean);
+      const q = qtdDe(lote, grupo);
       return {
         licitacao_id: licit.id, ordem: i, unidade: 'UN',
-        descricao: `${g}${produtos.length ? ' — ' + produtos.slice(0, 3).join(', ') + (produtos.length > 3 ? '…' : '') : ''}`,
-        // o "lote" da formação costuma ficar 1 com a quantidade dentro das
-        // linhas; por isso vem como sugestão e o aviso abaixo pede conferência
-        quantidade_contratada: Number(lotes[g]) > 0 ? Number(lotes[g]) : 1,
+        descricao: `${variosLotes ? lote + ' › ' : ''}${grupo}${produtos.length ? ' — ' + produtos.slice(0, 3).join(', ') + (produtos.length > 3 ? '…' : '') : ''}`,
+        // a quantidade do item na formação costuma ficar 1 com a quantidade
+        // dentro das linhas; por isso vem como sugestão e o aviso pede conferência
+        quantidade_contratada: q > 0 ? q : 1,
       };
     });
     const { error } = await supabase.from('licitacao_contrato_itens').insert(linhas);

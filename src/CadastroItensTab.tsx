@@ -15,7 +15,7 @@ const CATEGORIAS_DEFAULT = [
 const ITEM_VAZIO = {
   codigo: '', nome: '', descricao: '', unidade: 'UN', categoria: '',
   ncm: '', marca: '', fornecedor: '', moeda: 'REAL', custo_unit: 0,
-  ipi_pct: 0, st_pct: 0, difal_pct: 16, imposto_pct: 16,
+  ipi_pct: 0, st_pct: 0, difal_pct: 0, imposto_pct: 16,   // DIFAL começa zerado (depende do destino da venda)
   markup_pct: 30, custo_fixo_pct: 3, ativo: true,
 };
 

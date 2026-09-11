@@ -9,17 +9,21 @@ const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
 const PARAMS_PADRAO = {
   ptax_dolar:     5.85,
   ptax_euro:      6.40,
-  difal_pct:      16,
+  difal_pct:      0,    // começa zerado: DIFAL depende do destino da venda
   imposto_pct:    16,
   custo_fixo_pct: 3,
   lote_qtd:       1,
   markup_pct:     100,
-  lote_por_grupo: {} as Record<string, number>, // LOTE individual por "Item do edital" (chave = grupo_nome)
+  // QUANTIDADE de cada item do edital (o campo "Quantidade do item"; antes se
+  // chamava "Lote deste Item"). Chave = "lote::item"; formações antigas, que
+  // não tinham lote, usam só o nome do item — ver qtdDoItem().
+  lote_por_grupo: {} as Record<string, number>,
 };
 
 function novoItem() {
   return {
     _id: Math.random().toString(36).slice(2),
+    lote_nome:      'Lote 1', // LOTE do edital (agrupa itens) — ver tira de lotes
     grupo_nome:     'Item 1', // "Item do edital" ao qual este componente pertence (ver tira de abas)
     produto:        '',
     marca:          '',
@@ -32,7 +36,7 @@ function novoItem() {
     st_pct:         0,
     tipo_calculo:   'CUSTO', // 'CUSTO' (markup sobre custo) ou 'TABELA' (desconto sobre preço de tabela)
     markup_pct:     100,     // reaproveitado nos 2 modos — no modo TABELA representa o desconto %
-    difal_pct:      16,
+    difal_pct:      0,
     imposto_pct:    16,
     custo_fixo_pct: 3,
     // ── informações do produto (só referência, não entram no cálculo) ──
@@ -112,6 +116,17 @@ const fmtPct = (v) => {
 // item.grupo_nome direto) pra tratar de forma uniforme componentes antigos
 // salvos antes desse campo existir (viram um único grupo "Item 1").
 const grupoDe = (item) => item?.grupo_nome || 'Item 1';
+// Lote do edital (nível acima dos itens). Componente antigo, sem lote, é do
+// "Lote 1" — assim toda formação salva antes disto abre igual, só que no Lote 1.
+const loteDe  = (item) => item?.lote_nome || 'Lote 1';
+const chaveItem = (lote, grupo) => `${lote}::${grupo}`;
+/** Quantidade do item (antigo "Lote deste Item"). Lê a chave nova "lote::item"
+ *  e, para formação antiga (tudo no Lote 1), a chave velha só com o item. */
+function qtdDoItem(params, lote, grupo) {
+  const m = params?.lote_por_grupo || {};
+  const v = m[chaveItem(lote, grupo)] ?? (lote === 'Lote 1' ? m[grupo] : undefined);
+  return Number(v) || 1;
+}
 // Soma um conjunto de resultados de calcItem() nos mesmos totais usados no
 // painel geral — reaproveitado tanto pro resumo geral quanto pro subtotal
 // por Item do edital (tela e PDF).
@@ -394,11 +409,48 @@ function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPo
 // sai errado por um fator de 1000, sem nenhum aviso ao usuário.
 const parseNumBr = (v) => parseFloat(String(v).trim().replace(/\./g, '').replace(',', '.')) || 0;
 
+// ─── MARKUP REVERSO POR PRODUTO ───────────────────────────────────────────────
+// Inverso exato do calcItem:
+//   CUSTO : preço = custo·(1+m)/(1−difal)  →  m = preço·(1−difal)/custo − 1
+//   TABELA: preço = custo·(1−d)/(1−difal)  →  d = 1 − preço·(1−difal)/custo
+// `custoUnitBrl` já vem com IPI, ST e câmbio (é o "custo c/ impostos BRL").
+function MarkupReversoProduto({ item, custoUnitBrl, modoTabela, bloqueado, onAplicar }) {
+  const [preco, setPreco] = useState('');
+  const aplicar = () => {
+    const pv = parseNumBr(preco);
+    const difal = (Number(item.difal_pct) || 0) / 100;
+    if (!(pv > 0)) { alert('Informe o preço unitário desejado.'); return; }
+    if (!(custoUnitBrl > 0)) { alert('Informe o custo do produto antes — sem custo não há markup.'); return; }
+    const razao = pv * (1 - difal) / custoUnitBrl;
+    const valor = modoTabela ? (1 - razao) * 100 : (razao - 1) * 100;
+    onAplicar(String(Math.round(valor * 100) / 100));
+    setPreco('');
+  };
+  return (
+    <div title={bloqueado ? 'Desmarque "Markup Global" para usar markup por produto' : 'Digite o preço unitário que você quer e aplique'}>
+      <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>🔄 Preço unit. desejado</div>
+      <div style={{ display:'flex', gap:3 }}>
+        <input className="acn-input" style={{ width:'100%', fontSize:11, padding:'5px 7px', textAlign:'right' }}
+          placeholder={bloqueado ? 'markup global' : 'R$'} value={preco} disabled={bloqueado}
+          onChange={e => setPreco(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') aplicar(); }} />
+        <button type="button" onClick={aplicar} disabled={bloqueado || !preco}
+          title={modoTabela ? 'Calcula e aplica o desconto' : 'Calcula e aplica o markup'}
+          style={{ fontSize:10, fontWeight:800, padding:'0 8px', borderRadius:4, border:'none',
+            cursor: bloqueado || !preco ? 'default' : 'pointer',
+            background: bloqueado || !preco ? '#e2e8f0' : '#0891b2', color: bloqueado || !preco ? '#94a3b8' : '#fff' }}>
+          ↺
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── CALCULADORA MARKUP REVERSO ───────────────────────────────────────────────
 function CalcMarkupReverso() {
   const [precoVenda, setPrecoVenda] = useState('');
   const [custoFob, setCustoFob]     = useState('');
-  const [difal, setDifal]           = useState('16');
+  const [difal, setDifal]           = useState('0');
   const [resultado, setResultado]   = useState(null);
 
   const calcular = () => {
@@ -488,7 +540,7 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
   const [form, setForm] = useState({
     nome: nomeInicial || '', marca: '', fornecedor: '', moeda: 'REAL',
     custo_unit: 0, ipi_pct: 0, st_pct: 0, tipo_calculo: 'CUSTO', markup_pct: 30,
-    difal_pct: 16, imposto_pct: 16, custo_fixo_pct: 3, unidade: 'UN', ativo: true,
+    difal_pct: 0, imposto_pct: 16, custo_fixo_pct: 3, unidade: 'UN', ativo: true,
   });
   const [salvando, setSalvando] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -503,7 +555,7 @@ function CriarItemModal({ nomeInicial, onSalvo, onClose }) {
       moeda: form.moeda || 'REAL', custo_unit: Number(form.custo_unit) || 0,
       ipi_pct: Number(form.ipi_pct) || 0, st_pct: Number(form.st_pct) || 0,
       tipo_calculo: form.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-      markup_pct: Number(form.markup_pct) || 30, difal_pct: Number(form.difal_pct) || 16,
+      markup_pct: Number(form.markup_pct) || 30, difal_pct: Number(form.difal_pct) || 0,
       imposto_pct: Number(form.imposto_pct) || 16, custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
       unidade: form.unidade || 'UN', ativo: true,
     }]).select().single();
@@ -608,7 +660,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       moeda: normMoeda(it.moeda), custo_unit: it.custo_unit || 0,
       ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
       tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-      markup_pct: it.markup_pct ?? 30, difal_pct: it.difal_pct ?? 16,
+      markup_pct: it.markup_pct ?? 30, difal_pct: it.difal_pct ?? 0,
       imposto_pct: it.imposto_pct ?? 16, custo_fixo_pct: it.custo_fixo_pct ?? 3,
     });
     setQ(it.nome); setOpen(false);
@@ -618,7 +670,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
     onFill({
       produto: p.nome, marca: '', fornecedor: '', moeda: 'REAL',
       custo_unit: p.preco_venda || 0, ipi_pct: 0, st_pct: 0,
-      markup_pct: 0, difal_pct: p.difal_pct ?? 16,
+      markup_pct: 0, difal_pct: p.difal_pct ?? 0,
       imposto_pct: p.imposto_pct ?? 16, custo_fixo_pct: p.custo_fixo_pct ?? 3,
     });
     setQ(p.nome); setOpen(false);
@@ -639,7 +691,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
         custo_unit: it.custo_unit || 0, ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
         tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
         markup_pct: it.markup_pct ?? p.markup_pct ?? 30,
-        difal_pct: it.difal_pct ?? p.difal_pct ?? 16,
+        difal_pct: it.difal_pct ?? p.difal_pct ?? 0,
         imposto_pct: it.imposto_pct ?? p.imposto_pct ?? 16,
         custo_fixo_pct: it.custo_fixo_pct ?? p.custo_fixo_pct ?? 3,
       };
@@ -922,6 +974,12 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
                 onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
                 readOnly={!!usarMarkupGlobal} />
             </div>
+            {/* Markup reverso DESTE produto: digita o preço unitário desejado e o
+                markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
+                É a mesma conta da calculadora "Markup Reverso" do rodapé, que
+                só mostrava o número, sem aplicar em produto nenhum. */}
+            <MarkupReversoProduto item={item} custoUnitBrl={custoUnitBrl} modoTabela={modoTabela}
+              bloqueado={!!usarMarkupGlobal} onAplicar={(v) => onSet('markup_pct', v)} />
           </div>
 
           {secao('🧾 Impostos & Validação')}
@@ -1282,6 +1340,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [params, setParams]           = useState({ ...PARAMS_PADRAO });
   const [itens, setItens]             = useState([novoItem()]);
   const [grupoAtivo, setGrupoAtivo]   = useState('Item 1'); // aba ativa — "Item do edital"
+  const [loteAtivo, setLoteAtivo]     = useState('Lote 1'); // lote ativo — nível acima dos itens
   const [usarGlobais, setUsarGlobais]             = useState(true);
   const [usarMarkupGlobal, setUsarMarkupGlobal]   = useState(false);
   const [modelos, setModelos]         = useState([]);
@@ -1439,6 +1498,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setParams({ ...PARAMS_PADRAO, ...(c.params || {}) });
     const itensRestaurados = (c.itens || []).map((x: any) => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) }));
     setItens(itensRestaurados.length ? itensRestaurados : [novoItem()]);
+    setLoteAtivo(loteDe(itensRestaurados[0]));
     setGrupoAtivo(grupoDe(itensRestaurados[0]) || 'Item 1');
     setNomeCotacao(c.nome || '');
     if (c.empresa) setEmpresa(c.empresa);
@@ -1590,14 +1650,27 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   // ── Itens do edital (abas) — derivado direto de itens[].grupo_nome, sem
   // registro separado pra não correr risco de ficar dessincronizado. ──
-  const gruposNomes = [...new Set(itens.map(grupoDe))];
+  // Lote → Item → Produtos. Tudo derivado de lote_nome/grupo_nome dos próprios
+  // componentes (sem registro separado, para não dessincronizar).
+  const lotesNomes = [...new Set(itens.map(loteDe))];
+  if (lotesNomes.length === 0) lotesNomes.push('Lote 1');
+  const loteAtivoValido = lotesNomes.includes(loteAtivo) ? loteAtivo : lotesNomes[0];
+  const gruposNomes = [...new Set(itens.filter(it => loteDe(it) === loteAtivoValido).map(grupoDe))];  // itens DO LOTE ativo
   if (gruposNomes.length === 0) gruposNomes.push('Item 1');
   const grupoAtivoValido = gruposNomes.includes(grupoAtivo) ? grupoAtivo : gruposNomes[0];
-  const idxDoGrupo    = itens.map((it, i) => ({ it, i })).filter(({ it }) => grupoDe(it) === grupoAtivoValido).map(({ i }) => i);
+  const doItemAtivo = (it) => loteDe(it) === loteAtivoValido && grupoDe(it) === grupoAtivoValido;
+  const idxDoGrupo    = itens.map((it, i) => ({ it, i })).filter(({ it }) => doItemAtivo(it)).map(({ i }) => i);
   const itensDoGrupo  = idxDoGrupo.map(i => itens[i]);
   const resultsDoGrupo = idxDoGrupo.map(i => results[i]);
   const subtotalGrupo  = somarResultados(resultsDoGrupo);
-  const loteGrupo       = Number(params.lote_por_grupo?.[grupoAtivoValido]) || 1;
+  const loteGrupo       = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);   // QUANTIDADE do item
+  // subtotal do lote ativo (soma dos itens dele)
+  const subtotalLote   = somarResultados(itens.map((it, i) => loteDe(it) === loteAtivoValido ? results[i] : null).filter(Boolean));
+  // todos os pares lote/item, na ordem em que aparecem (PDF, contagens)
+  const paresLoteItem: { lote: string; grupo: string }[] = [];
+  for (const it of itens) {
+    if (!paresLoteItem.some(x => x.lote === loteDe(it) && x.grupo === grupoDe(it))) paresLoteItem.push({ lote: loteDe(it), grupo: grupoDe(it) });
+  }
 
   const descontoPlatPct  = Number(plataformaSelecionada?.desconto_pct) || 0;
   const retencaoPlatPct  = Number(plataformaSelecionada?.retencao_pct) || 0;
@@ -1607,6 +1680,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   const addItem  = () => setItens(p => [...p, {
     ...novoItem(),
+    lote_nome:      loteAtivoValido,
     grupo_nome:     grupoAtivoValido,
     difal_pct:      params.difal_pct,
     imposto_pct:    params.imposto_pct,
@@ -1625,7 +1699,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const remItem  = (id) => {
     if (statusCotacao === 'finalizada') {
       const item = itens.find(x => x._id === id);
-      if (item) registrarLog('item_removido', `[${grupoDe(item)}] Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);
+      if (item) registrarLog('item_removido', `[${loteDe(item)} › ${grupoDe(item)}] Item removido: "${item.produto || 'sem nome'}"${item.marca ? ` (${item.marca})` : ''}`);
     }
     setItens(p => p.filter(x => x._id !== id));
   };
@@ -1639,43 +1713,94 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       if (antes !== undefined && String(antes) !== String(v)) {
         registrarLog(
           k === 'custo_unit' ? 'custo_alterado' : 'markup_alterado',
-          `[${grupoDe(item)}] ${CAMPOS_LOGADOS[k]} de "${item?.produto || 'item'}": ${antes} → ${v}`,
+          `[${loteDe(item)} › ${grupoDe(item)}] ${CAMPOS_LOGADOS[k]} de "${item?.produto || 'item'}": ${antes} → ${v}`,
         );
       }
     }
     setItens(p => p.map(x => x._id === id ? { ...x, [k]: v } : x));
   };
 
-  // ── Gerenciamento das abas "Item do edital" ───────────────────────────────
+  // ── Gerenciamento das abas "Item do edital" (dentro do lote ativo) ─────────
+  // Renomear/remover mexe só no lote ativo: "Item 1" pode existir em mais de um
+  // lote. A quantidade do item (lote_por_grupo) acompanha a renomeação — antes
+  // ela ficava para trás, presa ao nome velho.
+  const moverQtd = (deLote, deGrupo, paraLote, paraGrupo) => setParams(p => {
+    const m = { ...(p.lote_por_grupo || {}) };
+    const antiga = m[chaveItem(deLote, deGrupo)] ?? (deLote === 'Lote 1' ? m[deGrupo] : undefined);
+    delete m[chaveItem(deLote, deGrupo)];
+    if (deLote === 'Lote 1') delete m[deGrupo];
+    if (antiga != null && paraLote != null) m[chaveItem(paraLote, paraGrupo)] = antiga;
+    return { ...p, lote_por_grupo: m };
+  });
+  const linhaNova = (lote, grupo) => ({
+    ...novoItem(), lote_nome: lote, grupo_nome: grupo,
+    difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct,
+  });
+
   const novoGrupoItem = () => {
-    const nome = window.prompt('Nome do novo Item do edital:', `Item ${gruposNomes.length + 1}`);
+    const nome = window.prompt(`Nome do novo Item do edital (em ${loteAtivoValido}):`, `Item ${paresLoteItem.length + 1}`);
     if (!nome || !nome.trim()) return;
     const nomeFinal = nome.trim();
-    setItens(p => [...p, {
-      ...novoItem(),
-      grupo_nome:     nomeFinal,
-      difal_pct:      params.difal_pct,
-      imposto_pct:    params.imposto_pct,
-      custo_fixo_pct: params.custo_fixo_pct,
-    }]);
+    if (gruposNomes.includes(nomeFinal)) { alert(`Já existe "${nomeFinal}" em ${loteAtivoValido}.`); return; }
+    setItens(p => [...p, linhaNova(loteAtivoValido, nomeFinal)]);
     setGrupoAtivo(nomeFinal);
   };
   const renomearGrupoItem = (nomeAtual: string) => {
     const nome = window.prompt('Renomear Item do edital:', nomeAtual);
     if (!nome || !nome.trim() || nome.trim() === nomeAtual) return;
     const nomeFinal = nome.trim();
-    setItens(p => p.map(x => grupoDe(x) === nomeAtual ? { ...x, grupo_nome: nomeFinal } : x));
+    if (gruposNomes.includes(nomeFinal)) { alert(`Já existe "${nomeFinal}" em ${loteAtivoValido}.`); return; }
+    setItens(p => p.map(x => loteDe(x) === loteAtivoValido && grupoDe(x) === nomeAtual ? { ...x, grupo_nome: nomeFinal } : x));
+    moverQtd(loteAtivoValido, nomeAtual, loteAtivoValido, nomeFinal);
     if (grupoAtivoValido === nomeAtual) setGrupoAtivo(nomeFinal);
   };
   const removerGrupoItem = (nome: string) => {
-    if (!window.confirm(`Remover o Item "${nome}" e todos os seus ${itens.filter(x=>grupoDe(x)===nome).length} componente(s)?`)) return;
+    const n = itens.filter(x => loteDe(x) === loteAtivoValido && grupoDe(x) === nome).length;
+    if (!window.confirm(`Remover o Item "${nome}" de ${loteAtivoValido} e todos os seus ${n} componente(s)?`)) return;
     setItens(p => {
-      const restante = p.filter(x => grupoDe(x) !== nome);
+      const restante = p.filter(x => !(loteDe(x) === loteAtivoValido && grupoDe(x) === nome));
       return restante.length > 0 ? restante : [novoItem()]; // nunca fica sem nenhum item
     });
+    moverQtd(loteAtivoValido, nome, null, null);
     if (grupoAtivoValido === nome) {
       const restantes = gruposNomes.filter(g => g !== nome);
       setGrupoAtivo(restantes[0] || 'Item 1');
+    }
+  };
+
+  // ── Lotes do edital ──────────────────────────────────────────────────────
+  const novoLote = () => {
+    const nome = window.prompt('Nome do novo Lote:', `Lote ${lotesNomes.length + 1}`);
+    if (!nome || !nome.trim()) return;
+    const nomeFinal = nome.trim();
+    if (lotesNomes.includes(nomeFinal)) { alert(`Já existe o "${nomeFinal}".`); return; }
+    setItens(p => [...p, linhaNova(nomeFinal, 'Item 1')]);
+    setLoteAtivo(nomeFinal);
+    setGrupoAtivo('Item 1');
+  };
+  const renomearLote = (nomeAtual: string) => {
+    const nome = window.prompt('Renomear Lote:', nomeAtual);
+    if (!nome || !nome.trim() || nome.trim() === nomeAtual) return;
+    const nomeFinal = nome.trim();
+    if (lotesNomes.includes(nomeFinal)) { alert(`Já existe o "${nomeFinal}".`); return; }
+    const gruposDoLote = [...new Set(itens.filter(x => loteDe(x) === nomeAtual).map(grupoDe))];
+    setItens(p => p.map(x => loteDe(x) === nomeAtual ? { ...x, lote_nome: nomeFinal } : x));
+    gruposDoLote.forEach(g => moverQtd(nomeAtual, g, nomeFinal, g));
+    if (loteAtivoValido === nomeAtual) setLoteAtivo(nomeFinal);
+  };
+  const removerLote = (nome: string) => {
+    const n = itens.filter(x => loteDe(x) === nome).length;
+    if (!window.confirm(`Remover o "${nome}" inteiro, com todos os seus itens e ${n} componente(s)?`)) return;
+    const gruposDoLote = [...new Set(itens.filter(x => loteDe(x) === nome).map(grupoDe))];
+    setItens(p => {
+      const restante = p.filter(x => loteDe(x) !== nome);
+      return restante.length > 0 ? restante : [novoItem()];
+    });
+    gruposDoLote.forEach(g => moverQtd(nome, g, null, null));
+    if (loteAtivoValido === nome) {
+      const outro = lotesNomes.find(l => l !== nome) || 'Lote 1';
+      setLoteAtivo(outro);
+      setGrupoAtivo(grupoDe(itens.find(x => loteDe(x) === outro)) || 'Item 1');
     }
   };
 
@@ -1688,6 +1813,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (idx < 0) return prev;
     const novas = linhas.map(l => ({
       ...novoItem(),
+      // herda lote e item da linha expandida — antes as linhas do BOM nasciam
+      // de um item em branco e iam parar no "Item 1", fosse qual fosse o item
+      lote_nome:      loteDe(prev[idx]),
+      grupo_nome:     grupoDe(prev[idx]),
       difal_pct:      params.difal_pct,
       imposto_pct:    params.imposto_pct,
       custo_fixo_pct: params.custo_fixo_pct,
@@ -1870,6 +1999,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setParams({ ...PARAMS_PADRAO, ...(m.parametros_globais || {}) });
     const itensCarregados = (m.itens || []).map(x => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) }));
     setItens(itensCarregados);
+    setLoteAtivo(loteDe(itensCarregados[0]));
     setGrupoAtivo(grupoDe(itensCarregados[0]) || 'Item 1');
     setNomeCotacao(m.nome);
     if (m.empresa) setEmpresa(m.empresa);
@@ -1916,6 +2046,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setParams({ ...PARAMS_PADRAO });
     setItens([novoItem()]);
     setGrupoAtivo('Item 1');
+    setLoteAtivo('Lote 1');
     setNomeCotacao('');
     setEmpresa('ACN');
     setPlataformaSelecionada(null);
@@ -2003,15 +2134,18 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         : { 0: { cellWidth: 50 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } };
 
       let yCursor = y + 4;
-      gruposNomes.forEach((nomeGrupo) => {
-        const idxsGrupo     = itens.map((it, i) => ({ it, i })).filter(({ it }) => grupoDe(it) === nomeGrupo).map(({ i }) => i);
+      const variosLotes = new Set(paresLoteItem.map(x => x.lote)).size > 1;
+      paresLoteItem.forEach(({ lote: nomeLote, grupo: nomeGrupoPuro }) => {
+        const nomeGrupo     = variosLotes ? `${nomeLote} › ${nomeGrupoPuro}` : nomeGrupoPuro;
+        const idxsGrupo     = itens.map((it, i) => ({ it, i })).filter(({ it }) => loteDe(it) === nomeLote && grupoDe(it) === nomeGrupoPuro).map(({ i }) => i);
         const itensGrupo    = idxsGrupo.map(i => itens[i]);
         const resultsGrupo  = idxsGrupo.map(i => results[i]);
         if (itensGrupo.length === 0) return;
 
         if (yCursor > 265) { doc.addPage(); yCursor = 18; } // evita cabeçalho colado na borda da página
         doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-        const loteGrupoTxt = Number(params.lote_por_grupo?.[nomeGrupo]) > 1 ? ` - Lote: ${params.lote_por_grupo[nomeGrupo]}` : '';
+        const qtdItemPdf   = qtdDoItem(params, nomeLote, nomeGrupoPuro);
+        const loteGrupoTxt = qtdItemPdf > 1 ? ` - Qtd.: ${qtdItemPdf}` : '';
         doc.text(`${nomeGrupo}${loteGrupoTxt}`, 14, yCursor);
         yCursor += 5;
 
@@ -2037,7 +2171,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
         // Subtotal do item — só imprime linha à parte quando há mais de 1
         // Item do edital (com 1 só, o resumo geral logo abaixo já é isso).
-        if (gruposNomes.length > 1) {
+        if (paresLoteItem.length > 1) {
           const sub = somarResultados(resultsGrupo);
           doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(15, 118, 110);
           const linhaSub = isVendedor
@@ -2636,10 +2770,41 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           </div>
 
-          {/* ── ITENS DO EDITAL (abas) ── */}
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:8 }}>
+          {/* ── LOTES DO EDITAL — nível acima dos itens ── */}
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:6 }}>
+            <span style={{ fontSize:9, fontWeight:800, color:'#475569', textTransform:'uppercase', marginRight:2 }}>Lotes</span>
+            {lotesNomes.map(nome => {
+              const nItens = new Set(itens.filter(x => loteDe(x) === nome).map(grupoDe)).size;
+              const ativo = nome === loteAtivoValido;
+              return (
+                <div key={nome} style={{ display:'flex', alignItems:'stretch', borderRadius:6, overflow:'hidden', border:'1px solid ' + (ativo ? '#1e3a5f' : '#d1d5db') }}>
+                  <button type="button" onClick={() => { setLoteAtivo(nome); setGrupoAtivo(grupoDe(itens.find(x => loteDe(x) === nome)) || 'Item 1'); }}
+                    onDoubleClick={() => renomearLote(nome)} title="Duplo-clique para renomear"
+                    style={{ padding:'6px 12px', fontSize:10, fontWeight:800, border:'none', cursor:'pointer',
+                      background: ativo ? '#1e3a5f' : '#fff', color: ativo ? '#fff' : '#334155' }}>
+                    📦 {nome} <span style={{ opacity:.75, fontWeight:400 }}>({nItens} {nItens === 1 ? 'item' : 'itens'})</span>
+                  </button>
+                  {lotesNomes.length > 1 && (
+                    <button type="button" onClick={() => removerLote(nome)} title={`Remover ${nome}`}
+                      style={{ padding:'6px 8px', fontSize:10, border:'none', cursor:'pointer',
+                        background: ativo ? '#0f2744' : '#f1f5f9', color: ativo ? '#fff' : '#dc2626' }}>
+                      🗑
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            <button type="button" onClick={novoLote}
+              style={{ padding:'6px 10px', fontSize:10, fontWeight:700, border:'1px dashed #1e3a5f', borderRadius:6,
+                background:'#fff', color:'#1e3a5f', cursor:'pointer' }}>
+              + Lote
+            </button>
+          </div>
+
+          {/* ── ITENS DO EDITAL (abas) — do lote ativo ── */}
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:8, paddingLeft:10, borderLeft:'3px solid #1e3a5f' }}>
             {gruposNomes.map(nome => {
-              const qtd = itens.filter(x => grupoDe(x) === nome).length;
+              const qtd = itens.filter(x => loteDe(x) === loteAtivoValido && grupoDe(x) === nome).length;
               const ativo = nome === grupoAtivoValido;
               return (
                 <div key={nome} style={{ display:'flex', alignItems:'stretch', borderRadius:6, overflow:'hidden', border:'1px solid ' + (ativo ? '#0891b2' : '#d1d5db') }}>
@@ -2743,10 +2908,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   📦 Subtotal — {grupoAtivoValido}
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontSize:9, color:'#0f766e' }}>Lote deste Item</span>
+                  <span style={{ fontSize:9, color:'#0f766e' }}>Quantidade do item</span>
                   <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
-                    min={1} value={params.lote_por_grupo?.[grupoAtivoValido] ?? 1}
-                    onChange={e => setParams(p => ({ ...p, lote_por_grupo: { ...(p.lote_por_grupo||{}), [grupoAtivoValido]: parseInt(e.target.value)||1 } }))} />
+                    min={1} value={loteGrupo}
+                    onChange={e => setParams(p => {
+                      const m = { ...(p.lote_por_grupo || {}) };
+                      if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
+                      m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
+                      return { ...p, lote_por_grupo: m };
+                    })} />
                 </div>
               </div>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
@@ -2754,7 +2924,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                   <tr>
                     <th style={{ textAlign:'left', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }} />
                     <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Total</th>
-                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Unitário (÷ lote)</th>
+                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Unitário (÷ qtd.)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2776,7 +2946,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               </table>
               {loteGrupo > 1 && (
                 <div style={{ fontSize:10, color:'#0f766e', marginTop:8, paddingTop:8, borderTop:'1px dashed #99f6e4' }}>
-                  Total p/ {loteGrupo} unid. (× lote): <strong>{fmtR(subtotalGrupo.totVendas * loteGrupo)}</strong>
+                  Total p/ {loteGrupo} unid. (× qtd.): <strong>{fmtR(subtotalGrupo.totVendas * loteGrupo)}</strong>
                   {!isVendedor && <> · Margem: <strong style={{ color: subtotalGrupo.totMargem>=0?'#16a34a':'#dc2626' }}>{fmtR(subtotalGrupo.totMargem * loteGrupo)}</strong></>}
                 </div>
               )}

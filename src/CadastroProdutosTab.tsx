@@ -118,7 +118,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
 
   const [form, setForm] = useState<any>({
     codigo: '', nome: '', descricao: '', categoria: '', unidade: 'UN', ncm: '',
-    markup_pct: 100, custo_fixo_pct: 3, imposto_pct: 16, difal_pct: 16,
+    markup_pct: 100, custo_fixo_pct: 3, imposto_pct: 16, difal_pct: 0,
     garantia_meses: 12,
     preco_manual: false, preco_venda: 0, observacoes: '', ativo: true,
     ...produto,
@@ -222,7 +222,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
       markup_pct:    Number(form.markup_pct) || 100,
       custo_fixo_pct: Number(form.custo_fixo_pct) || 3,
       imposto_pct:   Number(form.imposto_pct) || 16,
-      difal_pct:     Number(form.difal_pct) || 16,
+      difal_pct:     Number(form.difal_pct) || 0,   // antes "|| 16" transformava um 0 digitado em 16
       garantia_meses: Number(form.garantia_meses) || 12,
       fotos:         fotos,
       catalogo_url:  catalogoUrl || null,
