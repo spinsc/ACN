@@ -36,6 +36,18 @@ export function podeDeletarRegistro(usuarioAtual: any): boolean {
 }
 
 /**
+ * Alterar o número de uma OPL ou de um PV JÁ PREENCHIDO: só Admin e gerentes
+ * (qualquer perfil "Gerente ...": Comercial, Administrativo, Produção...).
+ * A 1ª atribuição continua livre: o vendedor informa o PV ao enviar a
+ * proposta e a OP nasce com o número na abertura.
+ * A troca do número da OP é conferida de novo no banco (renomear_opl).
+ */
+export function podeAlterarNumeroOplPv(usuarioAtual: any): boolean {
+  const perfil = String(usuarioAtual?.perfil || '').trim();
+  return perfil === 'Admin' || /^gerente/i.test(perfil);
+}
+
+/**
  * Retorna mensagem de erro sobre permissão
  */
 export function getMensagemPermissao(acao: string, setor: string): string {

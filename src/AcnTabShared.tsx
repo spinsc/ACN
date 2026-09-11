@@ -10,6 +10,8 @@ import { normalizarBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
 import { soEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
+import { podeAlterarNumeroOplPv } from './utils/permissoes';
+import { renomearOpl } from './RenomearOpl';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -478,6 +480,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const { campoDestaque, marcarComoLido } = useFieldHighlight('oples', opl?.id, currentUser);
   const fecharEMarcarLido = () => { marcarComoLido(); onClose(); };
 
+  // Nem toda tela que abre este modal passa currentUser — cai na sessão salva.
+  const usuario = currentUser || (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+  const podeTrocarNumero = podeAlterarNumeroOplPv(usuario);
+  const trocarNumero = async () => {
+    const novo = await renomearOpl(opl, usuario);
+    if (novo) setOpl((o: any) => ({ ...o, opl: novo }));   // o efeito dos logs recarrega pelo opl.opl
+  };
+
   useEffect(() => {
     if (!opl?.id) return;
     setLoading(true);
@@ -487,7 +497,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       .order('data_hora', { ascending: false })
       .limit(50)
       .then(({ data }) => { setLogs(data || []); setLoading(false); });
-  }, [opl?.id]);
+  }, [opl?.id, opl?.opl]);
 
   // ── Liberar OP para o Fiscal emitir NF ──────────────────────────────────
   // Os números de série agora são informados pelo Almoxarifado no kiting
@@ -585,7 +595,17 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <div style={{ fontSize: 10, opacity: .65, fontWeight: 700, letterSpacing: .5, textTransform: 'uppercase' }}>
               {opl.faturamento_empresa || 'ACN'} · {opl.tipo_projeto || 'OP'}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>OP {opl.opl}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+              OP {opl.opl}
+              {podeTrocarNumero && (
+                <button onClick={trocarNumero}
+                  title="Alterar o número desta OP (só administradores e gerentes)"
+                  style={{ background: '#334155', border: '1px solid #475569', color: '#e2e8f0', borderRadius: 5,
+                    padding: '1px 7px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                  ✏️ Alterar nº
+                </button>
+              )}
+            </div>
           </div>
           <span style={{ background: opl.status_geral === 'Faturado' ? '#16a34a' : opl.status_geral === 'Cancelado' ? '#dc2626' : '#334155',
             color: '#fff', fontSize: 9, fontWeight: 800, padding: '3px 10px', borderRadius: 12, letterSpacing: .3 }}>

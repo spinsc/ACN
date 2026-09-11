@@ -25,6 +25,8 @@ import { abrirVinculo } from './VinculoPicker';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
+import { podeAlterarNumeroOplPv } from './utils/permissoes';
+import { renomearOpl } from './RenomearOpl';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -1326,6 +1328,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       }
       numeroPvFinal = pv;
     }
+    // Alterar (ou apagar) um PV já preenchido: só Admin e gerentes. A 1ª
+    // atribuição continua livre. Confere o valor do BANCO — o da tela pode
+    // estar desatualizado (outra pessoa pode ter atribuído o PV nesse meio-tempo).
+    if (!podeAlterarNumeroOplPv(currentUser)) {
+      const { data: pvBanco } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', modalAbrir.id).maybeSingle();
+      const salvo = String(pvBanco?.numero_pv || '').trim();
+      if (salvo && salvo !== (numeroPvFinal || '')) {
+        alert(`O PV ${salvo} já foi atribuído a esta oportunidade.\n\nSó administradores e gerentes podem alterar o número do PV.`);
+        return;
+      }
+    }
     setSalvando(true);
     const p: any = {
       numero_pv:         numeroPvFinal,
@@ -1606,6 +1619,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
     setSalvandoEnviado(true);
     const op = modalEnviado.op;
+
+    // PV já atribuído: só Admin e gerentes trocam (mesma regra do painel do card)
+    if (!podeAlterarNumeroOplPv(currentUser)) {
+      const { data: pvBanco } = await supabase.from('crm_oportunidades').select('numero_pv').eq('id', op.id).maybeSingle();
+      const salvo = String(pvBanco?.numero_pv || '').trim();
+      if (salvo && salvo !== pv) {
+        alert(`O PV ${salvo} já foi atribuído a esta oportunidade.\n\nSó administradores e gerentes podem alterar o número do PV.`);
+        setSalvandoEnviado(false);
+        return;
+      }
+    }
 
     const { data: dup } = await supabase.from('crm_oportunidades').select('id,titulo').eq('numero_pv', pv).neq('id', op.id).maybeSingle();
     if (dup) {
@@ -3021,6 +3045,19 @@ const SUB_STATUS_COR: Record<string,string> = {
                             </td>
                             <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
                               <LinkOpl opl={o} currentUser={currentUser} />
+                              {emEdicao && podeAlterarNumeroOplPv(currentUser) && (
+                                <button type="button" title="Alterar o número desta OP (só administradores e gerentes)"
+                                  onClick={async () => {
+                                    const novo = await renomearOpl(o, currentUser);
+                                    if (!novo) return;
+                                    setOplEditando((ed: any) => ed ? { ...ed, opl: novo } : ed);
+                                    fetchOplsEmAberto();
+                                  }}
+                                  style={{ display:'block', marginTop:3, background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:4,
+                                    padding:'1px 6px', fontSize:9, fontWeight:700, color:'#334155', cursor:'pointer' }}>
+                                  ✏️ Alterar nº
+                                </button>
+                              )}
                             </td>
                             <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>
                               {emEdicao
@@ -3563,9 +3600,17 @@ const SUB_STATUS_COR: Record<string,string> = {
             </div>
 
             <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>Número do PV (4 dígitos) *</label>
-            <input className="acn-input" style={{ width:'100%', fontSize:12, marginBottom:12, letterSpacing:2, fontWeight:700 }}
-              value={pvTexto} placeholder="0000" maxLength={4}
-              onChange={e => setPvTexto(e.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus />
+            {(() => {
+              // PV já atribuído: só Admin e gerentes trocam (confirmarEnviado confere no banco)
+              const pvTravado = !!String(modalEnviado?.op?.numero_pv || '').trim() && !podeAlterarNumeroOplPv(currentUser);
+              return (
+                <input className="acn-input" style={{ width:'100%', fontSize:12, marginBottom:12, letterSpacing:2, fontWeight:700,
+                    ...(pvTravado ? { background:'#f1f5f9', cursor:'not-allowed' } : {}) }}
+                  value={pvTexto} placeholder="0000" maxLength={4} disabled={pvTravado}
+                  title={pvTravado ? 'PV já atribuído. Só administradores e gerentes podem alterar o número.' : undefined}
+                  onChange={e => setPvTexto(e.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus={!pvTravado} />
+              );
+            })()}
 
             <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:6 }}>Temperatura do Lead *</label>
             <div style={{ position:'relative', height:10, borderRadius:5, marginBottom:6,
@@ -4305,12 +4350,24 @@ const SUB_STATUS_COR: Record<string,string> = {
                     à parte, editável a qualquer momento (não só pelo gate
                     "Enviar Proposta" do Kanban, que continua funcionando
                     igual como atalho quando o campo está vazio). */}
-                <div style={campoDestaque('numero_pv')}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Nº do PV (4 dígitos)</div>
-                  <input type="text" value={formOp.numero_pv||''} placeholder="0000" maxLength={4}
-                    onChange={e => setFormOp(f => ({...f, numero_pv: e.target.value.replace(/\D/g, '').slice(0, 4)}))}
-                    style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
-                </div>
+                {/* PV já preenchido: só Admin e gerentes alteram (o salvar
+                    confere de novo no banco). Vazio: qualquer um preenche. */}
+                {(() => {
+                  const pvTravado = !!String(modalAbrir?.numero_pv || '').trim() && !podeAlterarNumeroOplPv(currentUser);
+                  return (
+                    <div style={campoDestaque('numero_pv')}>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>
+                        Nº do PV (4 dígitos){pvTravado && <span style={{ color:'#94a3b8', fontWeight:600 }}> · 🔒 só admin/gerente altera</span>}
+                      </div>
+                      <input type="text" value={formOp.numero_pv||''} placeholder="0000" maxLength={4}
+                        disabled={pvTravado}
+                        title={pvTravado ? 'PV já atribuído. Só administradores e gerentes podem alterar o número.' : undefined}
+                        onChange={e => setFormOp(f => ({...f, numero_pv: e.target.value.replace(/\D/g, '').slice(0, 4)}))}
+                        style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box',
+                          ...(pvTravado ? { background:'#f1f5f9', color:'#475569', cursor:'not-allowed' } : {}) }} />
+                    </div>
+                  );
+                })()}
 
                 <div style={campoDestaque('estagio_id')}>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>Estágio</div>
