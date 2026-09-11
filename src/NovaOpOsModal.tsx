@@ -162,19 +162,6 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const ehVendaEnvio = form.tipo_projeto === TIPO_VENDA_ENVIO;
   const fluxoEf = fluxoEfetivo(form.tipo_projeto, form.fluxo_entrega);
 
-  // Dados vindos de uma Licitação vencida ("Preparar OP"): ela grava um
-  // prefill no localStorage. Isso existia mas ninguém lia — o único leitor era
-  // ComercialTab.tsx, que não é mais renderizado desde a unificação no CRM.
-  // Sem isto, o Fluxo de Entrega definido na licitação se perdia no caminho.
-  useEffect(() => {
-    try {
-      const bruto = localStorage.getItem('acn_nova_op_prefill');
-      if (!bruto) return;
-      localStorage.removeItem('acn_nova_op_prefill');
-      const pre = JSON.parse(bruto);
-      setForm(f => ({ ...f, ...pre }));
-    } catch { /* prefill é conveniência: se falhar, abre em branco mesmo */ }
-  }, []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState('');
   const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos
@@ -201,11 +188,29 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     fetchModelosReboque();
   };
 
+  // Prefill lido UMA vez por abertura e guardado aqui: em desenvolvimento o
+  // StrictMode roda este efeito duas vezes — a 1ª lia e apagava a chave, a 2ª
+  // não achava mais nada e zerava o formulário. O ref sobrevive às duas.
+  const prefillRef = useRef<any>(undefined);   // undefined = ainda não lido nesta abertura
+
   // Pré-preenche quando crmCard muda
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) { prefillRef.current = undefined; return; }
     setSavedOp(null);
     fetchModelosReboque();
+    // Prefill vindo de uma Licitação (pedido de entrega → "Gerar OP"), gravado no
+    // localStorage. Lido AQUI, na abertura, e aplicado por ÚLTIMO: antes era um
+    // efeito separado que rodava primeiro, e este aqui zerava o formulário logo
+    // depois — o prefill nunca chegava na tela (nem o do antigo "Preparar OP").
+    if (prefillRef.current === undefined) {
+      let lido: any = null;
+      try {
+        const bruto = localStorage.getItem('acn_nova_op_prefill');
+        if (bruto) { localStorage.removeItem('acn_nova_op_prefill'); lido = JSON.parse(bruto); }
+      } catch { /* prefill é conveniência: se falhar, abre em branco mesmo */ }
+      prefillRef.current = lido;
+    }
+    const pre = prefillRef.current;
     if (crmCard) {
       setForm(f => ({
         ...f,
@@ -213,9 +218,10 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         _cliente_id:  crmCard.cliente_id || null,
         responsavel:  crmCard.responsavel_nome || '',
         observacoes:  crmCard.titulo || '',
+        ...(pre || {}),
       }));
     } else {
-      setForm({ ...VAZIO, data_entrada: new Date().toISOString().split('T')[0] });
+      setForm({ ...VAZIO, data_entrada: new Date().toISOString().split('T')[0], ...(pre || {}) });
     }
     setErro('');
   }, [isOpen, crmCard?.id]);

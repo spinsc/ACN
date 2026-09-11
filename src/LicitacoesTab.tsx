@@ -10,6 +10,7 @@ import Linkify from './Linkify';
 import { FLUXOS, UFS } from './FluxoEntrega';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
+import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 
@@ -1151,6 +1152,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       ['data_limite_proposta','Limite de Proposta'],
       ['data_disputa','Data da Disputa'],
       ['data_limite_analise_tecnica','Limite de Análise Técnica'],
+      ['prazo_entrega','Prazo de Entrega'],
     ];
     for (const [campo, rotulo] of camposData) {
       if (dataForaDeFaixa((formEdit as any)[campo])) {
@@ -1171,6 +1173,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       data_limite_proposta:        inputBRParaUtc(editaveis.data_limite_proposta),
       data_disputa:                inputBRParaUtc(editaveis.data_disputa),
       data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
+      prazo_entrega: editaveis.prazo_entrega || null,   // coluna date: '' não é data
       atualizado_em: agora,
     };
     const { error } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
@@ -1401,6 +1404,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   };
 
   const s = licit.status;
+  // Vencida: entrega (fluxo, endereços) e o controle de contrato só existem aqui.
+  // `licit` é a cópia da abertura; logo após marcar como Vencida o status dela
+  // ainda é o antigo — por isso vale também o painel de ações da vitória.
+  const ehVencida = s === 'Vencida' || showAcoesVencida;
 
   const botaoProximoStatus = () => {
     if (s === 'Aberta' && isAnalista) return { label:'🚀 Iniciar Andamento', next:'Em Andamento' };
@@ -1523,9 +1530,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
-            {/* Fluxo de Entrega — mesma classificação usada na OP. Definida já aqui,
-                no primeiro card, para o processo nascer sabendo se vai ser adaptado
-                ou apenas separado e enviado. */}
+            {/* Fluxo de Entrega e endereços: só em Vencida (nos outros status não
+                há o que entregar ainda). Mesma classificação usada na OP. */}
+            {ehVencida && (<>
             <div style={{ ...campoDestaque('fluxo_entrega'), background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'7px 9px', marginBottom:6 }}>
               <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#0369a1', textTransform:'uppercase', marginBottom:2 }}>Fluxo de Entrega</label>
               <select value={formEdit.fluxo_entrega||''} onChange={e=>setF('fluxo_entrega',e.target.value)}
@@ -1540,19 +1547,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
-            {/* Destino — alimenta o aproveitamento de frete (mesma região/período) */}
-            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8 }}>
-              <div style={campoDestaque('destino_cidade')}><FInput label="Cidade de Entrega" value={formEdit.destino_cidade} onChange={v=>setF('destino_cidade',v)} /></div>
-              <div style={campoDestaque('destino_uf')}>
-                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>UF</label>
-                <select value={formEdit.destino_uf||''} onChange={e=>setF('destino_uf',e.target.value)}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
-                  <option value="">—</option>
-                  {UFS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div style={campoDestaque('destino_cep')}><FInput label="CEP de Entrega" value={formEdit.destino_cep} onChange={v=>setF('destino_cep',v)} /></div>
-            </div>
+            {/* Vários endereços (antes era um só): cada pedido de entrega escolhe o seu */}
+            <EnderecosEntrega licitacaoId={licit.id} />
+            </>)}
 
             <div style={campoDestaque('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
             <div style={campoDestaque('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
@@ -1619,6 +1616,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <div style={campoDestaque('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
                 <div style={campoDestaque('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
                 <div style={campoDestaque('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
+                <div style={campoDestaque('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} type="date" /></div>
               </div>
             </div>
 
@@ -1789,9 +1787,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     {emitindoPedido ? 'Emitindo...' : '📦 Emitir Pedido de Compra'}
                   </button>
                 )}
-                <button onClick={prepararOpComercial}
+                <button onClick={() => { setTabDir('entregas'); if (modoSplit === 'esquerda') setModoSplit('dividido'); }}
                   style={{ width:'100%', background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4 }}>
-                  🏭 Preparar OP no Comercial
+                  📦 Contrato e Entregas — registrar pedidos e gerar OPs
                 </button>
                 <button onClick={fecharModal}
                   style={{ width:'100%', background:'#fff', color:'#374151', border:'1px solid #d1d5db', borderRadius:4, padding:'5px', fontSize:10, cursor:'pointer' }}>
@@ -1859,11 +1857,8 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   </button>
                 )}
 
-                <div style={{ display:'flex', gap:6 }}>
-                  <button onClick={() => setShowModalSolicitar(true)}
-                    style={{ flex:1, background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'5px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
-                    🔍 Solicitar Análise
-                  </button>
+                {/* "Solicitar Análise" saiu daqui: fica só o do Andamento (corpo do card) */}
+                <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
                   {isAdmin && (
                     <button onClick={onExcluir}
                       style={{ background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:4, padding:'5px 10px', fontWeight:700, fontSize:10, cursor:'pointer' }}>
@@ -1889,7 +1884,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
           {/* Tab bar — quebra em linhas em vez de rolar horizontalmente, pra caber tudo na tela */}
           <div style={{ display:'flex', flexWrap:'wrap', borderBottom:'2px solid #e2e8f0', background:'#fff', flexShrink:0 }}>
-            {TABS_DIREITO.map(t => {
+            {(ehVencida ? [...TABS_DIREITO, { key:'entregas', label:'📦 Contrato e Entregas' }] : TABS_DIREITO).map(t => {
               const destacada = tabDir !== t.key && (isAbaDestacada(t.key) || camposNaoLidos.has(t.key));
               return (
                 <button key={t.key} onClick={() => { setTabDir(t.key); marcarAbaLida(t.key); }}
@@ -1931,6 +1926,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               />
             )}
 
+            {/* ── CONTRATO E ENTREGAS (só Vencida) ── usa o fluxo/prazo do formulário,
+                que é o valor atual; `licit` é a cópia da abertura */}
+            {tabDir === 'entregas' && ehVencida && (
+              <ContratoEntregas currentUser={currentUser}
+                licit={{ ...licit, fluxo_entrega: formEdit.fluxo_entrega, prazo_entrega: formEdit.prazo_entrega }} />
+            )}
+
             {/* ── ARQUIVOS DE LICITAÇÃO — sub-quadros por categoria fixa ── */}
             {tabDir === 'processo' && (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -1949,7 +1951,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             )}
 
             {/* ── ABAS DE DOCUMENTOS (demais abas — Docs Enviados, Fase Contrato, Atestados) ── */}
-            {tabDir !== 'formacao_precos' && tabDir !== 'processo' && (
+            {tabDir !== 'formacao_precos' && tabDir !== 'processo' && tabDir !== 'entregas' && (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {/* Upload */}
                 <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12 }}>

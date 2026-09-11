@@ -4290,6 +4290,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                   { label:'Nº do Orçamento (Proposta)', key:'numero_proposta', placeholder:'Ex: 041/2025' },
                   { label:'Valor Estimado (R$)', key:'valor_registrado', placeholder:'Ex: 280000' },
                   { label:'Previsão de Fechamento', key:'data_prev_fechamento', type:'date' },
+                  // a coluna existia (e o salvar já gravava), mas nunca teve campo na tela
+                  { label:'Prazo de Entrega', key:'prazo_entrega_comercial', type:'date' },
                 ] as any[]).map(({ label, key, placeholder, type }) => (
                   <div key={key} style={campoDestaque(key)}>
                     <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 }}>{label}</div>
