@@ -7,7 +7,8 @@ import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
-import { abrirVinculo } from './VinculoPicker';
+import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
+import KanbanColuna from './KanbanColuna';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor_unitario: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
@@ -236,6 +237,188 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
   );
 }
 
+// ─── STATUS (colunas do Kanban e ordem do fluxo) ───────────────────────────────
+const STATUS_COMPRAS = ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'];
+const COR_STATUS_COMPRA: Record<string,string> = {
+  'Pendente':'#f59e0b','Em Andamento':'#3b82f6','Aguardando Aprovação':'#ea580c','Aprovado':'#0ea5e9','Comprado':'#7c3aed','Concluído':'#22c55e',
+};
+
+// ─── DESCRIÇÃO COMPACTA ───────────────────────────────────────────────────────
+// A descrição da compra ocupava a linha inteira (e o card do kanban) quando o
+// pedido vinha com especificação longa. Mostra 2 linhas e "ver mais"; o texto
+// completo também está no Resumo.
+function DescricaoCompacta({ texto, linhas = 2 }: { texto: string; linhas?: number }) {
+  const [aberta, setAberta] = useState(false);
+  const t = String(texto || '').trim();
+  if (!t) return <span style={{ color:'#9ca3af' }}>—</span>;
+  const longa = t.length > 70 || t.includes('\n');
+  return (
+    <span style={{ display:'block' }} title={longa && !aberta ? t : undefined}>
+      <span style={aberta || !longa ? { display:'block', whiteSpace:'pre-wrap', wordBreak:'break-word' } : {
+        display:'-webkit-box', WebkitLineClamp: linhas, WebkitBoxOrient:'vertical', overflow:'hidden', wordBreak:'break-word' }}>
+        {t}
+      </span>
+      {longa && (
+        <button type="button" onClick={e => { e.stopPropagation(); setAberta(a => !a); }}
+          style={{ background:'none', border:'none', padding:0, color:'#2563eb', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+          {aberta ? 'ver menos' : 'ver mais'}
+        </button>
+      )}
+    </span>
+  );
+}
+
+// ─── VÍNCULO / LINK na requisição ──────────────────────────────────────────────
+function VinculoLinkCompra({ p, compacto = false }: { p: any; compacto?: boolean }) {
+  if (!p?.vinculo_tipo && !p?.link_url) return null;
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop: compacto ? 2 : 3 }}>
+      {p.vinculo_tipo && (
+        <button type="button" onClick={e => { e.stopPropagation(); abrirVinculo({ tipo: p.vinculo_tipo, id: p.vinculo_id, descricao: p.vinculo_descricao }); }}
+          title="Abrir registro vinculado"
+          style={{ background:'none', border:'none', padding:0, color:'#0369a1', fontSize:9, fontWeight:700, cursor:'pointer', textAlign:'left', textDecoration:'underline' }}>
+          🔗 {TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: {p.vinculo_descricao}
+        </button>
+      )}
+      {p.link_url && (
+        <a href={p.link_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+          style={{ color:'#0f766e', fontSize:9, fontWeight:700, wordBreak:'break-all' }}>🌐 link</a>
+      )}
+    </div>
+  );
+}
+
+function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
+  const [vinculo, setVinculo] = useState(pedido.vinculo_tipo ? { tipo: pedido.vinculo_tipo, id: pedido.vinculo_id, descricao: pedido.vinculo_descricao } : null);
+  const [link, setLink] = useState(pedido.link_url || '');
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async () => {
+    const l = link.trim();
+    if (l && !/^https?:\/\//i.test(l)) { alert('O link precisa começar com http:// ou https://'); return; }
+    if (vinculo?.tipo === 'compra' && String(vinculo.id) === String(pedido.id)) { alert('Não dá para vincular a requisição a ela mesma.'); return; }
+    setSalvando(true);
+    const { error } = await supabase.from('pcp_pedidos_compra').update({
+      vinculo_tipo: vinculo?.tipo || null, vinculo_id: vinculo?.id || null, vinculo_descricao: vinculo?.descricao || null, link_url: l || null,
+    }).eq('id', pedido.id);
+    setSalvando(false);
+    if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    onSalvo();
+  };
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:480 }}>
+        <div className="modal-title">🔗 Vínculo e link — {pedido.numero_pedido}</div>
+        <div style={{ fontSize:10, color:'#64748b', marginBottom:10 }}><DescricaoCompacta texto={pedido.descricao_material} /></div>
+        <label className="acn-label">Vincular a um PV, OP, OS, outra compra ou OFI</label>
+        <div style={{ marginBottom:12 }}>
+          <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+        </div>
+        <label className="acn-label">Link (opcional)</label>
+        <input className="acn-input" style={{ width:'100%', marginBottom:14 }} placeholder="https://..."
+          value={link} onChange={e => setLink(e.target.value)} />
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="acn-btn" style={{ background:'#0369a1', flex:1 }} disabled={salvando} onClick={salvar}>{salvando ? 'Salvando...' : '💾 Salvar'}</button>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RESUMO DA SOLICITAÇÃO ─────────────────────────────────────────────────────
+function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose }) {
+  const [cotacoes, setCotacoes] = useState<any[] | null>(null);
+  const [aprovacoes, setAprovacoes] = useState<any[]>([]);
+  const [acomp, setAcomp] = useState<any[]>([]);
+  useEffect(() => {
+    supabase.from('pcp_cotacoes_fornecedores').select('*').eq('pedido_id', p.id).order('criado_em', { ascending: true })
+      .then(({ data }) => setCotacoes(data || []));
+    supabase.from('pcp_aprovacoes').select('*').eq('pedido_id', p.id).order('nivel', { ascending: true })
+      .then(({ data }) => setAprovacoes(data || []));
+    supabase.from('op_acompanhamentos').select('*').eq('referencia_id', String(p.id)).order('criado_em', { ascending: false }).limit(20)
+      .then(({ data }) => setAcomp(data || []));
+  }, [p.id]);
+  const moeda = (v: any) => v != null && v !== '' ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v)) : '—';
+  const data = (d: any) => d ? new Date(String(d).length <= 10 ? d + 'T00:00:00' : d).toLocaleDateString('pt-BR') : '—';
+  const dep = (departamentos || []).find((d: any) => d.id === p.departamento_id);
+  const Linha = ({ k, v }) => (v === null || v === undefined || v === '' ? null : (
+    <div style={{ display:'grid', gridTemplateColumns:'150px 1fr', gap:8, padding:'4px 0', borderBottom:'1px solid #f1f5f9', fontSize:11 }}>
+      <span style={{ color:'#64748b', fontWeight:700, fontSize:10 }}>{k}</span><span style={{ color:'#1e293b', wordBreak:'break-word' }}>{v}</span>
+    </div>
+  ));
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:680, width:'95vw', maxHeight:'90vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:800, color:'#1a3a52' }}>🔍 Resumo — {p.numero_pedido}</div>
+            <span style={{ padding:'2px 9px', borderRadius:4, color:'#fff', fontSize:10, fontWeight:700, background: COR_STATUS_COMPRA[p.status_compra] || '#9ca3af' }}>{p.status_compra || '—'}</span>
+            {p.numero_oc && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, color:'#7c3aed' }}>📋 {p.numero_oc}</span>}
+          </div>
+          <button className="acn-btn" style={{ background:'#475569' }} onClick={() => imprimirSolicitacao(p)}>🖨️ Imprimir</button>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
+        </div>
+        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'8px 0 4px' }}>Solicitação</div>
+        <div style={{ fontSize:12, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 10px', whiteSpace:'pre-wrap', wordBreak:'break-word', marginBottom:6 }}>
+          {p.descricao_material || '—'}
+        </div>
+        <Linha k="Quantidade" v={p.quantidade} />
+        <Linha k="OP" v={p.opl} />
+        <Linha k="Vínculo" v={p.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : null} />
+        <Linha k="Link" v={p.link_url ? <a href={p.link_url} target="_blank" rel="noreferrer">{p.link_url}</a> : null} />
+        <Linha k="Fornecedor" v={p.fornecedor} />
+        {canVerValor && <Linha k="Valor da compra" v={p.valor_compra ? moeda(p.valor_compra) : null} />}
+        <Linha k="Centro de custo" v={p.centro_custo} />
+        <Linha k="Departamento" v={dep?.nome} />
+        <Linha k="Prev. recebimento" v={p.data_prevista_recebimento ? data(p.data_prevista_recebimento) : null} />
+        <Linha k="Prazo prometido" v={p.prazo_prometido_entrega ? `${data(p.prazo_prometido_entrega)} (${p.prazo_prometido_destino === 'cliente' ? 'cliente' : 'produção'})` : null} />
+        <Linha k="NF" v={p.numero_nf} />
+        <Linha k="Solicitado por" v={[p.criado_por_nome || p.criado_por, p.data_criacao ? data(p.data_criacao) : null].filter(Boolean).join(' · ')} />
+        {p.observacoes_compra && (
+          <>
+            <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'10px 0 4px' }}>Observações</div>
+            <div style={{ fontSize:11, whiteSpace:'pre-wrap', wordBreak:'break-word', color:'#334155' }}><Linkify text={p.observacoes_compra} /></div>
+          </>
+        )}
+        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Cotações de fornecedores</div>
+        {cotacoes === null ? <div style={{ fontSize:10, color:'#94a3b8' }}>Carregando...</div> : cotacoes.length === 0 ? (
+          <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhuma cotação lançada.</div>
+        ) : cotacoes.map((c: any) => (
+          <div key={c.id} style={{ display:'flex', gap:8, alignItems:'center', fontSize:11, padding:'4px 6px', borderBottom:'1px solid #f1f5f9',
+            background: c.id === p.vencedora_id ? '#f0fdf4' : undefined }}>
+            <span style={{ flex:1, fontWeight: c.id === p.vencedora_id ? 800 : 600 }}>{c.id === p.vencedora_id ? '🏆 ' : ''}{c.fornecedor_nome}</span>
+            {canVerValor && <span>{moeda(c.valor)}</span>}
+            {c.prazo_entrega && <span style={{ color:'#64748b', fontSize:10 }}>prazo {c.prazo_entrega}</span>}
+            {c.arquivo_url && <a href={c.arquivo_url} target="_blank" rel="noreferrer" style={{ fontSize:10 }}>📎</a>}
+          </div>
+        ))}
+        {aprovacoes.length > 0 && (
+          <>
+            <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Aprovações</div>
+            {aprovacoes.map((a: any) => (
+              <div key={a.id} style={{ fontSize:11, padding:'3px 6px', borderBottom:'1px solid #f1f5f9' }}>
+                {a.status === 'aprovado' ? '✅' : a.status === 'reprovado' ? '❌' : '⏳'} {a.nivel_nome || `Nível ${a.nivel}`}
+                <span style={{ color:'#64748b', fontSize:10 }}> · {a.status}{a.respondido_por_nome ? ` por ${a.respondido_por_nome}` : ''}</span>
+              </div>
+            ))}
+          </>
+        )}
+        {acomp.length > 0 && (
+          <>
+            <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Acompanhamento (últimos)</div>
+            {acomp.map((a: any) => (
+              <div key={a.id} style={{ fontSize:11, padding:'4px 6px', borderBottom:'1px solid #f1f5f9' }}>
+                <span style={{ color:'#94a3b8', fontSize:9 }}>{a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR') : ''} · {a.usuario_nome}</span>
+                <div style={{ whiteSpace:'pre-wrap', wordBreak:'break-word' }}><Linkify text={a.texto} /></div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
   // Linhas com alteração não vista por este usuário ganham borda amarela —
@@ -296,6 +479,14 @@ export default function ComprasTab({ currentUser }) {
 
   // Acompanhamento (timeline) — reaproveita OplAcompModal
   const [modalAcomp, setModalAcomp]             = useState<any>(null);
+  // Resumo da solicitação e vínculo/link
+  const [modalResumo, setModalResumo]           = useState<any>(null);
+  const [modalVinculo, setModalVinculo]         = useState<any>(null);
+  // Tabela x Kanban (por status) — lembra a escolha neste navegador
+  const [visao, setVisaoState] = useState<'tabela'|'kanban'>(() => {
+    try { return localStorage.getItem('acn:compras-visao') === 'kanban' ? 'kanban' : 'tabela'; } catch { return 'tabela'; }
+  });
+  const setVisao = (v: 'tabela'|'kanban') => { setVisaoState(v); try { localStorage.setItem('acn:compras-visao', v); } catch {} };
 
   // Valores inline por pedido: { [id]: { valor, prazo, salvando } }
   const [inline, setInline] = useState<Record<string,{valor:string,prazo:string,salvando:boolean}>>({});
@@ -1034,11 +1225,10 @@ export default function ComprasTab({ currentUser }) {
               </button>
             </div>
           )}
+          <VinculoLinkCompra p={p} />
         </td>
-        <td style={{...td,maxWidth:150}}>
-          <span style={{ display:'block', wordBreak:'break-word' }}>
-            {p.descricao_material}
-          </span>
+        <td style={{...td,minWidth:200,maxWidth:300}}>
+          <DescricaoCompacta texto={p.descricao_material} />
         </td>
         <td style={td}>{p.quantidade}</td>
         <td style={td}>{p.fornecedor||'—'}</td>
@@ -1184,6 +1374,18 @@ export default function ComprasTab({ currentUser }) {
             </span>
           )}
 
+          {/* 🔍 Resumo da solicitação */}
+          <button onClick={()=>setModalResumo(p)} title="Resumo da solicitação"
+            style={{...btn,background:'#0f766e',marginRight:3}}>
+            🔍 Resumo
+          </button>
+
+          {/* 🔗 Vínculo (PV/OP/OS/compra/OFI) e link */}
+          <button onClick={()=>setModalVinculo(p)} title={p.vinculo_tipo || p.link_url ? 'Editar vínculo/link' : 'Vincular a PV, OP, OS, outra compra ou OFI / adicionar link'}
+            style={{...btn,background:(p.vinculo_tipo || p.link_url)?'#0369a1':'#94a3b8',marginRight:3}}>
+            🔗
+          </button>
+
           {/* 🗨️ Acompanhamento — timeline/chat do pedido */}
           <button onClick={()=>setModalAcomp(p)}
             style={{...btn,background:'#7c3aed',marginRight:3}}>
@@ -1220,11 +1422,22 @@ export default function ComprasTab({ currentUser }) {
           <button onClick={()=>setModalGerCentros(true)}
             style={{...btn,background:'#6366f1',fontSize:10,whiteSpace:'nowrap'}}>⚙️ Centros de Custo</button>
         </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{ display:'flex', border:'1px solid #cbd5e1', borderRadius:6, overflow:'hidden' }}>
+          {([['tabela','☰ Tabela'],['kanban','▦ Kanban']] as const).map(([v,l]) => (
+            <button key={v} onClick={()=>setVisao(v)}
+              style={{ fontSize:10, fontWeight:800, padding:'5px 12px', cursor:'pointer', border:'none',
+                background: visao===v ? '#1e293b' : '#fff', color: visao===v ? '#fff' : '#64748b' }}>
+              {l}
+            </button>
+          ))}
+        </div>
         <select value={filtro} onChange={e=>setFiltro(e.target.value)}
           style={{padding:'5px 10px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11}}>
           <option value="">Todos os status</option>
           {['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'].map(s=><option key={s}>{s}</option>)}
         </select>
+        </div>
       </div>
 
       {queryError && (
@@ -1233,9 +1446,50 @@ export default function ComprasTab({ currentUser }) {
         </div>
       )}
 
+      {!loading && pedidos.length > 0 && visao === 'kanban' && (
+        <div style={{ display:'flex', gap:8, overflowX:'auto', alignItems:'flex-start', paddingBottom:6 }}>
+          {STATUS_COMPRAS.filter(st => !filtro || st === filtro).map(st => (
+            <KanbanColuna key={st} titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={230}
+              itens={pedidos.filter((p:any) => p.status_compra === st)} vazio="Nenhuma requisição"
+              renderCard={(p:any) => {
+                const naoLido = pedidosNaoLidos.has(String(p.id));
+                return (
+                  <div key={p.id} style={{ background:'#fff', border:`1px solid ${naoLido ? '#eab308' : '#e2e8f0'}`, borderLeft:`4px solid ${COR_STATUS_COMPRA[st]}`,
+                    borderRadius:6, padding:'7px 9px', boxShadow:'0 1px 2px #0000000d', fontSize:11 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
+                      <strong style={{ fontSize:11, color:'#1e293b' }}>{p.numero_pedido}</strong>
+                      {p.numero_oc && <span style={{ fontSize:8, fontWeight:700, color:'#7c3aed' }}>📋 {p.numero_oc}</span>}
+                    </div>
+                    <div style={{ fontSize:10, color:'#334155', margin:'3px 0' }}><DescricaoCompacta texto={p.descricao_material} /></div>
+                    <div style={{ fontSize:9, color:'#64748b' }}>
+                      Qtd {p.quantidade || 1}{p.fornecedor ? ` · ${p.fornecedor}` : ''}{p.opl ? ` · OP ${p.opl}` : ''}
+                    </div>
+                    <VinculoLinkCompra p={p} compacto />
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4, marginTop:5, flexWrap:'wrap' }}>
+                      <span style={{ fontSize:9 }}>
+                        {canVerValor && p.valor_compra ? <strong style={{ color:'#16a34a', marginRight:6 }}>{fmt(p.valor_compra)}</strong> : null}
+                        {p.data_prevista_recebimento ? fmtData(p.data_prevista_recebimento) : null}
+                      </span>
+                      <div style={{ display:'flex', gap:3 }}>
+                        {p.status_compra==='Pendente' && <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',padding:'2px 6px',fontSize:9}}>▶️ Iniciar</button>}
+                        {p.status_compra==='Em Andamento' && <button onClick={()=>abrirModalCotacoes(p)} style={{...btn,background:'#d97706',padding:'2px 6px',fontSize:9}}>🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}</button>}
+                        {p.status_compra==='Aguardando Aprovação' && <button onClick={()=>abrirModalCotacoes(p)} style={{...btn,background:'#ea580c',padding:'2px 6px',fontSize:9}}>🔒 Aprovação</button>}
+                        {p.status_compra==='Aprovado' && <button onClick={()=>confirmarCompra(p)} style={{...btn,background:'#0ea5e9',padding:'2px 6px',fontSize:9}}>🛒 Confirmar</button>}
+                        <button onClick={()=>setModalResumo(p)} title="Resumo" style={{...btn,background:'#0f766e',padding:'2px 6px',fontSize:9}}>🔍</button>
+                        <button onClick={()=>setModalVinculo(p)} title="Vínculo e link" style={{...btn,background:(p.vinculo_tipo||p.link_url)?'#0369a1':'#94a3b8',padding:'2px 6px',fontSize:9}}>🔗</button>
+                        <button onClick={()=>setModalAcomp(p)} title="Acompanhamento" style={{...btn,background:'#7c3aed',padding:'2px 6px',fontSize:9}}>🗨️</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }} />
+          ))}
+        </div>
+      )}
+
       {loading ? <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
         : pedidos.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhuma requisição encontrada. {queryError ? '' : '(tabela vazia ou sem permissão)'}</div>
-        : (
+        : visao === 'kanban' ? null : (
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
@@ -1756,6 +2010,15 @@ export default function ComprasTab({ currentUser }) {
       )}
 
       {/* MODAL ACOMPANHAMENTO (timeline/chat) */}
+      {modalResumo && (
+        <ResumoCompraModal pedido={modalResumo} canVerValor={canVerValor} departamentos={departamentosConfig}
+          onClose={()=>setModalResumo(null)} />
+      )}
+      {modalVinculo && (
+        <ModalVinculoCompra pedido={modalVinculo} onClose={()=>setModalVinculo(null)}
+          onSalvo={()=>{ setModalVinculo(null); load(true); }} />
+      )}
+
       {modalAcomp && (
         <OplAcompModal
           referenciaId={modalAcomp.id}

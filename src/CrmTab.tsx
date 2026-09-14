@@ -21,7 +21,7 @@ import { useAlturaDeCards } from './KanbanColuna';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
-import { abrirVinculo } from './VinculoPicker';
+import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
@@ -145,6 +145,8 @@ const VAZIO_COMPRA: any = {
   quantidade: 1,
   fornecedor: '',
   observacoes_compra: '',
+  vinculo: null as any,   // PV/OP/OS/outra compra/OFI (VinculoPicker)
+  link_url: '',
 };
 
 // Monta o estado editável (formOp) a partir de uma linha crua do banco —
@@ -723,6 +725,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       status_compra:        'Pendente',
       observacoes_compra:   obsCompleta,
       oportunidade_id:      modalCompras.id || null,
+      vinculo_tipo:         formCompras.vinculo?.tipo || null,
+      vinculo_id:           formCompras.vinculo?.id || null,
+      vinculo_descricao:    formCompras.vinculo?.descricao || null,
+      link_url:             String(formCompras.link_url || '').trim() || null,
       data_criacao:         agora,
     }]);
     setSalvandoCompra(false);
@@ -4275,6 +4281,19 @@ const SUB_STATUS_COR: Record<string,string> = {
                   style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
                 />
               </div>
+            </div>
+
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Vincular a outro registro (opcional)</div>
+              <VinculoPicker value={formCompras.vinculo} onSelect={v => setFormCompras(f => ({ ...f, vinculo: v }))}
+                onClear={() => setFormCompras(f => ({ ...f, vinculo: null }))} />
+              <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>A compra já fica ligada a esta oportunidade; aqui dá para ligar também a uma OP, OS, outra compra...</div>
+            </div>
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Link (opcional)</div>
+              <input value={formCompras.link_url || ''} onChange={e => setFormCompras(f => ({ ...f, link_url: e.target.value }))}
+                placeholder="https://... (página do produto, especificação, cotação online)"
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
             </div>
 
             <div style={{ marginBottom:14 }}>

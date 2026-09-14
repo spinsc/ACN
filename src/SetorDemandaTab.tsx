@@ -762,7 +762,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       <tr key={d.id} style={{background:sacRowBg(d,isAjuste)}}>
         <td style={{fontSize:10}}>{fmtDt(d.data_abertura)}</td>
         <td>{d.numero_opl||'—'}</td>
-        <td style={{maxWidth:220}}>
+        <td style={{minWidth:210, maxWidth:340}}>
           {isAjuste && <span style={{background:'#f59e0b',color:'#fff',fontSize:8,fontWeight:700,padding:'1px 4px',borderRadius:2,marginRight:3}}>AJUSTE</span>}
           {setor === 'Compras' && d.tipo_solicitacao && (
             <span style={{background: d.tipo_solicitacao==='cotacao' ? '#7c3aed' : '#0891b2', color:'#fff', fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:2, marginRight:3}}>
@@ -777,11 +777,15 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
           {sacBadge(d)}
           {sacFlagBadge(d)}
           {d.pausado && <span style={{display:'block',fontSize:8,color:'#f59e0b',fontWeight:700}}>⏸ PAUSADO</span>}
-          <span style={{ display:'block', maxWidth:180, wordBreak:'break-word' }} title={descExibida}>{descExibida}</span>
-          <button onClick={() => setModalVer(d)}
+          {/* Descrição em até 3 linhas: pedido de compra com especificação longa
+              deixava a linha com meia tela de altura. O texto completo está no
+              Resumo (e no título, ao passar o mouse). */}
+          <span title={descExibida} style={{ display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden',
+            minWidth:200, maxWidth:320, wordBreak:'break-word', lineHeight:1.35 }}>{descExibida}</span>
+          <button onClick={() => setModalVer(d)} title="Resumo da demanda: descrição completa, origem, OP, prazos, valores e observações"
             style={{marginTop:2,padding:'1px 7px',fontSize:9,fontWeight:700,background:'#e2e8f0',
               color:'#475569',border:'none',borderRadius:3,cursor:'pointer'}}>
-            VER
+            🔍 RESUMO
           </button>
         </td>
         <td><span className="acn-badge" style={{background:statusCor[d.status]||'#94a3b8'}}>{d.status}</span></td>
@@ -954,15 +958,49 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       {modalVer && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalVer(null);}}>
           <div className="modal-box" style={{maxWidth:560}}>
-            <div className="modal-title">📋 Descrição — {modalVer.numero_opl||modalVer.id}</div>
-            <div style={{fontSize:11,color:'#6b7280',marginBottom:8}}>
-              {modalVer.setor_destino} · {modalVer.data_abertura ? new Date(modalVer.data_abertura).toLocaleString('pt-BR') : ''}
-              {modalVer.responsavel_nome ? ` · ${modalVer.responsavel_nome}` : ''}
-            </div>
+            <div className="modal-title">🔍 Resumo — {modalVer.numero_demanda || modalVer.numero_opl || 'Demanda'}</div>
+            {(() => {
+              const m = modalVer;
+              const itens = [
+                ['Status', m.status],
+                ['Tipo', m.tipo_solicitacao === 'cotacao' ? 'Cotação' : m.tipo_solicitacao === 'compra' ? 'Compra' : m.tipo_solicitacao],
+                ['Setor', [m.setor_origem, m.setor_destino].filter(Boolean).join(' → ')],
+                ['OP', m.numero_opl || m.opl],
+                ['Quantidade', m.quantidade ? `${m.quantidade} ${m.unidade || ''}`.trim() : null],
+                ['Solicitado por', m.criado_por_nome || m.criado_por],
+                ['Aberta em', m.data_abertura ? new Date(m.data_abertura).toLocaleString('pt-BR') : null],
+                ['Responsável', m.responsavel_nome],
+                ['Concluída em', m.data_conclusao ? new Date(m.data_conclusao).toLocaleString('pt-BR') : null],
+                ['Tempo de execução', m.tempo_execucao_horas != null ? `${Number(m.tempo_execucao_horas).toFixed(1)}h úteis` : null],
+                ['Valor da compra', m.valor_compra != null ? Number(m.valor_compra).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) : null],
+                ['Prev. recebimento', m.data_prevista_recebimento ? new Date(String(m.data_prevista_recebimento).slice(0,10) + 'T00:00:00').toLocaleDateString('pt-BR') : null],
+                ['Centro de custo', m.centro_custo],
+                ['Prioridade', m.prioridade],
+              ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+              return (
+                <div style={{display:'grid',gridTemplateColumns:'130px 1fr',gap:'3px 10px',fontSize:11,marginBottom:10}}>
+                  {itens.map(([k, v]) => (
+                    <React.Fragment key={k}>
+                      <span style={{color:'#64748b',fontWeight:700,fontSize:10}}>{k}</span>
+                      <span style={{color:'#1e293b',wordBreak:'break-word'}}>{v}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            })()}
+            <div style={{fontWeight:700,fontSize:11,color:'#475569',marginBottom:4}}>Descrição</div>
             <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:'12px 14px',
               whiteSpace:'pre-wrap',fontSize:12,lineHeight:1.7,color:'#1e293b',maxHeight:400,overflowY:'auto'}}>
               <Linkify text={modalVer.descricao?.replace('[AJUSTE] ','').replace('[SAC-DIAG] ','').replace('[SAC-EXEC] ','') || '—'} />
             </div>
+            {Array.isArray(modalVer.anexos) && modalVer.anexos.length > 0 && (
+              <div style={{marginTop:10,fontSize:11}}>
+                <span style={{fontWeight:700,color:'#475569'}}>Anexos: </span>
+                {modalVer.anexos.map((a:any, i:number) => (
+                  <a key={i} href={a.url} target="_blank" rel="noreferrer" style={{marginRight:8}}>📎 {a.nome || 'arquivo'}</a>
+                ))}
+              </div>
+            )}
             {(modalVer.observacoes_execucao) && (
               <>
                 <div style={{fontWeight:700,fontSize:11,color:'#475569',marginTop:14,marginBottom:4}}>Observações de execução:</div>
