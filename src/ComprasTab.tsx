@@ -1220,7 +1220,7 @@ export default function ComprasTab({ currentUser }) {
           {p.oportunidade_id && (
             <div>
               <button onClick={()=>abrirVinculo({ tipo:'pv', id:p.oportunidade_id, descricao:p.numero_pedido })}
-                style={{ background:'none', border:'none', padding:0, color:'#7c3aed', fontSize:9, fontWeight:700, cursor:'pointer', textDecoration:'underline' }}>
+                style={{ background:'none', border:'none', padding:0, color:'#7c3aed', fontSize:9, fontWeight:700, cursor:'pointer', textDecoration:'underline', whiteSpace:'nowrap' }}>
                 🔗 Proposta
               </button>
             </div>

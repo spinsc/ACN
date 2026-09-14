@@ -109,3 +109,37 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ETIQUETAS E BOTÕES NÃO QUEBRAM NO MEIO
+   Etiqueta de status feita com <span> + fundo + cantos arredondados é um
+   elemento "inline": numa coluna estreita o texto quebrava e cada linha virava
+   um pedaço de fundo separado ("Em" numa pílula, "Andamento" em outra). São
+   centenas espalhadas pelo sistema com estilo inline, então a regra é global:
+   vira bloco em linha, sem quebra; se não couber de jeito nenhum, corta com
+   "…" em vez de estourar o card.
+   Ficam de fora os que já definem display próprio (flex/grid/block).
+   ───────────────────────────────────────────────────────────────────────── */
+:is(span, a, strong, b, em, small)[style*="border-radius"]:is([style*="background"], [style*="border: "]):not([style*="display"]) {
+  display: inline-block;
+  white-space: nowrap;
+  vertical-align: middle;
+  line-height: 1.35;   /* sem isto herda a altura de linha da tabela e a pílula fica alta */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Etiqueta feita para nomes longos (tem word-break no estilo — centro de
+   custo, departamento...): pode quebrar, mas dentro de UMA pílula só. */
+:is(span, a, strong, b, em, small)[style*="border-radius"]:is([style*="background"], [style*="border: "])[style*="word-break"]:not([style*="display"]) {
+  white-space: normal;
+  overflow: visible;
+}
+.acn-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+
+/* Botão com rótulo curto ("👁 VER", "+ empresa", "📐 Técnica") quebrava em duas
+   linhas. Não quebra mais — exceto botões que ocupam a largura toda (rótulos
+   longos de propósito) e botões com cara de link, que mostram nomes longos. */
+button:not([style*="width: 100%"]):not([style*="flex: 1"]):not([style*="background: none"]):not([style*="background: transparent"]) {
+  white-space: nowrap;
+}

@@ -1067,6 +1067,8 @@ export function LinkOpl({ opl, currentUser, color }: { opl: any; currentUser?: a
           textDecoration: 'underline dotted',
           textUnderlineOffset: 2,
           opacity: loading ? 0.6 : 1,
+          // número curto não quebra ("OPL A" / "997.2607"); número com nome junto pode quebrar
+          whiteSpace: String(numero || '').length <= 22 ? 'nowrap' : undefined,
         }}
         title="Abrir detalhes da OPL"
       >

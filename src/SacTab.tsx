@@ -1679,7 +1679,7 @@ OK = ACN   |   Cancelar = DETECH`;
                     }
                   }>
                     <td>
-                      <strong style={{color:'#0f766e'}}>{o.numero_os}</strong>
+                      <strong style={{color:'#0f766e',whiteSpace:'nowrap'}}>{o.numero_os}</strong>
                       <div style={{marginTop:2}}><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /></div>
                     </td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
