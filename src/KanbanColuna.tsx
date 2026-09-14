@@ -77,19 +77,19 @@ export default function KanbanColuna({
   const [refLista, maxAltura] = useAlturaDeCards(visiveis);
   const total = itens.length;
 
+  // Visual do guia: coluna neutra, a cor da etapa fica só no ponto do cabeçalho
+  // (`fundo` continua aceito por compatibilidade, mas não pinta mais a coluna).
   return (
-    <div style={{ flex: `1 1 ${larguraMin}px`, minWidth: larguraMin, maxWidth: 420,
-      background: fundo, border: `1px solid ${cor}33`, borderRadius: 8, display: 'flex', flexDirection: 'column' }}>
+    <div className="acn-kcol" style={{ flex: `1 1 ${larguraMin}px`, minWidth: larguraMin, maxWidth: 420 }}>
 
-      <div style={{ background: cor, color: '#fff', padding: '6px 10px', borderRadius: '7px 7px 0 0',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.3px' }}>{titulo}</span>
-        <span style={{ fontSize: 11, fontWeight: 800, background: '#ffffff33', borderRadius: 10, padding: '0 7px' }}>{contagem ?? total}</span>
+      <div className="acn-kcab">
+        <i style={{ background: cor }} />
+        <span>{titulo}</span>
+        <em>{contagem ?? total}</em>
       </div>
 
-      <div ref={refLista}
-        style={{ padding: 6, display: 'flex', flexDirection: 'column', gap: 6, flex: 1,
-          boxSizing: 'border-box',
+      <div ref={refLista} className="acn-klista"
+        style={{
           maxHeight: maxAltura || undefined,
           overflowY: maxAltura ? 'auto' : 'visible',
           // Reserva o espaço da barra desde sempre: sem isto ela aparece, o
@@ -97,7 +97,7 @@ export default function KanbanColuna({
           // muda — a coluna ficaria piscando.
           scrollbarGutter: 'stable' }}>
         {total === 0 ? (
-          <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', padding: '14px 4px' }}>{vazio}</div>
+          <div className="acn-kvazio">{vazio}</div>
         ) : itens.map(renderCard)}
       </div>
 

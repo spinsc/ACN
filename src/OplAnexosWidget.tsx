@@ -55,7 +55,7 @@ async function uploadOplAnexo(file: File, oplNumero: string): Promise<string | n
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE ANEXOS
 // ─────────────────────────────────────────────────────────────────────────────
-function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
+export function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
   const [anexos, setAnexos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -215,6 +215,19 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
 //   tipoFixo   — (opcional) força um tipo: 'checklist_entrega'
 //   compact    — (opcional) modo compacto para tabelas
 // ─────────────────────────────────────────────────────────────────────────────
+// Só a contagem de anexos da OP (para mostrar "3 anexos" onde o botão foi para o menu ⋯)
+export function useContagemAnexos(oplId: any): [number | null, () => void] {
+  const [count, setCount] = useState<number | null>(null);
+  const recarregar = useCallback(async () => {
+    if (!oplId) return;
+    const { count: c } = await supabase.from('opl_anexos')
+      .select('*', { count:'exact', head:true }).eq('opl_id', oplId);
+    setCount(c ?? 0);
+  }, [oplId]);
+  useEffect(() => { recarregar(); }, [recarregar]);
+  return [count, recarregar];
+}
+
 export default function OplAnexosWidget({ opl, setor, currentUser, tipoFixo = null, compact = true }) {
   const [count, setCount] = useState<number | null>(null);
   const [modal, setModal] = useState(false);

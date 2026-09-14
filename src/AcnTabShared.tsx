@@ -448,6 +448,30 @@ export function VeiculoOuEnvio({ o, semPlaca = false }: { o: any; semPlaca?: boo
   );
 }
 
+// Mesma informação do VeiculoOuEnvio em duas linhas (tabelas do guia visual):
+// modelo em destaque com o que falta ao lado; chassi e placa na linha de apoio.
+export function VeiculoCompacto({ o, semPlaca = false, children }: { o: any; semPlaca?: boolean; children?: React.ReactNode }) {
+  const vazio = (v: any) => !v || !String(v).trim();
+  if (o?.tipo_projeto === TIPO_VENDA_ENVIO) {
+    return <div className="acn-duas"><span className="acn-forte">Venda para envio · {o.quantidade || 1} un.</span>{children}</div>;
+  }
+  if (soEnvio(o?.fluxo_entrega)) {
+    return <div className="acn-duas"><span className="acn-fraco">Sem veículo (envio)</span>{children}</div>;
+  }
+  const falta = [vazio(o?.modelo) && 'sem modelo', vazio(o?.chassi) && 'sem chassi', !semPlaca && vazio(o?.placa) && 'sem placa'].filter(Boolean);
+  const dados = [!vazio(o?.chassi) && o.chassi, !semPlaca && !vazio(o?.placa) && o.placa].filter(Boolean);
+  return (
+    <div className="acn-duas">
+      <span className="acn-forte" style={{ whiteSpace: 'normal' }}>
+        {vazio(o?.modelo) ? '' : o.modelo}
+        {falta.length > 0 && <span className="acn-aviso-mini" style={vazio(o?.modelo) ? { marginLeft: 0 } : undefined}>⚠ {falta.join(' · ')}</span>}
+      </span>
+      {dados.length > 0 && <small className="acn-mono">{dados.join(' · ')}</small>}
+      {children}
+    </div>
+  );
+}
+
 // ─── RESUMO DO LOTE ─────────────────────────────────────────────────────────
 // OP com lote (BASE/01, /02...): visão da OPL inteira numa tabela só — status,
 // progresso, veículo, técnico, serviços e prazo de cada unidade, contagem por

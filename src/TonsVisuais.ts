@@ -128,7 +128,9 @@ function marcarBotao(el: HTMLElement) {
   const antes = el.getAttribute('data-acn-tom');
   // ao passar o mouse a tela troca a cor: mantém o papel já dado
   if (antes && el.matches(':hover')) return;
-  const p = papelBotao(el);
+  let p = papelBotao(el);
+  // dentro de [data-acn-rebaixar] nada passa de secundário (ex.: anexos ao lado da ação principal)
+  if ((p === 'primario' || p === 'selecionado') && el.closest('[data-acn-rebaixar]')) p = 'secundario';
   const borda = !!el.style.borderStyle && el.style.borderStyle !== 'none' && parseFloat(el.style.borderWidth || '0') > 0;
   if (borda) { if (!el.hasAttribute('data-acn-borda')) el.setAttribute('data-acn-borda', ''); }
   else if (el.hasAttribute('data-acn-borda')) el.removeAttribute('data-acn-borda');

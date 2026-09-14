@@ -17,6 +17,8 @@ import KanbanColuna from './KanbanColuna';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { temSerralheria } from './FluxoEntrega';
 import { OrigemVendaBadge } from './OrigemVenda';
+import { Botao, Selo, Tag } from './Interface';
+import { mdiSwapVertical, mdiMessageTextOutline, mdiAccountGroupOutline, mdiPlay, mdiCheck, mdiTrayArrowDown, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 const maisDias = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
@@ -89,90 +91,52 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
     const retrabalho = o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho';
     const semDono    = !o.responsavel_producao && !o.equipe_nome;
     const responsavel = (o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao) || null;
+    const atrasada   = colunaDe(o) === 'atrasadas';
 
     return (
-      <div key={o.id}
-        style={{ background: '#fff', border: `1px solid ${retrabalho ? '#fca5a5' : '#e2e8f0'}`,
-          borderLeft: `4px solid ${retrabalho ? '#dc2626' : emProd ? '#16a34a' : '#94a3b8'}`,
-          borderRadius: 6, padding: '7px 9px', boxShadow: '0 1px 2px #0000000d' }}>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#1e293b' }}>{o.opl}</span>
+      <div key={o.id} className={'acn-kcard' + (retrabalho ? ' alerta' : emProd ? ' andamento' : '')}>
+        <div className="acn-kmeta">
+          <span className="acn-mono acn-forte">{o.opl}</span>
           <OrigemVendaBadge origem={o.origem_venda} />
-          {o.prioridade_dia != null && (
-            <span title="Prioridade no dia" style={{ fontSize: 8, fontWeight: 800, background: '#fef3c7',
-              color: '#92400e', border: '1px solid #fcd34d', borderRadius: 3, padding: '0 4px' }}>
-              {o.prioridade_dia}º
-            </span>
-          )}
-          {temSerralheria(o) && (
-            <span title="Passa pela serralheria" style={{ fontSize: 8, fontWeight: 800, background: '#e0e7ff',
-              color: '#3730a3', border: '1px solid #a5b4fc', borderRadius: 3, padding: '0 4px' }}>🔩</span>
-          )}
+          {o.prioridade_dia != null && <Tag title="Prioridade no dia">{o.prioridade_dia}º</Tag>}
+          {temSerralheria(o) && <Tag title="Passa pela serralheria">Serralheria</Tag>}
         </div>
 
-        <div style={{ fontSize: 10, color: '#334155', fontWeight: 600, wordBreak: 'break-word' }}>
-          {o.cliente_nome || '—'}
+        <div>
+          <h6>{o.cliente_nome || '—'}</h6>
+          <div className="acn-kmeta">{o.modelo || '—'}</div>
         </div>
-        <div style={{ fontSize: 9, color: '#94a3b8', wordBreak: 'break-word' }}>{o.modelo || '—'}</div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 8, fontWeight: 800, borderRadius: 3, padding: '1px 5px',
-            background: emProd ? '#dcfce7' : retrabalho ? '#fee2e2' : '#f1f5f9',
-            color: emProd ? '#166534' : retrabalho ? '#991b1b' : '#475569' }}>
-            {o.status_geral}
-          </span>
+        <div className="acn-kmeta">
+          <Selo status={o.status_geral} />
           {/* "Ninguém pegou" é o sinal mais acionável do quadro: separa decisão
               pendente do gerente de acompanhamento de trabalho em andamento. */}
-          {semDono ? (
-            <span style={{ fontSize: 8, fontWeight: 800, background: '#fff7ed', color: '#c2410c',
-              border: '1px dashed #fdba74', borderRadius: 3, padding: '1px 5px' }}>
-              sem responsável
-            </span>
-          ) : (
-            <span style={{ fontSize: 8, color: '#64748b', fontWeight: 700 }}>👤 {responsavel}</span>
-          )}
+          {semDono ? <Selo familia="atencao" ponto={false}>Sem responsável</Selo> : <span>{responsavel}</span>}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginTop: 5, gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: colunaDe(o) === 'atrasadas' ? '#dc2626' : '#475569' }}>
+        <div className="acn-kmeta">
+          <span className="acn-num" style={atrasada ? { color: 'var(--acn-bad)', fontWeight: 500 } : undefined}>
             {fmt(o.data_prevista_entrega)}
-            {colunaDe(o) === 'atrasadas' && ` · ${diasAtraso(o.data_prevista_entrega)}d`}
+            {atrasada && ` · ${diasAtraso(o.data_prevista_entrega)} d`}
           </span>
-          <div style={{ display: 'flex', gap: 3 }}>
-            <button onClick={() => onPrioridade(o)} title="Definir prioridade no dia"
-              style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
-                border: '1px solid #fcd34d', background: '#fffbeb', color: '#92400e' }}>
-              ⇅
-            </button>
-            {/* 💬 fica sempre visível: é por onde sai a informação que o
+          <span className="dir-auto" style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Botao pequeno variante="discreto" icone={mdiSwapVertical} onClick={() => onPrioridade(o)}
+              title="Definir prioridade no dia" aria-label="Definir prioridade no dia" />
+            {/* Recado fica sempre visível: é por onde sai a informação que o
                 vendedor precisa, e escondê-lo é o mesmo que não existir. */}
-            <button onClick={() => onAction('acomp', o)} title="Dar um recado sobre esta OP (1 clique)"
-              style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
-                border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca' }}>
-              💬
-            </button>
+            <Botao pequeno variante="discreto" icone={mdiMessageTextOutline} onClick={() => onAction('acomp', o)}
+              title="Dar um recado sobre esta OP (1 clique)" aria-label="Dar um recado sobre esta OP" />
             {o.status_geral === 'Aguardando Inicio Producao' && (<>
-              <button onClick={() => onAction('iniciar', o)} title="Inicia agora com você como responsável"
-                style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 3, cursor: 'pointer',
-                  border: 'none', background: '#16a34a', color: '#fff' }}>
-                ▶ INICIAR
-              </button>
-              <button onClick={() => onAction('iniciar_opcoes', o)} title="Iniciar em dupla ou com uma equipe"
-                style={{ fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 3, cursor: 'pointer',
-                  border: '1px solid #16a34a', background: '#fff', color: '#16a34a' }}>
-                👥
-              </button>
+              <Botao pequeno variante="discreto" icone={mdiAccountGroupOutline} onClick={() => onAction('iniciar_opcoes', o)}
+                title="Iniciar em dupla ou com uma equipe" aria-label="Iniciar em dupla ou com uma equipe" />
+              <Botao pequeno variante="primario" icone={mdiPlay} onClick={() => onAction('iniciar', o)}
+                title="Inicia agora com você como responsável">Iniciar</Botao>
             </>)}
             {emProd && (
-              <button onClick={() => onAction('checklist', o)} title="Conclui a produção e envia para o Controle de Qualidade"
-                style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 3, cursor: 'pointer',
-                  border: 'none', background: '#0891b2', color: '#fff' }}>
-                ✅ CONCLUIR
-              </button>
+              <Botao pequeno variante="secundario" icone={mdiCheck} onClick={() => onAction('checklist', o)}
+                title="Conclui a produção e envia para o Controle de Qualidade">Concluir</Botao>
             )}
-          </div>
+          </span>
         </div>
       </div>
     );
@@ -187,47 +151,40 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
     const qtdRetrab     = g.irmaos.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho').length;
     const qtdSemDono    = g.irmaos.filter(o => !o.responsavel_producao && !o.equipe_nome).length;
     const datas = g.irmaos.map(o => o.data_prevista_entrega).filter(Boolean).sort();
-    const badge = (txt, bg, cor) => (
-      <span style={{ fontSize: 8, fontWeight: 800, borderRadius: 3, padding: '1px 5px', background: bg, color: cor }}>{txt}</span>
-    );
     return (
-      <div key={'lote-' + chave}
-        style={{ background: '#faf5ff', border: '1px solid #ddd6fe', borderLeft: `4px solid ${qtdRetrab ? '#dc2626' : '#7c3aed'}`,
-          borderRadius: 6, padding: '7px 9px', boxShadow: '0 1px 2px #0000000d' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#1e293b' }}>🔗 {g.base}</span>
-          <span style={{ fontSize: 8, fontWeight: 800, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 5px' }}>
-            LOTE — {g.irmaos.length} unidades
-          </span>
+      <div key={'lote-' + chave} className={'acn-kcard ' + (qtdRetrab ? 'alerta' : 'lote')}>
+        <div className="acn-kmeta">
+          <span className="acn-mono acn-forte">{g.base}</span>
+          <Tag>Lote · {g.irmaos.length} unidades</Tag>
           <OrigemVendaBadge origem={primeiro.origem_venda} />
         </div>
-        <div style={{ fontSize: 10, color: '#334155', fontWeight: 600, wordBreak: 'break-word' }}>{primeiro.cliente_nome || '—'}</div>
-        <div style={{ fontSize: 9, color: '#94a3b8', wordBreak: 'break-word' }}>{primeiro.modelo || primeiro.tipo_projeto || '—'}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
-          {qtdAguardando > 0 && badge(`${qtdAguardando} aguardando início`, '#fef3c7', '#92400e')}
-          {qtdEmProd > 0 && badge(`${qtdEmProd} em produção`, '#dcfce7', '#166534')}
-          {qtdRetrab > 0 && badge(`${qtdRetrab} em retrabalho`, '#fee2e2', '#991b1b')}
-          {qtdSemDono > 0 && badge(`${qtdSemDono} sem responsável`, '#fff7ed', '#c2410c')}
+        <div>
+          <h6>{primeiro.cliente_nome || '—'}</h6>
+          <div className="acn-kmeta">{primeiro.modelo || primeiro.tipo_projeto || '—'}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5, gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: colunaDe(primeiro) === 'atrasadas' ? '#dc2626' : '#475569' }}>
+        <div className="acn-kmeta">
+          {qtdAguardando > 0 && <Selo familia="neutro">{qtdAguardando} aguardando início</Selo>}
+          {qtdEmProd > 0 && <Selo familia="info">{qtdEmProd} em produção</Selo>}
+          {qtdRetrab > 0 && <Selo familia="erro">{qtdRetrab} em retrabalho</Selo>}
+          {qtdSemDono > 0 && <Selo familia="atencao" ponto={false}>{qtdSemDono} sem responsável</Selo>}
+        </div>
+        <div className="acn-kmeta">
+          <span className="acn-num" style={colunaDe(primeiro) === 'atrasadas' ? { color: 'var(--acn-bad)', fontWeight: 500 } : undefined}>
             {datas.length ? fmt(datas[0]) : 'Sem prazo'}{datas.length > 1 && datas[0] !== datas[datas.length - 1] ? ` a ${fmt(datas[datas.length - 1])}` : ''}
           </span>
-          <div style={{ display: 'flex', gap: 3 }}>
+          <span className="dir-auto" style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             {onImportarLote && (
-              <button onClick={() => onImportarLote(g)} title="Importar técnicos/equipes para as unidades do lote"
-                style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, cursor: 'pointer', border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8' }}>
-                📥
-              </button>
+              <Botao pequeno variante="discreto" icone={mdiTrayArrowDown} onClick={() => onImportarLote(g)}
+                title="Importar técnicos/equipes para as unidades do lote" aria-label="Importar técnicos/equipes para as unidades do lote" />
             )}
-            <button onClick={() => setLotesAbertos(p => ({ ...p, [chave]: !p[chave] }))}
-              style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 3, cursor: 'pointer', border: 'none', background: '#7c3aed', color: '#fff' }}>
-              {aberto ? '▲ Ocultar' : `▼ Ver ${g.irmaos.length} unidades`}
-            </button>
-          </div>
+            <Botao pequeno variante="secundario" icone={aberto ? mdiChevronUp : mdiChevronDown}
+              onClick={() => setLotesAbertos(p => ({ ...p, [chave]: !p[chave] }))}>
+              {aberto ? 'Ocultar' : `Ver ${g.irmaos.length} unidades`}
+            </Botao>
+          </span>
         </div>
         {aberto && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
             {g.irmaos.map(card)}
           </div>
         )}
@@ -252,7 +209,7 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, alignItems: 'flex-start' }}>
       {COLUNAS.map(c => (
         <KanbanColuna key={c.id} titulo={c.titulo} cor={c.cor} fundo={c.fundo}
           itens={agruparLotes(porColuna(c.id))} contagem={porColuna(c.id).length}

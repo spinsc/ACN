@@ -2,8 +2,8 @@
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, VeiculoOuEnvio } from './AcnTabShared';
-import OplAnexosWidget from './OplAnexosWidget';
+import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, VeiculoOuEnvio, VeiculoCompacto } from './AcnTabShared';
+import { ModalAnexos, useContagemAnexos } from './OplAnexosWidget';
 import AnaliseWidget from './AnaliseWidget';
 import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -17,11 +17,21 @@ import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
+import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
+import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
+  mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
+  mdiMessageTextOutline, mdiPause, mdiCheck, mdiChevronDown, mdiChevronUp, mdiTrayArrowDown, mdiHammerWrench, mdiClose,
+  mdiAccountGroupOutline, mdiCheckAll, mdiAccount, mdiPaperclip } from '@mdi/js';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 const semDado = (v) => !v || !String(v).trim();
+const MODOS_EXECUCAO = [
+  { id: 'individual', rotulo: 'Individual', icone: mdiAccount },
+  { id: 'dupla',      rotulo: 'Dupla',      icone: mdiAccountMultipleOutline },
+  { id: 'equipe',     rotulo: 'Equipe',     icone: mdiTagOutline },
+];
 
 // Recados prontos da produção. São as respostas que o vendedor precisa dar ao
 // cliente — "e a minha adaptação?" — escritas de um jeito que possa ser
@@ -52,154 +62,118 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
   // precisar de nenhum código especial (horasUteis não soma essas horas).
   const timerProd   = useTempoUtil(emProd   ? o.data_inicio_producao   : null, o.pausado, o.data_pausa, o.tempo_pausado_horas).texto;
   const timerRetrab = useTempoUtil(emRetrab ? o.data_inicio_retrabalho : null, o.pausado, o.data_pausa, o.tempo_pausado_horas).texto;
+  const timer = emProd ? timerProd : emRetrab ? timerRetrab : null;
+  const [qtdAnexos, recarregarAnexos] = useContagemAnexos(o.id);
+  const [anexosAberto, setAnexosAberto] = useState(false);
 
-  const rowStyle = retrabalho || emRetrab
-    ? { background: '#fef2f2', borderLeft: '4px solid #ef4444' }
-    : o.liberado_divulgacao
-    ? { background: '#faf5ff', borderLeft: '3px solid #7c3aed' }
-    : naoLido
-    ? { background: '#fffdf0', borderLeft: '4px solid #eab308' }
-    : {};
+  // Linha com filete: vermelho = retrabalho, roxo = autorização de marketing,
+  // amarelo = alteração que este usuário ainda não viu (ver AuditSystem.tsx)
+  const classeLinha = retrabalho || emRetrab ? 'acn-linha-alerta'
+    : o.liberado_divulgacao ? 'acn-linha-marca'
+    : naoLido ? 'acn-linha-nova' : '';
+  const atraso = diasAtraso(o.data_prevista_entrega);
+  const qtd = o.quantidade || 1;
+
+  const responsavel = o.modo_execucao === 'equipe'
+    ? (o.equipe_nome ? <div className="acn-duas"><span>{o.equipe_nome}</span><small>Equipe</small></div> : null)
+    : o.modo_execucao === 'dupla'
+    ? (o.responsavel_producao ? <div className="acn-duas"><span>{o.responsavel_producao}</span>{o.tecnico_producao_2_nome && <small>+ {o.tecnico_producao_2_nome}</small>}</div> : null)
+    : o.responsavel_producao || null;
+
+  const acaoPrincipal =
+    aguardando ? <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>onAction('iniciar',o)} title="Inicia agora com você como responsável">Iniciar</Botao>
+    : retrabalho ? <Botao pequeno variante="primario" icone={mdiPlay} onClick={()=>onAction('iniciar_retrabalho',o)}>Iniciar retrabalho</Botao>
+    : (emProd || emRetrab) && o.pausado ? <Botao pequeno variante="secundario" icone={mdiPlay} onClick={()=>onAction('retomar',o)}>Retomar</Botao>
+    : emProd ? <Botao pequeno variante="secundario" icone={mdiCheck} onClick={()=>onAction('checklist',o)}>Concluir</Botao>
+    : emRetrab ? <Botao pequeno variante="secundario" icone={mdiCheck} onClick={()=>onAction('concluir_retrabalho',o)}>Concluir → CQ</Botao>
+    : null;
+
+  const serralheriaAtual = o.serralheria_status || 'Pendente';
+  const menu = [
+    { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => onAction('ver', o) },
+    { rotulo: 'Acompanhamento', icone: mdiMessageTextOutline, onClick: () => onAction('acomp', o) },
+    { rotulo: qtdAnexos ? `Anexos (${qtdAnexos})` : 'Anexos', icone: mdiPaperclip, onClick: () => setAnexosAberto(true) },
+    { rotulo: 'Iniciar em dupla ou equipe', icone: mdiAccountGroupOutline, onClick: () => onAction('iniciar_opcoes', o), oculto: !aguardando },
+    { rotulo: 'Pausar', icone: mdiPause, onClick: () => onAction('pausar', o), oculto: !((emProd || emRetrab) && !o.pausado) },
+    { rotulo: 'Concluir', icone: mdiCheck, onClick: () => onAction('checklist', o), oculto: !(emProd && o.pausado) },
+    { rotulo: 'Concluir → CQ', icone: mdiCheck, onClick: () => onAction('concluir_retrabalho', o), oculto: !(emRetrab && o.pausado) },
+    { rotulo: 'Editar responsável', icone: mdiPencilOutline, onClick: () => onAction('editar_resp', o), oculto: !(emProd || emRetrab) },
+    { rotulo: 'Equipe', icone: mdiAccountMultipleOutline, onClick: () => onAction('gerenciar_equipe', o), oculto: !(emProd || emRetrab) },
+    ...(temSerralheria(o) && onSerralheria
+      ? SERRALHERIA_STATUS.filter(st => st !== serralheriaAtual).map(st => ({
+          rotulo: `Serralheria: ${rotuloStatus(st)}`, icone: mdiHammerWrench, onClick: () => onSerralheria(o, st), titulo: `Marcar serralheria como ${st}`,
+        }))
+      : []),
+    { rotulo: 'Devolver ao PCP', icone: mdiArrowULeftTop, onClick: () => onAction('devolver', o), perigo: true, oculto: !emProd },
+  ];
 
   return (
     <>
-      <tr style={rowStyle}>
+      <tr className={classeLinha}>
         {onToggleSelecionar && (
           <td style={{textAlign:'center'}}>
-            <input type="checkbox" checked={!!selecionado} onChange={()=>onToggleSelecionar(o.id)} style={{cursor:'pointer'}} />
+            <input type="checkbox" checked={!!selecionado} onChange={()=>onToggleSelecionar(o.id)} style={{cursor:'pointer'}} aria-label={`Selecionar ${o.opl}`} />
           </td>
         )}
         <td>
-          <LinkOpl opl={o} currentUser={currentUser} color={retrabalho || emRetrab ? '#dc2626' : '#2563eb'} />
-          {o.liberado_divulgacao && !retrabalho && !emRetrab && (
-            <div><span style={{fontSize:9,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>📸 MKT</span></div>
-          )}
-          {(retrabalho || emRetrab) && (
-            <div><span style={{fontSize:9,background:'#ef4444',color:'white',padding:'1px 5px',borderRadius:10,fontWeight:700}}>🔁 RETRABALHO</span></div>
-          )}
-          {/* Andamento da serralheria — visível em qualquer fila, porque numa
-              adaptação ela é etapa e quem acompanha precisa ver ali mesmo. */}
-          {temSerralheria(o) && (
-            <div style={{ marginTop:3 }}>
-              <div title={motivoSerralheria(o)}
-                style={{ fontSize:8, fontWeight:800, background:'#e0e7ff', color:'#3730a3',
-                  border:'1px solid #a5b4fc', borderRadius:3, padding:'1px 5px', display:'inline-block' }}>
-                🔩 {o.serralheria_status || 'Pendente'}
-              </div>
-              {onSerralheria && (
-                <div style={{ display:'flex', gap:3, marginTop:2, flexWrap:'wrap' }}>
-                  {SERRALHERIA_STATUS.filter(st => st !== (o.serralheria_status || 'Pendente')).map(st => (
-                    <button key={st} onClick={()=>onSerralheria(o, st)}
-                      title={`Marcar serralheria como ${st}`}
-                      style={{ fontSize:8, padding:'1px 6px', borderRadius:3, cursor:'pointer',
-                        border:'1px solid #a5b4fc', background:'#fff', color:'#3730a3', fontWeight:700 }}>
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </td>
-        <td style={{fontSize:10}}>
-          <VeiculoOuEnvio o={o} />
-        </td>
-        <td>{o.cliente_nome || '—'}</td>
-        <td>{o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
-        <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-        <td style={{ maxWidth:110, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
-        <td>
-          {o.modo_execucao === 'equipe'
-            ? <span>🏷️ <strong>{o.equipe_nome || '—'}</strong></span>
-            : o.modo_execucao === 'dupla'
-            ? <span>{o.responsavel_producao || '—'}{o.tecnico_producao_2_nome ? <><br/><span style={{fontSize:9,color:'#6366f1'}}>+ {o.tecnico_producao_2_nome}</span></> : ''}</span>
-            : o.responsavel_producao || '—'
-          }
-        </td>
-        <td>
-          {emProd && (
-            <div>
-              <span style={{fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",color: o.pausado?'#f59e0b':'#2563eb',fontWeight:700,fontSize:12}}>
-                {o.pausado && '⏸ '}{timerProd}
-              </span>
-              <div><BadgeForaExpediente /></div>
-            </div>
-          )}
-          {emRetrab && (
-            <div>
-              <span style={{fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",color: o.pausado?'#f59e0b':'#dc2626',fontWeight:700,fontSize:12}}>
-                {o.pausado && '⏸ '}{timerRetrab}
-              </span>
-              <div><BadgeForaExpediente /></div>
-            </div>
-          )}
-          {(aguardando || retrabalho) && '—'}
-        </td>
-        <td>
-          <span className="acn-badge" style={{
-            background: emProd?'#3b82f6': aguardando?'#f59e0b': (retrabalho||emRetrab)?'#ef4444':'#94a3b8'
-          }}>{o.status_geral}</span>
-        </td>
-        <td>
-          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-            <button className="acn-btn" style={{background:'#0891b2',fontSize:10}} onClick={()=>onAction('ver',o)}>👁 VER</button>
-            <OplAnexosWidget opl={o} setor="Producao" currentUser={currentUser} compact={true} />
-            <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('acomp',o)}>💬 ACOMP.</button>
-            {aguardando && (
-              <>
-                <button className="acn-btn" style={{background:'#2563eb'}} onClick={()=>onAction('iniciar',o)}
-                  title="Inicia agora com você como responsável">▶ INICIAR</button>
-                <button className="acn-btn" style={{background:'#1d4ed8',fontSize:9}} onClick={()=>onAction('iniciar_opcoes',o)}
-                  title="Iniciar em dupla ou com uma equipe">👥</button>
-              </>
-            )}
-            {emProd && (
-              <>
-                <BotaoPausar pausado={o.pausado} onPausar={()=>onAction('pausar',o)} onRetomar={()=>onAction('retomar',o)} />
-                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>onAction('checklist',o)}>✅ CONCLUIR</button>
-                <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
-                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
-                <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>onAction('devolver',o)}>DEV. PCP</button>
-              </>
-            )}
-            {emRetrab && (
-              <>
-                <BotaoPausar pausado={o.pausado} onPausar={()=>onAction('pausar',o)} onRetomar={()=>onAction('retomar',o)} />
-                <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>onAction('editar_resp',o)}>✏️ RESP.</button>
-                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} onClick={()=>onAction('gerenciar_equipe',o)}>👥 EQUIPE</button>
-              </>
-            )}
-            {retrabalho && (
-              <button className="acn-btn" style={{background:'#ef4444',fontWeight:700}} onClick={()=>onAction('iniciar_retrabalho',o)}>
-                🔁 INICIAR RETRABALHO
-              </button>
-            )}
-            {emRetrab && (
-              <button className="acn-btn" style={{background:'#22c55e',fontWeight:700}} onClick={()=>onAction('concluir_retrabalho',o)}>
-                ✅ CONCLUIR → CQ
-              </button>
-            )}
+          <div className="acn-duas">
+            <span className={(String(o.opl || '').length <= 14 ? 'acn-mono ' : '') + 'acn-forte'} style={{ whiteSpace:'normal', maxWidth:150 }}>
+              <LinkOpl opl={o} currentUser={currentUser} color="var(--acn-brand-ink)" />
+            </span>
+            {qtd > 1 && <small>{qtd} unidades</small>}
+            {qtdAnexos > 0 && <small>{qtdAnexos} anexo{qtdAnexos !== 1 ? 's' : ''}</small>}
+            {o.liberado_divulgacao && !retrabalho && !emRetrab && <small style={{ color:'#6d28d9' }}>Autorização de marketing</small>}
+            {/* Andamento da serralheria — visível em qualquer fila, porque numa
+                adaptação ela é etapa e quem acompanha precisa ver ali mesmo. */}
+            {temSerralheria(o) && <span style={{ marginTop:2 }}><Tag title={motivoSerralheria(o)}>Serralheria · {rotuloStatus(serralheriaAtual)}</Tag></span>}
           </div>
+        </td>
+        <td style={{ minWidth:190, maxWidth:'min(280px, 19vw)' }}>
+          <VeiculoCompacto o={o}>
+            <small title={[o.cliente_nome, o.tipo_projeto].filter(Boolean).join(' · ')}
+              style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'min(280px, 19vw)' }}>
+              {o.cliente_nome || 'Sem cliente'}{o.tipo_projeto ? ` · ${o.tipo_projeto}` : ''}
+            </small>
+          </VeiculoCompacto>
+        </td>
+        <td className="acn-num" style={{ whiteSpace:'nowrap' }}>
+          {!o.data_prevista_entrega ? <span className="acn-fraco">Sem data</span>
+            : isNaN(new Date(o.data_prevista_entrega+'T00:00:00').getTime()) ? <span className="acn-fraco" title={String(o.data_prevista_entrega)}>Data inválida</span>
+            : <span style={atraso > 0 ? { color:'var(--acn-bad)', fontWeight:500 } : undefined} title={atraso > 0 ? `${atraso} dia(s) após a entrega prevista` : undefined}>
+                {new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR')}{atraso > 0 ? ` · ${atraso} d` : ''}
+              </span>}
+        </td>
+        <td style={{ minWidth:96 }}>{responsavel || <span className="acn-fraco">Sem responsável</span>}</td>
+        <td>
+          <div className="acn-duas" style={{ alignItems:'flex-start' }}>
+            <Selo status={o.status_geral} />
+            {timer && (
+              <small className="acn-mono" style={{ whiteSpace:'nowrap', ...(o.pausado ? { color:'var(--acn-warn)' } : {}) }}>
+                {o.pausado ? 'Pausado · ' : ''}{timer}
+              </small>
+            )}
+            {timer && <BadgeForaExpediente />}
+          </div>
+        </td>
+        <td>
+          <div className="acn-acoes-linha">
+            {acaoPrincipal}
+            <MenuAcoes itens={menu} />
+          </div>
+          {anexosAberto && (
+            <ModalAnexos opl={o} setor="Producao" currentUser={currentUser} tipo={null}
+              onClose={() => { setAnexosAberto(false); recarregarAnexos(); }} />
+          )}
         </td>
       </tr>
       {/* Linha extra: motivo da reprovação CQ */}
       {(retrabalho || emRetrab) && o.obs_reprovacao_cq && (
-        <tr style={{background:'#fef2f2'}}>
-          <td colSpan={onToggleSelecionar ? 11 : 10} style={{padding:'4px 10px'}}>
-            <div style={{display:'flex',alignItems:'flex-start',gap:8,padding:'5px 8px',background:'#fee2e2',borderRadius:4,border:'1px solid #fca5a5'}}>
-              <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
-              <div style={{flex:1}}>
-                <span style={{fontSize:9,fontWeight:700,color:'#991b1b',textTransform:'uppercase',letterSpacing:'0.5px'}}>
-                  Motivo da reprovacao CQ — Auditor: {o.cq_auditor || '—'}
-                </span>
-                <div style={{fontSize:11,color:'#7f1d1d',marginTop:2,fontWeight:600}}>{o.obs_reprovacao_cq}</div>
-              </div>
-              {o.tempo_retrabalho_horas && (
-                <span style={{fontSize:10,color:'#dc2626',fontWeight:700,whiteSpace:'nowrap'}}>
-                  Ret. anterior: {Number(o.tempo_retrabalho_horas).toFixed(1)}h
-                </span>
-              )}
-            </div>
+        <tr className="acn-linha-alerta">
+          <td colSpan={onToggleSelecionar ? 7 : 6} style={{ padding:'4px 12px 8px' }}>
+            <Faixa tom="erro" acao={o.tempo_retrabalho_horas ? <span className="acn-num" style={{ fontSize:12, whiteSpace:'nowrap' }}>Retrabalho anterior: {Number(o.tempo_retrabalho_horas).toFixed(1)} h</span> : null}>
+              <b>Motivo da reprovação no CQ</b> · Auditor: {o.cq_auditor || '—'}
+              <div style={{ marginTop:2 }}>{o.obs_reprovacao_cq}</div>
+            </Faixa>
           </td>
         </tr>
       )}
@@ -2463,6 +2437,7 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const [abaProducao, setAbaProducao] = useState('producao');
+  const [maisFiltros, setMaisFiltros] = useState(false);
   const emRetrabalho = opls.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho');
 
   // Técnicos únicos presentes na lista atual, para popular o filtro
@@ -2588,21 +2563,31 @@ export default function ProducaoTab({ currentUser }) {
     setFiltroCliente(''); setFiltroEntregaDe(''); setFiltroEntregaAte('');
   };
 
+  const qtdMkt = opls.filter(o => o.liberado_divulgacao && o.status_geral === 'Em Producao').length;
+
   return (
     <div>
-      {/* TABS */}
-      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
-        <button style={{flex:1,padding:'8px',background:abaProducao==='producao'?'#1e293b':'white',color:abaProducao==='producao'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaProducao('producao')}>⚙️ Produção</button>
-        <button style={{flex:1,padding:'8px',background:abaProducao==='veicular'?'#dc2626':'white',color:abaProducao==='veicular'?'white':'#dc2626',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaProducao('veicular')}>🔧 SAC Veicular</button>
-        <button style={{flex:1,padding:'8px',background:abaProducao==='agenda'?'#f97316':'white',color:abaProducao==='agenda'?'white':'#f97316',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaProducao('agenda')}>📅 Agendamentos</button>
-        <button style={{flex:1,padding:'8px',background:abaProducao==='voucher'?'#7c3aed':'white',color:abaProducao==='voucher'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaProducao('voucher')}>🎟️ Voucher</button>
-        <button style={{flex:1,padding:'8px',background:abaProducao==='equipes'?'#0891b2':'white',color:abaProducao==='equipes'?'white':'#0891b2',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaProducao('equipes')}>🏷️ Equipes</button>
-      </div>
+      <CabecalhoTela
+        titulo="Adaptação"
+        subtitulo={abaProducao === 'producao'
+          ? <><span className="acn-num">{opls.length}</span> OPs na fila · {emRetrabalho.length} em retrabalho · {qtdMkt} com autorização de marketing</>
+          : undefined}
+        acoes={abaProducao === 'producao' && (
+          /* Tabela x Kanban — as duas visões olham a MESMA lista já filtrada,
+             então trocar de visão não muda o que está sendo mostrado. */
+          <Chips rotulo="Visão" ativo={visao} onChange={setVisao}
+            itens={[{ id:'tabela', rotulo:'Tabela', icone: mdiTableLarge }, { id:'kanban', rotulo:'Kanban', icone: mdiViewColumnOutline }]} />
+        )}
+        abas={
+          <Abas ativa={abaProducao} onChange={setAbaProducao} itens={[
+            { id:'producao', rotulo:'Produção', icone: mdiCogOutline },
+            { id:'veicular', rotulo:'SAC veicular', icone: mdiCarWrench },
+            { id:'agenda',   rotulo:'Agendamentos', icone: mdiCalendarMonthOutline },
+            { id:'voucher',  rotulo:'Voucher', icone: mdiTicketPercentOutline },
+            { id:'equipes',  rotulo:'Equipes', icone: mdiTagOutline },
+          ]} />
+        }
+      />
 
       {abaProducao === 'veicular' && <PainelSacVeicular currentUser={currentUser} />}
       {abaProducao === 'agenda' && <CalendarioManutencao currentUser={currentUser} />}
@@ -2611,143 +2596,76 @@ export default function ProducaoTab({ currentUser }) {
       {abaProducao === 'producao' && <div>
       {/* ALERTA RETRABALHO */}
       {emRetrabalho.length > 0 && (
-        <div style={{background:'#fef2f2',border:'2px solid #ef4444',borderRadius:6,padding:'10px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:12}}>
-          <span style={{fontSize:22}}>🔁</span>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,fontSize:11,color:'#dc2626'}}>
-              {emRetrabalho.length} OP(s) reprovada(s) pelo CQ — aguardando ou em retrabalho
-            </div>
-            <div style={{fontSize:10,color:'#991b1b',marginTop:2}}>
-              Verifique o motivo da reprovacao nas linhas destacadas em vermelho abaixo e inicie o retrabalho.
-            </div>
-          </div>
-        </div>
+        <Faixa tom="erro" acao={<Botao pequeno variante="perigo-sec" onClick={() => handleAction('ver', emRetrabalho[0])}>Ver OP</Botao>}>
+          <b>{emRetrabalho.length} OP(s) reprovada(s) pelo CQ</b> — aguardando ou em retrabalho. O motivo está nas linhas com filete vermelho.
+        </Faixa>
       )}
 
       {/* ALERTA MKT */}
-      {opls.filter(o => o.liberado_divulgacao && (o.status_geral === 'Em Producao')).length > 0 && (
-        <div style={{background:'#faf5ff',border:'2px solid #7c3aed',borderRadius:6,padding:'10px 14px',marginBottom:8,display:'flex',alignItems:'center',gap:12}}>
-          <span style={{fontSize:20}}>📸</span>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,fontSize:11,color:'#7c3aed'}}>
-              {opls.filter(o=>o.liberado_divulgacao && o.status_geral==='Em Producao').length} OP(s) em producao COM AUTORIZACAO MKT — momento ideal para registro!
-            </div>
-            <div style={{fontSize:10,color:'#6d28d9',marginTop:2}}>Avise o Marketing para agendar foto/video.</div>
-          </div>
-        </div>
+      {qtdMkt > 0 && (
+        <Faixa tom="marca" icone={mdiCameraOutline}>
+          <b>{qtdMkt} OP(s) em produção com autorização do Marketing</b> — momento ideal para registro. Avise o Marketing para agendar foto/vídeo.
+        </Faixa>
       )}
 
       <div className="sec-card">
-        <div className="sec-hdr">
-          <span>Filtros</span>
-          {filtrosAtivos && (
-            <button className="acn-btn" style={{background:'#94a3b8',fontSize:10,padding:'3px 8px'}} onClick={limparFiltros}>✕ Limpar filtros</button>
-          )}
+        <div className="acn-filtros">
+          <input className="acn-input" style={{ width:210 }} value={filtroBusca} onChange={e=>setFiltroBusca(e.target.value)}
+            placeholder="OPL, chassi ou cliente" aria-label="Buscar (OPL, chassi, cliente)" />
+          <select className="acn-input" style={{ width:170 }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)} aria-label="Status">
+            <option value="Todos">Status: Todos</option>
+            <option value="Aguardando Inicio Producao">Aguardando Início Produção</option>
+            <option value="Em Producao">Em Produção</option>
+            <option value="Retrabalho">Retrabalho</option>
+            <option value="Em Retrabalho">Em Retrabalho</option>
+          </select>
+          <select className="acn-input" style={{ width:150 }} value={filtroTecnico} onChange={e=>setFiltroTecnico(e.target.value)} aria-label="Técnico / Equipe">
+            <option value="Todos">Técnico: Todos</option>
+            {tecnicosDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <Botao pequeno variante={maisFiltros || filtroCliente || filtroEntregaDe || filtroEntregaAte ? 'secundario' : 'discreto'} icone={mdiFilterVariant}
+            onClick={() => setMaisFiltros(v => !v)} aria-expanded={maisFiltros}>Mais filtros</Botao>
+          {filtrosAtivos && <Botao pequeno variante="discreto" icone={mdiClose} onClick={limparFiltros}>Limpar filtros</Botao>}
+          {oplsFiltradas.length !== opls.length && <span className="acn-fraco acn-num" style={{ fontSize:12 }}>{oplsFiltradas.length} de {opls.length}</span>}
+          {/* Filas — separam adaptação de fabricação e de envio. Item que só
+              será separado e enviado não polui mais a fila de quem adapta. */}
+          <Chips rotulo="Fila" className="acn-filtros-dir" ativo={filaAtiva} onChange={setFilaAtiva}
+            itens={([
+              ['adaptacao',  'Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
+              ['fabricacao', 'Fabricação', 'Serralheria fabricando o item inteiro; ao concluir, passa para a Adaptação, depois CQ, embalagem e frete'],
+              ['envio',      'Envio',      'Não passa por produção — só separar, embalar e enviar'],
+              ['serralheria','Serralheria','Tudo que passa pela serralheria: carretinhas inteiras e etapa dentro de adaptações'],
+              ['todas',      'Todas',      'Mostra as três filas juntas'],
+            ] as const).map(([v, rotulo, titulo]) => ({ id: v, rotulo, titulo, contagem: v === 'todas' ? opls.length : contaFila(v) }))} />
         </div>
-        <div className="sec-body">
-          <div className="form-row">
-            <div className="form-group">
-              <label className="acn-label">Buscar (OPL, chassi, cliente)</label>
-              <input className="acn-input" style={{width:'100%'}} value={filtroBusca} onChange={e=>setFiltroBusca(e.target.value)} placeholder="Digite para buscar..." />
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Status</label>
-              <select className="acn-input" style={{width:'100%'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-                <option value="Todos">Todos</option>
-                <option value="Aguardando Inicio Producao">Aguardando Início Produção</option>
-                <option value="Em Producao">Em Produção</option>
-                <option value="Retrabalho">Retrabalho</option>
-                <option value="Em Retrabalho">Em Retrabalho</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Técnico / Equipe</label>
-              <select className="acn-input" style={{width:'100%'}} value={filtroTecnico} onChange={e=>setFiltroTecnico(e.target.value)}>
-                <option value="Todos">Todos</option>
-                {tecnicosDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Cliente</label>
-              <input className="acn-input" style={{width:'100%'}} value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Nome do cliente..." />
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Entrega prevista — de</label>
-              <input className="acn-input" type="date" style={{width:'100%'}} value={filtroEntregaDe} onChange={e=>setFiltroEntregaDe(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Entrega prevista — até</label>
-              <input className="acn-input" type="date" style={{width:'100%'}} value={filtroEntregaAte} onChange={e=>setFiltroEntregaAte(e.target.value)} />
-            </div>
+        {maisFiltros && (
+          <div className="acn-filtros" style={{ background:'var(--acn-surface-2)' }}>
+            <label className="acn-label" style={{ margin:0 }}>Cliente</label>
+            <input className="acn-input" style={{ width:200 }} value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Nome do cliente..." />
+            <label className="acn-label" style={{ margin:'0 0 0 8px' }}>Entrega prevista de</label>
+            <input className="acn-input" type="date" style={{ width:'auto' }} value={filtroEntregaDe} onChange={e=>setFiltroEntregaDe(e.target.value)} />
+            <label className="acn-label" style={{ margin:0 }}>até</label>
+            <input className="acn-input" type="date" style={{ width:'auto' }} value={filtroEntregaAte} onChange={e=>setFiltroEntregaAte(e.target.value)} />
           </div>
-        </div>
-      </div>
-
-      {/* Abas de fila — separam adaptação de fabricação e de envio. Item que só
-          será separado e enviado não polui mais a fila de quem adapta. */}
-      <div style={{ display:'flex', gap:6, flexWrap:'wrap', margin:'0 0 10px', alignItems:'center' }}>
-        {/* Tabela x Kanban — as duas visões olham a MESMA lista já filtrada,
-            então trocar de visão não muda o que está sendo mostrado. */}
-        <div style={{ display:'flex', gap:0, marginRight:6, border:'1px solid #cbd5e1', borderRadius:6, overflow:'hidden' }}>
-          {([['tabela','☰ Tabela'],['kanban','▦ Kanban']] as const).map(([v,l]) => (
-            <button key={v} onClick={()=>setVisao(v)}
-              style={{ fontSize:10, fontWeight:800, padding:'5px 12px', cursor:'pointer', border:'none',
-                background: visao===v ? '#1e293b' : '#fff', color: visao===v ? '#fff' : '#64748b' }}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {([
-          ['adaptacao',  '🔧 Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
-          ['fabricacao', '🏭 Fabricação', 'Serralheria fabricando o item inteiro; ao concluir, passa para a Adaptação, depois CQ, embalagem e frete'],
-          ['envio',      '📦 Envio',      'Não passa por produção — só separar, embalar e enviar'],
-          ['serralheria','🔩 Serralheria','Tudo que passa pela serralheria: carretinhas inteiras e etapa dentro de adaptações'],
-          ['todas',      'Todas',         'Mostra as três filas juntas'],
-        ] as const).map(([v, label, ajuda]) => {
-          const n = v === 'todas' ? opls.length : contaFila(v);
-          return (
-            <button key={v} onClick={() => setFilaAtiva(v)} title={ajuda}
-              style={{ fontSize:10, fontWeight:700, padding:'5px 12px', borderRadius:20, cursor:'pointer',
-                border:`1px solid ${filaAtiva===v ? '#0f766e' : '#e2e8f0'}`,
-                background: filaAtiva===v ? '#0f766e' : '#f8fafc',
-                color: filaAtiva===v ? '#fff' : '#64748b' }}>
-              {label} ({n})
-            </button>
-          );
-        })}
-      </div>
+        )}
 
       {visao === 'kanban' && (
-        <div className="sec-card">
-          <div className="sec-hdr">
-            <span>OPLs em Producao / Retrabalho ({oplsFiltradas.length}{oplsFiltradas.length !== opls.length ? ` de ${opls.length}` : ''})</span>
-            <span style={{ fontSize:9, color:'#94a3b8' }}>Ordenado por data de entrega · prioridade desempata o mesmo dia</span>
-          </div>
           <div className="sec-body">
+            <div className="acn-fraco" style={{ fontSize:12, marginBottom:8 }}>Ordenado por data de entrega · prioridade desempata o mesmo dia</div>
             {loading ? <div className="acn-empty">Carregando...</div>
               : <ProducaoKanban opls={oplsFiltradas} onAction={handleAction}
                   onPrioridade={definirPrioridade} currentUser={currentUser}
                   onImportarLote={(g) => setModalImportarLoteProducao({ base: g.base, irmaos: g.irmaos })} />}
           </div>
-        </div>
       )}
 
-      <div className="sec-card" style={{ display: visao === 'tabela' ? undefined : 'none' }}>
-        <div className="sec-hdr">
-          <span>OPLs em Producao / Retrabalho ({oplsFiltradas.length}{oplsFiltradas.length !== opls.length ? ` de ${opls.length}` : ''})</span>
-          {emRetrabalho.length > 0 && (
-            <span style={{fontSize:10,background:'#ef4444',color:'white',padding:'2px 8px',borderRadius:10,fontWeight:700}}>
-              🔁 {emRetrabalho.length} em retrabalho
-            </span>
-          )}
-        </div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body" style={{ overflowX:'auto', padding:0, display: visao === 'tabela' ? undefined : 'none' }}>
           {loading ? <div className="acn-empty">Carregando...</div> : oplsFiltradas.length === 0 ? (
-            <div className="acn-empty">{opls.length === 0 ? 'Nenhuma OPL em producao no momento.' : 'Nenhuma OPL encontrada para os filtros aplicados.'}</div>
+            <div className="acn-empty">{opls.length === 0 ? 'Nenhuma OPL em produção no momento.' : 'Nenhuma OPL encontrada para os filtros aplicados.'}</div>
           ) : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr>
-                <th></th><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Entrega Prevista</th><th>Qtd</th><th>Tipo Projeto</th><th>Responsavel</th><th>Tempo</th><th>Status</th><th>Acoes</th>
+                <th style={{ width:36 }}></th><th>OP</th><th>Veículo e cliente</th><th>Entrega</th><th>Responsável</th><th>Status</th><th style={{ textAlign:'right' }}>Ações</th>
               </tr></thead>
               <tbody>
                 {(() => {
@@ -2779,7 +2697,7 @@ export default function ProducaoTab({ currentUser }) {
                     const loteNaoLido = grupo.irmaos.some((o:any) => oplsNaoLidas.has(String(o.id)));
                     return (
                       <React.Fragment key={grupo.base}>
-                        <tr style={{background:'#f5f3ff',borderLeft: loteNaoLido ? '4px solid #eab308' : '4px solid #7c3aed'}}>
+                        <tr className={loteNaoLido ? 'acn-linha-nova' : 'acn-linha-marca'}>
                           <td style={{textAlign:'center'}}>
                             <input type="checkbox" checked={todosSelecionados} title="Selecionar todas as unidades deste lote"
                               onChange={()=>setSelecionados(prev => {
@@ -2789,26 +2707,26 @@ export default function ProducaoTab({ currentUser }) {
                               })} style={{cursor:'pointer'}} />
                           </td>
                           <td>
-                            <strong>🔗 {grupo.base}</strong>
-                            <div><span className="acn-badge" style={{background:'#7c3aed'}}>LOTE — {grupo.irmaos.length} unidades</span></div>
+                            <div className="acn-duas">
+                              <span className="acn-mono acn-forte">{grupo.base}</span>
+                              <small>Lote · {grupo.irmaos.length} unidades</small>
+                            </div>
                           </td>
-                          <td colSpan={8}>
+                          <td colSpan={4}>
                             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                              {qtdAguardando > 0 && <span className="acn-badge" style={{background:'#f59e0b'}}>{qtdAguardando} aguardando início</span>}
-                              {qtdEmProducao > 0 && <span className="acn-badge" style={{background:'#3b82f6'}}>{qtdEmProducao} em produção</span>}
-                              {qtdRetrabalho > 0 && <span className="acn-badge" style={{background:'#ef4444'}}>{qtdRetrabalho} em retrabalho</span>}
+                              {qtdAguardando > 0 && <Selo familia="neutro">{qtdAguardando} aguardando início</Selo>}
+                              {qtdEmProducao > 0 && <Selo familia="info">{qtdEmProducao} em produção</Selo>}
+                              {qtdRetrabalho > 0 && <Selo familia="erro">{qtdRetrabalho} em retrabalho</Selo>}
                             </div>
                           </td>
                           <td>
-                            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                              <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
+                            <div className="acn-acoes-linha">
+                              <Botao pequeno variante="secundario" icone={expandido ? mdiChevronUp : mdiChevronDown}
                                 onClick={()=>setLotesExpandidos(prev => ({...prev, [grupo.base]: !prev[grupo.base]}))}>
-                                {expandido ? `▲ Ocultar` : `▼ Ver ${grupo.irmaos.length} unidades`}
-                              </button>
-                              <button className="acn-btn" style={{background:'#2563eb',fontSize:10}}
-                                onClick={()=>setModalImportarLoteProducao({base:grupo.base,irmaos:grupo.irmaos})}>
-                                📥 Importar Técnicos/Equipes
-                              </button>
+                                {expandido ? 'Ocultar unidades' : 'Ver unidades'}
+                              </Botao>
+                              <MenuAcoes itens={[{ rotulo: 'Importar técnicos/equipes', icone: mdiTrayArrowDown,
+                                onClick: () => setModalImportarLoteProducao({ base: grupo.base, irmaos: grupo.irmaos }) }]} />
                             </div>
                           </td>
                         </tr>
@@ -2836,7 +2754,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalIniciar && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">▶️ Iniciar Produção — OPL {modalIniciar.opl}</div>
+            <div className="modal-title">Iniciar produção — OPL {modalIniciar.opl}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               Tipo: {modalIniciar.tipo_projeto} | Chassi: {modalIniciar.chassi || '—'}
             </div>
@@ -2848,17 +2766,8 @@ export default function ProducaoTab({ currentUser }) {
 
             {/* Seletor de modo */}
             <label className="acn-label">Modo de Execução</label>
-            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
-              {(['individual','dupla','equipe'] as const).map(m => (
-                <button key={m} onClick={()=>setModoExecucao(m)} style={{
-                  flex:1, padding:'7px 4px', border:'none', cursor:'pointer', fontSize:10, fontWeight:700,
-                  background: modoExecucao===m ? '#2563eb' : 'white',
-                  color: modoExecucao===m ? 'white' : '#475569',
-                  borderRight: m!=='equipe' ? '1px solid #d1d5db' : 'none',
-                }}>
-                  {m==='individual'?'👤 Individual':m==='dupla'?'👥 Dupla':'🏷️ Equipe'}
-                </button>
-              ))}
+            <div style={{ marginBottom:14 }}>
+              <Chips rotulo="Modo de execução" ativo={modoExecucao} onChange={setModoExecucao} itens={MODOS_EXECUCAO} />
             </div>
 
             {/* Individual */}
@@ -2915,8 +2824,8 @@ export default function ProducaoTab({ currentUser }) {
             )}
 
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={iniciarProducao}>▶️ INICIAR PRODUÇÃO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalIniciar(null)}>Cancelar</button>
+              <Botao variante="secundario" onClick={()=>setModalIniciar(null)}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiPlay} style={{flex:1}} onClick={iniciarProducao}>Iniciar produção</Botao>
             </div>
           </div>
         </div>
@@ -2926,7 +2835,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalEditResp && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">✏️ Editar Responsável — OPL {modalEditResp.opl}</div>
+            <div className="modal-title">Editar responsável — OPL {modalEditResp.opl}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               Atual: <strong>{modalEditResp.responsavel_producao || '—'}</strong>
               {modalEditResp.tecnico_producao_2_nome && <> + <strong>{modalEditResp.tecnico_producao_2_nome}</strong></>}
@@ -2934,17 +2843,8 @@ export default function ProducaoTab({ currentUser }) {
             </div>
 
             <label className="acn-label">Modo de Execução</label>
-            <div style={{display:'flex',gap:0,marginBottom:14,borderRadius:6,overflow:'hidden',border:'1.5px solid #d1d5db'}}>
-              {(['individual','dupla','equipe'] as const).map(m => (
-                <button key={m} onClick={()=>setEditModo(m)} style={{
-                  flex:1, padding:'7px 4px', border:'none', cursor:'pointer', fontSize:10, fontWeight:700,
-                  background: editModo===m ? '#6366f1' : 'white',
-                  color: editModo===m ? 'white' : '#475569',
-                  borderRight: m!=='equipe' ? '1px solid #d1d5db' : 'none',
-                }}>
-                  {m==='individual'?'👤 Individual':m==='dupla'?'👥 Dupla':'🏷️ Equipe'}
-                </button>
-              ))}
+            <div style={{ marginBottom:14 }}>
+              <Chips rotulo="Modo de execução" ativo={editModo} onChange={setEditModo} itens={MODOS_EXECUCAO} />
             </div>
 
             {editModo === 'individual' && (
@@ -2993,8 +2893,8 @@ export default function ProducaoTab({ currentUser }) {
             )}
 
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={editarResponsavel}>✏️ SALVAR ALTERAÇÃO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditResp(null)}>Cancelar</button>
+              <Botao variante="secundario" onClick={()=>setModalEditResp(null)}>Cancelar</Botao>
+              <Botao variante="primario" style={{flex:1}} onClick={editarResponsavel}>Salvar alteração</Botao>
             </div>
           </div>
         </div>
@@ -3004,7 +2904,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalGerenciarEquipe && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">👥 Equipe — OPL {modalGerenciarEquipe.opl}</div>
+            <div className="modal-title">Equipe — OPL {modalGerenciarEquipe.opl}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
               Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
               do valor de mão de obra desta OP, além do que os responsáveis já recebem.
@@ -3054,7 +2954,7 @@ export default function ProducaoTab({ currentUser }) {
               <button className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>adicionarMembroEquipe('apoio')}>+ Add</button>
             </div>
 
-            <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalGerenciarEquipe(null)}>Fechar</button>
+            <Botao variante="secundario" style={{width:'100%'}} onClick={()=>setModalGerenciarEquipe(null)}>Fechar</Botao>
           </div>
         </div>
       )}
@@ -3076,23 +2976,19 @@ export default function ProducaoTab({ currentUser }) {
 
       {/* BARRA DE AÇÃO EM LOTE — seleção livre por checkbox, não precisa ser do mesmo lote/base */}
       {selecionados.size > 0 && (
-        <div style={{position:'fixed',left:'50%',transform:'translateX(-50%)',bottom:16,zIndex:1500,
-          background:'#1e293b',color:'white',borderRadius:8,padding:'10px 16px',boxShadow:'0 8px 24px rgba(0,0,0,.3)',
-          display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',maxWidth:'92vw'}}>
-          <strong style={{fontSize:12}}>{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
-          <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} disabled={aplicandoIniciarLote} onClick={iniciarProducaoEmLote}>
-            {aplicandoIniciarLote ? 'Aplicando...' : '▶️ Iniciar Produção em Lote'}
-          </button>
-          <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}}
+        <div className="acn-barra-selecao">
+          <strong className="acn-num">{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
+          <Botao pequeno variante="secundario" icone={mdiTrayArrowDown}
             onClick={()=>setModalImportarLoteProducao({base:'Seleção', irmaos: opls.filter((o:any)=>selecionados.has(o.id))})}>
-            📥 Atribuir Técnicos/Equipes
-          </button>
-          <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} disabled={aplicandoIniciarLote} onClick={liberarChecklistEmLote}>
-            {aplicandoIniciarLote ? 'Aplicando...' : '✅ Liberar Checklist (CQ) em Lote'}
-          </button>
-          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>setSelecionados(new Set())}>
-            ✕ Limpar seleção
-          </button>
+            Atribuir técnicos/equipes
+          </Botao>
+          <Botao pequeno variante="secundario" icone={mdiCheckAll} disabled={aplicandoIniciarLote} onClick={liberarChecklistEmLote}>
+            {aplicandoIniciarLote ? 'Aplicando...' : 'Liberar checklist (CQ) em lote'}
+          </Botao>
+          <Botao pequeno variante="primario" icone={mdiPlay} disabled={aplicandoIniciarLote} onClick={iniciarProducaoEmLote}>
+            {aplicandoIniciarLote ? 'Aplicando...' : 'Iniciar produção em lote'}
+          </Botao>
+          <Botao pequeno variante="discreto" icone={mdiClose} onClick={()=>setSelecionados(new Set())}>Limpar seleção</Botao>
         </div>
       )}
 
@@ -3105,8 +3001,8 @@ export default function ProducaoTab({ currentUser }) {
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverPCP}>CONFIRMAR</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+              <Botao variante="secundario" onClick={()=>setModalDevolver(null)}>Cancelar</Botao>
+              <Botao variante="perigo" style={{flex:1}} onClick={devolverPCP}>Devolver ao PCP</Botao>
             </div>
           </div>
         </div>
