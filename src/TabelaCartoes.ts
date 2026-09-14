@@ -62,7 +62,7 @@ function marcarTabela(tabela: HTMLTableElement) {
         const r = rotulos[col] || '';
         if (td.getAttribute('data-rotulo') !== r) td.setAttribute('data-rotulo', r);
         const soAcoes = !!td.querySelector('button') && !(td.textContent || '').replace(/[\s​]/g, '').replace(/[^\p{L}\p{N}]/gu, '').length;
-        td.classList.toggle('acn-cel-acoes', /^a[cç][oõ]es$/i.test(r) || (soAcoes && !r));
+        td.classList.toggle('acn-cel-acoes', /^a[cç](oes|ões|ao|ão)$/i.test(r) || (soAcoes && !r));
         col += Math.max(1, td.colSpan || 1);
       }
     }

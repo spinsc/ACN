@@ -12,8 +12,9 @@
 // Cada coluna tem a altura de 10 cards e rola (KanbanColuna), senão
 // "Atrasadas" — que hoje tem 70 — viraria uma coluna sem fim.
 // ─────────────────────────────────────────────────────────────────────────────
-import React from 'react';
+import React, { useState } from 'react';
 import KanbanColuna from './KanbanColuna';
+import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { temSerralheria } from './FluxoEntrega';
 import { OrigemVendaBadge } from './OrigemVenda';
 
@@ -57,6 +58,8 @@ export function ordenar(a, b) {
 
 export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUser }: any) {
   const porColuna = (id) => opls.filter(o => colunaDe(o) === id).sort(ordenar);
+  const celular = useCelular();
+  const [etapaCel, setEtapaCel] = useState(null);
 
   const card = (o) => {
     const emProd     = o.status_geral === 'Em Producao';
@@ -151,6 +154,20 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
       </div>
     );
   };
+
+  // Celular: uma coluna por vez, escolhida na faixa de etapas
+  if (celular) {
+    const etapas = COLUNAS.map(c => ({ ...c, total: porColuna(c.id).length }));
+    const ativa = etapas.find(e => e.id === etapaCel) ? etapaCel : etapaInicial(etapas);
+    const col = COLUNAS.find(c => c.id === ativa);
+    return (
+      <div>
+        <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />
+        <KanbanColuna key={col.id} titulo={col.titulo} cor={col.cor} fundo={col.fundo}
+          itens={porColuna(col.id)} renderCard={card} vazio="Nenhuma OP" larguraMin={0} visiveis={100000} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, alignItems: 'flex-start' }}>

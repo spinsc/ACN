@@ -103,6 +103,8 @@
   html body select:not(.acn-main-tv *),
   html body textarea:not(.acn-main-tv *) { font-size: 16px !important; min-height: 38px; }
   html body input:is([type="checkbox"], [type="radio"]) { width: 20px; height: 20px; }
+  /* Assinatura (canvas de desenho): cabe na tela e o dedo desenha em vez de rolar a página */
+  html body canvas[style*="crosshair"] { max-width: 100%; height: auto; touch-action: none; }
   /* O que só aparece com o mouse em cima fica sempre visível */
   html body .dm-del-btn { opacity: 1; }
 
@@ -148,6 +150,10 @@
   html body .acn-right > div > span + span { position: absolute; top: -5px; right: -5px; }
 
   html body .acn-main { padding: 8px; }
+  /* Títulos de quadro e linhas de formulário quebram em vez de espremer */
+  html body .sec-hdr { flex-wrap: wrap; }
+  html body .form-group { flex: 1 1 140px; }
+  html body .form-row { gap: 8px 10px; }
 
   /* Janelas em tela cheia */
   html body :is(.modal-overlay, [style*="position: fixed"][style*="inset: 0px"]) {

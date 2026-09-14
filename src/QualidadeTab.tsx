@@ -16,10 +16,12 @@ function SignatureCanvas({ onSave }) {
 
   const getXY = (e) => {
     const rect = ref.current.getBoundingClientRect();
+    // escala: no celular o canvas encolhe para caber na tela (no computador clientWidth = width, escala 1)
+    const sx = ref.current.width / (ref.current.clientWidth || ref.current.width), sy = ref.current.height / (ref.current.clientHeight || ref.current.height);
     if (e.touches) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+      return { x: (e.touches[0].clientX - rect.left) * sx, y: (e.touches[0].clientY - rect.top) * sy };
     }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
   };
 
   const start = (e) => { e.preventDefault(); drawing.current = true; const {x,y} = getXY(e); const ctx = ref.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x,y); };
