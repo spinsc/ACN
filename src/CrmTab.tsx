@@ -7,7 +7,7 @@ import { ClienteAutocomplete } from './ClienteUtils';
 import ContactosSection from './ContactosSection';
 import Linkify from './Linkify';
 import CrmAnexosWidget from './CrmAnexosWidget';
-import { ModalSolicitarAnalise, AnaliseStatusBadge } from './AnaliseWidget';
+import { ModalSolicitarAnalise, AnaliseStatusBadge, AnaliseStatusPanel } from './AnaliseWidget';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import RichTextInput, { pareceHtmlFormatado } from './RichTextInput';
 import NovaOpOsModal from './NovaOpOsModal';
@@ -4542,14 +4542,17 @@ const SUB_STATUS_COR: Record<string,string> = {
                 {abrirTabDir === 'analise' && (
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
 
-                    {/* Status + botão solicitar */}
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                      <AnaliseStatusBadge origemId={modalAbrir.id} />
-                      <button className="acn-btn" style={{ background:'#7c3aed' }}
-                        onClick={() => setModalSolicitarAnalise(modalAbrir)}>
-                        🔬 Solicitar / Ver Análise
-                      </button>
-                    </div>
+                    {/* Solicitações com setores, pareceres e cancelamento — o
+                        mesmo painel da Licitação (antes aqui só havia o badge
+                        e não dava para ver os pareceres nem cancelar). */}
+                    <AnaliseStatusPanel
+                      origemId={modalAbrir.id}
+                      origemTitulo={modalAbrir.titulo}
+                      origemNumero={modalAbrir.numero_edital || null}
+                      origem="crm"
+                      currentUser={currentUser}
+                      onSolicitarNova={() => setModalSolicitarAnalise(modalAbrir)}
+                    />
 
                     <hr style={{ border:'none', borderTop:'1px solid #e2e8f0', margin:'2px 0' }} />
 

@@ -309,6 +309,13 @@ export default function EngenhariaTab({ currentUser }) {
 
   return (
     <div>
+      {/* Análises pedidas à Engenharia — no TOPO e fora das sub-abas. Antes o
+          quadro ficava no fim da sub-aba "Análise", abaixo das listas de OP,
+          e sumia nas sub-abas Desenvolvimento e Horas: a pendência existia,
+          mas ninguém a via. */}
+      <div style={{ margin:'12px 12px 0' }}>
+        <AnaliseWidget setor="Engenharia" currentUser={currentUser} />
+      </div>
       {/* SELETOR DE SUB-ABAS */}
       <div style={{display:'flex',gap:0,margin:'12px 12px 0',borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
         <button style={{flex:1,padding:'8px',background:abaEng==='analise'?'#1e293b':'white',color:abaEng==='analise'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
@@ -623,7 +630,6 @@ export default function EngenhariaTab({ currentUser }) {
         </div>
       )}
 
-      <AnaliseWidget setor="Engenharia" currentUser={currentUser} />
       <DemandasSetorWidget setor="Engenharia" cor="#2563eb" currentUser={currentUser} />
       <OplMovimentadas setor="Engenharia" />
       <DemandaFooter setor="Engenharia" />

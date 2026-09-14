@@ -43,6 +43,11 @@ export function podeDeletarRegistro(usuarioAtual: any): boolean {
  * A troca do número da OP é conferida de novo no banco (renomear_opl).
  */
 export function podeAlterarNumeroOplPv(usuarioAtual: any): boolean {
+  return ehAdminOuGerente(usuarioAtual);
+}
+
+/** Admin ou qualquer perfil "Gerente ..." (Comercial, Administrativo, Produção...). */
+export function ehAdminOuGerente(usuarioAtual: any): boolean {
   const perfil = String(usuarioAtual?.perfil || '').trim();
   return perfil === 'Admin' || /^gerente/i.test(perfil);
 }

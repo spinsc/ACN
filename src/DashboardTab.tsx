@@ -32,6 +32,7 @@ import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
 import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel from './AnaliseInboxPanel';
+import { contarAnalisesPendentesPorSetor } from './AnaliseWidget';
 import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
 import ContatoAlertWidget from './ContatoAlertWidget';
@@ -665,6 +666,19 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
   const [waNotifCount, setWaNotifCount] = useState(0);
+  // Pendências de análise técnica por setor — contador no menu das abas que
+  // têm o quadro de análises (Engenharia, Produção). Tempo real + a cada 60s.
+  const [analisesPorSetor, setAnalisesPorSetor] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const atualizar = () => contarAnalisesPendentesPorSetor().then(setAnalisesPorSetor).catch(() => {});
+    atualizar();
+    const iv = setInterval(atualizar, 60000);
+    const ch = supabase.channel('menu-analises-pendentes')
+      .on('postgres_changes', { event:'*', schema:'public', table:'analise_setores' }, atualizar)
+      .on('postgres_changes', { event:'*', schema:'public', table:'analise_solicitacoes' }, atualizar)
+      .subscribe();
+    return () => { clearInterval(iv); supabase.removeChannel(ch); };
+  }, []);
   const [analiseAlertCount, setAnaliseAlertCount] = useState(0);
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);
   const [mencoesCount, setMencoesCount]         = useState(0);
@@ -1368,6 +1382,17 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                         <span className="sidebar-dot">●</span>
                         {item.label}
                       </span>
+                      {(() => {
+                        const setorDaAba = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[item.id];
+                        const n = setorDaAba ? (analisesPorSetor[setorDaAba] || 0) : 0;
+                        return n > 0 ? (
+                          <span title={`${n} análise(s) técnica(s) aguardando este setor`}
+                            style={{ background:'#f59e0b', color:'#fff', borderRadius:10, fontSize:9, fontWeight:800,
+                              padding:'0 6px', minWidth:16, textAlign:'center', lineHeight:'16px' }}>
+                            🔍 {n}
+                          </span>
+                        ) : null;
+                      })()}
                       {item.id === 'crm' && waNotifCount > 0 && (
                         <span className="acn-wa-sidebar-dot">
                           {waNotifCount > 9 ? '9+' : waNotifCount}

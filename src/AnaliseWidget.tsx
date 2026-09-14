@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { ehAdminOuGerente } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES DE SETORES
@@ -104,6 +105,59 @@ export async function concluirAnaliseSetor(setor: any, solicitacao: any, opts: {
   } catch (_) { /* tabela pode não existir ainda */ }
 
   return { todosOk, agora };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CANCELAR SOLICITAÇÃO
+// Manual: quem pediu, Admin ou Gerente. Automático (processo em Perdida /
+// Perdido / Desistência) é feito por gatilho no banco — ver
+// cancelar_analises_origem (migration analise_cancelamento).
+// Setores já analisados ficam como estão: o parecer continua como registro.
+// ─────────────────────────────────────────────────────────────────────────────
+export function podeCancelarAnalise(sol: any, usuario: any): boolean {
+  if (!sol || sol.status !== 'em_andamento' || !usuario) return false;
+  if (ehAdminOuGerente(usuario)) return true;
+  const quem = String(sol.criado_por || '').trim().toLowerCase();
+  return !!quem && (quem === String(usuario.nome || '').trim().toLowerCase()
+                 || quem === String(usuario.email || '').trim().toLowerCase());
+}
+
+/** Pergunta o motivo e cancela. Devolve true se cancelou. */
+export async function cancelarSolicitacaoAnalise(sol: any, usuario: any): Promise<boolean> {
+  if (!podeCancelarAnalise(sol, usuario)) {
+    alert('Só quem pediu a análise, administradores e gerentes podem cancelá-la.');
+    return false;
+  }
+  const motivo = window.prompt('Motivo do cancelamento desta solicitação de análise:');
+  if (motivo == null) return false;
+  if (!motivo.trim()) { alert('Informe o motivo do cancelamento.'); return false; }
+  const agora = new Date().toISOString();
+  const nome = usuario?.nome || usuario?.email || 'Usuário';
+  // .eq('status','em_andamento'): se alguém concluiu nesse meio-tempo, não sobrescreve
+  const { data, error } = await supabase.from('analise_solicitacoes')
+    .update({ status: 'cancelada', cancelada_por: nome, cancelada_em: agora, motivo_cancelamento: motivo.trim() })
+    .eq('id', sol.id).eq('status', 'em_andamento').select('id');
+  if (error) { alert('Erro ao cancelar: ' + error.message); return false; }
+  if (!data?.length) { alert('Esta solicitação não está mais em andamento (foi concluída ou cancelada por outra pessoa).'); return false; }
+  await supabase.from('analise_setores').update({ status: 'cancelado' })
+    .eq('solicitacao_id', sol.id).eq('status', 'pendente');
+  try {
+    await supabase.from('analise_logs').insert([{
+      solicitacao_id: sol.id, origem: sol.origem, origem_titulo: sol.origem_titulo, origem_numero: sol.origem_numero,
+      acao: 'solicitacao_cancelada', usuario: nome, notas: motivo.trim(), criado_em: agora,
+    }]);
+  } catch (_) { /* log é complementar */ }
+  return true;
+}
+
+/** Pendências de análise por setor (só solicitações em andamento). */
+export async function contarAnalisesPendentesPorSetor(): Promise<Record<string, number>> {
+  const { data } = await supabase.from('analise_setores')
+    .select('setor, analise_solicitacoes!inner(status)')
+    .eq('status', 'pendente').eq('analise_solicitacoes.status', 'em_andamento');
+  const cont: Record<string, number> = {};
+  (data || []).forEach((r: any) => { cont[r.setor] = (cont[r.setor] || 0) + 1; });
+  return cont;
 }
 
 export async function reabrirAnaliseSetor(setor: any) {
@@ -290,8 +344,8 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
   const [obsSetor, setObsSetor] = useState<Record<string, string>>({});
   const [finalizando, setFinalizando] = useState<string|null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silencioso = false) => {
+    if (!silencioso) setLoading(true);
     const { data } = await supabase
       .from('analise_solicitacoes')
       .select('*, analise_setores(*)')
@@ -301,7 +355,17 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
     setLoading(false);
   }, [origemId]);
 
-  useEffect(() => { load(); }, [load]);
+  // Tempo real: nova solicitação (modal), conclusão ou cancelamento por outra
+  // pessoa aparecem sem fechar e abrir o card. Silencioso: não pisca a tela nem
+  // tira o foco de quem está escrevendo o parecer.
+  useEffect(() => {
+    load();
+    const ch = supabase.channel(`analise-painel-${origemId}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event:'*', schema:'public', table:'analise_solicitacoes', filter:`origem_id=eq.${origemId}` }, () => load(true))
+      .on('postgres_changes', { event:'*', schema:'public', table:'analise_setores' }, () => load(true))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [load]);
 
   const concluirSetor = async (setor: any, sol: any) => {
     setFinalizando(setor.id);
@@ -316,6 +380,8 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
 
   const ativas = solicitacoes.filter(s => s.status === 'em_andamento');
   const finalizadas = solicitacoes.filter(s => s.status === 'finalizada');
+  const canceladas = solicitacoes.filter(s => s.status === 'cancelada');
+  const cancelar = async (sol: any) => { if (await cancelarSolicitacaoAnalise(sol, currentUser)) load(); };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -348,6 +414,13 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
                 <div style={{ width:60, height:6, background:'#e2e8f0', borderRadius:3, overflow:'hidden' }}>
                   <div style={{ width:`${pct}%`, height:'100%', background: pct===100?'#16a34a':'#f59e0b', borderRadius:3 }} />
                 </div>
+                {podeCancelarAnalise(sol, currentUser) && (
+                  <button onClick={() => cancelar(sol)} title="Cancelar esta solicitação (pede o motivo)"
+                    style={{ background:'#fff', color:'#b91c1c', border:'1px solid #fca5a5', borderRadius:4,
+                      padding:'2px 8px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+                    ⊘ Cancelar
+                  </button>
+                )}
               </div>
             </div>
 
@@ -441,7 +514,33 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
         </details>
       )}
 
-      {!ativas.length && !finalizadas.length && (
+      {canceladas.length > 0 && (
+        <details>
+          <summary style={{ fontSize:10, color:'#6b7280', cursor:'pointer', userSelect:'none' }}>
+            ⊘ {canceladas.length === 1 ? '1 solicitação cancelada' : canceladas.length + ' solicitações canceladas'}
+          </summary>
+          {canceladas.map(sol => (
+            <div key={sol.id} style={{ marginTop:6, border:'1px solid #fecaca', borderRadius:5, padding:'6px 10px', background:'#fef2f2' }}>
+              <div style={{ fontSize:9, color:'#991b1b' }}>
+                Solicitado por {sol.criado_por} · {fmtDT(sol.criado_em)} — cancelada por <strong>{sol.cancelada_por || '—'}</strong>{sol.cancelada_em ? ' em ' + fmtDT(sol.cancelada_em) : ''}
+              </div>
+              {sol.motivo_cancelamento && (
+                <div style={{ fontSize:10, color:'#7f1d1d', marginTop:3, whiteSpace:'pre-wrap' }}>Motivo: {sol.motivo_cancelamento}</div>
+              )}
+              <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:4 }}>
+                {(sol.analise_setores||[]).map((s:any) => (
+                  <span key={s.id} style={{ fontSize:9, padding:'1px 6px', borderRadius:8,
+                    background: s.status==='analisado' ? '#dcfce7' : '#fee2e2', color: s.status==='analisado' ? '#166534' : '#991b1b' }}>
+                    {s.status==='analisado' ? '✅' : '⊘'} {SETOR_LABEL[s.setor]||s.setor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </details>
+      )}
+
+      {!ativas.length && !finalizadas.length && !canceladas.length && (
         <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:20 }}>
           Nenhuma análise solicitada ainda para este processo.
         </div>
@@ -488,7 +587,17 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
     }
   }, [setor]);
 
-  useEffect(() => { load(); const t = setInterval(()=>load(true), 60000); return ()=>clearInterval(t); }, [load]);
+  // Tempo real: a pendência aparece (ou some, se cancelada/concluída) na hora.
+  // O intervalo continua como rede de segurança se a conexão cair.
+  useEffect(() => {
+    load();
+    const t = setInterval(()=>load(true), 60000);
+    const ch = supabase.channel(`analise-widget-${setor}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event:'*', schema:'public', table:'analise_setores' }, () => load(true))
+      .on('postgres_changes', { event:'*', schema:'public', table:'analise_solicitacoes' }, () => load(true))
+      .subscribe();
+    return () => { clearInterval(t); supabase.removeChannel(ch); };
+  }, [load]);
 
   const marcarAnalisado = async (item: any) => {
     setAprovando(item.id);

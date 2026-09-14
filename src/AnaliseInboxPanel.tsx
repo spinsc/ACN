@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor } from './AnaliseWidget';
+import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel Inbox de Análises Orçamentárias
@@ -219,12 +219,13 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
             const exp = expandido[sol.id] !== false; // padrão expandido
             const origem = sol.origem === 'licitacao' ? '🏛️ Licitação' : sol.origem === 'crm' ? '💼 CRM' : sol.origem;
             const solConcluida = sol.status === 'finalizada';
+            const solCancelada = sol.status === 'cancelada';
 
             return (
               <div key={sol.id} style={{
-                border: `1px solid ${solConcluida ? '#d1fae5' : '#fde68a'}`,
+                border: `1px solid ${solCancelada ? '#fecaca' : solConcluida ? '#d1fae5' : '#fde68a'}`,
                 borderRadius: 8, marginBottom: 10, overflow:'hidden',
-                background: solConcluida ? '#f0fdf4' : '#fffbeb',
+                background: solCancelada ? '#fef2f2' : solConcluida ? '#f0fdf4' : '#fffbeb',
               }}>
 
                 {/* Cabeçalho do card */}
@@ -242,10 +243,10 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                       )}
                       <span style={{
                         fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:3,
-                        background: solConcluida ? '#d1fae5' : '#fef3c7',
-                        color:      solConcluida ? '#065f46' : '#92400e',
+                        background: solCancelada ? '#fee2e2' : solConcluida ? '#d1fae5' : '#fef3c7',
+                        color:      solCancelada ? '#991b1b' : solConcluida ? '#065f46' : '#92400e',
                       }}>
-                        {solConcluida ? '✅ Concluída' : `⏳ ${pendentes} pendente(s)`}
+                        {solCancelada ? '⊘ Cancelada' : solConcluida ? '✅ Concluída' : `⏳ ${pendentes} pendente(s)`}
                       </span>
                     </div>
                     <div style={{ fontSize:11, fontWeight:700, color:'#1e293b', marginTop:3 }}>
@@ -273,7 +274,25 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                           {sol.origem === 'crm' ? '💼 Abrir no CRM' : '🏛️ Abrir Licitações'}
                         </button>
                       )}
+                      {podeCancelarAnalise(sol, currentUser) && (
+                        <button
+                          onClick={async e => {
+                            e.stopPropagation();
+                            if (await cancelarSolicitacaoAnalise(sol, currentUser)) { await load(); await refreshCount(); }
+                          }}
+                          title="Cancelar esta solicitação (pede o motivo)"
+                          style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:4,
+                            border:'1px solid #fca5a5', background:'#fff', color:'#b91c1c', cursor:'pointer' }}>
+                          ⊘ Cancelar
+                        </button>
+                      )}
                     </div>
+                    {solCancelada && (
+                      <div style={{ fontSize:9, color:'#991b1b', marginTop:3 }}>
+                        Cancelada por <strong>{sol.cancelada_por || '—'}</strong>{sol.cancelada_em ? ' em ' + fmtDT(sol.cancelada_em) : ''}
+                        {sol.motivo_cancelamento ? ' — ' + sol.motivo_cancelamento : ''}
+                      </div>
+                    )}
                   </div>
                   <span style={{ fontSize:12, color:'#94a3b8' }}>{exp ? '▲' : '▼'}</span>
                 </div>
@@ -286,6 +305,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                     )}
                     {setores.map(setor => {
                       const concluido = setor.status === 'analisado';
+                      const cancelado = setor.status === 'cancelado' || (solCancelada && !concluido);
                       const salvandoSetor = salvando[setor.id];
                       const cor = SETOR_COR[setor.setor] || '#64748b';
                       const label = SETOR_LABEL[setor.setor] || setor.setor;
@@ -301,14 +321,14 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                             <span style={{
                               fontSize:10, fontWeight:700, color: concluido ? '#065f46' : cor,
                             }}>
-                              {concluido ? '✅' : '⏳'} {label}
+                              {concluido ? '✅' : cancelado ? '⊘' : '⏳'} {label}{cancelado ? ' (cancelado)' : ''}
                             </span>
                             {concluido && setor.analisado_por && (
                               <span style={{ fontSize:9, color:'#64748b' }}>
                                 por {setor.analisado_por} · {fmtDT(setor.analisado_em)}
                               </span>
                             )}
-                            {concluido && (
+                            {concluido && !solCancelada && (
                               <button onClick={() => reabrirSetor(setor)}
                                 style={{ marginLeft:'auto', fontSize:8, color:'#94a3b8', background:'none',
                                   border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 6px', cursor:'pointer' }}>
@@ -326,7 +346,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                           )}
 
                           {/* Campo nota + botão concluir (apenas pendentes) */}
-                          {!concluido && (
+                          {!concluido && !cancelado && (
                             <div style={{ marginTop:6 }}>
                               <textarea
                                 value={notas[setor.id] || ''}
