@@ -166,14 +166,48 @@ function marcarAbas(pai: Element) {
   }
 }
 
+// Cor forte que a tela usou no texto ou na borda de uma peça (para virar o "ponto")
+function corForteDe(el: HTMLElement): RGBA | null {
+  for (const v of [el.style.color, el.style.borderLeftColor, el.style.borderColor, el.style.borderTopColor]) {
+    const c = lerCor(v);
+    if (c && c.a > 0.5) { const h = hsl(c); if (h.s > 0.3 && h.l < 0.7) return c; }
+  }
+  return null;
+}
+
+// Cartão de número pintado (fundo claro colorido, borda e um número grande dentro):
+// fica branco com o ponto de cor, como os cartões do Dashboard no guia.
+function marcarCartaoNumero(el: HTMLElement) {
+  if (el.closest(FORA) || el.closest('button, table')) return;
+  const bg = fundoInline(el);
+  let eh = false;
+  if (bg && bg.a > 0.05 && el.childElementCount > 0 && el.childElementCount <= 5 && (el.textContent || '').length < 90) {
+    const h = hsl(bg);
+    if (h.l > 0.84 && h.l < 0.985 && h.s > 0.3 && parseFloat(el.style.borderRadius || '0') >= 4) {
+      eh = Array.from(el.querySelectorAll<HTMLElement>('[style*="font-size"]')).some(f => parseFloat(f.style.fontSize) >= 18);
+    }
+  }
+  if (eh) {
+    const c = corForteDe(el) || corForteDe(el.querySelector<HTMLElement>('[style*="color"]') || el) || bg!;
+    const cor = `rgb(${c.r}, ${c.g}, ${c.b})`;
+    if (!el.hasAttribute('data-acn-numero')) el.setAttribute('data-acn-numero', '');
+    if (el.style.getPropertyValue('--acn-cab-cor') !== cor) el.style.setProperty('--acn-cab-cor', cor);
+  } else if (el.hasAttribute('data-acn-numero')) el.removeAttribute('data-acn-numero');
+}
+
 // Cabeçalho de quadro pintado (.sec-hdr com fundo forte): fica branco, com a cor num ponto
 function marcarCabecalho(el: HTMLElement) {
   if (el.closest(FORA)) return;
   const bg = fundoInline(el);
-  let forte = false;
-  if (bg && bg.a > 0.05) { const h = hsl(bg); forte = h.l < 0.8 && h.s > 0.12; }
-  if (forte) {
-    const cor = `rgb(${bg!.r}, ${bg!.g}, ${bg!.b})`;
+  let pintado = false, ponto: RGBA | null = null;
+  if (bg && bg.a > 0.05) {
+    const h = hsl(bg);
+    if (h.l < 0.8 && h.s > 0.12) { pintado = true; ponto = bg; }
+    // fundo claro colorido (amarelo, verde-claro...): o ponto usa a cor do texto ou da borda
+    else if (h.l < 0.975 && h.s > 0.3) { pintado = true; ponto = corForteDe(el) || bg; }
+  }
+  if (pintado) {
+    const cor = `rgb(${ponto!.r}, ${ponto!.g}, ${ponto!.b})`;
     if (!el.hasAttribute('data-acn-cab')) el.setAttribute('data-acn-cab', '');
     if (el.style.getPropertyValue('--acn-cab-cor') !== cor) el.style.setProperty('--acn-cab-cor', cor);
   } else if (el.hasAttribute('data-acn-cab')) el.removeAttribute('data-acn-cab');
@@ -242,6 +276,9 @@ function processar() {
     const cabs = raiz.matches('.sec-hdr[style]') ? [raiz] : [];
     cabs.push(...Array.from(raiz.querySelectorAll('.sec-hdr[style]')));
     for (const c of cabs) marcarCabecalho(c as HTMLElement);
+    const cartoes = raiz.matches('div[style*="font-size"], div[style]') && raiz.tagName === 'DIV' ? [raiz] : [];
+    cartoes.push(...Array.from(raiz.querySelectorAll('div[style*="border-radius"]')));
+    for (const c of cartoes) marcarCartaoNumero(c as HTMLElement);
     marcarCarregando(raiz);
   }
   pendentes.clear();

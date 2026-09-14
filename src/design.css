@@ -443,3 +443,8 @@ body.dark .acn-contato-hoje, body.dark .acn-temp-barras { background: #1e293b; b
 body.dark .acn-kpi { background: #1e293b; border-color: #334155; }
 body.dark .acn-kpi .val { color: #f1f5f9; }
 body.dark .acn-barra > span { background: #334155; }
+
+/* ── Cartão de número pintado pela tela: branco, borda neutra e ponto de cor ── */
+html body div[data-acn-numero] { position: relative; background: var(--acn-surface) !important; background-image: none !important; border-color: var(--acn-line) !important; border-top-color: var(--acn-line) !important; border-left-color: var(--acn-line) !important; padding-left: 26px !important; }
+div[data-acn-numero]::before { content: ""; position: absolute; left: 12px; top: 15px; width: 8px; height: 8px; border-radius: 50%; background: var(--acn-cab-cor); }
+body.dark div[data-acn-numero] { background: #1e293b !important; border-color: #334155 !important; }
