@@ -155,6 +155,16 @@
   html body .form-group { flex: 1 1 140px; }
   html body .form-row { gap: 8px 10px; }
 
+  /* Faixas de abas/filtros: rolam para o lado em vez de estourar a tela */
+  html body .acn-faixa-rolavel { overflow-x: auto; flex-wrap: nowrap !important; max-width: 100%; -webkit-overflow-scrolling: touch; }
+  html body .acn-faixa-rolavel > * { flex-shrink: 0; white-space: nowrap; }
+  /* Item flexível que precisa poder encolher (senão o conteúdo empurra a linha para fora da tela) */
+  html body .acn-min0 { min-width: 0 !important; }
+  /* Barra de navegação que pode ir para 2 linhas (espaçador flex:1 some) */
+  html body .acn-nav-quebra { flex-wrap: wrap; }
+  html body .acn-nav-quebra > [style*="flex: 1"] { display: none; }
+  html body .acn-nav-quebra > .acn-faixa-rolavel { width: 100%; }
+
   /* Janelas em tela cheia */
   html body :is(.modal-overlay, [style*="position: fixed"][style*="inset: 0px"]) {
     padding: 0 !important; align-items: stretch !important; justify-content: stretch !important;

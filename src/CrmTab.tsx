@@ -18,6 +18,7 @@ import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { useAlturaDeCards } from './KanbanColuna';
+import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -246,6 +247,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [loading, setLoading]       = useState(true);
   const [busca, setBusca]           = useState('');
   const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'>('kanban');
+  // Celular: kanban mostra uma etapa por vez e o card muda de etapa por "Mover para…" (sem arrastar)
+  const celular = useCelular();
+  const [etapaCel, setEtapaCel] = useState<string | null>(null);
   const [recentesCrm, setRecentesCrm] = useState<any[]>([]);
   const [recentesCrmLoading, setRecentesCrmLoading] = useState(false);
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
@@ -563,10 +567,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     await load(true);
   };
 
-  const handleDrop = async (estagioDestId: string) => {
+  // opId: no celular o card é movido pelo seletor "Mover para…", sem arrastar
+  const handleDrop = async (estagioDestId: string, opId: string | null = dragging) => {
     setDragOver(null);
-    if (!dragging) return;
-    const op = ops.find(o => o.id === dragging);
+    if (!opId) return;
+    const op = ops.find(o => o.id === opId);
     if (!op || op.estagio_id === estagioDestId) { setDragging(null); return; }
 
     const estDest = getEst(estagioDestId);
@@ -2395,15 +2400,32 @@ const SUB_STATUS_COR: Record<string,string> = {
   // componente porque ela carrega drag-and-drop, chips de sub-status e o
   // "+ Adicionar" — só a medida da altura é compartilhada.
 
-  const renderKanban = () => (
+  const renderKanban = () => {
+    if (celular) {
+      const etapas = SUPER_COLS.map(c => ({ id: c.id, titulo: c.label, cor: c.bg, total: opsFiltradas.filter(c.match).length }));
+      const ativa = etapas.find(e => e.id === etapaCel) ? etapaCel : etapaInicial(etapas);
+      const col = SUPER_COLS.find(c => c.id === ativa);
+      return (
+        <div>
+          <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />
+          {col && renderColunaKanban(col, '100%')}
+        </div>
+      );
+    }
+    return (
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
-      {SUPER_COLS.map(col => {
+      {SUPER_COLS.map(col => renderColunaKanban(col, 205))}
+    </div>
+    );
+  };
+
+  const renderColunaKanban = (col: any, largura: number | string) => {
         const cards = opsFiltradas.filter(col.match);
         const estId = col.estDrop();
         const isDragOver = dragOver === col.id;
 
         return (
-          <div key={col.id} style={{ width: 205, flexShrink:0 }}>
+          <div key={col.id} style={{ width: largura, flexShrink:0 }}>
             {/* Header */}
             <div style={{ background:col.bg, color:'white', padding:'5px 8px', borderRadius:'5px 5px 0 0',
               fontSize:9, fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center',
@@ -2456,6 +2478,17 @@ const SUB_STATUS_COR: Record<string,string> = {
                 >
                   {renderCard(op)}
 
+                  {/* Celular: mudar de etapa sem arrastar */}
+                  {celular && (
+                    <select value="" onChange={e => { const destino = e.target.value; if (destino) handleDrop(destino, op.id); }}
+                      style={{ width:'100%', margin:'2px 0 4px', borderRadius:6, border:'1px solid #cbd5e1', background:'#fff', color:'#334155' }}>
+                      <option value="">Mover para…</option>
+                      {SUPER_COLS.filter(c => c.id !== col.id).map(c => (
+                        <option key={c.id} value={c.estDrop()}>{c.label}</option>
+                      ))}
+                    </select>
+                  )}
+
                   {/* Sub-status chips — colunas abertas */}
                   {!col.terminal && (
                     <div style={{ display:'flex', gap:2, marginTop:1, marginBottom:5, paddingLeft:2 }}>
@@ -2500,9 +2533,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             </div>
           </div>
         );
-      })}
-    </div>
-  );
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // PAINEL FATURAMENTOS
@@ -2685,7 +2716,7 @@ const SUB_STATUS_COR: Record<string,string> = {
     <div style={{ padding:'8px 12px' }}>
 
       {/* ── Navegação principal CRM ── */}
-      <div style={{ display:'flex', background:'#0f172a', margin:'-8px -12px 0', padding:'0 12px' }}>
+      <div className="acn-nav-quebra" style={{ display:'flex', background:'#0f172a', margin:'-8px -12px 0', padding:'0 12px' }}>
         {/* Funis */}
         <div onClick={() => setSecaoCrm('funil')} style={{
           padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
@@ -2701,7 +2732,7 @@ const SUB_STATUS_COR: Record<string,string> = {
 
         <div style={{ flex:1 }} />
         {secaoCrm === 'funil' && (
-          <div style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
+          <div className="acn-faixa-rolavel" style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
             {([
               ['kanban',       '📋 Kanban'],
               ['agenda',       '📅 Agenda'],

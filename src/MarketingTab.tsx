@@ -44,7 +44,7 @@ function PipelineStatus({ opl }) {
   ];
 
   return (
-    <div style={{display:'flex',alignItems:'center',gap:0,margin:'4px 0'}}>
+    <div className="acn-faixa-rolavel" style={{display:'flex',alignItems:'center',gap:0,margin:'4px 0'}}>
       {etapas.map((e, i) => (
         <React.Fragment key={e.label}>
           <div style={{
@@ -168,7 +168,7 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background: temNaoLidos?'#fef9c3':'#f8fafc',cursor:'pointer',borderBottom: expanded?'1px solid #e2e8f0':'none'}}
         onClick={toggleExpand}>
-        <div style={{flex:1}}>
+        <div className="acn-min0" style={{flex:1}}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <LinkOpl opl={opl} currentUser={currentUser} />
             <span style={{fontSize:10,color:'#64748b'}}>{opl.cliente_nome || '—'}</span>
