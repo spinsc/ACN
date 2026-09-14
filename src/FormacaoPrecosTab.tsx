@@ -1473,9 +1473,10 @@ function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, 
               { label:'Valor Líquido c/ Plataforma',                        value: fmtR(totalLiquidoPlat), bg:'#0f766e', hide: false },
             ] : []),
           ].filter(x => !x.hide).map(({ label, value, bg }) => (
-            <div key={label} style={{ background:bg, color:'#fff', borderRadius:8, padding:'8px 12px' }}>
-              <div style={{ fontSize:9, opacity:.85, marginBottom:2 }}>{label}</div>
-              <div style={{ fontSize:13, fontWeight:800 }}>{value}</div>
+            <div key={label} className="acn-kpi" style={{ padding:'8px 12px' }}>
+              <span className="rot"><i style={{ background:bg }} />{label}</span>
+              <span className="acn-num" style={{ fontSize:15, fontWeight:600, lineHeight:1.3,
+                color: /^(Margem|Lucro)/.test(label) ? bg : 'var(--acn-ink)' }}>{value}</span>
             </div>
           ))}
         </div>

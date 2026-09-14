@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { normalizarBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { CabecalhoTela, Botao } from './Interface';
+import { mdiPlus } from '@mdi/js';
 
 const supabase = createClient(
   'https://qgemelnuqdilnggxmrdw.supabase.co',
@@ -1102,28 +1104,11 @@ export default function VeiculosNfcTab({ currentUser }) {
 
   return (
     <div style={{ padding:'0 0 24px', fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
-      {/* Header */}
-      <div style={{ background:'#14532d', borderRadius:8, padding:'14px 16px', marginBottom:12,
-        display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-        <div>
-          <div style={{ color:'#86efac', fontSize:10, fontWeight:700, marginBottom:2 }}>
-            ACN SINAL VERDE
-          </div>
-          <div style={{ color:'#fff', fontWeight:800, fontSize:15 }}>
-            📱 Dossiê NFC Veicular
-          </div>
-          <div style={{ color:'#bbf7d0', fontSize:9, marginTop:2 }}>
-            {veiculos.length} veículo(s) · {totAtiva} com garantia ativa · {totExpirada} expirada(s)
-          </div>
-        </div>
-        {isAdmin && (
-          <button onClick={() => setModalForm({})}
-            style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6,
-              padding:'8px 16px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-            ➕ Novo Veículo
-          </button>
-        )}
-      </div>
+      <CabecalhoTela
+        titulo="Dossiê NFC veicular"
+        subtitulo={<><span className="acn-num">{veiculos.length}</span> veículo(s) · {totAtiva} com garantia ativa · {totExpirada} expirada(s)</>}
+        acoes={isAdmin && <Botao variante="primario" icone={mdiPlus} onClick={() => setModalForm({})}>Novo veículo</Botao>}
+      />
 
       {/* Filtros */}
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,

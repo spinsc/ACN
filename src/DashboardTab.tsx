@@ -1534,7 +1534,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             ) : (
               <>
                 {/* Título da tela para as abas que ainda não têm cabeçalho próprio */}
-                {!['producao', 'crm', 'painel_tv', 'licitacoes'].includes(activeTab) && (() => {
+                {!['producao', 'crm', 'painel_tv', 'licitacoes', 'nfc'].includes(activeTab) && (() => {
                   const item = SIDEBAR_GROUPS.flatMap(g => g.items).find(i => i.id === activeTab);
                   return item ? <CabecalhoTela titulo={item.label} /> : null;
                 })()}
