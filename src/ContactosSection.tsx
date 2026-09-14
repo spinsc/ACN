@@ -848,7 +848,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               <select value={formI.oportunidade_id||''} onChange={e => setFormI(f => ({...f, oportunidade_id:e.target.value||null}))}
                 style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
                 <option value="">— Sem vínculo —</option>
-                {oportunidades.map(op => <option key={op.id} value={op.id}>{op.funil==='licitacao'?'🏛️':'💼'} {op.titulo}</option>)}
+                {oportunidades.map(op => <option key={op.id} value={op.id}>{op.funil==='licitacao'?'':''} {op.titulo}</option>)}
               </select>
             </div>
 

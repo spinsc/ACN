@@ -714,7 +714,7 @@ export default function ComercialTab({ currentUser }) {
               status_anterior: anterior?.status_geral, status_novo: anterior?.status_geral,
               usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: new Date().toISOString(),
             }]);
-            alert(`✅ Desmembrado: ${baseOpl} (unidade 1) + ${qtdNova - 1} OPs novas, de ${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}.`);
+            alert(`Desmembrado: ${baseOpl} (unidade 1) + ${qtdNova - 1} OPs novas, de ${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}.`);
             setFormData(FORM_VAZIO); setShowForm(false); setEditId(null); fetchOpls();
             return;
           }
@@ -929,7 +929,7 @@ export default function ComercialTab({ currentUser }) {
                     else { setMostraNovaCat(false); setFormData({...formData,tipo_projeto:e.target.value}); }
                   }}>
                   {TIPOS_PROJETO.map(t=><option key={t.label} value={t.label}>{t.emoji} {t.label}</option>)}
-                  {categoriasExtra.map(n=><option key={n} value={n}>📌 {n}</option>)}
+                  {categoriasExtra.map(n=><option key={n} value={n}>{n}</option>)}
                   <option value="___NOVA___">➕ Nova Categoria...</option>
                 </select>
                 {mostraNovaCat && (

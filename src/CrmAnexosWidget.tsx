@@ -92,7 +92,7 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
       });
     }
     if (falhas.length > 0) {
-      alert(`❌ Falha ao enviar ${falhas.length} arquivo${falhas.length>1?'s':''}:\n\n${falhas.join('\n')}`);
+      alert(`Falha ao enviar ${falhas.length} arquivo${falhas.length>1?'s':''}:\n\n${falhas.join('\n')}`);
     }
     if (fileRef.current) fileRef.current.value = '';
     setUploading(false);

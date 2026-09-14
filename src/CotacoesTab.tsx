@@ -168,7 +168,7 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
 
   <!-- DADOS DO CLIENTE -->
   <div class="bloco">
-    <h2>📋 Dados do Cliente</h2>
+    <h2>Dados do Cliente</h2>
     <div class="grade">
       <div class="campo">
         <label>ÓRGÃO / CLIENTE</label>
@@ -188,7 +188,7 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
 
   <!-- PRODUTOS -->
   <div class="bloco">
-    <h2>📦 Produtos e Serviços</h2>
+    <h2>Produtos e Serviços</h2>
     <table>
       <thead>
         <tr>
@@ -245,7 +245,7 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
   <!-- RODAPÉ -->
   <div class="rodape">
     <div>
-      <p>⏳ Proposta válida por <strong>${validade || '30'} dias</strong> a partir de ${dataHoje}.</p>
+      <p>Proposta válida por <strong>${validade || '30'} dias</strong> a partir de ${dataHoje}.</p>
       ${prazoEntrega ? `<p style="margin-top:4px">Prazo de entrega: <strong>${prazoEntrega}</strong>.</p>` : ''}
       <p style="margin-top:4px">Preços sujeitos a alteração após o prazo de validade.</p>
     </div>
@@ -466,7 +466,7 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
         crm_oportunidade_id: cotacao.crm_oportunidade_id || null,
       }]);
       if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
-      alert(`✅ Solicitação de aprovação enviada! Desconto de ${desconto}% aguardando aprovação.`);
+      alert(`Solicitação de aprovação enviada! Desconto de ${desconto}% aguardando aprovação.`);
       onSalvo && onSalvo();
       onClose();
     } else {
@@ -485,7 +485,7 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
       if (error) { alert('Erro: ' + error.message); setSalvando(false); return; }
       // Atualiza status
       await supabase.from('cotacoes_precos').update({ status: 'proposta_gerada' }).eq('id', cotacao.id);
-      alert('✅ Proposta salva!');
+      alert('Proposta salva!');
       onSalvo && onSalvo();
       onClose();
     }
@@ -1013,7 +1013,7 @@ function ModalCombinarPropostas({ cotacoes, currentUser, onClose, onSalvo }) {
     }]);
     setSalvando(false);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
-    alert('✅ Proposta combinada salva!');
+    alert('Proposta combinada salva!');
     onSalvo();
     onClose();
   };
@@ -1422,7 +1422,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const statusOpcoes = [...new Set(cotacoes.map(c => c.status).filter(Boolean))];
 
   return (
-    <div style={{ padding:'0 0 24px', fontFamily:'system-ui,sans-serif' }}>
+    <div style={{ padding:'0 0 24px', fontFamily: "'ACN Icones', system-ui, sans-serif" }}>
       {/* Header */}
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>

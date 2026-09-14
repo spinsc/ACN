@@ -763,7 +763,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
               <tbody>
                 {visiveis.map(it => (
                   <tr key={it.id} style={{ background: it.ativo ? '#fff' : '#fafafa' }}>
-                    <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: 'monospace', fontSize: 9 }}>
+                    <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: "'ACN Icones', monospace", fontSize: 9 }}>
                       {it.codigo || '—'}
                     </td>
                     <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 200 }}>
@@ -793,13 +793,13 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
                     <td style={{ ...tdStyle, textAlign: 'center', fontSize: 9, fontWeight: 700, color: it.moeda !== 'REAL' ? '#7c3aed' : '#374151' }}>
                       {it.moeda}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: 'monospace' }}>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', monospace" }}>
                       {fmtMoeda(it.custo_unit, it.moeda)}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#6b7280' }}>{fmtPct(it.ipi_pct)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#6b7280' }}>{fmtPct(it.st_pct)}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#7c3aed' }}>{fmtPct(it.markup_pct)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'monospace', fontSize: 9, color: '#9ca3af' }}>
+                    <td style={{ ...tdStyle, textAlign: 'center', fontFamily: "'ACN Icones', monospace", fontSize: 9, color: '#9ca3af' }}>
                       {it.ncm || '—'}
                     </td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>

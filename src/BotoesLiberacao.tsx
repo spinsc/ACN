@@ -58,16 +58,16 @@ export default function BotoesLiberacao({ registro, setorAtual, currentUser, onU
         .eq('id', registro.id);
 
       if (!error) {
-        alert(`✅ ${registro.opl} liberada para ${fluxo.label}!`);
+        alert(`${registro.opl} liberada para ${fluxo.label}!`);
         if (onLiberacaoSucesso) {
           onLiberacaoSucesso();
         }
       } else {
-        alert('❌ Erro ao liberar: ' + error.message);
+        alert('Erro ao liberar: ' + error.message);
       }
     } catch (err) {
       console.error('Erro:', err);
-      alert('❌ Erro: ' + err.message);
+      alert('Erro: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export default function BotoesLiberacao({ registro, setorAtual, currentUser, onU
         .eq('id', registro.id);
 
       if (!error) {
-        alert(`❌ ${registro.opl} rejeitada.\n\nMotivo: ${motivo}`);
+        alert(`${registro.opl} rejeitada.\n\nMotivo: ${motivo}`);
         if (onLiberacaoSucesso) {
           onLiberacaoSucesso();
         }
@@ -149,7 +149,7 @@ export default function BotoesLiberacao({ registro, setorAtual, currentUser, onU
 
       if (!error) {
         alert(
-          `⚠️ ${registro.opl} liberada COM PENDÊNCIA!\n\nSetores: ${setorsPendentes}`
+          `${registro.opl} liberada COM PENDÊNCIA!\n\nSetores: ${setorsPendentes}`
         );
         if (onLiberacaoSucesso) {
           onLiberacaoSucesso();
@@ -385,7 +385,7 @@ const styles = {
   },
   logText: {
     fontSize: '11px',
-    fontFamily: 'monospace',
+    fontFamily: "'ACN Icones', monospace",
     color: '#333',
     lineHeight: '1.4',
   },

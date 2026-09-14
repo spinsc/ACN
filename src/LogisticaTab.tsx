@@ -368,7 +368,7 @@ function FretesPanel({ currentUser }: any) {
       .in('id', g.fretes.map((f:any) => f.id));
     setJuntando(null);
     if (error) { alert('Erro ao agrupar: ' + error.message); return; }
-    alert(`✅ ${g.fretes.length} envios agrupados. Cote uma vez só para a carga inteira.`);
+    alert(`${g.fretes.length} envios agrupados. Cote uma vez só para a carga inteira.`);
     fetchAll();
   };
 
@@ -849,8 +849,8 @@ function FretesPanel({ currentUser }: any) {
               <label className="acn-label">Direção</label>
               <select className="acn-input" style={{width:'100%'}} value={form.direcao}
                 onChange={e=>setForm({...form,direcao:e.target.value})}>
-                <option value="inbound">📥 Inbound (chegando na ACN)</option>
-                <option value="outbound">📤 Outbound (saindo da ACN)</option>
+                <option value="inbound">Inbound (chegando na ACN)</option>
+                <option value="outbound">Outbound (saindo da ACN)</option>
               </select>
             </div>
             <div style={{flex:2}}>
@@ -1415,7 +1415,7 @@ function PainelRecebimento({ currentUser }: any) {
         recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado',
       }).eq('pedido_id', pedido.id);
       if (errFat) console.warn('Falha ao atualizar faturamento:', errFat.message);
-      notificarEvento('logistica_recebe_pedido', `📦 *Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}\nNF: ${form.numero_nf.trim()}`, 'Compras');
+      notificarEvento('logistica_recebe_pedido', `*Recebimento confirmado* — Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''}\nNF: ${form.numero_nf.trim()}`, 'Compras');
     } else {
       await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras', numero_opl: pedido.opl || null,
@@ -1425,7 +1425,7 @@ function PainelRecebimento({ currentUser }: any) {
         logs_demanda: [{ texto: `Divergência no recebimento: ${form.observacoes.trim()}`, usuario: currentUser?.nome, hora: agora }],
       }]);
       await notificarComprador(pedido, `⚠️ Divergência no recebimento do pedido ${pedido.numero_pedido}: ${form.observacoes.trim()}`);
-      notificarEvento('logistica_divergencia_recebimento', `⚠️ *Divergência no recebimento* — Pedido ${pedido.numero_pedido}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
+      notificarEvento('logistica_divergencia_recebimento', `*Divergência no recebimento* — Pedido ${pedido.numero_pedido}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
     }
 
     setSalvando(false);

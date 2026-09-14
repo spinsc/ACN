@@ -103,15 +103,15 @@ export default function SerralheriaTab({ currentUser }) {
       ]);
 
       if (error) {
-        alert('❌ Erro: ' + error.message);
+        alert('Erro: ' + error.message);
       } else {
-        alert('✅ Pedido criado!');
+        alert('Pedido criado!');
         setFormData({ tipoPedido: 'Projeto Especial', descricao: '', quantidade: 1, peso: 0, observacoes: '' });
         setShowForm(false);
         fetchData();
       }
     } catch (err) {
-      alert('❌ ' + err.message);
+      alert(err.message);
     }
   };
 
@@ -125,13 +125,13 @@ export default function SerralheriaTab({ currentUser }) {
       const { error } = await supabase.from(tabela).update(updateData).eq('id', id);
 
       if (error) {
-        alert('❌ Erro: ' + error.message);
+        alert('Erro: ' + error.message);
       } else {
-        alert('✅ Status atualizado!');
+        alert('Status atualizado!');
         fetchData();
       }
     } catch (err) {
-      alert('❌ ' + err.message);
+      alert(err.message);
     }
   };
 

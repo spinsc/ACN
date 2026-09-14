@@ -506,7 +506,7 @@ export default function SacTab({ currentUser }) {
       }]);
     }
 
-    notificarEvento('sac_os_aberta', `📋 *Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
+    notificarEvento('sac_os_aberta', `*Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
     const _savedCliente = { formData: { ...form }, clienteId: form._cliente_id };
     setForm({ ...FORM_VAZIO }); setFotosEntradaFiles([]); setArquivosEntradaFiles([]); setAnexarFiles([]); setAcessInput('');
@@ -527,7 +527,7 @@ export default function SacTab({ currentUser }) {
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', modalOrc.id);
-    notificarEvento('sac_orcamento_enviado', `💰 *Orçamento enviado — ${modalOrc.numero_os}*\nCliente: ${modalOrc.cliente_nome}\nValor: R$ ${orcForm.valor}\nPor: ${currentUser?.nome}`);
+    notificarEvento('sac_orcamento_enviado', `*Orçamento enviado — ${modalOrc.numero_os}*\nCliente: ${modalOrc.cliente_nome}\nValor: R$ ${orcForm.valor}\nPor: ${currentUser?.nome}`);
     setModalOrc(null); setOrcForm({ valor:'', condicoes:'' }); fetchOrdens();
   };
 
@@ -567,7 +567,7 @@ export default function SacTab({ currentUser }) {
       }],
     }]);
 
-    notificarEvento('sac_os_aprovada', `✅ *OS ${modalAprov.numero_os} APROVADA*\nCliente: ${modalAprov.cliente_nome}\nAprovador: ${aprovForm.nome}\nPor: ${currentUser?.nome}`);
+    notificarEvento('sac_os_aprovada', `*OS ${modalAprov.numero_os} APROVADA*\nCliente: ${modalAprov.cliente_nome}\nAprovador: ${aprovForm.nome}\nPor: ${currentUser?.nome}`);
     setModalAprov(null); setAprovForm({ nome:'', sig:null, data_entrega:'' }); fetchOrdens();
   };
 
@@ -582,7 +582,7 @@ export default function SacTab({ currentUser }) {
       nome_retirada_reprovacao: reprForm.nome_retirada || null,
       atualizado_em: agora,
     }).eq('id', modalRepr.id);
-    notificarEvento('sac_os_reprovada', `❌ *OS ${modalRepr.numero_os} REPROVADA*\nCliente: ${modalRepr.cliente_nome}\nMotivo: ${reprForm.motivo}`);
+    notificarEvento('sac_os_reprovada', `*OS ${modalRepr.numero_os} REPROVADA*\nCliente: ${modalRepr.cliente_nome}\nMotivo: ${reprForm.motivo}`);
     setModalRepr(null); setReprForm({ motivo:'', data_retirada:'', nome_retirada:'' }); fetchOrdens();
   };
 
@@ -605,7 +605,7 @@ export default function SacTab({ currentUser }) {
       fotos_saida: urlsFotos,
       atualizado_em: agora,
     }).eq('id', modalSaida.id);
-    notificarEvento('sac_os_entregue', `🚚 *OS ${modalSaida.numero_os} ENTREGUE*\nCliente: ${modalSaida.cliente_nome}\nRetirado por: ${saidaForm.nome}`);
+    notificarEvento('sac_os_entregue', `*OS ${modalSaida.numero_os} ENTREGUE*\nCliente: ${modalSaida.cliente_nome}\nRetirado por: ${saidaForm.nome}`);
     setModalSaida(null); setSaidaForm({ nome:'', sig:null }); setFotosSaidaFiles([]); fetchOrdens();
   };
 
@@ -631,7 +631,7 @@ export default function SacTab({ currentUser }) {
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_cotacao_enviada', `💰 *Cotação enviada — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
+    notificarEvento('sac_cotacao_enviada', `*Cotação enviada — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
     fetchOrdens();
   };
 
@@ -682,7 +682,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       status: os.tipo_avaliacao === 'Remota' ? 'Aguardando Início' : 'Provisionada',
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_aceite_data', `✅ *SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
+    notificarEvento('sac_aceite_data', `*SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
     setModalAceiteSAC(null);
     fetchOrdens();
   };
@@ -749,7 +749,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       status: 'Aguardando Emissão NF',
       atualizado_em: agora,
     }).eq('id', os.id);
-    notificarEvento('sac_enviado_fiscal', `📤 *Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
+    notificarEvento('sac_enviado_fiscal', `*Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
     setModalEnviarFiscal(null); setFiscalItens([]);
     fetchOrdens();
   };
@@ -771,7 +771,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     }).eq('id', os.id);
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: { status: os.status }, newRow: { status: 'Entregue' }, user: currentUser });
-    notificarEvento('sac_os_entregue', `🚚 *Veículo entregue — ${os.numero_os}*
+    notificarEvento('sac_os_entregue', `*Veículo entregue — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
 Recebido por: ${nomeRecebeuVeic.trim()}`);
     setModalEntregaVeic(null);
@@ -1307,10 +1307,10 @@ OK = ACN   |   Cancelar = DETECH`;
               <select value={nfcStatus} onChange={e=>{setNfcStatus(e.target.value);}}
                 style={{border:'1px solid #166534',borderRadius:5,padding:'5px 8px',fontSize:10,background:'#166534',color:'#fff'}}>
                 <option value="">Todos os status</option>
-                <option value="Aberto">🔴 Aberto</option>
-                <option value="Em Atendimento">🟡 Em Atendimento</option>
-                <option value="Concluído">🟢 Concluído</option>
-                <option value="Cancelado">⚫ Cancelado</option>
+                <option value="Aberto">Aberto</option>
+                <option value="Em Atendimento">Em Atendimento</option>
+                <option value="Concluído">Concluído</option>
+                <option value="Cancelado">Cancelado</option>
               </select>
               <button onClick={carregarChamadosNfc}
                 style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:5,
@@ -1645,9 +1645,9 @@ OK = ACN   |   Cancelar = DETECH`;
           </select>
           <select className="acn-input" style={{width:140}} value={filtroAvaliacao} onChange={e=>setFiltroAvaliacao(e.target.value)}>
             <option value="">Presencial / Remota</option>
-            <option value="Veicular">🚗 Veiculares</option>
-            <option value="Presencial">📍 Presencial</option>
-            <option value="Remota">📡 Remota</option>
+            <option value="Veicular">Veiculares</option>
+            <option value="Presencial">Presencial</option>
+            <option value="Remota">Remota</option>
           </select>
           <select className="acn-input" style={{width:130}} value={filtroEmpresa} onChange={e=>setFiltroEmpresa(e.target.value)}>
             <option value="">Todas as empresas</option>
@@ -2739,7 +2739,7 @@ function PrintOS({ os }) {
   const base = import.meta.env.BASE_URL;
 
   return (
-    <div style={{fontFamily:'Arial,sans-serif',color:'#1e293b'}}>
+    <div style={{fontFamily: "'ACN Icones', Arial, sans-serif",color:'#1e293b'}}>
       {/* CABEÇALHO */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'3px solid #0f766e',paddingBottom:10,marginBottom:12}}>
         <img src={base + 'logo.png'} alt="ACN Sinal Verde" style={{height:56,objectFit:'contain'}} />

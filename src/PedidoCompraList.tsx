@@ -55,7 +55,7 @@ export default function PedidoCompraList({ currentUser, onClose }) {
         .insert([dados]);
 
       if (!error) {
-        alert('✅ Pedido criado!');
+        alert('Pedido criado!');
         setShowForm(false);
         setFormData({
           numero_pedido: '',
@@ -67,10 +67,10 @@ export default function PedidoCompraList({ currentUser, onClose }) {
         });
         onRefresh();
       } else {
-        alert('❌ Erro: ' + error.message);
+        alert('Erro: ' + error.message);
       }
     } catch (err) {
-      alert('❌ Erro: ' + err.message);
+      alert('Erro: ' + err.message);
     }
   };
 
@@ -84,11 +84,11 @@ export default function PedidoCompraList({ currentUser, onClose }) {
         .eq('id', id);
 
       if (!error) {
-        alert('✅ Deletado!');
+        alert('Deletado!');
         onRefresh();
       }
     } catch (err) {
-      alert('❌ Erro: ' + err.message);
+      alert('Erro: ' + err.message);
     }
   };
 

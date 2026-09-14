@@ -274,13 +274,13 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                   />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} style={inpStyle}>
-                      <option value="admin">👮 Admin</option>
-                      <option value="diretoria">🏢 Diretoria</option>
+                      <option value="admin">Admin</option>
+                      <option value="diretoria">Diretoria</option>
                     </select>
                     <select value={form.criticidade} onChange={e => setForm({ ...form, criticidade: e.target.value })} style={inpStyle}>
-                      <option value="baixa">🟡 Baixa</option>
-                      <option value="media">🟠 Média</option>
-                      <option value="alta">🔴 Alta</option>
+                      <option value="baixa">Baixa</option>
+                      <option value="media">Média</option>
+                      <option value="alta">Alta</option>
                     </select>
                   </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#cbd5e1', cursor: 'pointer' }}>

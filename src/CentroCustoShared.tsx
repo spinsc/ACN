@@ -223,7 +223,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
           <tbody>
             {arvore.map(c => (
               <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: c.ativo ? 1 : 0.45 }}>
-                <td style={{ padding:'8px 8px', fontWeight:700, fontFamily:'monospace', color:'#0f766e' }}>
+                <td style={{ padding:'8px 8px', fontWeight:700, fontFamily: "'ACN Icones', monospace", color:'#0f766e' }}>
                   {'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo}
                 </td>
                 <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
@@ -308,7 +308,7 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
     }]);
     setSalvando(false);
     if (error) { alert('Erro ao lançar despesa: ' + error.message); return; }
-    alert(parcelado ? '✅ Contrato parcelado criado! Lance as medições (pagamentos) depois, na lista de despesas do centro.' : '✅ Despesa lançada!');
+    alert(parcelado ? 'Contrato parcelado criado! Lance as medições (pagamentos) depois, na lista de despesas do centro.' : 'Despesa lançada!');
     onClose();
   };
 

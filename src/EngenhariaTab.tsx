@@ -197,7 +197,7 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('engenharia_libera_serralheria', `🔧 *Liberação parcial p/ Serralheria* — OPL ${opl.opl}\n${obsSerralheria.trim()}\nPor: ${currentUser?.nome}`, 'Serralheria');
+    notificarEvento('engenharia_libera_serralheria', `*Liberação parcial p/ Serralheria* — OPL ${opl.opl}\n${obsSerralheria.trim()}\nPor: ${currentUser?.nome}`, 'Serralheria');
     setEnviandoSerralheria(false);
     setModalSerralheria(null); setObsSerralheria(''); fetchAll();
   };
@@ -275,7 +275,7 @@ export default function EngenhariaTab({ currentUser }) {
         status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('engenharia_libera_pcp', `📦 *BOM liberado em lote* — ${modalBomLote.base}\n${selecionados.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
+      notificarEvento('engenharia_libera_pcp', `*BOM liberado em lote* — ${modalBomLote.base}\n${selecionados.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
     } finally {
       setLiberandoLote(false);
       setModalBomLote(null); setObsBomLote(''); setSelecionadosLote({});

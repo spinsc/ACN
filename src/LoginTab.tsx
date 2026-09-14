@@ -122,7 +122,7 @@ export default function LoginTab() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
         body: JSON.stringify({
           numero: usuario.whatsapp,
-          mensagem: `🔑 *ACN Sinal Verde — Recuperação de Senha*\n\nOlá, ${usuario.nome}!\n\nSua senha temporária é: *${temp}*\n\nEla é válida por 30 minutos. Ao entrar, você será solicitado a criar uma nova senha.\n\nSe não foi você, ignore esta mensagem.`,
+          mensagem: `*ACN Sinal Verde — Recuperação de Senha*\n\nOlá, ${usuario.nome}!\n\nSua senha temporária é: *${temp}*\n\nEla é válida por 30 minutos. Ao entrar, você será solicitado a criar uma nova senha.\n\nSe não foi você, ignore esta mensagem.`,
         }),
       });
 

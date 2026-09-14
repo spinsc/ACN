@@ -315,7 +315,7 @@ export default function FiscalTab({ currentUser }) {
                     <td>{fmtDt(o.data_liberacao_comercial)}</td>
                     <td>
                       {o.seriais_equipamentos ? (
-                        <div style={{width:180,fontSize:10,fontFamily:'monospace',whiteSpace:'pre-wrap',color:'#1e3a8a',background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:4,padding:'4px 7px'}}>
+                        <div style={{width:180,fontSize:10,fontFamily: "'ACN Icones', monospace",whiteSpace:'pre-wrap',color:'#1e3a8a',background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:4,padding:'4px 7px'}}>
                           <Linkify text={o.seriais_equipamentos} />
                         </div>
                       ) : (
@@ -371,7 +371,7 @@ export default function FiscalTab({ currentUser }) {
                     <td>
                       <strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong>
                       {o.observacoes_faturamento && (
-                        <div style={{marginTop:3,width:200,fontSize:9,fontFamily:'monospace',whiteSpace:'pre-wrap',color:'#5b21b6',background:'#faf5ff',border:'1px solid #d8b4fe',borderRadius:4,padding:'4px 6px'}}>
+                        <div style={{marginTop:3,width:200,fontSize:9,fontFamily: "'ACN Icones', monospace",whiteSpace:'pre-wrap',color:'#5b21b6',background:'#faf5ff',border:'1px solid #d8b4fe',borderRadius:4,padding:'4px 6px'}}>
                           🔗 NF em lote:<br/>{o.observacoes_faturamento}
                         </div>
                       )}

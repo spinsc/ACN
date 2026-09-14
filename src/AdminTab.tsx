@@ -1164,7 +1164,7 @@ function PainelKPI() {
                         ? <input className="acn-input" style={{width:60,textAlign:'center'}} value={editVals.tol} onChange={e=>setEditVals(v=>({...v,tol:e.target.value}))} />
                         : <strong style={{color:'#d97706'}}>{m.tol}h</strong>}
                     </td>
-                    <td style={{textAlign:'center',fontFamily:'monospace',fontWeight:700,color:'#3b82f6'}}>
+                    <td style={{textAlign:'center',fontFamily: "'ACN Icones', monospace",fontWeight:700,color:'#3b82f6'}}>
                       {real != null ? real.toFixed(1)+'h' : '—'}
                     </td>
                     <td style={{textAlign:'center',color:'#94a3b8',fontSize:10}}>{cnt > 0 ? cnt : '—'}</td>
@@ -1597,7 +1597,7 @@ function PainelNotificacoes() {
                   </td>
                   <td>
                     <strong style={{fontSize:10}}>{ev.label}</strong>
-                    <div style={{fontSize:9,color:'#94a3b8',fontFamily:'monospace'}}>{ev.evento}</div>
+                    <div style={{fontSize:9,color:'#94a3b8',fontFamily: "'ACN Icones', monospace"}}>{ev.evento}</div>
                   </td>
                   <td style={{fontSize:10,color:'#64748b',maxWidth:220}}>{ev.descricao}</td>
                   <td>
@@ -2034,8 +2034,8 @@ function PainelEmailCfg() {
       body: { to: testeEmail.trim(), subject: 'Teste — ACN Sinal Verde', html: '<p>Email de teste enviado pelo painel de Configurações de Email.</p>' },
     });
     setTestando(false);
-    if (error || data?.error) alert('❌ Falha no envio: ' + (data?.error || error?.message));
-    else alert('✅ Email de teste enviado!');
+    if (error || data?.error) alert('Falha no envio: ' + (data?.error || error?.message));
+    else alert('Email de teste enviado!');
   };
 
   const inp = { width: '100%', border: '1px solid #d1d5db', borderRadius: 5, padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' as const };
@@ -2243,7 +2243,7 @@ function PainelAlcadasAprovacao() {
             <tbody>
               {alcadas.map(a => (
                 <tr key={a.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: a.ativo ? 1 : 0.45 }}>
-                  <td style={{ padding:'8px 8px', fontWeight:700, fontFamily:'monospace', color:'#0f766e' }}>{a.nivel}</td>
+                  <td style={{ padding:'8px 8px', fontWeight:700, fontFamily: "'ACN Icones', monospace", color:'#0f766e' }}>{a.nivel}</td>
                   <td style={{ padding:'8px 8px', fontWeight:700 }}>{a.nome}</td>
                   <td style={{ padding:'8px 8px' }}>R$ {Number(a.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                   <td style={{ padding:'8px 8px', color:'#64748b' }}>{(a.perfis_aprovadores || []).join(', ') || '—'}</td>
@@ -2424,7 +2424,7 @@ function PainelAlcadasAprovacaoFretes() {
             <tbody>
               {alcadas.map(a => (
                 <tr key={a.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: a.ativo ? 1 : 0.45 }}>
-                  <td style={{ padding:'8px 8px', fontWeight:700, fontFamily:'monospace', color:'#0f766e' }}>{a.nivel}</td>
+                  <td style={{ padding:'8px 8px', fontWeight:700, fontFamily: "'ACN Icones', monospace", color:'#0f766e' }}>{a.nivel}</td>
                   <td style={{ padding:'8px 8px', fontWeight:700 }}>{a.nome}</td>
                   <td style={{ padding:'8px 8px' }}>R$ {Number(a.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                   <td style={{ padding:'8px 8px', color:'#64748b' }}>{(a.perfis_aprovadores || []).join(', ') || '—'}</td>
@@ -3150,16 +3150,16 @@ function PainelAvisos() {
             <div>
               <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Origem</label>
               <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} style={inpStyle}>
-                <option value="admin">👮 Admin</option>
-                <option value="diretoria">🏢 Diretoria</option>
+                <option value="admin">Admin</option>
+                <option value="diretoria">Diretoria</option>
               </select>
             </div>
             <div>
               <label style={{ fontSize: 10, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 2 }}>Criticidade</label>
               <select value={form.criticidade} onChange={e => setForm({...form, criticidade: e.target.value})} style={inpStyle}>
-                <option value="baixa">🟡 Baixa</option>
-                <option value="media">🟠 Média</option>
-                <option value="alta">🔴 Alta</option>
+                <option value="baixa">Baixa</option>
+                <option value="media">Média</option>
+                <option value="alta">Alta</option>
               </select>
             </div>
           </div>

@@ -1191,7 +1191,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     }]);
     if (error) { alert('Erro: ' + error.message); }
     else {
-      alert('✅ Proposta salva!');
+      alert('Proposta salva!');
       const { data } = await supabase.from('cotacoes_propostas')
         .select('*').eq('cotacao_id', cotacaoAberta.id).order('criado_em', { ascending: false });
       setPropostas(data || []);
@@ -1211,7 +1211,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     const valorComDesconto = totVendas * (1 - desconto / 100);
 
     return (
-      <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
+      <div style={{ padding:14, fontFamily: "'ACN Icones', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
           <button className="acn-btn" style={{ background:'#64748b', fontSize:10 }} onClick={() => setAberta(null)}>← Voltar</button>
           <div>
@@ -1350,7 +1350,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   // ── Lista de cotações ──
   const cotacoesFiltradas = cotacoes.filter(m => !filtroCat || categoriaDe(m) === filtroCat);
   return (
-    <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
+    <div style={{ padding:14, fontFamily: "'ACN Icones', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
         <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', flex:1 }}>📋 Preços Formados</div>
         <FiltroCategoria lista={cotacoes} valor={filtroCat} onChange={setFiltroCat} />
@@ -1795,7 +1795,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setEditandoId(abrir.id);
     setModalImportar(false);
     carregarModelos();
-    if (lista.length > 1) alert(`✅ ${lista.length} formações vinculadas a este processo. Troque entre elas pelo seletor de versões.`);
+    if (lista.length > 1) alert(`${lista.length} formações vinculadas a este processo. Troque entre elas pelo seletor de versões.`);
   };
 
   // Desfaz o vínculo da formação aberta com ESTE processo (Gerentes e Admins).
@@ -1827,7 +1827,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       setVersaoRaizId(null); setVencedoraAtual(false); setTravaAtualizadoEm(null); setUltimaAlteracao(null);
       geracaoRef.current += 1;
     }
-    alert('✅ Formação desvinculada deste processo.');
+    alert('Formação desvinculada deste processo.');
   };
 
   // Ao abrir o processo, carrega automaticamente a formação mais recente
@@ -2248,7 +2248,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       marcarComoSalvo(payload?.nome);
       carregarModelos();
       if (vinculo?.id) carregarFormacoesVinculo();
-      alert(`✅ Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.`);
+      alert(`Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.`);
     } catch (err: any) {
       alert('Erro ao gravar como nova versão: ' + err.message);
     } finally {
@@ -2316,7 +2316,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     }
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
-      alert(editandoId ? '✅ Cotação atualizada!' : '✅ Modelo salvo!');
+      alert(editandoId ? 'Cotação atualizada!' : 'Modelo salvo!');
       setModalSalvar(false);
       // O nome digitado no modal ia só pro banco: a tela continuava achando
       // que a formação era "sem nome", então o salvamento seguinte pedia o
@@ -2597,7 +2597,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         criado_por: currentUser?.nome,
       }]);
 
-      alert(`✅ PDF gerado e anexado à OP ${oplVinculada.opl}!\n\nO arquivo está disponível nos anexos da OP.`);
+      alert(`PDF gerado e anexado à OP ${oplVinculada.opl}!\n\nO arquivo está disponível nos anexos da OP.`);
     } catch (err) {
       console.error(err);
       alert('Erro ao finalizar: ' + err.message);
@@ -2714,7 +2714,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       descartarRascunho(editandoId);
       marcarComoSalvo(nomeFinal);
       carregarModelos();
-      alert('✅ Formação de preços registrada como versão final!');
+      alert('Formação de preços registrada como versão final!');
     } catch (err: any) {
       alert('Erro ao registrar versão: ' + err.message);
     } finally {
@@ -2744,7 +2744,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       descricao: `Versão ${versaoAtual} marcada como vencedora do pregão/licitação.`,
       usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
     }]);
-    alert('🏆 Versão marcada como vencedora!');
+    alert('Versão marcada como vencedora!');
   };
 
   // Carrega o histórico completo (versões do grupo + log de alterações de
@@ -2771,7 +2771,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily:'system-ui,sans-serif', minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
+    <div style={{ fontFamily: "'ACN Icones', system-ui, sans-serif", minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
 
       {/* ── NAVEGAÇÃO DE ABAS — some no modo embutido, só a edição importa ── */}
       {!embutido && (

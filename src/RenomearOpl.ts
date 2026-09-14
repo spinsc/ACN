@@ -41,7 +41,7 @@ export async function renomearOpl(op: { id: string; opl: string }, usuario: any)
     p_opl_id: op.id, p_novo: novo, p_email: usuario?.email || '',
   });
   if (error) { alert('Não foi possível trocar o número: ' + error.message); return null; }
-  alert(`✅ Número alterado: ${data.antigo} → ${data.novo}` +
+  alert(`Número alterado: ${data.antigo} → ${data.novo}` +
     (data.ops > 1 ? ` (e ${data.ops - 1} desmembrada(s))` : '') +
     `.\n${data.referencias} registro(s) ligados à OP foram atualizados.`);
   return data.novo;

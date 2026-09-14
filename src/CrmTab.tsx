@@ -754,12 +754,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       await supabase.from('crm_historico').insert({
         oportunidade_id: modalCompras.id,
         tipo: 'observacao',
-        texto: `📦 Pedido de Compra ${numeroPedido} emitido para o setor Compras.`,
+        texto: `Pedido de Compra ${numeroPedido} emitido para o setor Compras.`,
         usuario_nome: currentUser?.nome || 'Sistema',
         criado_em: agora,
       });
     }
-    alert(`✅ Pedido ${numeroPedido} criado! Acompanhe na aba Compras.`);
+    alert(`Pedido ${numeroPedido} criado! Acompanhe na aba Compras.`);
     setModalCompras(null);
     setFormCompras({ ...VAZIO_COMPRA });
     load(true);
@@ -1010,7 +1010,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           status_anterior: completa.status_geral, status_novo: completa.status_geral,
           usuario_nome: currentUser?.nome, usuario_email: currentUser?.email, data_hora: new Date().toISOString(),
         }]);
-        alert(`✅ Desmembrado: ${baseOpl} (unidade 1) + ${qtdNova - 1} OPs novas, de ${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}.`);
+        alert(`Desmembrado: ${baseOpl} (unidade 1) + ${qtdNova - 1} OPs novas, de ${baseOpl}/02 até ${baseOpl}/${String(qtdNova).padStart(2,'0')}.`);
         setOplEditando(null);
         fetchOplsEmAberto();
         return;
@@ -1227,7 +1227,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       const ct = contentTypeUpload(abrirUploadFile);
       const { error: upErr } = await supabase.storage.from('acn-media').upload(path, abrirUploadFile, { contentType: ct });
       if (upErr) {
-        alert(`❌ Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);
+        alert(`Falha ao enviar "${abrirUploadFile.name}": ${upErr.message}`);
         setAbrirSalvandoDoc(false);
         return;
       }
@@ -1416,7 +1416,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setSalvando(false);
     await load(true);
     if (oplCriada) {
-      alert(`✅ OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+      alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
     }
   };
 
@@ -2774,7 +2774,7 @@ const SUB_STATUS_COR: Record<string,string> = {
         {/* Filtro por responsável */}
         <select value={filtResp} onChange={e => setFiltResp(e.target.value)}
           style={{ padding:'3px 7px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
-          <option value="">👤 Todos os responsáveis</option>
+          <option value="">Todos os responsáveis</option>
           {respUnicos.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
         {filtResp && (
@@ -3093,7 +3093,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                               {emEdicao ? (
                                 <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
                                   <select style={{ ...inpLinha, borderColor:'#0f766e' }} value={oplFormEdit.fluxo_entrega||''} onChange={e=>setEd('fluxo_entrega', e.target.value)}>
-                                    <option value="">🚦 — Fluxo de entrega —</option>
+                                    <option value="">— Fluxo de entrega —</option>
                                     {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
                                   </select>
                                   <select style={inpLinha} value={oplFormEdit.tipo_projeto||''} onChange={e=>setEd('tipo_projeto', e.target.value)}>
@@ -3592,9 +3592,9 @@ const SUB_STATUS_COR: Record<string,string> = {
                   const oplCriada = await criarOpAutomatica(opVenc, emp);
                   await load();
                   if (oplCriada) {
-                    alert(`✅ OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+                    alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
                   } else if (!opVenc.numero_pv) {
-                    alert('⚠️ Esta oportunidade não tem PV atribuído — use o botão "📋 Lançar OP" para criar manualmente.');
+                    alert('Esta oportunidade não tem PV atribuído — use o botão "Lançar OP" para criar manualmente.');
                   }
                 }} style={{
                   flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
@@ -3912,7 +3912,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                   if (novaLic) await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
                   setModalConverterLicit(null);
                   await load();
-                  alert('✅ Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
+                  alert('Licitação criada com status "Aberta"! Acesse a aba Licitações para acompanhar.');
                 }}>
                 🏛️ Processo Licitatório<br/>
                 <span style={{ fontSize:9, fontWeight:400 }}>Cria nova licitação com status "Aberta"</span>
@@ -3948,7 +3948,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                   if (novaLic) await supabase.from('crm_oportunidades').update({ licitacao_processo_id: novaLic.id }).eq('id', op.id);
                   setModalConverterLicit(null);
                   await load();
-                  alert('✅ Adesão a ATA criada! Acesse a aba Licitações para acompanhar.');
+                  alert('Adesão a ATA criada! Acesse a aba Licitações para acompanhar.');
                 }}>
                 📋 Adesão a ATA<br/>
                 <span style={{ fontSize:9, fontWeight:400 }}>Cria registro de Adesão a Ata de Registro de Preços</span>
@@ -4196,7 +4196,7 @@ const SUB_STATUS_COR: Record<string,string> = {
               <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Status Faturamento</div>
               <select value={formVenda.status_faturamento} onChange={e => setFormVenda(f => ({...f, status_faturamento: e.target.value}))}
                 style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-                <option value="pendente">⏳ Pendente</option>
+                <option value="pendente">Pendente</option>
                 <option value="faturado">✓ Faturado</option>
                 <option value="cancelado">✕ Cancelado</option>
               </select>
@@ -4806,7 +4806,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             </div>
             <textarea className="acn-input" rows={3} placeholder={'Ex. só chassi:\n9BW...\n9BW...\n\nEx. placa + chassi:\nABC1D23\t9BW...\nDEF4G56\t9BW...'}
               value={loteColar} onChange={e=>setLoteColar(e.target.value)}
-              style={{ width:'100%', resize:'vertical', fontFamily:'monospace', fontSize:10 }} />
+              style={{ width:'100%', resize:'vertical', fontFamily: "'ACN Icones', monospace", fontSize:10 }} />
             <button onClick={aplicarColaChassis}
               style={{ marginTop:6, fontSize:9, padding:'4px 10px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
               ⬇ Aplicar às unidades abaixo

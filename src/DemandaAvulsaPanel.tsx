@@ -419,7 +419,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       motivo: reprogramarForm.motivo || '',
       usuario: currentUser?.nome || '',
       data: agora,
-      texto: `📅 Prazo reprogramado de ${fmtDate(d.prazo)} → ${fmtDate(reprogramarForm.nova_data)}${reprogramarForm.motivo ? ` — Motivo: ${reprogramarForm.motivo}` : ''}`,
+      texto: `Prazo reprogramado de ${fmtDate(d.prazo)} → ${fmtDate(reprogramarForm.nova_data)}${reprogramarForm.motivo ? ` — Motivo: ${reprogramarForm.motivo}` : ''}`,
     };
     const infoAtual = [...(d.informacoes || []), entrada];
     await supabase.from('demandas_avulsas').update({

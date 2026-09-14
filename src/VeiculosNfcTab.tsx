@@ -241,7 +241,7 @@ function ModalGravarTag({ url, chassi, onClose }) {
               </div>
               <div style={{ fontSize:9, color:'#1e293b', wordBreak:'break-all',
                 background:'#fff', border:'1px solid #bbf7d0', borderRadius:4, padding:'6px 8px',
-                marginBottom:8, fontFamily:'monospace' }}>
+                marginBottom:8, fontFamily: "'ACN Icones', monospace" }}>
                 {url}
               </div>
               <button onClick={copiarUrl}
@@ -312,7 +312,7 @@ function ModalGravarTag({ url, chassi, onClose }) {
                   <div style={{ fontSize:10, color:'#374151', lineHeight:1.4 }}>
                     {p.n === 5
                       ? <><span>{p.txt}:</span><br/>
-                          <span style={{ fontFamily:'monospace', fontSize:8, color:'#0369a1',
+                          <span style={{ fontFamily: "'ACN Icones', monospace", fontSize:8, color:'#0369a1',
                             wordBreak:'break-all', background:'#eff6ff', padding:'2px 6px',
                             borderRadius:3, display:'inline-block', marginTop:2 }}>
                             {url}
@@ -1037,7 +1037,7 @@ export default function VeiculosNfcTab({ currentUser }) {
 
   const deletarVeiculo = async (v) => {
     const confirm1 = window.confirm(
-      `⚠️ Excluir o veículo "${v.chassi}"?\n\n` +
+      `Excluir o veículo "${v.chassi}"?\n\n` +
       `Isso também irá:\n` +
       `• Excluir todos os serviços cadastrados\n` +
       `• Excluir todos os chamados de suporte\n` +
@@ -1100,7 +1100,7 @@ export default function VeiculosNfcTab({ currentUser }) {
   const totExpirada  = veiculos.filter(v => calcGarantia(v.data_fim_garantia) === false).length;
 
   return (
-    <div style={{ padding:'0 0 24px', fontFamily:'system-ui,sans-serif' }}>
+    <div style={{ padding:'0 0 24px', fontFamily: "'ACN Icones', system-ui, sans-serif" }}>
       {/* Header */}
       <div style={{ background:'#14532d', borderRadius:8, padding:'14px 16px', marginBottom:12,
         display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
@@ -1134,8 +1134,8 @@ export default function VeiculosNfcTab({ currentUser }) {
         <select value={filtroGar} onChange={e => setFiltroGar(e.target.value)}
           style={{ border:'1px solid #d1d5db', borderRadius:5, padding:'6px 10px', fontSize:10 }}>
           <option value="">Todas as garantias</option>
-          <option value="ativa">✅ Garantia Ativa</option>
-          <option value="expirada">⚠️ Garantia Expirada</option>
+          <option value="ativa">Garantia Ativa</option>
+          <option value="expirada">Garantia Expirada</option>
         </select>
         <button onClick={carregarVeiculos}
           style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:5,

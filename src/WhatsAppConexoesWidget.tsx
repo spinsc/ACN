@@ -307,7 +307,7 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
               <div style={{ marginTop:10, padding:'6px 10px', background:'#eff6ff', border:'1px solid #bfdbfe',
                 borderRadius:5, fontSize:9 }}>
                 <span style={{ fontWeight:700, color:'#1e40af' }}>Webhook URL</span>
-                <span style={{ color:'#1e293b', marginLeft:6, fontFamily:'monospace', userSelect:'all' }}>
+                <span style={{ color:'#1e293b', marginLeft:6, fontFamily: "'ACN Icones', monospace", userSelect:'all' }}>
                   {SUPABASE_URL}/functions/v1/whatsapp-webhook
                 </span>
                 <button onClick={() => navigator.clipboard.writeText(

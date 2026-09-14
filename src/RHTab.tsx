@@ -1012,11 +1012,11 @@ function gerarHtmlRelatorio(titulo: string, periodoLabel: string, linhas: any[],
   </table>
   ${(totais.faltas||totais.atestados||totais.declaracoes||totais.saidasAnt||totais.entradasAnt) ? `
   <div class="destaques">
-    <h3>📌 Destaques do Período</h3>
-    ${totais.faltas ? `<span class="chip" style="background:#fde8e8;color:#dc2626">🔴 ${totais.faltas} falta(s)</span>` : ''}
-    ${totais.atestados ? `<span class="chip" style="background:#f1f5f9;color:#6b7280">📋 ${totais.atestados} atestado(s)</span>` : ''}
-    ${totais.declaracoes ? `<span class="chip" style="background:#fffbeb;color:#d97706">📝 ${totais.declaracoes} declaração(ões)</span>` : ''}
-    ${totais.saidasAnt ? `<span class="chip" style="background:#fef2f2;color:#ef4444">↩ ${totais.saidasAnt} saída(s) antecipada(s)</span>` : ''}
+    <h3>Destaques do Período</h3>
+    ${totais.faltas ? `<span class="chip" style="background:#fde8e8;color:#dc2626">${totais.faltas} falta(s)</span>` : ''}
+    ${totais.atestados ? `<span class="chip" style="background:#f1f5f9;color:#6b7280">${totais.atestados} atestado(s)</span>` : ''}
+    ${totais.declaracoes ? `<span class="chip" style="background:#fffbeb;color:#d97706">${totais.declaracoes} declaração(ões)</span>` : ''}
+    ${totais.saidasAnt ? `<span class="chip" style="background:#fef2f2;color:#ef4444">${totais.saidasAnt} saída(s) antecipada(s)</span>` : ''}
     ${totais.entradasAnt ? `<span class="chip" style="background:#f0fdf4;color:#16a34a">↪ ${totais.entradasAnt} entrada(s) antecipada(s)</span>` : ''}
   </div>` : ''}
   <script>window.onload=function(){window.print();}<\/script>
@@ -1845,7 +1845,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
             <select value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value as any)}
               style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
               <option value="todos">Todas as origens</option>
-              <option value="adaptacao">🚗 Só Adaptação (veículos)</option>
+              <option value="adaptacao">Só Adaptação (veículos)</option>
             </select>
             <button onClick={calcular} disabled={loading}
               style={{background:'#2563eb',color:'#fff',border:'none',borderRadius:4,padding:'4px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>

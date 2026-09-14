@@ -356,7 +356,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             if (i === 0) firstData = data;
           }
           onSaved?.(firstData, 'op');
-          alert(`✅ ${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`);
+          alert(`${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`);
           onClose();
           return;
         } else {

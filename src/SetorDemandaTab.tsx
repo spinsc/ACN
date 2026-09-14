@@ -486,7 +486,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
           status_anterior: opl.status_geral, status_novo: opl.status_geral,
           usuario_nome: currentUser?.nome, data_hora: agora,
         }]);
-        notificarEvento('serralheria_conclui_parcial', `✅ *Serralheria concluiu* — OPL ${opl.opl}\nPor: ${currentUser?.nome}`, 'PCP');
+        notificarEvento('serralheria_conclui_parcial', `*Serralheria concluiu* — OPL ${opl.opl}\nPor: ${currentUser?.nome}`, 'PCP');
       }
     }
 
@@ -514,7 +514,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
       .footer{margin-top:24px;font-size:9px;color:#9ca3af;border-top:1px solid #e2e8f0;padding-top:8px}
       @media print{button{display:none}}
     </style></head><body>
-      <h2>📋 Demanda — ${setor}</h2>
+      <h2>Demanda — ${setor}</h2>
       <table class="info">
         <tr><th>Data de Abertura</th><td>${fmtDtBR(d.data_abertura)}</td></tr>
         <tr><th>OPL / Referência</th><td>${d.numero_opl||'—'}</td></tr>
@@ -529,7 +529,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
         ${fmtVal(d.valor_compra)?`<tr><th>Valor da Compra</th><td>${fmtVal(d.valor_compra)}</td></tr>`:''}
         ${d.observacoes_execucao?`<tr><th>Observações</th><td>${d.observacoes_execucao}</td></tr>`:''}
       </table>
-      ${logs.length>0?`<div class="log-section"><h3>📝 Histórico</h3>${logs.map(l=>`
+      ${logs.length>0?`<div class="log-section"><h3>Histórico</h3>${logs.map(l=>`
         <div class="log-item">${l.texto||'—'}<div class="log-meta">${l.usuario||''} · ${l.hora?new Date(l.hora).toLocaleString('pt-BR'):''}</div></div>`).join('')}
       </div>`:''}
       <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')} · Sistema ACN</div>
@@ -792,7 +792,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
         <td>{d.responsavel_nome||'—'}</td>
         <td>
           {timer
-            ? <span style={{fontFamily:'monospace',color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
+            ? <span style={{fontFamily: "'ACN Icones', monospace",color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
             : <span style={{fontSize:10,color:'#94a3b8'}}>{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
           }
         </td>

@@ -42,7 +42,7 @@ function imprimirSolicitacao(p: any) {
       @media print { button { display:none; } }
     </style></head>
     <body>
-      <h2>🛒 Solicitação de Compra</h2>
+      <h2>Solicitação de Compra</h2>
       <table>
         <tr><th>Campo</th><th>Informação</th></tr>
         <tr><td><b>Nº Pedido</b></td><td>${p.numero_pedido || '—'}</td></tr>
@@ -81,7 +81,7 @@ export function imprimirOrdemCompra(p: any) {
       @media print { button { display:none; } }
     </style></head>
     <body>
-      <h2>📋 Ordem de Compra — <span class="badge">${p.numero_oc}</span></h2>
+      <h2>Ordem de Compra — <span class="badge">${p.numero_oc}</span></h2>
       <table>
         <tr><th>Campo</th><th>Informação</th></tr>
         <tr><td><b>Nº Pedido</b></td><td>${p.numero_pedido || '—'}</td></tr>
@@ -789,7 +789,7 @@ export default function ComprasTab({ currentUser }) {
     // simplesmente sumir — se o valor dela estava errado, o caminho é
     // corrigir (✏️ Editar), não excluir (perderia o registro/rastreio).
     if (id === vencedoraId && ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra)) {
-      alert('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "✏️ Editar" para corrigir o valor em vez de excluir.');
+      alert('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "Editar" para corrigir o valor em vez de excluir.');
       return;
     }
     if (!confirm('Remover esta cotação?')) return;
@@ -1320,7 +1320,7 @@ export default function ComprasTab({ currentUser }) {
           </span>
           {p.numero_oc && (
             <div style={{marginTop:4}}>
-              <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily:'monospace'}} title="Ordem de Compra">
+              <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily: "'ACN Icones', monospace"}} title="Ordem de Compra">
                 📋 {p.numero_oc}
               </span>
             </div>

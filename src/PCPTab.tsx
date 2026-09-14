@@ -209,7 +209,7 @@ export default function PCPTab({ currentUser }) {
         status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('pcp_libera_almox', `📦 *Kiting liberado em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para o Almoxarifado.\nPor: ${currentUser?.nome}`);
+      notificarEvento('pcp_libera_almox', `*Kiting liberado em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para o Almoxarifado.\nPor: ${currentUser?.nome}`);
     } finally {
       setProcessandoLote(false);
       fetchAll();
@@ -239,7 +239,7 @@ export default function PCPTab({ currentUser }) {
         status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('pcp_libera_producao', `🏭 *Produção liberada em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para Produção.\nPor: ${currentUser?.nome}`);
+      notificarEvento('pcp_libera_producao', `*Produção liberada em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para Produção.\nPor: ${currentUser?.nome}`);
     } finally {
       setProcessandoLote(false);
       fetchAll();

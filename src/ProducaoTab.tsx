@@ -118,7 +118,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
         <td>
           {emProd && (
             <div>
-              <span style={{fontFamily:'monospace',color: o.pausado?'#f59e0b':'#2563eb',fontWeight:700,fontSize:12}}>
+              <span style={{fontFamily: "'ACN Icones', monospace",color: o.pausado?'#f59e0b':'#2563eb',fontWeight:700,fontSize:12}}>
                 {o.pausado && '⏸ '}{timerProd}
               </span>
               <div><BadgeForaExpediente /></div>
@@ -126,7 +126,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
           )}
           {emRetrab && (
             <div>
-              <span style={{fontFamily:'monospace',color: o.pausado?'#f59e0b':'#dc2626',fontWeight:700,fontSize:12}}>
+              <span style={{fontFamily: "'ACN Icones', monospace",color: o.pausado?'#f59e0b':'#dc2626',fontWeight:700,fontSize:12}}>
                 {o.pausado && '⏸ '}{timerRetrab}
               </span>
               <div><BadgeForaExpediente /></div>
@@ -307,7 +307,7 @@ function CalendarioManutencao({ currentUser }) {
     table{width:100%;border-collapse:collapse}th{background:#1a3a52;color:#fff;padding:6px 8px;text-align:left;font-size:10px}
     td{padding:6px 8px;border-bottom:1px solid #e2e8f0;font-size:10px}.footer{margin-top:20px;font-size:9px;color:#9ca3af}
     @media print{button{display:none}}</style></head>
-    <body><h2>📅 Agendamentos de Manutenção</h2>
+    <body><h2>Agendamentos de Manutenção</h2>
     <table><thead><tr><th>Data</th><th>Período</th><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Modelo</th><th>Obs.</th><th>Agendado por</th></tr></thead>
     <tbody>${rows}</tbody></table>
     <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
@@ -1538,9 +1538,9 @@ function VoucherServicos({ currentUser }) {
     <div class="footer">
       <div class="footer-text">
         <strong style="color:#0f766e">ACN Sinal Verde</strong><br/>
-        📍 Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028<br/>
-        📞 (48) 3240-0336 &nbsp;|&nbsp; ✉️ acn@acn.com.br<br/>
-        📸 @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br<br/>
+        Rua Osvaldo Souza, 104 — Aririu, Palhoça - SC — CEP 88135-028<br/>
+        (48) 3240-0336 &nbsp;|&nbsp; acn@acn.com.br<br/>
+        @ledflex_br &nbsp;|&nbsp; instagram.com/ledflex_br<br/>
         <span style="color:#94a3b8">Emitido em ${new Date().toLocaleString('pt-BR')} por ${v.criado_por || '—'}</span>
       </div>
       <img src="${window.location.origin}${base}motorola.png" class="footer-logo" alt="Motorola" onerror="this.style.display='none'" />
@@ -1971,7 +1971,7 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
           O casamento é sempre pelo chassi/placa já vinculado à OP, nunca pela ordem das linhas.
         </div>
 
-        <textarea className="acn-input" rows={5} style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 10, marginBottom: 8 }}
+        <textarea className="acn-input" rows={5} style={{ width: '100%', resize: 'vertical', fontFamily: "'ACN Icones', monospace", fontSize: 10, marginBottom: 8 }}
           placeholder={'Ex:\n9BW1234567890\tJUNIOR\nABC1D23\tHead Line Tiago\n9BW...\tFELIPE + JONATAN'}
           value={texto} onChange={e => setTexto(e.target.value)} />
 
