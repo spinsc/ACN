@@ -34,7 +34,7 @@
   html body .acn-aba-selo { margin-left: 4px !important; min-width: 0; max-width: 34vw; flex-shrink: 1 !important; overflow: hidden; }
   html body .acn-aba-selo > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px !important; }
   html body .acn-busca { min-width: 0 !important; margin: 0 !important; }
-  html body .acn-busca input { font-size: 16px !important; }
+  html body .acn-busca input { font-size: 16px !important; min-width: 0; width: 100%; }
   html body .acn-right { gap: 6px; flex-shrink: 0; }
   html body .acn-right > div { padding: 0 10px !important; height: 40px; font-size: 16px !important; border-radius: 8px !important; }
   html body .acn-right > div span { font-size: 11px !important; }

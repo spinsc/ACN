@@ -18,7 +18,7 @@ import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
 import { useAlturaDeCards } from './KanbanColuna';
-import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
+import { useCelular, useToque, SeletorEtapas, etapaInicial } from './Celular';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -249,6 +249,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [abaInterna, setAbaInterna] = useState<'kanban'|'faturamentos'|'opls'|'relatorio'|'agenda'|'recentes'>('kanban');
   // Celular: kanban mostra uma etapa por vez e o card muda de etapa por "Mover para…" (sem arrastar)
   const celular = useCelular();
+  const toque = useToque(); // celular ou tablet: sem arrastar
   const [etapaCel, setEtapaCel] = useState<string | null>(null);
   const [recentesCrm, setRecentesCrm] = useState<any[]>([]);
   const [recentesCrmLoading, setRecentesCrmLoading] = useState(false);
@@ -2478,8 +2479,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                 >
                   {renderCard(op)}
 
-                  {/* Celular: mudar de etapa sem arrastar */}
-                  {celular && (
+                  {/* Celular/tablet: mudar de etapa sem arrastar */}
+                  {toque && (
                     <select value="" onChange={e => { const destino = e.target.value; if (destino) handleDrop(destino, op.id); }}
                       style={{ width:'100%', margin:'2px 0 4px', borderRadius:6, border:'1px solid #cbd5e1', background:'#fff', color:'#334155' }}>
                       <option value="">Mover para…</option>

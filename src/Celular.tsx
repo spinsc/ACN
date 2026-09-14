@@ -10,21 +10,32 @@ import React, { useEffect, useState } from 'react';
 
 export const MQ_CELULAR = '(hover: none) and (pointer: coarse) and (max-width: 639.98px)';
 
+// Toque = celular OU tablet (sem mouse, tela até 1023px): onde arrastar não funciona
+export const MQ_TOQUE = '(hover: none) and (pointer: coarse) and (max-width: 1023.98px)';
+
+function useMedia(mq: string): boolean {
+  const [ok, setOk] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(mq).matches);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const m = window.matchMedia(mq);
+    const mudou = () => setOk(m.matches);
+    mudou();
+    m.addEventListener?.('change', mudou);
+    return () => m.removeEventListener?.('change', mudou);
+  }, [mq]);
+  return ok;
+}
+
+export function useToque(): boolean {
+  return useMedia(MQ_TOQUE);
+}
+
 export function ehCelular(): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(MQ_CELULAR).matches;
 }
 
 export function useCelular(): boolean {
-  const [celular, setCelular] = useState(ehCelular);
-  useEffect(() => {
-    if (!window.matchMedia) return;
-    const mq = window.matchMedia(MQ_CELULAR);
-    const mudou = () => setCelular(mq.matches);
-    mudou();
-    mq.addEventListener?.('change', mudou);
-    return () => mq.removeEventListener?.('change', mudou);
-  }, []);
-  return celular;
+  return useMedia(MQ_CELULAR);
 }
 
 /**
