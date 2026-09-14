@@ -128,7 +128,16 @@ async function gerarNumeroOS(): Promise<string> {
   return `OS-${String(max + 1).padStart(4, '0')}/${ano}`;
 }
 
+// Empresa da OS (ACN ou DETECH), como o faturamento da OP. OS antigas não
+// têm (null) e podem ser definidas clicando na etiqueta da lista.
+const EMPRESAS_OS = ['ACN', 'DETECH'];
+const COR_EMPRESA: Record<string, { bg: string; fg: string }> = {
+  ACN:    { bg:'#0f766e', fg:'#fff' },
+  DETECH: { bg:'#1d4ed8', fg:'#fff' },
+};
+
 const FORM_VAZIO = {
+  empresa:'ACN',
   tipo_servico:'Orçamento', tipo_projeto:'', equipamento_nome:'',
   marca:'', modelo:'', numero_serie:'', quantidade:1,
   defeito_reclamado:'', observacoes:'',
@@ -151,6 +160,20 @@ const FORM_VAZIO = {
   _crm_titulo: '',
 };
 
+// Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
+function EtiquetaEmpresaOS({ os, onTrocar }: { os: any; onTrocar: (os: any) => void }) {
+  const cor = COR_EMPRESA[os.empresa];
+  return (
+    <button type="button" onClick={() => onTrocar(os)}
+      title={os.empresa ? 'Clique para trocar a empresa desta OS' : 'OS sem empresa — clique para definir'}
+      style={{ fontSize:8, fontWeight:800, padding:'1px 6px', borderRadius:8, cursor:'pointer', letterSpacing:.3,
+        border: cor ? 'none' : '1px dashed #94a3b8',
+        background: cor ? cor.bg : '#fff', color: cor ? cor.fg : '#64748b' }}>
+      {os.empresa || '+ empresa'}
+    </button>
+  );
+}
+
 export default function SacTab({ currentUser }) {
   const [abaAtiva, setAbaAtiva]         = useState<'os'|'cadastros'|'chamados_nfc'>('os');
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
@@ -167,6 +190,7 @@ export default function SacTab({ currentUser }) {
   const [filtroStatus, setFiltroStatus]       = useState('');
   const [filtroTipo, setFiltroTipo]         = useState('');
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
+  const [filtroEmpresa, setFiltroEmpresa]     = useState('');
   const [busca, setBusca]               = useState('');
   const [modalAcomp, setModalAcomp]     = useState<any>(null); // acompanhamento OS
 
@@ -362,6 +386,7 @@ export default function SacTab({ currentUser }) {
 
     // Payload base sem numero_os (será preenchido em cada tentativa)
     const payloadBase = {
+      empresa: form.empresa || 'ACN',
       tipo_servico: form.tipo_servico,
       tipo_projeto: form.tipo_projeto || null,
       equipamento_nome: form.equipamento_nome,
@@ -789,6 +814,23 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
     setNovoEquip(''); setModalNovoEquip(false);
   };
 
+  // Define/troca a empresa de uma OS já aberta (as antigas não têm).
+  const trocarEmpresaOS = async (os: any) => {
+    const nova = os.empresa === 'ACN' ? 'DETECH' : 'ACN';
+    const pergunta = os.empresa
+      ? `Trocar a empresa da ${os.numero_os} de ${os.empresa} para ${nova}?`
+      : `Definir a empresa da ${os.numero_os}.
+
+OK = ACN   |   Cancelar = DETECH`;
+    let escolhida = nova;
+    if (os.empresa) { if (!window.confirm(pergunta)) return; }
+    else escolhida = window.confirm(pergunta) ? 'ACN' : 'DETECH';
+    const { error } = await supabase.from('sac_ordens_servico')
+      .update({ empresa: escolhida, atualizado_em: new Date().toISOString() }).eq('id', os.id);
+    if (error) { alert('Erro ao salvar a empresa: ' + error.message); return; }
+    setOrdens(prev => prev.map((x: any) => x.id === os.id ? { ...x, empresa: escolhida } : x));
+  };
+
   // ── FILTROS ───────────────────────────────────────────────────────────────
   const ordensFiltradas = ordens.filter(o => {
     if (filtroStatus && o.status !== filtroStatus) return false;
@@ -796,6 +838,8 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
     if (filtroAvaliacao === 'Remota' && o.tipo_avaliacao !== 'Remota') return false;
     if (filtroAvaliacao === 'Presencial' && o.tipo_avaliacao !== 'Presencial') return false;
     if (filtroAvaliacao === 'Veicular' && !o.is_manutencao_veicular) return false;
+    if (filtroEmpresa === 'sem' && o.empresa) return false;
+    if (filtroEmpresa && filtroEmpresa !== 'sem' && o.empresa !== filtroEmpresa) return false;
     if (busca) {
       const b = normalizarBusca(busca);
       return normalizarBusca(o.numero_os).includes(b) || normalizarBusca(o.cliente_nome).includes(b) || normalizarBusca(o.equipamento_nome).includes(b);
@@ -1085,7 +1129,7 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
       <!-- Cabeçalho -->
       <div style="background:#0f766e;color:white;padding:14px 16px;border-radius:4px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-weight:700;font-size:18px">ACN SINAL VERDE</div>
+          <div style="font-weight:700;font-size:18px">${os.empresa === 'DETECH' ? 'DETECH' : 'ACN SINAL VERDE'}</div>
           <div style="font-size:11px;opacity:.85">Ordem de Serviço</div>
         </div>
         <div style="text-align:right">
@@ -1605,7 +1649,12 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
             <option value="Presencial">📍 Presencial</option>
             <option value="Remota">📡 Remota</option>
           </select>
-          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setBusca('');}}>Limpar</button>
+          <select className="acn-input" style={{width:130}} value={filtroEmpresa} onChange={e=>setFiltroEmpresa(e.target.value)}>
+            <option value="">Todas as empresas</option>
+            {EMPRESAS_OS.map(e=><option key={e} value={e}>{e}</option>)}
+            <option value="sem">Sem empresa</option>
+          </select>
+          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setBusca('');}}>Limpar</button>
         </div>
 
         {/* ── TABELA ── */}
@@ -1629,7 +1678,10 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                                 : undefined
                     }
                   }>
-                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
+                    <td>
+                      <strong style={{color:'#0f766e'}}>{o.numero_os}</strong>
+                      <div style={{marginTop:2}}><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /></div>
+                    </td>
                     <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
                     <td>{o.tipo_avaliacao==='Remota' ? <span style={{fontSize:9,fontWeight:700,color:'#0ea5e9',background:'#e0f2fe',borderRadius:10,padding:'2px 7px'}}>📡 Remota</span> : o.tipo_avaliacao==='Presencial' ? <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',background:'#ede9fe',borderRadius:10,padding:'2px 7px'}}>📍 Presencial</span> : <span style={{color:'#cbd5e1',fontSize:9}}>—</span>}</td>
                     <td style={{ maxWidth:140, wordBreak:'break-word' }}>
@@ -1729,6 +1781,21 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
                       : '(marque se for manutenção de veículo)'}
                   </span>
                 </label>
+              </div>
+
+              <div className="form-group" style={{marginBottom:8}}>
+                <label className="acn-label">Empresa *</label>
+                <div style={{display:'flex',gap:6}}>
+                  {EMPRESAS_OS.map(emp => (
+                    <button key={emp} type="button" onClick={()=>setForm(f=>({...f,empresa:emp}))}
+                      style={{padding:'5px 18px',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',
+                        border:`2px solid ${COR_EMPRESA[emp].bg}`,
+                        background: form.empresa===emp ? COR_EMPRESA[emp].bg : '#fff',
+                        color: form.empresa===emp ? COR_EMPRESA[emp].fg : COR_EMPRESA[emp].bg}}>
+                      {emp}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="form-row">
@@ -2712,6 +2779,7 @@ function PrintOS({ os }) {
             <tbody>
               {row('Nome', os.cliente_nome)}
               {row('Empresa', os.empresa_orgao)}
+              {row('Empresa da OS', os.empresa)}
               {row('CPF/CNPJ', os.cpf_cnpj)}
               {row('Telefone', os.telefone)}
               {row('E-mail', os.email)}
