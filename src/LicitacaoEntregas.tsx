@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { quantidadesDosItens } from './FormacaoCalculo';
 import { UFS } from './FluxoEntrega';
 import NovaOpOsModal from './NovaOpOsModal';
 
@@ -175,28 +176,16 @@ export function ContratoEntregas({ licit, currentUser }) {
     if (!c || !Array.isArray(c.itens) || c.itens.length === 0) {
       alert('Esta licitação não tem Formação de Preço com itens para importar. Adicione os itens com "+ Item".'); return;
     }
-    // A formação é Lote → Item → Produtos (componente sem lote = "Lote 1").
-    const loteDe = (it) => it.lote_nome || 'Lote 1';
-    const grupoDe = (it) => it.grupo_nome || 'Item 1';
-    const pares = [];
-    for (const it of c.itens) {
-      if (!pares.some(x => x.lote === loteDe(it) && x.grupo === grupoDe(it))) pares.push({ lote: loteDe(it), grupo: grupoDe(it) });
-    }
-    const variosLotes = new Set(pares.map(x => x.lote)).size > 1;
-    // "Quantidade do item": chave "lote::item"; formação antiga usa só o item
-    const qtds = c.parametros_globais?.lote_por_grupo || {};
-    const qtdDe = (lote, grupo) => Number(qtds[`${lote}::${grupo}`] ?? (lote === 'Lote 1' ? qtds[grupo] : undefined)) || 0;
-    const linhas = pares.map(({ lote, grupo }, i) => {
-      const produtos = c.itens.filter(it => loteDe(it) === lote && grupoDe(it) === grupo).map(it => it.produto).filter(Boolean);
-      const q = qtdDe(lote, grupo);
-      return {
-        licitacao_id: licit.id, ordem: i, unidade: 'UN',
-        descricao: `${variosLotes ? lote + ' › ' : ''}${grupo}${produtos.length ? ' — ' + produtos.slice(0, 3).join(', ') + (produtos.length > 3 ? '…' : '') : ''}`,
-        // a quantidade do item na formação costuma ficar 1 com a quantidade
-        // dentro das linhas; por isso vem como sugestão e o aviso pede conferência
-        quantidade_contratada: q > 0 ? q : 1,
-      };
-    });
+    // A formação é Lote → Item → (Subgrupo) → Produtos; a quantidade de cada
+    // item já considera os subgrupos — ver FormacaoCalculo.ts.
+    const itensF = quantidadesDosItens(c.itens, c.parametros_globais || {});
+    const variosLotes = new Set(itensF.map(x => x.lote)).size > 1;
+    const linhas = itensF.map(({ lote, grupo, qtd, produtos }, i) => ({
+      licitacao_id: licit.id, ordem: i, unidade: 'UN',
+      descricao: `${variosLotes ? lote + ' › ' : ''}${grupo}${produtos.length ? ' — ' + [...new Set(produtos)].slice(0, 3).join(', ') + (new Set(produtos).size > 3 ? '…' : '') : ''}`,
+      // vem como sugestão: o aviso abaixo pede conferência da quantidade contratada
+      quantidade_contratada: qtd > 0 ? qtd : 1,
+    }));
     const { error } = await supabase.from('licitacao_contrato_itens').insert(linhas);
     if (error) { alert('Erro ao importar: ' + error.message); return; }
     alert(`${linhas.length} item(ns) importado(s) de "${c.nome || 'Formação'}" v${c.versao || 1}.\n\nConfira a QUANTIDADE CONTRATADA de cada item — a formação nem sempre traz esse número.`);

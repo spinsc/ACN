@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { normalizarBusca } from './SearchUtils';
+import { estruturaFormacao } from './FormacaoCalculo';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -68,7 +69,8 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
   const prms     = cotacao.parametros_globais || {};
   const itens    = cotacao.itens || [];
   const results  = itens.map(it => calcItem(it, prms));
-  const totalBruto = results.reduce((s, r) => s + r.valorTotal, 0);
+  // total já × quantidade do item/subgrupo (produto = 1 unidade) — FormacaoCalculo.ts
+  const totalBruto = estruturaFormacao(itens, prms, calcItem).geral.totVendas;
   const descPct  = proposta?.desconto_pct || 0;
   // Sempre recalcula a partir dos itens ATUAIS da cotação (não confia no
   // valor_com_desconto salvo na proposta) — se a cotação foi corrigida depois
@@ -289,9 +291,8 @@ function ModalEmitirProposta({ cotacao, proposta, onClose }) {
 
   const prms = cotacao.parametros_globais || {};
   const itens = cotacao.itens || [];
-  const results = itens.map(it => calcItem(it, prms));
   // Sempre recalculado a partir dos itens atuais — ver mesmo comentário em gerarPropostaHTML.
-  const totalLiq = results.reduce((s, r) => s + r.valorTotal, 0) * (1 - (proposta?.desconto_pct || 0) / 100);
+  const totalLiq = estruturaFormacao(itens, prms, calcItem).geral.totVendas * (1 - (proposta?.desconto_pct || 0) / 100);
 
   const enviarEmail = () => {
     if (!emailCliente.trim()) { alert('Informe o e-mail do cliente.'); return; }
@@ -439,9 +440,7 @@ function ModalDesconto({ cotacao, currentUser, onClose, onSalvo, verCustos, verM
 
   const prms      = cotacao.parametros_globais || {};
   const itens     = cotacao.itens || [];
-  const results   = itens.map(it => calcItem(it, prms));
-  const totVendas  = results.reduce((s, r) => s + r.valorTotal,   0);
-  const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
+  const { totVendas, totImposto } = estruturaFormacao(itens, prms, calcItem).geral;   // × quantidades
   const maxDesc    = Number(cotacao.desconto_maximo_pct) || 0;
   const valorDesc  = totVendas * desconto / 100;
   const valorFinal = totVendas - valorDesc;
@@ -665,14 +664,15 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const prms      = cotacao.parametros_globais || {};
   const itens     = cotacao.itens || [];
   const results   = itens.map(it => calcItem(it, prms));
-  const totVendas = results.reduce((s, r) => s + r.valorTotal,   0);
-  const totCusto  = results.reduce((s, r) => s + r.custoTotal,   0);
-  const totDifal  = results.reduce((s, r) => s + r.totalDifal,   0);
-  // Mesma fórmula usada em FormacaoPrecosTab (totMargem/lucroGeral) e no
-  // calcItem de cada linha — soma a margem real (já líquida de imposto e
-  // custo fixo), não apenas venda-custo, que ficava artificialmente alta.
-  const margem    = results.reduce((s, r) => s + r.margem, 0);
-  const margemPct = (totVendas - totDifal) > 0 ? margem / (totVendas - totDifal) * 100 : 0;
+  // Totais pela mesma estrutura da Formação de Preços (× quantidade do
+  // item/subgrupo; produto = 1 unidade) — ver FormacaoCalculo.ts. A margem é a
+  // real (já líquida de imposto e custo fixo), não apenas venda-custo.
+  const geralF    = estruturaFormacao(itens, prms, calcItem).geral;
+  const totVendas = geralF.totVendas;
+  const totCusto  = geralF.totCustos;
+  const totDifal  = geralF.totDifal;
+  const margem    = geralF.totMargem;
+  const margemPct = geralF.lucroPct;
 
   return (
     <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1900, display:'flex', alignItems:'center', justifyContent:'center' }}
@@ -1553,9 +1553,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                 {cotacoesFiltradas.map((c, i) => {
                   const itens   = c.itens || [];
                   const prms    = c.parametros_globais || {};
-                  const results = itens.map(it => calcItem(it, prms));
-                  const totVendas  = results.reduce((s, r) => s + r.valorTotal, 0);
-                  const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
+                  const { totVendas, totImposto } = estruturaFormacao(itens, prms, calcItem).geral;
                   const impostoPct = totVendas > 0 ? (totImposto / totVendas * 100) : (prms.imposto_pct || 0);
                   const sel = selecionadas.includes(c.id);
                   const naoLida = cotacoesNaoLidas.has(String(c.id));

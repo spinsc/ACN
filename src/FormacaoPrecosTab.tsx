@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
+import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
+         somarResultados, estruturaFormacao } from './FormacaoCalculo';
+import { ehAdminOuGerente } from './utils/permissoes';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -18,6 +21,8 @@ const PARAMS_PADRAO = {
   // chamava "Lote deste Item"). Chave = "lote::item"; formações antigas, que
   // não tinham lote, usam só o nome do item — ver qtdDoItem().
   lote_por_grupo: {} as Record<string, number>,
+  // Quantidade de cada SUBGRUPO de um item ("lote::item::subgrupo").
+  qtd_subgrupo:   {} as Record<string, number>,
 };
 
 function novoItem() {
@@ -112,33 +117,8 @@ const fmtPct = (v) => {
   if (v == null || !isFinite(v) || isNaN(v)) return '—';
   return `${Number(v).toFixed(1)}%`;
 };
-// Nome do "Item do edital" de um componente — sempre passa por aqui (nunca lê
-// item.grupo_nome direto) pra tratar de forma uniforme componentes antigos
-// salvos antes desse campo existir (viram um único grupo "Item 1").
-const grupoDe = (item) => item?.grupo_nome || 'Item 1';
-// Lote do edital (nível acima dos itens). Componente antigo, sem lote, é do
-// "Lote 1" — assim toda formação salva antes disto abre igual, só que no Lote 1.
-const loteDe  = (item) => item?.lote_nome || 'Lote 1';
-const chaveItem = (lote, grupo) => `${lote}::${grupo}`;
-/** Quantidade do item (antigo "Lote deste Item"). Lê a chave nova "lote::item"
- *  e, para formação antiga (tudo no Lote 1), a chave velha só com o item. */
-function qtdDoItem(params, lote, grupo) {
-  const m = params?.lote_por_grupo || {};
-  const v = m[chaveItem(lote, grupo)] ?? (lote === 'Lote 1' ? m[grupo] : undefined);
-  return Number(v) || 1;
-}
-// Soma um conjunto de resultados de calcItem() nos mesmos totais usados no
-// painel geral — reaproveitado tanto pro resumo geral quanto pro subtotal
-// por Item do edital (tela e PDF).
-const somarResultados = (results) => {
-  const totVendas  = results.reduce((s, r) => s + r.valorTotal,   0);
-  const totCustos  = results.reduce((s, r) => s + r.custoTotal,   0);
-  const totDifal   = results.reduce((s, r) => s + r.totalDifal,   0);
-  const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
-  const totMargem  = results.reduce((s, r) => s + r.margem,       0);
-  const lucroPct   = (totVendas - totDifal) > 0 ? totMargem / (totVendas - totDifal) * 100 : 0;
-  return { totVendas, totCustos, totDifal, totImposto, totMargem, lucroPct };
-};
+// Lote/Item/Subgrupo, quantidades e somas: ver FormacaoCalculo.ts (a mesma
+// conta é usada na lista de Preços Formados, nas propostas e no contrato).
 
 // ─── OP AUTOCOMPLETE ──────────────────────────────────────────────────────────
 function OplAutocomplete({ value, onSelect }) {
@@ -224,22 +204,94 @@ function OplAutocomplete({ value, onSelect }) {
 // ─── MODAL DE SALVAR TEMPLATE ─────────────────────────────────────────────────
 const NOVO_TIPO_SENTINEL = '___NOVO___';
 
-function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, editando }) {
+// ─── CATEGORIAS ───────────────────────────────────────────────────────────────
+// A "categoria" é o antigo campo Tipo (catálogo formacao_precos_tipos, gravado
+// como texto em cotacoes_precos.tipo) — decidido com o usuário em 13/09/2026.
+// Só Gerentes e Admins criam, renomeiam e desativam categorias; quem salva a
+// formação escolhe uma. As listas de formações filtram e agrupam por ela.
+const SEM_CATEGORIA = '(sem categoria)';
+const categoriaDe = (m: any) => (m?.tipo && String(m.tipo).trim()) || SEM_CATEGORIA;
+
+function agruparPorCategoria(lista: any[]) {
+  const grupos: Record<string, any[]> = {};
+  lista.forEach(m => { (grupos[categoriaDe(m)] ||= []).push(m); });
+  return Object.keys(grupos)
+    .sort((a, b) => a === SEM_CATEGORIA ? 1 : b === SEM_CATEGORIA ? -1 : a.localeCompare(b, 'pt-BR'))
+    .map(nome => ({ nome, itens: grupos[nome] }));
+}
+
+function FiltroCategoria({ lista, valor, onChange }) {
+  const nomes = [...new Set(lista.map(categoriaDe))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return (
+    <select className="acn-input" value={valor} onChange={e => onChange(e.target.value)} style={{ fontSize:10, padding:'3px 6px' }}>
+      <option value="">Todas as categorias ({lista.length})</option>
+      {nomes.map(n => <option key={n} value={n}>{n} ({lista.filter(m => categoriaDe(m) === n).length})</option>)}
+    </select>
+  );
+}
+
+const TituloCategoria = ({ nome, qtd }) => (
+  <div style={{ fontSize:9, fontWeight:800, color:'#475569', textTransform:'uppercase', letterSpacing:.4,
+    margin:'8px 2px 4px', borderBottom:'1px solid #e2e8f0', paddingBottom:2 }}>
+    🏷️ {nome} <span style={{ color:'#94a3b8', fontWeight:600 }}>({qtd})</span>
+  </div>
+);
+
+function GerenciarCategorias({ onMudou }) {
+  const [cats, setCats] = useState([]);
+  const carregar = () => supabase.from('formacao_precos_tipos').select('id,nome,ativo').order('nome').then(({ data }) => setCats(data || []));
+  useEffect(() => { carregar(); }, []);
+  const criar = async () => {
+    const nome = window.prompt('Nome da nova categoria:');
+    if (!nome || !nome.trim()) return;
+    const { error } = await supabase.from('formacao_precos_tipos').insert([{ nome: nome.trim() }]);
+    if (error) { alert('Erro ao criar: ' + error.message); return; }
+    carregar(); onMudou?.();
+  };
+  const renomear = async (c) => {
+    const nome = window.prompt('Renomear categoria:', c.nome);
+    if (!nome || !nome.trim() || nome.trim() === c.nome) return;
+    const { error } = await supabase.from('formacao_precos_tipos').update({ nome: nome.trim() }).eq('id', c.id);
+    if (error) { alert('Erro ao renomear: ' + error.message); return; }
+    // a formação guarda o NOME da categoria: renomear leva junto as formações dela
+    await supabase.from('cotacoes_precos').update({ tipo: nome.trim() }).eq('tipo', c.nome);
+    carregar(); onMudou?.();
+  };
+  const alternar = async (c) => {
+    await supabase.from('formacao_precos_tipos').update({ ativo: !c.ativo }).eq('id', c.id);
+    carregar(); onMudou?.();
+  };
+  return (
+    <div style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:8, marginTop:6, background:'#f8fafc' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+        <span style={{ fontSize:9, fontWeight:800, color:'#475569' }}>CATEGORIAS (Gerentes e Admins)</span>
+        <button type="button" onClick={criar} style={{ fontSize:9, fontWeight:700, border:'1px dashed #16a34a', color:'#16a34a', background:'#fff', borderRadius:4, padding:'1px 8px', cursor:'pointer' }}>+ Nova</button>
+      </div>
+      {cats.map(c => (
+        <div key={c.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:10, padding:'2px 0', opacity: c.ativo ? 1 : .5 }}>
+          <span style={{ flex:1 }}>{c.nome}{!c.ativo && ' (desativada)'}</span>
+          <button type="button" onClick={() => renomear(c)} title="Renomear" style={{ fontSize:9, border:'none', background:'none', cursor:'pointer' }}>✏️</button>
+          <button type="button" onClick={() => alternar(c)} title={c.ativo ? 'Desativar (some da escolha; formações já salvas mantêm)' : 'Reativar'}
+            style={{ fontSize:9, border:'1px solid #cbd5e1', background:'#fff', borderRadius:4, cursor:'pointer', padding:'0 5px' }}>
+            {c.ativo ? 'Desativar' : 'Reativar'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, editando, podeGerirCategorias }) {
   const [nome, setNome] = useState(nomeInicial || '');
   const [tipo, setTipo] = useState(tipoInicial || '');
   const [tipos, setTipos] = useState([]);
   const [carregandoTipos, setCarregandoTipos] = useState(true);
-  const [novoTipoTexto, setNovoTipoTexto] = useState('');
-  const [salvandoNovoTipo, setSalvandoNovoTipo] = useState(false);
+  const [gerindo, setGerindo] = useState(false);
 
-  // Refresh simples da lista (usado depois de criar um tipo novo) — não mexe
-  // na seleção atual, só atualiza as opções disponíveis.
   const carregarTipos = () => {
     supabase.from('formacao_precos_tipos').select('id,nome').eq('ativo', true).order('nome')
       .then(({ data }) => setTipos(data || []));
   };
-  // Carga inicial — essa sim escolhe um padrão (o 1º do catálogo) quando é
-  // um modelo novo sem tipo pré-definido. Roda só uma vez, no mount.
   useEffect(() => {
     supabase.from('formacao_precos_tipos').select('id,nome').eq('ativo', true).order('nome')
       .then(({ data }) => {
@@ -249,22 +301,13 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
       });
   }, []);
 
-  const salvarNovoTipo = async () => {
-    const nomeNovo = novoTipoTexto.trim();
-    if (!nomeNovo) return;
-    setSalvandoNovoTipo(true);
-    const { data, error } = await supabase.from('formacao_precos_tipos').insert([{ nome: nomeNovo }]).select().single();
-    setSalvandoNovoTipo(false);
-    if (error) { alert('Erro ao criar tipo: ' + error.message); return; }
-    setNovoTipoTexto('');
-    setTipo(data.nome);
-    carregarTipos();
-  };
+  // categoria atual que foi desativada/renomeada continua aparecendo para não sumir da tela
+  const opcoes = tipo && !tipos.some((t: any) => t.nome === tipo) ? [{ id: '_atual', nome: tipo }, ...tipos] : tipos;
 
   return (
     <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:360, padding:20, boxShadow:'0 8px 32px #0003' }}>
+      <div style={{ background:'#fff', borderRadius:8, width:380, padding:20, boxShadow:'0 8px 32px #0003', maxHeight:'90vh', overflowY:'auto' }}>
         <div style={{ fontWeight:800, fontSize:13, marginBottom:12 }}>
           {editando ? '✏️ Atualizar Cotação' : '💾 Salvar Modelo de Cotação'}
         </div>
@@ -274,29 +317,29 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
             value={nome} onChange={e => setNome(e.target.value)} autoFocus />
         </div>
         <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo</div>
-          {novoTipoTexto !== '' || tipo === NOVO_TIPO_SENTINEL ? (
-            <div style={{ display:'flex', gap:6 }}>
-              <input className="acn-input" style={{ flex:1 }} placeholder="Nome do novo tipo"
-                value={novoTipoTexto} onChange={e => setNovoTipoTexto(e.target.value)} autoFocus
-                onKeyDown={e => e.key === 'Enter' && salvarNovoTipo()} />
-              <button className="acn-btn" style={{ background:'#16a34a', padding:'0 10px' }}
-                onClick={salvarNovoTipo} disabled={salvandoNovoTipo}>✓</button>
-              <button className="acn-btn" style={{ background:'#94a3b8', padding:'0 10px' }}
-                onClick={() => { setNovoTipoTexto(''); setTipo(tipos[0]?.nome || ''); }}>✕</button>
-            </div>
-          ) : (
-            <select className="acn-input" style={{ width:'100%' }} value={tipo} disabled={carregandoTipos}
-              onChange={e => setTipo(e.target.value)}>
-              {carregandoTipos && <option>Carregando...</option>}
-              {tipos.map((t: any) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
-              <option value={NOVO_TIPO_SENTINEL}>➕ Novo tipo...</option>
-            </select>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:3 }}>
+            <span style={{ fontSize:9, fontWeight:700, color:'#475569' }}>Categoria *</span>
+            {podeGerirCategorias && (
+              <button type="button" onClick={() => setGerindo(g => !g)}
+                style={{ fontSize:9, border:'none', background:'none', color:'#0369a1', cursor:'pointer', fontWeight:700 }}>
+                ⚙️ {gerindo ? 'Fechar' : 'Gerenciar categorias'}
+              </button>
+            )}
+          </div>
+          <select className="acn-input" style={{ width:'100%' }} value={tipo} disabled={carregandoTipos}
+            onChange={e => setTipo(e.target.value)}>
+            {carregandoTipos && <option>Carregando...</option>}
+            {!carregandoTipos && !tipo && <option value="">— escolha —</option>}
+            {opcoes.map((t: any) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+          </select>
+          {!podeGerirCategorias && (
+            <div style={{ fontSize:9, color:'#94a3b8', marginTop:3 }}>Precisa de uma categoria nova? Peça a um gerente ou administrador.</div>
           )}
+          {gerindo && <GerenciarCategorias onMudou={carregarTipos} />}
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <button className="acn-btn" style={{ background: editando ? '#f59e0b' : '#16a34a', flex:1 }}
-            onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } if (!tipo || tipo === NOVO_TIPO_SENTINEL) { alert('Informe/selecione o tipo.'); return; } onSalvar(nome.trim(), tipo); }}
+            onClick={() => { if (!nome.trim()) { alert('Informe o nome.'); return; } if (!tipo) { alert('Selecione a categoria.'); return; } onSalvar(nome.trim(), tipo); }}
             disabled={salvando}>
             {salvando ? 'Salvando...' : editando ? 'ATUALIZAR' : 'SALVAR'}
           </button>
@@ -309,35 +352,43 @@ function ModalSalvar({ onSalvar, onClose, salvando, nomeInicial, tipoInicial, ed
 
 // ─── MODAL DE CARREGAR TEMPLATE ───────────────────────────────────────────────
 function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) {
+  const [cat, setCat] = useState('');
+  const lista = modelos.filter((m: any) => !cat || categoriaDe(m) === cat);
   return (
     <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(520px,95vw)', maxHeight:'70vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13 }}>
-          📂 Modelos Salvos
+      <div style={{ background:'#fff', borderRadius:8, width:'min(560px,95vw)', maxHeight:'75vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
+        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ flex:1 }}>📂 Modelos Salvos</span>
+          <FiltroCategoria lista={modelos} valor={cat} onChange={setCat} />
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:10 }}>
           {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
-          {!carregando && modelos.length === 0 && (
+          {!carregando && lista.length === 0 && (
             <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhum modelo salvo.</div>
           )}
-          {!carregando && modelos.map(m => (
-            <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
-              border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6 }}>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:700, fontSize:11 }}>{m.nome}</div>
-                <div style={{ fontSize:9, color:'#64748b' }}>
-                  {m.tipo} · {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
-                  {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
-                  {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
+          {!carregando && agruparPorCategoria(lista).map(g => (
+            <div key={g.nome}>
+              <TituloCategoria nome={g.nome} qtd={g.itens.length} />
+              {g.itens.map(m => (
+                <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
+                  border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:11 }}>{m.nome}</div>
+                    <div style={{ fontSize:9, color:'#64748b' }}>
+                      {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                      {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
+                      {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
+                    </div>
+                  </div>
+                  <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'3px 10px' }}
+                    onClick={() => onCarregar(m)}>Carregar</button>
+                  <button onClick={() => onExcluir(m.id)} title="Excluir modelo"
+                    style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'3px 7px', fontSize:9, cursor:'pointer' }}>
+                    ✕
+                  </button>
                 </div>
-              </div>
-              <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'3px 10px' }}
-                onClick={() => onCarregar(m)}>Carregar</button>
-              <button onClick={() => onExcluir(m.id)}
-                style={{ background:'none', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:4, padding:'3px 7px', fontSize:9, cursor:'pointer' }}>
-                ✕
-              </button>
+              ))}
             </div>
           ))}
         </div>
@@ -354,50 +405,74 @@ function ModalCarregar({ modelos, carregando, onCarregar, onExcluir, onClose }) 
 // isto vincula de verdade o registro escolhido a este processo — o registro
 // continua existindo em "Formação de Preços", agora com o vínculo atualizado.
 function ModalImportar({ modelos, carregando, vinculo, vinculoLabels, vinculosPorCotacao, onImportar, onClose }) {
+  const [cat, setCat] = useState('');
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
+  const [importando, setImportando] = useState(false);
   const jaVinculadaAqui = (m: any) =>
     (vinculosPorCotacao[m.id] || []).some((v:any) => v.tipo === vinculo.tipo && v.processo_id === vinculo.id);
-  const listaFiltrada = modelos.filter((m: any) => !jaVinculadaAqui(m));
+  const disponiveis = modelos.filter((m: any) => !jaVinculadaAqui(m));
+  const listaFiltrada = disponiveis.filter((m: any) => !cat || categoriaDe(m) === cat);
+  const alternar = (id: string) => setSelecionadas(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const importar = async () => {
+    const escolhidas = disponiveis.filter((m: any) => selecionadas.includes(m.id));
+    if (!escolhidas.length) return;
+    setImportando(true);
+    await onImportar(escolhidas);
+    setImportando(false);
+  };
   return (
     <div style={{ position:'fixed', inset:0, background:'#0007', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(560px,95vw)', maxHeight:'70vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13 }}>
-          📥 Importar Formação Existente
+      <div style={{ background:'#fff', borderRadius:8, width:'min(600px,95vw)', maxHeight:'78vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0003' }}>
+        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:800, fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ flex:1 }}>📥 Importar Formação Existente</span>
+          <FiltroCategoria lista={disponiveis} valor={cat} onChange={setCat} />
         </div>
         <div style={{ padding:'8px 16px', fontSize:9, color:'#64748b', borderBottom:'1px solid #f1f5f9' }}>
-          Vincula a formação escolhida a este processo — o registro continua existindo em "Formação de Preços", agora com o vínculo atualizado.
+          Marque uma ou mais formações. Elas passam a ficar ligadas a este processo (aparecem no seletor de versões) —
+          o registro continua existindo em "Formação de Preços", sem cópia.
         </div>
         <div style={{ flex:1, overflowY:'auto', padding:10 }}>
           {carregando && <div style={{ textAlign:'center', color:'#64748b', fontSize:11, padding:20 }}>Carregando...</div>}
           {!carregando && listaFiltrada.length === 0 && (
             <div style={{ textAlign:'center', color:'#9ca3af', fontSize:11, padding:24 }}>Nenhuma formação disponível.</div>
           )}
-          {!carregando && listaFiltrada.map((m: any) => {
-            const vinculosAtuais = (vinculosPorCotacao[m.id] || [])
-              .map((v:any) => vinculoLabels[(v.tipo === 'crm' ? 'crm:' : 'lic:') + v.processo_id])
-              .filter(Boolean);
-            return (
-              <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
-                border:'1px solid #e2e8f0', borderRadius:6, marginBottom:6 }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:700, fontSize:11 }}>{m.nome}</div>
-                  <div style={{ fontSize:9, color:'#64748b' }}>
-                    {m.tipo} · {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
-                  </div>
-                  {vinculosAtuais.length > 0 && (
-                    <div style={{ fontSize:9, color:'#b45309', marginTop:2 }}>
-                      🔗 já atende: {vinculosAtuais.join(' · ')}
+          {!carregando && agruparPorCategoria(listaFiltrada).map(g => (
+            <div key={g.nome}>
+              <TituloCategoria nome={g.nome} qtd={g.itens.length} />
+              {g.itens.map((m: any) => {
+                const vinculosAtuais = (vinculosPorCotacao[m.id] || [])
+                  .map((v:any) => vinculoLabels[(v.tipo === 'crm' ? 'crm:' : 'lic:') + v.processo_id])
+                  .filter(Boolean);
+                const marcada = selecionadas.includes(m.id);
+                return (
+                  <label key={m.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', cursor:'pointer',
+                    border:'1px solid ' + (marcada ? '#7c3aed' : '#e2e8f0'), background: marcada ? '#faf5ff' : '#fff', borderRadius:6, marginBottom:6 }}>
+                    <input type="checkbox" checked={marcada} onChange={() => alternar(m.id)} style={{ accentColor:'#7c3aed' }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:11 }}>{m.nome || <em style={{ color:'#94a3b8' }}>sem nome</em>}{m.versao ? ` · v${m.versao}` : ''}</div>
+                      <div style={{ fontSize:9, color:'#64748b' }}>
+                        {m.itens?.length || 0} itens · por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                      </div>
+                      {vinculosAtuais.length > 0 && (
+                        <div style={{ fontSize:9, color:'#b45309', marginTop:2 }}>
+                          🔗 já atende: {vinculosAtuais.join(' · ')}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9, padding:'3px 10px' }}
-                  onClick={() => onImportar(m)}>+ Vincular também aqui</button>
-              </div>
-            );
-          })}
+                  </label>
+                );
+              })}
+            </div>
+          ))}
         </div>
-        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0' }}>
-          <button className="acn-btn" style={{ background:'#94a3b8', float:'right' }} onClick={onClose}>Fechar</button>
+        <div style={{ padding:'8px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, alignItems:'center' }}>
+          <span style={{ fontSize:10, color:'#64748b', flex:1 }}>{selecionadas.length} selecionada(s)</span>
+          <button className="acn-btn" style={{ background:'#7c3aed', opacity: selecionadas.length ? 1 : .5 }}
+            disabled={!selecionadas.length || importando} onClick={importar}>
+            {importando ? 'Vinculando...' : `📥 Vincular ${selecionadas.length || ''} selecionada(s)`}
+          </button>
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
         </div>
       </div>
     </div>
@@ -1074,6 +1149,8 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   const [obs, setObs]                   = useState('');
   const [salvando, setSalvando]         = useState(false);
   const [propostas, setPropostas]       = useState([]);
+  const [filtroCat, setFiltroCat]       = useState('');
+  const [gerindoCat, setGerindoCat]     = useState(false);
 
   const carregarCotacoes = useCallback(async () => {
     setCarregando(true);
@@ -1100,8 +1177,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     setSalvando(true);
     const prms  = cotacaoAberta.parametros_globais || {};
     const items = (cotacaoAberta.itens || []);
-    const results = items.map(it => calcItem(it, prms));
-    const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
+    const totVendas = estruturaFormacao(items, prms, calcItem).geral.totVendas;   // já × quantidades
     const valorComDesconto = totVendas * (1 - desconto / 100);
     const { error } = await supabase.from('cotacoes_propostas').insert([{
       cotacao_id:          cotacaoAberta.id,
@@ -1127,10 +1203,9 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   if (cotacaoAberta) {
     const prms  = cotacaoAberta.parametros_globais || {};
     const items = (cotacaoAberta.itens || []).map(it => ({ ...it, _id: Math.random().toString(36).slice(2) }));
-    const results  = items.map(it => calcItem(it, prms));
-    const totVendas  = results.reduce((s, r) => s + r.valorTotal, 0);
-    const totImposto = results.reduce((s, r) => s + r.totalImposto, 0);
-    const totDifal   = results.reduce((s, r) => s + r.totalDifal, 0);
+    const estr     = estruturaFormacao(items, prms, calcItem);   // totais já × quantidades do item/subgrupo
+    const results  = estr.results;
+    const { totVendas, totImposto, totDifal } = estr.geral;
     const maxDesc    = Number(cotacaoAberta.desconto_maximo_pct) || 0;
     const descontoValor    = totVendas * desconto / 100;
     const valorComDesconto = totVendas * (1 - desconto / 100);
@@ -1273,19 +1348,31 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   }
 
   // ── Lista de cotações ──
+  const cotacoesFiltradas = cotacoes.filter(m => !filtroCat || categoriaDe(m) === filtroCat);
   return (
     <div style={{ padding:14, fontFamily:'system-ui,sans-serif', minHeight:'100vh', background:'#f8fafc' }}>
-      <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', marginBottom:14 }}>📋 Preços Formados</div>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+        <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', flex:1 }}>📋 Preços Formados</div>
+        <FiltroCategoria lista={cotacoes} valor={filtroCat} onChange={setFiltroCat} />
+        {ehAdminOuGerente(currentUser) && (
+          <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={() => setGerindoCat(g => !g)}>
+            ⚙️ Categorias
+          </button>
+        )}
+      </div>
+      {gerindoCat && <div style={{ maxWidth:420, marginBottom:12 }}><GerenciarCategorias onMudou={carregarCotacoes} /></div>}
       {carregando && <div style={{ textAlign:'center', color:'#64748b', padding:30 }}>Carregando...</div>}
       {!carregando && cotacoes.length === 0 && (
         <div style={{ textAlign:'center', color:'#9ca3af', fontSize:12, padding:40 }}>Nenhuma cotação salva.</div>
       )}
       <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        {cotacoes.map(m => {
+        {agruparPorCategoria(cotacoesFiltradas).map(g => (
+          <React.Fragment key={g.nome}>
+          <TituloCategoria nome={g.nome} qtd={g.itens.length} />
+        {g.itens.map(m => {
           const prms    = m.parametros_globais || {};
           const items   = m.itens || [];
-          const results = items.map(it => calcItem(it, prms));
-          const totVendas = results.reduce((s, r) => s + r.valorTotal, 0);
+          const totVendas = estruturaFormacao(items, prms, calcItem).geral.totVendas;
           return (
             <div key={m.id}
               style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px',
@@ -1293,7 +1380,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:700, fontSize:12 }}>{m.nome}</div>
                 <div style={{ fontSize:9, color:'#64748b', marginTop:2 }}>
-                  {m.tipo} · {m.empresa} · {items.length} {items.length === 1 ? 'item' : 'itens'}
+                  {m.empresa} · {items.length} {items.length === 1 ? 'item' : 'itens'}
                   {m.opl_numero ? ` · OP: ${m.opl_numero}` : ''}
                   {m.desconto_maximo_pct > 0 ? ` · Desc.máx: ${m.desconto_maximo_pct}%` : ''}
                   {' '}· por {m.criado_por} · {new Date(m.criado_em).toLocaleDateString('pt-BR')}
@@ -1324,6 +1411,112 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
             </div>
           );
         })}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── RESUMO DA FORMAÇÃO ───────────────────────────────────────────────────────
+// Por lote e item (e subgrupo): quantidade, unitário, total; total e unitário
+// do lote; total geral, margem e lucro (vendedor não vê custo/margem).
+// Impressão pelo navegador ("Salvar como PDF").
+const escHtmlF = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' } as any)[c]);
+
+function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao, multiplicador, plataforma, onClose }) {
+  const g = estrutura.geral;
+  const cols = isVendedor ? ['Lote / Item', 'Qtd.', 'Unitário', 'Total'] : ['Lote / Item', 'Qtd.', 'Unitário', 'Total', 'Custos', 'Margem', 'Lucro %'];
+  const linhas: any[] = [];
+  estrutura.lotes.forEach(lc => {
+    linhas.push({ tipo: 'lote', nome: lc.nome, qtd: `${lc.itens.length} ${lc.itens.length === 1 ? 'item' : 'itens'}`, unit: lc.unit, total: lc.total });
+    lc.itens.forEach(ic => {
+      linhas.push({ tipo: 'item', nome: ic.nome, qtd: ic.qtd, unit: ic.unit, total: ic.total, medio: ic.subgrupos.length > 0 });
+      ic.subgrupos.forEach(sg => linhas.push({ tipo: 'sub', nome: 'Subgrupo ' + sg.nome, qtd: sg.qtd, unit: sg.unit, total: sg.total }));
+    });
+  });
+  const celulas = (l: any) => isVendedor
+    ? [l.nome, l.qtd, fmtR(l.unit.totVendas), fmtR(l.total.totVendas)]
+    : [l.nome, l.qtd, fmtR(l.unit.totVendas), fmtR(l.total.totVendas), fmtR(l.total.totCustos), fmtR(l.total.totMargem), fmtPct(l.total.lucroPct)];
+
+  const imprimir = () => {
+    const w = window.open('', '_blank');
+    if (!w) { alert('O navegador bloqueou a janela de impressão.'); return; }
+    const corpo = linhas.map(l => {
+      const estilo = l.tipo === 'lote' ? 'background:#e0f2fe;font-weight:bold' : l.tipo === 'sub' ? 'color:#6b21a8' : '';
+      const recuo = l.tipo === 'item' ? 'padding-left:16px' : l.tipo === 'sub' ? 'padding-left:30px' : '';
+      return `<tr style="${estilo}">${celulas(l).map((c, i) => `<td style="${i === 0 ? recuo : 'text-align:right'}">${escHtmlF(c)}${i === 2 && l.medio ? ' (médio)' : ''}</td>`).join('')}</tr>`;
+    }).join('');
+    const extras = [
+      `Total geral: <b>${fmtR(g.totVendas)}</b>`, `Impostos: ${fmtR(g.totImposto)}`,
+      ...(isVendedor ? [] : [`DIFAL: ${fmtR(g.totDifal)}`, `Custos: ${fmtR(g.totCustos)}`, `Margem: ${fmtR(g.totMargem)}`, `Lucro: ${fmtPct(g.lucroPct)}`]),
+      ...(multiplicador > 1 ? [`× Multiplicador geral ${multiplicador}: ${fmtR(g.totVendas * multiplicador)}`] : []),
+      ...(plataforma ? [`Plataforma ${escHtmlF(plataforma.nome)}: desconto ${fmtR(plataforma.desconto)} · retenção ${fmtR(plataforma.retencao)} · líquido ${fmtR(plataforma.liquido)}`] : []),
+    ];
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumo — ${escHtmlF(titulo)}</title>
+      <style>body{font-family:Arial,sans-serif;font-size:11px;margin:18px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}
+      th,td{border:1px solid #cbd5e1;padding:4px 6px}th{background:#1e3a5f;color:#fff;font-size:10px;text-align:right}th:first-child{text-align:left}</style></head><body>
+      <h2>Resumo da Formação de Preços</h2>
+      <div>${escHtmlF(titulo)}${categoria ? ' · ' + escHtmlF(categoria) : ''}${versao ? ' · v' + versao : ''} · ${new Date().toLocaleDateString('pt-BR')}</div>
+      <table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${corpo}</tbody></table>
+      <p style="margin-top:10px">${extras.join(' &nbsp;·&nbsp; ')}</p>
+      <p style="color:#64748b;font-size:9px">Quantidades de produto por 1 unidade do item. Unitário do lote = soma dos unitários dos itens; unitário de item com subgrupos = médio (total ÷ quantidade).</p>
+      </body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 300);
+  };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 3000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 900, width: '96vw', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:800, color:'#0f172a' }}>🧾 Resumo da formação</div>
+            <div style={{ fontSize:10, color:'#64748b' }}>{titulo}{categoria ? ` · 🏷️ ${categoria}` : ''}{versao ? ` · v${versao}` : ''}</div>
+          </div>
+          <button className="acn-btn" style={{ background:'#0f766e', fontSize:11 }} onClick={imprimir}>🖨️ Imprimir / PDF</button>
+          <button className="acn-btn" style={{ background:'#94a3b8', fontSize:11 }} onClick={onClose}>Fechar</button>
+        </div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+            <thead>
+              <tr style={{ background:'#1e3a5f', color:'#fff' }}>
+                {cols.map(c => <th key={c} style={{ padding:'6px 8px', textAlign: c === 'Lote / Item' ? 'left' : 'right', fontSize:10 }}>{c}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((l, i) => (
+                <tr key={i} style={{ background: l.tipo === 'lote' ? '#e0f2fe' : undefined, borderTop:'1px solid #e2e8f0',
+                  fontWeight: l.tipo === 'lote' ? 800 : 400, color: l.tipo === 'sub' ? '#6b21a8' : '#1e293b' }}>
+                  {celulas(l).map((c, j) => (
+                    <td key={j} style={{ padding:'4px 8px', textAlign: j === 0 ? 'left' : 'right',
+                      paddingLeft: j === 0 ? (l.tipo === 'item' ? 22 : l.tipo === 'sub' ? 38 : 8) : 8 }}>
+                      {c}{j === 2 && l.medio ? <span style={{ fontSize:9, color:'#7c3aed' }}> (médio)</span> : null}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
+          {[
+            { label:'Total geral', v: fmtR(g.totVendas), bg:'#1e40af' },
+            { label:'Impostos', v: fmtR(g.totImposto), bg:'#831843' },
+            ...(isVendedor ? [] : [
+              { label:'Custos', v: fmtR(g.totCustos), bg:'#065f46' },
+              { label:'Margem', v: fmtR(g.totMargem), bg: g.totMargem >= 0 ? '#166534' : '#991b1b' },
+              { label:'Lucro %', v: fmtPct(g.lucroPct), bg:'#334155' },
+            ]),
+            ...(multiplicador > 1 ? [{ label:`× Multiplicador ${multiplicador}`, v: fmtR(g.totVendas * multiplicador), bg:'#0369a1' }] : []),
+            ...(plataforma ? [{ label:`Líquido c/ ${plataforma.nome}`, v: fmtR(plataforma.liquido), bg:'#0f766e' }] : []),
+          ].map(x => (
+            <div key={x.label} style={{ background:x.bg, color:'#fff', borderRadius:8, padding:'8px 12px', minWidth:130 }}>
+              <div style={{ fontSize:9, opacity:.85 }}>{x.label}</div>
+              <div style={{ fontSize:14, fontWeight:800 }}>{x.v}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1341,6 +1534,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [itens, setItens]             = useState([novoItem()]);
   const [grupoAtivo, setGrupoAtivo]   = useState('Item 1'); // aba ativa — "Item do edital"
   const [loteAtivo, setLoteAtivo]     = useState('Lote 1'); // lote ativo — nível acima dos itens
+  const [subgrupoAtivo, setSubgrupoAtivo] = useState<string | null>(null); // subgrupo ativo do item (se houver)
   const [usarGlobais, setUsarGlobais]             = useState(true);
   const [usarMarkupGlobal, setUsarMarkupGlobal]   = useState(false);
   const [modelos, setModelos]         = useState([]);
@@ -1351,6 +1545,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const [salvando, setSalvando]       = useState(false);
   const [carregando, setCarregando]   = useState(false);
   const [nomeCotacao, setNomeCotacao] = useState('');
+  const [tipoCotacao, setTipoCotacao] = useState('');   // categoria da formação carregada
+  const [modalResumo, setModalResumo] = useState(false);
   const [empresa, setEmpresa]         = useState('ACN');
   const [plataformas, setPlataformas]                 = useState([]);
   const [plataformaSelecionada, setPlataformaSelecionada] = useState(null);
@@ -1579,16 +1775,59 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // formação pode atender vários processos (CRM e/ou Licitação) ao mesmo
   // tempo. Clicar "Importar" de novo no mesmo processo é inofensivo
   // (unique constraint com onConflict:'do nothing').
-  const importarEVincular = async (m: any) => {
+  const importarEVincular = async (selecionadas: any[]) => {
     if (!vinculo?.id) return;
+    const lista = Array.isArray(selecionadas) ? selecionadas : [selecionadas];
+    if (!lista.length) return;
     const { error } = await supabase.from('cotacoes_precos_vinculos')
-      .upsert([{ cotacao_id: m.id, tipo: vinculo.tipo, processo_id: vinculo.id }], { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
+      .upsert(lista.map(m => ({ cotacao_id: m.id, tipo: vinculo.tipo, processo_id: vinculo.id })),
+              { onConflict: 'cotacao_id,tipo,processo_id', ignoreDuplicates: true });
     if (error) { alert('Erro ao vincular: ' + error.message); return; }
+    await supabase.from('cotacoes_precos_log').insert(lista.map(m => ({
+      cotacao_id: m.id, tipo: 'importada',
+      descricao: `Importada/vinculada a ${vinculo.tipo === 'crm' ? 'oportunidade do CRM' : 'licitação'}${rotulo ? ' "' + rotulo + '"' : ''}.`,
+      usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+    })));
     await carregarFormacoesVinculo();
-    carregarModelo(m);
-    setEditandoId(m.id);
+    // abre a mais recente das importadas
+    const abrir = [...lista].sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em)))[0];
+    carregarModelo(abrir);
+    setEditandoId(abrir.id);
     setModalImportar(false);
     carregarModelos();
+    if (lista.length > 1) alert(`✅ ${lista.length} formações vinculadas a este processo. Troque entre elas pelo seletor de versões.`);
+  };
+
+  // Desfaz o vínculo da formação aberta com ESTE processo (Gerentes e Admins).
+  // A formação continua salva e ligada a outros processos, se houver.
+  const desvincularFormacao = async () => {
+    if (!vinculo?.id || !editandoId) return;
+    const atual = formacoesVinculo.find((x: any) => x.id === editandoId);
+    if (!atual) return;
+    if (temNaoSalvo && !window.confirm('Há alterações não salvas nesta formação. Desvincular mesmo assim? (as alterações ficam só no rascunho)')) return;
+    if (!window.confirm(`Desvincular "${atual.nome || 'formação sem nome'}" (v${atual.versao || 1}) deste processo?\n\n` +
+      'A formação NÃO é apagada: continua em Formação de Preços e nos outros processos a que estiver ligada.')) return;
+    const { error } = await supabase.from('cotacoes_precos_vinculos').delete()
+      .eq('cotacao_id', editandoId).eq('tipo', vinculo.tipo).eq('processo_id', vinculo.id);
+    if (error) { alert('Erro ao desvincular: ' + error.message); return; }
+    // a coluna antiga (crm_oportunidade_id / licitacao_id) também apontava para cá
+    const coluna = vinculo.tipo === 'crm' ? 'crm_oportunidade_id' : 'licitacao_id';
+    await supabase.from('cotacoes_precos').update({ [coluna]: null }).eq('id', editandoId).eq(coluna, vinculo.id);
+    await supabase.from('cotacoes_precos_log').insert([{
+      cotacao_id: editandoId, tipo: 'desvinculada',
+      descricao: `Desvinculada de ${vinculo.tipo === 'crm' ? 'oportunidade do CRM' : 'licitação'}${rotulo ? ' "' + rotulo + '"' : ''}.`,
+      usuario_id: currentUser?.id || null, usuario_nome: currentUser?.nome || currentUser?.email || 'Sistema',
+    }]);
+    const restantes = formacoesVinculo.filter((x: any) => x.id !== editandoId);
+    await carregarFormacoesVinculo();
+    if (restantes.length) { carregarModelo(restantes[0]); setEditandoId(restantes[0].id); }
+    else {
+      setParams({ ...PARAMS_PADRAO }); setItens([novoItem()]); setGrupoAtivo('Item 1'); setLoteAtivo('Lote 1');
+      setNomeCotacao(''); setTipoCotacao(''); setEditandoId(null); setStatusCotacao('rascunho'); setVersaoAtual(1);
+      setVersaoRaizId(null); setVencedoraAtual(false); setTravaAtualizadoEm(null); setUltimaAlteracao(null);
+      geracaoRef.current += 1;
+    }
+    alert('✅ Formação desvinculada deste processo.');
   };
 
   // Ao abrir o processo, carrega automaticamente a formação mais recente
@@ -1644,9 +1883,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     return it;
   };
 
-  const results    = itens.map(it => calcItem(paramEfetivo(it), params));
+  // Estrutura Lote › Item › (Subgrupo) com os totais JÁ multiplicados pelas
+  // quantidades (produto = 1 unidade do item) — ver FormacaoCalculo.ts.
+  const estrutura  = estruturaFormacao(itens.map(paramEfetivo), params, calcItem);
+  const results    = estrutura.results;
   const lote       = Number(params.lote_qtd) || 1;
-  const { totVendas, totCustos, totDifal, totImposto, totMargem, lucroPct: lucroGeral } = somarResultados(results);
+  const { totVendas, totCustos, totDifal, totImposto, totMargem, lucroPct: lucroGeral } = estrutura.geral;
 
   // ── Itens do edital (abas) — derivado direto de itens[].grupo_nome, sem
   // registro separado pra não correr risco de ficar dessincronizado. ──
@@ -1659,13 +1901,17 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   if (gruposNomes.length === 0) gruposNomes.push('Item 1');
   const grupoAtivoValido = gruposNomes.includes(grupoAtivo) ? grupoAtivo : gruposNomes[0];
   const doItemAtivo = (it) => loteDe(it) === loteAtivoValido && grupoDe(it) === grupoAtivoValido;
-  const idxDoGrupo    = itens.map((it, i) => ({ it, i })).filter(({ it }) => doItemAtivo(it)).map(({ i }) => i);
+  const itemCalcAtivo = estrutura.itens.find(x => x.lote === loteAtivoValido && x.nome === grupoAtivoValido) || null;
+  const subsDoItem    = [...new Set(itens.filter(doItemAtivo).map(subgrupoDe).filter(Boolean))] as string[];
+  const temSubgrupos  = subsDoItem.length > 0;
+  const subAtivoValido = temSubgrupos ? (subsDoItem.includes(subgrupoAtivo) ? subgrupoAtivo : subsDoItem[0]) : null;
+  // a lista de produtos mostra o subgrupo ativo (item com subgrupos) ou o item inteiro
+  const idxDoGrupo    = itens.map((it, i) => ({ it, i }))
+    .filter(({ it }) => doItemAtivo(it) && (!temSubgrupos || subgrupoDe(it) === subAtivoValido)).map(({ i }) => i);
   const itensDoGrupo  = idxDoGrupo.map(i => itens[i]);
   const resultsDoGrupo = idxDoGrupo.map(i => results[i]);
   const subtotalGrupo  = somarResultados(resultsDoGrupo);
   const loteGrupo       = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);   // QUANTIDADE do item
-  // subtotal do lote ativo (soma dos itens dele)
-  const subtotalLote   = somarResultados(itens.map((it, i) => loteDe(it) === loteAtivoValido ? results[i] : null).filter(Boolean));
   // todos os pares lote/item, na ordem em que aparecem (PDF, contagens)
   const paresLoteItem: { lote: string; grupo: string }[] = [];
   for (const it of itens) {
@@ -1682,6 +1928,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     ...novoItem(),
     lote_nome:      loteAtivoValido,
     grupo_nome:     grupoAtivoValido,
+    subgrupo_nome:  subAtivoValido,
     difal_pct:      params.difal_pct,
     imposto_pct:    params.imposto_pct,
     custo_fixo_pct: params.custo_fixo_pct,
@@ -1730,8 +1977,81 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     delete m[chaveItem(deLote, deGrupo)];
     if (deLote === 'Lote 1') delete m[deGrupo];
     if (antiga != null && paraLote != null) m[chaveItem(paraLote, paraGrupo)] = antiga;
-    return { ...p, lote_por_grupo: m };
+    // quantidades dos subgrupos ("lote::item::sub") acompanham o item
+    const qs = { ...(p.qtd_subgrupo || {}) };
+    const prefixo = chaveItem(deLote, deGrupo) + '::';
+    Object.keys(qs).filter(k => k.startsWith(prefixo)).forEach(k => {
+      const v = qs[k]; delete qs[k];
+      if (paraLote != null) qs[chaveItem(paraLote, paraGrupo) + '::' + k.slice(prefixo.length)] = v;
+    });
+    return { ...p, lote_por_grupo: m, qtd_subgrupo: qs };
   });
+
+  // ── Subgrupos do item (ex.: Nivus 6 un.: 3 com conjunto A, 2 com A + cela) ──
+  const setQtdSub = (sub, qtd) => setParams(p => ({ ...p,
+    qtd_subgrupo: { ...(p.qtd_subgrupo || {}), [chaveSub(loteAtivoValido, grupoAtivoValido, sub)]: Math.max(1, parseInt(qtd) || 1) } }));
+  const dividirEmSubgrupos = () => {
+    const nome = window.prompt(`Nome do 1º subgrupo de "${grupoAtivoValido}".\nOs produtos que já estão no item vão para ele.`, 'A');
+    if (!nome || !nome.trim()) return;
+    const n = nome.trim();
+    const qtdAtual = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);
+    setItens(p => p.map(x => doItemAtivo(x) ? { ...x, subgrupo_nome: n } : x));
+    setQtdSub(n, qtdAtual);
+    setSubgrupoAtivo(n);
+  };
+  const novoSubgrupo = (copiarDe: string | null) => {
+    const sugestao = String.fromCharCode(65 + (subsDoItem.length % 26));
+    const nome = window.prompt(copiarDe
+      ? `Nome do novo subgrupo — começa com uma CÓPIA dos produtos de "${copiarDe}" (depois é só ajustar):`
+      : 'Nome do novo subgrupo:', sugestao);
+    if (!nome || !nome.trim()) return;
+    const n = nome.trim();
+    if (subsDoItem.includes(n)) { alert(`Já existe o subgrupo "${n}" em ${grupoAtivoValido}.`); return; }
+    const qtd = parseInt(window.prompt(`Quantas unidades no subgrupo "${n}"?`, '1') || '', 10);
+    if (!(qtd > 0)) { alert('Informe uma quantidade maior que zero.'); return; }
+    setItens(p => {
+      const novos = copiarDe
+        ? p.filter(x => doItemAtivo(x) && subgrupoDe(x) === copiarDe).map(x => ({ ...x, _id: Math.random().toString(36).slice(2), subgrupo_nome: n }))
+        : [{ ...linhaNova(loteAtivoValido, grupoAtivoValido), subgrupo_nome: n }];
+      return [...p, ...novos];
+    });
+    setQtdSub(n, qtd);
+    setSubgrupoAtivo(n);
+  };
+  const renomearSubgrupo = (atual: string) => {
+    const nome = window.prompt('Renomear subgrupo:', atual);
+    if (!nome || !nome.trim() || nome.trim() === atual) return;
+    const n = nome.trim();
+    if (subsDoItem.includes(n)) { alert(`Já existe o subgrupo "${n}".`); return; }
+    setItens(p => p.map(x => doItemAtivo(x) && subgrupoDe(x) === atual ? { ...x, subgrupo_nome: n } : x));
+    setParams(p => {
+      const qs = { ...(p.qtd_subgrupo || {}) };
+      const k = chaveSub(loteAtivoValido, grupoAtivoValido, atual);
+      if (k in qs) { qs[chaveSub(loteAtivoValido, grupoAtivoValido, n)] = qs[k]; delete qs[k]; }
+      return { ...p, qtd_subgrupo: qs };
+    });
+    setSubgrupoAtivo(n);
+  };
+  const removerSubgrupo = (sub: string) => {
+    const k = chaveSub(loteAtivoValido, grupoAtivoValido, sub);
+    if (subsDoItem.length === 1) {
+      // último subgrupo: o item volta a ser simples, com os mesmos produtos e quantidade
+      if (!window.confirm(`Desfazer os subgrupos de "${grupoAtivoValido}"? Os produtos continuam no item, com quantidade ${qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub)}.`)) return;
+      const q = qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub);
+      setItens(p => p.map(x => doItemAtivo(x) ? { ...x, subgrupo_nome: null } : x));
+      setParams(p => {
+        const qs = { ...(p.qtd_subgrupo || {}) }; delete qs[k];
+        return { ...p, qtd_subgrupo: qs, lote_por_grupo: { ...(p.lote_por_grupo || {}), [chaveItem(loteAtivoValido, grupoAtivoValido)]: q } };
+      });
+      setSubgrupoAtivo(null);
+      return;
+    }
+    const n = itens.filter(x => doItemAtivo(x) && subgrupoDe(x) === sub).length;
+    if (!window.confirm(`Remover o subgrupo "${sub}" e os seus ${n} produto(s)?`)) return;
+    setItens(p => p.filter(x => !(doItemAtivo(x) && subgrupoDe(x) === sub)));
+    setParams(p => { const qs = { ...(p.qtd_subgrupo || {}) }; delete qs[k]; return { ...p, qtd_subgrupo: qs }; });
+    setSubgrupoAtivo(subsDoItem.find(x => x !== sub) || null);
+  };
   const linhaNova = (lote, grupo) => ({
     ...novoItem(), lote_nome: lote, grupo_nome: grupo,
     difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct,
@@ -1817,6 +2137,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       // de um item em branco e iam parar no "Item 1", fosse qual fosse o item
       lote_nome:      loteDe(prev[idx]),
       grupo_nome:     grupoDe(prev[idx]),
+      subgrupo_nome:  subgrupoDe(prev[idx]),
       difal_pct:      params.difal_pct,
       imposto_pct:    params.imposto_pct,
       custo_fixo_pct: params.custo_fixo_pct,
@@ -2001,6 +2322,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       // que a formação era "sem nome", então o salvamento seguinte pedia o
       // nome de novo e o cabeçalho seguia mostrando "sem nome".
       setNomeCotacao(nome);
+      setTipoCotacao(tipo);
       // Gravou: o rascunho local cumpriu o papel e sai de cena.
       descartarRascunho(editandoId);
       if (novaCotacaoId) descartarRascunho(null); // era a chave "nova"
@@ -2027,6 +2349,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setLoteAtivo(loteDe(itensCarregados[0]));
     setGrupoAtivo(grupoDe(itensCarregados[0]) || 'Item 1');
     setNomeCotacao(m.nome);
+    setTipoCotacao(m.tipo || '');
+    setSubgrupoAtivo(null);
     if (m.empresa) setEmpresa(m.empresa);
     if (m.plataforma_id && plataformas.length > 0) {
       setPlataformaSelecionada(plataformas.find(x => x.id === m.plataforma_id) || null);
@@ -2073,6 +2397,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setGrupoAtivo('Item 1');
     setLoteAtivo('Lote 1');
     setNomeCotacao('');
+    setTipoCotacao('');
+    setSubgrupoAtivo(null);
     setEmpresa('ACN');
     setPlataformaSelecionada(null);
     setOplVinculada(null);
@@ -2159,53 +2485,53 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
         : { 0: { cellWidth: 50 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' } };
 
       let yCursor = y + 4;
-      const variosLotes = new Set(paresLoteItem.map(x => x.lote)).size > 1;
-      paresLoteItem.forEach(({ lote: nomeLote, grupo: nomeGrupoPuro }) => {
-        const nomeGrupo     = variosLotes ? `${nomeLote} › ${nomeGrupoPuro}` : nomeGrupoPuro;
-        const idxsGrupo     = itens.map((it, i) => ({ it, i })).filter(({ it }) => loteDe(it) === nomeLote && grupoDe(it) === nomeGrupoPuro).map(({ i }) => i);
-        const itensGrupo    = idxsGrupo.map(i => itens[i]);
-        const resultsGrupo  = idxsGrupo.map(i => results[i]);
-        if (itensGrupo.length === 0) return;
-
-        if (yCursor > 265) { doc.addPage(); yCursor = 18; } // evita cabeçalho colado na borda da página
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
-        const qtdItemPdf   = qtdDoItem(params, nomeLote, nomeGrupoPuro);
-        const loteGrupoTxt = qtdItemPdf > 1 ? ` - Qtd.: ${qtdItemPdf}` : '';
-        doc.text(`${nomeGrupo}${loteGrupoTxt}`, 14, yCursor);
+      const variosLotes = estrutura.lotes.length > 1;
+      const linhaPdf = (texto, cor = [15, 118, 110]) => {
+        if (yCursor > 280) { doc.addPage(); yCursor = 18; }
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(cor[0], cor[1], cor[2]);
+        doc.text(texto, 14, yCursor);
+        doc.setTextColor(0, 0, 0);
         yCursor += 5;
-
-        const body = itensGrupo.map((item, idx) => {
-          const r = resultsGrupo[idx];
-          if (isVendedor) {
-            return [item.produto || '—', item.marca || '—', item.qt, fmtR(r.valorUnit), fmtR(r.valorTotal), fmtR(r.totalImposto)];
-          }
-          return [
-            item.produto || '—', item.marca || '—', item.qt,
-            fmtR(r.custoUnitBrl), fmtR(r.valorUnit), fmtR(r.valorTotal),
-            fmtR(r.totalDifal), fmtR(r.totalImposto), fmtPct(r.lucroPct),
-          ];
+      };
+      estrutura.lotes.forEach(lc => {
+        lc.itens.forEach(ic => {
+          const nomeItem = variosLotes ? `${lc.nome} › ${ic.nome}` : ic.nome;
+          if (yCursor > 265) { doc.addPage(); yCursor = 18; } // evita cabeçalho colado na borda da página
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+          doc.text(`${nomeItem} - Qtd.: ${ic.qtd}${ic.subgrupos.length ? ` (${ic.subgrupos.length} subgrupos)` : ''}`, 14, yCursor);
+          yCursor += 5;
+          const blocos = ic.subgrupos.length
+            ? ic.subgrupos.map(sg => ({ titulo: `Subgrupo ${sg.nome} - ${sg.qtd} un.`, indices: sg.indices, calc: sg }))
+            : [{ titulo: '', indices: ic.indices, calc: ic }];
+          blocos.forEach(b => {
+            if (b.titulo) {
+              if (yCursor > 270) { doc.addPage(); yCursor = 18; }
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(107, 33, 168);
+              doc.text(b.titulo, 18, yCursor); doc.setTextColor(0, 0, 0);
+              yCursor += 4;
+            }
+            const body = b.indices.map(i => {
+              const item = itens[i], r = results[i];
+              if (isVendedor) return [item.produto || '—', item.marca || '—', item.qt, fmtR(r.valorUnit), fmtR(r.valorTotal), fmtR(r.totalImposto)];
+              return [item.produto || '—', item.marca || '—', item.qt, fmtR(r.custoUnitBrl), fmtR(r.valorUnit), fmtR(r.valorTotal), fmtR(r.totalDifal), fmtR(r.totalImposto), fmtPct(r.lucroPct)];
+            });
+            autoTable(doc, {
+              head, body, startY: yCursor, theme: 'grid',
+              headStyles: { fillColor: [30, 41, 59], fontSize: 7, textColor: 255 },
+              bodyStyles: { fontSize: 7 },
+              columnStyles,
+            });
+            yCursor = (doc as any).lastAutoTable.finalY + 4;
+            if (b.titulo) linhaPdf(`${b.titulo}: unitário ${fmtR(b.calc.unit.totVendas)} × ${b.calc.qtd} = ${fmtR(b.calc.total.totVendas)}`, [107, 33, 168]);
+          });
+          const t = ic.total;
+          linhaPdf(isVendedor
+            ? `Subtotal ${nomeItem}: unitário${ic.subgrupos.length ? ' médio' : ''} ${fmtR(ic.unit.totVendas)} × ${ic.qtd} = ${fmtR(t.totVendas)} · Impostos ${fmtR(t.totImposto)}`
+            : `Subtotal ${nomeItem}: unitário${ic.subgrupos.length ? ' médio' : ''} ${fmtR(ic.unit.totVendas)} × ${ic.qtd} = ${fmtR(t.totVendas)} · Custos ${fmtR(t.totCustos)} · DIFAL ${fmtR(t.totDifal)} · Impostos ${fmtR(t.totImposto)} · Margem ${fmtR(t.totMargem)} · Lucro ${fmtPct(t.lucroPct)}`);
+          yCursor += 2;
         });
-
-        autoTable(doc, {
-          head, body, startY: yCursor, theme: 'grid',
-          headStyles: { fillColor: [30, 41, 59], fontSize: 7, textColor: 255 },
-          bodyStyles: { fontSize: 7 },
-          columnStyles,
-        });
-        yCursor = (doc as any).lastAutoTable.finalY + 3;
-
-        // Subtotal do item — só imprime linha à parte quando há mais de 1
-        // Item do edital (com 1 só, o resumo geral logo abaixo já é isso).
-        if (paresLoteItem.length > 1) {
-          const sub = somarResultados(resultsGrupo);
-          doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(15, 118, 110);
-          const linhaSub = isVendedor
-            ? `Subtotal ${nomeGrupo}: Vendas ${fmtR(sub.totVendas)} · Impostos ${fmtR(sub.totImposto)}`
-            : `Subtotal ${nomeGrupo}: Vendas ${fmtR(sub.totVendas)} · Custos ${fmtR(sub.totCustos)} · DIFAL ${fmtR(sub.totDifal)} · Impostos ${fmtR(sub.totImposto)} · Margem ${fmtR(sub.totMargem)} · Lucro ${fmtPct(sub.lucroPct)}`;
-          doc.text(linhaSub, 14, yCursor);
-          doc.setTextColor(0, 0, 0);
-          yCursor += 7;
-        } else {
+        if (variosLotes) {
+          linhaPdf(`TOTAL ${lc.nome}: unitário (1 de cada item) ${fmtR(lc.unit.totVendas)} · total ${fmtR(lc.total.totVendas)}${isVendedor ? '' : ` · margem ${fmtR(lc.total.totMargem)} · lucro ${fmtPct(lc.total.lucroPct)}`}`, [30, 58, 95]);
           yCursor += 3;
         }
       });
@@ -2586,6 +2912,14 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                       </select>
                     );
                   })()}
+                  {editandoId && formacoesVinculo.some((m: any) => m.id === editandoId) && ehAdminOuGerente(currentUser) && (
+                    <button onClick={desvincularFormacao}
+                      title="Tira esta formação deste processo (não apaga a formação) — Gerentes e Admins"
+                      style={{ padding:'5px 10px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px solid #fca5a5',
+                        background:'#fff', color:'#b91c1c' }}>
+                      ⊘ Desvincular
+                    </button>
+                  )}
                   <button onClick={novaQuotacao}
                     style={{ padding:'5px 12px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px dashed #94a3b8',
                       background:'#f8fafc', color:'#64748b' }}>
@@ -2653,6 +2987,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 onClick={novaQuotacao}>
                 🗒️ Nova Cotação
               </button>
+              {itens.length > 0 && (
+                <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }} onClick={() => setModalResumo(true)}
+                  title="Resumo por lote e item: quantidades, unitários, totais e margem — com impressão/PDF">
+                  🧾 Resumo
+                </button>
+              )}
               {itens.length > 0 && (
                 <button className="acn-btn" style={{ background:'#1e3a5f', fontSize:10 }}
                   onClick={() => { setSenhaConfirm(''); setErroSenha(''); setModalSenha(true); }}
@@ -2869,6 +3209,44 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </button>
           </div>
 
+          {/* ── SUBGRUPOS DO ITEM (quando o item foi dividido) ── */}
+          {temSubgrupos && (
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginBottom:8, marginLeft:18, paddingLeft:10, borderLeft:'3px solid #7c3aed' }}>
+              <span style={{ fontSize:9, fontWeight:800, color:'#6b21a8', textTransform:'uppercase' }}>Subgrupos</span>
+              {subsDoItem.map(sub => {
+                const ativo = sub === subAtivoValido;
+                const q = qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub);
+                return (
+                  <div key={sub} style={{ display:'flex', alignItems:'center', gap:4, borderRadius:6, padding:'2px 4px',
+                    border:'1px solid ' + (ativo ? '#7c3aed' : '#d8b4fe'), background: ativo ? '#7c3aed' : '#faf5ff' }}>
+                    <button type="button" onClick={() => setSubgrupoAtivo(sub)} onDoubleClick={() => renomearSubgrupo(sub)}
+                      title="Duplo-clique para renomear"
+                      style={{ padding:'3px 6px', fontSize:10, fontWeight:800, border:'none', cursor:'pointer', background:'transparent',
+                        color: ativo ? '#fff' : '#6b21a8' }}>
+                      {sub}
+                    </button>
+                    <input type="number" min={1} value={q} title={`Unidades no subgrupo ${sub}`}
+                      onChange={e => setQtdSub(sub, e.target.value)}
+                      style={{ width:44, fontSize:10, padding:'1px 3px', border:'1px solid #d8b4fe', borderRadius:4, textAlign:'right' }} />
+                    <span style={{ fontSize:9, color: ativo ? '#ede9fe' : '#7c3aed' }}>un.</span>
+                  </div>
+                );
+              })}
+              <button type="button" onClick={() => novoSubgrupo(null)}
+                style={{ padding:'4px 9px', fontSize:10, fontWeight:700, border:'1px dashed #7c3aed', borderRadius:6, background:'#fff', color:'#7c3aed', cursor:'pointer' }}>
+                + Subgrupo
+              </button>
+              <button type="button" onClick={() => novoSubgrupo(subAtivoValido)} title={`Novo subgrupo começando com os produtos de "${subAtivoValido}"`}
+                style={{ padding:'4px 9px', fontSize:10, fontWeight:700, border:'1px solid #d8b4fe', borderRadius:6, background:'#fff', color:'#7c3aed', cursor:'pointer' }}>
+                ⧉ Duplicar "{subAtivoValido}"
+              </button>
+              <button type="button" onClick={() => removerSubgrupo(subAtivoValido)} title={`Remover o subgrupo "${subAtivoValido}"`}
+                style={{ padding:'4px 8px', fontSize:10, border:'1px solid #fca5a5', borderRadius:6, background:'#fff', color:'#dc2626', cursor:'pointer' }}>
+                🗑
+              </button>
+            </div>
+          )}
+
           {/* ── LISTA DE ITENS (do Item do edital ativo) ── */}
           <div style={{ marginBottom:12 }}>
             {/* Container com scroll — cada item é um cartão vertical (ver ItemRow),
@@ -2922,7 +3300,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             {/* Contador + botão add abaixo da alça */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4, marginBottom:6 }}>
               <span style={{ fontSize:9, color:'#9ca3af' }}>
-                {itensDoGrupo.length} item{itensDoGrupo.length !== 1 ? 'ns' : ''} em "{grupoAtivoValido}" · arraste a barra cinza para redimensionar
+                {itensDoGrupo.length} item{itensDoGrupo.length !== 1 ? 'ns' : ''} em "{grupoAtivoValido}"{temSubgrupos ? ` › ${subAtivoValido}` : ''} · quantidades por 1 unidade · arraste a barra cinza para redimensionar
               </span>
               {/* O botao de adicionar item fica AQUI, colado na lista, e nao
                   la em cima junto dos botoes que agem sobre a formacao
@@ -2936,57 +3314,130 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           </div>{/* fim wrapper resize */}
 
-          {/* ── SUBTOTAL DESTE ITEM DO EDITAL — tabela Total × Unitário, como o
-              painel CONSOLIDADO da planilha original ── */}
-          {itensDoGrupo.length > 0 && (
+          {/* ── SUBTOTAL DESTE ITEM — Unitário (1 unidade) × Total (× quantidade).
+              Produto é por 1 unidade do item; com subgrupos, o unitário do item é
+              o MÉDIO (total ÷ quantidade) e cada subgrupo mostra o seu. ── */}
+          {itemCalcAtivo && (
             <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:8, padding:12, marginBottom:12 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8, marginBottom:8 }}>
                 <div style={{ fontWeight:800, fontSize:11, color:'#0f766e' }}>
                   📦 Subtotal — {grupoAtivoValido}
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontSize:9, color:'#0f766e' }}>Quantidade do item</span>
-                  <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
-                    min={1} value={loteGrupo}
-                    onChange={e => setParams(p => {
-                      const m = { ...(p.lote_por_grupo || {}) };
-                      if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
-                      m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
-                      return { ...p, lote_por_grupo: m };
-                    })} />
-                </div>
+                {temSubgrupos ? (
+                  <span style={{ fontSize:10, color:'#0f766e' }}>
+                    Quantidade do item: <strong>{itemCalcAtivo.qtd}</strong> <span style={{ color:'#64748b' }}>(soma dos {subsDoItem.length} subgrupos)</span>
+                  </span>
+                ) : (
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:9, color:'#0f766e' }}>Quantidade do item</span>
+                    <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
+                      min={1} value={loteGrupo}
+                      onChange={e => setParams(p => {
+                        const m = { ...(p.lote_por_grupo || {}) };
+                        if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
+                        m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
+                        return { ...p, lote_por_grupo: m };
+                      })} />
+                    <button type="button" onClick={dividirEmSubgrupos}
+                      title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)"
+                      style={{ fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:5, border:'1px solid #7c3aed', background:'#faf5ff', color:'#7c3aed', cursor:'pointer' }}>
+                      🧩 Dividir em subgrupos
+                    </button>
+                  </div>
+                )}
               </div>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
                   <tr>
                     <th style={{ textAlign:'left', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }} />
-                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Total</th>
-                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Unitário (÷ qtd.)</th>
+                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>{temSubgrupos ? 'Unitário médio' : 'Unitário (1 un.)'}</th>
+                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Total (× {itemCalcAtivo.qtd})</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[
-                    { label:'Vendas',    total: subtotalGrupo.totVendas,   fmt: fmtR,   hide:false },
-                    { label:'Custos',    total: subtotalGrupo.totCustos,   fmt: fmtR,   hide:isVendedor },
-                    { label:'DIFAL',     total: subtotalGrupo.totDifal,    fmt: fmtR,   hide:isVendedor },
-                    { label:'Impostos',  total: subtotalGrupo.totImposto,  fmt: fmtR,   hide:false },
-                    { label:'Margem',    total: subtotalGrupo.totMargem,   fmt: fmtR,   hide:isVendedor },
-                    { label:'Lucro %',   total: subtotalGrupo.lucroPct,    fmt: fmtPct, hide:isVendedor, semUnitario:true },
-                  ].filter(x=>!x.hide).map(({ label, total, fmt, semUnitario }) => (
+                    { label:'Vendas',    k:'totVendas',  fmt: fmtR,   hide:false },
+                    { label:'Custos',    k:'totCustos',  fmt: fmtR,   hide:isVendedor },
+                    { label:'DIFAL',     k:'totDifal',   fmt: fmtR,   hide:isVendedor },
+                    { label:'Impostos',  k:'totImposto', fmt: fmtR,   hide:false },
+                    { label:'Margem',    k:'totMargem',  fmt: fmtR,   hide:isVendedor },
+                    { label:'Lucro %',   k:'lucroPct',   fmt: fmtPct, hide:isVendedor, semUnitario:true },
+                  ].filter(x=>!x.hide).map(({ label, k, fmt, semUnitario }) => (
                     <tr key={label} style={{ borderTop:'1px solid #ccfbf1' }}>
                       <td style={{ fontSize:10, color:'#134e4a', padding:'4px 6px' }}>{label}</td>
-                      <td style={{ fontSize:11, fontWeight:800, color:'#134e4a', textAlign:'right', padding:'4px 6px' }}>{fmt(total)}</td>
-                      <td style={{ fontSize:10, color:'#0f766e', textAlign:'right', padding:'4px 6px' }}>{semUnitario ? '—' : fmt(total / loteGrupo)}</td>
+                      <td style={{ fontSize:10, color:'#0f766e', textAlign:'right', padding:'4px 6px' }}>{semUnitario ? '—' : fmt(itemCalcAtivo.unit[k])}</td>
+                      <td style={{ fontSize:11, fontWeight:800, color:'#134e4a', textAlign:'right', padding:'4px 6px' }}>{fmt(itemCalcAtivo.total[k])}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {loteGrupo > 1 && (
-                <div style={{ fontSize:10, color:'#0f766e', marginTop:8, paddingTop:8, borderTop:'1px dashed #99f6e4' }}>
-                  Total p/ {loteGrupo} unid. (× qtd.): <strong>{fmtR(subtotalGrupo.totVendas * loteGrupo)}</strong>
-                  {!isVendedor && <> · Margem: <strong style={{ color: subtotalGrupo.totMargem>=0?'#16a34a':'#dc2626' }}>{fmtR(subtotalGrupo.totMargem * loteGrupo)}</strong></>}
-                </div>
+              {temSubgrupos && (
+                <table style={{ width:'100%', borderCollapse:'collapse', marginTop:8, borderTop:'1px dashed #99f6e4' }}>
+                  <thead>
+                    <tr>
+                      {['Subgrupo', 'Qtd.', 'Unitário', 'Total', ...(isVendedor ? [] : ['Margem'])].map(h => (
+                        <th key={h} style={{ textAlign: h === 'Subgrupo' ? 'left' : 'right', fontSize:8, color:'#6b21a8', fontWeight:700, padding:'4px 6px' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itemCalcAtivo.subgrupos.map(sg => (
+                      <tr key={sg.nome} style={{ borderTop:'1px solid #f3e8ff', background: sg.nome === subAtivoValido ? '#faf5ff' : undefined }}>
+                        <td style={{ fontSize:10, fontWeight:700, color:'#6b21a8', padding:'3px 6px', cursor:'pointer' }} onClick={() => setSubgrupoAtivo(sg.nome)}>{sg.nome}</td>
+                        <td style={{ fontSize:10, textAlign:'right', padding:'3px 6px' }}>{sg.qtd}</td>
+                        <td style={{ fontSize:10, textAlign:'right', padding:'3px 6px' }}>{fmtR(sg.unit.totVendas)}</td>
+                        <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'3px 6px' }}>{fmtR(sg.total.totVendas)}</td>
+                        {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 6px', color: sg.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(sg.total.totMargem)}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
+            </div>
+          )}
+
+          {/* ── TOTAIS POR LOTE — total e unitário (soma dos unitários dos itens) ── */}
+          {estrutura.lotes.length > 0 && itens.length > 0 && (
+            <div style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:8, padding:12, marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:11, color:'#1e3a5f', marginBottom:6 }}>📦 Totais por lote</div>
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead>
+                    <tr style={{ background:'#1e3a5f', color:'#fff' }}>
+                      {['Lote / Item', 'Qtd.', 'Unitário', 'Total', ...(isVendedor ? [] : ['Margem', 'Lucro %'])].map(h => (
+                        <th key={h} style={{ textAlign: h === 'Lote / Item' ? 'left' : 'right', fontSize:9, fontWeight:700, padding:'5px 8px' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {estrutura.lotes.map(lc => (
+                      <React.Fragment key={lc.nome}>
+                        <tr style={{ background: lc.nome === loteAtivoValido ? '#e0f2fe' : '#f1f5f9', cursor:'pointer' }}
+                          onClick={() => { setLoteAtivo(lc.nome); setGrupoAtivo(lc.itens[0]?.nome || 'Item 1'); }}>
+                          <td style={{ fontSize:10, fontWeight:800, color:'#1e3a5f', padding:'5px 8px' }}>📦 {lc.nome}</td>
+                          <td style={{ fontSize:9, color:'#64748b', textAlign:'right', padding:'5px 8px' }}>{lc.itens.length} {lc.itens.length === 1 ? 'item' : 'itens'}</td>
+                          <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }} title="Soma do unitário de cada item do lote (1 unidade de cada)">{fmtR(lc.unit.totVendas)}</td>
+                          <td style={{ fontSize:11, fontWeight:800, color:'#1e40af', textAlign:'right', padding:'5px 8px' }}>{fmtR(lc.total.totVendas)}</td>
+                          {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px', color: lc.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(lc.total.totMargem)}</td>}
+                          {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }}>{fmtPct(lc.total.lucroPct)}</td>}
+                        </tr>
+                        {lc.itens.map(ic => (
+                          <tr key={ic.nome} style={{ borderTop:'1px solid #f1f5f9' }}>
+                            <td style={{ fontSize:10, color:'#334155', padding:'3px 8px 3px 22px' }}>
+                              {ic.nome}{ic.subgrupos.length ? <span style={{ color:'#7c3aed' }}> · {ic.subgrupos.length} subgrupos</span> : ''}
+                            </td>
+                            <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{ic.qtd}</td>
+                            <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }} title={ic.subgrupos.length ? 'Unitário médio (total ÷ quantidade)' : undefined}>{fmtR(ic.unit.totVendas)}</td>
+                            <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'3px 8px' }}>{fmtR(ic.total.totVendas)}</td>
+                            {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px', color: ic.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(ic.total.totMargem)}</td>}
+                            {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{fmtPct(ic.total.lucroPct)}</td>}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -2994,7 +3445,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           {itens.length > 0 && (
             <>
             <div style={{ fontWeight:800, fontSize:11, color:'#1e293b', marginBottom:6 }}>
-              🧾 Resumo Geral — todos os Itens do edital{gruposNomes.length > 1 ? ` (${gruposNomes.length})` : ''}
+              🧾 Resumo Geral — todos os lotes e itens (já multiplicados pelas quantidades)
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:12 }}>
               {[
@@ -3056,8 +3507,18 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               onClose={() => setModalSalvar(false)}
               salvando={salvando}
               nomeInicial={nomeCotacao}
-              tipoInicial={undefined}
+              tipoInicial={tipoCotacao || undefined}
               editando={!!editandoId}
+              podeGerirCategorias={ehAdminOuGerente(currentUser)}
+            />
+          )}
+          {modalResumo && (
+            <ResumoFormacaoModal
+              estrutura={estrutura} isVendedor={isVendedor}
+              titulo={nomeCotacao || rotulo || 'Formação de Preços'} categoria={tipoCotacao}
+              versao={editandoId ? versaoAtual : null} multiplicador={lote}
+              plataforma={plataformaSelecionada ? { nome: plataformaSelecionada.nome, desconto: descontoPlat, retencao: retencaoPlat, liquido: totalLiquidoPlat } : null}
+              onClose={() => setModalResumo(false)}
             />
           )}
           {modalCarregar && (
