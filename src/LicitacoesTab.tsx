@@ -175,7 +175,7 @@ const TABS_DIREITO = [
 // viva) foram reclassificados por nome de arquivo, e os de "custos" viraram
 // edital_anexos.
 const SUBQUADROS_ARQUIVOS: { categoria: string; label: string }[][] = [
-  [{ categoria:'edital_anexos', label:'📄 Edital / Anexos' }],
+  [{ categoria:'edital_anexos', label:'📄 Edital / Anexos' }, { categoria:'cotacoes_fornecedores', label:'🧾 Cotações de Fornecedores' }],
   [{ categoria:'impugnacao', label:'⚠️ Impugnações' }, { categoria:'impugnacao_decisao', label:'⚖️ Decisão' }],
   [{ categoria:'esclarecimento', label:'❓ Esclarecimento' }, { categoria:'esclarecimento_resposta', label:'💬 Respostas' }],
   [{ categoria:'recurso', label:'📮 Recursos' }, { categoria:'recurso_defesa', label:'🛡️ Defesa' }, { categoria:'recurso_decisao', label:'⚖️ Decisão' }],

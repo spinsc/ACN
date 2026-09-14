@@ -100,6 +100,42 @@ export default function PainelProducaoTV() {
     return () => { clearTimeout(t); window.removeEventListener('mousemove', mexeu); };
   }, [telaCheia]);
 
+  // ── TELA SEMPRE LIGADA ─────────────────────────────────────────────────
+  // Screen Wake Lock: enquanto o painel estiver aberto, o computador ligado à
+  // TV não apaga a tela nem entra em descanso. O navegador SOLTA a trava
+  // sozinho quando a aba fica oculta (minimizou, trocou de aba) — por isso
+  // pede de novo ao voltar a ficar visível. Onde não existe (navegador antigo,
+  // página sem https), avisa ao lado dos controles em vez de falhar calado.
+  // Não impede desligamento por energia do Windows se a política for forçada.
+  const [telaLigada, setTelaLigada] = useState<'ativa' | 'sem_suporte' | 'negada' | null>(null);
+  useEffect(() => {
+    const wl = (navigator as any).wakeLock;
+    if (!wl?.request) { setTelaLigada('sem_suporte'); return; }
+    let trava: any = null;
+    let desmontado = false;
+    const pedir = async () => {
+      if (desmontado || document.visibilityState !== 'visible' || (trava && !trava.released)) return;
+      try {
+        trava = await wl.request('screen');
+        if (desmontado) { trava.release().catch(() => {}); return; }
+        setTelaLigada('ativa');
+        trava.addEventListener('release', () => { if (!desmontado) setTelaLigada(null); });
+      } catch {
+        if (!desmontado) setTelaLigada('negada');
+      }
+    };
+    pedir();
+    document.addEventListener('visibilitychange', pedir);
+    // alguns navegadores só liberam depois de uma interação na página
+    window.addEventListener('pointerdown', pedir);
+    return () => {
+      desmontado = true;
+      document.removeEventListener('visibilitychange', pedir);
+      window.removeEventListener('pointerdown', pedir);
+      if (trava && !trava.released) trava.release().catch(() => {});
+    };
+  }, []);
+
   const carregar = useCallback(async () => {
     const { data } = await supabase.from('oples')
       .select('id,opl,cliente_nome,modelo,status_geral,data_prevista_entrega,fluxo_entrega,tipo_projeto,valor_mao_de_obra_serralheria,serralheria_status,responsavel_producao,equipe_nome,modo_execucao')
@@ -210,6 +246,14 @@ export default function PainelProducaoTV() {
                 border: '2px solid #e2e8f0', background: 'transparent', color: '#e2e8f0' }}>
               ⛶ Tela cheia
             </button>
+            {telaLigada && (
+              <span title={telaLigada === 'ativa'
+                  ? 'Enquanto este painel estiver aberto e visível, a tela não apaga nem entra em descanso.'
+                  : 'Este navegador não deixou manter a tela ligada. Use Chrome ou Edge atualizados, ou desative o descanso de tela no computador da TV.'}
+                style={{ fontSize: 11, fontWeight: 700, color: telaLigada === 'ativa' ? '#86efac' : '#fca5a5' }}>
+                {telaLigada === 'ativa' ? '🔆 Tela sempre ligada' : '⚠️ Descanso de tela não bloqueado'}
+              </span>
+            )}
           </div>
         )}
       </div>

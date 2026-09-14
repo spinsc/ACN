@@ -2767,7 +2767,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 { label:'Imposto %',      k:'imposto_pct',    step:'0.1' },
                 { label:'Custo Fixo %',  k:'custo_fixo_pct', step:'0.1' },
                 { label:'Markup Global %',k:'markup_pct',     step:'0.1' },
-                { label:'Qtd. Lote',      k:'lote_qtd',       step:'1' },
+                // Multiplica a formação INTEIRA (quantas vezes ela é vendida).
+                // Chamava "Qtd. Lote" e confundia com o Lote do edital.
+                { label:'Multiplicador geral', k:'lote_qtd',  step:'1' },
               ].map(({ label, k, step }) => (
                 <div key={k}>
                   <div style={{ fontSize:9, color:'#64748b', marginBottom:2 }}>{label}</div>
@@ -3021,7 +3023,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
           {itens.length > 0 && lote > 1 && (
             <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:12, marginBottom:12 }}>
               <div style={{ fontWeight:700, fontSize:11, color:'#0369a1', marginBottom:6 }}>
-                📦 Totais gerais para {lote} unidade{lote !== 1 ? 's' : ''} (Lote geral)
+                ✖️ Totais gerais × {lote} (Multiplicador geral)
               </div>
               <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
                 <span style={{ fontSize:11 }}>Vendas: <strong>{fmtR(totVendas * lote)}</strong></span>
