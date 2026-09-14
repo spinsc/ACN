@@ -16,6 +16,8 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
+import { CabecalhoTela, Botao, Chips, Selo } from './Interface';
+import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -2337,66 +2339,45 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
   const vencidoDisputa = dias !== null && dias < 0 && ['Aberta','Em Andamento'].includes(l.status);
   const orgaoEhLink = !!l.orgao && /^https?:\/\//i.test(l.orgao.trim());
 
+  const familia = ({ 'Aberta':'info', 'Em Andamento':'info', 'Vencida':'ok', 'Finalizada':'ok', 'Perdida':'erro', 'Descartada':'neutro', 'Suspenso':'atencao' } as any)[l.status] || 'neutro';
+
   return (
-    <div onClick={onClick} style={{ background: unread ? '#fefce8' : '#fff',
-      border:`1.5px solid ${STATUS_COR[l.status]||'#e2e8f0'}20`,
-      borderLeft:`4px solid ${unread ? '#f59e0b' : (STATUS_COR[l.status]||'#e2e8f0')}`,
-      borderRadius:6, padding:'10px 12px', cursor:'pointer', marginBottom:8,
-      boxShadow: unread ? '0 0 0 1px #fcd34d40' : '0 1px 3px #0001',
-      transition:'box-shadow .15s' }}
-      onMouseEnter={e=>(e.currentTarget.style.boxShadow='0 3px 8px #0002')}
-      onMouseLeave={e=>(e.currentTarget.style.boxShadow=unread?'0 0 0 1px #fcd34d40':'0 1px 3px #0001')}>
-      <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
-        {unread && <UnreadBadge show />}
-        <span style={{ background:STATUS_COR[l.status], color:'#fff', borderRadius:3, padding:'1px 6px', fontSize:9, fontWeight:700 }}>{l.status}</span>
-        {l.data_limite_proposta && (
-          <span style={{ fontSize:9, color:'#6b7280', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:3, padding:'1px 6px' }}>
-            📋 Proposta: {fmtDT(l.data_limite_proposta)}
-          </span>
-        )}
-        {l.data_disputa && (
-          <span style={{ fontSize:9, fontWeight:700,
-            color: vencidoDisputa?'#dc2626': urgente?'#d97706':'#374151',
-            background: vencidoDisputa?'#fef2f2': urgente?'#fffbeb':'#f8fafc',
-            border:`1px solid ${vencidoDisputa?'#fca5a5':urgente?'#fcd34d':'#e2e8f0'}`,
-            borderRadius:3, padding:'1px 6px' }}>
-            ⚡ Disputa: {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` (${dias}d)`:''}
-            {vencidoDisputa?' ⚠️':''}
-          </span>
-        )}
+    <div onClick={onClick} className={'acn-licit' + (unread ? ' nova' : '')} role="button" tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter') onClick(); }}>
+      <div className="acn-licit-corpo">
+        {/* Identificação: os marcadores que estão ligados + o nome do projeto.
+            O órgão saiu daqui a pedido do usuário. Atenção aos nomes de coluna,
+            que são antigos e enganam: `numero` é o que a tela chama de "Nome do
+            Projeto", e `nome_projeto` é o "Nome completo do Órgão" — por isso o
+            título usa `numero`, e não `nome_projeto`. */}
+        <h6>
+          {(Array.isArray(l.marcadores) ? l.marcadores : []).map(m => (
+            <Selo key={m} familia="erro" ponto={false}>{m}</Selo>
+          ))}
+          <span>{l.numero || '—'}</span>
+        </h6>
+        <div className="acn-kmeta">
+          {unread && <UnreadBadge show />}
+          <Selo familia={familia}>{l.status}</Selo>
+          {l.data_limite_proposta && <span className="acn-num">Proposta: {fmtDT(l.data_limite_proposta)}</span>}
+          {l.data_disputa && (
+            <span className="acn-num" style={{ fontWeight:500, color: vencidoDisputa ? 'var(--acn-bad)' : urgente ? 'var(--acn-warn)' : 'var(--acn-ink)' }}>
+              Disputa: {fmtDT(l.data_disputa)}{dias!==null&&dias>=0?` · ${dias} d`:''}{vencidoDisputa ? ' · passou' : ''}
+            </span>
+          )}
+          {l.orgao ? (
+            orgaoEhLink ? (
+              <a href={l.orgao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+                style={{ color:'var(--acn-brand-ink)', wordBreak:'break-all' }}>
+                {l.orgao}
+              </a>
+            ) : <span>{l.orgao}</span>
+          ) : null}
+        </div>
       </div>
-      {/* Identificação: os marcadores que estão ligados + o nome do projeto.
-          O órgão saiu daqui a pedido do usuário. Atenção aos nomes de coluna,
-          que são antigos e enganam: `numero` é o que a tela chama de "Nome do
-          Projeto", e `nome_projeto` é o "Nome completo do Órgão" — por isso o
-          título usa `numero`, e não `nome_projeto`. */}
-      <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap', marginTop:5 }}>
-        {(Array.isArray(l.marcadores) ? l.marcadores : []).map(m => (
-          <span key={m} style={{ border:'1.5px solid #dc2626', background:'#fef2f2', color:'#dc2626',
-            borderRadius:4, padding:'0 6px', fontSize:9, fontWeight:700 }}>
-            {m}
-          </span>
-        ))}
-        <span style={{ fontSize:12, fontWeight:700, color:'#1f2937' }}>{l.numero || '—'}</span>
-      </div>
-      <div style={{ marginTop:6 }}>
-        {l.orgao ? (
-          orgaoEhLink ? (
-            <a href={l.orgao} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
-              style={{ fontSize:10, color:'#2563eb', fontWeight:600, wordBreak:'break-all' }}>
-              🔗 {l.orgao}
-            </a>
-          ) : (
-            <span style={{ fontSize:10, color:'#6b7280' }}>{l.orgao}</span>
-          )
-        ) : null}
-      </div>
-      <div style={{ marginTop:8, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
-        <MarkupBadge pct={markup} />
-        <button onClick={e => { e.stopPropagation(); onClick(); }}
-          style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 8px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
-          ⬆ Atualizar
-        </button>
+      <div className="acn-licit-acoes">
+        <MarkupBadge pct={markup} discreto />
+        <Botao pequeno variante="secundario" icone={mdiUpdate} onClick={e => { e.stopPropagation(); onClick(); }}>Atualizar</Botao>
       </div>
     </div>
   );
@@ -2579,40 +2560,29 @@ function PipelineCardsLicitacoes({ licitacoes }: any) {
   const totalGanhas      = ganhas.reduce((s:number,l:any) => s + valorDe(l), 0);
   const totalAguardando  = aguardando.reduce((s:number,l:any) => s + valorDe(l), 0);
 
+  const cartoes = [
+    { rot: 'Em negociação', n: emNegociacao.length, total: totalNegociacao, cor: 'var(--acn-ink)', sub: 'licitações abertas ou em andamento' },
+    { rot: 'Ganhas',        n: ganhas.length,       total: totalGanhas,     cor: 'var(--acn-ok)',  sub: 'vencidas' },
+    { rot: 'Perdidas',      n: perdidas.length,     total: totalPerdidas,   cor: 'var(--acn-bad)', sub: 'perdidas' },
+    { rot: 'Aguardando faturamento', n: aguardando.length, total: totalAguardando, cor: 'var(--acn-warn)', sub: 'ganhas ainda não faturadas' },
+  ];
   return (
-    <div style={{ padding:'10px 16px 0' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:'#475569' }}>📅 Filtrar pipeline por mês:</span>
-        <input type="month" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
-          style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
-        {mesFiltro && (
-          <button onClick={() => setMesFiltro('')}
-            style={{ background:'#f1f5f9', border:'none', borderRadius:4, padding:'4px 10px', fontSize:9, fontWeight:700, color:'#475569', cursor:'pointer' }}>
-            Limpar
-          </button>
-        )}
+    <div style={{ marginBottom:12 }}>
+      {/* Mesma faixa do Comercial/CRM: valor, quantidade e o que significa */}
+      <div className="sec-card acn-pipe" style={{ gridTemplateColumns:'repeat(4, minmax(0, 1fr))' }}>
+        {cartoes.map(c => (
+          <div key={c.rot}>
+            <span className="rot">{c.rot}</span>
+            <span className="val acn-num" style={{ color:c.cor }}>{c.total > 0 ? fmtValRel(c.total) : c.n}</span>
+            <span className="sub"><span className="acn-num">{c.n}</span> {c.sub}</span>
+          </div>
+        ))}
       </div>
-      <div style={{ display:'flex', gap:10, marginBottom:4, flexWrap:'wrap' }}>
-        <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
-          <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>🤝 PIPELINE EM NEGOCIAÇÃO</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{emNegociacao.length}</div>
-          {totalNegociacao > 0 && <div style={{ fontSize:9, color:'#3b82f6', marginTop:2 }}>{fmtValRel(totalNegociacao)}</div>}
-        </div>
-        <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
-          <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PIPELINE PERDIDAS</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{perdidas.length}</div>
-          {totalPerdidas > 0 && <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtValRel(totalPerdidas)}</div>}
-        </div>
-        <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
-          <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 PIPELINE GANHAS</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{ganhas.length}</div>
-          {totalGanhas > 0 && <div style={{ fontSize:9, color:'#16a34a', marginTop:2 }}>{fmtValRel(totalGanhas)}</div>}
-        </div>
-        <div style={{ background:'#fefce8', border:'1px solid #fde68a', borderRadius:6, padding:'8px 14px', minWidth:130 }}>
-          <div style={{ fontSize:8, color:'#a16207', fontWeight:700, marginBottom:2 }}>🕐 GANHAS — AGUARDANDO FATURAMENTO</div>
-          <div style={{ fontSize:22, fontWeight:800, color:'#a16207', lineHeight:1 }}>{aguardando.length}</div>
-          {totalAguardando > 0 && <div style={{ fontSize:9, color:'#a16207', marginTop:2 }}>{fmtValRel(totalAguardando)}</div>}
-        </div>
+      <div className="acn-kmeta" style={{ margin:'8px 2px 0', gap:8 }}>
+        <label htmlFor="licit-mes-pipeline">Mês do pipeline</label>
+        <input id="licit-mes-pipeline" type="month" className="acn-input" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
+          style={{ width:'auto', height:28 }} />
+        {mesFiltro && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setMesFiltro('')}>Limpar</Botao>}
       </div>
     </div>
   );
@@ -2806,126 +2776,94 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   licitacoes.forEach(l => { conts[l.status] = (conts[l.status]||0) + 1; });
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', background:'#f4f6f9' }}>
+    <div style={{ display:'flex', flexDirection:'column' }}>
       <UndoToast onRestaurado={fetchLicit} />
 
-      {/* HEADER */}
-      <div style={{ background:'#1e3a5f', color:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:15, fontWeight:700 }}>🏛️ Licitações</div>
-          <div style={{ fontSize:10, opacity:.75 }}>{licitacoes.length} total · {lista.length} exibindo</div>
-        </div>
-        {isAnalista && (
-          <button onClick={() => setModalNova(true)}
-            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'7px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            + Nova Licitação
-          </button>
-        )}
-      </div>
+      <CabecalhoTela
+        titulo="Licitações"
+        subtitulo={<><span className="acn-num">{licitacoes.length}</span> no total · {lista.length} exibindo</>}
+        acoes={isAnalista && <Botao variante="primario" icone={mdiPlus} onClick={() => setModalNova(true)}>Nova licitação</Botao>}
+      />
 
       {/* AGENDA */}
-      <div style={{ padding:'12px 16px 0', flexShrink:0 }}>
+      <div style={{ flexShrink:0, marginBottom:12 }}>
         <AgendaWidget setor="licitacoes" currentUser={currentUser} />
       </div>
 
-      {/* PIPELINE — mesmos cartões do Comercial/CRM (Em Negociação / Perdidas / Ganhas / Aguardando Faturamento) */}
+      {/* PIPELINE — mesma faixa do Comercial/CRM */}
       <div style={{ flexShrink:0 }}>
         <PipelineCardsLicitacoes licitacoes={licitacoes} />
       </div>
 
-      {/* STATUS CHIPS + BOTÃO RELATÓRIO */}
-      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', flexShrink:0 }}>
-        {/* Botão Relatório — destaque laranja */}
-        <button onClick={() => setVistaRelatorio(v => !v)}
-          style={{ background: vistaRelatorio ? '#1e3a5f' : '#f59e0b', color:'#fff', border:'none', borderRadius:20,
-            padding:'3px 14px', fontSize:10, fontWeight:800, cursor:'pointer', marginRight:6 }}>
-          {vistaRelatorio ? '← Lista' : '📊 Relatório'}
-        </button>
-        <button onClick={() => setModoRecentes(v => !v)}
-          style={{ background: modoRecentes ? '#7c3aed' : '#f1f5f9', color: modoRecentes ? '#fff' : '#374151', border:'none', borderRadius:20,
-            padding:'3px 12px', fontSize:10, fontWeight:700, cursor:'pointer', marginRight:6 }}>
-          🕐 Últimas Visualizadas
-        </button>
-        <div style={{ width:1, height:18, background:'#e2e8f0', marginRight:6 }} />
-        <button onClick={() => setFiltroStatus('todas')}
-          style={{ border:'none', borderRadius:20, padding:'3px 12px', fontSize:10, fontWeight:700,
-            background: filtroStatus==='todas'?'#1e3a5f':'#f1f5f9', color: filtroStatus==='todas'?'#fff':'#374151', cursor:'pointer' }}>
-          Todas ({licitacoes.length})
-        </button>
-        {STATUS_LIST.map(s => (
-          <button key={s} onClick={() => setFiltroStatus(s)}
-            style={{ border:`1.5px solid ${filtroStatus===s?STATUS_COR[s]:'transparent'}`,
-              borderRadius:20, padding:'3px 10px', fontSize:10, fontWeight:700,
-              background: filtroStatus===s ? STATUS_COR[s]+'15' : '#f1f5f9',
-              color: filtroStatus===s ? STATUS_COR[s] : '#374151', cursor:'pointer' }}>
-            {s} ({conts[s]||0})
-          </button>
-        ))}
-      </div>
+      <div className="sec-card" style={{ marginBottom:0, overflow:'visible' }}>
+        {/* STATUS + RELATÓRIO */}
+        <div className="acn-filtros">
+          <Botao pequeno variante={vistaRelatorio ? 'primario' : 'secundario'} icone={vistaRelatorio ? mdiArrowLeft : mdiChartBar}
+            onClick={() => setVistaRelatorio(v => !v)}>{vistaRelatorio ? 'Voltar à lista' : 'Relatório'}</Botao>
+          <Botao pequeno variante={modoRecentes ? 'primario' : 'secundario'} icone={mdiHistory}
+            onClick={() => setModoRecentes(v => !v)} aria-pressed={modoRecentes}>Últimas visualizadas</Botao>
+          <Chips rotulo="Status" ativo={filtroStatus} onChange={setFiltroStatus}
+            itens={[{ id:'todas', rotulo:'Todas', contagem: licitacoes.length }, ...STATUS_LIST.map(st => ({ id: st, rotulo: st, contagem: conts[st] || 0 }))]} />
+        </div>
 
-      {/* FILTROS */}
-      <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'8px 16px', display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end', flexShrink:0 }}>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>ORDENAR POR</div>
-          <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+        {/* FILTROS */}
+        <div className="acn-filtros" style={{ alignItems:'flex-end' }}>
+          <div>
+            <label className="acn-label">Ordenar por</label>
+            <select className="acn-input" value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ width:'auto' }}>
+              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="acn-label">Tipo</label>
+            <select className="acn-input" value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)} style={{ width:'auto' }}>
+              <option value="todos">Todos</option>
+              <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
+            </select>
+          </div>
+          <div>
+            <label className="acn-label">Análise</label>
+            <select className="acn-input" value={filtroAnaliseSetor} onChange={e=>setFiltroAnaliseSetor(e.target.value)} style={{ width:'auto' }}>
+              <option value="todas">Todas</option>
+              <option value="Orcamento">Orçamentária</option>
+              <option value="Telecom">Telecom</option>
+              <option value="Engenharia">Engenharia</option>
+              <option value="Comercial">Comercial</option>
+            </select>
+          </div>
+          <div>
+            <label className="acn-label">Disputa de</label>
+            <input className="acn-input" type="date" value={filtroPeriodoDe} onChange={e=>setFiltroPeriodoDe(e.target.value)} style={{ width:'auto' }} />
+          </div>
+          <div>
+            <label className="acn-label">Até</label>
+            <input className="acn-input" type="date" value={filtroPeriodoAte} onChange={e=>setFiltroPeriodoAte(e.target.value)} style={{ width:'auto' }} />
+          </div>
+          <div>
+            <label className="acn-label">Agrupar por período</label>
+            <select className="acn-input" value={agrupamentoPeriodo} onChange={e=>setAgrupamentoPeriodo(e.target.value as any)} style={{ width:'auto' }}>
+              <option value="">Não agrupar</option>
+              <option value="semana">Semana</option>
+              <option value="mes">Mês</option>
+              <option value="bimestre">Bimestre</option>
+              <option value="trimestre">Trimestre</option>
+              <option value="semestre">Semestre</option>
+            </select>
+          </div>
+          {(filtroTipo!=='todos'||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
+            <Botao pequeno variante="discreto" icone={mdiClose}
+              onClick={() => { setFiltroTipo('todos'); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}>
+              Limpar filtros
+            </Botao>
+          )}
         </div>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>TIPO</div>
-          <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-            <option value="todos">Todos</option>
-            <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>🔍 ANÁLISE</div>
-          <select value={filtroAnaliseSetor} onChange={e=>setFiltroAnaliseSetor(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-            <option value="todas">Todas</option>
-            <option value="Orcamento">Orçamentária</option>
-            <option value="Telecom">Telecom</option>
-            <option value="Engenharia">Engenharia</option>
-            <option value="Comercial">Comercial</option>
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>DISPUTA DE</div>
-          <input type="date" value={filtroPeriodoDe} onChange={e=>setFiltroPeriodoDe(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
-        </div>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>ATÉ</div>
-          <input type="date" value={filtroPeriodoAte} onChange={e=>setFiltroPeriodoAte(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
-        </div>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', marginBottom:2 }}>AGRUPAR POR PERÍODO</div>
-          <select value={agrupamentoPeriodo} onChange={e=>setAgrupamentoPeriodo(e.target.value as any)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
-            <option value="">Não agrupar</option>
-            <option value="semana">Semana</option>
-            <option value="mes">Mês</option>
-            <option value="bimestre">Bimestre</option>
-            <option value="trimestre">Trimestre</option>
-            <option value="semestre">Semestre</option>
-          </select>
-        </div>
-        {(filtroTipo!=='todos'||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
-          <button onClick={() => { setFiltroTipo('todos'); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}
-            style={{ padding:'4px 10px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', fontSize:10, cursor:'pointer' }}>
-            ✕ Limpar
-          </button>
-        )}
       </div>
 
       {/* LISTA ou RELATÓRIO */}
       {vistaRelatorio ? (
         <RelatorioStatus licitacoes={licitacoes} loading={loading} onOpenLicit={setSelected} markupPorLicit={markupPorLicit} />
       ) : (
-        <div style={{ height:'90vh', overflowY:'auto', padding:16 }}>
+        <div style={{ height:'90vh', overflowY:'auto', padding:'12px 0' }}>
           {loading || (modoRecentes && recentesLicitLoading) ? (
             <div style={{ textAlign:'center', color:'#9ca3af', padding:40 }}>Carregando...</div>
           ) : !lista.length ? (
@@ -2936,10 +2874,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
           ) : gruposPeriodo ? (
             gruposPeriodo.map((g, i) => (
               <div key={i} style={{ marginBottom:16 }}>
-                <div style={{ fontSize:11, fontWeight:800, color:'#374151', textTransform:'uppercase', letterSpacing:.4,
-                  padding:'4px 0', borderBottom:'2px solid #e2e8f0', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
-                  {g.label}
-                  <span style={{ background:'#1e3a5f', color:'#fff', borderRadius:10, padding:'1px 8px', fontSize:9, fontWeight:700 }}>{g.itens.length}</span>
+                <div className="acn-kcab" style={{ padding:'4px 0 8px', borderBottom:'1px solid var(--acn-line)', marginBottom:8 }}>
+                  <span>{g.label}</span><em>{g.itens.length}</em>
                 </div>
                 {g.itens.map((l:any) => <LicitCard key={l.id} l={l} unread={licitacoesNaoLidas.has(String(l.id))} onClick={() => setSelected(l)} markup={markupPorLicit[l.id]} />)}
               </div>

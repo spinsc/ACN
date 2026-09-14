@@ -162,8 +162,8 @@ export type Familia = 'ok' | 'atencao' | 'erro' | 'info' | 'neutro' | 'marca';
 export function familiaStatus(status: string | null | undefined): Familia {
   const s = String(status || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   if (!s.trim()) return 'neutro';
-  if (/retrabalho|devolvid|reprovad|critico|perdid|cancelad|atrasad|vencid|recusad|erro|desist/.test(s)) return 'erro';
-  if (/concluid|aprovad|faturad|finalizad|entregue|bom ok|liberad|vencedor|pronta|ganh|\bok\b|100%/.test(s)) return 'ok';
+  if (/retrabalho|devolvid|reprovad|critico|perdid|cancelad|atrasad|recusad|erro|desist/.test(s)) return 'erro';
+  if (/concluid|aprovad|faturad|finalizad|entregue|bom ok|liberad|vencedor|vencid|pronta|ganh|\bok\b|100%/.test(s)) return 'ok';
   if (/aguardando cq|kit ok|aguarda emiss|pausad|atencao|revis|pendencia|falta|aguardando aprov|aguardando aceite/.test(s)) return 'atencao';
   if (/em produc|em andamento|em execuc|execuc|diagnost|em manutenc|em cotac|em provision|em fabric|em separac|em transito|negociac|enviad/.test(s)) return 'info';
   return 'neutro';

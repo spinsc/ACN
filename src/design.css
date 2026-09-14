@@ -448,3 +448,14 @@ body.dark .acn-barra > span { background: #334155; }
 html body div[data-acn-numero] { position: relative; background: var(--acn-surface) !important; background-image: none !important; border-color: var(--acn-line) !important; border-top-color: var(--acn-line) !important; border-left-color: var(--acn-line) !important; padding-left: 26px !important; }
 div[data-acn-numero]::before { content: ""; position: absolute; left: 12px; top: 15px; width: 8px; height: 8px; border-radius: 50%; background: var(--acn-cab-cor); }
 body.dark div[data-acn-numero] { background: #1e293b !important; border-color: #334155 !important; }
+
+/* ── Licitações: cartão da lista ─────────────────────────────────────────── */
+.acn-licit { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); box-shadow: var(--acn-shadow-1); cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.acn-licit:hover { border-color: #c5cfd8; box-shadow: var(--acn-shadow-2); }
+.acn-licit.nova { box-shadow: inset 3px 0 0 #d4a106, var(--acn-shadow-1); }
+.acn-licit-corpo { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.acn-licit h6 { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: var(--acn-ink); line-height: 1.35; }
+.acn-licit-acoes { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+@media (max-width: 639.98px) { .acn-licit { flex-direction: column; align-items: stretch; } .acn-licit-acoes { justify-content: flex-end; } }
+body.dark .acn-licit { background: #1e293b; border-color: #334155; }
+body.dark .acn-licit h6 { color: #f1f5f9; }
