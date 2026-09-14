@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
-import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM } from './FluxoEntrega';
+import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -99,8 +99,39 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [embForm, setEmbForm] = useState<any>({});
   const [salvandoEmb, setSalvandoEmb] = useState(false);
 
+  // Venda para Envio: seriais ACN produto a produto, linha a linha (decidido
+  // com o usuário em 13/09). Não conclui sem pelo menos um serial por unidade
+  // vendida. Guardado em oples.seriais_itens e repetido em texto em
+  // seriais_equipamentos (e-mail ao Fiscal e telas antigas leem esse).
+  const ehVendaEnvioOp = (o) => o?.tipo_projeto === TIPO_VENDA_ENVIO;
+  const linhasSeriaisIniciais = (o) => {
+    if (Array.isArray(o?.seriais_itens) && o.seriais_itens.length) return o.seriais_itens.map(x => ({ produto: x.produto || '', serial: x.serial || '' }));
+    return Array.from({ length: Math.max(1, Number(o?.quantidade) || 1) }, () => ({ produto: '', serial: '' }));
+  };
+  const setLinhaSerial = (i, k, v) => setEmbForm(f => ({ ...f, itens: f.itens.map((x, j) => j === i ? { ...x, [k]: v } : x) }));
+  // Colar do Excel: cada linha "produto<TAB>serial" (ou só o serial) preenche a partir da linha clicada
+  const colarSeriais = (i, e) => {
+    const txt = e.clipboardData?.getData('text') || '';
+    if (!txt.includes('\n') && !txt.includes('\t')) return;   // colagem simples: deixa o input tratar
+    e.preventDefault();
+    const linhas = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+      const c = l.split('\t');
+      return c.length > 1 ? { produto: c[0].trim(), serial: c.slice(1).join(' ').trim() } : { produto: '', serial: c[0].trim() };
+    });
+    setEmbForm(f => {
+      const itens = [...f.itens];
+      linhas.forEach((l, k) => {
+        const alvo = i + k;
+        const atual = itens[alvo] || { produto: '', serial: '' };
+        itens[alvo] = { produto: l.produto || atual.produto, serial: l.serial };
+      });
+      return { ...f, itens };
+    });
+  };
+
   const abrirModalEmbalagem = (opl) => {
     setEmbForm({
+      itens: linhasSeriaisIniciais(opl),
       seriais: opl.seriais_equipamentos || '',
       peso_total: '', volumes: '1',
       altura: '', largura: '', comprimento: '',
@@ -114,7 +145,18 @@ export default function AlmoxarifadoTab({ currentUser }) {
 
   const confirmarEmbalagem = async () => {
     const f = embForm;
-    if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
+    const vendaEnvio = ehVendaEnvioOp(modalEmbalagem);
+    const itensSeriais = vendaEnvio
+      ? (f.itens || []).map(x => ({ produto: String(x.produto || '').trim(), serial: String(x.serial || '').trim() })).filter(x => x.serial)
+      : [];
+    if (vendaEnvio) {
+      const qtdVendida = Math.max(1, Number(modalEmbalagem.quantidade) || 1);
+      if (itensSeriais.some(x => !x.produto)) { alert('Informe o produto de cada serial.'); return; }
+      if (itensSeriais.length < qtdVendida) {
+        alert(`Informe o serial ACN de cada produto: são ${qtdVendida} unidade(s) vendida(s) e há ${itensSeriais.length} serial(is).`);
+        return;
+      }
+    } else if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
     if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
       alert('Informe a cidade e a UF de entrega — sem isso a Logística não consegue cotar o frete.'); return;
@@ -125,7 +167,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
 
     // 1) a OP sai do caminho da produção e passa a aguardar a cotação de frete
     await setAlmox(opl, 'Kit OK', 'Aguardando Cotacao Frete', f.observacoes || '', {
-      seriais_equipamentos: f.seriais.trim(),
+      seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
+      ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
       destino_cep: f.destino_cep?.trim() || null,
@@ -520,10 +563,45 @@ export default function AlmoxarifadoTab({ currentUser }) {
               {modalEmbalagem.status_geral === STATUS_EMBALAGEM ? 'produção concluída' : 'não passa por produção'}
             </div>
 
+            {ehVendaEnvioOp(modalEmbalagem) ? (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
+                  Seriais ACN por produto * <span style={{ fontWeight:400, color:'#64748b' }}>
+                    — pelo menos {Math.max(1, Number(modalEmbalagem.quantidade) || 1)} (uma por unidade vendida). Dá para colar do Excel: produto ⇥ serial.
+                  </span>
+                </div>
+                <div style={{ maxHeight:220, overflowY:'auto', border:'1px solid #e2e8f0', borderRadius:6, padding:6 }}>
+                  {(embForm.itens || []).map((x, i) => (
+                    <div key={i} style={{ display:'grid', gridTemplateColumns:'24px 1.4fr 1fr 24px', gap:5, marginBottom:4, alignItems:'center' }}>
+                      <span style={{ fontSize:9, color:'#94a3b8', fontWeight:700 }}>{i + 1}</span>
+                      <input className="acn-input" placeholder="Produto" value={x.produto}
+                        onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'produto', e.target.value)} />
+                      <input className="acn-input" placeholder="Serial ACN" value={x.serial}
+                        onPaste={e => colarSeriais(i, e)} onChange={e => setLinhaSerial(i, 'serial', e.target.value)} />
+                      <button type="button" title="Remover linha"
+                        onClick={() => setEmbForm(f => ({ ...f, itens: f.itens.length > 1 ? f.itens.filter((_, j) => j !== i) : [{ produto:'', serial:'' }] }))}
+                        style={{ background:'none', border:'none', color:'#dc2626', cursor:'pointer', fontSize:12 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:4 }}>
+                  <button type="button" onClick={() => setEmbForm(f => ({ ...f, itens: [...(f.itens || []), { produto:'', serial:'' }] }))}
+                    style={{ background:'#f0fdfa', color:'#0f766e', border:'1px dashed #0f766e', borderRadius:5, fontSize:10, fontWeight:700, padding:'2px 10px', cursor:'pointer' }}>
+                    + Linha
+                  </button>
+                  {(() => {
+                    const n = (embForm.itens || []).filter(x => String(x.serial || '').trim()).length;
+                    const q = Math.max(1, Number(modalEmbalagem.quantidade) || 1);
+                    return <span style={{ fontSize:10, fontWeight:700, color: n >= q ? '#15803d' : '#b45309' }}>{n} de {q} serial(is)</span>;
+                  })()}
+                </div>
+              </div>
+            ) : (<>
             <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Números de série *</div>
             <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10 }}
               value={embForm.seriais||''} onChange={e=>setEmbForm(f=>({...f, seriais:e.target.value}))}
               placeholder="Um por linha" />
+            </>)}
 
             <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
               Embalagem (vai para a cotação de frete)
