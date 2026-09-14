@@ -258,9 +258,11 @@ body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !imp
 .acn-empty { text-align:center; padding:16px; color:#9ca3af; font-size:9px; font-style:italic; }
 
 /* ── FOOTER / OPL MOVIMENTADAS ── */
-.acn-footer-setor { background:#1e293b; color:#64748b; font-size:9px; padding:5px 10px; border-radius:4px; margin-top:6px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
-.acn-footer-setor strong { color:#4ade80; }
-.opl-mov-hdr  { background:#fffbeb; border:1px solid #fde68a; border-radius:4px; padding:5px 10px; font-size:10px; font-weight:700; color:#92400e; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:6px; user-select:none; }
+.acn-footer-setor { background:var(--acn-surface); color:var(--acn-muted); border:1px solid var(--acn-line); font-size:9px; padding:5px 10px; border-radius:4px; margin-top:6px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+.acn-footer-setor strong { color:var(--acn-brand-ink); }
+body.dark .acn-footer-setor { background:#1e293b !important; border-color:#334155 !important; color:#94a3b8 !important; }
+body.dark .acn-footer-setor strong { color:#7fd8cc !important; }
+.opl-mov-hdr  { background:var(--acn-surface); border:1px solid var(--acn-line); border-radius:4px; padding:5px 10px; font-size:10px; font-weight:600; color:var(--acn-ink); cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:6px; user-select:none; }
 .opl-mov-body { border:1px solid #fde68a; border-top:none; border-radius:0 0 4px 4px; overflow:hidden; }
 
 /* ── MODAL ── */
@@ -442,7 +444,7 @@ body.dark .acn-label  { color:#64748b !important; }
 body.dark .acn-empty  { color:#64748b !important; }
 body.dark .modal-box  { background:#1e293b !important; color:#cbd5e1 !important; border:1px solid #334155 !important; }
 body.dark .modal-title { color:#e2e8f0 !important; }
-body.dark .opl-mov-hdr  { background:#1c1a09 !important; border-color:#713f12 !important; color:#fbbf24 !important; }
+body.dark .opl-mov-hdr  { background:#1e293b !important; border-color:#334155 !important; color:#f1f5f9 !important; }
 body.dark .opl-mov-body { border-color:#713f12 !important; }
 body.dark .metrics-tbl th { background:#0f172a !important; color:#64748b !important; border-color:#334155 !important; }
 body.dark .metrics-tbl td { color:#cbd5e1 !important; border-color:#1e293b !important; }
