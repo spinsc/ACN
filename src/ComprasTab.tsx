@@ -1324,7 +1324,7 @@ export default function ComprasTab({ currentUser }) {
           </span>
           {p.numero_oc && (
             <div style={{marginTop:4}}>
-              <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily: "'ACN Icones', monospace"}} title="Ordem de Compra">
+              <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}} title="Ordem de Compra">
                 📋 {p.numero_oc}
               </span>
             </div>

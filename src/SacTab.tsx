@@ -2741,7 +2741,7 @@ function PrintOS({ os }) {
   const base = import.meta.env.BASE_URL;
 
   return (
-    <div style={{fontFamily: "'ACN Icones', Arial, sans-serif",color:'#1e293b'}}>
+    <div style={{fontFamily: "'ACN Icones', 'IBM Plex Sans', Arial, sans-serif",color:'#1e293b'}}>
       {/* CABEÇALHO */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'3px solid #0f766e',paddingBottom:10,marginBottom:12}}>
         <img src={base + 'logo.png'} alt="ACN Sinal Verde" style={{height:56,objectFit:'contain'}} />

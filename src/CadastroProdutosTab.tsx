@@ -547,8 +547,8 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
                             />
                           </td>
                           <td style={{ padding: '4px 7px', fontSize: 10, color: '#6b7280' }}>{l.unidade}</td>
-                          <td style={{ padding: '4px 7px', fontSize: 10, textAlign: 'right', color: '#374151', fontFamily: "'ACN Icones', monospace" }}>{fmtR(cu_c)}</td>
-                          <td style={{ padding: '4px 7px', fontSize: 10, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', monospace" }}>{fmtR(total)}</td>
+                          <td style={{ padding: '4px 7px', fontSize: 10, textAlign: 'right', color: '#374151', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(cu_c)}</td>
+                          <td style={{ padding: '4px 7px', fontSize: 10, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
                           <td style={{ padding: '4px 7px' }}>
                             <input
                               value={l.observacoes || ''}
@@ -571,7 +571,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
                       <td colSpan={5} style={{ padding: '6px 7px', fontWeight: 700, fontSize: 10, color: '#6b7280', textAlign: 'right', borderTop: '2px solid #e2e8f0' }}>
                         Total custo BOM:
                       </td>
-                      <td style={{ padding: '6px 7px', fontWeight: 800, fontSize: 12, color: '#0f766e', textAlign: 'right', borderTop: '2px solid #e2e8f0', fontFamily: "'ACN Icones', monospace" }}>
+                      <td style={{ padding: '6px 7px', fontWeight: 800, fontSize: 12, color: '#0f766e', textAlign: 'right', borderTop: '2px solid #e2e8f0', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
                         {fmtR(custoTotal)}
                       </td>
                       <td colSpan={2} style={{ borderTop: '2px solid #e2e8f0' }} />
@@ -670,7 +670,7 @@ function BomViewer({ produto, onClose }: any) {
                       <td style={{ padding: '4px 8px', fontSize: 10, fontWeight: 600 }}>{l.item_nome}</td>
                       <td style={{ padding: '4px 8px', fontSize: 10, textAlign: 'right' }}>{l.quantidade}</td>
                       <td style={{ padding: '4px 8px', fontSize: 10, color: '#6b7280' }}>{l.unidade}</td>
-                      <td style={{ padding: '4px 8px', fontSize: 10, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', monospace" }}>{fmtR(total)}</td>
+                      <td style={{ padding: '4px 8px', fontSize: 10, textAlign: 'right', fontWeight: 700, color: '#0f766e', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
                       <td style={{ padding: '4px 8px', fontSize: 9, color: '#6b7280' }}>{l.observacoes || '—'}</td>
                     </tr>
                   );
@@ -679,12 +679,12 @@ function BomViewer({ produto, onClose }: any) {
               <tfoot>
                 <tr>
                   <td colSpan={4} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontSize: 10, color: '#6b7280', borderTop: '2px solid #e2e8f0' }}>Custo total BOM:</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, fontSize: 13, color: '#0f766e', borderTop: '2px solid #e2e8f0', fontFamily: "'ACN Icones', monospace" }}>{fmtR(custoTotal)}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, fontSize: 13, color: '#0f766e', borderTop: '2px solid #e2e8f0', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(custoTotal)}</td>
                   <td style={{ borderTop: '2px solid #e2e8f0' }} />
                 </tr>
                 <tr>
                   <td colSpan={4} style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, fontSize: 10, color: '#7c3aed' }}>Preço de venda ({produto.preco_manual ? 'manual' : 'calculado'}):</td>
-                  <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 800, fontSize: 14, color: '#7c3aed', fontFamily: "'ACN Icones', monospace" }}>{fmtR(produto.preco_venda)}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 800, fontSize: 14, color: '#7c3aed', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(produto.preco_venda)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -841,7 +841,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
               <tbody>
                 {filtrados.map((p, idx) => (
                   <tr key={p.id} style={{ background: p.ativo ? (idx % 2 === 0 ? '#fff' : '#fafafa') : '#fdf4ff' }}>
-                    <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: "'ACN Icones', monospace", fontSize: 9 }}>{p.codigo || '—'}</td>
+                    <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize: 9 }}>{p.codigo || '—'}</td>
                     <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 240 }}>
                       <div>{p.nome}</div>
                       {p.descricao && <div style={{ fontSize: 9, color: '#9ca3af', maxWidth: 230, wordBreak:'break-word' }}>{p.descricao}</div>}
@@ -854,9 +854,9 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 700 }}>{p.unidade}</span>
                     </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', color: '#374151', fontFamily: "'ACN Icones', monospace", fontSize: 10 }}>—</td>
+                    <td style={{ ...tdStyle, textAlign: 'right', color: '#374151', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize: 10 }}>—</td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: '#7c3aed' }}>{fmtPct(p.markup_pct)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: '#0f766e', fontSize: 11, fontFamily: "'ACN Icones', monospace" }}>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: '#0f766e', fontSize: 11, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
                       {p.preco_venda ? fmtR(p.preco_venda) : <span style={{ color: '#d1d5db' }}>—</span>}
                       {p.preco_manual && <span style={{ fontSize: 8, color: '#9ca3af', marginLeft: 4 }}>(M)</span>}
                     </td>

@@ -680,7 +680,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
               Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
             </div>
             <label className="acn-label">Números de série dos equipamentos instalados *</label>
-            <textarea autoFocus className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', monospace"}}
+            <textarea autoFocus className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}}
               placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
               value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
             <div style={{display:'flex',gap:8}}>
@@ -722,7 +722,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                 </tbody>
               </table>
             </div>
-            <textarea autoFocus className="acn-input" rows={Math.min(8, modalSeriaisLote.irmaos.length)} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', monospace",fontSize:11}}
+            <textarea autoFocus className="acn-input" rows={Math.min(8, modalSeriaisLote.irmaos.length)} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",fontSize:11}}
               placeholder={'Ex:\nSN-00123\nSN-00124, SN-00125\nSN-00126'}
               value={seriaisLoteTexto} onChange={e=>setSeriaisLoteTexto(e.target.value)} />
             <div style={{display:'flex',gap:8}}>

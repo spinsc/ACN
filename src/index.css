@@ -161,5 +161,5 @@ button:not([style*="width: 100%"]):not([style*="flex: 1"]):not([style*="backgrou
 }
 html body,
 html body :is(button, input, select, textarea, optgroup, h1, h2, h3, h4, h5, h6, code):not([style*="font-family"]) {
-  font-family: 'ACN Icones', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'ACN Icones', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }

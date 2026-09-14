@@ -124,7 +124,7 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>
                       <span style={{ color: '#9ca3af' }}>—</span>
                     </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: "'ACN Icones', monospace" }}>
+                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
                       {p.parcelado ? '—' : fmtR(Number(p.valor) || 0)}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
@@ -155,7 +155,7 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>
                       {p.numero_oc ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: '#7c3aed', fontWeight: 700, fontFamily: "'ACN Icones', monospace" }}>✓ {p.numero_oc}</span>
+                          <span style={{ color: '#7c3aed', fontWeight: 700, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>✓ {p.numero_oc}</span>
                           <button onClick={() => imprimirOrdemCompra(p)} title="Imprimir Ordem de Compra"
                             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>🖨️</button>
                         </div>
@@ -163,7 +163,7 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                         <span style={{ color: '#9ca3af' }}>— aguardando aprovação</span>
                       )}
                     </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: "'ACN Icones', monospace" }}>
+                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
                       {p.valor_compra ? fmtR(Number(p.valor_compra)) : '—'}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
@@ -176,7 +176,7 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
               <tfoot>
                 <tr style={{ background: '#1e293b', color: '#fff' }}>
                   <td colSpan={5} style={{ padding: '6px 8px', fontWeight: 700, fontSize: 11, textAlign: 'right' }}>TOTAL</td>
-                  <td style={{ padding: '6px 8px', fontWeight: 800, fontSize: 13, textAlign: 'right', fontFamily: "'ACN Icones', monospace" }}>{fmtR(total)}</td>
+                  <td style={{ padding: '6px 8px', fontWeight: 800, fontSize: 13, textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
                   <td />
                   <td />
                 </tr>
@@ -253,11 +253,11 @@ function LinhaFaturamento({ f, onAtualizar, currentUser, naoLido, marcarLidoLoca
     <tr onClick={marcarVisto} style={{ borderBottom: '1px solid #f1f5f9',
       background: naoLido ? '#fffdf0' : 'transparent',
       boxShadow: naoLido ? 'inset 3px 0 0 #eab308' : 'none' }}>
-      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, color: '#7c3aed', fontFamily: "'ACN Icones', monospace" }}>{f.numero_oc || '—'}</td>
+      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, color: '#7c3aed', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{f.numero_oc || '—'}</td>
       <td style={{ padding: '6px 8px', fontSize: 10 }}>{f.numero_pedido || '—'}</td>
       <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.fornecedor || '—'}</td>
       <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.centro_custo || '—'}</td>
-      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, textAlign: 'right', fontFamily: "'ACN Icones', monospace", color: '#15803d' }}>{fmtR(f.valor)}</td>
+      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color: '#15803d' }}>{fmtR(f.valor)}</td>
       <td style={{ padding: '6px 8px' }}>
         <span style={{ background: st.bg, color: st.cor, padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>{st.label}</span>
       </td>
@@ -434,7 +434,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const anos = Array.from({ length: 5 }, (_, i) => String(now.getFullYear() - i));
 
   return (
-    <div style={{ padding: 10, fontFamily: "'ACN Icones', system-ui, sans-serif" }}>
+    <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
 
       {/* Header */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
@@ -538,7 +538,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                       }} />
                     </div>
                     <div style={{ width: 110, fontWeight: 700, fontSize: 10, color: '#15803d',
-                      fontFamily: "'ACN Icones', monospace", textAlign: 'right', flexShrink: 0 }}>
+                      fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", textAlign: 'right', flexShrink: 0 }}>
                       {fmtR(c.total)}
                     </div>
                     <div style={{ width: 30, fontSize: 9, color: '#9ca3af', textAlign: 'right', flexShrink: 0 }}>
@@ -602,7 +602,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                             {c.count}
                           </td>
                           <td style={{ padding: '7px 10px', fontSize: 11, fontWeight: 800, color: '#15803d',
-                            textAlign: 'right', fontFamily: "'ACN Icones', monospace" }}>
+                            textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
                             {fmtR(c.total)}
                           </td>
                           <td style={{ padding: '7px 10px', textAlign: 'center' }}>
@@ -638,7 +638,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                       <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700 }}>
                         {comprasFiltradas.length + despesasFiltradas.length}
                       </td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, fontSize: 13, fontFamily: "'ACN Icones', monospace" }}>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, fontSize: 13, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
                         {fmtR(totalGasto)}
                       </td>
                       <td colSpan={3} />

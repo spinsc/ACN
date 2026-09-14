@@ -1422,7 +1422,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   const statusOpcoes = [...new Set(cotacoes.map(c => c.status).filter(Boolean))];
 
   return (
-    <div style={{ padding:'0 0 24px', fontFamily: "'ACN Icones', system-ui, sans-serif" }}>
+    <div style={{ padding:'0 0 24px', fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
       {/* Header */}
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>

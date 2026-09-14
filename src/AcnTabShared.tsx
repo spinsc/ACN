@@ -947,7 +947,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <>
             <Sec title="🔢 Seriais dos Equipamentos" />
             <div style={{ marginBottom: 8, padding: '8px 12px', background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 6 }}>
-              <div style={{ fontSize: 11, color: '#1e3a8a', whiteSpace: 'pre-wrap', fontFamily: "'ACN Icones', monospace" }}><Linkify text={opl.seriais_equipamentos} /></div>
+              <div style={{ fontSize: 11, color: '#1e3a8a', whiteSpace: 'pre-wrap', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}><Linkify text={opl.seriais_equipamentos} /></div>
             </div>
           </>
         )}
@@ -1309,7 +1309,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                   <td>{d.responsavel_nome || '—'}</td>
                   <td>
                     {emAndamento && d.data_inicio ? (
-                      <span style={{ fontFamily: "'ACN Icones', monospace", color: pausado ? '#f59e0b' : '#2563eb', fontWeight: 700 }}>
+                      <span style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color: pausado ? '#f59e0b' : '#2563eb', fontWeight: 700 }}>
                         {pausado ? '⏸ ' : ''}{fmtHMS(seg)}
                       </span>
                     ) : '—'}

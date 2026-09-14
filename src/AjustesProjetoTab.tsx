@@ -150,7 +150,7 @@ export default function AjustesProjetoTab({ currentUser }) {
                       <td>{a.responsavel_nome || '—'}</td>
                       <td>
                         {a.status === 'Em Andamento' && a.data_inicio
-                          ? <span style={{ fontFamily: "'ACN Icones', monospace", color: '#2563eb', fontWeight: 700 }}>{tempoDecorrido(a.data_inicio)}</span>
+                          ? <span style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color: '#2563eb', fontWeight: 700 }}>{tempoDecorrido(a.data_inicio)}</span>
                           : fmtH(a.tempo_execucao_horas)
                         }
                       </td>

@@ -198,7 +198,7 @@ export default function PainelProducaoTV() {
     <div ref={raizRef} onClick={telaCheia ? sairTelaCheia : undefined}
       title={telaCheia ? 'Clique para sair da tela cheia' : undefined}
       style={{ background: '#0f172a', minHeight: '100vh', color: '#f8fafc', padding: '18px 22px',
-        fontFamily: "'ACN Icones', system-ui, sans-serif", boxSizing: 'border-box', overflowY: 'auto',
+        fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", boxSizing: 'border-box', overflowY: 'auto',
         cursor: telaCheia ? (cursorOculto ? 'none' : 'pointer') : undefined }}>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>

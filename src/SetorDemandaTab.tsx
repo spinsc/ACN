@@ -792,7 +792,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
         <td>{d.responsavel_nome||'—'}</td>
         <td>
           {timer
-            ? <span style={{fontFamily: "'ACN Icones', monospace",color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
+            ? <span style={{fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",color: d.pausado?'#f59e0b':'#2563eb',fontWeight:700}}>{timer}</span>
             : <span style={{fontSize:10,color:'#94a3b8'}}>{d.status==='Concluido' ? fmtH(d.tempo_execucao_horas) : fmtDt(d.data_inicio)}</span>
           }
         </td>

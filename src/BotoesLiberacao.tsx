@@ -385,7 +385,7 @@ const styles = {
   },
   logText: {
     fontSize: '11px',
-    fontFamily: "'ACN Icones', monospace",
+    fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",
     color: '#333',
     lineHeight: '1.4',
   },

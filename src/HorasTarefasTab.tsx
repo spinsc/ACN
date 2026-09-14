@@ -198,7 +198,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
         </td>
         <td>{tarefa.responsavel_nome || '—'}</td>
         <td><span className="acn-badge" style={{ background: STATUS_COR[tarefa.status] }}>{STATUS_LABEL[tarefa.status]}</span></td>
-        <td style={{ fontFamily: "'ACN Icones', monospace", fontWeight: 700, color: tarefa.status === 'pausada' ? '#f59e0b' : '#2563eb' }}>
+        <td style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontWeight: 700, color: tarefa.status === 'pausada' ? '#f59e0b' : '#2563eb' }}>
           {tarefa.data_inicio ? fmtDuracao(decorrido) : '—'}
         </td>
         <td style={{ fontSize: 10 }}>{fmtDtHr(tarefa.data_inicio)}</td>

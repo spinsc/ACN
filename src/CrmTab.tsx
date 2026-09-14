@@ -2434,7 +2434,7 @@ const SUB_STATUS_COR: Record<string,string> = {
     }
     return (
     <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
-      {SUPER_COLS.map(col => renderColunaKanban(col, 205))}
+      {SUPER_COLS.map(col => renderColunaKanban(col, 240))}
     </div>
     );
   };
@@ -4878,7 +4878,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             </div>
             <textarea className="acn-input" rows={3} placeholder={'Ex. só chassi:\n9BW...\n9BW...\n\nEx. placa + chassi:\nABC1D23\t9BW...\nDEF4G56\t9BW...'}
               value={loteColar} onChange={e=>setLoteColar(e.target.value)}
-              style={{ width:'100%', resize:'vertical', fontFamily: "'ACN Icones', monospace", fontSize:10 }} />
+              style={{ width:'100%', resize:'vertical', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize:10 }} />
             <button onClick={aplicarColaChassis}
               style={{ marginTop:6, fontSize:9, padding:'4px 10px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
               ⬇ Aplicar às unidades abaixo

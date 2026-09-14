@@ -1211,7 +1211,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
     const valorComDesconto = totVendas * (1 - desconto / 100);
 
     return (
-      <div style={{ padding:14, fontFamily: "'ACN Icones', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
+      <div style={{ padding:14, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
           <button className="acn-btn" style={{ background:'#64748b', fontSize:10 }} onClick={() => setAberta(null)}>← Voltar</button>
           <div>
@@ -1350,7 +1350,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   // ── Lista de cotações ──
   const cotacoesFiltradas = cotacoes.filter(m => !filtroCat || categoriaDe(m) === filtroCat);
   return (
-    <div style={{ padding:14, fontFamily: "'ACN Icones', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
+    <div style={{ padding:14, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", minHeight:'100vh', background:'#f8fafc' }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
         <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', flex:1 }}>📋 Preços Formados</div>
         <FiltroCategoria lista={cotacoes} valor={filtroCat} onChange={setFiltroCat} />
@@ -2991,7 +2991,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: "'ACN Icones', system-ui, sans-serif", minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
+    <div style={{ fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif", minHeight: embutido ? undefined : '100vh', background: embutido ? undefined : '#f8fafc' }}>
 
       {/* ── NAVEGAÇÃO DE ABAS — some no modo embutido, só a edição importa ── */}
       {!embutido && (

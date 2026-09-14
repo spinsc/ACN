@@ -118,7 +118,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
         <td>
           {emProd && (
             <div>
-              <span style={{fontFamily: "'ACN Icones', monospace",color: o.pausado?'#f59e0b':'#2563eb',fontWeight:700,fontSize:12}}>
+              <span style={{fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",color: o.pausado?'#f59e0b':'#2563eb',fontWeight:700,fontSize:12}}>
                 {o.pausado && '⏸ '}{timerProd}
               </span>
               <div><BadgeForaExpediente /></div>
@@ -126,7 +126,7 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
           )}
           {emRetrab && (
             <div>
-              <span style={{fontFamily: "'ACN Icones', monospace",color: o.pausado?'#f59e0b':'#dc2626',fontWeight:700,fontSize:12}}>
+              <span style={{fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",color: o.pausado?'#f59e0b':'#dc2626',fontWeight:700,fontSize:12}}>
                 {o.pausado && '⏸ '}{timerRetrab}
               </span>
               <div><BadgeForaExpediente /></div>
@@ -1971,7 +1971,7 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
           O casamento é sempre pelo chassi/placa já vinculado à OP, nunca pela ordem das linhas.
         </div>
 
-        <textarea className="acn-input" rows={5} style={{ width: '100%', resize: 'vertical', fontFamily: "'ACN Icones', monospace", fontSize: 10, marginBottom: 8 }}
+        <textarea className="acn-input" rows={5} style={{ width: '100%', resize: 'vertical', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontSize: 10, marginBottom: 8 }}
           placeholder={'Ex:\n9BW1234567890\tJUNIOR\nABC1D23\tHead Line Tiago\n9BW...\tFELIPE + JONATAN'}
           value={texto} onChange={e => setTexto(e.target.value)} />
 
