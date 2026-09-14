@@ -24,13 +24,7 @@
   /* ── Cabeçalho ─────────────────────────────────────────────────────────── */
   html body .acn-header { padding: 0 8px; gap: 6px; height: 52px; }
   html body .acn-hamburger { display: flex; width: 40px; height: 40px; font-size: 20px; }
-  html body .acn-logo { min-width: 0; flex: 0 1 auto; gap: 6px; }
-  html body .acn-logo img { height: 34px; }
-  html body .acn-logo p,
-  html body .acn-motorola,
-  html body .acn-tema-btn,
-  html body .acn-user,
-  html body .acn-rotulo { display: none !important; }
+  html body .acn-rotulo, html body .acn-kbd, html body .acn-trilha-secao, html body .acn-trilha-sep { display: none !important; }
   html body .acn-aba-selo { margin-left: 4px !important; min-width: 0; max-width: 34vw; flex-shrink: 1 !important; overflow: hidden; }
   html body .acn-aba-selo > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px !important; }
   html body .acn-busca { min-width: 0 !important; margin: 0 !important; }
@@ -38,11 +32,7 @@
   html body .acn-right { gap: 6px; flex-shrink: 0; }
   html body .acn-right > div { padding: 0 10px !important; height: 40px; font-size: 16px !important; border-radius: 8px !important; }
   html body .acn-right > div span { font-size: 11px !important; }
-  html body .acn-user-btn {
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35);
-    background: rgba(0,0,0,.2); color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; padding: 0;
-  }
+  html body .acn-user-btn { width: 40px; height: 40px; font-size: 14px; margin-left: 2px; }
   html body .acn-user-menu {
     display: block; position: fixed; top: 58px; right: 8px; z-index: 5000; min-width: 230px;
     background: #fff; color: #1e293b; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.28); overflow: hidden;
@@ -58,11 +48,13 @@
 
   /* ── Menu lateral vira gaveta ──────────────────────────────────────────── */
   html body .acn-sidebar {
-    position: fixed; top: 52px; bottom: 0; left: -290px; z-index: 300; width: 280px;
+    position: fixed; top: 52px; bottom: 0; left: -290px; z-index: 300; width: 280px; height: auto;
     transition: left .22s ease; box-shadow: none; padding-bottom: 24px;
   }
   html body .acn-sidebar.mob-open { left: 0; box-shadow: 3px 0 16px rgba(0,0,0,.25); }
   html body .acn-mob-overlay { display: none; position: fixed; inset: 0; top: 52px; background: rgba(0,0,0,.40); z-index: 299; }
+  /* a marca já aparece no cabeçalho do app aberto; na gaveta ela só ocupa espaço */
+  html body .acn-sidebar .acn-marca { display: none; }
   html body .acn-mob-overlay.mob-open { display: block; }
   html body .sidebar-section { font-size: 11px; padding: 16px 16px 6px; }
   html body .sidebar-section span { font-size: 11px !important; }
@@ -123,26 +115,23 @@
 /* ══ Só celular ═════════════════════════════════════════════════════════════ */
 @media (hover: none) and (pointer: coarse) and (max-width: 639.98px) {
   html body .acn-header { height: 52px; }
-  html body .acn-logo h1,
-  html body .acn-logo img { display: none; }
   html body .acn-hamburger { order: -1; }
   html body .acn-aba-selo > span:last-child { font-size: 13px !important; }
-  html body .acn-aba-selo { max-width: none; flex: 1 1 auto; }
+  html body .acn-aba-selo { max-width: none; flex: 1 1 auto; margin-left: 0 !important; }
   html body .acn-aba-selo > span:not(:last-child) { display: none !important; }
-  html body .acn-logo { flex: 1 1 auto; }
 
   /* Busca: vira botão; abre uma faixa inteira abaixo do cabeçalho */
   html body .acn-busca-btn {
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 40px; height: 40px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25);
-    background: rgba(255,255,255,.13); color: #fff; font-size: 18px; padding: 0; cursor: pointer;
+    width: 40px; height: 40px; border-radius: 8px; border: 1px solid #dee4ea;
+    background: #f8fafb; color: #3b4856; font-size: 18px; padding: 0; cursor: pointer;
   }
   html body .acn-busca { display: none !important; }
   html body .acn-header.acn-busca-aberta .acn-busca {
     display: block !important; position: fixed !important; top: 52px; left: 0; right: 0;
-    max-width: none !important; padding: 8px; background: #0f766e; z-index: 400; box-shadow: 0 6px 16px rgba(0,0,0,.2);
+    max-width: none !important; padding: 8px; background: #fff; border-bottom: 1px solid #dee4ea; z-index: 400; box-shadow: 0 6px 16px rgba(0,0,0,.12);
   }
-  html body .acn-header.acn-busca-aberta .acn-busca > div:first-child { height: 44px !important; }
+  html body .acn-header.acn-busca-aberta .acn-busca-campo { height: 44px; }
   html body .acn-busca > div + div { left: 8px !important; right: 8px !important; max-height: calc(100dvh - 130px) !important; }
 
   /* Menções/Análise só com ícone; contador no canto */

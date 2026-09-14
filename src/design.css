@@ -111,7 +111,9 @@ html body:not(.dark) .acn-main:not(.acn-main-tv) table th {
   background: var(--acn-surface-2) !important; color: var(--acn-muted) !important;
 }
 html body:not(.dark) .acn-main:not(.acn-main-tv) table th { border-bottom: 1px solid var(--acn-line) !important; }
-html body .acn-main:not(.acn-main-tv) table td { font-size: 12px !important; padding: 5px 8px !important; }
+html body .acn-main:not(.acn-main-tv) table td { font-size: 12px !important; }
+/* (tabelas que viram cartões no celular — .acn-tab-cartoes — mantêm o espaçamento do responsivo.css) */
+html body .acn-main:not(.acn-main-tv) table:not(.acn-tab-cartoes) td { padding: 5px 8px !important; }
 /* Dentro de tabela os botões são compactos, para as ações caberem na linha */
 html body .acn-main:not(.acn-main-tv) table .acn-btn { font-size: 11px !important; min-height: 24px; padding: 3px 7px; }
 html body:not(.dark) .acn-main:not(.acn-main-tv) table td { border-bottom: 1px solid var(--acn-line-soft) !important; color: var(--acn-text); }

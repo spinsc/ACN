@@ -30,6 +30,8 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   // aberto por padrão a cada login incomodava. Ver também as duas posições
   // dedicadas (POS_MINIMIZADO/POS_EXPANDIDO) logo abaixo.
   const [minimizado, setMinimizado]   = useState(true);
+  const minimizadoRef = useRef(true);
+  minimizadoRef.current = minimizado;
   const [mostraForm, setMostraForm]   = useState(false);
   const [form, setForm]               = useState<any>({ ...VAZIO_FORM });
   const [salvando, setSalvando]       = useState(false);
@@ -98,10 +100,15 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   // que ficava sobrepondo esses botões conforme o conteúdo do header varia
   // (nome do usuário, badge de análise visível ou não, etc.).
   const POS_MINIMIZADO = () => {
+    // Cabeçalho novo: o pin fica no espaço livre à esquerda da busca
+    // (antes, à esquerda dos botões da direita — agora a busca está colada neles).
+    const buscaEl = document.querySelector('.acn-busca');
+    const rb = buscaEl?.getBoundingClientRect();
+    if (rb && rb.width > 0) return { x: Math.max(rb.left - 56, 16), y: 5 };
     const rightEl = document.querySelector('.acn-right');
     if (rightEl) {
       const r = rightEl.getBoundingClientRect();
-      return { x: Math.max(r.left - 56, 16), y: 4 };
+      return { x: Math.max(r.left - 56, 16), y: 5 };
     }
     return { x: Math.max(window.innerWidth - 400, 16), y: 4 };
   };
@@ -111,6 +118,11 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   // posição inicial — já nasce na âncora do estado minimizado (padrão atual)
   useEffect(() => {
     setPos(POS_MINIMIZADO());
+    // o cabeçalho termina de montar (busca, contadores) um instante depois — reposiciona
+    const t = setTimeout(() => { if (minimizadoRef.current) setPos(POS_MINIMIZADO()); }, 800);
+    const aoRedimensionar = () => { if (minimizadoRef.current) setPos(POS_MINIMIZADO()); };
+    window.addEventListener('resize', aoRedimensionar);
+    return () => { clearTimeout(t); window.removeEventListener('resize', aoRedimensionar); };
   }, []);
 
   // ── drag ──────────────────────────────────────────────────────────────────

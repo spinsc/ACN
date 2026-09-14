@@ -33,6 +33,30 @@ import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
 import AvisosOpPanel, { contarAvisosOp } from './AvisosOpPanel';
+import Icone from './Icone';
+import {
+  mdiViewDashboardOutline, mdiCalendarMonthOutline, mdiHandshakeOutline, mdiGavel, mdiFileDocumentOutline,
+  mdiAccountGroupOutline, mdiBullhornOutline, mdiRulerSquareCompass, mdiClipboardCheckOutline, mdiWarehouse,
+  mdiCarWrench, mdiTelevision, mdiHammerWrench, mdiCableData, mdiFlaskOutline, mdiShieldCheckOutline,
+  mdiRadioTower, mdiTruckOutline, mdiCarSearchOutline, mdiClipboardTextOutline, mdiCartOutline, mdiCashMultiple,
+  mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
+  mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
+  mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout,
+} from '@mdi/js';
+
+// Ícone de cada aba do menu lateral
+const ICONE_ABA: Record<string, string> = {
+  dashboard: mdiViewDashboardOutline, calendario: mdiCalendarMonthOutline,
+  crm: mdiHandshakeOutline, licitacoes: mdiGavel, cotacoes: mdiFileDocumentOutline, clientes: mdiAccountGroupOutline, marketing: mdiBullhornOutline,
+  engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
+  producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
+  laboratorio: mdiFlaskOutline, qualidade: mdiShieldCheckOutline, telecom: mdiRadioTower,
+  logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, compras: mdiCartOutline,
+  financeiro: mdiCashMultiple, cadastro_itens: mdiPackageVariantClosed, cadastro_produtos: mdiTagMultipleOutline,
+  rh: mdiAccountTieOutline, comissoes_tecnicos: mdiCurrencyUsd, fiscal: mdiReceiptTextOutline, relatorios: mdiChartBoxOutline,
+  formacao_precos: mdiCalculatorVariantOutline, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
+};
 import { contarAnalisesPendentesPorSetor } from './AnaliseWidget';
 import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
@@ -63,13 +87,13 @@ const SIDEBAR_GROUPS = [
     section: 'Dashboard',
     items: [
       { id: 'dashboard', label: 'Dashboard' },
-      { id: 'calendario', label: '📅 Calendário' },
+      { id: 'calendario', label: 'Calendário' },
     ],
   },
   {
     section: 'Comercial',
     items: [
-      { id: 'crm',        label: 'Comercial/CRM' },
+      { id: 'crm',        label: 'Comercial / CRM' },
       { id: 'licitacoes', label: 'Licitações' },
       { id: 'cotacoes',   label: 'Cotações' },
       { id: 'clientes',  label: 'Clientes' },
@@ -77,7 +101,7 @@ const SIDEBAR_GROUPS = [
     ],
   },
   {
-    section: 'Controle de Produção',
+    section: 'Controle de produção',
     items: [
       { id: 'engenharia',   label: 'Engenharia' },
       { id: 'pcp',          label: 'PCP' },
@@ -88,11 +112,11 @@ const SIDEBAR_GROUPS = [
     section: 'Produção',
     items: [
       { id: 'producao',    label: 'Adaptação' },
-      { id: 'painel_tv',   label: '🏭 Painel (TV)' },
+      { id: 'painel_tv',   label: 'Painel TV' },
       { id: 'serralheria', label: 'Serralheria' },
       { id: 'chicotes',    label: 'Chicotes' },
       { id: 'laboratorio', label: 'Laboratório' },
-      { id: 'qualidade',   label: 'Ctrl. Qualidade' },
+      { id: 'qualidade',   label: 'Controle de qualidade' },
       { id: 'telecom',     label: 'Telecom' },
     ],
   },
@@ -100,24 +124,24 @@ const SIDEBAR_GROUPS = [
     section: 'Administrativo',
     items: [
       { id: 'logistica',  label: 'Logística In/Out' },
-      { id: 'vistorias',  label: 'Vistorias de Pátio' },
-      { id: 'ajustes',    label: 'Demandas Gerais' },
+      { id: 'vistorias',  label: 'Vistorias de pátio' },
+      { id: 'ajustes',    label: 'Demandas gerais' },
       { id: 'compras',         label: 'Compras' },
       { id: 'financeiro',      label: 'Financeiro' },
-      { id: 'cadastro_itens',    label: 'Cadastro de Itens' },
-      { id: 'cadastro_produtos', label: 'Produto e Mercadorias' },
+      { id: 'cadastro_itens',    label: 'Cadastro de itens' },
+      { id: 'cadastro_produtos', label: 'Produtos e mercadorias' },
       { id: 'rh',                label: 'RH' },
-      { id: 'comissoes_tecnicos', label: '💰 Comissões' },
+      { id: 'comissoes_tecnicos', label: 'Comissões' },
       { id: 'fiscal',     label: 'Fiscal' },
       { id: 'relatorios',      label: 'Relatórios' },
-      { id: 'formacao_precos', label: 'Formação de Preços' },
+      { id: 'formacao_precos', label: 'Formação de preços' },
     ],
   },
   {
     section: 'SAC',
     items: [
       { id: 'sac', label: 'SAC' },
-      { id: 'nfc', label: '📱 Dossiê NFC' },
+      { id: 'nfc', label: 'Dossiê NFC' },
     ],
   },
   {
@@ -134,35 +158,61 @@ const CSS = `
 html, body { margin:0; padding:0; height:100%; }
 body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:11px; background:#f8fafc; color:#374151; overflow:hidden; }
 
-/* ── APP SHELL ── */
-.acn-app  { display:flex; flex-direction:column; height:100vh; width:100%; }
-.acn-body { display:flex; flex:1; overflow:hidden; width:100%; }
+/* ── CASCA: menu lateral + coluna (cabeçalho + conteúdo) ── */
+.acn-app    { display:flex; height:100vh; width:100%; }
+.acn-coluna { flex:1; min-width:0; display:flex; flex-direction:column; height:100vh; }
 
-/* ── TOPBAR ── */
-.acn-header { background:#0f766e; color:#fff; padding:0 14px; display:flex; align-items:center; gap:10px; height:52px; flex-shrink:0; }
-.acn-logo { display:flex; align-items:center; gap:8px; }
-.acn-logo img { height:40px; object-fit:contain; }
-.acn-logo h1 { margin:0; font-size:13px; font-weight:700; color:#fff; letter-spacing:.4px; }
-.acn-logo h1 span { color:#99f6e4; }
-.acn-logo p  { margin:0; font-size:8px; color:#99f6e4; opacity:.75; }
-.acn-motorola img { height:36px; object-fit:contain; opacity:.92; }
-.acn-period  { display:flex; align-items:center; gap:4px; background:rgba(0,0,0,.18); padding:3px 8px; border-radius:4px; }
-.acn-period span  { font-size:9px; color:#ccfbf1; }
-.acn-period input { font-size:9px; padding:2px 4px; border-radius:3px; border:none; color:#0f172a; background:#f0fdfa; }
-.acn-period button { font-size:8px; font-weight:700; background:rgba(0,0,0,.25); color:#ccfbf1; border:none; padding:2px 7px; border-radius:3px; cursor:pointer; }
-.acn-period button:hover { background:rgba(0,0,0,.38); }
-.acn-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
-.acn-user  { font-size:8px; color:#ccfbf1; text-align:right; line-height:1.5; }
-.acn-user strong { display:block; color:#fff; font-size:9px; }
-.acn-logout { font-size:8px; background:none; border:none; color:#99f6e4; cursor:pointer; text-decoration:underline; padding:0; }
+/* ── CABEÇALHO ── */
+.acn-header { background:#fff; color:#17212b; padding:0 20px; display:flex; align-items:center; gap:14px; height:56px; flex-shrink:0; border-bottom:1px solid #dee4ea; position:relative; z-index:20; }
+.acn-aba-selo { display:flex; align-items:center; gap:6px; min-width:0; font-size:13px; color:#6b7886; white-space:nowrap; }
+.acn-trilha-sep { display:flex; color:#9aa5b1; }
+.acn-trilha-aba { color:#17212b; font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+.acn-busca { position:relative; flex:0 1 440px; min-width:180px; margin-left:auto; }
+.acn-busca-campo { display:flex; align-items:center; gap:8px; height:36px; padding:0 10px; background:#f8fafb; border:1px solid #dee4ea; border-radius:8px; color:#6b7886; transition:border-color .12s, box-shadow .12s, background .12s; }
+.acn-busca-campo:focus-within { background:#fff; border-color:#0e7068; box-shadow:0 0 0 3px rgba(14,112,104,.18); }
+.acn-busca-campo input { flex:1; min-width:0; border:none; outline:none; background:transparent; font-size:13px; color:#17212b; box-shadow:none !important; }
+.acn-busca-campo input::placeholder { color:#8a96a3; }
+.acn-busca-status { font-size:12px; color:#8a96a3; }
+.acn-busca-limpar { display:flex; border:none; background:none; color:#8a96a3; cursor:pointer; padding:2px; border-radius:4px; }
+.acn-busca-limpar:hover { color:#17212b; background:#eef1f4; }
+.acn-kbd { font:500 11px 'IBM Plex Mono', ui-monospace, monospace; padding:1px 6px; border:1px solid #dee4ea; border-radius:4px; color:#6b7886; background:#fff; white-space:nowrap; }
+.acn-busca-resultados { background:#fff; border:1px solid #dee4ea; border-radius:10px; box-shadow:0 18px 48px rgba(23,33,43,.18), 0 4px 12px rgba(23,33,43,.08); }
+.acn-right { display:flex; align-items:center; gap:2px; }
+.acn-notif { position:relative; display:flex; align-items:center; gap:6px; height:36px; padding:0 10px; border-radius:8px; color:#3b4856; cursor:pointer; user-select:none; font-size:13px; font-weight:500; }
+.acn-notif:hover { background:#eef1f4; color:#17212b; }
+.acn-notif-icone { display:flex; align-items:center; gap:6px; }
+.acn-notif-contador { min-width:18px; height:18px; padding:0 5px; border-radius:999px; font-size:11px; font-weight:700; line-height:18px; text-align:center; color:#fff; }
+.acn-notif-contador.tom-info    { background:#245fb8; }
+.acn-notif-contador.tom-marca   { background:#0e7068; }
+.acn-notif-contador.tom-atencao { background:#c2700f; }
+.acn-user-btn { display:flex; align-items:center; justify-content:center; width:34px; height:34px; margin-left:8px; border-radius:50%; border:none; background:#e3f2ef; color:#0a544e; font-weight:700; font-size:12px; cursor:pointer; flex-shrink:0; padding:0; }
+.acn-user-btn:hover { background:#cfe9e4; }
+.acn-user-menu { position:fixed; top:60px; right:16px; z-index:5000; min-width:240px; background:#fff; color:#17212b; border:1px solid #dee4ea; border-radius:10px; box-shadow:0 18px 48px rgba(23,33,43,.18); overflow:hidden; }
+.acn-user-menu .acn-user-menu-topo { padding:12px 14px; border-bottom:1px solid #edf1f4; }
+.acn-user-menu .acn-user-menu-topo strong { display:block; font-size:14px; font-weight:600; }
+.acn-user-menu .acn-user-menu-topo span { font-size:12px; color:#6b7886; }
+.acn-user-menu button { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; padding:0 14px; border:none; background:none; font-size:13px; color:#3b4856; cursor:pointer; text-align:left; }
+.acn-user-menu button:hover { background:#f3f5f7; color:#17212b; }
+.acn-user-menu-fundo { position:fixed; inset:0; z-index:4999; }
+.acn-faixa-vercomo { background:#7c2d12; color:#fff; font-size:12px; font-weight:600; padding:6px 16px; display:flex; align-items:center; justify-content:center; gap:10px; flex-shrink:0; }
+.acn-faixa-vercomo button { background:#fff; color:#7c2d12; border:none; border-radius:6px; padding:3px 10px; font-weight:700; cursor:pointer; font-size:12px; }
 
-/* ── SIDEBAR ── */
-.acn-sidebar { width:160px; flex-shrink:0; background:#fff; border-right:1px solid #e8ecf0; overflow-y:auto; display:flex; flex-direction:column; padding-bottom:8px; }
-.sidebar-section { padding:10px 10px 3px; font-size:8px; font-weight:700; color:#b0bac5; letter-spacing:.08em; text-transform:uppercase; }
-.sidebar-item { display:flex; align-items:center; gap:6px; padding:5px 10px 5px 10px; font-size:10px; color:#52616b; cursor:pointer; border-left:2px solid transparent; transition:color .1s,background .1s; user-select:none; }
-.sidebar-item:hover  { color:#0f766e; background:#f0fdfa; }
-.sidebar-item.active { color:#0f766e; border-left-color:#0f766e; background:#f0fdfa; font-weight:600; }
-.sidebar-dot { font-size:7px; flex-shrink:0; line-height:1; margin-top:1px; opacity:.6; }
+/* ── MENU LATERAL ── */
+.acn-sidebar { width:232px; flex-shrink:0; background:#fff; border-right:1px solid #dee4ea; display:flex; flex-direction:column; height:100vh; }
+.acn-marca { height:56px; display:flex; align-items:center; padding:0 16px; border-bottom:1px solid #edf1f4; flex-shrink:0; }
+.acn-marca img { height:36px; max-width:100%; object-fit:contain; }
+.acn-nav-lista { flex:1; overflow-y:auto; padding:8px 8px 12px; display:flex; flex-direction:column; gap:1px; }
+.sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 10px 4px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
+.sidebar-section:hover { color:#3b4856; }
+.sidebar-item { display:flex; align-items:center; gap:10px; width:100%; min-height:32px; padding:0 10px; border:none; background:none; border-radius:6px; font-size:13px; color:#3b4856; cursor:pointer; text-align:left; user-select:none; transition:background .1s, color .1s; white-space:nowrap; }
+.sidebar-item .sidebar-icone { color:#8a96a3; }
+.sidebar-item:hover { background:#f3f5f7; color:#17212b; }
+.sidebar-item.active { background:#e3f2ef; color:#0a544e; font-weight:600; }
+.sidebar-item.active .sidebar-icone { color:#0e7068; }
+.sidebar-rotulo { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.sidebar-contador { margin-left:auto; min-width:18px; height:18px; padding:0 6px; border-radius:999px; background:#fcf1df; color:#9a5708; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
+.acn-parceiro { padding:10px 16px 12px; border-top:1px solid #edf1f4; flex-shrink:0; }
+.acn-parceiro img { height:30px; max-width:100%; object-fit:contain; opacity:.9; display:block; }
 
 /* ── MAIN CONTENT ── */
 .acn-main { flex:1; overflow-y:auto; padding:10px 14px; background:#f4f6f9; min-width:0; }
@@ -308,83 +358,38 @@ body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !imp
 /* ══════════════════════════════════════════════════════════════════
    MOBILE — tela estreita (< 700px)
    ══════════════════════════════════════════════════════════════════ */
-.acn-hamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:rgba(0,0,0,.22); border:none; border-radius:6px; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; }
+.acn-hamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:transparent; border:none; border-radius:8px; color:#3b4856; cursor:pointer; flex-shrink:0; }
+.acn-hamburger:hover { background:#eef1f4; }
 
 @media (max-width:700px) {
-  /* body pode rolar na área do app */
-  body { overflow:auto; }
-
-  /* Hamburger visível */
+  /* Menu vira gaveta; cabeçalho enxuto */
   .acn-hamburger { display:flex; }
-
-  /* Header compacto */
-  .acn-header { padding:0 8px; height:46px; gap:6px; }
-  .acn-logo h1 { font-size:11px; }
-  .acn-logo p  { display:none; }
-  .acn-motorola { display:none !important; }
-  .acn-period   { display:none !important; }
-  .acn-user strong { font-size:9px; }
-  .acn-user span   { display:none; }
-
-  /* Sidebar: drawer que desliza da esquerda */
+  .acn-header { padding:0 8px; gap:8px; }
+  .acn-trilha-secao, .acn-trilha-sep, .acn-rotulo, .acn-kbd { display:none; }
+  .acn-busca { min-width:110px; }
   .acn-sidebar {
-    position:fixed;
-    top:46px;
-    left:-170px;
-    bottom:0;
-    z-index:300;
-    width:160px;
-    transition:left .22s ease;
-    box-shadow:none;
+    position:fixed; top:0; bottom:0; left:-250px; z-index:300; width:240px;
+    transition:left .22s ease; box-shadow:none;
   }
-  .acn-sidebar.mob-open {
-    left:0;
-    box-shadow:3px 0 16px rgba(0,0,0,.25);
-  }
-
-  /* Overlay escuro quando sidebar aberta */
-  .acn-mob-overlay {
-    display:none;
-    position:fixed;
-    inset:0;
-    top:46px;
-    background:rgba(0,0,0,.40);
-    z-index:299;
-  }
+  .acn-sidebar.mob-open { left:0; box-shadow:3px 0 16px rgba(0,0,0,.25); }
+  .acn-mob-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.40); z-index:299; }
   .acn-mob-overlay.mob-open { display:block; }
 
-  /* Conteúdo toma a largura toda */
-  .acn-body  { overflow-y:auto; overflow-x:hidden; }
-  .acn-main  { padding:8px; overflow:visible; }
-
-  /* Tabelas com scroll horizontal */
+  .acn-main  { padding:8px; }
   .sec-body  { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-
-  /* Botões com área de toque maior */
   .acn-btn { font-size:10px !important; padding:5px 8px !important; min-height:28px; }
 
-  /* Modais: quase tela cheia */
   .modal-overlay { align-items:flex-end; }
   .modal-box {
-    max-width:100% !important;
-    width:100% !important;
-    max-height:88vh !important;
-    border-radius:12px 12px 0 0 !important;
-    margin:0 !important;
+    max-width:100% !important; width:100% !important; max-height:88vh !important;
+    border-radius:12px 12px 0 0 !important; margin:0 !important;
   }
-
-  /* Painéis fixos com position:fixed (ex: side panels) */
-  div[style*="width:min(700px"] ,
-  div[style*="width:min(640px"] ,
-  div[style*="width:min(500px"] ,
-  div[style*="width:min(460px"] {
-    width:100vw !important;
-    max-width:100vw !important;
+  div[style*="width:min(700px"], div[style*="width:min(640px"], div[style*="width:min(500px"], div[style*="width:min(460px"] {
+    width:100vw !important; max-width:100vw !important;
   }
 }
 
 @media (max-width:400px) {
-  .acn-logo img { height:30px; }
   .acn-main { padding:6px; }
 }
 
@@ -404,6 +409,22 @@ body.dark .acn-tab-btn.ativo { background:#0f766e !important; color:#ffffff !imp
 body.dark { background:#0f172a !important; color:#cbd5e1 !important; overflow:hidden; color-scheme:dark; }
 body.dark .acn-app   { color-scheme:dark; background:#0f172a; color:#cbd5e1; }
 body.dark .acn-sidebar { background:#161d2e !important; border-color:#263045 !important; }
+body.dark .acn-header { background:#161d2e !important; border-color:#263045 !important; color:#cbd5e1 !important; }
+body.dark .acn-trilha-aba { color:#e2e8f0 !important; }
+body.dark .acn-busca-campo { background:#0f172a !important; border-color:#334155 !important; }
+body.dark .acn-busca-campo input { color:#e2e8f0 !important; background:transparent !important; }
+body.dark .acn-kbd { background:#1e293b !important; border-color:#334155 !important; color:#94a3b8 !important; }
+body.dark .acn-busca-resultados { background:#1e293b !important; border-color:#334155 !important; }
+body.dark .acn-notif { color:#cbd5e1 !important; }
+body.dark .acn-notif:hover, body.dark .acn-hamburger:hover { background:#1e293b !important; }
+body.dark .acn-hamburger { color:#cbd5e1 !important; }
+body.dark .acn-user-btn { background:#133a36 !important; color:#86d9ce !important; }
+body.dark .acn-user-menu { background:#1e293b !important; border-color:#334155 !important; color:#e2e8f0 !important; }
+body.dark .acn-user-menu button { color:#cbd5e1 !important; }
+body.dark .acn-user-menu button:hover { background:#0f172a !important; }
+body.dark .acn-marca, body.dark .acn-parceiro, body.dark .acn-user-menu .acn-user-menu-topo { border-color:#263045 !important; }
+body.dark .sidebar-item .sidebar-icone { color:#64748b; }
+body.dark .sidebar-item.active .sidebar-icone { color:#2dd4bf; }
 body.dark .sidebar-section { color:#3d4f63 !important; }
 body.dark .sidebar-item { color:#7c8fa0 !important; }
 body.dark .sidebar-item:hover  { background:#0d2924 !important; color:#2dd4bf !important; }
@@ -689,6 +710,19 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [showMencoesPanel, setShowMencoesPanel] = useState(false);
   const [avisosOpCount, setAvisosOpCount]       = useState(0);
   const [showAvisosOp, setShowAvisosOp]         = useState(false);
+
+  // Ctrl+K (ou ⌘K) leva direto para a busca geral
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        const campo = globalBarRef.current?.querySelector('input');
+        if (campo) { setBuscaMobile(true); setTimeout(() => campo.focus(), 30); }
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
 
   // Fecha dropdown de busca ao clicar fora
   useEffect(() => {
@@ -1137,75 +1171,120 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <style>{CSS}</style>
       <div className="acn-app">
 
-        {/* ── TOPBAR ── */}
-        <header className={`acn-header${buscaMobile ? ' acn-busca-aberta' : ''}`}>
-          <div className="acn-logo">
+        {/* Overlay escuro no celular/tablet quando o menu está aberto */}
+        <div
+          className={`acn-mob-overlay${sidebarOpen ? ' mob-open' : ''}`}
+          onClick={() => setSidebarOpen(false)}
+        />
+
+        {/* ── MENU LATERAL ── */}
+        <nav className={`acn-sidebar${sidebarOpen ? ' mob-open' : ''}`} aria-label="Menu principal">
+          <div className="acn-marca">
             <img src={import.meta.env.BASE_URL + 'logo.png'} alt="ACN Sinal Verde" />
-            <div>
-              <h1>ACN <span>SINAL VERDE</span></h1>
-              <p>Workflow Industrial · KPIs em Horas</p>
-            </div>
-            {/* Badge aba ativa */}
-            {(() => {
-              const GROUP_COLORS: Record<string,string> = {
-                'Dashboard': '#334155',
-                'Comercial': '#7c3aed',
-                'Controle de Produção': '#0891b2',
-                'Produção': '#d97706',
-                'Administrativo': '#475569',
-                'SAC': '#14532d',
-                'Admin': '#dc2626',
-              };
-              for (const g of SIDEBAR_GROUPS) {
-                const item = g.items.find(i => i.id === activeTab);
-                if (item) return (
-                  <div className="acn-aba-selo" style={{
-                    marginLeft: 10, display:'inline-flex', alignItems:'center', gap:5,
-                    background: GROUP_COLORS[g.section] || '#334155',
-                    borderRadius: 20, padding:'3px 10px', flexShrink:0,
-                  }}>
-                    <span style={{ fontSize:9, color:'rgba(255,255,255,.65)', fontWeight:600, letterSpacing:.4, textTransform:'uppercase' }}>{g.section}</span>
-                    <span style={{ width:3, height:3, borderRadius:'50%', background:'rgba(255,255,255,.4)', display:'inline-block' }} />
-                    <span style={{ fontSize:10, color:'white', fontWeight:700 }}>{item.label}</span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
           </div>
-          {/* Hamburger — só visível no mobile via CSS */}
+          <div className="acn-nav-lista">
+            {SIDEBAR_GROUPS.map(group => {
+              const collapsed = sectionsCollapsed.has(group.section);
+              const visibleItems = group.items.filter(item => isVisible(item.id));
+              if (visibleItems.length === 0) return null;
+              const soUmItemSemTitulo = group.section === 'Dashboard';
+              return (
+                <React.Fragment key={group.section}>
+                  {!soUmItemSemTitulo && (
+                    <button type="button"
+                      className="sidebar-section"
+                      aria-expanded={!collapsed}
+                      onClick={() => setSectionsCollapsed(prev => {
+                        const next = new Set(prev);
+                        next.has(group.section) ? next.delete(group.section) : next.add(group.section);
+                        return next;
+                      })}>
+                      <span>{group.section}</span>
+                      <Icone path={mdiChevronDown} size={14} style={{ transform: collapsed ? 'rotate(-90deg)' : undefined, transition:'transform .15s' }} />
+                    </button>
+                  )}
+                  {!collapsed && visibleItems.map(item => (
+                    <button type="button"
+                      key={item.id}
+                      className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
+                      aria-current={activeTab === item.id ? 'page' : undefined}
+                      onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}>
+                      <Icone path={ICONE_ABA[item.id] || mdiViewDashboardOutline} size={18} className="sidebar-icone" />
+                      <span className="sidebar-rotulo">{item.label}</span>
+                      {(() => {
+                        const setorDaAba = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[item.id];
+                        const n = setorDaAba ? (analisesPorSetor[setorDaAba] || 0) : 0;
+                        return n > 0 ? (
+                          <span className="sidebar-contador" title={`${n} análise(s) técnica(s) aguardando este setor`}>{n}</span>
+                        ) : null;
+                      })()}
+                      {item.id === 'crm' && waNotifCount > 0 && (
+                        <span className="acn-wa-sidebar-dot">
+                          {waNotifCount > 9 ? '9+' : waNotifCount}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </div>
+          <div className="acn-parceiro">
+            <img src={import.meta.env.BASE_URL + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" />
+          </div>
+        </nav>
+
+        <div className="acn-coluna">
+        {/* ── CABEÇALHO ── */}
+        <header className={`acn-header${buscaMobile ? ' acn-busca-aberta' : ''}`}>
+          {/* Celular/tablet: abre o menu */}
           <button
             className="acn-hamburger"
             onClick={() => setSidebarOpen(o => !o)}
-            title="Menu">
-            {sidebarOpen ? '✕' : '☰'}
+            aria-label="Menu" title="Menu">
+            <Icone path={sidebarOpen ? mdiClose : mdiMenu} size={22} />
           </button>
 
+          {/* Caminho da tela: seção › aba */}
+          {(() => {
+            for (const g of SIDEBAR_GROUPS) {
+              const item = g.items.find(i => i.id === activeTab);
+              if (item) return (
+                <div className="acn-aba-selo">
+                  {g.section !== 'Dashboard' && <span className="acn-trilha-secao">{g.section}</span>}
+                  {g.section !== 'Dashboard' && <span className="acn-trilha-sep"><Icone path={mdiChevronRight} size={14} /></span>}
+                  <span className="acn-trilha-aba">{item.label}</span>
+                </div>
+              );
+            }
+            return <div className="acn-aba-selo"><span className="acn-trilha-aba">Início</span></div>;
+          })()}
+
           {/* ── BUSCA GLOBAL ── */}
-          <div ref={globalBarRef} className="acn-busca" style={{ position:'relative', flex:'1 1 0', maxWidth:380, minWidth:160, margin:'0 8px' }}>
-            <div style={{ display:'flex', alignItems:'center', background:'rgba(255,255,255,.13)',
-              border:'1px solid rgba(255,255,255,.25)', borderRadius:7, padding:'0 10px', height:32 }}>
-              <span style={{ fontSize:13, marginRight:6, opacity:.7 }}>🔍</span>
+          <div ref={globalBarRef} className="acn-busca">
+            <div className="acn-busca-campo">
+              <Icone path={mdiMagnify} size={18} className="acn-busca-lupa" />
               <input
                 value={globalBusca}
                 onChange={e => onGlobalInput(e.target.value)}
                 onFocus={() => globalResultados.length > 0 && setShowGlobalRes(true)}
-                placeholder="Buscar OP, OS, processo, cliente, órgão..."
-                style={{ flex:1, background:'none', border:'none', outline:'none', color:'#fff',
-                  fontSize:11, '::placeholder':{ color:'rgba(255,255,255,.55)' } } as any}
+                placeholder="Buscar OP, OS, processo, cliente, órgão…"
+                aria-label="Busca geral"
               />
-              {globalBuscando && <span style={{ fontSize:10, color:'rgba(255,255,255,.6)', marginLeft:4 }}>⏳</span>}
+              {globalBuscando && <span className="acn-busca-status">buscando…</span>}
               {globalBusca && !globalBuscando && (
-                <button onClick={() => { setGlobalBusca(''); setGlobalResultados([]); setShowGlobalRes(false); }}
-                  style={{ background:'none', border:'none', color:'rgba(255,255,255,.6)', cursor:'pointer', fontSize:13, padding:0, marginLeft:4 }}>✕</button>
+                <button className="acn-busca-limpar" aria-label="Limpar busca"
+                  onClick={() => { setGlobalBusca(''); setGlobalResultados([]); setShowGlobalRes(false); }}>
+                  <Icone path={mdiClose} size={16} />
+                </button>
               )}
+              {!globalBusca && <kbd className="acn-kbd">Ctrl K</kbd>}
             </div>
 
             {/* Dropdown de resultados */}
             {showGlobalRes && (
-              <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, right:0,
-                background:'#fff', borderRadius:8, boxShadow:'0 8px 32px rgba(0,0,0,.22)',
-                zIndex:9999, maxHeight:420, overflowY:'auto', border:'1px solid #e2e8f0' }}>
+              <div className="acn-busca-resultados" style={{ position:'absolute', top:'calc(100% + 6px)', left:0, right:0,
+                zIndex:9999, maxHeight:460, overflowY:'auto' }}>
 
                 {globalResultados.length === 0 && !globalBuscando && (
                   <div style={{ padding:'16px 14px', color:'#9ca3af', fontSize:11, textAlign:'center' }}>
@@ -1279,103 +1358,62 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           </div>
 
           {/* Celular: lupa que abre a busca (escondida no computador) */}
-          <button className="acn-busca-btn" title="Buscar"
+          <button className="acn-busca-btn" title="Buscar" aria-label="Buscar"
             onClick={() => {
               setBuscaMobile(b => !b);
               setTimeout(() => globalBarRef.current?.querySelector('input')?.focus(), 50);
             }}>
-            {buscaMobile ? '✕' : '🔍'}
+            <Icone path={buscaMobile ? mdiClose : mdiMagnify} size={20} />
           </button>
 
           <div className="acn-right">
-            <div className="acn-motorola">
-              <img src={import.meta.env.BASE_URL + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" />
+            {/* Menções */}
+            <div className={`acn-notif${mencoesCount > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0}
+              title={mencoesCount > 0 ? `${mencoesCount} menção(ões) pendente(s)` : 'Menções'}
+              onClick={() => setShowMencoesPanel(true)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowMencoesPanel(true); }}>
+              <span className="acn-notif-icone"><Icone path={mdiAt} size={18} /><span className="acn-rotulo">Menções</span></span>
+              {mencoesCount > 0 && <span className="acn-notif-contador tom-info">{mencoesCount}</span>}
             </div>
-            <button className="acn-tema-btn"
-              style={{ background:'rgba(0,0,0,.2)', border:'1px solid rgba(255,255,255,.2)', color:'white', fontSize:14, cursor:'pointer', borderRadius:4, padding:'2px 7px' }}
-              onClick={() => setDark(d => !d)}
-              title={dark ? 'Modo claro' : 'Modo escuro'}>
-              {dark ? '☀️' : '🌙'}
-            </button>
-            {/* Badge menções */}
-            <div
-              title={mencoesCount > 0 ? `${mencoesCount} menção(ões) não lida(s)` : 'Menções'}
-              style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
-                background: mencoesCount > 0 ? 'rgba(99,102,241,.2)' : 'rgba(255,255,255,.1)',
-                border:`1px solid ${mencoesCount > 0 ? 'rgba(99,102,241,.5)' : 'rgba(255,255,255,.2)'}`,
-                borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#c7d2fe', fontWeight:700 }}
-              onClick={() => setShowMencoesPanel(true)}>
-              <span>💬 <span className="acn-rotulo">Menções</span></span>
-              {mencoesCount > 0 && (
-                <span style={{ background:'#6366f1', color:'white', borderRadius:10, padding:'0 5px',
-                  fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
-                  {mencoesCount}
-                </span>
-              )}
-            </div>
-            {/* Avisos automáticos de andamento das OPs (antes iam para Menções) */}
-            <div
+            {/* Avisos automáticos de andamento das OPs */}
+            <div className={`acn-notif${avisosOpCount > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0}
               title={avisosOpCount > 0 ? `${avisosOpCount} aviso(s) de OP` : 'Avisos de OP'}
-              style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
-                background: avisosOpCount > 0 ? 'rgba(8,145,178,.25)' : 'rgba(255,255,255,.1)',
-                border:`1px solid ${avisosOpCount > 0 ? 'rgba(103,232,249,.5)' : 'rgba(255,255,255,.2)'}`,
-                borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#a5f3fc', fontWeight:700 }}
-              onClick={() => setShowAvisosOp(true)}>
-              <span>📢 <span className="acn-rotulo">Avisos</span></span>
-              {avisosOpCount > 0 && (
-                <span style={{ background:'#0891b2', color:'white', borderRadius:10, padding:'0 5px',
-                  fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
-                  {avisosOpCount}
-                </span>
-              )}
+              onClick={() => setShowAvisosOp(true)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowAvisosOp(true); }}>
+              <span className="acn-notif-icone"><Icone path={mdiBellOutline} size={18} /><span className="acn-rotulo">Avisos</span></span>
+              {avisosOpCount > 0 && <span className="acn-notif-contador tom-marca">{avisosOpCount}</span>}
             </div>
             {currentUser?.id && (
-              <div
+              <div className={`acn-notif${analiseAlertCount > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0}
                 title={analiseAlertCount > 0 ? `${analiseAlertCount} análise(s) pendente(s) do seu setor` : 'Análises'}
-                style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
-                  background: analiseAlertCount > 0 ? 'rgba(217,119,6,.15)' : 'rgba(255,255,255,.1)',
-                  border:`1px solid ${analiseAlertCount > 0 ? 'rgba(217,119,6,.4)' : 'rgba(255,255,255,.2)'}`,
-                  borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#fde68a', fontWeight:700 }}
-                onClick={() => setShowAnalisePanel(true)}>
-                <span>🔔 <span className="acn-rotulo">Análise</span></span>
-                {analiseAlertCount > 0 && (
-                  <span style={{ background:'#d97706', color:'white', borderRadius:10, padding:'0 5px',
-                    fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
-                    {analiseAlertCount}
-                  </span>
-                )}
+                onClick={() => setShowAnalisePanel(true)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowAnalisePanel(true); }}>
+                <span className="acn-notif-icone"><Icone path={mdiClipboardSearchOutline} size={18} /><span className="acn-rotulo">Análise</span></span>
+                {analiseAlertCount > 0 && <span className="acn-notif-contador tom-atencao">{analiseAlertCount}</span>}
               </div>
             )}
-            <div className="acn-user">
-              <strong>{currentUser?.nome || 'Usuário'}</strong>
-              <span>{currentUser?.perfil || ''}</span>
-              <button className="acn-logout" style={{background:'#0d9488',marginRight:4}}
-                onClick={()=>{setSenhaForm({atual:'',nova:'',confirmar:''});setSenhaMsg('');setModalSenha(true);}}>
-                🔑 Senha
-              </button>
-              <button className="acn-logout" onClick={onLogout}>Sair</button>
-            </div>
-            {/* Celular: iniciais do usuário abrem o menu (escondido no computador) */}
-            <button className="acn-user-btn" title={currentUser?.nome || 'Usuário'} onClick={() => setMenuUsuario(m => !m)}>
+            {/* Iniciais do usuário abrem o menu (tema, senha, sair) */}
+            <button className="acn-user-btn" aria-haspopup="menu" aria-expanded={menuUsuario}
+              title={currentUser?.nome || 'Usuário'} onClick={() => setMenuUsuario(m => !m)}>
               {String(currentUser?.nome || 'U').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()}
             </button>
           </div>
           {menuUsuario && (
             <>
               <div className="acn-user-menu-fundo" onClick={() => setMenuUsuario(false)} />
-              <div className="acn-user-menu">
+              <div className="acn-user-menu" role="menu">
                 <div className="acn-user-menu-topo">
                   <strong>{currentUser?.nome || 'Usuário'}</strong>
                   <span>{currentUser?.perfil || ''}</span>
                 </div>
-                <button onClick={() => { setMenuUsuario(false); setDark(d => !d); }}>
-                  {dark ? '☀️ Modo claro' : '🌙 Modo escuro'}
+                <button role="menuitem" onClick={() => { setMenuUsuario(false); setDark(d => !d); }}>
+                  <Icone path={dark ? mdiWhiteBalanceSunny : mdiWeatherNight} size={18} />{dark ? 'Modo claro' : 'Modo escuro'}
                 </button>
-                <button onClick={() => { setMenuUsuario(false); setSenhaForm({atual:'',nova:'',confirmar:''}); setSenhaMsg(''); setModalSenha(true); }}>
-                  🔑 Trocar senha
+                <button role="menuitem" onClick={() => { setMenuUsuario(false); setSenhaForm({atual:'',nova:'',confirmar:''}); setSenhaMsg(''); setModalSenha(true); }}>
+                  <Icone path={mdiKeyOutline} size={18} />Trocar senha
                 </button>
-                <button onClick={() => { setMenuUsuario(false); onLogout(); }}>
-                  Sair
+                <button role="menuitem" onClick={() => { setMenuUsuario(false); onLogout(); }}>
+                  <Icone path={mdiLogout} size={18} />Sair
                 </button>
               </div>
             </>
@@ -1384,81 +1422,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
         {/* ── FAIXA "VER COMO" ── visível só enquanto o admin está testando com a sessão de outro usuário */}
         {sessaoOriginalAdmin && (
-          <div style={{ background:'#7c2d12', color:'#fff', fontSize:10, fontWeight:700,
-            padding:'5px 14px', display:'flex', alignItems:'center', justifyContent:'center', gap:10, flexShrink:0 }}>
+          <div className="acn-faixa-vercomo">
             <span>👁️ Visualizando o sistema como <strong>{currentUser?.nome}</strong> ({currentUser?.perfil || '—'})</span>
-            <button onClick={voltarParaAdmin}
-              style={{ background:'#fff', color:'#7c2d12', border:'none', borderRadius:4, padding:'2px 10px',
-                fontWeight:800, cursor:'pointer', fontSize:10 }}>
-              ← Voltar ao Admin
-            </button>
+            <button onClick={voltarParaAdmin}>← Voltar ao Admin</button>
           </div>
         )}
 
-        {/* ── BODY: SIDEBAR + MAIN ── */}
-        <div className="acn-body">
-
-          {/* Overlay escuro no mobile quando sidebar aberta */}
-          <div
-            className={`acn-mob-overlay${sidebarOpen ? ' mob-open' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          />
-
-          {/* ── SIDEBAR ── */}
-          <nav className={`acn-sidebar${sidebarOpen ? ' mob-open' : ''}`}>
-            {SIDEBAR_GROUPS.map(group => {
-              const collapsed = sectionsCollapsed.has(group.section);
-              const visibleItems = group.items.filter(item => isVisible(item.id));
-              if (visibleItems.length === 0) return null;
-              return (
-                <React.Fragment key={group.section}>
-                  <div
-                    className="sidebar-section"
-                    onClick={() => setSectionsCollapsed(prev => {
-                      const next = new Set(prev);
-                      next.has(group.section) ? next.delete(group.section) : next.add(group.section);
-                      return next;
-                    })}
-                    style={{ cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', userSelect:'none' }}
-                  >
-                    <span>{group.section}</span>
-                    <span style={{ fontSize:7, opacity:.7 }}>{collapsed ? '▶' : '▼'}</span>
-                  </div>
-                  {!collapsed && visibleItems.map(item => (
-                    <div
-                      key={item.id}
-                      className={`sidebar-item${activeTab === item.id ? ' active' : ''}`}
-                      onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}
-                    >
-                      <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-                        <span className="sidebar-dot">●</span>
-                        {item.label}
-                      </span>
-                      {(() => {
-                        const setorDaAba = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[item.id];
-                        const n = setorDaAba ? (analisesPorSetor[setorDaAba] || 0) : 0;
-                        return n > 0 ? (
-                          <span title={`${n} análise(s) técnica(s) aguardando este setor`}
-                            style={{ background:'#f59e0b', color:'#fff', borderRadius:10, fontSize:9, fontWeight:800,
-                              padding:'0 6px', minWidth:16, textAlign:'center', lineHeight:'16px' }}>
-                            🔍 {n}
-                          </span>
-                        ) : null;
-                      })()}
-                      {item.id === 'crm' && waNotifCount > 0 && (
-                        <span className="acn-wa-sidebar-dot">
-                          {waNotifCount > 9 ? '9+' : waNotifCount}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </React.Fragment>
-              );
-            })}
-          </nav>
-
-          {/* ── MAIN ── */}
           <main className={`acn-main${activeTab === 'painel_tv' ? ' acn-main-tv' : ''}`}>
             {activeTab === 'dashboard' ? (
               <div>
