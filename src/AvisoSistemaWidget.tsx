@@ -174,7 +174,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
         .aviso-widget { transition: none; }
       `}</style>
 
-      <div className="aviso-widget" style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 1500, userSelect: 'none' }}>
+      <div className={`aviso-widget ${minimizado ? 'aviso-min' : 'aviso-aberto'}`} style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 1500, userSelect: 'none' }}>
 
         {/* ── MINIMIZADO ── */}
         {minimizado ? (

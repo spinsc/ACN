@@ -664,6 +664,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const globalBarRef   = useRef<any>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('acn-dark') === '1');
   const [sidebarOpen, setSidebarOpen]   = useState(false);
+  // Celular: busca abre numa faixa abaixo do cabeçalho; nome/senha/sair num menu (ver responsivo.css)
+  const [buscaMobile, setBuscaMobile]   = useState(false);
+  const [menuUsuario, setMenuUsuario]   = useState(false);
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Set<string>>(new Set());
   const [waNotifCount, setWaNotifCount] = useState(0);
   // Pendências de análise técnica por setor — contador no menu das abas que
@@ -1094,6 +1097,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const abrirResultado = async (r: any) => {
     const termoBusca = globalBusca;
     setShowGlobalRes(false);
+    setBuscaMobile(false);
     setGlobalBusca('');
     setGlobalResultados([]);
     if (r._tipo === 'crm') {
@@ -1134,7 +1138,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       <div className="acn-app">
 
         {/* ── TOPBAR ── */}
-        <header className="acn-header">
+        <header className={`acn-header${buscaMobile ? ' acn-busca-aberta' : ''}`}>
           <div className="acn-logo">
             <img src={import.meta.env.BASE_URL + 'logo.png'} alt="ACN Sinal Verde" />
             <div>
@@ -1155,7 +1159,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
               for (const g of SIDEBAR_GROUPS) {
                 const item = g.items.find(i => i.id === activeTab);
                 if (item) return (
-                  <div style={{
+                  <div className="acn-aba-selo" style={{
                     marginLeft: 10, display:'inline-flex', alignItems:'center', gap:5,
                     background: GROUP_COLORS[g.section] || '#334155',
                     borderRadius: 20, padding:'3px 10px', flexShrink:0,
@@ -1178,7 +1182,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           </button>
 
           {/* ── BUSCA GLOBAL ── */}
-          <div ref={globalBarRef} style={{ position:'relative', flex:'1 1 0', maxWidth:380, minWidth:160, margin:'0 8px' }}>
+          <div ref={globalBarRef} className="acn-busca" style={{ position:'relative', flex:'1 1 0', maxWidth:380, minWidth:160, margin:'0 8px' }}>
             <div style={{ display:'flex', alignItems:'center', background:'rgba(255,255,255,.13)',
               border:'1px solid rgba(255,255,255,.25)', borderRadius:7, padding:'0 10px', height:32 }}>
               <span style={{ fontSize:13, marginRight:6, opacity:.7 }}>🔍</span>
@@ -1274,11 +1278,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             )}
           </div>
 
+          {/* Celular: lupa que abre a busca (escondida no computador) */}
+          <button className="acn-busca-btn" title="Buscar"
+            onClick={() => {
+              setBuscaMobile(b => !b);
+              setTimeout(() => globalBarRef.current?.querySelector('input')?.focus(), 50);
+            }}>
+            {buscaMobile ? '✕' : '🔍'}
+          </button>
+
           <div className="acn-right">
             <div className="acn-motorola">
               <img src={import.meta.env.BASE_URL + 'motorola.png'} alt="Motorola Solutions Gold Channel Partner" />
             </div>
-            <button
+            <button className="acn-tema-btn"
               style={{ background:'rgba(0,0,0,.2)', border:'1px solid rgba(255,255,255,.2)', color:'white', fontSize:14, cursor:'pointer', borderRadius:4, padding:'2px 7px' }}
               onClick={() => setDark(d => !d)}
               title={dark ? 'Modo claro' : 'Modo escuro'}>
@@ -1292,7 +1305,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 border:`1px solid ${mencoesCount > 0 ? 'rgba(99,102,241,.5)' : 'rgba(255,255,255,.2)'}`,
                 borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#c7d2fe', fontWeight:700 }}
               onClick={() => setShowMencoesPanel(true)}>
-              💬 Menções
+              <span>💬 <span className="acn-rotulo">Menções</span></span>
               {mencoesCount > 0 && (
                 <span style={{ background:'#6366f1', color:'white', borderRadius:10, padding:'0 5px',
                   fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
@@ -1308,7 +1321,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                   border:`1px solid ${analiseAlertCount > 0 ? 'rgba(217,119,6,.4)' : 'rgba(255,255,255,.2)'}`,
                   borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#fde68a', fontWeight:700 }}
                 onClick={() => setShowAnalisePanel(true)}>
-                🔔 Análise
+                <span>🔔 <span className="acn-rotulo">Análise</span></span>
                 {analiseAlertCount > 0 && (
                   <span style={{ background:'#d97706', color:'white', borderRadius:10, padding:'0 5px',
                     fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
@@ -1326,7 +1339,31 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
               </button>
               <button className="acn-logout" onClick={onLogout}>Sair</button>
             </div>
+            {/* Celular: iniciais do usuário abrem o menu (escondido no computador) */}
+            <button className="acn-user-btn" title={currentUser?.nome || 'Usuário'} onClick={() => setMenuUsuario(m => !m)}>
+              {String(currentUser?.nome || 'U').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()}
+            </button>
           </div>
+          {menuUsuario && (
+            <>
+              <div className="acn-user-menu-fundo" onClick={() => setMenuUsuario(false)} />
+              <div className="acn-user-menu">
+                <div className="acn-user-menu-topo">
+                  <strong>{currentUser?.nome || 'Usuário'}</strong>
+                  <span>{currentUser?.perfil || ''}</span>
+                </div>
+                <button onClick={() => { setMenuUsuario(false); setDark(d => !d); }}>
+                  {dark ? '☀️ Modo claro' : '🌙 Modo escuro'}
+                </button>
+                <button onClick={() => { setMenuUsuario(false); setSenhaForm({atual:'',nova:'',confirmar:''}); setSenhaMsg(''); setModalSenha(true); }}>
+                  🔑 Trocar senha
+                </button>
+                <button onClick={() => { setMenuUsuario(false); onLogout(); }}>
+                  Sair
+                </button>
+              </div>
+            </>
+          )}
         </header>
 
         {/* ── FAIXA "VER COMO" ── visível só enquanto o admin está testando com a sessão de outro usuário */}
@@ -1406,7 +1443,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           </nav>
 
           {/* ── MAIN ── */}
-          <main className="acn-main">
+          <main className={`acn-main${activeTab === 'painel_tv' ? ' acn-main-tv' : ''}`}>
             {activeTab === 'dashboard' ? (
               <div>
                 {/* PIPELINE — resumo de status dos setores, mesmas cores/regra de

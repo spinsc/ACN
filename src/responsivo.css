@@ -1,0 +1,218 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   CELULAR E TABLET (aparelhos de toque)
+   ──────────────────────────────────────────────────────────────────────────
+   Tudo aqui vale SÓ em aparelho de toque — (hover: none) and (pointer: coarse)
+   — com tela até 1023px. No computador (mouse), em qualquer largura de janela,
+   nada disto se aplica: o uso no computador fica exatamente como era.
+     celular: toque + até 639px      tablet: toque + 640 a 1023px
+   Não usar @media só por largura aqui.
+
+   As telas usam estilo inline (style={{ fontSize: 9 }}), então as regras miram
+   o atributo style ([style*="font-size: 9px"]) e precisam de !important.
+   O Painel TV (.acn-main-tv) fica de fora.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Controles que só existem no celular/tablet */
+.acn-busca-btn, .acn-user-btn, .acn-user-menu { display: none; }
+
+@media (hover: none) and (pointer: coarse) and (max-width: 1023.98px) {
+
+  /* ── Estrutura ─────────────────────────────────────────────────────────── */
+  html body { overflow: hidden; }
+  html body .acn-app { height: 100dvh; }
+
+  /* ── Cabeçalho ─────────────────────────────────────────────────────────── */
+  html body .acn-header { padding: 0 8px; gap: 6px; height: 52px; }
+  html body .acn-hamburger { display: flex; width: 40px; height: 40px; font-size: 20px; }
+  html body .acn-logo { min-width: 0; flex: 0 1 auto; gap: 6px; }
+  html body .acn-logo img { height: 34px; }
+  html body .acn-logo p,
+  html body .acn-motorola,
+  html body .acn-tema-btn,
+  html body .acn-user,
+  html body .acn-rotulo { display: none !important; }
+  html body .acn-aba-selo { margin-left: 4px !important; min-width: 0; max-width: 34vw; flex-shrink: 1 !important; overflow: hidden; }
+  html body .acn-aba-selo > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px !important; }
+  html body .acn-busca { min-width: 0 !important; margin: 0 !important; }
+  html body .acn-busca input { font-size: 16px !important; }
+  html body .acn-right { gap: 6px; flex-shrink: 0; }
+  html body .acn-right > div { padding: 0 10px !important; height: 40px; font-size: 16px !important; border-radius: 8px !important; }
+  html body .acn-right > div span { font-size: 11px !important; }
+  html body .acn-user-btn {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35);
+    background: rgba(0,0,0,.2); color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; padding: 0;
+  }
+  html body .acn-user-menu {
+    display: block; position: fixed; top: 58px; right: 8px; z-index: 5000; min-width: 230px;
+    background: #fff; color: #1e293b; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.28); overflow: hidden;
+  }
+  html body .acn-user-menu .acn-user-menu-topo { padding: 14px 16px; background: #f0fdfa; border-bottom: 1px solid #e2e8f0; }
+  html body .acn-user-menu .acn-user-menu-topo strong { display: block; font-size: 15px; }
+  html body .acn-user-menu .acn-user-menu-topo span { font-size: 13px; color: #64748b; }
+  html body .acn-user-menu button {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 16px;
+    background: none; border: none; border-bottom: 1px solid #f1f5f9; font-size: 15px; color: #1e293b; text-align: left; cursor: pointer;
+  }
+  html body .acn-user-menu-fundo { position: fixed; inset: 0; z-index: 4999; }
+
+  /* ── Menu lateral vira gaveta ──────────────────────────────────────────── */
+  html body .acn-sidebar {
+    position: fixed; top: 52px; bottom: 0; left: -290px; z-index: 300; width: 280px;
+    transition: left .22s ease; box-shadow: none; padding-bottom: 24px;
+  }
+  html body .acn-sidebar.mob-open { left: 0; box-shadow: 3px 0 16px rgba(0,0,0,.25); }
+  html body .acn-mob-overlay { display: none; position: fixed; inset: 0; top: 52px; background: rgba(0,0,0,.40); z-index: 299; }
+  html body .acn-mob-overlay.mob-open { display: block; }
+  html body .sidebar-section { font-size: 11px; padding: 16px 16px 6px; }
+  html body .sidebar-section span { font-size: 11px !important; }
+  html body .sidebar-item { font-size: 15px; padding: 11px 16px; min-height: 46px; }
+  html body .sidebar-item span { font-size: inherit; }
+  html body .acn-main { padding: 10px; }
+
+  /* Avisos do sistema: sai de cima do cabeçalho — pin acima do botão do chat */
+  html body .aviso-widget.aviso-min { left: auto !important; top: auto !important; right: 16px; bottom: 84px; }
+  html body .aviso-widget.aviso-aberto { left: 8px !important; right: 8px; top: 60px !important; }
+  html body .aviso-widget.aviso-aberto > div { width: auto !important; max-height: calc(100dvh - 76px); overflow-y: auto !important; }
+
+  /* ── Letras: nada abaixo de 12px ───────────────────────────────────────── */
+  html body { font-size: 13px; }
+  :is([style*="font-size: 5px"], [style*="font-size: 6px"], [style*="font-size: 6.5px"],
+      [style*="font-size: 7px"], [style*="font-size: 7.5px"], [style*="font-size: 8px"],
+      [style*="font-size: 8.5px"], [style*="font-size: 9px"], [style*="font-size: 9.5px"],
+      [style*="font-size: 10px"]):not(.acn-main-tv, .acn-main-tv *) { font-size: 12px !important; }
+  :is([style*="font-size: 10.5px"], [style*="font-size: 11px"], [style*="font-size: 11.5px"]):not(.acn-main-tv, .acn-main-tv *) { font-size: 13px !important; }
+  html body .acn-main:not(.acn-main-tv) table,
+  html body .acn-main:not(.acn-main-tv) table th,
+  html body .acn-main:not(.acn-main-tv) table td { font-size: 12px !important; }
+  html body .acn-main:not(.acn-main-tv) h2 { font-size: 15px !important; }
+  html body .acn-main:not(.acn-main-tv) h3 { font-size: 14px !important; }
+  html body .sec-hdr { font-size: 12px; padding: 10px 12px; }
+  html body .acn-btn { font-size: 12px !important; padding: 6px 10px; }
+  html body .acn-badge { font-size: 12px; padding: 3px 7px; }
+  html body .acn-footer-setor, html body .acn-footer-setor * { font-size: 12px; }
+  html body .opl-mov-hdr, html body .opl-mov-hdr * { font-size: 13px; }
+  html body .acn-label { font-size: 11px; }
+  html body .acn-empty { font-size: 13px; }
+  html body .metrics-tbl th, html body .metrics-tbl td { font-size: 12px; }
+  html body :is(.st-ok, .st-warn, .st-crit, .st-sem-dados) { font-size: 12px; }
+
+  /* ── Toque: alvos de pelo menos 36px ───────────────────────────────────── */
+  html body :is(button, select):not(.acn-main-tv *) { min-height: 36px; }
+  html body input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):not(.acn-main-tv *),
+  html body select:not(.acn-main-tv *),
+  html body textarea:not(.acn-main-tv *) { font-size: 16px !important; min-height: 38px; }
+  html body input:is([type="checkbox"], [type="radio"]) { width: 20px; height: 20px; }
+  /* O que só aparece com o mouse em cima fica sempre visível */
+  html body .dm-del-btn { opacity: 1; }
+
+  /* ── Janelas (modais) e painéis ────────────────────────────────────────── */
+  html body :is(.modal-overlay, [style*="position: fixed"][style*="inset: 0px"]) > :not([style*="position: absolute"], style) {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+
+  /* ── Grades inline: 5+ colunas viram 3 ─────────────────────────────────── */
+  html body :is([style*="grid-template-columns: repeat(5"], [style*="grid-template-columns: repeat(6"]):not(.acn-main-tv *) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ══ Só celular ═════════════════════════════════════════════════════════════ */
+@media (hover: none) and (pointer: coarse) and (max-width: 639.98px) {
+  html body .acn-header { height: 52px; }
+  html body .acn-logo h1,
+  html body .acn-logo img { display: none; }
+  html body .acn-hamburger { order: -1; }
+  html body .acn-aba-selo > span:last-child { font-size: 13px !important; }
+  html body .acn-aba-selo { max-width: none; flex: 1 1 auto; }
+  html body .acn-aba-selo > span:not(:last-child) { display: none !important; }
+  html body .acn-logo { flex: 1 1 auto; }
+
+  /* Busca: vira botão; abre uma faixa inteira abaixo do cabeçalho */
+  html body .acn-busca-btn {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.13); color: #fff; font-size: 18px; padding: 0; cursor: pointer;
+  }
+  html body .acn-busca { display: none !important; }
+  html body .acn-header.acn-busca-aberta .acn-busca {
+    display: block !important; position: fixed !important; top: 52px; left: 0; right: 0;
+    max-width: none !important; padding: 8px; background: #0f766e; z-index: 400; box-shadow: 0 6px 16px rgba(0,0,0,.2);
+  }
+  html body .acn-header.acn-busca-aberta .acn-busca > div:first-child { height: 44px !important; }
+  html body .acn-busca > div + div { left: 8px !important; right: 8px !important; max-height: calc(100dvh - 130px) !important; }
+
+  /* Menções/Análise só com ícone; contador no canto */
+  html body .acn-right > div { position: relative; width: 40px; padding: 0 !important; justify-content: center; }
+  html body .acn-right > div > span + span { position: absolute; top: -5px; right: -5px; }
+
+  html body .acn-main { padding: 8px; }
+
+  /* Janelas em tela cheia */
+  html body :is(.modal-overlay, [style*="position: fixed"][style*="inset: 0px"]) {
+    padding: 0 !important; align-items: stretch !important; justify-content: stretch !important;
+  }
+  html body :is(.modal-overlay, [style*="position: fixed"][style*="inset: 0px"]) > :not([style*="position: absolute"], style) {
+    width: 100% !important; max-width: 100% !important; min-width: 0 !important;
+    height: 100% !important; max-height: 100% !important;
+    margin: 0 !important; border-radius: 0 !important; overflow-y: auto !important;
+  }
+  html body .modal-overlay .modal-box { padding: 16px !important; }
+  /* Chat aberto ocupa a tela toda */
+  html body .acn-chat-raiz:has(> .acn-chat-painel) { inset: 0 !important; gap: 0 !important; }
+  html body .acn-chat-raiz > .acn-chat-painel { width: 100% !important; height: 100% !important; border-radius: 0 !important; border: none !important; }
+  html body .acn-chat-raiz:has(> .acn-chat-painel) > :not(.acn-chat-painel, style, [style*="inset: 0px"]) { display: none !important; }
+  /* Com uma janela aberta, pin de avisos e botão do chat saem da frente */
+  html body:has(:is(.modal-overlay, [style*="position: fixed"][style*="inset: 0px"]):not(.acn-chat-raiz *)) :is(.aviso-widget, .acn-chat-raiz) {
+    display: none !important;
+  }
+
+  /* Grades inline de 3+ colunas viram 2 */
+  html body :is([style*="grid-template-columns: repeat(3"], [style*="grid-template-columns: repeat(4"],
+      [style*="grid-template-columns: repeat(5"], [style*="grid-template-columns: repeat(6"],
+      [style*="fr 1fr 1fr"], [style*="fr 2fr 1fr"], [style*="1fr 1fr 2fr"], [style*="auto 1fr 1fr"]):not(.acn-main-tv *) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ══ Tabelas no celular (marcadas por TabelaCartoes.ts) ═════════════════════ */
+@media (hover: none) and (pointer: coarse) and (max-width: 639.98px) {
+  /* Listas: cada linha vira um cartão "Rótulo: valor" */
+  html body table.acn-tab-cartoes,
+  html body table.acn-tab-cartoes > tbody { display: block; width: 100% !important; min-width: 0 !important; background: transparent; }
+  html body table.acn-tab-cartoes > thead { display: none; }
+  html body table.acn-tab-cartoes > tbody > tr {
+    display: block; position: relative; margin: 0 0 8px; padding: 8px 10px;
+    border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  /* rótulo à esquerda (posição absoluta) e o conteúdo da célula no fluxo normal ao lado */
+  html body table.acn-tab-cartoes > tbody > tr > td {
+    display: block; position: relative; width: auto !important; max-width: none !important; min-width: 0 !important;
+    min-height: 24px; padding: 4px 0 4px calc(34% + 10px) !important; border: none !important;
+    text-align: left !important; white-space: normal !important; height: auto !important; overflow-wrap: anywhere;
+  }
+  html body table.acn-tab-cartoes > tbody > tr > td::before {
+    content: attr(data-rotulo); position: absolute; left: 0; top: 6px; width: 34%;
+    font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .3px; line-height: 1.3;
+  }
+  html body table.acn-tab-cartoes > tbody > tr > td[data-rotulo=""] { padding-left: 0 !important; }
+  html body table.acn-tab-cartoes > tbody > tr > td[data-rotulo=""]::before { display: none; }
+  html body table.acn-tab-cartoes > tbody > tr > td:empty { display: none; }
+  html body table.acn-tab-cartoes > tbody > tr > td > * { min-width: 0; max-width: 100%; }
+  /* Ações no pé do cartão */
+  html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes {
+    display: flex; gap: 6px; padding-left: 0 !important; flex-wrap: wrap; justify-content: flex-end; margin-top: 4px; padding-top: 8px !important; border-top: 1px solid #f1f5f9 !important;
+  }
+  html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes::before { display: none; }
+  html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes > * { flex-wrap: wrap; }
+  html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira { border: none; box-shadow: none; background: transparent; padding: 0; }
+  html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira > td::before { display: none; }
+  html body table.acn-tab-cartoes > tbody > tr:hover > td { background: transparent !important; }
+  html body table.acn-tab-cartoes > tfoot { display: block; }
+
+  /* Planilhas: rolam para o lado, 1ª coluna fixa */
+  html body table.acn-tab-planilha { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  html body table.acn-tab-planilha :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
+  html body table.acn-tab-planilha th:first-child { background: #1e293b !important; }
+}

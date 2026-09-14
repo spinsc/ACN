@@ -653,7 +653,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
      RENDER
   ══════════════════════════════════════════════════════════════════════════ */
   return (
-    <div style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 9500, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+    <div className="acn-chat-raiz" style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 9500, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
 
       <style>{`
         @keyframes chatPop   { from{opacity:0;transform:translateY(10px) scale(.95)} to{opacity:1;transform:translateY(0) scale(1)} }
@@ -698,7 +698,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
       {/* ── Painel principal ── */}
       {aberto && (
-        <div style={{
+        <div className="acn-chat-painel" style={{
           width: 380, height: 580, background: '#ffffff', borderRadius: 14,
           boxShadow: '0 16px 56px rgba(0,0,0,.22)', display: 'flex',
           flexDirection: 'column', border: '1px solid #e2e8f0', overflow: 'hidden',
