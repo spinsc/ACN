@@ -24,6 +24,10 @@ import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
+import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag } from './Interface';
+import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
+  mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
+  mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
 import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
@@ -1855,7 +1859,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // CARD
   // ─────────────────────────────────────────────────────────────────────────
-  const renderCard = (op: any) => {
+  const renderCard = (op: any, col?: any) => {
     const est    = getEst(op.estagio_id);
     const ganho      = isGanho(est);
     const perdido    = isPerdido(est);
@@ -1865,7 +1869,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const vds    = getVendasOp(op.id);
     const tvend  = totalVendidoOp(op.id);
     const tfat   = totalFaturadoOp(op.id);
-    const accent = op.funil === 'licitacao' ? '#7c3aed' : '#0891b2';
     const naoLido = cardsNaoLidos.has(String(op.id));
     const expandido = cardsExpandidos.has(op.id);
     const toggleExpand = (e: React.MouseEvent) => {
@@ -1876,6 +1879,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         return next;
       });
     };
+    const isDetech = (op.faturamento_empresa || 'ACN') === 'Detech';
+    const abrir = () => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); };
+
+    // Ações do cartão: "Atualizar" e as demais ficam no menu ⋯ (mesmas regras de antes)
+    const acoes = [
+      { rotulo: 'Atualizar andamento', icone: mdiUpdate, onClick: () => abrirAndamento(op) },
+      { rotulo: 'Abrir', icone: mdiFolderOpenOutline, onClick: abrir, oculto: perdido || desistiu },
+      { rotulo: 'Lançar OP', icone: mdiClipboardTextOutline, onClick: () => { setModalConverter(op); setTipoConverter('op'); setNumOp(''); }, oculto: !ganho },
+      { rotulo: 'Lançar OS', icone: mdiWrenchOutline, onClick: () => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }, oculto: !(ganho && funil === 'venda_direta') },
+      { rotulo: 'Nova venda', icone: mdiPlus, onClick: () => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }, oculto: !ganho },
+      { rotulo: 'Compras', icone: mdiPackageVariantClosed, onClick: () => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }, oculto: !ganho },
+      { rotulo: op.licitacao_processo_id ? 'Processo vinculado' : 'Vincular a processo licitatório', icone: mdiLinkVariant,
+        onClick: () => { setModalVincularLicit(op); setBuscaVincularLicit(''); setResultVincularLicit([]); }, oculto: !ganho },
+      { rotulo: 'Reativar', icone: mdiRestore, onClick: () => reativarOp(op), oculto: !desistiu },
+      { rotulo: 'Converter em licitação/ATA', icone: mdiGavel, onClick: () => setModalConverterLicit(op), oculto: !(funil === 'venda_direta' && !desistiu && est?.tipo === 'estimativa') },
+      { rotulo: 'Excluir', icone: mdiTrashCanOutline, onClick: () => excluirOp(op), perigo: true, oculto: currentUser?.perfil !== 'Admin' },
+    ];
 
     return (
       <div
@@ -1883,275 +1903,164 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         draggable
         onDragStart={() => handleDragStart(op.id)}
         onDragEnd={handleDragEnd}
+        className={'acn-kcard' + (naoLido ? ' nova' : '')}
         style={{
-          background: dragging === op.id ? '#e0f2fe' : naoLido ? '#fffdf0' : 'white',
-          borderRadius: 5, padding: '6px 8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,.1)',
-          cursor: 'grab', marginBottom: 5,
-          borderLeft: `${naoLido ? 4 : 3}px solid ${naoLido ? '#eab308' : accent}`,
-          borderTop: dragOverItem === op.id && dragging !== op.id ? '2px dashed #3b82f6' : '2px solid transparent',
+          background: dragging === op.id ? 'var(--acn-brand-soft)' : undefined,
+          cursor: 'grab', marginBottom: 8,
+          outline: dragOverItem === op.id && dragging !== op.id ? '2px dashed var(--acn-brand)' : undefined,
+          outlineOffset: 2,
           opacity: dragging === op.id ? .6 : 1,
           userSelect: 'none',
-          transition: 'border-top .1s',
         }}
         title={naoLido ? 'Este registro tem alteração(ões) que você ainda não visualizou' : undefined}
       >
-        {/* ── Linha do título (sempre visível) ── */}
-        <div style={{ display:'flex', alignItems:'center', gap:4 }} onClick={toggleExpand}>
-          <span style={{ fontSize:8, fontWeight:700, padding:'1px 4px', borderRadius:3, flexShrink:0,
-            background: op.funil === 'licitacao' ? '#f5f3ff' : '#ecfeff',
-            color:      op.funil === 'licitacao' ? '#7c3aed'  : '#0e7490' }}>
-            {op.funil === 'licitacao' ? '🏛️' : '💼'}
-          </span>
-          {/* Badge ACN vs Detech */}
-          {(() => {
-            const fat = op.faturamento_empresa || 'ACN';
-            const isDetech = fat === 'Detech';
-            return (
-              <span style={{ fontSize:7, fontWeight:800, padding:'1px 5px', borderRadius:3, flexShrink:0,
-                background: isDetech ? '#fef3c7' : '#dbeafe',
-                color:      isDetech ? '#92400e' : '#1d4ed8',
-                border: `1px solid ${isDetech ? '#fde68a' : '#93c5fd'}`,
-              }}>
-                {isDetech ? 'DETECH' : 'ACN'}
-              </span>
-            );
-          })()}
-          {/* Badge de temperatura do lead */}
+        {/* ── Título (clique mostra os detalhes) ── */}
+        <h6 onClick={toggleExpand} style={{ cursor:'pointer' }} title={op.titulo}>{op.titulo}</h6>
+
+        {/* ── Linha de apoio sempre visível ── */}
+        <div className="acn-kmeta">
+          <Tag>{isDetech ? 'DETECH' : 'ACN'}</Tag>
+          {op.funil === 'licitacao' && <Tag>Licitação</Tag>}
           {op.temperatura && (
-            <span title={`Temperatura: ${op.temperatura}`} style={{ fontSize:9, flexShrink:0, lineHeight:1 }}>
+            <span title={`Temperatura: ${op.temperatura}`} style={{ lineHeight:1 }}>
               {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
             </span>
           )}
-          <span style={{ fontSize:10, fontWeight:700, color:'#1e293b', lineHeight:1.3, flex:1, cursor:'pointer' }}>
-            {op.titulo}
-          </span>
-          <span style={{ fontSize:9, color:'#94a3b8', flexShrink:0, cursor:'pointer' }}>
-            {expandido ? '▲' : '▼'}
-          </span>
-        </div>
-
-        {/* ── Sub-linha sempre visível: data sessão + motivo + botão atualizar ── */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:3, gap:4 }}>
-          <div style={{ minWidth:0, flex:1, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-            {op.data_sessao && (
-              <span style={{ fontSize:8, color:'#475569', fontWeight:600, flexShrink:0 }}>
-                📅 {fmtData(op.data_sessao)}{op.hora_sessao ? ` · ⏰${String(op.hora_sessao).slice(0,5)}` : ''}
-              </span>
-            )}
-            {desistiu && op.motivo_desistencia && (
-              <span style={{ fontSize:7, color:'#92400e', fontStyle:'italic', maxWidth:110, wordBreak:'break-word' }}
-                title={op.motivo_desistencia}>
-                ✋ {op.motivo_desistencia}
-              </span>
-            )}
-            {perdido && op.motivo_perda && (
-              <span style={{ fontSize:7, color:'#991b1b', fontStyle:'italic', maxWidth:110, wordBreak:'break-word' }}
-                title={op.motivo_perda}>
-                ❌ {op.motivo_perda}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={e => { e.stopPropagation(); abrirAndamento(op); }}
-            style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:3, padding:'2px 7px', fontSize:8, cursor:'pointer', flexShrink:0, fontWeight:700 }}>
-            ⬆ Atualizar
-          </button>
-        </div>
-
-        {/* ── Corpo (visível só quando expandido) ── */}
-        {expandido && (<>
-        <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
-        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginBottom:4 }}>
-          <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3, display:'inline-block',
-            background: op.funil === 'licitacao' ? '#f5f3ff' : '#ecfeff',
-            color:      op.funil === 'licitacao' ? '#7c3aed'  : '#0e7490' }}>
-            {op.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda Direta'}
-          </span>
-          {op.tipo_licitacao === 'ata' && (
-            <span style={{ fontSize:8, fontWeight:700, background:'#fdf4ff', color:'#a21caf', padding:'1px 5px', borderRadius:3, display:'inline-block' }}>
-              📋 Ata Reg. Preços
-            </span>
+          {op.data_sessao && (
+            <span className="acn-num">{fmtData(op.data_sessao)}{op.hora_sessao ? ` · ${String(op.hora_sessao).slice(0,5)}` : ''}</span>
           )}
-          <AnaliseStatusBadge origemId={op.id} />
+          <span className="dir-auto" style={{ display:'flex', alignItems:'center', gap:2 }}>
+            {markupPorOp[op.id] !== undefined && <MarkupBadge pct={markupPorOp[op.id]} discreto />}
+            <Botao pequeno variante="discreto" icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={toggleExpand}
+              title={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-label={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-expanded={expandido} />
+            <MenuAcoes itens={acoes} rotulo="Ações do cartão" />
+          </span>
         </div>
-
-        {(op.orgao || op.numero_edital) && (
-          <div style={{ fontSize:8, color:'#64748b', marginBottom:3 }}>
-            {op.numero_edital && <span style={{ fontWeight:600 }}>{op.numero_edital} · </span>}
-            {op.orgao}
-          </div>
-        )}
-
-        {op.responsavel_nome && (
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:3 }}>👤 {op.responsavel_nome}</div>
-        )}
-        {op.funil === 'venda_direta' && (
-          <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:3 }}>
-            {op.temperatura ? (() => {
-              const cor = op.temperatura === 'quente' ? '#dc2626' : op.temperatura === 'morno' ? '#a855f7' : '#3b82f6';
-              const label = op.temperatura === 'quente' ? '🔥 Quente' : op.temperatura === 'morno' ? '🌤️ Morno' : '🧊 Frio';
-              return (
-                <span style={{ fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:8, display:'inline-block',
-                  background:`${cor}18`, color:cor, border:`1px solid ${cor}50` }}>
-                  {label}
-                </span>
-              );
-            })() : (
-              <span style={{ fontSize:8, color:'#94a3b8' }}>🌡️ sem temperatura</span>
-            )}
-            <button
-              onClick={e => { e.stopPropagation(); setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }}
-              title="Editar temperatura"
-              style={{ background:'none', border:'none', cursor:'pointer', fontSize:8, color:'#64748b', padding:0 }}>
-              ✏️
-            </button>
-          </div>
-        )}
-        {op.prox_contato && (
-          <div style={{
-            fontSize:8, fontWeight:700, marginBottom:3,
-            color: op.prox_contato === hoje ? '#92400e' : op.prox_contato < hoje ? '#dc2626' : '#0369a1',
-          }}>
-            📅 {op.prox_contato === hoje ? '⚡ HOJE' : op.prox_contato < hoje ? '⚠️ ATRASADO' : ''} {op.prox_contato}
-            {op.hora_prox_contato && <span style={{ marginLeft:3 }}>⏰ {op.hora_prox_contato}</span>}
-            {op.nome_contato && <span style={{ fontWeight:400 }}> · {op.nome_contato}</span>}
-          </div>
-        )}
-
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
-          <span style={{ fontSize:10, fontWeight:700, color:'#0f766e' }}>{fmtMoeda(op.valor_registrado)}</span>
-          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-            {op.hora_sessao && (
-              <span style={{ fontSize:8, color:'#64748b' }}>⏰ {String(op.hora_sessao).slice(0,5)}</span>
-            )}
-            {dias !== null && !ganho && !perdido && (
-              <span style={{
-                fontSize:8, padding:'1px 5px', borderRadius:3, fontWeight:700,
-                background: dias < 0 ? '#fee2e2' : dias <= 3 ? '#fef9c3' : '#dcfce7',
-                color:      dias < 0 ? '#991b1b' : dias <= 3 ? '#854d0e' : '#166534',
-              }}>
-                {dias < 0 ? `${Math.abs(dias)}d atraso` : dias === 0 ? 'Hoje' : `+${dias}d`}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {chk && !ganho && !perdido && (
-          <div style={{ marginTop:4, paddingTop:4, borderTop:'1px dashed #e2e8f0' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-              <div style={{ flex:1, height:4, background:'#e2e8f0', borderRadius:2, overflow:'hidden' }}>
-                <div style={{ width:`${(chk.done/chk.total)*100}%`, height:'100%', borderRadius:2,
-                  background: chk.done===chk.total ? '#22c55e' : '#f59e0b' }} />
-              </div>
-              <span style={{ fontSize:8, color:'#64748b', fontWeight:600 }}>{chk.done}/{chk.total}</span>
-            </div>
-          </div>
-        )}
-
-        {ganho && op.tipo_licitacao === 'ata' && (
-          <div style={{ marginTop:5, paddingTop:4, borderTop:'2px solid #86efac', fontSize:8, display:'flex', gap:6, flexWrap:'wrap' }}>
-            <span style={{ color:'#64748b' }}>Adesões: <strong>{vds.length}</strong></span>
-            <span style={{ color:'#0f766e' }}>Vendido: <strong>{fmtMoeda(tvend)}</strong></span>
-            {podeVerTotais && <span style={{ color:'#166534' }}>Faturado: <strong>{fmtMoeda(tfat)}</strong></span>}
-            {op.data_validade_ata && (
-              <span style={{ color: diasAte(op.data_validade_ata)! < 30 ? '#991b1b' : '#64748b' }}>
-                Validade: {fmtData(op.data_validade_ata)}
-              </span>
-            )}
-          </div>
-        )}
-
-        {perdido && op.motivo_perda && (
-          <div style={{ marginTop:4, fontSize:8, color:'#991b1b', fontWeight:600, fontStyle:'italic' }}>
-            Motivo: {op.motivo_perda}
-          </div>
-        )}
-
         {desistiu && op.motivo_desistencia && (
-          <div style={{ marginTop:4, fontSize:8, color:'#b45309', fontWeight:600, fontStyle:'italic' }}>
-            Desistência: {op.motivo_desistencia}
-          </div>
+          <div className="acn-kmeta" style={{ color:'var(--acn-warn)' }} title={op.motivo_desistencia}>Desistência: {op.motivo_desistencia}</div>
+        )}
+        {perdido && op.motivo_perda && (
+          <div className="acn-kmeta" style={{ color:'var(--acn-bad)' }} title={op.motivo_perda}>Motivo: {op.motivo_perda}</div>
         )}
 
-        {/* Badge de previsão de entrega de compra */}
-        {ganho && (() => {
-          const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
-          const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
-          const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
-          if (comprado) return (
-            <button onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}
-              style={{ marginTop:4, fontSize:9, color:'#166534', background:'#dcfce7', border:'none', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block', cursor:'pointer' }}>
-              📦 Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-            </button>
-          );
-          if (pendente) return (
-            <button onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: pendente.id, descricao: pendente.numero_pedido }); }}
-              style={{ marginTop:4, fontSize:9, color:'#92400e', background:'#fef3c7', border:'none', borderRadius:4, padding:'2px 7px', fontWeight:700, display:'inline-block', cursor:'pointer' }}>
-              📦 Compra em andamento
-            </button>
-          );
-          return null;
-        })()}
-
-        {markupPorOp[op.id] !== undefined && (
-          <div style={{ marginTop:4 }}>
-            <MarkupBadge pct={markupPorOp[op.id]} />
-          </div>
-        )}
-
-        <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
-          {ganho && (
-            <>
-              <button className="acn-btn" style={{ background:'#2563eb' }}
-                onClick={() => { setModalConverter(op); setTipoConverter('op'); setNumOp(''); }}>
-                📋 Lançar OP
-              </button>
-              {funil === 'venda_direta' && (
-                <button className="acn-btn" style={{ background:'#ea580c' }}
-                  onClick={() => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }}>
-                  🔧 Lançar OS
+        {/* Sub-etapa — colunas abertas */}
+        {col && !col.terminal && (
+          <div className="acn-ksub" role="group" aria-label="Sub-etapa">
+            {(['andamento','suspenso','aguardando'] as const).map(s => {
+              const ativo = (op.sub_status || 'andamento') === s;
+              return (
+                <button key={s} type="button" className={ativo ? 'on' : ''} aria-pressed={ativo}
+                  onClick={e => { e.stopPropagation(); atualizarSubStatus(op.id, s); }}>
+                  {SUB_STATUS_LABEL[s]}
                 </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empresa vencedora — coluna Vencido */}
+        {col?.tipo === 'ganho' && (
+          <div className="acn-kmeta">
+            <span>Vencedora</span>
+            {op.empresa_vencedora ? <Tag>{op.empresa_vencedora}</Tag> : <span className="acn-fraco">— empresa</span>}
+          </div>
+        )}
+
+        {/* ── Detalhes (visível só quando expandido) ── */}
+        {expandido && (
+        <div style={{ display:'grid', gap:5, paddingTop:8, borderTop:'1px solid var(--acn-line-soft)' }}>
+          <div className="acn-kmeta">
+            <Tag>{op.funil === 'licitacao' ? 'Licitação' : 'Venda direta'}</Tag>
+            {op.tipo_licitacao === 'ata' && <Tag>Ata reg. preços</Tag>}
+            <AnaliseStatusBadge origemId={op.id} />
+          </div>
+
+          {(op.orgao || op.numero_edital) && (
+            <div className="acn-kmeta">
+              {op.numero_edital && <span className="acn-forte">{op.numero_edital}</span>}
+              {op.orgao}
+            </div>
+          )}
+
+          {op.responsavel_nome && <div className="acn-kmeta">Responsável: {op.responsavel_nome}</div>}
+          {op.funil === 'venda_direta' && (
+            <div className="acn-kmeta">
+              {op.temperatura ? (
+                <Selo familia={op.temperatura === 'quente' ? 'erro' : op.temperatura === 'morno' ? 'marca' : 'info'}>
+                  {op.temperatura === 'quente' ? 'Quente' : op.temperatura === 'morno' ? 'Morno' : 'Frio'}
+                </Selo>
+              ) : <span>Sem temperatura</span>}
+              <Botao pequeno variante="discreto" icone={mdiPencilOutline} title="Editar temperatura" aria-label="Editar temperatura"
+                onClick={e => { e.stopPropagation(); setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }} />
+            </div>
+          )}
+          {op.prox_contato && (
+            <div className="acn-kmeta" style={{ fontWeight:500,
+              color: op.prox_contato === hoje ? 'var(--acn-warn)' : op.prox_contato < hoje ? 'var(--acn-bad)' : 'var(--acn-info)' }}>
+              Próximo contato: {op.prox_contato === hoje ? 'hoje' : op.prox_contato < hoje ? 'atrasado ·' : ''} {op.prox_contato}
+              {op.hora_prox_contato && <span>· {op.hora_prox_contato}</span>}
+              {op.nome_contato && <span style={{ fontWeight:400 }}>· {op.nome_contato}</span>}
+            </div>
+          )}
+
+          <div className="acn-kmeta">
+            <span className="acn-num acn-forte">{fmtMoeda(op.valor_registrado)}</span>
+            <span className="dir-auto" style={{ display:'flex', gap:6, alignItems:'center' }}>
+              {op.hora_sessao && <span className="acn-num">{String(op.hora_sessao).slice(0,5)}</span>}
+              {dias !== null && !ganho && !perdido && (
+                <Selo familia={dias < 0 ? 'erro' : dias <= 3 ? 'atencao' : 'ok'} ponto={false}>
+                  {dias < 0 ? `${Math.abs(dias)} d de atraso` : dias === 0 ? 'Hoje' : `em ${dias} d`}
+                </Selo>
               )}
-              <button className="acn-btn" style={{ background:'#0f766e' }}
-                onClick={() => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }}>
-                + Venda
-              </button>
-              <button className="acn-btn" style={{ background:'#0369a1' }}
-                onClick={() => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }}>
-                📦 Compras
-              </button>
-              <button className="acn-btn" style={{ background:'#0891b2' }}
-                onClick={() => { setModalVincularLicit(op); setBuscaVincularLicit(''); setResultVincularLicit([]); }}>
-                🔗 {op.licitacao_processo_id ? 'Processo Vinculado' : 'Vincular a Processo Licitatório'}
-              </button>
-            </>
+            </span>
+          </div>
+
+          {chk && !ganho && !perdido && (
+            <div className="acn-kmeta" title="Checklist da etapa">
+              <div style={{ flex:1, height:6, background:'var(--acn-line-soft)', borderRadius:3, overflow:'hidden' }}>
+                <div style={{ width:`${(chk.done/chk.total)*100}%`, height:'100%', borderRadius:3,
+                  background: chk.done===chk.total ? 'var(--acn-ok)' : 'var(--acn-warn)' }} />
+              </div>
+              <span className="acn-num">{chk.done}/{chk.total}</span>
+            </div>
           )}
-          {desistiu && (
-            <button className="acn-btn" style={{ background:'#d97706' }}
-              onClick={() => reativarOp(op)}>
-              ↩ Reativar
-            </button>
+
+          {ganho && op.tipo_licitacao === 'ata' && (
+            <div className="acn-kmeta">
+              <span>Adesões: <strong>{vds.length}</strong></span>
+              <span>Vendido: <strong>{fmtMoeda(tvend)}</strong></span>
+              {podeVerTotais && <span>Faturado: <strong>{fmtMoeda(tfat)}</strong></span>}
+              {op.data_validade_ata && (
+                <span style={{ color: diasAte(op.data_validade_ata)! < 30 ? 'var(--acn-bad)' : undefined }}>
+                  Validade: {fmtData(op.data_validade_ata)}
+                </span>
+              )}
+            </div>
           )}
-          {!perdido && !desistiu && (
-            <button className="acn-btn" style={{ background:'#0369a1' }}
-              onClick={e => { e.stopPropagation(); setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); }}>
-              📂 Abrir
-            </button>
-          )}
-          {funil === 'venda_direta' && !desistiu && est?.tipo === 'estimativa' && (
-            <button className="acn-btn" style={{ background:'#7c3aed', fontSize:8 }}
-              onClick={() => setModalConverterLicit(op)}>
-              🏛️ → Licitação/ATA
-            </button>
-          )}
-          {currentUser?.perfil === 'Admin' && (
-            <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirOp(op)}>✕</button>
-          )}
-          <CrmAnexosWidget op={op} currentUser={currentUser} />
+
+          {/* Previsão de entrega de compra */}
+          {ganho && (() => {
+            const pc = pedidosCompra.filter(p => p.oportunidade_id === op.id);
+            const comprado = pc.find(p => p.status_compra === 'Comprado' && p.data_prevista_recebimento);
+            const pendente = pc.find(p => ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado'].includes(p.status_compra));
+            if (comprado) return (
+              <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
+                onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: comprado.id, descricao: comprado.numero_pedido }); }}>
+                Entrega prev.: {comprado.data_prevista_recebimento ? new Date(comprado.data_prevista_recebimento.slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+              </Botao></div>
+            );
+            if (pendente) return (
+              <div><Botao pequeno variante="secundario" icone={mdiPackageVariantClosed}
+                onClick={e => { e.stopPropagation(); abrirVinculo({ tipo:'compra', id: pendente.id, descricao: pendente.numero_pedido }); }}>
+                Compra em andamento
+              </Botao></div>
+            );
+            return null;
+          })()}
+
+          <div data-acn-rebaixar><CrmAnexosWidget op={op} currentUser={currentUser} /></div>
         </div>
-        </div>{/* fecha wrapper expandido */}
-        </>)}{/* fecha {expandido && } */}
+        )}
       </div>
     );
   };
@@ -2194,88 +2103,55 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // barra de ferramentas (filtResp) — opsFiltradas já vem filtrado por ele.
     const recorteLabel = filtResp || 'Total (todos os vendedores)';
 
+    const totalMes = opsFiltradas.filter(noMes).length;
+    const dist = [
+      { rot: 'Negociação', n: opsAtivas.length, cor: 'var(--acn-info)' },
+      { rot: 'Ganhas', n: opsGanhas.length, cor: 'var(--acn-ok)' },
+      { rot: 'Perdidas', n: opsPerdidas.length, cor: 'var(--acn-bad)' },
+      { rot: 'Desistência', n: opsDesistencias.length, cor: 'var(--acn-neutral)' },
+    ];
+
     return (
       <div style={{ marginBottom:14 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-          <span style={{ fontSize:10, fontWeight:700, color:'#475569' }}>📅 Filtrar pipeline por mês:</span>
-          <input type="month" value={mesFiltroPipeline} onChange={e => setMesFiltroPipeline(e.target.value)}
-            style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }} />
-          {mesFiltroPipeline && (
-            <button onClick={() => setMesFiltroPipeline('')}
-              style={{ background:'#f1f5f9', border:'none', borderRadius:4, padding:'4px 10px', fontSize:9, fontWeight:700, color:'#475569', cursor:'pointer' }}>
-              Limpar
-            </button>
-          )}
-        </div>
-        <div style={{ display:'flex', gap:10, marginBottom:10, flexWrap:'wrap' }}>
-          <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
-            <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700, marginBottom:2 }}>🤝 PIPELINE EM NEGOCIAÇÃO</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsAtivas.length}</div>
-            {podeVer && totalPipeline > 0 && (
-              <div style={{ fontSize:9, color:'#3b82f6', marginTop:2 }}>{fmtMoeda(totalPipeline)}</div>
-            )}
+        {/* Números do funil numa faixa só: valor, quantidade e distribuição */}
+        <div className="sec-card acn-pipe">
+          <div>
+            <span className="rot">Em negociação</span>
+            <span className="val acn-num">{podeVer ? fmtMoeda(totalPipeline) : opsAtivas.length}</span>
+            <span className="sub">
+              <span className="acn-num">{opsAtivas.length}</span> oportunidades
+              {podeVer && totalPipelineACN !== totalPipeline && <> · Receita ACN: {fmtMoeda(totalPipelineACN)}</>}
+            </span>
           </div>
-          <div style={{ background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#7c3aed', fontWeight:700, marginBottom:2 }}>TOTAL</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1 }}>{opsFiltradas.filter(noMes).length}</div>
+          <div>
+            <span className="rot">Ganhas</span>
+            <span className="val acn-num" style={{ color:'var(--acn-ok)' }}>{podeVer ? fmtMoeda(totalGanho) : opsGanhas.length}</span>
+            <span className="sub">
+              <span className="acn-num">{opsGanhas.length}</span> · {opsAguardandoFaturamento.length} aguardando faturamento
+              {podeVer && totalAguardandoFaturamento > 0 && <> ({fmtMoeda(totalAguardandoFaturamento)})</>}
+            </span>
           </div>
-          <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
-            <div style={{ fontSize:8, color:'#dc2626', fontWeight:700, marginBottom:2 }}>❌ PIPELINE PERDIDAS</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#dc2626', lineHeight:1 }}>{opsPerdidas.length}</div>
-            {podeVer && totalPerdido > 0 && (
-              <div style={{ fontSize:9, color:'#ef4444', marginTop:2 }}>{fmtMoeda(totalPerdido)}</div>
-            )}
+          <div>
+            <span className="rot">Perdidas</span>
+            <span className="val acn-num" style={{ color:'var(--acn-bad)' }}>{podeVer ? fmtMoeda(totalPerdido) : opsPerdidas.length}</span>
+            <span className="sub"><span className="acn-num">{opsPerdidas.length}</span> perdidas · {opsDesistencias.length} desistência{opsDesistencias.length !== 1 ? 's' : ''}</span>
           </div>
-          <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:6, padding:'8px 14px', minWidth:90 }}>
-            <div style={{ fontSize:8, color:'#92400e', fontWeight:700, marginBottom:2 }}>🚫 DESISTÊNCIAS</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#92400e', lineHeight:1 }}>{opsDesistencias.length}</div>
-          </div>
-          <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:6, padding:'8px 14px', minWidth:110 }}>
-            <div style={{ fontSize:8, color:'#16a34a', fontWeight:700, marginBottom:2 }}>🏆 PIPELINE GANHAS</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{opsGanhas.length}</div>
-            {podeVer && totalGanho > 0 && (
-              <div style={{ fontSize:9, color:'#16a34a', marginTop:2 }}>{fmtMoeda(totalGanho)}</div>
-            )}
-          </div>
-          <div style={{ background:'#fefce8', border:'1px solid #fde68a', borderRadius:6, padding:'8px 14px', minWidth:130 }}>
-            <div style={{ fontSize:8, color:'#a16207', fontWeight:700, marginBottom:2 }}>🕐 GANHAS — AGUARDANDO FATURAMENTO</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#a16207', lineHeight:1 }}>{opsAguardandoFaturamento.length}</div>
-            {podeVer && totalAguardandoFaturamento > 0 && (
-              <div style={{ fontSize:9, color:'#a16207', marginTop:2 }}>{fmtMoeda(totalAguardandoFaturamento)}</div>
-            )}
+          <div>
+            <span className="rot">Distribuição · <span className="acn-num">{totalMes}</span> registros</span>
+            <div className="dist" aria-hidden="true">
+              {dist.filter(d => d.n > 0).map(d => <i key={d.rot} title={`${d.rot}: ${d.n}`} style={{ flex: d.n, background: d.cor }} />)}
+            </div>
+            <span className="sub">{dist.map(d => `${d.rot} ${d.n}`).join(' · ')}</span>
+            {podeVer && <MarkupBarraDistribuicao valores={opsAtivas.map(o => markupPorOp[o.id])} />}
           </div>
         </div>
-
-        {/* ── PIPELINE — VALORES (Negociação / Vencidas / Perdidas) ── */}
-        {podeVer && (
-          <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 14px' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:6, marginBottom:6 }}>
-              <div style={{ fontSize:9, fontWeight:800, color:'#1e293b' }}>💰 PIPELINE — VALORES</div>
-              <div style={{ fontSize:8, color:'#64748b' }}>
-                recorte: <strong style={{ color:'#1e293b' }}>{recorteLabel}</strong>
-                {' · '}filtre por vendedor no seletor "👤 Responsável" acima
-              </div>
-            </div>
-            <div style={{ display:'flex', gap:18, flexWrap:'wrap' }}>
-              <div>
-                <div style={{ fontSize:8, color:'#3b82f6', fontWeight:700 }}>NEGOCIAÇÃO</div>
-                <div style={{ fontSize:15, fontWeight:800, color:'#1e293b', lineHeight:1.4 }}>{fmtMoeda(totalPipeline)}</div>
-                {totalPipelineACN !== totalPipeline && (
-                  <div style={{ fontSize:8, color:'#1d4ed8' }}>Receita ACN: {fmtMoeda(totalPipelineACN)}</div>
-                )}
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#16a34a', fontWeight:700 }}>VENCIDAS</div>
-                <div style={{ fontSize:15, fontWeight:800, color:'#16a34a', lineHeight:1.4 }}>{fmtMoeda(totalGanho)}</div>
-              </div>
-              <div>
-                <div style={{ fontSize:8, color:'#dc2626', fontWeight:700 }}>PERDIDAS</div>
-                <div style={{ fontSize:15, fontWeight:800, color:'#dc2626', lineHeight:1.4 }}>{fmtMoeda(totalPerdido)}</div>
-              </div>
-            </div>
-            <MarkupBarraDistribuicao valores={opsAtivas.map(o => markupPorOp[o.id])} />
-          </div>
-        )}
+        <div className="acn-kmeta" style={{ margin:'8px 2px 0', gap:8 }}>
+          <label htmlFor="crm-mes-pipeline">Mês do pipeline</label>
+          <input id="crm-mes-pipeline" type="month" className="acn-input" value={mesFiltroPipeline} onChange={e => setMesFiltroPipeline(e.target.value)}
+            style={{ width:'auto', height:28 }} />
+          {mesFiltroPipeline && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setMesFiltroPipeline('')}>Limpar</Botao>}
+          {podeVer && <span>· Recorte: <strong style={{ color:'var(--acn-ink)', fontWeight:500 }}>{recorteLabel}</strong> (filtre por vendedor no seletor de responsável)</span>}
+        </div>
       </div>
     );
   };
@@ -2298,22 +2174,19 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const hoje2    = new Date().toISOString().slice(0, 10);
 
           return (
-            <div key={est.id} style={{ marginBottom:10, background:'white', borderRadius:6, overflow:'hidden', boxShadow:'0 1px 3px #0001' }}>
-              {/* Header do estágio */}
-              <div style={{ background:hdrBg, color:'white', padding:'6px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <div style={{ fontWeight:800, fontSize:10, textTransform:'uppercase', letterSpacing:'.4px' }}>
-                  {est.nome}
-                  <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 7px', fontSize:8, marginLeft:7 }}>
-                    {items.length}
-                  </span>
-                </div>
+            <div key={est.id} className="sec-card" style={{ marginBottom:10 }}>
+              {/* Header do estágio — cor só no ponto */}
+              <div className="acn-kcab" style={{ padding:'10px 14px', borderBottom:'1px solid var(--acn-line)', marginBottom:0 }}>
+                <i style={{ background: hdrBg }} />
+                <span>{est.nome}</span>
+                <em>{items.length}</em>
                 {podeVer && totalEst > 0 && (
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
-                    <div style={{ fontSize:10, fontWeight:700, opacity:.9 }}>{fmtMoeda(totalEst)}</div>
+                  <span style={{ marginLeft:'auto', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:1 }}>
+                    <span className="acn-num" style={{ fontSize:13, fontWeight:600 }}>{fmtMoeda(totalEst)}</span>
                     {totalEstACN !== totalEst && (
-                      <div style={{ fontSize:8, opacity:.75 }}>ACN: {fmtMoeda(totalEstACN)}</div>
+                      <span className="acn-num" style={{ fontSize:12, fontWeight:400, color:'var(--acn-muted)' }}>ACN: {fmtMoeda(totalEstACN)}</span>
                     )}
-                  </div>
+                  </span>
                 )}
               </div>
 
@@ -2372,9 +2245,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // KANBAN — 5 super-colunas
   // ─────────────────────────────────────────────────────────────────────────
   const SUB_STATUS_LABEL: Record<string,string> = {
-    andamento: '📐 Técnica',
-    suspenso:  '📄 Documental',
-    aguardando:'💰 Orçamentária',
+    andamento: 'Técnica',
+    suspenso:  'Documental',
+    aguardando:'Orçamentária',
   };
   /** Área de cards de uma coluna do kanban: altura de 10 cards, rola daí pra
  *  frente. Fica no escopo do módulo (e não dentro do CrmTab) porque componente
@@ -2434,8 +2307,8 @@ const SUB_STATUS_COR: Record<string,string> = {
       );
     }
     return (
-    <div style={{ display:'flex', gap:8, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
-      {SUPER_COLS.map(col => renderColunaKanban(col, 240))}
+    <div style={{ display:'flex', gap:12, alignItems:'flex-start', paddingBottom:8, minWidth:'max-content' }}>
+      {SUPER_COLS.map(col => renderColunaKanban(col, 264))}
     </div>
     );
   };
@@ -2444,29 +2317,32 @@ const SUB_STATUS_COR: Record<string,string> = {
         const cards = opsFiltradas.filter(col.match);
         const estId = col.estDrop();
         const isDragOver = dragOver === col.id;
+        const adicionar = () => { setFormOp({ ...VAZIO_OP, funil, estagio_id: estId }); setModalOp({}); };
 
         return (
-          <div key={col.id} style={{ width: largura, flexShrink:0 }}>
-            {/* Header */}
-            <div style={{ background:col.bg, color:'white', padding:'5px 8px', borderRadius:'5px 5px 0 0',
-              fontSize:9, fontWeight:700, display:'flex', justifyContent:'space-between', alignItems:'center',
-              textTransform:'uppercase', letterSpacing:'.4px' }}>
-              <span>{col.label}</span>
-              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <div key={col.id} className="acn-kcol" style={{ width: largura, flexShrink:0 }}>
+            {/* Cabeçalho: a cor da etapa fica só no ponto */}
+            <div className="acn-kcab">
+              <i style={{ background: col.bg }} />
+              <span title={col.label}>{col.label}</span>
+              <em>{cards.length}</em>
+              <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4 }}>
                 {col.tipo === 'ganho' && (
-                  <span style={{ fontSize:7, opacity:.8 }}>
-                    ACN:{cards.filter(o=>o.empresa_vencedora==='ACN').length} · DTC:{cards.filter(o=>o.empresa_vencedora==='DETECH').length}
-                  </span>
+                  <Selo familia="neutro" ponto={false}>
+                    ACN {cards.filter(o=>o.empresa_vencedora==='ACN').length} · DTC {cards.filter(o=>o.empresa_vencedora==='DETECH').length}
+                  </Selo>
                 )}
                 {!col.terminal && (
-                  <span style={{ fontSize:7, opacity:.8 }}>
-                    📐{cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} 📄{cards.filter(o=>o.sub_status==='suspenso').length} 💰{cards.filter(o=>o.sub_status==='aguardando').length}
+                  <span className="acn-num" title="Técnica · Documental · Orçamentária"
+                    style={{ fontSize:11, fontWeight:500, color:'var(--acn-muted)', whiteSpace:'nowrap' }}>
+                    {cards.filter(o=>(o.sub_status||'andamento')==='andamento').length} · {cards.filter(o=>o.sub_status==='suspenso').length} · {cards.filter(o=>o.sub_status==='aguardando').length}
                   </span>
                 )}
-                <span style={{ background:'rgba(255,255,255,.2)', borderRadius:8, padding:'1px 6px', fontSize:8 }}>
-                  {cards.length}
-                </span>
-              </div>
+                {!col.terminal && estId && (
+                  <Botao pequeno variante="discreto" icone={mdiPlus} onClick={adicionar}
+                    title="Adicionar nesta etapa" aria-label={`Adicionar em ${col.label}`} />
+                )}
+              </span>
             </div>
 
             {/* Drop zone — só recebe drops de FORA da coluna (cross-col move) */}
@@ -2475,9 +2351,9 @@ const SUB_STATUS_COR: Record<string,string> = {
               onDragLeave={() => setDragOver(null)}
               onDrop={() => { setDragOver(null); estId && handleDrop(estId); }}
               style={{
-                background: isDragOver ? '#dbeafe' : col.dropBg,
-                borderRadius:'0 0 5px 5px', padding:5, minHeight:120, transition:'background .15s',
-                border: isDragOver ? '2px dashed #3b82f6' : '2px solid transparent',
+                background: isDragOver ? 'var(--acn-brand-soft)' : undefined,
+                borderRadius: 6, minHeight: 120, transition: 'background .15s',
+                outline: isDragOver ? '2px dashed var(--acn-brand)' : undefined, outlineOffset: -2,
               }}
             >
               <ColunaRolavel>
@@ -2497,59 +2373,26 @@ const SUB_STATUS_COR: Record<string,string> = {
                     }
                   }}
                 >
-                  {renderCard(op)}
+                  {renderCard(op, col)}
 
                   {/* Celular/tablet: mudar de etapa sem arrastar */}
                   {toque && (
-                    <select value="" onChange={e => { const destino = e.target.value; if (destino) handleDrop(destino, op.id); }}
-                      style={{ width:'100%', margin:'2px 0 4px', borderRadius:6, border:'1px solid #cbd5e1', background:'#fff', color:'#334155' }}>
+                    <select value="" className="acn-input" onChange={e => { const destino = e.target.value; if (destino) handleDrop(destino, op.id); }}
+                      style={{ width:'100%', margin:'-4px 0 8px' }}>
                       <option value="">Mover para…</option>
                       {SUPER_COLS.filter(c => c.id !== col.id).map(c => (
                         <option key={c.id} value={c.estDrop()}>{c.label}</option>
                       ))}
                     </select>
                   )}
-
-                  {/* Sub-status chips — colunas abertas */}
-                  {!col.terminal && (
-                    <div style={{ display:'flex', gap:2, marginTop:1, marginBottom:5, paddingLeft:2 }}>
-                      {(['andamento','suspenso','aguardando'] as const).map(s => {
-                        const ativo = (op.sub_status || 'andamento') === s;
-                        return (
-                          <button key={s} onClick={() => atualizarSubStatus(op.id, s)}
-                            style={{ fontSize:7, padding:'1px 5px', borderRadius:10, border:'none', cursor:'pointer',
-                              background: ativo ? SUB_STATUS_COR[s] : '#e2e8f0',
-                              color: ativo ? 'white' : '#64748b',
-                              fontWeight: ativo ? 700 : 400 }}>
-                            {SUB_STATUS_LABEL[s]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Badge empresa vencedora — coluna Vencido */}
-                  {col.tipo === 'ganho' && (
-                    <div style={{ marginTop:2, marginBottom:5, paddingLeft:2 }}>
-                      <span style={{ fontSize:8, fontWeight:700, padding:'1px 7px', borderRadius:8,
-                        background: op.empresa_vencedora === 'ACN' ? '#dbeafe' : op.empresa_vencedora === 'DETECH' ? '#f3e8ff' : '#f1f5f9',
-                        color:      op.empresa_vencedora === 'ACN' ? '#1e40af' : op.empresa_vencedora === 'DETECH' ? '#7c3aed'  : '#94a3b8' }}>
-                        {op.empresa_vencedora || '— empresa'}
-                      </span>
-                    </div>
-                  )}
                 </div>
               ))}
               </ColunaRolavel>
 
-              {/* Botão Adicionar (só em Aberto) — fica FORA da área que rola,
+              {/* Adicionar (só em etapas abertas) — fica FORA da área que rola,
                   senão numa coluna cheia ele sumiria lá no fim da rolagem. */}
               {!col.terminal && estId && (
-                <div onClick={() => { setFormOp({ ...VAZIO_OP, funil, estagio_id: estId }); setModalOp({}); }}
-                  style={{ background:'white', border:'1px dashed #cbd5e1', borderRadius:5, padding:'5px 8px',
-                    textAlign:'center', color:'#94a3b8', fontSize:9, cursor:'pointer', marginTop: cards.length ? 4 : 0 }}>
-                  + Adicionar
-                </div>
+                <button type="button" className="acn-kadd" onClick={adicionar}>+ Adicionar</button>
               )}
             </div>
           </div>
@@ -2569,15 +2412,15 @@ const SUB_STATUS_COR: Record<string,string> = {
   const renderFaturamentos = () => (
     <div>
       {podeVerTotais && (
-        <div style={{ display:'flex', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+        <div className="sec-card acn-pipe" style={{ gridTemplateColumns:'repeat(3, minmax(0, 1fr))', marginBottom:12 }}>
           {[
-            { label:'Total Vendido',  val: totalGeral,         cor:'#0f766e', bg:'#f0fdf4' },
-            { label:'Faturado',       val: totalFaturadoGeral, cor:'#166534', bg:'#dcfce7' },
-            { label:'A Faturar',      val: totalPendenteGeral, cor:'#854d0e', bg:'#fef9c3' },
-          ].map(({ label, val, cor, bg }) => (
-            <div key={label} style={{ background:bg, border:`1px solid ${cor}30`, borderRadius:6, padding:'7px 14px', minWidth:140 }}>
-              <div style={{ fontSize:8, color:'#94a3b8', fontWeight:700, textTransform:'uppercase', marginBottom:2 }}>{label}</div>
-              <div style={{ fontSize:14, fontWeight:700, color:cor }}>{fmtMoeda(val)}</div>
+            { label:'Total vendido', val: totalGeral,         cor:'var(--acn-ink)' },
+            { label:'Faturado',      val: totalFaturadoGeral, cor:'var(--acn-ok)' },
+            { label:'A faturar',     val: totalPendenteGeral, cor:'var(--acn-warn)' },
+          ].map(({ label, val, cor }) => (
+            <div key={label}>
+              <span className="rot">{label}</span>
+              <span className="val acn-num" style={{ color:cor }}>{fmtMoeda(val)}</span>
             </div>
           ))}
         </div>
@@ -2734,46 +2577,37 @@ const SUB_STATUS_COR: Record<string,string> = {
   if (loading) return <div style={{ padding:20, color:'#64748b', fontSize:11 }}>Carregando CRM...</div>;
 
   return (
-    <div style={{ padding:'8px 12px' }}>
+    <div>
 
-      {/* ── Navegação principal CRM ── */}
-      <div className="acn-nav-quebra" style={{ display:'flex', background:'#0f172a', margin:'-8px -12px 0', padding:'0 12px' }}>
-        {/* Funis */}
-        <div onClick={() => setSecaoCrm('funil')} style={{
-          padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
-          color: secaoCrm==='funil' ? '#38bdf8' : '#64748b',
-          borderBottom: secaoCrm==='funil' ? '3px solid #0891b2' : '3px solid transparent',
-        }}>💼 Vendas Diretas</div>
-        {/* Contatos */}
-        <div onClick={() => setSecaoCrm('contatos')} style={{
-          padding:'7px 18px', fontSize:11, fontWeight:700, cursor:'pointer',
-          color: secaoCrm==='contatos' ? '#fb923c' : '#64748b',
-          borderBottom: secaoCrm==='contatos' ? '3px solid #ea580c' : '3px solid transparent',
-        }}>📇 Contatos</div>
-
-        <div style={{ flex:1 }} />
-        {secaoCrm === 'funil' && (
-          <div className="acn-faixa-rolavel" style={{ display:'flex', alignItems:'center', gap:4, paddingRight:4 }}>
-            {([
-              ['kanban',       '📋 Kanban'],
-              ['agenda',       '📅 Agenda'],
-              ['recentes',     '🕐 Últimas Visualizadas'],
-              ['relatorio',    '📊 Relatório'],
-              ['opls',         '🔧 OPLs em Aberto'],
-              ...(podeVerFaturamentos ? [['faturamentos', '💰 Faturamentos']] : []),
-            ] as [string,string][]).map(([a, label]) => (
-              <div key={a} onClick={() => setAbaInterna(a as any)} style={{
-                padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer',
-                color: abaInterna===a ? 'white' : '#64748b',
-                background: abaInterna===a ? '#0f766e' : 'transparent',
-                borderRadius:4, margin:'4px 0',
-              }}>
-                {label}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* ── Cabeçalho: título, criar à direita, abas logo abaixo ── */}
+      <CabecalhoTela
+        titulo={secaoCrm === 'contatos' ? 'Contatos' : funil === 'licitacao' ? 'Licitações' : 'Vendas diretas'}
+        subtitulo={secaoCrm === 'funil' ? (
+          <>
+            <span className="acn-num">{opsFiltradas.length}</span> registros
+            {podeVerTotais && <> · Pipeline: <span className="acn-num">{fmtMoeda(opsFiltradas.filter(o=>!isPerdido(getEst(o.estagio_id))&&!isGanho(getEst(o.estagio_id))).reduce((s,o)=>s+(o.valor_registrado||0),0))}</span></>}
+          </>
+        ) : undefined}
+        acoes={secaoCrm === 'funil' && (<>
+          <Botao variante="secundario" icone={mdiPlus} onClick={() => setModalNovaOpOs({})}>Nova OP / OS</Botao>
+          <Botao variante="primario" icone={mdiPlus} onClick={() => { setFormOp({ ...VAZIO_OP, funil }); setModalOp({}); }}>Nova venda direta</Botao>
+        </>)}
+        abas={
+          <Abas
+            ativa={secaoCrm === 'contatos' ? 'contatos' : abaInterna}
+            onChange={id => { if (id === 'contatos') setSecaoCrm('contatos'); else { setSecaoCrm('funil'); setAbaInterna(id as any); } }}
+            itens={[
+              { id:'kanban',    rotulo:'Kanban', icone: mdiViewColumnOutline },
+              { id:'agenda',    rotulo:'Agenda', icone: mdiCalendarMonthOutline },
+              { id:'recentes',  rotulo:'Últimas visualizadas', icone: mdiHistory },
+              { id:'relatorio', rotulo:'Relatório', icone: mdiChartBar },
+              { id:'opls',      rotulo:'OPLs em aberto', icone: mdiWrenchOutline },
+              ...(podeVerFaturamentos ? [{ id:'faturamentos', rotulo:'Faturamentos', icone: mdiCashMultiple }] : []),
+              { id:'contatos',  rotulo:'Contatos', icone: mdiCardAccountDetailsOutline },
+            ]}
+          />
+        }
+      />
 
       {/* ── Seção Contatos ── */}
       {secaoCrm === 'contatos' && (
@@ -2785,103 +2619,66 @@ const SUB_STATUS_COR: Record<string,string> = {
 
       {/* ── Contatos do Dia ── */}
       {contatosHoje.length > 0 && (
-        <div style={{ background:'#fefce8', border:'1.5px solid #fde047', borderRadius:6, padding:'8px 12px', marginBottom:8 }}>
-          <div style={{ fontSize:9, fontWeight:700, color:'#854d0e', marginBottom:6 }}>
-            📅 CONTATOS AGENDADOS PARA HOJE ({contatosHoje.length})
-          </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+        <Faixa tom="atencao" icone={mdiCalendarClockOutline}>
+          <b>Contatos agendados para hoje ({contatosHoje.length})</b>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:6 }}>
             {contatosHoje.map(o => (
-              <div key={o.id} style={{
-                background:'white', border:'1px solid #fde047', borderRadius:5,
-                padding:'5px 10px', fontSize:9,
-              }}>
-                <div style={{ fontWeight:700, color:'#1e293b' }}>{o.titulo}</div>
-                {o.nome_contato && <div style={{ color:'#475569' }}>👤 {o.nome_contato}</div>}
-                {o.contato      && <div style={{ color:'#0891b2' }}>📞 {o.contato}</div>}
-                {o.responsavel_nome && <div style={{ color:'#94a3b8' }}>por {o.responsavel_nome}</div>}
-                <div style={{ fontSize:8, color:'#64748b', marginTop:2 }}>
-                  {o.funil === 'licitacao' ? '🏛️ Licitação' : '💼 Venda Direta'}
+              <div key={o.id} className="acn-contato-hoje">
+                <div className="acn-forte">{o.titulo}</div>
+                {o.nome_contato && <div>{o.nome_contato}</div>}
+                {o.contato      && <div className="acn-num">{o.contato}</div>}
+                <div className="acn-fraco">
+                  {o.funil === 'licitacao' ? 'Licitação' : 'Venda direta'}{o.responsavel_nome ? ` · por ${o.responsavel_nome}` : ''}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </Faixa>
       )}
 
-      {/* ── Toolbar ── */}
-      <div style={{ display:'flex', gap:6, alignItems:'center', margin:'8px 0', flexWrap:'wrap' }}>
-        <button className="acn-btn" style={{ background:'#0f766e', fontSize:9, padding:'3px 10px' }}
-          onClick={() => { setFormOp({ ...VAZIO_OP, funil }); setModalOp({}); }}>
-          + Nova Venda Direta
-        </button>
-        <button className="acn-btn" style={{ background:'#7c3aed', fontSize:9, padding:'3px 10px' }}
-          onClick={() => setModalNovaOpOs({})}>
-          🔧 Nova OP / OS
-        </button>
-        <input
-          placeholder={`🔍 Título, órgão ou edital...`}
-          value={busca} onChange={e => setBusca(e.target.value)}
-          style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9, width:180 }}
-        />
+      {/* ── Filtros ── */}
+      <div className="acn-kmeta" style={{ gap:8, margin:'0 0 12px' }}>
+        <input className="acn-input" placeholder="Título, órgão ou edital" aria-label="Buscar por título, órgão ou edital"
+          value={busca} onChange={e => setBusca(e.target.value)} style={{ width:220 }} />
         {/* Filtro por responsável */}
-        <select value={filtResp} onChange={e => setFiltResp(e.target.value)}
-          style={{ padding:'3px 7px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
+        <select className="acn-input" value={filtResp} onChange={e => setFiltResp(e.target.value)} style={{ width:'auto', minWidth:170 }} aria-label="Responsável">
           <option value="">Todos os responsáveis</option>
           {respUnicos.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
-        {filtResp && (
-          <button onClick={() => setFiltResp('')}
-            style={{ fontSize:9, padding:'2px 7px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer' }}>
-            ✕
-          </button>
-        )}
+        {filtResp && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltResp('')} title="Limpar responsável" aria-label="Limpar responsável" />}
         {/* Filtro por temperatura do lead — mini gráfico de barras clicável */}
         {(() => {
           const contTemp: Record<string, number> = { frio:0, morno:0, quente:0 };
           opsFunil.forEach(o => { if (o.temperatura && contTemp[o.temperatura] !== undefined) contTemp[o.temperatura]++; });
           const maxTemp = Math.max(1, contTemp.frio, contTemp.morno, contTemp.quente);
           const BARRAS = [
-            { v:'frio',   label:'🧊', cor:'#3b82f6' },
-            { v:'morno',  label:'🌤️', cor:'#a855f7' },
-            { v:'quente', label:'🔥', cor:'#dc2626' },
+            { v:'frio',   label:'🧊 Frio',   cor:'#245fb8' },
+            { v:'morno',  label:'🌤️ Morno',  cor:'#8b5cf6' },
+            { v:'quente', label:'🔥 Quente', cor:'#b9302a' },
           ] as const;
           return (
-            <div title="Clique numa barra pra filtrar por temperatura"
-              style={{ display:'flex', alignItems:'flex-end', gap:3, height:26, padding:'0 4px', border:'1px solid #e2e8f0', borderRadius:4, background:'#fafafa' }}>
+            <div title="Temperatura dos leads — clique numa barra para filtrar" className="acn-temp-barras">
               {BARRAS.map(b => {
                 const n = contTemp[b.v];
                 const ativo = filtTemp === b.v;
                 const h = Math.max(3, Math.round((n / maxTemp) * 18));
                 return (
-                  <div key={b.v} onClick={() => setFiltTemp(ativo ? '' : b.v)}
-                    title={`${b.label} ${n}`}
-                    style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end',
-                      cursor:'pointer', width:16, height:20 }}>
-                    <div style={{ width:10, height:h, borderRadius:'2px 2px 0 0',
-                      background: ativo ? b.cor : `${b.cor}70`,
-                      border: ativo ? `1px solid ${b.cor}` : 'none' }} />
+                  <div key={b.v} onClick={() => setFiltTemp(ativo ? '' : b.v)} title={`${b.label}: ${n}`}
+                    style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', cursor:'pointer', width:16, height:20 }}>
+                    <div style={{ width:10, height:h, borderRadius:'2px 2px 0 0', background: b.cor, opacity: ativo || !filtTemp ? 1 : .35 }} />
                   </div>
                 );
               })}
             </div>
           );
         })()}
-        {filtTemp && (
-          <button onClick={() => setFiltTemp('')}
-            style={{ fontSize:9, padding:'2px 7px', border:'1px solid #fca5a5', borderRadius:4, background:'#fef2f2', color:'#dc2626', cursor:'pointer' }}>
-            ✕ {filtTemp}
-          </button>
-        )}
-        <span style={{ fontSize:9, color:'#94a3b8' }}>
-          {opsFiltradas.length} registros
-          {podeVerTotais && ` · Pipeline: ${fmtMoeda(opsFiltradas.filter(o=>!isPerdido(getEst(o.estagio_id))&&!isGanho(getEst(o.estagio_id))).reduce((s,o)=>s+(o.valor_registrado||0),0))}`}
-        </span>
+        {filtTemp && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltTemp('')}>{filtTemp}</Botao>}
       </div>
 
       {/* ── Conteúdo ── */}
       {abaInterna === 'kanban' && (
         <div>
-          <div style={{ padding:'10px 4px 0' }}>{renderResumoCards()}</div>
+          <div>{renderResumoCards()}</div>
           <div style={{ overflowX:'auto' }}>{renderKanban()}</div>
         </div>
       )}

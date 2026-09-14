@@ -112,9 +112,17 @@ export function Termometro({ pct, size = 14 }: { pct: number | null | undefined;
 }
 
 // ── Badge pequeno pro card individual (Kanban CRM / LicitCard) ──
-export function MarkupBadge({ pct }: { pct: number | null | undefined }) {
+export function MarkupBadge({ pct, discreto = false }: { pct: number | null | undefined; discreto?: boolean }) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return null;
   const banda = corMarkup(pct);
+  // discreto: só o termômetro e o número na cor da faixa (cartões do kanban)
+  if (discreto) return (
+    <span title={`Markup médio da cotação: ${banda.label}`} className="acn-num"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 500, color: banda.cor }}>
+      <Termometro pct={pct} size={13} />
+      {pct.toFixed(1)}%
+    </span>
+  );
   return (
     <span title={`Markup médio da cotação: ${banda.label}`} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,

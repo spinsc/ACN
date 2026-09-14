@@ -97,7 +97,7 @@ function papelBotao(el: HTMLElement): string | null {
     if (h.s >= 0.3 && h.l < 0.975) return 'selecionado';
     return 'secundario';
   }
-  if (h.s < 0.2 && h.l > 0.33) return 'secundario'; // cinza médio (costuma ser "desligado")
+  if (h.s < 0.26 && h.l > 0.33) return 'secundario'; // cinza médio/azulado (costuma ser "desligado")
   if (ehVermelho(h)) return 'perigo';
   return 'primario';
 }
@@ -181,11 +181,16 @@ function marcarCabecalho(el: HTMLElement) {
 
 // Uma ação principal por grupo: se vários botões lado a lado ficaram "principal",
 // o último (à direita) continua principal e os outros viram secundários.
+// Exceção: quando os "principais" têm todos a MESMA cor e há botões apagados ao lado,
+// é um seletor (ex.: Todos · Pendentes · Faturados | Todos · Licitações) — aí os
+// demais ficam como "selecionado", para não sumir qual opção está ligada.
 function ajustarGrupo(pai: Element) {
-  const principais = Array.from(pai.children).filter(c =>
-    ehBotao(c) && c.getAttribute('data-acn-tom-original') === 'primario') as HTMLElement[];
+  const botoes = Array.from(pai.children).filter(ehBotao) as HTMLElement[];
+  const principais = botoes.filter(c => c.getAttribute('data-acn-tom-original') === 'primario');
+  const cores = new Set(principais.map(b => b.style.backgroundColor));
+  const seletor = principais.length > 1 && cores.size === 1 && botoes.length > principais.length;
   principais.forEach((b, i) => {
-    const alvo = i === principais.length - 1 ? 'primario' : 'secundario';
+    const alvo = seletor ? 'selecionado' : i === principais.length - 1 ? 'primario' : 'secundario';
     if (b.getAttribute('data-acn-tom') !== alvo) b.setAttribute('data-acn-tom', alvo);
   });
 }
