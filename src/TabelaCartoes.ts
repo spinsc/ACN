@@ -61,7 +61,10 @@ function marcarTabela(tabela: HTMLTableElement) {
       for (const td of cells) {
         const r = rotulos[col] || '';
         if (td.getAttribute('data-rotulo') !== r) td.setAttribute('data-rotulo', r);
-        const soAcoes = !!td.querySelector('button') && !(td.textContent || '').replace(/[\s​]/g, '').replace(/[^\p{L}\p{N}]/gu, '').length;
+        // só botões (o texto da célula é todo de botões/links de ação)
+        const botoes = Array.from(td.querySelectorAll('button, a[role=button]'));
+        const letras = (t: string) => t.replace(/[^\p{L}\p{N}]/gu, '').length;
+        const soAcoes = botoes.length > 0 && letras(td.textContent || '') <= botoes.reduce((n, b) => n + letras(b.textContent || ''), 0);
         td.classList.toggle('acn-cel-acoes', /^a[cç](oes|ões|ao|ão)$/i.test(r) || (soAcoes && !r));
         col += Math.max(1, td.colSpan || 1);
       }

@@ -578,7 +578,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   return (
     <div style={{ padding: 10 }}>
       {/* ── Cabeçalho ── */}
-      <div style={{
+      <div className="acn-quebra" style={{
         background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
         padding: '10px 14px', marginBottom: 10,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,

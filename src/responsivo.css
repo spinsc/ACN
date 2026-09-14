@@ -158,6 +158,10 @@
   /* Faixas de abas/filtros: rolam para o lado em vez de estourar a tela */
   html body .acn-faixa-rolavel { overflow-x: auto; flex-wrap: nowrap !important; max-width: 100%; -webkit-overflow-scrolling: touch; }
   html body .acn-faixa-rolavel > * { flex-shrink: 0; white-space: nowrap; }
+  /* Botões lado a lado quebram de linha em vez de sair da tela */
+  html body .acn-main div:has(> button ~ button) { flex-wrap: wrap; }
+  /* Linha flexível que pode quebrar em várias linhas */
+  html body .acn-quebra { flex-wrap: wrap !important; }
   /* Item flexível que precisa poder encolher (senão o conteúdo empurra a linha para fora da tela) */
   html body .acn-min0 { min-width: 0 !important; }
   /* Barra de navegação que pode ir para 2 linhas (espaçador flex:1 some) */
@@ -221,11 +225,13 @@
     display: flex; gap: 6px; padding-left: 0 !important; flex-wrap: wrap; justify-content: flex-end; margin-top: 4px; padding-top: 8px !important; border-top: 1px solid #f1f5f9 !important;
   }
   html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes::before { display: none; }
-  html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes > * { flex-wrap: wrap; }
+  html body table.acn-tab-cartoes > tbody > tr > td.acn-cel-acoes div { flex-wrap: wrap !important; }
   html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira { border: none; box-shadow: none; background: transparent; padding: 0; }
   html body table.acn-tab-cartoes > tbody > tr.acn-linha-inteira > td::before { display: none; }
   html body table.acn-tab-cartoes > tbody > tr:hover > td { background: transparent !important; }
-  html body table.acn-tab-cartoes > tfoot { display: block; }
+  html body table.acn-tab-cartoes > tfoot,
+  html body table.acn-tab-cartoes > tfoot > tr { display: flex; flex-wrap: wrap; width: 100%; }
+  html body table.acn-tab-cartoes > tfoot > tr > td { display: block; flex: 1 1 auto; }
 
   /* Planilhas: rolam para o lado, 1ª coluna fixa */
   html body table.acn-tab-planilha { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }

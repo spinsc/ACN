@@ -9,6 +9,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
+import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor_unitario: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
@@ -487,6 +488,9 @@ export default function ComprasTab({ currentUser }) {
     try { return localStorage.getItem('acn:compras-visao') === 'kanban' ? 'kanban' : 'tabela'; } catch { return 'tabela'; }
   });
   const setVisao = (v: 'tabela'|'kanban') => { setVisaoState(v); try { localStorage.setItem('acn:compras-visao', v); } catch {} };
+  // Celular: kanban mostra um status por vez
+  const celular = useCelular();
+  const [etapaCel, setEtapaCel] = useState<string | null>(null);
 
   // Valores inline por pedido: { [id]: { valor, prazo, salvando } }
   const [inline, setInline] = useState<Record<string,{valor:string,prazo:string,salvando:boolean}>>({});
@@ -1446,10 +1450,16 @@ export default function ComprasTab({ currentUser }) {
         </div>
       )}
 
-      {!loading && pedidos.length > 0 && visao === 'kanban' && (
+      {!loading && pedidos.length > 0 && visao === 'kanban' && (() => {
+        const colunas = STATUS_COMPRAS.filter(st => !filtro || st === filtro);
+        const etapas = colunas.map(st => ({ id: st, titulo: st, cor: COR_STATUS_COMPRA[st], total: pedidos.filter((p:any) => p.status_compra === st).length }));
+        const ativa = etapas.find(e => e.id === etapaCel) ? etapaCel : etapaInicial(etapas);
+        return (<>
+        {celular && <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />}
         <div style={{ display:'flex', gap:8, overflowX:'auto', alignItems:'flex-start', paddingBottom:6 }}>
-          {STATUS_COMPRAS.filter(st => !filtro || st === filtro).map(st => (
-            <KanbanColuna key={st} titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={230}
+          {colunas.filter(st => !celular || st === ativa).map(st => (
+            <KanbanColuna key={st} titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={celular ? 0 : 230}
+              {...(celular ? { visiveis: 100000 } : {})}
               itens={pedidos.filter((p:any) => p.status_compra === st)} vazio="Nenhuma requisição"
               renderCard={(p:any) => {
                 const naoLido = pedidosNaoLidos.has(String(p.id));
@@ -1485,7 +1495,8 @@ export default function ComprasTab({ currentUser }) {
               }} />
           ))}
         </div>
-      )}
+        </>);
+      })()}
 
       {loading ? <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
         : pedidos.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhuma requisição encontrada. {queryError ? '' : '(tabela vazia ou sem permissão)'}</div>
