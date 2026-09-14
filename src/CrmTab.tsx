@@ -358,6 +358,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // Formação de Preços do card continua montada (escondida) depois de aberta —
   // trocar de aba desmontava e a edição ainda não salva (ex.: markup) sumia.
   const [formacaoMontadaId, setFormacaoMontadaId] = useState<string | null>(null);
+  // OPs geradas a partir desta oportunidade (PV) — botão no card aberto leva até elas
+  const [oplsDoCard, setOplsDoCard] = useState<any[]>([]);
+  const [oplDoCardAberta, setOplDoCardAberta] = useState<any | null>(null);
   const [abrirDocs, setAbrirDocs]           = useState<any[]>([]);
   const [abrirAndamentoHist, setAbrirAndamentoHist] = useState<any[]>([]);
   const [abrirNovoText, setAbrirNovoText]   = useState('');
@@ -858,6 +861,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   useEffect(() => {
     if (modalAbrir?.id && abrirTabDir === 'formacao_precos') setFormacaoMontadaId(modalAbrir.id);
   }, [modalAbrir?.id, abrirTabDir]);
+
+  useEffect(() => {
+    setOplsDoCard([]);
+    if (!modalAbrir?.id) return;
+    let vivo = true;
+    supabase.from('oples').select('*').eq('crm_oportunidade_id', modalAbrir.id).order('opl')
+      .then(({ data }) => { if (vivo) setOplsDoCard(data || []); });
+    return () => { vivo = false; };
+  }, [modalAbrir?.id]);
 
   useEffect(() => {
     if (!modalAbrir) return;
@@ -4370,6 +4382,12 @@ const SUB_STATUS_COR: Record<string,string> = {
             style={{ background:'none', border:'none', color:'#fff', fontSize:16, cursor:'pointer', padding:'2px 6px' }}>✕</button>
         </div>
       )}
+      {oplDoCardAberta && (
+        // acima do card aberto (zIndex 1100) — o modal da OP sozinho fica em 1000
+        <div style={{ position:'relative', zIndex:2000 }}>
+          <OplDetalheModal opl={oplDoCardAberta} onClose={() => setOplDoCardAberta(null)} currentUser={currentUser} />
+        </div>
+      )}
       {modalAbrir && !abrirMinimized && (
         <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1100, display:'flex' }}>
           <div ref={abrirContainerRef} style={{ display:'flex', width:'100%', height:'100%' }}>
@@ -4384,6 +4402,18 @@ const SUB_STATUS_COR: Record<string,string> = {
                   </div>
                   <div style={{ fontSize:13, fontWeight:700 }}>{modalAbrir.titulo}</div>
                   {modalAbrir.orgao && <div style={{ fontSize:9, opacity:.85 }}>{modalAbrir.orgao}</div>}
+                  {oplsDoCard.length > 0 && (() => {
+                    const primeira = oplsDoCard[0];
+                    const base = String(primeira.opl || '').replace(/\/\d+$/, '');
+                    return (
+                      <button onClick={() => setOplDoCardAberta(primeira)}
+                        title={oplsDoCard.length > 1 ? `Abre a 1ª unidade — no detalhe há o "Resumo do lote" com as ${oplsDoCard.length}` : 'Abrir o detalhe da OP gerada por este PV'}
+                        style={{ marginTop:6, background:'#0891b2', color:'#fff', border:'none', borderRadius:5, padding:'4px 10px',
+                          fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                        🔧 Ir para a OP {oplsDoCard.length > 1 ? `${base} (${oplsDoCard.length} unidades)` : primeira.opl}
+                      </button>
+                    );
+                  })()}
                 </div>
                 <div style={{ display:'flex', gap:4, alignItems:'center' }}>
                   <SeletorModoSplit modo={abrirModoSplit} onModo={setAbrirModoSplit} escuro />

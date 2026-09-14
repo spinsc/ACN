@@ -56,10 +56,33 @@ export function ordenar(a, b) {
   return (a.opl || '').localeCompare(b.opl || '');
 }
 
-export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUser }: any) {
+const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
+const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
+
+// Unidades do mesmo lote (/01, /02...) na mesma coluna viram UM cartão de lote,
+// como na visão em tabela — antes um lote de 18 enchia a coluna com 18 cartões.
+function agruparLotes(lista) {
+  const feitos = new Set();
+  const out = [];
+  for (const o of lista) {
+    const base = baseOplDe(o.opl);
+    if (feitos.has(base)) continue;
+    const irmaos = /\/\d+$/.test(o.opl || '') ? lista.filter(x => baseOplDe(x.opl) === base) : [o];
+    if (irmaos.length > 1) {
+      feitos.add(base);
+      out.push({ _lote: true, base, irmaos: [...irmaos].sort((a, b) => sufixoNum(a.opl) - sufixoNum(b.opl)) });
+    } else {
+      out.push(o);
+    }
+  }
+  return out;
+}
+
+export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUser, onImportarLote }: any) {
   const porColuna = (id) => opls.filter(o => colunaDe(o) === id).sort(ordenar);
   const celular = useCelular();
   const [etapaCel, setEtapaCel] = useState(null);
+  const [lotesAbertos, setLotesAbertos] = useState({});
 
   const card = (o) => {
     const emProd     = o.status_geral === 'Em Producao';
@@ -155,6 +178,64 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
     );
   };
 
+  const cardLote = (g, colId) => {
+    const chave = `${colId}::${g.base}`;
+    const aberto = !!lotesAbertos[chave];
+    const primeiro = g.irmaos[0];
+    const qtdAguardando = g.irmaos.filter(o => o.status_geral === 'Aguardando Inicio Producao').length;
+    const qtdEmProd     = g.irmaos.filter(o => o.status_geral === 'Em Producao').length;
+    const qtdRetrab     = g.irmaos.filter(o => o.status_geral === 'Retrabalho' || o.status_geral === 'Em Retrabalho').length;
+    const qtdSemDono    = g.irmaos.filter(o => !o.responsavel_producao && !o.equipe_nome).length;
+    const datas = g.irmaos.map(o => o.data_prevista_entrega).filter(Boolean).sort();
+    const badge = (txt, bg, cor) => (
+      <span style={{ fontSize: 8, fontWeight: 800, borderRadius: 3, padding: '1px 5px', background: bg, color: cor }}>{txt}</span>
+    );
+    return (
+      <div key={'lote-' + chave}
+        style={{ background: '#faf5ff', border: '1px solid #ddd6fe', borderLeft: `4px solid ${qtdRetrab ? '#dc2626' : '#7c3aed'}`,
+          borderRadius: 6, padding: '7px 9px', boxShadow: '0 1px 2px #0000000d' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#1e293b' }}>🔗 {g.base}</span>
+          <span style={{ fontSize: 8, fontWeight: 800, background: '#7c3aed', color: '#fff', borderRadius: 3, padding: '1px 5px' }}>
+            LOTE — {g.irmaos.length} unidades
+          </span>
+          <OrigemVendaBadge origem={primeiro.origem_venda} />
+        </div>
+        <div style={{ fontSize: 10, color: '#334155', fontWeight: 600, wordBreak: 'break-word' }}>{primeiro.cliente_nome || '—'}</div>
+        <div style={{ fontSize: 9, color: '#94a3b8', wordBreak: 'break-word' }}>{primeiro.modelo || primeiro.tipo_projeto || '—'}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
+          {qtdAguardando > 0 && badge(`${qtdAguardando} aguardando início`, '#fef3c7', '#92400e')}
+          {qtdEmProd > 0 && badge(`${qtdEmProd} em produção`, '#dcfce7', '#166534')}
+          {qtdRetrab > 0 && badge(`${qtdRetrab} em retrabalho`, '#fee2e2', '#991b1b')}
+          {qtdSemDono > 0 && badge(`${qtdSemDono} sem responsável`, '#fff7ed', '#c2410c')}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5, gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: colunaDe(primeiro) === 'atrasadas' ? '#dc2626' : '#475569' }}>
+            {datas.length ? fmt(datas[0]) : 'Sem prazo'}{datas.length > 1 && datas[0] !== datas[datas.length - 1] ? ` a ${fmt(datas[datas.length - 1])}` : ''}
+          </span>
+          <div style={{ display: 'flex', gap: 3 }}>
+            {onImportarLote && (
+              <button onClick={() => onImportarLote(g)} title="Importar técnicos/equipes para as unidades do lote"
+                style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, cursor: 'pointer', border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8' }}>
+                📥
+              </button>
+            )}
+            <button onClick={() => setLotesAbertos(p => ({ ...p, [chave]: !p[chave] }))}
+              style={{ fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 3, cursor: 'pointer', border: 'none', background: '#7c3aed', color: '#fff' }}>
+              {aberto ? '▲ Ocultar' : `▼ Ver ${g.irmaos.length} unidades`}
+            </button>
+          </div>
+        </div>
+        {aberto && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {g.irmaos.map(card)}
+          </div>
+        )}
+      </div>
+    );
+  };
+  const renderDaColuna = (colId) => (x) => (x._lote ? cardLote(x, colId) : card(x));
+
   // Celular: uma coluna por vez, escolhida na faixa de etapas
   if (celular) {
     const etapas = COLUNAS.map(c => ({ ...c, total: porColuna(c.id).length }));
@@ -164,7 +245,8 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
       <div>
         <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />
         <KanbanColuna key={col.id} titulo={col.titulo} cor={col.cor} fundo={col.fundo}
-          itens={porColuna(col.id)} renderCard={card} vazio="Nenhuma OP" larguraMin={0} visiveis={100000} />
+          itens={agruparLotes(porColuna(col.id))} contagem={porColuna(col.id).length}
+          renderCard={renderDaColuna(col.id)} vazio="Nenhuma OP" larguraMin={0} visiveis={100000} />
       </div>
     );
   }
@@ -173,7 +255,8 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, alignItems: 'flex-start' }}>
       {COLUNAS.map(c => (
         <KanbanColuna key={c.id} titulo={c.titulo} cor={c.cor} fundo={c.fundo}
-          itens={porColuna(c.id)} renderCard={card} vazio="Nenhuma OP" />
+          itens={agruparLotes(porColuna(c.id))} contagem={porColuna(c.id).length}
+          renderCard={renderDaColuna(c.id)} vazio="Nenhuma OP" />
       ))}
     </div>
   );

@@ -42,6 +42,30 @@ const SETOR_ABA: Record<string, string | null> = {
   Laboratorio: 'laboratorio',
 };
 
+// Setores que a pessoa pode analisar: os das abas que ela acessa (Admin: todos).
+// "Orçamento" não tem aba — fica com quem tem "recebe alerta de análise".
+export function setoresQueAnalisa(currentUser: any): string[] {
+  const abas = currentUser?.abas_permitidas;
+  const admin = currentUser?.perfil === 'Admin';
+  const semRestricao = admin || !Array.isArray(abas) || abas.length === 0;
+  return Object.keys(SETOR_ABA).filter(s => {
+    const aba = SETOR_ABA[s];
+    if (aba === null) return admin || !!currentUser?.recebe_alerta_analise;
+    return semRestricao || abas.includes(aba);
+  });
+}
+
+/** Solicitações em andamento com pelo menos um setor DESTA pessoa ainda pendente. */
+export async function contarAnalisesDoUsuario(currentUser: any): Promise<number> {
+  const meus = setoresQueAnalisa(currentUser);
+  if (!meus.length) return 0;
+  const { data } = await supabase.from('analise_setores')
+    .select('solicitacao_id, analise_solicitacoes!inner(status)')
+    .eq('status', 'pendente').eq('analise_solicitacoes.status', 'em_andamento')
+    .in('setor', meus);
+  return new Set((data || []).map((r: any) => r.solicitacao_id)).size;
+}
+
 interface Props {
   currentUser: any;
   onClose: () => void;
@@ -62,22 +86,22 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
   // Opções do filtro de setor — só os setores cuja aba correspondente o
   // usuário tem permissão de ver (mesmo critério de isVisible() em
   // DashboardTab.tsx: Admin ou sem abas_permitidas configuradas vê tudo).
-  const setorOpcoes = React.useMemo(() => {
-    const abas = currentUser?.abas_permitidas;
-    const semRestricao = currentUser?.perfil === 'Admin' || !Array.isArray(abas) || abas.length === 0;
-    return Object.keys(SETOR_ABA).filter(s => {
-      const aba = SETOR_ABA[s];
-      return aba === null || semRestricao || abas.includes(aba);
-    });
-  }, [currentUser?.abas_permitidas, currentUser?.perfil]);
+  const setorOpcoes = React.useMemo(() => setoresQueAnalisa(currentUser),
+    [currentUser?.abas_permitidas, currentUser?.perfil, currentUser?.recebe_alerta_analise]);
+  // Admin vê a solicitação inteira; os demais só a parte do próprio setor.
+  const veTodosSetores = currentUser?.perfil === 'Admin';
 
   // Filtra por setor no cliente — um card (solicitação) pode ter vários
   // setores, então "filtrar por setor" mantém o card se PELO MENOS um dos
   // setores dele bater, sem esconder os outros setores do mesmo card.
   const analisesFiltradas = React.useMemo(() => {
-    if (setorFiltro === 'todos') return analises;
-    return analises.filter(sol => (sol.analise_setores || []).some((s: any) => s.setor === setorFiltro));
-  }, [analises, setorFiltro]);
+    // só solicitações que pedem análise de algum setor desta pessoa
+    // (em "Pendentes", quem não é Admin só vê o que o seu setor ainda não analisou)
+    const minhas = analises.filter(sol => (sol.analise_setores || []).some((s: any) =>
+      setorOpcoes.includes(s.setor) && (veTodosSetores || filtro !== 'pendente' || s.status === 'pendente')));
+    if (setorFiltro === 'todos') return minhas;
+    return minhas.filter(sol => (sol.analise_setores || []).some((s: any) => s.setor === setorFiltro));
+  }, [analises, setorFiltro, setorOpcoes, filtro, veTodosSetores]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,11 +121,10 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
   // Contagem do badge do header é sempre "pendentes de verdade", independente
   // do filtro selecionado na tela — senão o badge some ao trocar de aba.
   const refreshCount = useCallback(async () => {
-    const { count } = await supabase.from('analise_solicitacoes')
-      .select('id', { count: 'exact', head: true }).eq('status', 'em_andamento');
-    setPendentesGlobal(count || 0);
-    onCountChange?.(count || 0);
-  }, [onCountChange]);
+    const n = await contarAnalisesDoUsuario(currentUser);
+    setPendentesGlobal(n);
+    onCountChange?.(n);
+  }, [onCountChange, currentUser]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { refreshCount(); }, [refreshCount]);
@@ -148,7 +171,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
         <div style={{ background:'#b45309', color:'white', padding:'14px 16px', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div>
-              <div style={{ fontWeight:700, fontSize:14 }}>🔔 Análises Orçamentárias</div>
+              <div style={{ fontWeight:700, fontSize:14 }}>🔔 Análises</div>
               <div style={{ fontSize:10, opacity:.85, marginTop:2 }}>
                 {pendentesGlobal > 0
                   ? `${pendentesGlobal} solicitação(ões) aguardando análise`
@@ -303,7 +326,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
                     {setores.length === 0 && (
                       <div style={{ fontSize:10, color:'#94a3b8' }}>Nenhum setor cadastrado para esta análise.</div>
                     )}
-                    {setores.map(setor => {
+                    {setores.filter(s => veTodosSetores || setorOpcoes.includes(s.setor)).map(setor => {
                       const concluido = setor.status === 'analisado';
                       const cancelado = setor.status === 'cancelado' || (solCancelada && !concluido);
                       const salvandoSetor = salvando[setor.id];

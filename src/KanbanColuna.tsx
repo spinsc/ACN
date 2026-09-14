@@ -72,6 +72,7 @@ export default function KanbanColuna({
   larguraMin = 260,
   vazio = 'Nada aqui',
   rodape = null,
+  contagem = null,   // número mostrado no cabeçalho, quando difere da quantidade de cartões (ex.: lotes agrupados)
 }: any) {
   const [refLista, maxAltura] = useAlturaDeCards(visiveis);
   const total = itens.length;
@@ -83,7 +84,7 @@ export default function KanbanColuna({
       <div style={{ background: cor, color: '#fff', padding: '6px 10px', borderRadius: '7px 7px 0 0',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.3px' }}>{titulo}</span>
-        <span style={{ fontSize: 11, fontWeight: 800, background: '#ffffff33', borderRadius: 10, padding: '0 7px' }}>{total}</span>
+        <span style={{ fontSize: 11, fontWeight: 800, background: '#ffffff33', borderRadius: 10, padding: '0 7px' }}>{contagem ?? total}</span>
       </div>
 
       <div ref={refLista}

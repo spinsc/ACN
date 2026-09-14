@@ -170,6 +170,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
         .from('mencoes')
         .select('*')
         .or(orFilter)
+        .neq('contexto', 'op_adaptacao')   // avisos automáticos de OP ficam no botão "Avisos"
         .order('criado_em', { ascending: false })
         .limit(100);
       if (filtro === 'pendentes') q = q.eq('resolvida', false);
@@ -198,6 +199,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       .from('mencoes')
       .select('id', { count: 'exact', head: true })
       .or(orFilter)
+      .neq('contexto', 'op_adaptacao')
       .eq('resolvida', false);
     setPendentesGlobal(count || 0);
     onCountChange?.(count || 0);
@@ -216,7 +218,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
   const marcarTodasLidas = async () => {
     // Respeita o filtro de setor ativo — "todas" aqui significa "todas as
     // visíveis nesta tela", não todas as menções do usuário em qualquer setor.
-    let q = supabase.from('mencoes').update({ lida: true }).eq('mencionado_id', currentUser?.id).eq('lida', false);
+    let q = supabase.from('mencoes').update({ lida: true }).eq('mencionado_id', currentUser?.id).eq('lida', false).neq('contexto', 'op_adaptacao');
     if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
     await q;
     await load();
@@ -253,7 +255,7 @@ export default function MencoesInboxPanel({ currentUser, onClose, onCountChange,
       resolvida: true, resolvida_em: new Date().toISOString(),
       resolvida_por: currentUser?.nome || currentUser?.email || null,
       lida: true,
-    }).eq('mencionado_id', currentUser?.id).eq('resolvida', false);
+    }).eq('mencionado_id', currentUser?.id).eq('resolvida', false).neq('contexto', 'op_adaptacao');
     if (setorFiltro !== 'todos') q = q.eq('aba_destino', setorFiltro);
     await q;
     await load();

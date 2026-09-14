@@ -9,7 +9,8 @@ import { UnreadBadge } from './useUnread';
 import { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { FLUXOS, UFS } from './FluxoEntrega';
-import FormacaoPrecosTab from './FormacaoPrecosTab';
+import FormacaoPrecosTab, { calcItem } from './FormacaoPrecosTab';
+import { estruturaFormacao } from './FormacaoCalculo';
 import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
@@ -917,6 +918,72 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
+// Quadro no formulário da licitação (lado esquerdo): valor de cada lote e o
+// unitário do lote (soma dos unitários dos itens) da ÚLTIMA versão da formação
+// de preços vinculada. Só leitura; atualiza sozinho quando a formação é salva.
+function QuadroFormacaoLicitacao({ licitacaoId }: any) {
+  const [cot, setCot] = useState<any>(null);
+  const [carregando, setCarregando] = useState(true);
+  const carregar = useCallback(async () => {
+    const { data: vinc } = await supabase.from('cotacoes_precos_vinculos')
+      .select('cotacao_id').eq('tipo', 'licitacao').eq('processo_id', licitacaoId);
+    const ids = [...new Set((vinc || []).map((v: any) => v.cotacao_id))];
+    if (!ids.length) { setCot(null); setCarregando(false); return; }
+    const { data } = await supabase.from('cotacoes_precos')
+      .select('id,nome,versao,criado_em,atualizado_em,itens,parametros_globais,status').in('id', ids);
+    const ultima = [...(data || [])].sort((a: any, b: any) =>
+      (b.versao || 1) - (a.versao || 1) || String(b.criado_em).localeCompare(String(a.criado_em)))[0] || null;
+    setCot(ultima);
+    setCarregando(false);
+  }, [licitacaoId]);
+  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    const h = (e: any) => { if (!e.detail?.vinculo || e.detail.vinculo.id === licitacaoId) carregar(); };
+    window.addEventListener('acn:formacao-salva', h);
+    return () => window.removeEventListener('acn:formacao-salva', h);
+  }, [carregar, licitacaoId]);
+
+  if (carregando || !cot) return null;
+  const est = estruturaFormacao(cot.itens || [], cot.parametros_globais || {}, calcItem);
+  if (!est.lotes.length) return null;
+  const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return (
+    <div style={{ border:'1px solid #bfdbfe', background:'#eff6ff', borderRadius:6, padding:'8px 10px', margin:'4px 0 8px' }}>
+      <div style={{ display:'flex', alignItems:'baseline', gap:6, flexWrap:'wrap', marginBottom:6 }}>
+        <span style={{ fontSize:9, fontWeight:800, color:'#1e3a8a', textTransform:'uppercase', letterSpacing:.3 }}>Formação de preços</span>
+        <span style={{ fontSize:9, color:'#475569' }}>
+          v{cot.versao || 1}{cot.nome ? ` · ${cot.nome}` : ''}{cot.status === 'finalizada' ? ' · final' : ''}
+        </span>
+      </div>
+      <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign:'left', fontSize:8, color:'#64748b', fontWeight:700, padding:'2px 4px' }}>Lote</th>
+            <th style={{ textAlign:'right', fontSize:8, color:'#64748b', fontWeight:700, padding:'2px 4px' }} title="Soma do unitário de cada item do lote">Valor unitário</th>
+            <th style={{ textAlign:'right', fontSize:8, color:'#64748b', fontWeight:700, padding:'2px 4px' }}>Valor do lote</th>
+          </tr>
+        </thead>
+        <tbody>
+          {est.lotes.map((l: any) => (
+            <tr key={l.nome} style={{ borderTop:'1px solid #dbeafe' }}>
+              <td style={{ fontSize:10, fontWeight:700, color:'#1e3a8a', padding:'3px 4px' }}>{l.nome}</td>
+              <td style={{ fontSize:10, textAlign:'right', padding:'3px 4px' }}>{brl(l.unit.totVendas)}</td>
+              <td style={{ fontSize:10, fontWeight:800, textAlign:'right', padding:'3px 4px', color:'#1e40af' }}>{brl(l.total.totVendas)}</td>
+            </tr>
+          ))}
+          {est.lotes.length > 1 && (
+            <tr style={{ borderTop:'1px solid #93c5fd' }}>
+              <td style={{ fontSize:10, fontWeight:800, padding:'3px 4px' }}>Total</td>
+              <td />
+              <td style={{ fontSize:11, fontWeight:800, textAlign:'right', padding:'3px 4px', color:'#1e40af' }}>{brl(est.geral.totVendas)}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // Colunas da lista de licitações — todas menos areas_livres (ver fetchLicit).
 const COLUNAS_LISTA_LICITACOES = 'id,numero,nome_projeto,objeto_principal,orgao,classificacao,status,marcadores,prioridade,'
   + 'data_registro,data_limite_esclarecimentos,data_limite_proposta,data_disputa,data_limite_analise_tecnica,'
@@ -1591,6 +1658,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
               </div>
             </div>
 
+            <QuadroFormacaoLicitacao licitacaoId={licit.id} />
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
               <div style={campoDestaque('valor_estimado')}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
               <div style={campoDestaque('julgamento')}>

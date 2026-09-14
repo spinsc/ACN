@@ -2725,7 +2725,8 @@ export default function ProducaoTab({ currentUser }) {
           <div className="sec-body">
             {loading ? <div className="acn-empty">Carregando...</div>
               : <ProducaoKanban opls={oplsFiltradas} onAction={handleAction}
-                  onPrioridade={definirPrioridade} currentUser={currentUser} />}
+                  onPrioridade={definirPrioridade} currentUser={currentUser}
+                  onImportarLote={(g) => setModalImportarLoteProducao({ base: g.base, irmaos: g.irmaos })} />}
           </div>
         </div>
       )}

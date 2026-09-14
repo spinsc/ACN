@@ -31,7 +31,8 @@ import ClientesTab from './ClientesTab';
 import RHTab, { ComissoesTecnicosStandalone } from './RHTab';
 import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
-import AnaliseInboxPanel from './AnaliseInboxPanel';
+import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
+import AvisosOpPanel, { contarAvisosOp } from './AvisosOpPanel';
 import { contarAnalisesPendentesPorSetor } from './AnaliseWidget';
 import MencoesInboxPanel from './MencoesInboxPanel';
 import AvisoSistemaWidget from './AvisoSistemaWidget';
@@ -686,6 +687,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [showAnalisePanel, setShowAnalisePanel] = useState(false);
   const [mencoesCount, setMencoesCount]         = useState(0);
   const [showMencoesPanel, setShowMencoesPanel] = useState(false);
+  const [avisosOpCount, setAvisosOpCount]       = useState(0);
+  const [showAvisosOp, setShowAvisosOp]         = useState(false);
 
   // Fecha dropdown de busca ao clicar fora
   useEffect(() => {
@@ -705,22 +708,17 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     return () => window.removeEventListener('crm:wa-unread-count', handler);
   }, []);
 
-  // Badge análise orçamentária — só para usuários com recebe_alerta_analise
+  // Badge de análises — para todos; conta só o que é do(s) setor(es) da pessoa
   useEffect(() => {
-    if (!currentUser?.recebe_alerta_analise) return;
+    if (!currentUser?.id) return;
     const fetchAnalise = async () => {
-      try {
-        const { count } = await supabase
-          .from('analise_solicitacoes')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'em_andamento');
-        setAnaliseAlertCount(count || 0);
-      } catch(_) {}
+      try { setAnaliseAlertCount(await contarAnalisesDoUsuario(currentUser)); } catch(_) {}
     };
     fetchAnalise();
     const iv = setInterval(fetchAnalise, 60000);
     return () => clearInterval(iv);
-  }, [currentUser?.recebe_alerta_analise]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.perfil, currentUser?.recebe_alerta_analise]);
 
   // Badge de menções — contagem de menções PENDENTES (não resolvidas, não só
   // não lidas — "lida" só significa "vista", "resolvida" é o que de fato tira
@@ -739,8 +737,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           .from('mencoes')
           .select('id', { count: 'exact', head: true })
           .or(orFilter)
+          .neq('contexto', 'op_adaptacao')   // avisos de OP têm botão próprio
           .eq('resolvida', false);
         setMencoesCount(count || 0);
+        setAvisosOpCount(await contarAvisosOp(currentUser));
       } catch { /* mencoes table may not exist yet */ }
     };
     fetchMencoes();
@@ -1313,9 +1313,25 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 </span>
               )}
             </div>
-            {currentUser?.recebe_alerta_analise && (
+            {/* Avisos automáticos de andamento das OPs (antes iam para Menções) */}
+            <div
+              title={avisosOpCount > 0 ? `${avisosOpCount} aviso(s) de OP` : 'Avisos de OP'}
+              style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
+                background: avisosOpCount > 0 ? 'rgba(8,145,178,.25)' : 'rgba(255,255,255,.1)',
+                border:`1px solid ${avisosOpCount > 0 ? 'rgba(103,232,249,.5)' : 'rgba(255,255,255,.2)'}`,
+                borderRadius:6, padding:'3px 8px', cursor:'pointer', fontSize:10, color:'#a5f3fc', fontWeight:700 }}
+              onClick={() => setShowAvisosOp(true)}>
+              <span>📢 <span className="acn-rotulo">Avisos</span></span>
+              {avisosOpCount > 0 && (
+                <span style={{ background:'#0891b2', color:'white', borderRadius:10, padding:'0 5px',
+                  fontSize:9, fontWeight:800, lineHeight:'16px', minWidth:16, textAlign:'center' }}>
+                  {avisosOpCount}
+                </span>
+              )}
+            </div>
+            {currentUser?.id && (
               <div
-                title={analiseAlertCount > 0 ? `${analiseAlertCount} análise(s) orçamentária(s) pendente(s)` : 'Análises orçamentárias'}
+                title={analiseAlertCount > 0 ? `${analiseAlertCount} análise(s) pendente(s) do seu setor` : 'Análises'}
                 style={{ position:'relative', display:'flex', alignItems:'center', gap:4,
                   background: analiseAlertCount > 0 ? 'rgba(217,119,6,.15)' : 'rgba(255,255,255,.1)',
                   border:`1px solid ${analiseAlertCount > 0 ? 'rgba(217,119,6,.4)' : 'rgba(255,255,255,.2)'}`,
@@ -1605,6 +1621,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           onCountChange={n => setAnaliseAlertCount(n)}
           onNavigate={(tab) => { setShowAnalisePanel(false); setActiveTab(tab); }}
         />
+      )}
+
+      {/* Painel de Avisos de OP */}
+      {showAvisosOp && (
+        <AvisosOpPanel currentUser={currentUser} onClose={() => setShowAvisosOp(false)}
+          onCountChange={n => setAvisosOpCount(n)} />
       )}
 
       {/* Painel lateral de Menções */}

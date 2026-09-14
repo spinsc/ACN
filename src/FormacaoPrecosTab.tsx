@@ -63,7 +63,7 @@ function novoItem() {
 const MARKUP_MINIMO_CUSTO_PCT    = 65;
 const DESCONTO_MAXIMO_TABELA_PCT = 17.5;
 
-function calcItem(item, params) {
+export function calcItem(item, params) {
   const qt             = Number(item.qt)             || 1;
   const custo_unit     = Number(item.custo_unit)     || 0;
   const ipi_pct        = Number(item.ipi_pct)        || 0;
@@ -1418,6 +1418,185 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
   );
 }
 
+// ─── RESUMO NO TOPO DA FORMAÇÃO ───────────────────────────────────────────────
+// Todo o resumo fica ANTES da composição (pedido de 14/09): total geral de todos
+// os itens, e cada lote com TODOS os seus itens (não só o item selecionado).
+// A composição de cada item (custos, DIFAL, impostos, margem, lucro) fica
+// recolhida e abre só quando a pessoa quer ver. Clicar no nome leva ao item.
+function ResumoFormacaoTopo({ estrutura, isVendedor, multiplicador, plataforma, descontoPlatPct, retencaoPlatPct,
+  descontoPlat, retencaoPlat, totalLiquidoPlat, loteAtivo, grupoAtivo, onSelecionar }: any) {
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
+  const [recolhido, setRecolhido] = useState(false);
+  const alternar = (k: string) => setAbertos(a => ({ ...a, [k]: !a[k] }));
+  const g = estrutura.geral;
+  const linhasComposicao = [
+    { label: 'Vendas',   k: 'totVendas',  fmt: fmtR,   hide: false },
+    { label: 'Custos',   k: 'totCustos',  fmt: fmtR,   hide: isVendedor },
+    { label: 'DIFAL',    k: 'totDifal',   fmt: fmtR,   hide: isVendedor },
+    { label: 'Impostos', k: 'totImposto', fmt: fmtR,   hide: false },
+    { label: 'Margem',   k: 'totMargem',  fmt: fmtR,   hide: isVendedor },
+    { label: 'Lucro %',  k: 'lucroPct',   fmt: fmtPct, hide: isVendedor, semUnitario: true },
+  ].filter(x => !x.hide);
+  const th = (h: string, esquerda = false) => (
+    <th key={h} style={{ textAlign: esquerda ? 'left' : 'right', fontSize:9, fontWeight:700, padding:'5px 8px' }}>{h}</th>
+  );
+  if (!estrutura.itens.length) return null;
+
+  return (
+    <div style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:8, padding:12, marginBottom:12 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom: recolhido ? 0 : 10 }}>
+        <div style={{ fontWeight:800, fontSize:12, color:'#1e293b' }}>🧾 Resumo da formação</div>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'baseline', gap:6 }}>
+          <span style={{ fontSize:10, color:'#64748b' }}>Valor total de todos os itens</span>
+          <span style={{ fontSize:16, fontWeight:800, color:'#1e40af' }}>{fmtR(g.totVendas)}</span>
+        </div>
+        <button type="button" onClick={() => setRecolhido(r => !r)}
+          style={{ fontSize:10, fontWeight:700, padding:'3px 10px', borderRadius:5, border:'1px solid #cbd5e1', background:'#f8fafc', color:'#475569', cursor:'pointer' }}>
+          {recolhido ? '▾ Mostrar resumo' : '▴ Recolher'}
+        </button>
+      </div>
+
+      {!recolhido && (<>
+        {/* Totais gerais */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))', gap:8, marginBottom:10 }}>
+          {[
+            { label:'Total de Vendas',   value: fmtR(g.totVendas),  bg:'#1e40af', hide: false },
+            { label:'Total de Custos',   value: fmtR(g.totCustos),  bg:'#065f46', hide: isVendedor },
+            { label:'Total DIFAL',       value: fmtR(g.totDifal),   bg:'#92400e', hide: isVendedor },
+            { label:'Total Impostos',    value: fmtR(g.totImposto), bg:'#831843', hide: false },
+            { label:'Margem Real Total', value: fmtR(g.totMargem),  bg: g.totMargem >= 0 ? '#166534' : '#991b1b', hide: isVendedor },
+            { label:'Lucro % Geral',     value: fmtPct(g.lucroPct), bg: g.lucroPct >= 10 ? '#16a34a' : g.lucroPct >= 5 ? '#d97706' : '#dc2626', hide: isVendedor },
+            ...(plataforma ? [
+              { label:`Desconto ${plataforma.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     bg:'#0891b2', hide: false },
+              { label:`Retenção ${plataforma.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     bg:'#7c3aed', hide: false },
+              { label:'Valor Líquido c/ Plataforma',                        value: fmtR(totalLiquidoPlat), bg:'#0f766e', hide: false },
+            ] : []),
+          ].filter(x => !x.hide).map(({ label, value, bg }) => (
+            <div key={label} style={{ background:bg, color:'#fff', borderRadius:8, padding:'8px 12px' }}>
+              <div style={{ fontSize:9, opacity:.85, marginBottom:2 }}>{label}</div>
+              <div style={{ fontSize:13, fontWeight:800 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+        {multiplicador > 1 && (
+          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:'6px 10px', marginBottom:10, display:'flex', gap:16, flexWrap:'wrap', fontSize:11 }}>
+            <strong style={{ color:'#0369a1' }}>✖️ × {multiplicador} (Multiplicador geral)</strong>
+            <span>Vendas: <strong>{fmtR(g.totVendas * multiplicador)}</strong></span>
+            {!isVendedor && <span>Custos: <strong>{fmtR(g.totCustos * multiplicador)}</strong></span>}
+            {!isVendedor && <span>DIFAL: <strong>{fmtR(g.totDifal * multiplicador)}</strong></span>}
+            {!isVendedor && <span>Margem: <strong style={{ color: g.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(g.totMargem * multiplicador)}</strong></span>}
+          </div>
+        )}
+
+        {/* Lotes com todos os itens; composição recolhida por item */}
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr style={{ background:'#1e3a5f', color:'#fff' }}>
+                {th('Lote / Item', true)}{th('Qtd.')}{th('Unitário')}{th('Total')}
+                {!isVendedor && th('Margem')}{!isVendedor && th('Lucro %')}
+              </tr>
+            </thead>
+            <tbody>
+              {estrutura.lotes.map((lc: any) => (
+                <React.Fragment key={lc.nome}>
+                  <tr style={{ background: lc.nome === loteAtivo ? '#e0f2fe' : '#f1f5f9' }}>
+                    <td style={{ fontSize:10, fontWeight:800, color:'#1e3a5f', padding:'5px 8px' }}>📦 {lc.nome}</td>
+                    <td style={{ fontSize:9, color:'#64748b', textAlign:'right', padding:'5px 8px' }}>{lc.itens.length} {lc.itens.length === 1 ? 'item' : 'itens'}</td>
+                    <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }} title="Soma do unitário de cada item do lote (1 unidade de cada)">{fmtR(lc.unit.totVendas)}</td>
+                    <td style={{ fontSize:11, fontWeight:800, color:'#1e40af', textAlign:'right', padding:'5px 8px' }}>{fmtR(lc.total.totVendas)}</td>
+                    {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px', color: lc.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(lc.total.totMargem)}</td>}
+                    {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }}>{fmtPct(lc.total.lucroPct)}</td>}
+                  </tr>
+                  {lc.itens.map((ic: any) => {
+                    const chave = `${lc.nome}::${ic.nome}`;
+                    const aberto = !!abertos[chave];
+                    const ativo = lc.nome === loteAtivo && ic.nome === grupoAtivo;
+                    return (
+                      <React.Fragment key={chave}>
+                        <tr style={{ borderTop:'1px solid #f1f5f9', background: ativo ? '#f0fdfa' : undefined }}>
+                          <td style={{ fontSize:10, color:'#334155', padding:'3px 8px 3px 14px', whiteSpace:'nowrap' }}>
+                            <button type="button" onClick={() => alternar(chave)} title={aberto ? 'Esconder composição' : 'Ver composição (custos, impostos, margem)'}
+                              style={{ border:'none', background:'none', cursor:'pointer', fontSize:10, color:'#0f766e', padding:'0 6px 0 0' }}>
+                              {aberto ? '▾' : '▸'}
+                            </button>
+                            <span onClick={() => onSelecionar(lc.nome, ic.nome)} style={{ cursor:'pointer', fontWeight: ativo ? 800 : 600, textDecoration:'underline dotted' }}
+                              title="Ir para este item na composição">{ic.nome}</span>
+                            {ic.subgrupos.length ? <span style={{ color:'#7c3aed' }}> · {ic.subgrupos.length} subgrupos</span> : ''}
+                          </td>
+                          <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{ic.qtd}</td>
+                          <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }} title={ic.subgrupos.length ? 'Unitário médio (total ÷ quantidade)' : undefined}>{fmtR(ic.unit.totVendas)}</td>
+                          <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'3px 8px' }}>{fmtR(ic.total.totVendas)}</td>
+                          {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px', color: ic.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(ic.total.totMargem)}</td>}
+                          {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{fmtPct(ic.total.lucroPct)}</td>}
+                        </tr>
+                        {aberto && (
+                          <tr>
+                            <td colSpan={isVendedor ? 4 : 6} style={{ padding:'4px 8px 8px 34px', background:'#f8fafc' }}>
+                              <table style={{ borderCollapse:'collapse', minWidth:320 }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ textAlign:'left', fontSize:8, color:'#0f766e', padding:'2px 8px' }} />
+                                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', padding:'2px 8px' }}>{ic.subgrupos.length ? 'Unitário médio' : 'Unitário (1 un.)'}</th>
+                                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', padding:'2px 8px' }}>Total (× {ic.qtd})</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {linhasComposicao.map(({ label, k, fmt, semUnitario }: any) => (
+                                    <tr key={label} style={{ borderTop:'1px solid #e2e8f0' }}>
+                                      <td style={{ fontSize:10, color:'#134e4a', padding:'3px 8px' }}>{label}</td>
+                                      <td style={{ fontSize:10, color:'#0f766e', textAlign:'right', padding:'3px 8px' }}>{semUnitario ? '—' : fmt(ic.unit[k])}</td>
+                                      <td style={{ fontSize:10, fontWeight:700, color:'#134e4a', textAlign:'right', padding:'3px 8px' }}>{fmt(ic.total[k])}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {ic.subgrupos.length > 0 && (
+                                <table style={{ borderCollapse:'collapse', minWidth:320, marginTop:6 }}>
+                                  <thead>
+                                    <tr>
+                                      {['Subgrupo', 'Qtd.', 'Unitário', 'Total', ...(isVendedor ? [] : ['Margem'])].map(h => (
+                                        <th key={h} style={{ textAlign: h === 'Subgrupo' ? 'left' : 'right', fontSize:8, color:'#6b21a8', padding:'2px 8px' }}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {ic.subgrupos.map((sg: any) => (
+                                      <tr key={sg.nome} style={{ borderTop:'1px solid #f3e8ff' }}>
+                                        <td style={{ fontSize:10, fontWeight:700, color:'#6b21a8', padding:'2px 8px' }}>{sg.nome}</td>
+                                        <td style={{ fontSize:10, textAlign:'right', padding:'2px 8px' }}>{sg.qtd}</td>
+                                        <td style={{ fontSize:10, textAlign:'right', padding:'2px 8px' }}>{fmtR(sg.unit.totVendas)}</td>
+                                        <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'2px 8px' }}>{fmtR(sg.total.totVendas)}</td>
+                                        {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'2px 8px', color: sg.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(sg.total.totMargem)}</td>}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+              <tr style={{ borderTop:'2px solid #1e3a5f', background:'#eef2ff' }}>
+                <td style={{ fontSize:10, fontWeight:800, color:'#1e3a5f', padding:'6px 8px' }}>Total de todos os itens</td>
+                <td />
+                <td />
+                <td style={{ fontSize:12, fontWeight:800, color:'#1e40af', textAlign:'right', padding:'6px 8px' }}>{fmtR(g.totVendas)}</td>
+                {!isVendedor && <td style={{ fontSize:10, fontWeight:800, textAlign:'right', padding:'6px 8px', color: g.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(g.totMargem)}</td>}
+                {!isVendedor && <td style={{ fontSize:10, fontWeight:800, textAlign:'right', padding:'6px 8px' }}>{fmtPct(g.lucroPct)}</td>}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
 // ─── RESUMO DA FORMAÇÃO ───────────────────────────────────────────────────────
 // Por lote e item (e subgrupo): quantidade, unitário, total; total e unitário
 // do lote; total geral, margem e lucro (vendedor não vê custo/margem).
@@ -2280,6 +2459,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       marcarComoSalvo(payload?.nome);
       carregarModelos();
       if (vinculo?.id) carregarFormacoesVinculo();
+      window.dispatchEvent(new CustomEvent('acn:formacao-salva', { detail: { vinculo } }));
       alert(`Seu trabalho foi gravado como a versão ${proximaVersao}. A versão de ${conflito?.dono || 'outra pessoa'} continua intacta.`);
     } catch (err: any) {
       alert('Erro ao gravar como nova versão: ' + err.message);
@@ -2348,6 +2528,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     }
     if (error) { alert('Erro ao salvar: ' + error.message); }
     else {
+      window.dispatchEvent(new CustomEvent('acn:formacao-salva', { detail: { vinculo } }));
       alert(editandoId ? 'Cotação atualizada!' : 'Modelo salvo!');
       setModalSalvar(false);
       // O nome digitado no modal ia só pro banco: a tela continuava achando
@@ -2752,6 +2933,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       descartarRascunho(editandoId);
       marcarComoSalvo(nomeFinal);
       carregarModelos();
+      window.dispatchEvent(new CustomEvent('acn:formacao-salva', { detail: { vinculo } }));
       alert('Formação de preços registrada como versão final!');
     } catch (err: any) {
       alert('Erro ao registrar versão: ' + err.message);
@@ -3065,6 +3247,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           )}
 
+          {/* ── RESUMO — no topo, antes de toda a composição ── */}
+          <ResumoFormacaoTopo estrutura={estrutura} isVendedor={isVendedor} multiplicador={lote}
+            plataforma={plataformaSelecionada} descontoPlatPct={descontoPlatPct} retencaoPlatPct={retencaoPlatPct}
+            descontoPlat={descontoPlat} retencaoPlat={retencaoPlat} totalLiquidoPlat={totalLiquidoPlat}
+            loteAtivo={loteAtivoValido} grupoAtivo={grupoAtivoValido}
+            onSelecionar={(l, gr) => { setLoteAtivo(l); setGrupoAtivo(gr); setSubgrupoAtivo(null); }} />
+
           {/* ── IDENTIFICAÇÃO: OP/OS, Desconto Máx., Empresa, Plataforma ──
               Um card só (antes eram 2 caixas separadas) — mesmo assunto,
               "quem é esta cotação", com uma linha divisória entre os 2 blocos. */}
@@ -3285,6 +3474,30 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           )}
 
+          {/* ── QUANTIDADE DO ITEM (antes ficava no subtotal, abaixo da composição) ── */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:8, marginLeft:10 }}>
+            {temSubgrupos ? (
+              <span style={{ fontSize:10, color:'#0f766e' }}>
+                Quantidade de "{grupoAtivoValido}": <strong>{itemCalcAtivo?.qtd ?? 1}</strong> <span style={{ color:'#64748b' }}>(soma dos {subsDoItem.length} subgrupos)</span>
+              </span>
+            ) : (<>
+              <span style={{ fontSize:10, color:'#0f766e', fontWeight:700 }}>Quantidade de "{grupoAtivoValido}"</span>
+              <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
+                min={1} value={loteGrupo}
+                onChange={e => setParams(p => {
+                  const m = { ...(p.lote_por_grupo || {}) };
+                  if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
+                  m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
+                  return { ...p, lote_por_grupo: m };
+                })} />
+              <button type="button" onClick={dividirEmSubgrupos}
+                title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)"
+                style={{ fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:5, border:'1px solid #7c3aed', background:'#faf5ff', color:'#7c3aed', cursor:'pointer' }}>
+                🧩 Dividir em subgrupos
+              </button>
+            </>)}
+          </div>
+
           {/* ── LISTA DE ITENS (do Item do edital ativo) ── */}
           <div style={{ marginBottom:12 }}>
             {/* Container com scroll — cada item é um cartão vertical (ver ItemRow),
@@ -3351,177 +3564,6 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               </button>
             </div>
           </div>{/* fim wrapper resize */}
-
-          {/* ── SUBTOTAL DESTE ITEM — Unitário (1 unidade) × Total (× quantidade).
-              Produto é por 1 unidade do item; com subgrupos, o unitário do item é
-              o MÉDIO (total ÷ quantidade) e cada subgrupo mostra o seu. ── */}
-          {itemCalcAtivo && (
-            <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:8, padding:12, marginBottom:12 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8, marginBottom:8 }}>
-                <div style={{ fontWeight:800, fontSize:11, color:'#0f766e' }}>
-                  📦 Subtotal — {grupoAtivoValido}
-                </div>
-                {temSubgrupos ? (
-                  <span style={{ fontSize:10, color:'#0f766e' }}>
-                    Quantidade do item: <strong>{itemCalcAtivo.qtd}</strong> <span style={{ color:'#64748b' }}>(soma dos {subsDoItem.length} subgrupos)</span>
-                  </span>
-                ) : (
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <span style={{ fontSize:9, color:'#0f766e' }}>Quantidade do item</span>
-                    <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
-                      min={1} value={loteGrupo}
-                      onChange={e => setParams(p => {
-                        const m = { ...(p.lote_por_grupo || {}) };
-                        if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
-                        m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
-                        return { ...p, lote_por_grupo: m };
-                      })} />
-                    <button type="button" onClick={dividirEmSubgrupos}
-                      title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)"
-                      style={{ fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:5, border:'1px solid #7c3aed', background:'#faf5ff', color:'#7c3aed', cursor:'pointer' }}>
-                      🧩 Dividir em subgrupos
-                    </button>
-                  </div>
-                )}
-              </div>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign:'left', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }} />
-                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>{temSubgrupos ? 'Unitário médio' : 'Unitário (1 un.)'}</th>
-                    <th style={{ textAlign:'right', fontSize:8, color:'#0f766e', fontWeight:700, padding:'2px 6px 4px' }}>Total (× {itemCalcAtivo.qtd})</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label:'Vendas',    k:'totVendas',  fmt: fmtR,   hide:false },
-                    { label:'Custos',    k:'totCustos',  fmt: fmtR,   hide:isVendedor },
-                    { label:'DIFAL',     k:'totDifal',   fmt: fmtR,   hide:isVendedor },
-                    { label:'Impostos',  k:'totImposto', fmt: fmtR,   hide:false },
-                    { label:'Margem',    k:'totMargem',  fmt: fmtR,   hide:isVendedor },
-                    { label:'Lucro %',   k:'lucroPct',   fmt: fmtPct, hide:isVendedor, semUnitario:true },
-                  ].filter(x=>!x.hide).map(({ label, k, fmt, semUnitario }) => (
-                    <tr key={label} style={{ borderTop:'1px solid #ccfbf1' }}>
-                      <td style={{ fontSize:10, color:'#134e4a', padding:'4px 6px' }}>{label}</td>
-                      <td style={{ fontSize:10, color:'#0f766e', textAlign:'right', padding:'4px 6px' }}>{semUnitario ? '—' : fmt(itemCalcAtivo.unit[k])}</td>
-                      <td style={{ fontSize:11, fontWeight:800, color:'#134e4a', textAlign:'right', padding:'4px 6px' }}>{fmt(itemCalcAtivo.total[k])}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {temSubgrupos && (
-                <table style={{ width:'100%', borderCollapse:'collapse', marginTop:8, borderTop:'1px dashed #99f6e4' }}>
-                  <thead>
-                    <tr>
-                      {['Subgrupo', 'Qtd.', 'Unitário', 'Total', ...(isVendedor ? [] : ['Margem'])].map(h => (
-                        <th key={h} style={{ textAlign: h === 'Subgrupo' ? 'left' : 'right', fontSize:8, color:'#6b21a8', fontWeight:700, padding:'4px 6px' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {itemCalcAtivo.subgrupos.map(sg => (
-                      <tr key={sg.nome} style={{ borderTop:'1px solid #f3e8ff', background: sg.nome === subAtivoValido ? '#faf5ff' : undefined }}>
-                        <td style={{ fontSize:10, fontWeight:700, color:'#6b21a8', padding:'3px 6px', cursor:'pointer' }} onClick={() => setSubgrupoAtivo(sg.nome)}>{sg.nome}</td>
-                        <td style={{ fontSize:10, textAlign:'right', padding:'3px 6px' }}>{sg.qtd}</td>
-                        <td style={{ fontSize:10, textAlign:'right', padding:'3px 6px' }}>{fmtR(sg.unit.totVendas)}</td>
-                        <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'3px 6px' }}>{fmtR(sg.total.totVendas)}</td>
-                        {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 6px', color: sg.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(sg.total.totMargem)}</td>}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {/* ── TOTAIS POR LOTE — total e unitário (soma dos unitários dos itens) ── */}
-          {estrutura.lotes.length > 0 && itens.length > 0 && (
-            <div style={{ background:'#fff', border:'1px solid #cbd5e1', borderRadius:8, padding:12, marginBottom:12 }}>
-              <div style={{ fontWeight:800, fontSize:11, color:'#1e3a5f', marginBottom:6 }}>📦 Totais por lote</div>
-              <div style={{ overflowX:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                  <thead>
-                    <tr style={{ background:'#1e3a5f', color:'#fff' }}>
-                      {['Lote / Item', 'Qtd.', 'Unitário', 'Total', ...(isVendedor ? [] : ['Margem', 'Lucro %'])].map(h => (
-                        <th key={h} style={{ textAlign: h === 'Lote / Item' ? 'left' : 'right', fontSize:9, fontWeight:700, padding:'5px 8px' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {estrutura.lotes.map(lc => (
-                      <React.Fragment key={lc.nome}>
-                        <tr style={{ background: lc.nome === loteAtivoValido ? '#e0f2fe' : '#f1f5f9', cursor:'pointer' }}
-                          onClick={() => { setLoteAtivo(lc.nome); setGrupoAtivo(lc.itens[0]?.nome || 'Item 1'); }}>
-                          <td style={{ fontSize:10, fontWeight:800, color:'#1e3a5f', padding:'5px 8px' }}>📦 {lc.nome}</td>
-                          <td style={{ fontSize:9, color:'#64748b', textAlign:'right', padding:'5px 8px' }}>{lc.itens.length} {lc.itens.length === 1 ? 'item' : 'itens'}</td>
-                          <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }} title="Soma do unitário de cada item do lote (1 unidade de cada)">{fmtR(lc.unit.totVendas)}</td>
-                          <td style={{ fontSize:11, fontWeight:800, color:'#1e40af', textAlign:'right', padding:'5px 8px' }}>{fmtR(lc.total.totVendas)}</td>
-                          {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px', color: lc.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(lc.total.totMargem)}</td>}
-                          {!isVendedor && <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'5px 8px' }}>{fmtPct(lc.total.lucroPct)}</td>}
-                        </tr>
-                        {lc.itens.map(ic => (
-                          <tr key={ic.nome} style={{ borderTop:'1px solid #f1f5f9' }}>
-                            <td style={{ fontSize:10, color:'#334155', padding:'3px 8px 3px 22px' }}>
-                              {ic.nome}{ic.subgrupos.length ? <span style={{ color:'#7c3aed' }}> · {ic.subgrupos.length} subgrupos</span> : ''}
-                            </td>
-                            <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{ic.qtd}</td>
-                            <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }} title={ic.subgrupos.length ? 'Unitário médio (total ÷ quantidade)' : undefined}>{fmtR(ic.unit.totVendas)}</td>
-                            <td style={{ fontSize:10, fontWeight:700, textAlign:'right', padding:'3px 8px' }}>{fmtR(ic.total.totVendas)}</td>
-                            {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px', color: ic.total.totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(ic.total.totMargem)}</td>}
-                            {!isVendedor && <td style={{ fontSize:10, textAlign:'right', padding:'3px 8px' }}>{fmtPct(ic.total.lucroPct)}</td>}
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── RESUMO GERAL (todos os Itens do edital somados) ── */}
-          {itens.length > 0 && (
-            <>
-            <div style={{ fontWeight:800, fontSize:11, color:'#1e293b', marginBottom:6 }}>
-              🧾 Resumo Geral — todos os lotes e itens (já multiplicados pelas quantidades)
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:12 }}>
-              {[
-                { label:'Total de Vendas',    value: fmtR(totVendas),    bg:'#1e40af', color:'#fff', hide: false },
-                { label:'Total de Custos',    value: fmtR(totCustos),    bg:'#065f46', color:'#fff', hide: isVendedor },
-                { label:'Total DIFAL',        value: fmtR(totDifal),     bg:'#92400e', color:'#fff', hide: isVendedor },
-                { label:'Total Impostos',     value: fmtR(totImposto),   bg:'#831843', color:'#fff', hide: false },
-                { label:'Margem Real Total',  value: fmtR(totMargem),    bg: totMargem >= 0 ? '#166534' : '#991b1b', color:'#fff', hide: isVendedor },
-                { label:'Lucro % Geral',      value: fmtPct(lucroGeral), bg: lucroGeralColor, color:'#fff', hide: isVendedor },
-                ...(plataformaSelecionada ? [
-                  { label:`Desconto ${plataformaSelecionada.nome} (${descontoPlatPct}%)`, value: fmtR(descontoPlat),     bg:'#0891b2', color:'#fff', hide: false },
-                  { label:`Retenção ${plataformaSelecionada.nome} (${retencaoPlatPct}%)`, value: fmtR(retencaoPlat),     bg:'#7c3aed', color:'#fff', hide: false },
-                  { label:'Valor Líquido c/ Plataforma',                                  value: fmtR(totalLiquidoPlat), bg:'#0f766e', color:'#fff', hide: false },
-                ] : []),
-              ].filter(x => !x.hide).map(({ label, value, bg, color }) => (
-                <div key={label} style={{ background:bg, color, borderRadius:8, padding:'10px 14px' }}>
-                  <div style={{ fontSize:9, opacity:.85, marginBottom:3 }}>{label}</div>
-                  <div style={{ fontSize:14, fontWeight:800 }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            </>
-          )}
-
-          {/* ── TOTAIS POR LOTE (geral) ── */}
-          {itens.length > 0 && lote > 1 && (
-            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:12, marginBottom:12 }}>
-              <div style={{ fontWeight:700, fontSize:11, color:'#0369a1', marginBottom:6 }}>
-                ✖️ Totais gerais × {lote} (Multiplicador geral)
-              </div>
-              <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
-                <span style={{ fontSize:11 }}>Vendas: <strong>{fmtR(totVendas * lote)}</strong></span>
-                <span style={{ fontSize:11 }}>Custos: <strong>{fmtR(totCustos * lote)}</strong></span>
-                <span style={{ fontSize:11 }}>DIFAL: <strong>{fmtR(totDifal * lote)}</strong></span>
-                <span style={{ fontSize:11 }}>Margem: <strong style={{ color: totMargem >= 0 ? '#16a34a' : '#dc2626' }}>{fmtR(totMargem * lote)}</strong></span>
-              </div>
-            </div>
-          )}
 
           {/* ── CALCULADORAS ── */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
