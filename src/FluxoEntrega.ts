@@ -30,7 +30,7 @@ export const FLUXOS: { valor: FluxoEntrega; label: string; fila: DestinoFila; aj
   { valor:'adaptacao_externa',            label:'Adaptação externa',                    fila:'adaptacao',
     ajuda:'Nossa equipe se desloca até o local e adapta lá.' },
   { valor:'fabricacao_serralheria_envio', label:'Fabricação serralheria com envio',     fila:'fabricacao',
-    ajuda:'Serralheria fabrica (ex: carretinhas) e depois segue para envio.' },
+    ajuda:'Serralheria fabrica (ex: carretinhas), depois passa pela adaptação e pelo CQ e segue para envio.' },
   { valor:'envio_adaptacao_terceiro',     label:'Envio para adaptação de terceiro',     fila:'envio',
     ajuda:'Segue para um parceiro fora da empresa, que faz a adaptação.' },
   { valor:'envio_material',               label:'Envio de material',                    fila:'envio',
@@ -95,12 +95,26 @@ export function terminaEmEnvio(v: string | null | undefined): boolean {
   return filaDe(v) !== 'adaptacao';
 }
 
-/** A serralheria, quando fabrica o item INTEIRO para envio (carretinha, por
- *  exemplo), encerra a produção: terminou lá, vai direto para a embalagem e o
- *  frete. Quando ela é só uma etapa dentro de uma adaptação, não — a OP
- *  continua na adaptação até a adaptação acabar. */
-export function serralheriaEncerraProducao(o: any): boolean {
+/** "Fabricação serralheria com envio" (carretinha, por exemplo). Rota
+ *  definida pelo usuário em 13/09/2026: SERRALHERIA → ADAPTAÇÃO → CQ →
+ *  EMBALAGEM → frete. (Antes, em 10/09, a serralheria concluída ia direto
+ *  para a embalagem.) Quando a serralheria é só uma etapa dentro de uma
+ *  adaptação, nada disso muda: a OP continua na adaptação até acabar. */
+export function serralheriaSegueParaAdaptacao(o: any): boolean {
   return o?.fluxo_entrega === 'fabricacao_serralheria_envio';
+}
+
+/** Fila da OP considerando a etapa: a de serralheria com envio começa na
+ *  Fabricação e, com a serralheria concluída, passa para a Adaptação. */
+export function filaDaOp(o: any): DestinoFila {
+  if (serralheriaSegueParaAdaptacao(o) && o?.serralheria_status === 'Concluido') return 'adaptacao';
+  return filaDe(o?.fluxo_entrega);
+}
+
+/** Depois do CQ aprovado: fluxo que termina em envio vai para a embalagem
+ *  (que abre a cotação de frete) em vez de esperar liberação comercial. */
+export function statusAposCqAprovado(o: any): string {
+  return serralheriaSegueParaAdaptacao(o) ? STATUS_EMBALAGEM : 'Aprovado CQ - Aguardando Liberacao Comercial';
 }
 
 /** Tipo de Projeto que JÁ define a rota: kit vendido para envio. Com ele o

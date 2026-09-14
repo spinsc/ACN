@@ -11,7 +11,7 @@ import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, filaDe, fluxoLabel, temSerralheria, motivoSerralheria, SERRALHERIA_STATUS,
-         serralheriaEncerraProducao, STATUS_EMBALAGEM } from './FluxoEntrega';
+         serralheriaSegueParaAdaptacao, filaDaOp } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
@@ -2474,7 +2474,7 @@ export default function ProducaoTab({ currentUser }) {
   // Fluxo vazio conta como 'adaptacao' (OP anterior à regra) — ver FluxoEntrega.ts.
   const contaFila = (f: string) =>
     f === 'serralheria' ? opls.filter(temSerralheria).length
-                        : opls.filter(o => filaDe(o.fluxo_entrega) === f).length;
+                        : opls.filter(o => filaDaOp(o) === f).length;
 
   // ── ANDAMENTO AUTOMÁTICO ────────────────────────────────────────────────
   // O gerente de produção precisa atualizar muita OP em pouco tempo, e o
@@ -2512,20 +2512,28 @@ export default function ProducaoTab({ currentUser }) {
   // serralheria_status, que ja existia e estava praticamente sem uso (1 linha).
   const setSerralheria = async (opl: any, novoStatus: string) => {
     const agora = new Date().toISOString();
-    // Venda marcada como "fabricação serralheria com envio": quando a
-    // serralheria termina, a produção daquela OP acabou — o item está pronto e
-    // o que falta é embalar e enviar. Ela sai da fila da produção e vai para o
-    // Almoxarifado pesar/medir a caixa, que é o que abre a cotação de frete.
-    // Quando a serralheria é só uma etapa dentro de uma adaptação, nada disso
-    // acontece: a OP continua na adaptação até a adaptação acabar.
-    const encerra = novoStatus === 'Concluido' && serralheriaEncerraProducao(opl);
-    if (encerra && !confirm(
+    // "Fabricação serralheria com envio": serralheria → ADAPTAÇÃO → CQ →
+    // embalagem → frete (decidido com o usuário em 13/09). Concluída a
+    // serralheria, a OP passa da fila de Fabricação para a de Adaptação,
+    // aguardando INICIAR — e sem responsável, porque quem adapta não é quem
+    // soldou (o nome anterior fica no histórico). Quando a serralheria é só
+    // uma etapa dentro de uma adaptação, nada disso acontece.
+    const vaiAdaptar = novoStatus === 'Concluido' && serralheriaSegueParaAdaptacao(opl);
+    if (vaiAdaptar && !confirm(
       `Concluir a serralheria da OP ${opl.opl}?\n\n` +
-      `Como esta venda é "fabricação serralheria com envio", a OP sai da fila da produção ` +
-      `e vai para o Almoxarifado embalar e abrir a cotação de frete.`)) return;
+      `Como esta venda é "fabricação serralheria com envio", a OP passa para a fila da ADAPTAÇÃO ` +
+      `(aguardando iniciar). Depois da adaptação vai para o CQ e, aprovada, para embalagem e frete.`)) return;
 
     const upd: any = { serralheria_status: novoStatus };
-    if (encerra) { upd.status_geral = STATUS_EMBALAGEM; upd.data_conclusao_producao = agora; }
+    if (vaiAdaptar) {
+      Object.assign(upd, {
+        status_geral: 'Aguardando Inicio Producao',
+        responsavel_producao: null, tecnico_producao_id: null,
+        tecnico_producao_2_id: null, tecnico_producao_2_nome: null,
+        equipe_id: null, equipe_nome: null, modo_execucao: null,
+        data_inicio_producao: null, pausado: false, data_pausa: null, tempo_pausado_horas: 0,
+      });
+    }
     await supabase.from('oples').update(upd).eq('id', opl.id);
 
     const logs: any[] = [{
@@ -2534,24 +2542,27 @@ export default function ProducaoTab({ currentUser }) {
       status_anterior: opl.serralheria_status || '—', status_novo: novoStatus,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }];
-    if (encerra) logs.push({
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
-      evento: 'Serralheria concluída — OP liberada para embalagem e cotação de frete.',
-      status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
-      usuario_nome: currentUser?.nome, data_hora: agora,
-    });
+    if (vaiAdaptar) {
+      const quem = (opl.modo_execucao === 'equipe' ? opl.equipe_nome : opl.responsavel_producao) || null;
+      logs.push({
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Serralheria',
+        evento: `Serralheria concluída — OP passou para a fila da Adaptação (aguardando iniciar).${quem ? ' Responsável na serralheria: ' + quem + '.' : ''}`,
+        status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      });
+    }
     await supabase.from('logs_movimentacao_opl').insert(logs);
 
-    if (encerra) {
+    if (vaiAdaptar) {
       await registrarAndamento(opl,
-        'Serralheria concluída. Item pronto — seguiu para o Almoxarifado embalar e cotar o frete.');
+        'Serralheria concluída. A OP seguiu para a adaptação; depois passa pelo Controle de Qualidade e vai para embalagem e envio.');
     }
     fetchAll(true);
   };
 
   const oplsFiltradas = opls.filter(o => {
     if (filaAtiva === 'serralheria') { if (!temSerralheria(o)) return false; }
-    else if (filaAtiva !== 'todas' && filaDe(o.fluxo_entrega) !== filaAtiva) return false;
+    else if (filaAtiva !== 'todas' && filaDaOp(o) !== filaAtiva) return false;
     if (filtroStatus !== 'Todos' && o.status_geral !== filtroStatus) return false;
     if (filtroTecnico !== 'Todos') {
       const tec = o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao;
@@ -2687,7 +2698,7 @@ export default function ProducaoTab({ currentUser }) {
         </div>
         {([
           ['adaptacao',  '🔧 Adaptação',  'Veículos adaptados aqui ou pela nossa equipe no local'],
-          ['fabricacao', '🏭 Fabricação', 'Serralheria fabricando o item inteiro; ao concluir, vai para embalagem e frete'],
+          ['fabricacao', '🏭 Fabricação', 'Serralheria fabricando o item inteiro; ao concluir, passa para a Adaptação, depois CQ, embalagem e frete'],
           ['envio',      '📦 Envio',      'Não passa por produção — só separar, embalar e enviar'],
           ['serralheria','🔩 Serralheria','Tudo que passa pela serralheria: carretinhas inteiras e etapa dentro de adaptações'],
           ['todas',      'Todas',         'Mostra as três filas juntas'],

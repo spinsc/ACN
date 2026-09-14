@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { statusAposCqAprovado } from './FluxoEntrega';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -133,8 +134,10 @@ export default function QualidadeTab({ currentUser }) {
     } else {
       const iniciosCq = row.data_entrada_cq ? new Date(row.data_entrada_cq) : null;
       const tempoCq = iniciosCq ? horasUteis(iniciosCq, new Date()) : null;
+      // Fabricação serralheria com envio: aprovada, vai para embalagem/frete
+      const statusNovo = statusAposCqAprovado(row);
       const novoRow = {
-        status_geral: 'Aprovado CQ - Aguardando Liberacao Comercial',
+        status_geral: statusNovo,
         data_cq: agora,
         resultado_cq: 'Aprovado',
         cq_auditor: currentUser?.nome,
@@ -146,8 +149,9 @@ export default function QualidadeTab({ currentUser }) {
 
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
-        evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}`,
-        status_anterior: 'Aguardando CQ', status_novo: 'Aprovado CQ - Aguardando Liberacao Comercial',
+        evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}` +
+          (statusNovo !== 'Aprovado CQ - Aguardando Liberacao Comercial' ? ' — segue para embalagem e cotação de frete.' : ''),
+        status_anterior: 'Aguardando CQ', status_novo: statusNovo,
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
     }
