@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { OrigemVendaBadge } from './OrigemVenda';
 import { temSerralheria } from './FluxoEntrega';
 
 const STATUS_PRODUCAO = ['Aguardando Inicio Producao', 'Em Producao', 'Retrabalho', 'Em Retrabalho'];
@@ -138,7 +139,7 @@ export default function PainelProducaoTV() {
 
   const carregar = useCallback(async () => {
     const { data } = await supabase.from('oples')
-      .select('id,opl,cliente_nome,modelo,status_geral,data_prevista_entrega,fluxo_entrega,tipo_projeto,valor_mao_de_obra_serralheria,serralheria_status,responsavel_producao,equipe_nome,modo_execucao')
+      .select('id,opl,cliente_nome,modelo,status_geral,data_prevista_entrega,fluxo_entrega,tipo_projeto,valor_mao_de_obra_serralheria,serralheria_status,responsavel_producao,equipe_nome,modo_execucao,origem_venda')
       .in('status_geral', STATUS_PRODUCAO)
       .order('data_prevista_entrega', { ascending: true });
     setOpls(data || []);
@@ -278,6 +279,11 @@ export default function PainelProducaoTV() {
                 borderTop: i === 0 ? 'none' : '1px solid #ffffff18',
                 background: i % 2 ? '#ffffff08' : 'transparent' }}>
                 <div style={{ fontSize: 20, fontWeight: 900, minWidth: 150, color: lista.cor }}>{o.opl}</div>
+                {/* Origem com o maior destaque da linha depois do número: prazo
+                    de licitação é contratual. OP antiga sem origem fica em
+                    branco aqui (na TV "origem ?" em quase toda linha só polui);
+                    o aviso para completar aparece no Kanban e no detalhe. */}
+                <div style={{ minWidth: 190 }}><OrigemVendaBadge origem={o.origem_venda} tamanho="tv" ocultarSemOrigem /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 17, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {o.cliente_nome || '—'}

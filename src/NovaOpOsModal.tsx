@@ -10,6 +10,8 @@ import { ClienteAutocomplete } from './ClienteUtils';
 import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo } from './FluxoEntrega';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { dividirValorEmUnidades } from './AcnTabShared';
+import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
+import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA, type GrupoLote } from './LoteMisto';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -109,6 +111,7 @@ const VAZIO = {
   pedido_venda:           '',   // 4 dígitos — gera o número da OP automaticamente
   opl:                    '',   // derivado: PPPP.YYMMM  (ou PPPP.YYMMM/01, /02...)
   tipo_projeto:           'Transformacao Veicular Ostensiva',
+  origem_venda:           '',   // 'licitacao' | 'venda_direta' — obrigatório (Kanban e Painel TV)
   fluxo_entrega:          '',   // obrigatório: decide se cai na Adaptação, na Fabricação ou vai direto pra envio
   destino_cidade:         '',
   destino_uf:             '',
@@ -164,6 +167,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState('');
+  // Lote misto: adaptações diferentes entre os veículos do mesmo lote
+  const [loteMisto, setLoteMisto] = useState(false);
+  const [grupos, setGrupos]       = useState<GrupoLote[]>(grupoInicial(1));
   const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos
 
   // Catálogo de modelos de reboque — cadastrável direto por aqui, fica salvo
@@ -197,6 +203,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   useEffect(() => {
     if (!isOpen) { prefillRef.current = undefined; return; }
     setSavedOp(null);
+    setLoteMisto(false);
+    setGrupos(grupoInicial(1));
     fetchModelosReboque();
     // Prefill vindo de uma Licitação (pedido de entrega → "Gerar OP"), gravado no
     // localStorage. Lido AQUI, na abertura, e aplicado por ÚLTIMO: antes era um
@@ -218,6 +226,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         _cliente_id:  crmCard.cliente_id || null,
         responsavel:  crmCard.responsavel_nome || '',
         observacoes:  crmCard.titulo || '',
+        origem_venda: origemDeOportunidade(crmCard),
         ...(pre || {}),
       }));
     } else {
@@ -256,6 +265,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Sem fluxo de entrega a OP não tem como ser roteada e acabaria caindo na
     // Adaptação por omissão — que é justamente o problema que isto resolve.
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
+    if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
 
 
     setSalvando(true);
@@ -269,6 +279,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         // de frete para uma remessa só. Nesse caso sai UMA OP com a quantidade.
         const semLote = soEnvio(fluxoEf);
         const desmembrar = qty > 1 && !semLote;
+        const misto = desmembrar && loteMisto;
+        if (misto) {
+          const errGrupos = validarGrupos(grupos, qty);
+          if (errGrupos) { setErro(errGrupos); setSalvando(false); return; }
+        }
 
         // Verificar duplicata da base
         const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
@@ -285,6 +300,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           tipo_op:                'OPL',
           faturamento_empresa:    form.empresa,
           tipo_projeto:           form.tipo_projeto,
+          origem_venda:           form.origem_venda || null,
           fluxo_entrega:          fluxoEf || null,
           destino_cidade:         form.destino_cidade?.trim() || null,
           destino_uf:             form.destino_uf || null,
@@ -324,10 +340,17 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           const valoresTotal = dividirValorEmUnidades(parseMoedaOuNull(form.valor_total), qty);
           const valoresMO     = dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra), qty);
           const valoresMOSerr = dividirValorEmUnidades(parseMoedaOuNull(form.valor_mao_de_obra_serralheria), qty);
+          const unidades = misto ? unidadesDosGrupos(grupos) : null;
           for (let i = 0; i < qty; i++) {
             const suf = String(i + 1).padStart(2, '0');
+            const payload: any = makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] });
+            if (unidades) {
+              // lote misto: serviços (e valor, se informado por grupo) da unidade vêm do grupo
+              payload.resumo_servicos = unidades[i].servicos;
+              if (unidades[i].valor != null) payload.valor_total = unidades[i].valor;
+            }
             const { data, error } = await supabase.from('oples')
-              .insert([makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] })])
+              .insert([payload])
               .select().single();
             if (error) throw error;
             if (i === 0) firstData = data;
@@ -507,6 +530,22 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   </div>
                 </div>
               </div>
+              {/* Origem da venda — aparece no Kanban da Adaptação e no Painel TV */}
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>
+                  Origem da venda *{crmCard && <span style={{ fontWeight:400, color:'#64748b' }}> · definida pelo funil do CRM</span>}
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  {ORIGENS.map(o => (
+                    <button key={o.valor} type="button" onClick={() => setF('origem_venda', o.valor)}
+                      style={{ fontSize:11, fontWeight:800, padding:'5px 14px', borderRadius:6, cursor:'pointer',
+                        border:`1.5px solid ${o.cor}`, background: form.origem_venda === o.valor ? o.fundo : '#fff',
+                        color: o.cor, boxShadow: form.origem_venda === o.valor ? `inset 0 0 0 1px ${o.cor}` : 'none' }}>
+                      {o.emoji} {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Tipo de Projeto *</div>
@@ -594,10 +633,25 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <div style={{ fontSize:9, fontWeight:800, color:'#7c3aed', marginBottom:8, textTransform:'uppercase' }}>
                     🚗 Dados por Veículo (desmembramento)
                   </div>
+                  {/* Lote misto: grupos de veículos com serviços diferentes */}
+                  <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:10, fontWeight:700, color:'#6b21a8', marginBottom:8, cursor:'pointer' }}>
+                    <input type="checkbox" checked={loteMisto} style={{ accentColor:'#7c3aed' }}
+                      onChange={e => {
+                        setLoteMisto(e.target.checked);
+                        if (e.target.checked) setGrupos(grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || ''));
+                      }} />
+                    Adaptações diferentes entre os veículos (lote misto)
+                  </label>
+                  {loteMisto && (
+                    <div style={{ marginBottom:10 }}>
+                      <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos} />
+                    </div>
+                  )}
                   {(form.veiculos || []).map((v, i) => (
                     <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:6, marginBottom:6, alignItems:'center' }}>
-                      <span style={{ fontSize:10, fontWeight:800, color:'#7c3aed', width:28 }}>
+                      <span style={{ fontSize:10, fontWeight:800, color:'#7c3aed', width: loteMisto ? 44 : 28 }}>
                         {String(i+1).padStart(2,'0')}
+                        {loteMisto && (() => { const u = unidadesDosGrupos(grupos)[i]; return u ? <span style={{ marginLeft:3, fontSize:8, background:'#ede9fe', borderRadius:3, padding:'0 3px' }}>{LETRA(u.grupo)}</span> : null; })()}
                       </span>
                       <input className="acn-input" placeholder="Chassi" value={v.chassi}
                         onChange={e => {
@@ -742,8 +796,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             </>
           )}
 
-          {/* Resumo dos Serviços — OP */}
-          {isOP && (
+          {/* Resumo dos Serviços — OP (no lote misto, cada unidade usa o do seu grupo) */}
+          {isOP && loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
+            <div style={{ marginBottom:10, fontSize:10, color:'#6b21a8', background:'#faf5ff', border:'1px dashed #c4b5fd', borderRadius:6, padding:'6px 10px' }}>
+              🧩 Lote misto: o resumo dos serviços de cada unidade vem do seu grupo (acima, em Dados por Veículo).
+            </div>
+          )}
+          {isOP && !(loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf)) && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Resumo dos Serviços a serem executados</div>
               <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', overflow: 'hidden', minHeight: 60 }}

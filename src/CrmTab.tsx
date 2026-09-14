@@ -27,6 +27,8 @@ import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
+import { origemDeOportunidade } from './OrigemVenda';
+import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -309,6 +311,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [tipoConverter, setTipoConverter]   = useState<'op'|'os'>('op');
   const [numOp, setNumOp]                   = useState('');
   const [resumoConv, setResumoConv]         = useState('');
+  const [loteMistoConv, setLoteMistoConv]   = useState(false);        // adaptações diferentes por veículo
+  const [gruposConv, setGruposConv]         = useState<GrupoLote[]>(grupoInicial(1));
   const [qtdVeiculosConv, setQtdVeiculosConv] = useState(1);
   const [veiculosConv, setVeiculosConv]     = useState<{chassi:string,placa:string}[]>([]);
   // ── compras ──
@@ -948,6 +952,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           observacoes_comercial:         oplFormEdit.observacoes_comercial || null,
           centro_custo:                  oplFormEdit.centro_custo || null,
           crm_oportunidade_id:           completa.crm_oportunidade_id,
+          origem_venda:                  completa.origem_venda,
           servico_terceiro:              completa.servico_terceiro,
           tipos_servico_terceiro:        completa.tipos_servico_terceiro,
           tipo_servico_terceiro:         completa.tipo_servico_terceiro,
@@ -1465,6 +1470,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       criado_por_nome:       currentUser?.nome,
       criado_por:            currentUser?.email,
       crm_oportunidade_id:   op.id,
+      origem_venda:          origemDeOportunidade(op),
       fluxo_entrega:         op.fluxo_entrega || null,
       destino_cidade:        op.destino_cidade || null,
       destino_uf:            op.destino_uf || null,
@@ -1499,6 +1505,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         // Mesma regra da abertura (NovaOpOsModal): envio direto não gera lote.
         const semLote = soEnvio(op.fluxo_entrega);
         const desmembrar = qty > 1 && !semLote;
+        const unidadesMisto = desmembrar && loteMistoConv ? unidadesDosGrupos(gruposConv) : null;
+        if (unidadesMisto) {
+          const errGrupos = validarGrupos(gruposConv, qty);
+          if (errGrupos) { alert(errGrupos); setSalvando(false); return; }
+        }
 
         // Checa duplicata antes de inserir
         const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
@@ -1521,6 +1532,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           criado_por_nome:       currentUser?.nome,
           criado_por:            currentUser?.email,
           crm_oportunidade_id:   op.id,
+          origem_venda:          origemDeOportunidade(op),
           resumo_servicos:       resumoConv.trim() || null,
           // Antes a OP nascia daqui SEM fluxo de entrega — e fluxo vazio é
           // tratado como adaptação, então venda de envio caía na fila errada.
@@ -1537,7 +1549,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const valoresTotal = dividirValorEmUnidades(op.valor_registrado ?? null, qty);
           for (let i = 0; i < qty; i++) {
             const suf = String(i + 1).padStart(2, '0');
-            const { error } = await supabase.from('oples').insert([makePayload(`${baseOpl}/${suf}`, veiculosConv[i], valoresTotal[i])]);
+            const payload: any = makePayload(`${baseOpl}/${suf}`, veiculosConv[i], valoresTotal[i]);
+            if (unidadesMisto) {
+              payload.resumo_servicos = unidadesMisto[i].servicos;
+              if (unidadesMisto[i].valor != null) payload.valor_total = unidadesMisto[i].valor;
+            }
+            const { error } = await supabase.from('oples').insert([payload]);
             if (error) throw error;
           }
           await supabase.from('crm_historico').insert({
@@ -1597,6 +1614,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       setResumoConv('');
       setQtdVeiculosConv(1);
       setVeiculosConv([]);
+      setLoteMistoConv(false);
+      setGruposConv(grupoInicial(1));
       alert(qtyFinal > 1
         ? `${qtyFinal} OPs criadas: ${numOp.trim()}/01 até ${numOp.trim()}/${String(qtyFinal).padStart(2,'0')}! Acesse a aba Engenharia para acompanhar.`
         : `OP ${numOp.trim()} criada! Acesse a aba Engenharia para acompanhar.`);
@@ -4070,6 +4089,16 @@ const SUB_STATUS_COR: Record<string,string> = {
                     <div style={{ fontSize:8, fontWeight:800, color:'#7c3aed', marginBottom:6, textTransform:'uppercase' }}>
                       🚗 Dados por Veículo (desmembramento em {qtdVeiculosConv} OPs)
                     </div>
+                    <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:9, fontWeight:700, color:'#6b21a8', marginBottom:6, cursor:'pointer' }}>
+                      <input type="checkbox" checked={loteMistoConv} style={{ accentColor:'#7c3aed' }}
+                        onChange={e => { setLoteMistoConv(e.target.checked); if (e.target.checked) setGruposConv(grupoInicial(qtdVeiculosConv, resumoConv)); }} />
+                      Adaptações diferentes entre os veículos (lote misto)
+                    </label>
+                    {loteMistoConv && (
+                      <div style={{ marginBottom:8 }}>
+                        <GruposLoteMisto compacto quantidade={qtdVeiculosConv} grupos={gruposConv} onChange={setGruposConv} />
+                      </div>
+                    )}
                     {veiculosConv.map((v, i) => (
                       <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:5, marginBottom:5, alignItems:'center' }}>
                         <span style={{ fontSize:9, fontWeight:800, color:'#7c3aed', width:24 }}>{String(i+1).padStart(2,'0')}</span>
@@ -4084,7 +4113,7 @@ const SUB_STATUS_COR: Record<string,string> = {
               </div>
             )}
 
-            {tipoConverter === 'op' && (
+            {tipoConverter === 'op' && !(loteMistoConv && qtdVeiculosConv > 1 && !soEnvio(modalConverter?.fluxo_entrega)) && (
               <div style={{ marginBottom:10 }}>
                 <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
                   Resumo dos Serviços a serem executados
@@ -4102,7 +4131,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); setResumoConv(''); setQtdVeiculosConv(1); setVeiculosConv([]); }}>Cancelar</button>
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); setResumoConv(''); setQtdVeiculosConv(1); setVeiculosConv([]); setLoteMistoConv(false); setGruposConv(grupoInicial(1)); }}>Cancelar</button>
               <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
                 background: tipoConverter==='op' ? '#2563eb' : '#ea580c', opacity: salvando?.5:1 }}
                 onClick={converterGanho} disabled={salvando}>

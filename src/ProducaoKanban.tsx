@@ -15,6 +15,7 @@
 import React from 'react';
 import KanbanColuna from './KanbanColuna';
 import { temSerralheria } from './FluxoEntrega';
+import { OrigemVendaBadge } from './OrigemVenda';
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 const maisDias = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
@@ -71,6 +72,7 @@ export default function ProducaoKanban({ opls, onAction, onPrioridade, currentUs
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: '#1e293b' }}>{o.opl}</span>
+          <OrigemVendaBadge origem={o.origem_venda} />
           {o.prioridade_dia != null && (
             <span title="Prioridade no dia" style={{ fontSize: 8, fontWeight: 800, background: '#fef3c7',
               color: '#92400e', border: '1px solid #fcd34d', borderRadius: 3, padding: '0 4px' }}>

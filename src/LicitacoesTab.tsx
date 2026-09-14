@@ -1371,6 +1371,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       cliente_nome: licit.nome_projeto || '',
       modelo: licit.numero || '',
       // o que foi definido aqui no primeiro card segue com a OP
+      origem_venda:   'licitacao',
       fluxo_entrega:  licit.fluxo_entrega  || '',
       destino_cidade: licit.destino_cidade || '',
       destino_uf:     licit.destino_uf     || '',

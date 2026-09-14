@@ -252,6 +252,7 @@ export function ContratoEntregas({ licit, currentUser }) {
       quantidade:     qtd,
       veiculos:       Array.from({ length: qtd }, () => ({ chassi:'', placa:'' })),
       prazo_entrega:  pedido.prazo_entrega || licit.prazo_entrega || '',
+      origem_venda:   'licitacao',
       fluxo_entrega:  licit.fluxo_entrega || '',
       destino_cidade: end?.cidade || '', destino_uf: end?.uf || '', destino_cep: end?.cep || '',
       resumo_servicos: `${item?.descricao || ''} — ${fmtQ(pedido.quantidade)} ${item?.unidade || 'UN'}`,

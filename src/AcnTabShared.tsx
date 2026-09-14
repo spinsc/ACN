@@ -12,6 +12,7 @@ import { abrirVinculo } from './VinculoPicker';
 import { soEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
+import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -447,6 +448,132 @@ export function VeiculoOuEnvio({ o, semPlaca = false }: { o: any; semPlaca?: boo
   );
 }
 
+// ─── RESUMO DO LOTE ─────────────────────────────────────────────────────────
+// OP com lote (BASE/01, /02...): visão da OPL inteira numa tabela só — status,
+// progresso, veículo, técnico, serviços e prazo de cada unidade, contagem por
+// status e valor total. Aberto pelo detalhe de qualquer unidade.
+const baseDoLote = (opl: string) => String(opl || '').trim().replace(/\/\d+$/, '');
+const escLike = (v: string) => v.replace(/[\\%_]/g, m => '\\' + m);
+
+async function buscarUnidadesDoLote(opl: string) {
+  const base = baseDoLote(opl);
+  if (!base) return [];
+  const { data } = await supabase.from('oples')
+    .select('id,opl,status_geral,chassi,placa,modelo,responsavel_producao,equipe_nome,modo_execucao,resumo_servicos,data_prevista_entrega,valor_total,cliente_nome,origem_venda')
+    .like('opl', escLike(base) + '/%');
+  return (data || [])
+    .filter((o: any) => /^\/\d+$/.test(String(o.opl).slice(base.length)))
+    .sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true }));
+}
+
+const fmtBRL = (v: any) => v == null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+const fmtDataCurta = (d: any) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+const escHtml = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' } as any)[c]);
+
+function ResumoLoteModal({ opl, onClose }: { opl: string; onClose: () => void }) {
+  const [unidades, setUnidades] = useState<any[] | null>(null);
+  const base = baseDoLote(opl);
+  useEffect(() => { buscarUnidadesDoLote(opl).then(setUnidades); }, [opl]);
+
+  const lista = unidades || [];
+  const porStatus: Record<string, number> = {};
+  lista.forEach(u => { const k = u.status_geral || 'Sem status'; porStatus[k] = (porStatus[k] || 0) + 1; });
+  const total = lista.reduce((s, u) => s + (Number(u.valor_total) || 0), 0);
+  const tecnico = (u: any) => (u.modo_execucao === 'equipe' ? u.equipe_nome : u.responsavel_producao) || '';
+  const pctMedio = lista.length ? Math.round(lista.reduce((s, u) => s + progressoOpl(u.status_geral).pct, 0) / lista.length) : 0;
+
+  const imprimir = () => {
+    const w = window.open('', '_blank');
+    if (!w) { alert('O navegador bloqueou a janela de impressão.'); return; }
+    const linhas = lista.map(u => `<tr>
+      <td><b>${escHtml(u.opl)}</b></td><td>${escHtml(u.status_geral)}</td><td>${progressoOpl(u.status_geral).pct}%</td>
+      <td>${escHtml([u.modelo, u.chassi, u.placa].filter(Boolean).join(' · ') || '—')}</td>
+      <td>${escHtml(tecnico(u) || '—')}</td><td>${escHtml(u.resumo_servicos || '—')}</td>
+      <td>${fmtDataCurta(u.data_prevista_entrega)}</td><td style="text-align:right">${fmtBRL(u.valor_total)}</td></tr>`).join('');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumo do lote ${escHtml(base)}</title>
+      <style>body{font-family:Arial,sans-serif;font-size:11px;margin:18px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:10px}
+      th,td{border:1px solid #cbd5e1;padding:4px 6px;vertical-align:top}th{background:#0f172a;color:#fff;font-size:10px;text-align:left}</style></head><body>
+      <h2>Resumo do lote — OP ${escHtml(base)}</h2>
+      <div>${escHtml(lista[0]?.cliente_nome || '')} · ${lista.length} unidade(s) · progresso médio ${pctMedio}% · valor total ${fmtBRL(total)}</div>
+      <div style="margin-top:4px">${Object.entries(porStatus).map(([k, n]) => escHtml(k) + ': ' + n).join(' · ')}</div>
+      <table><thead><tr><th>Unidade</th><th>Status</th><th>Progresso</th><th>Veículo</th><th>Técnico</th><th>Serviços</th><th>Prazo</th><th>Valor</th></tr></thead>
+      <tbody>${linhas}</tbody></table></body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 300);
+  };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 2100 }}>
+      <div className="modal-box" style={{ maxWidth: 1000, width: '96vw', maxHeight: '92vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>📋 Resumo do lote — OP {base}</div>
+            {unidades && (
+              <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                {lista[0]?.cliente_nome || '—'} · {lista.length} unidade(s) · progresso médio {pctMedio}% · valor total <b>{fmtBRL(total)}</b>
+              </div>
+            )}
+          </div>
+          <button onClick={imprimir} disabled={!lista.length}
+            style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            🖨️ Imprimir
+          </button>
+          <button onClick={onClose} title="Fechar resumo"
+            style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 12px', fontSize: 11, cursor: 'pointer' }}>
+            Fechar
+          </button>
+        </div>
+        {!unidades ? (
+          <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8' }}>Carregando...</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {Object.entries(porStatus).map(([k, n]) => (
+                <span key={k} style={{ fontSize: 10, fontWeight: 700, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 12, padding: '2px 10px', color: '#334155' }}>
+                  {k}: {n}
+                </span>
+              ))}
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#0f172a', color: '#fff' }}>
+                    {['Unidade', 'Status', 'Progresso', 'Veículo', 'Técnico', 'Serviços', 'Prazo', 'Valor'].map(h => (
+                      <th key={h} style={{ padding: '6px 8px', textAlign: h === 'Valor' ? 'right' : 'left', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lista.map(u => {
+                    const pr = progressoOpl(u.status_geral);
+                    return (
+                      <tr key={u.id} style={{ borderBottom: '1px solid #e2e8f0', background: u.opl === opl ? '#eff6ff' : undefined }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 800, whiteSpace: 'nowrap' }}>{u.opl}</td>
+                        <td style={{ padding: '6px 8px' }}>{u.status_geral || '—'}</td>
+                        <td style={{ padding: '6px 8px', minWidth: 90 }}>
+                          <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: pr.pct + '%', height: '100%', background: pr.retrabalho ? '#f59e0b' : pr.pct >= 100 ? '#16a34a' : '#2563eb' }} />
+                          </div>
+                          <div style={{ fontSize: 9, color: '#64748b' }}>{pr.pct}%</div>
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>{[u.modelo, u.chassi, u.placa].filter(Boolean).join(' · ') || '—'}</td>
+                        <td style={{ padding: '6px 8px' }}>{tecnico(u) || <span style={{ color: '#c2410c' }}>sem responsável</span>}</td>
+                        <td style={{ padding: '6px 8px', maxWidth: 260, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{u.resumo_servicos || '—'}</td>
+                        <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{fmtDataCurta(u.data_prevista_entrega)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtBRL(u.valor_total)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: any; onClose: () => void; currentUser?: any }) {
   const [opl, setOpl]       = useState<any>(oplProp);
   const [logs, setLogs]     = useState<any[]>([]);
@@ -483,6 +610,31 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // Nem toda tela que abre este modal passa currentUser — cai na sessão salva.
   const usuario = currentUser || (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
   const podeTrocarNumero = podeAlterarNumeroOplPv(usuario);
+
+  // Lote: só mostra o "Resumo do lote" se houver unidades /NN desta base
+  const [qtdLote, setQtdLote] = useState(0);
+  const [verResumoLote, setVerResumoLote] = useState(false);
+  useEffect(() => {
+    if (!opl?.opl) { setQtdLote(0); return; }
+    buscarUnidadesDoLote(opl.opl).then(u => setQtdLote(u.length));
+  }, [opl?.opl]);
+
+  // Origem da venda (Licitação / Venda direta) — completar nas OPs antigas
+  const trocarOrigem = async (nova: string) => {
+    if (!nova || nova === opl.origem_venda) return;
+    const { error } = await supabase.from('oples').update({ origem_venda: nova }).eq('id', opl.id);
+    if (error) { alert('Erro ao salvar a origem: ' + error.message); return; }
+    const antes = origemInfo(opl.origem_venda)?.label || 'não informada';
+    const depois = origemInfo(nova)?.label || nova;
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: usuario?.perfil || 'Comercial',
+      evento: `Origem da venda: ${antes} → ${depois}.`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
+      usuario_nome: usuario?.nome || usuario?.email || '—', usuario_email: usuario?.email || null,
+      data_hora: new Date().toISOString(),
+    }]);
+    setOpl((o: any) => ({ ...o, origem_venda: nova }));
+  };
   const trocarNumero = async () => {
     const novo = await renomearOpl(opl, usuario);
     if (novo) setOpl((o: any) => ({ ...o, opl: novo }));   // o efeito dos logs recarrega pelo opl.opl
@@ -586,6 +738,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
   return (
     <div className="modal-overlay">
+      {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} />}
       <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto' }}>
 
         {/* Cabeçalho */}
@@ -603,6 +756,15 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                   style={{ background: '#334155', border: '1px solid #475569', color: '#e2e8f0', borderRadius: 5,
                     padding: '1px 7px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
                   ✏️ Alterar nº
+                </button>
+              )}
+              <OrigemVendaBadge origem={opl.origem_venda} />
+              {qtdLote > 1 && (
+                <button onClick={() => setVerResumoLote(true)}
+                  title="Todas as unidades deste lote numa tabela"
+                  style={{ background: '#1d4ed8', border: 'none', color: '#fff', borderRadius: 5,
+                    padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                  📋 Resumo do lote ({qtdLote})
                 </button>
               )}
             </div>
@@ -668,6 +830,20 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         <Sec title="🔍 Identificação" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
           <Campo label="Número OP"         value={opl.opl} />
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Origem da venda</div>
+            {podeEditarOrigem(usuario) ? (
+              <select value={opl.origem_venda || ''} onChange={e => trocarOrigem(e.target.value)}
+                style={{ fontSize: 11, fontWeight: 700, padding: '3px 6px', borderRadius: 4,
+                  border: opl.origem_venda ? '1px solid #cbd5e1' : '1.5px dashed #f59e0b',
+                  background: opl.origem_venda ? '#fff' : '#fffbeb' }}>
+                {!opl.origem_venda && <option value="">— informar —</option>}
+                {ORIGENS.map(o => <option key={o.valor} value={o.valor}>{o.emoji} {o.label}</option>)}
+              </select>
+            ) : (
+              <OrigemVendaBadge origem={opl.origem_venda} />
+            )}
+          </div>
           <Campo label="Empresa"           value={opl.faturamento_empresa} />
           <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
           <Campo label="Cliente"           value={opl.cliente_nome} />
