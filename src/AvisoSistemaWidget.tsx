@@ -122,7 +122,14 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
     const t = setTimeout(() => { if (minimizadoRef.current) setPos(POS_MINIMIZADO()); }, 800);
     const aoRedimensionar = () => { if (minimizadoRef.current) setPos(POS_MINIMIZADO()); };
     window.addEventListener('resize', aoRedimensionar);
-    return () => { clearTimeout(t); window.removeEventListener('resize', aoRedimensionar); };
+    // trocar de aba muda o caminho da tela e a largura da busca sem redimensionar a janela
+    let obs: ResizeObserver | null = null;
+    const t2 = setTimeout(() => {
+      if (typeof ResizeObserver === 'undefined') return;
+      obs = new ResizeObserver(aoRedimensionar);
+      document.querySelectorAll('.acn-busca, .acn-aba-selo').forEach(el => obs!.observe(el));
+    }, 300);
+    return () => { clearTimeout(t); clearTimeout(t2); obs?.disconnect(); window.removeEventListener('resize', aoRedimensionar); };
   }, []);
 
   // ── drag ──────────────────────────────────────────────────────────────────

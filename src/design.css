@@ -459,3 +459,21 @@ body.dark div[data-acn-numero] { background: #1e293b !important; border-color: #
 @media (max-width: 639.98px) { .acn-licit { flex-direction: column; align-items: stretch; } .acn-licit-acoes { justify-content: flex-end; } }
 body.dark .acn-licit { background: #1e293b; border-color: #334155; }
 body.dark .acn-licit h6 { color: #f1f5f9; }
+
+/* ── Modo escuro: os mesmos tokens, com valores do tema escuro ────────────── */
+body.dark {
+  --acn-canvas: #0f172a; --acn-surface: #1e293b; --acn-surface-2: #172033;
+  --acn-ink: #f1f5f9; --acn-text: #cbd5e1; --acn-muted: #94a3b8;
+  --acn-line: #334155; --acn-line-soft: #263244;
+  --acn-brand-soft: rgba(20, 134, 124, .22); --acn-brand-ink: #7fd8cc;
+  --acn-ok: #3fb56a;      --acn-ok-soft: rgba(27, 127, 67, .24);
+  --acn-warn: #e0a13a;    --acn-warn-soft: rgba(154, 87, 8, .26);
+  --acn-bad: #f06a5f;     --acn-bad-soft: rgba(185, 48, 42, .24);
+  --acn-info: #6b9be6;    --acn-info-soft: rgba(36, 95, 184, .26);
+  --acn-neutral: #94a3b8; --acn-neutral-soft: #263244;
+}
+body.dark .acn-b-primario, body.dark [data-acn-tom=primario] { color: #fff !important; }
+body.dark .acn-b-perigo, body.dark [data-acn-tom=perigo] { background-color: #b9302a !important; }
+
+/* Cabeçalho: espaço reservado entre o caminho da tela e a busca para o pino de avisos */
+@media (min-width: 700px) { html body .acn-header .acn-aba-selo { margin-right: 60px; } }
