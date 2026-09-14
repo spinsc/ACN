@@ -998,6 +998,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
   // ── RIGHT PANEL ───────────────────────────────────────────────────────────
   const [tabDir, setTabDir] = useState<string>('processo');
+  // A Formação de Preços continua montada (escondida) depois de aberta: trocar
+  // de aba desmontava o componente e a edição ainda não salva (ex.: markup) sumia.
+  const [formacaoMontada, setFormacaoMontada] = useState(false);
+  useEffect(() => { if (tabDir === 'formacao_precos') setFormacaoMontada(true); }, [tabDir]);
   const [docs, setDocs] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -1918,13 +1922,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           <div style={{ flex:1, overflowY:'auto', padding:14 }}>
 
             {/* ── FORMAÇÃO DE PREÇOS (embutida, já vinculada a este processo) ── */}
-            {tabDir === 'formacao_precos' && (
-              <FormacaoPrecosTab
-                currentUser={currentUser}
-                vinculo={{ tipo:'licitacao', id: licit.id }}
-                rotulo={licit.numero || licit.nome_projeto || ''}
-                embutido
-              />
+            {(tabDir === 'formacao_precos' || formacaoMontada) && (
+              <div style={tabDir === 'formacao_precos' ? undefined : { display:'none' }}>
+                <FormacaoPrecosTab
+                  currentUser={currentUser}
+                  vinculo={{ tipo:'licitacao', id: licit.id }}
+                  rotulo={licit.numero || licit.nome_projeto || ''}
+                  embutido
+                />
+              </div>
             )}
 
             {/* ── CONTRATO E ENTREGAS (só Vencida) ── usa o fluxo/prazo do formulário,

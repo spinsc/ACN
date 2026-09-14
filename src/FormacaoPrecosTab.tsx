@@ -1605,12 +1605,24 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const geracaoRef      = useRef(0);
   const geracaoVistaRef = useRef(-1);
   const baseSerializadaRef = useRef('');
+  // último conteúdo não salvo, para gravar como rascunho se a formação sair da tela
+  const rascunhoAoSairRef = useRef<{ chave: string; atual: string } | null>(null);
+
+  // O que vai para o banco. As marcações "Usar globais (DIFAL/Imp/CF)" e
+  // "Markup Global" existiam só na tela: não eram gravadas e, ao reabrir, a
+  // formação voltava aos valores de cada produto. Além disso Cotações, proposta,
+  // termômetro de markup e Contrato/Entregas calculam pelo valor de CADA
+  // produto — então, com a marcação ligada, o valor global é gravado em cada
+  // produto (o mesmo que a tela já mostrava e calculava) e a marcação vai junto
+  // em parametros_globais para reabrir do mesmo jeito.
+  const paramsParaGravar = () => ({ ...params, usar_globais: usarGlobais, usar_markup_global: usarMarkupGlobal });
+  const itensParaGravar = () => itens.map(({ _id, ...rest }) => paramEfetivo(rest));
 
   const edicaoAtual = () => ({
     nome: nomeCotacao || '',
     empresa,
     plataforma_id: plataformaSelecionada?.id || null,
-    params,
+    params: paramsParaGravar(),
     itens: itens.map(({ _id, ...rest }) => rest),
     desconto_maximo_pct: descontoMaximoPct || 0,
   });
@@ -1624,11 +1636,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (geracaoVistaRef.current !== geracaoRef.current) {
       geracaoVistaRef.current = geracaoRef.current;
       baseSerializadaRef.current = atual;
+      rascunhoAoSairRef.current = null;
       setTemNaoSalvo(false);
       return;
     }
     const mudou = atual !== baseSerializadaRef.current;
     setTemNaoSalvo(mudou);
+    rascunhoAoSairRef.current = mudou ? { chave: chaveRascunho(editandoId), atual } : null;
     if (!mudou) {
       // Voltou a ser igual ao que está salvo (o usuário desfez na mão): o
       // rascunho não representa mais nada e some, senão reapareceria depois
@@ -1647,7 +1661,21 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     }, 1200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itens, params, nomeCotacao, empresa, plataformaSelecionada, descontoMaximoPct, editandoId]);
+  }, [itens, params, nomeCotacao, empresa, plataformaSelecionada, descontoMaximoPct, editandoId, usarGlobais, usarMarkupGlobal]);
+
+  // Ao sair da formação (trocar de aba no card, minimizar, fechar) o atraso de
+  // 1,2s acima era cancelado e a edição sumia sem rascunho nenhum. Grava na hora.
+  useEffect(() => () => {
+    const r = rascunhoAoSairRef.current;
+    if (!r) return;
+    try {
+      localStorage.setItem(r.chave, JSON.stringify({
+        conteudo: JSON.parse(r.atual), salvoEm: new Date().toISOString(),
+        usuario: currentUser?.nome || currentUser?.email || null,
+      }));
+    } catch { /* best-effort */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Avisa antes de fechar/recarregar a aba com alterações não salvas.
   // (Sair da tela por dentro do sistema não passa por aqui — nesse caso quem
@@ -1671,11 +1699,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     });
     geracaoRef.current += 1;
     geracaoVistaRef.current = geracaoRef.current; // já fotografado aqui
+    rascunhoAoSairRef.current = null;
     setTemNaoSalvo(false);
   };
 
   const descartarRascunho = (id: any) => {
     try { localStorage.removeItem(chaveRascunho(id)); } catch { /* ignore */ }
+    if (rascunhoAoSairRef.current?.chave === chaveRascunho(id)) rascunhoAoSairRef.current = null;
     setRascunhoPendente(null);
   };
 
@@ -1692,6 +1722,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     const c = rascunhoPendente?.conteudo;
     if (!c) return;
     setParams({ ...PARAMS_PADRAO, ...(c.params || {}) });
+    setUsarGlobais(c.params?.usar_globais ?? true);
+    setUsarMarkupGlobal(c.params?.usar_markup_global ?? false);
     const itensRestaurados = (c.itens || []).map((x: any) => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) }));
     setItens(itensRestaurados.length ? itensRestaurados : [novoItem()]);
     setLoteAtivo(loteDe(itensRestaurados[0]));
@@ -2274,8 +2306,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       tipo,
       empresa,
       plataforma_id:       plataformaSelecionada?.id || null,
-      parametros_globais:  params,
-      itens:               itens.map(({ _id, ...rest }) => rest),
+      parametros_globais:  paramsParaGravar(),
+      itens:               itensParaGravar(),
       opl_id:              oplVinculada?.id   || null,
       opl_numero:          oplVinculada?.opl  || null,
       desconto_maximo_pct: descontoMaximoPct  || 0,
@@ -2344,6 +2376,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     // chave, e um valor `undefined` num input controlado dispara o warning
     // "controlled input to be uncontrolled" do React.
     setParams({ ...PARAMS_PADRAO, ...(m.parametros_globais || {}) });
+    // formações gravadas antes de a marcação ir para o banco mantêm o padrão da tela
+    setUsarGlobais(m.parametros_globais?.usar_globais ?? true);
+    setUsarMarkupGlobal(m.parametros_globais?.usar_markup_global ?? false);
     const itensCarregados = (m.itens || []).map(x => ({ ...novoItem(), ...x, _id: Math.random().toString(36).slice(2) }));
     setItens(itensCarregados);
     setLoteAtivo(loteDe(itensCarregados[0]));
@@ -2393,6 +2428,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const novaQuotacao = () => {
     if (!confirm('Limpar cotação atual e iniciar nova?')) return;
     setParams({ ...PARAMS_PADRAO });
+    setUsarGlobais(true);
+    setUsarMarkupGlobal(false);
     setItens([novoItem()]);
     setGrupoAtivo('Item 1');
     setLoteAtivo('Lote 1');
@@ -2634,11 +2671,12 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     const payloadBase: any = {
       nome: nomeFinal, empresa,
       plataforma_id: plataformaSelecionada?.id || null,
-      parametros_globais: params,
-      itens: itens.map(({ _id, ...rest }) => rest),
+      parametros_globais: paramsParaGravar(),
+      itens: itensParaGravar(),
       opl_id: oplVinculada?.id || null,
       opl_numero: oplVinculada?.opl || null,
       desconto_maximo_pct: descontoMaximoPct || 0,
+      ...(tipoCotacao ? { tipo: tipoCotacao } : {}),
       status: 'finalizada',
       finalizada_por: currentUser?.email || null,
       finalizada_por_nome: currentUser?.nome || currentUser?.email || 'Sistema',

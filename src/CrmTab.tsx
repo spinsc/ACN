@@ -355,6 +355,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ── modal ABRIR (split-screen CRM) ──
   const [modalAbrir, setModalAbrir]         = useState<any|null>(null);
   const [abrirTabDir, setAbrirTabDir]       = useState<string>('andamento');
+  // Formação de Preços do card continua montada (escondida) depois de aberta —
+  // trocar de aba desmontava e a edição ainda não salva (ex.: markup) sumia.
+  const [formacaoMontadaId, setFormacaoMontadaId] = useState<string | null>(null);
   const [abrirDocs, setAbrirDocs]           = useState<any[]>([]);
   const [abrirAndamentoHist, setAbrirAndamentoHist] = useState<any[]>([]);
   const [abrirNovoText, setAbrirNovoText]   = useState('');
@@ -851,6 +854,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     { key:'informacoes',  label: tabLabel('informacoes', 'ℹ️ Informações Importantes') },
     { key:'analise',      label:'🔬 Análise' },
   ] as const;
+
+  useEffect(() => {
+    if (modalAbrir?.id && abrirTabDir === 'formacao_precos') setFormacaoMontadaId(modalAbrir.id);
+  }, [modalAbrir?.id, abrirTabDir]);
 
   useEffect(() => {
     if (!modalAbrir) return;
@@ -4609,13 +4616,16 @@ const SUB_STATUS_COR: Record<string,string> = {
                 )}
 
                 {/* ── FORMAÇÃO DE PREÇOS (embutida, já vinculada a este processo) ── */}
-                {abrirTabDir === 'formacao_precos' && (
-                  <FormacaoPrecosTab
-                    currentUser={currentUser}
-                    vinculo={{ tipo:'crm', id: modalAbrir.id }}
-                    rotulo={modalAbrir.titulo || ''}
-                    embutido
-                  />
+                {(abrirTabDir === 'formacao_precos' || formacaoMontadaId === modalAbrir.id) && (
+                  <div style={abrirTabDir === 'formacao_precos' ? undefined : { display:'none' }}>
+                    <FormacaoPrecosTab
+                      key={modalAbrir.id}
+                      currentUser={currentUser}
+                      vinculo={{ tipo:'crm', id: modalAbrir.id }}
+                      rotulo={modalAbrir.titulo || ''}
+                      embutido
+                    />
+                  </div>
                 )}
 
                 {/* ── ANÁLISE ── */}
