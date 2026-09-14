@@ -917,6 +917,13 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL DE DETALHE
 // ─────────────────────────────────────────────────────────────────────────────
+// Colunas da lista de licitações — todas menos areas_livres (ver fetchLicit).
+const COLUNAS_LISTA_LICITACOES = 'id,numero,nome_projeto,objeto_principal,orgao,classificacao,status,marcadores,prioridade,'
+  + 'data_registro,data_limite_esclarecimentos,data_limite_proposta,data_disputa,data_limite_analise_tecnica,'
+  + 'analista_nome,analista_email,coordenador_nome,coordenador_email,obs_encerramento,historico,criado_por,criado_por_nome,'
+  + 'criado_em,atualizado_em,faturamento_empresa,operador,valor_estimado,horario_sessao,tipo_objeto,julgamento,forma_disputa,'
+  + 'fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_entrega';
+
 function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir }) {
   const [licit, setLicit] = useState<any>(licitProp);
 
@@ -980,7 +987,17 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const setF = (k: string, v: any) => setFormEdit((f: any) => ({ ...f, [k]: v }));
 
   // ── Áreas livres ──────────────────────────────────────────────────────────
-  const [areasLivres, setAreasLivres] = useState<any>(licit.areas_livres || {});
+  // Vindo da lista, a licitação chega sem areas_livres (pesado) — busca aqui.
+  // Enquanto não chegou fica null e a Área Livre não aparece: salvar sobre um
+  // objeto vazio apagaria o texto das outras áreas.
+  const [areasLivres, setAreasLivres] = useState<any>(licitProp.areas_livres === undefined ? null : (licitProp.areas_livres || {}));
+  useEffect(() => {
+    if (licitProp.areas_livres !== undefined) return;
+    let vivo = true;
+    supabase.from('licitacoes').select('areas_livres').eq('id', licitProp.id).maybeSingle()
+      .then(({ data }) => { if (vivo) setAreasLivres(data?.areas_livres || {}); });
+    return () => { vivo = false; };
+  }, [licitProp.id]);
 
   // ── ANDAMENTO — agora fixo abaixo do formulário da esquerda, não é mais aba ─
   const [andDocs, setAndDocs] = useState<any[]>([]);
@@ -1770,8 +1787,12 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 )}
 
                 {/* Área Livre desta seção */}
-                <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
-                  currentUser={currentUser} naoLida={camposNaoLidos.has('area_livre_andamento')} />
+                {areasLivres === null ? (
+                  <div style={{ color:'#9ca3af', fontSize:11, textAlign:'center', padding:12 }}>Carregando área livre…</div>
+                ) : (
+                  <AreaLivre licitacaoId={licit.id} tabKey="andamento" areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
+                    currentUser={currentUser} naoLida={camposNaoLidos.has('area_livre_andamento')} />
+                )}
               </div>
             </div>
           </div>
@@ -2619,7 +2640,14 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
   const fetchLicit = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('licitacoes').select('*').order('criado_em', { ascending: false });
+    // A lista NÃO traz areas_livres: é o texto rico das Áreas Livres, com imagens
+    // coladas dentro (mais de 8 MB somando todas; um registro tem 2 MB). Com
+    // select('*') a lista estourava o tempo limite do banco e não carregava.
+    // O card busca areas_livres ao abrir (LicitacaoModal). Coluna nova na tabela
+    // precisa entrar aqui também.
+    const { data } = await supabase.from('licitacoes')
+      .select(COLUNAS_LISTA_LICITACOES)
+      .order('criado_em', { ascending: false });
     setLicitacoes(data || []);
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
     carregarMarkupPorProcesso('licitacao').then(setMarkupPorLicit);

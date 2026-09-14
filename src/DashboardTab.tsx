@@ -1053,7 +1053,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       // colunas certas dessa tabela são veiculo_modelo/equipamento_nome (não
       // veiculo/modelo, que não existem aqui — corrigido de brinde)
       supabase.from('sac_ordens_servico')
-        .select('id,numero_os,cliente_nome,veiculo_modelo,equipamento_nome,status_os')
+        .select('id,numero_os,cliente_nome,veiculo_modelo,equipamento_nome,status')
         .or(`numero_os_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,veiculo_modelo_norm.ilike.%${t}%,equipamento_nome_norm.ilike.%${t}%`)
         .limit(6),
       supabase.from('licitacoes')
@@ -1235,7 +1235,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                                      : r._tipo==='engenharia' ? `${r.titulo || ''}${r.numero_opl ? ' — ' + r.numero_opl : ''}`
                                      : `${r.codigo ? r.codigo + ' — ' : ''}${r.nome || ''}`;
                         const ctx = getContexto(r, globalBusca);
-                        const status = r.status_geral || r.status_os || r.funil || r.status || '';
+                        const status = r.status_geral || r.funil || r.status || '';
                         return (
                           <div key={r.id||i}
                             onClick={() => abrirResultado(r)}
