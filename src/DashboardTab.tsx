@@ -42,8 +42,9 @@ import {
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
-  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout,
+  mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh,
 } from '@mdi/js';
+import { CabecalhoTela, Botao, Selo } from './Interface';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
@@ -69,17 +70,17 @@ import { normalizarBusca } from './SearchUtils';
 interface Props { currentUser: any; onLogout: () => void; }
 
 const METRICAS_CONFIG = [
-  { key: 'engenharia',   nome: 'ENGENHARIA',   desc: 'Lead Time Liberacao BOM',               meta: 8,  tol: 16,  campo: 'tempo_engenharia_horas',   diretriz: 'Parametros normais mantidos.' },
-  { key: 'pcp',          nome: 'PCP',           desc: 'BOM Lancado x Liberacao Producao',      meta: 24, tol: 48,  campo: 'tempo_pcp_horas',          diretriz: 'Triagem e distribuicao em fluxo.' },
-  { key: 'compras',      nome: 'COMPRAS',       desc: 'Solicitacao x Efetivacao de Pedido',    meta: 24, tol: 72,  campo: 'tempo_compras_horas',       diretriz: 'Velocidade de compras.' },
-  { key: 'almoxarifado', nome: 'ALMOXARIFADO',  desc: 'Kiting Solicitado x Concluido',         meta: 8,  tol: 24,  campo: 'tempo_almoxarifado_horas',  diretriz: 'Separacao operacional.' },
-  { key: 'chicotes',     nome: 'CHICOTES',      desc: 'Tempo Fabricacao (Pedido x Entrega)',   meta: 48, tol: 96,  campo: 'tempo_chicotes_horas',      diretriz: 'Linha de chicotes.' },
-  { key: 'laboratorio',  nome: 'LABORATORIO',   desc: 'Solicitacao x Devolucao',               meta: 24, tol: 72,  campo: 'tempo_laboratorio_horas',   diretriz: 'Bancada de ensaios.' },
-  { key: 'producao',     nome: 'PRODUCAO',      desc: 'Lead Time Execucao (Inicio x Fim)',     meta: 16, tol: 48,  campo: 'tempo_producao_horas',      diretriz: 'Execucao de linha.' },
-  { key: 'qualidade',    nome: 'CQ',            desc: 'Fila Checklist x Liberacao',            meta: 1,  tol: 3,   campo: 'tempo_qualidade_horas',     diretriz: 'Auditoria de patio fluindo.' },
-  { key: 'logistica',    nome: 'LOGISTICA',     desc: 'Despacho x Retorno',                    meta: 48, tol: 120, campo: 'tempo_logistica_horas',     diretriz: 'Manifestos em movimento.' },
-  { key: 'serralheria',  nome: 'SERRALHERIA',   desc: 'Mobilizacao + Execucao (Total)',        meta: 24, tol: 72,  campo: 'tempo_serralheria_horas',   diretriz: 'Mob. media: x | Exec. media: x' },
-  { key: 'fiscal',       nome: 'FISCAL',        desc: 'Liberacao Comercial x Emissao NF',      meta: 2,  tol: 6,   campo: 'tempo_fiscal_horas',        diretriz: 'Faturamento sincrono.' },
+  { key: 'engenharia',   nome: 'Engenharia',   desc: 'Lead time liberação BOM',               meta: 8,  tol: 16,  campo: 'tempo_engenharia_horas',   diretriz: 'Parâmetros normais mantidos.' },
+  { key: 'pcp',          nome: 'PCP',           desc: 'BOM lançado × liberação produção',      meta: 24, tol: 48,  campo: 'tempo_pcp_horas',          diretriz: 'Triagem e distribuição em fluxo.' },
+  { key: 'compras',      nome: 'Compras',       desc: 'Solicitação × efetivação do pedido',    meta: 24, tol: 72,  campo: 'tempo_compras_horas',       diretriz: 'Velocidade de compras.' },
+  { key: 'almoxarifado', nome: 'Almoxarifado',  desc: 'Kiting solicitado × concluído',         meta: 8,  tol: 24,  campo: 'tempo_almoxarifado_horas',  diretriz: 'Separação operacional.' },
+  { key: 'chicotes',     nome: 'Chicotes',      desc: 'Tempo fabricação (pedido × entrega)',   meta: 48, tol: 96,  campo: 'tempo_chicotes_horas',      diretriz: 'Linha de chicotes.' },
+  { key: 'laboratorio',  nome: 'Laboratório',   desc: 'Solicitação × devolução',               meta: 24, tol: 72,  campo: 'tempo_laboratorio_horas',   diretriz: 'Bancada de ensaios.' },
+  { key: 'producao',     nome: 'Produção',      desc: 'Lead time execução (início × fim)',     meta: 16, tol: 48,  campo: 'tempo_producao_horas',      diretriz: 'Execução de linha.' },
+  { key: 'qualidade',    nome: 'Controle de qualidade', desc: 'Fila checklist × liberação',            meta: 1,  tol: 3,   campo: 'tempo_qualidade_horas',     diretriz: 'Auditoria de pátio fluindo.' },
+  { key: 'logistica',    nome: 'Logística',     desc: 'Despacho × retorno',                    meta: 48, tol: 120, campo: 'tempo_logistica_horas',     diretriz: 'Manifestos em movimento.' },
+  { key: 'serralheria',  nome: 'Serralheria',   desc: 'Mobilização + execução (total)',        meta: 24, tol: 72,  campo: 'tempo_serralheria_horas',   diretriz: 'Mobilização e execução.' },
+  { key: 'fiscal',       nome: 'Fiscal',        desc: 'Liberação comercial × emissão NF',      meta: 2,  tol: 6,   campo: 'tempo_fiscal_horas',        diretriz: 'Faturamento síncrono.' },
 ];
 
 const SIDEBAR_GROUPS = [
@@ -940,16 +941,21 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       data: {
         labels: METRICAS_CONFIG.map(m => m.nome),
         datasets: [
-          { label: 'Meta',       data: METRICAS_CONFIG.map(m => m.meta),                       borderColor:'#16a34a', borderDash:[5,5], fill:false, type:'line', pointRadius:0, tension:0 } as any,
-          { label: 'Tolerancia', data: METRICAS_CONFIG.map(m => m.tol),                        borderColor:'#d97706', borderDash:[5,5], fill:false, type:'line', pointRadius:0, tension:0 } as any,
-          { label: 'Realizado',  data: METRICAS_CONFIG.map(m => realizados[m.key] ?? 0),       backgroundColor:'#0d9488', borderColor:'#0f766e', borderWidth:1 },
+          { label: 'Meta',       data: METRICAS_CONFIG.map(m => m.meta),                       borderColor:'#1b7f43', borderDash:[5,5], fill:false, type:'line', pointRadius:0, tension:0 } as any,
+          { label: 'Tolerância', data: METRICAS_CONFIG.map(m => m.tol),                        borderColor:'#9a5708', borderDash:[5,5], fill:false, type:'line', pointRadius:0, tension:0 } as any,
+          { label: 'Realizado',  data: METRICAS_CONFIG.map(m => realizados[m.key] ?? 0),       backgroundColor:'#0e7068', borderColor:'#0a5c55', borderWidth:0, borderRadius:4, maxBarThickness:36 },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
-        scales:  { y: { beginAtZero: true, title: { display: true, text: 'Horas', font: { size: 11 } } } },
+        plugins: { legend: { position: 'top', align: 'end', labels: { font: { size: 12, family: "'IBM Plex Sans', sans-serif" }, boxWidth: 12, color: '#6b7886' } } },
+        scales:  {
+          x: { grid: { display: false }, ticks: { font: { size: 11, family: "'IBM Plex Sans', sans-serif" }, color: '#6b7886' } },
+          y: { beginAtZero: true, grid: { color: '#edf1f4' }, border: { display: false },
+               ticks: { font: { size: 11, family: "'IBM Plex Sans', sans-serif" }, color: '#6b7886' },
+               title: { display: true, text: 'Horas', font: { size: 12, family: "'IBM Plex Sans', sans-serif" }, color: '#6b7886' } },
+        },
       },
     });
     return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
@@ -1433,8 +1439,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           <main className={`acn-main${activeTab === 'painel_tv' ? ' acn-main-tv' : ''}`}>
             {activeTab === 'dashboard' ? (
               <div>
-                {/* PIPELINE — resumo de status dos setores, mesmas cores/regra de
-                    getStatus() já usada na tabela abaixo (st-ok/st-warn/st-crit/st-sem-dados) */}
+                <CabecalhoTela
+                  titulo="Dashboard"
+                  subtitulo="Lead time médio por setor · período atual"
+                  acoes={<Botao variante="secundario" icone={mdiRefresh} onClick={buscarRealizados}>Atualizar</Botao>}
+                />
+                {/* Resumo de status dos setores — mesma regra de getStatus() usada na tabela abaixo */}
                 {(() => {
                   const contagem = { ok: 0, warn: 0, crit: 0, sem: 0 };
                   METRICAS_CONFIG.forEach(m => {
@@ -1445,18 +1455,18 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                     else contagem.sem++;
                   });
                   const cards = [
-                    { label: 'No Prazo',   valor: contagem.ok,   sub: 'dentro da meta',              bg: '#f0fdf4', border: '#bbf7d0', txt: '#15803d', num: '#16a34a' },
-                    { label: 'Em Atenção', valor: contagem.warn, sub: 'acima da meta',                bg: '#fffbeb', border: '#fde68a', txt: '#92400e', num: '#b45309' },
-                    { label: 'Crítico',    valor: contagem.crit, sub: 'ação imediata',                bg: '#fef2f2', border: '#fecaca', txt: '#991b1b', num: '#dc2626' },
-                    { label: 'Sem Dados',  valor: contagem.sem,  sub: 'sem indicador no período',     bg: '#f8fafc', border: '#e2e8f0', txt: '#64748b', num: '#94a3b8' },
+                    { label: 'No prazo',   valor: contagem.ok,   sub: 'setores dentro da meta',   cor: 'var(--acn-ok)' },
+                    { label: 'Em atenção', valor: contagem.warn, sub: 'acima da meta',            cor: 'var(--acn-warn)' },
+                    { label: 'Crítico',    valor: contagem.crit, sub: 'acima da tolerância',      cor: 'var(--acn-bad)' },
+                    { label: 'Sem dados',  valor: contagem.sem,  sub: 'sem registro no período',  cor: 'var(--acn-neutral)' },
                   ];
                   return (
-                    <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:8, marginBottom:8}}>
+                    <div className="acn-kpis">
                       {cards.map(c => (
-                        <div key={c.label} style={{background:c.bg, border:`1px solid ${c.border}`, borderRadius:6, padding:'10px 12px'}}>
-                          <div style={{fontSize:9, fontWeight:700, color:c.txt, textTransform:'uppercase', letterSpacing:'.4px', marginBottom:4}}>{c.label}</div>
-                          <div style={{fontSize:22, fontWeight:800, color:c.num, lineHeight:1}}>{c.valor}</div>
-                          <div style={{fontSize:9, color:c.txt, marginTop:4, opacity:.85}}>{c.sub}</div>
+                        <div key={c.label} className="acn-kpi">
+                          <span className="rot"><i style={{ background: c.cor }} />{c.label}</span>
+                          <span className="val acn-num">{c.valor}</span>
+                          <span className="sub">{c.sub}</span>
                         </div>
                       ))}
                     </div>
@@ -1465,17 +1475,18 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
                 <div className="sec-card">
                   <div className="sec-hdr">
-                    <span>KPIs por Setor — Lead Times Médios</span>
-                    <button className="acn-btn" style={{background:'#0f766e'}} onClick={buscarRealizados}>↺ Atualizar</button>
+                    <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      KPIs por setor <Selo familia="neutro" ponto={false}>{METRICAS_CONFIG.length} setores</Selo>
+                    </span>
                   </div>
-                  <div className="sec-body" style={{overflowX:'auto'}}>
-                    <table className="metrics-tbl">
+                  <div className="sec-body" style={{ overflowX:'auto', padding:0 }}>
+                    <table className="acn-tabela">
                       <thead><tr>
                         <th>Setor</th>
                         <th>Indicador</th>
-                        <th style={{textAlign:'center'}}>Meta (h)</th>
-                        <th style={{textAlign:'center'}}>Tolerância (h)</th>
-                        <th style={{textAlign:'center'}}>Realizado (h)</th>
+                        <th style={{ textAlign:'right' }}>Meta</th>
+                        <th style={{ textAlign:'right' }}>Tolerância</th>
+                        <th style={{ textAlign:'right' }}>Realizado</th>
                         <th>Status</th>
                         <th>Diretriz</th>
                       </tr></thead>
@@ -1483,15 +1494,26 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                         {METRICAS_CONFIG.map(m => {
                           const real = realizados[m.key] ?? null;
                           const st = getStatus(real, m.meta, m.tol);
+                          const fam = st.cls === 'st-ok' ? 'ok' : st.cls === 'st-warn' ? 'atencao' : st.cls === 'st-crit' ? 'erro' : 'neutro';
+                          const cor = st.cls === 'st-ok' ? 'var(--acn-ok)' : st.cls === 'st-warn' ? 'var(--acn-warn)' : 'var(--acn-bad)';
+                          const usoTol = real != null && m.tol ? Math.min(100, Math.round((real / m.tol) * 100)) : 0;
+                          const h = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
                           return (
-                            <tr key={m.key}>
-                              <td><strong>{m.nome}</strong></td>
-                              <td style={{maxWidth:200,fontSize:9,color:'#64748b'}}>{m.desc}</td>
-                              <td className="num-meta">{m.meta}h</td>
-                              <td className="num-tol">{m.tol}h</td>
-                              <td className="num-real">{real != null ? real.toFixed(1)+'h' : '—'}</td>
-                              <td><span className={st.cls}>{st.label}</span></td>
-                              <td style={{fontSize:9,color:'#64748b'}}>{m.diretriz}</td>
+                            <tr key={m.key} className={st.cls === 'st-crit' ? 'acn-linha-alerta' : ''}>
+                              <td className="acn-forte" style={{ whiteSpace:'nowrap' }}>{m.nome}</td>
+                              <td style={{ minWidth:180 }}>{m.desc}</td>
+                              <td className="acn-num" style={{ textAlign:'right', whiteSpace:'nowrap' }}>{h(m.meta)}</td>
+                              <td className="acn-num" style={{ textAlign:'right', whiteSpace:'nowrap' }}>{h(m.tol)}</td>
+                              <td style={{ whiteSpace:'nowrap' }}>
+                                {real != null ? (
+                                  <div className="acn-barra" title={`${usoTol}% da tolerância`}>
+                                    <span><i style={{ width: `${Math.max(3, usoTol)}%`, background: cor }} /></span>
+                                    <b className="acn-num acn-forte">{h(real)}</b>
+                                  </div>
+                                ) : <div className="acn-fraco" style={{ textAlign:'right' }}>—</div>}
+                              </td>
+                              <td><Selo familia={fam as any}>{st.cls === 'st-ok' ? 'No prazo' : st.cls === 'st-warn' ? 'Atenção' : st.cls === 'st-crit' ? 'Crítico' : 'Sem dados'}</Selo></td>
+                              <td className="acn-fraco" style={{ minWidth:160 }}>{m.diretriz}</td>
                             </tr>
                           );
                         })}
@@ -1501,7 +1523,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                 </div>
 
                 <div className="sec-card">
-                  <div className="sec-hdr"><span>Gráfico de Lead Times por Setor</span></div>
+                  <div className="sec-hdr"><span>Lead times por setor</span></div>
                   <div className="sec-body">
                     <div className="chart-wrap">
                       <canvas ref={canvasRef} />
