@@ -7,6 +7,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import { confirmar } from './Feedback';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -192,7 +193,7 @@ export default function PCPTab({ currentUser }) {
   const liberarKitingLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera PCP');
     if (pendentes.length === 0) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
-    if (!confirm(`Liberar kiting (Almoxarifado) para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
+    if (!await confirmar(`Liberar kiting (Almoxarifado) para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {
@@ -219,7 +220,7 @@ export default function PCPTab({ currentUser }) {
   const liberarProducaoLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => podeLiberar(o));
     if (pendentes.length === 0) { alert('Nenhuma unidade deste lote esta pronta para liberar producao (falta kit).'); return; }
-    if (!confirm(`Liberar producao para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
+    if (!await confirmar(`Liberar producao para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {

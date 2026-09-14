@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPOS
@@ -215,7 +216,7 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
 
   // ─── desconectar ──────────────────────────────────────────────────────────
   const desconectar = async (inst: Instancia) => {
-    if (!confirm(`Desconectar WhatsApp de ${inst.vendedor_nome}?`)) return;
+    if (!await confirmar(`Desconectar WhatsApp de ${inst.vendedor_nome}?`)) return;
     try {
       await fetch(EDGE_URL, {
         method: 'POST',
@@ -231,7 +232,7 @@ export default function WhatsAppConexoesWidget({ onClose }: { onClose: () => voi
 
   // ─── excluir instância ─────────────────────────────────────────────────────
   const excluirInstancia = async (inst: Instancia) => {
-    if (!confirm(`Excluir instância "${inst.instance_name}" de ${inst.vendedor_nome}?\n\nIsso remove a instância da Evolution API e do sistema.`)) return;
+    if (!await confirmar(`Excluir instância "${inst.instance_name}" de ${inst.vendedor_nome}?\n\nIsso remove a instância da Evolution API e do sistema.`)) return;
     try {
       await fetch(EDGE_URL, {
         method: 'POST',

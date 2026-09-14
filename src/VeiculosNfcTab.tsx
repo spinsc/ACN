@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { normalizarBusca } from './SearchUtils';
+import { confirmar } from './Feedback';
 
 const supabase = createClient(
   'https://qgemelnuqdilnggxmrdw.supabase.co',
@@ -637,7 +638,7 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
   };
 
   const regenerarToken = async () => {
-    if (!confirm('Regenerar o token invalida o link antigo. Confirma?')) return;
+    if (!await confirmar('Regenerar o token invalida o link antigo. Confirma?')) return;
     setRegenerando(true);
     const novoToken = crypto.randomUUID();
     const { error } = await supabase.from('veiculos_nfc')
@@ -681,7 +682,7 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
   };
 
   const deletarServico = async (id) => {
-    if (!confirm('Remover este serviço?')) return;
+    if (!await confirmar('Remover este serviço?')) return;
     await supabase.from('servicos_executados_nfc').delete().eq('id', id);
     carregarServicos();
   };
@@ -1036,7 +1037,7 @@ export default function VeiculosNfcTab({ currentUser }) {
   }, []);
 
   const deletarVeiculo = async (v) => {
-    const confirm1 = window.confirm(
+    const confirm1 = await confirmar(
       `Excluir o veículo "${v.chassi}"?\n\n` +
       `Isso também irá:\n` +
       `• Excluir todos os serviços cadastrados\n` +
@@ -1045,7 +1046,7 @@ export default function VeiculosNfcTab({ currentUser }) {
       `Esta ação não pode ser desfeita.`
     );
     if (!confirm1) return;
-    const confirm2 = window.confirm(`Confirmar exclusão definitiva do chassi ${v.chassi}?`);
+    const confirm2 = await confirmar(`Confirmar exclusão definitiva do chassi ${v.chassi}?`);
     if (!confirm2) return;
 
     // Excluir chamados (SET NULL não exclui — apagamos manualmente)
@@ -1076,7 +1077,7 @@ export default function VeiculosNfcTab({ currentUser }) {
   useEffect(() => { carregarVeiculos(); carregarConfig(); }, [carregarVeiculos, carregarConfig]);
 
   const desativarVeiculo = async (id) => {
-    if (!confirm('Desativar este veículo? Ele deixará de aparecer na listagem.')) return;
+    if (!await confirmar('Desativar este veículo? Ele deixará de aparecer na listagem.')) return;
     await supabase.from('veiculos_nfc').update({ ativo: false }).eq('id', id);
     carregarVeiculos();
   };

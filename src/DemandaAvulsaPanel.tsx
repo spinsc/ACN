@@ -9,6 +9,7 @@ import { normalizarBusca } from './SearchUtils';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -104,7 +105,7 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
   const corBorda = al === 'vencida' ? '#dc2626' : al === 'urgente' ? '#d97706' : STATUS_COR[etapa.status] || '#e2e8f0';
 
   const iniciar = async () => {
-    if (!confirm(`Iniciar Etapa ${idx + 1}?`)) return;
+    if (!await confirmar(`Iniciar Etapa ${idx + 1}?`)) return;
     setSalvando(true);
     await onUpdate(idx, { status: 'Em Andamento', data_inicio: new Date().toISOString() });
     setSalvando(false);
@@ -127,7 +128,7 @@ function EtapaCard({ etapa, idx, total, onUpdate, currentUser, demandaId }) {
     setSalvando(false);
   };
   const concluir = async () => {
-    if (!confirm(`Concluir Etapa ${idx + 1}?`)) return;
+    if (!await confirmar(`Concluir Etapa ${idx + 1}?`)) return;
     setSalvando(true);
     await onUpdate(idx, { status: 'Concluída', data_fim: new Date().toISOString() });
     setSalvando(false);
@@ -436,13 +437,13 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
   // ── Ações da demanda simples ─────────────────────────────────────────────
   const iniciar = async () => {
-    if (!confirm('Marcar início da execução agora?')) return;
+    if (!await confirmar('Marcar início da execução agora?')) return;
     const agora = new Date().toISOString();
     await supabase.from('demandas_avulsas').update({ status: 'Em Andamento', data_inicio: agora, atualizado_em: agora }).eq('id', d.id);
     await reload(); onRefresh();
   };
   const concluir = async () => {
-    if (!confirm('Marcar como concluída?')) return;
+    if (!await confirmar('Marcar como concluída?')) return;
     const agora = new Date().toISOString();
     await supabase.from('demandas_avulsas').update({ status: 'Concluída', data_fim: agora, atualizado_em: agora }).eq('id', d.id);
     await reload(); onRefresh();
@@ -506,7 +507,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   };
 
   const excluirAnexo = async (id: string) => {
-    if (!confirm('Remover este arquivo?')) return;
+    if (!await confirmar('Remover este arquivo?')) return;
     await supabase.from('demanda_avulsa_anexos').delete().eq('id', id);
     await reload();
   };

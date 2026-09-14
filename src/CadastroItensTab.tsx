@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient';
 import { normalizarBusca } from './SearchUtils';
 import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
+import { confirmar } from './Feedback';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -478,7 +479,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   };
 
   const excluirItem = async (id: string) => {
-    if (!window.confirm('Excluir este item permanentemente?')) return;
+    if (!await confirmar('Excluir este item permanentemente?')) return;
     setDeletando(id);
     await supabase.from('cadastro_itens').delete().eq('id', id);
     setItens(prev => prev.filter(i => i.id !== id));

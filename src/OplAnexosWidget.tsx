@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -95,7 +96,7 @@ function ModalAnexos({ opl, setor, currentUser, tipo: tipoFixo, onClose }) {
   };
 
   const excluir = async (id: string) => {
-    if (!confirm('Remover este arquivo?')) return;
+    if (!await confirmar('Remover este arquivo?')) return;
     await supabase.from('opl_anexos').delete().eq('id', id);
     reload();
   };

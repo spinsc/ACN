@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ClienteAutocomplete, fmtTelefones, fmtEmails } from './ClienteUtils';
 import RichTextInput from './RichTextInput';
 import { normalizarBusca } from './SearchUtils';
+import { confirmar } from './Feedback';
 
 const CLIENTE_VAZIO = {
   nome: '', tipo: 'PF', documento: '', nome_contato: '', cargo_contato: '',
@@ -376,7 +377,7 @@ export default function ClientesTab({ currentUser }) {
   const fmtEml = (e: any[]) => Array.isArray(e) ? e.map(x => x.email||x).filter(Boolean).join(' / ') : '';
 
   const excluir = async (c: any) => {
-    if (!window.confirm(`Excluir cliente "${c.nome}"? Esta ação não pode ser desfeita.`)) return;
+    if (!await confirmar(`Excluir cliente "${c.nome}"? Esta ação não pode ser desfeita.`)) return;
     await supabase.from('clientes').delete().eq('id', c.id);
     load();
   };

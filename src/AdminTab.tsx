@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
 import { CentrosCustoManager } from './CentroCustoShared';
+import { confirmar } from './Feedback';
 
 
 const PERFIS = [
@@ -223,9 +224,9 @@ function PainelUsuarios() {
   // sessão atual (pra poder voltar, ver o banner/botão em DashboardTab.tsx)
   // e troca a sessão ativa pela do usuário-alvo, montada no mesmo formato
   // usado no login (ver LoginTab.tsx).
-  const verComoUsuario = (u: any) => {
+  const verComoUsuario = async (u: any) => {
     if (!u.ativo) { alert('Este usuário está inativo — reative antes de testar com a sessão dele.'); return; }
-    if (!window.confirm(`Acessar o sistema como "${u.nome}" (${u.perfil})?\n\nVocê pode voltar a qualquer momento pelo botão "Voltar ao Admin" que vai aparecer no topo da tela.`)) return;
+    if (!await confirmar(`Acessar o sistema como "${u.nome}" (${u.perfil})?\n\nVocê pode voltar a qualquer momento pelo botão "Voltar ao Admin" que vai aparecer no topo da tela.`)) return;
     try {
       const atual = localStorage.getItem('user');
       if (atual) localStorage.setItem('admin_sessao_original', atual);
@@ -245,7 +246,7 @@ function PainelUsuarios() {
   };
 
   const excluirUsuario = async (u) => {
-    if (!window.confirm(`Excluir permanentemente "${u.nome}"? Esta ação não pode ser desfeita.`)) return;
+    if (!await confirmar(`Excluir permanentemente "${u.nome}"? Esta ação não pode ser desfeita.`)) return;
     await supabase.from('auth_usuarios').delete().eq('id', u.id);
     fetchUsuarios();
   };
@@ -690,13 +691,13 @@ function PainelPerfis() {
   };
 
   const excluir = async (p) => {
-    if (!window.confirm(`Excluir perfil "${p.nome}"?`)) return;
+    if (!await confirmar(`Excluir perfil "${p.nome}"?`)) return;
     await supabase.from('admin_perfis_sistema').delete().eq('id', p.id);
     fetchPerfis();
   };
 
   const importarPadroes = async () => {
-    if (!window.confirm('Isso vai criar todos os perfis padrão que ainda não existem. Continuar?')) return;
+    if (!await confirmar('Isso vai criar todos os perfis padrão que ainda não existem. Continuar?')) return;
     setImportando(true);
     const padroes = Object.entries(PERFIS_PADRAO_ABAS).map(([nome, abas]) => ({
       nome, abas_permitidas: abas,
@@ -896,7 +897,7 @@ function PainelChecklist() {
   };
 
   const deleteItem = async (item) => {
-    if (!window.confirm(`Remover item: "${item.item_texto}"?`)) return;
+    if (!await confirmar(`Remover item: "${item.item_texto}"?`)) return;
     await supabase.from('cq_checklist_itens').delete().eq('id', item.id);
     fetchItens();
   };
@@ -1305,7 +1306,7 @@ function PainelDados() {
 
   const deletarSelecionados = async () => {
     if (selecionados.size === 0) return;
-    if (!window.confirm(`Deletar ${selecionados.size} registro(s) selecionado(s)?\n\nVocê poderá restaurar por até 24h na aba Lixeira.`)) return;
+    if (!await confirmar(`Deletar ${selecionados.size} registro(s) selecionado(s)?\n\nVocê poderá restaurar por até 24h na aba Lixeira.`)) return;
     setDeletando(true);
     const ids = Array.from(selecionados);
     // Salvar cópia na lixeira antes de deletar
@@ -1670,7 +1671,7 @@ function PainelLixeira() {
   useEffect(() => { fetchLixeira(); }, []);
 
   const restaurar = async (item) => {
-    if (!window.confirm(`Restaurar este registro para "${LABEL_TABELA[item.tabela] || item.tabela}"?`)) return;
+    if (!await confirmar(`Restaurar este registro para "${LABEL_TABELA[item.tabela] || item.tabela}"?`)) return;
     setRestaurando(item.id);
     try {
       const dados = { ...item.dados };
@@ -1682,7 +1683,7 @@ function PainelLixeira() {
   };
 
   const removerDaLixeira = async (item) => {
-    if (!window.confirm('Remover permanentemente da lixeira? Esta ação não pode ser desfeita.')) return;
+    if (!await confirmar('Remover permanentemente da lixeira? Esta ação não pode ser desfeita.')) return;
     await supabase.from('lixeira').update({ restaurado: true }).eq('id', item.id);
     fetchLixeira();
   };
@@ -1859,7 +1860,7 @@ function PainelPlataformas() {
   };
 
   const excluir = async (id) => {
-    if (!confirm('Excluir esta plataforma?')) return;
+    if (!await confirmar('Excluir esta plataforma?')) return;
     await supabase.from('plataformas_licitacao').delete().eq('id', id);
     load();
   };
@@ -3096,7 +3097,7 @@ function PainelAvisos() {
   };
 
   const excluir = async (id: string) => {
-    if (!window.confirm('Excluir este aviso?')) return;
+    if (!await confirmar('Excluir este aviso?')) return;
     await supabase.from('avisos_sistema').delete().eq('id', id);
     await carregar();
   };

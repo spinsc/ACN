@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { contentTypeUpload } from './FormatosArquivo';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -100,7 +101,7 @@ function ModalAnexos({ op, currentUser, onClose }: { op: any; currentUser: any; 
   };
 
   const excluir = async (id: string, url: string) => {
-    if (!confirm('Remover este arquivo?')) return;
+    if (!await confirmar('Remover este arquivo?')) return;
     // Remove do Storage
     try {
       const path = url.split('/acn-media/')[1]?.split('?')[0];

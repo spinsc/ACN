@@ -5,6 +5,7 @@ import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
          somarResultados, estruturaFormacao } from './FormacaoCalculo';
 import { ehAdminOuGerente } from './utils/permissoes';
+import { confirmar, pedirTexto } from './Feedback';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const MOEDAS = ['REAL', 'DOLAR', 'EURO'];
@@ -242,14 +243,14 @@ function GerenciarCategorias({ onMudou }) {
   const carregar = () => supabase.from('formacao_precos_tipos').select('id,nome,ativo').order('nome').then(({ data }) => setCats(data || []));
   useEffect(() => { carregar(); }, []);
   const criar = async () => {
-    const nome = window.prompt('Nome da nova categoria:');
+    const nome = await pedirTexto('Nome da nova categoria:');
     if (!nome || !nome.trim()) return;
     const { error } = await supabase.from('formacao_precos_tipos').insert([{ nome: nome.trim() }]);
     if (error) { alert('Erro ao criar: ' + error.message); return; }
     carregar(); onMudou?.();
   };
   const renomear = async (c) => {
-    const nome = window.prompt('Renomear categoria:', c.nome);
+    const nome = await pedirTexto('Renomear categoria:', c.nome);
     if (!nome || !nome.trim() || nome.trim() === c.nome) return;
     const { error } = await supabase.from('formacao_precos_tipos').update({ nome: nome.trim() }).eq('id', c.id);
     if (error) { alert('Erro ao renomear: ' + error.message); return; }
@@ -2015,8 +2016,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     if (!vinculo?.id || !editandoId) return;
     const atual = formacoesVinculo.find((x: any) => x.id === editandoId);
     if (!atual) return;
-    if (temNaoSalvo && !window.confirm('Há alterações não salvas nesta formação. Desvincular mesmo assim? (as alterações ficam só no rascunho)')) return;
-    if (!window.confirm(`Desvincular "${atual.nome || 'formação sem nome'}" (v${atual.versao || 1}) deste processo?\n\n` +
+    if (temNaoSalvo && !await confirmar('Há alterações não salvas nesta formação. Desvincular mesmo assim? (as alterações ficam só no rascunho)')) return;
+    if (!await confirmar(`Desvincular "${atual.nome || 'formação sem nome'}" (v${atual.versao || 1}) deste processo?\n\n` +
       'A formação NÃO é apagada: continua em Formação de Preços e nos outros processos a que estiver ligada.')) return;
     const { error } = await supabase.from('cotacoes_precos_vinculos').delete()
       .eq('cotacao_id', editandoId).eq('tipo', vinculo.tipo).eq('processo_id', vinculo.id);
@@ -2201,8 +2202,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // ── Subgrupos do item (ex.: Nivus 6 un.: 3 com conjunto A, 2 com A + cela) ──
   const setQtdSub = (sub, qtd) => setParams(p => ({ ...p,
     qtd_subgrupo: { ...(p.qtd_subgrupo || {}), [chaveSub(loteAtivoValido, grupoAtivoValido, sub)]: Math.max(1, parseInt(qtd) || 1) } }));
-  const dividirEmSubgrupos = () => {
-    const nome = window.prompt(`Nome do 1º subgrupo de "${grupoAtivoValido}".\nOs produtos que já estão no item vão para ele.`, 'A');
+  const dividirEmSubgrupos = async () => {
+    const nome = await pedirTexto(`Nome do 1º subgrupo de "${grupoAtivoValido}".\nOs produtos que já estão no item vão para ele.`, 'A');
     if (!nome || !nome.trim()) return;
     const n = nome.trim();
     const qtdAtual = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);
@@ -2210,15 +2211,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setQtdSub(n, qtdAtual);
     setSubgrupoAtivo(n);
   };
-  const novoSubgrupo = (copiarDe: string | null) => {
+  const novoSubgrupo = async (copiarDe: string | null) => {
     const sugestao = String.fromCharCode(65 + (subsDoItem.length % 26));
-    const nome = window.prompt(copiarDe
+    const nome = await pedirTexto(copiarDe
       ? `Nome do novo subgrupo — começa com uma CÓPIA dos produtos de "${copiarDe}" (depois é só ajustar):`
       : 'Nome do novo subgrupo:', sugestao);
     if (!nome || !nome.trim()) return;
     const n = nome.trim();
     if (subsDoItem.includes(n)) { alert(`Já existe o subgrupo "${n}" em ${grupoAtivoValido}.`); return; }
-    const qtd = parseInt(window.prompt(`Quantas unidades no subgrupo "${n}"?`, '1') || '', 10);
+    const qtd = parseInt(await pedirTexto(`Quantas unidades no subgrupo "${n}"?`, '1') || '', 10);
     if (!(qtd > 0)) { alert('Informe uma quantidade maior que zero.'); return; }
     setItens(p => {
       const novos = copiarDe
@@ -2229,8 +2230,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setQtdSub(n, qtd);
     setSubgrupoAtivo(n);
   };
-  const renomearSubgrupo = (atual: string) => {
-    const nome = window.prompt('Renomear subgrupo:', atual);
+  const renomearSubgrupo = async (atual: string) => {
+    const nome = await pedirTexto('Renomear subgrupo:', atual);
     if (!nome || !nome.trim() || nome.trim() === atual) return;
     const n = nome.trim();
     if (subsDoItem.includes(n)) { alert(`Já existe o subgrupo "${n}".`); return; }
@@ -2243,11 +2244,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     });
     setSubgrupoAtivo(n);
   };
-  const removerSubgrupo = (sub: string) => {
+  const removerSubgrupo = async (sub: string) => {
     const k = chaveSub(loteAtivoValido, grupoAtivoValido, sub);
     if (subsDoItem.length === 1) {
       // último subgrupo: o item volta a ser simples, com os mesmos produtos e quantidade
-      if (!window.confirm(`Desfazer os subgrupos de "${grupoAtivoValido}"? Os produtos continuam no item, com quantidade ${qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub)}.`)) return;
+      if (!await confirmar(`Desfazer os subgrupos de "${grupoAtivoValido}"? Os produtos continuam no item, com quantidade ${qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub)}.`)) return;
       const q = qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub);
       setItens(p => p.map(x => doItemAtivo(x) ? { ...x, subgrupo_nome: null } : x));
       setParams(p => {
@@ -2258,7 +2259,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
       return;
     }
     const n = itens.filter(x => doItemAtivo(x) && subgrupoDe(x) === sub).length;
-    if (!window.confirm(`Remover o subgrupo "${sub}" e os seus ${n} produto(s)?`)) return;
+    if (!await confirmar(`Remover o subgrupo "${sub}" e os seus ${n} produto(s)?`)) return;
     setItens(p => p.filter(x => !(doItemAtivo(x) && subgrupoDe(x) === sub)));
     setParams(p => { const qs = { ...(p.qtd_subgrupo || {}) }; delete qs[k]; return { ...p, qtd_subgrupo: qs }; });
     setSubgrupoAtivo(subsDoItem.find(x => x !== sub) || null);
@@ -2268,16 +2269,16 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     difal_pct: params.difal_pct, imposto_pct: params.imposto_pct, custo_fixo_pct: params.custo_fixo_pct,
   });
 
-  const novoGrupoItem = () => {
-    const nome = window.prompt(`Nome do novo Item do edital (em ${loteAtivoValido}):`, `Item ${paresLoteItem.length + 1}`);
+  const novoGrupoItem = async () => {
+    const nome = await pedirTexto(`Nome do novo Item do edital (em ${loteAtivoValido}):`, `Item ${paresLoteItem.length + 1}`);
     if (!nome || !nome.trim()) return;
     const nomeFinal = nome.trim();
     if (gruposNomes.includes(nomeFinal)) { alert(`Já existe "${nomeFinal}" em ${loteAtivoValido}.`); return; }
     setItens(p => [...p, linhaNova(loteAtivoValido, nomeFinal)]);
     setGrupoAtivo(nomeFinal);
   };
-  const renomearGrupoItem = (nomeAtual: string) => {
-    const nome = window.prompt('Renomear Item do edital:', nomeAtual);
+  const renomearGrupoItem = async (nomeAtual: string) => {
+    const nome = await pedirTexto('Renomear Item do edital:', nomeAtual);
     if (!nome || !nome.trim() || nome.trim() === nomeAtual) return;
     const nomeFinal = nome.trim();
     if (gruposNomes.includes(nomeFinal)) { alert(`Já existe "${nomeFinal}" em ${loteAtivoValido}.`); return; }
@@ -2285,9 +2286,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     moverQtd(loteAtivoValido, nomeAtual, loteAtivoValido, nomeFinal);
     if (grupoAtivoValido === nomeAtual) setGrupoAtivo(nomeFinal);
   };
-  const removerGrupoItem = (nome: string) => {
+  const removerGrupoItem = async (nome: string) => {
     const n = itens.filter(x => loteDe(x) === loteAtivoValido && grupoDe(x) === nome).length;
-    if (!window.confirm(`Remover o Item "${nome}" de ${loteAtivoValido} e todos os seus ${n} componente(s)?`)) return;
+    if (!await confirmar(`Remover o Item "${nome}" de ${loteAtivoValido} e todos os seus ${n} componente(s)?`)) return;
     setItens(p => {
       const restante = p.filter(x => !(loteDe(x) === loteAtivoValido && grupoDe(x) === nome));
       return restante.length > 0 ? restante : [novoItem()]; // nunca fica sem nenhum item
@@ -2300,8 +2301,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   };
 
   // ── Lotes do edital ──────────────────────────────────────────────────────
-  const novoLote = () => {
-    const nome = window.prompt('Nome do novo Lote:', `Lote ${lotesNomes.length + 1}`);
+  const novoLote = async () => {
+    const nome = await pedirTexto('Nome do novo Lote:', `Lote ${lotesNomes.length + 1}`);
     if (!nome || !nome.trim()) return;
     const nomeFinal = nome.trim();
     if (lotesNomes.includes(nomeFinal)) { alert(`Já existe o "${nomeFinal}".`); return; }
@@ -2309,8 +2310,8 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     setLoteAtivo(nomeFinal);
     setGrupoAtivo('Item 1');
   };
-  const renomearLote = (nomeAtual: string) => {
-    const nome = window.prompt('Renomear Lote:', nomeAtual);
+  const renomearLote = async (nomeAtual: string) => {
+    const nome = await pedirTexto('Renomear Lote:', nomeAtual);
     if (!nome || !nome.trim() || nome.trim() === nomeAtual) return;
     const nomeFinal = nome.trim();
     if (lotesNomes.includes(nomeFinal)) { alert(`Já existe o "${nomeFinal}".`); return; }
@@ -2319,9 +2320,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     gruposDoLote.forEach(g => moverQtd(nomeAtual, g, nomeFinal, g));
     if (loteAtivoValido === nomeAtual) setLoteAtivo(nomeFinal);
   };
-  const removerLote = (nome: string) => {
+  const removerLote = async (nome: string) => {
     const n = itens.filter(x => loteDe(x) === nome).length;
-    if (!window.confirm(`Remover o "${nome}" inteiro, com todos os seus itens e ${n} componente(s)?`)) return;
+    if (!await confirmar(`Remover o "${nome}" inteiro, com todos os seus itens e ${n} componente(s)?`)) return;
     const gruposDoLote = [...new Set(itens.filter(x => loteDe(x) === nome).map(grupoDe))];
     setItens(p => {
       const restante = p.filter(x => loteDe(x) !== nome);
@@ -2362,11 +2363,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // "pílulas" não permitiam. Por isso, se há alteração não salva: confirma e
   // grava o rascunho JÁ (o automático espera 1,2s sem digitar, e a troca
   // cancelaria essa gravação pendente). Sem alteração, troca direto.
-  const trocarVersao = (id: string) => {
+  const trocarVersao = async (id: string) => {
     const m = formacoesVinculo.find((x: any) => x.id === id);
     if (!m || m.id === editandoId) return;
     if (temNaoSalvo) {
-      if (!window.confirm(
+      if (!await confirmar(
         'Esta formação tem alterações NÃO salvas.\n\n' +
         'Trocar de versão mesmo assim? As alterações ficam no rascunho desta versão ' +
         'e são oferecidas de volta quando você abri-la de novo.')) return;
@@ -2601,13 +2602,13 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   };
 
   const excluirModelo = async (id) => {
-    if (!confirm('Excluir este modelo?')) return;
+    if (!await confirmar('Excluir este modelo?')) return;
     await supabase.from('cotacoes_precos').delete().eq('id', id);
     carregarModelos();
   };
 
-  const novaQuotacao = () => {
-    if (!confirm('Limpar cotação atual e iniciar nova?')) return;
+  const novaQuotacao = async () => {
+    if (!await confirmar('Limpar cotação atual e iniciar nova?')) return;
     setParams({ ...PARAMS_PADRAO });
     setUsarGlobais(true);
     setUsarMarkupGlobal(false);
@@ -2946,7 +2947,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   // demais do mesmo grupo).
   const marcarVencedora = async () => {
     if (!editandoId) return;
-    if (!confirm('Marcar esta versão como a VENCEDORA do pregão/licitação?')) return;
+    if (!await confirmar('Marcar esta versão como a VENCEDORA do pregão/licitação?')) return;
     const raizId = versaoRaizId || editandoId;
     await supabase.from('cotacoes_precos').update({ vencedora: false }).or(`id.eq.${raizId},versao_raiz_id.eq.${raizId}`);
     const { data: marcada } = await supabase.from('cotacoes_precos')

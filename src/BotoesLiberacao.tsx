@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
+import { confirmar, pedirTexto } from './Feedback';
 
 // ============================================
 // CONFIGURAR SUPABASE
@@ -20,7 +21,7 @@ export default function BotoesLiberacao({ registro, setorAtual, currentUser, onU
 
   const handleLiberar = async () => {
     if (
-      !window.confirm(
+      !await confirmar(
         `Liberar ${registro.opl} para ${fluxo.label}?\n\n${fluxo.descricao}`
       )
     ) {
@@ -74,7 +75,7 @@ export default function BotoesLiberacao({ registro, setorAtual, currentUser, onU
   };
 
   const handleRejeitar = async () => {
-    const motivo = prompt(
+    const motivo = await pedirTexto(
       'Motivo da rejeição (será registrado no log):'
     );
     if (!motivo) return;
@@ -113,7 +114,7 @@ export default function BotoesLiberacao({ registro, setorAtual, currentUser, onU
   };
 
   const handleComPendencia = async () => {
-    const setorsPendentes = prompt(
+    const setorsPendentes = await pedirTexto(
       'Setores com pendência (separados por vírgula):\nEx: Serralheria, Chicotes'
     );
     if (!setorsPendentes) return;

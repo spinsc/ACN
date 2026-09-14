@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { normalizarBusca } from './SearchUtils';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -679,7 +680,7 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
   };
 
   const fecharMes = async (funcId: string, saldo: number) => {
-    if (!confirm(`Fechar banco de horas de ${mesNome(mes)}/${ano} para este funcionário? Saldo atual: ${fmtMin(saldo)}`)) return;
+    if (!await confirmar(`Fechar banco de horas de ${mesNome(mes)}/${ano} para este funcionário? Saldo atual: ${fmtMin(saldo)}`)) return;
     setFechando(funcId);
     await supabase.from('rh_fechamentos').upsert([{
       funcionario_id: funcId, ano, mes, saldo_minutos: saldo,
@@ -2163,7 +2164,7 @@ export default function RHTab({ currentUser }) {
             onEdit={(f)=>setModalFunc(f)}
             currentUser={currentUser}
             onDelete={async (f)=>{
-              if (!confirm(`Excluir o funcionário "${f.nome}"?\n\nEsta ação irá desativá-lo do sistema.`)) return;
+              if (!await confirmar(`Excluir o funcionário "${f.nome}"?\n\nEsta ação irá desativá-lo do sistema.`)) return;
               await supabase.from('rh_funcionarios').update({ ativo: false }).eq('id', f.id);
               logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: f.id, changeType: 'DELETE', oldRow: f, user: currentUser });
               fetch();

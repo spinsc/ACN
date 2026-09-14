@@ -30,6 +30,7 @@ import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
+import { confirmar, pedirTexto } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -942,7 +943,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // então não há veículo para acompanhar um a um — só muda a quantidade.
     const ehEnvio = soEnvio(oplFormEdit.fluxo_entrega || oplEditando.fluxo_entrega);
     if (qtdNova > qtdAnterior && qtdNova > 1 && !jaEhSufixo && !ehEnvio) {
-      const desmembrar = confirm(
+      const desmembrar = await confirmar(
         `Quantidade aumentou de ${qtdAnterior} para ${qtdNova}.\n\n` +
         `Deseja DESMEMBRAR agora em ${qtdNova} OPs separadas (uma por veículo/unidade)? ` +
         `Esta OP (${baseOpl}) continua sendo a 1ª unidade, com todo o histórico/status atual preservado. ` +
@@ -1285,7 +1286,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     // confirmar sem perceber — achado real: usuário apagou uma análise sem
     // notar, porque "Excluir este registro?" genérico não dizia qual era.
     const msg = label ? `Excluir "${label}"?` : 'Excluir este registro?';
-    if (!window.confirm(msg)) return;
+    if (!await confirmar(msg)) return;
     await supabase.from(tabela).delete().eq('id', id);
     await fetchAbrirTabContent(modalAbrir, abrirTabDir);
   };
@@ -1330,8 +1331,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       `<img src="${pub.publicUrl}" style="max-width:100%;border-radius:4px;margin:4px 0;display:block;" />`);
   };
 
-  const inserirLinkNota = () => {
-    const url = window.prompt('URL do link (ex: https://...)');
+  const inserirLinkNota = async () => {
+    const url = await pedirTexto('URL do link (ex: https://...)');
     if (!url) return;
     const sel = window.getSelection()?.toString();
     const label = sel || url;
@@ -1839,7 +1840,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // EXCLUIR OP
   // ─────────────────────────────────────────────────────────────────────────
   const excluirOp = async (op: any) => {
-    if (!confirm(`Excluir "${op.titulo}"? Esta ação não pode ser desfeita.`)) return;
+    if (!await confirmar(`Excluir "${op.titulo}"? Esta ação não pode ser desfeita.`)) return;
     await supabase.from('crm_oportunidades').delete().eq('id', op.id);
     await load();
   };
@@ -2939,7 +2940,7 @@ const SUB_STATUS_COR: Record<string,string> = {
         };
 
         const liberarFiscalCrm = async (o: any) => {
-          if (!window.confirm(`Liberar OP ${o.opl} para o Fiscal emitir a NF?`)) return;
+          if (!await confirmar(`Liberar OP ${o.opl} para o Fiscal emitir a NF?`)) return;
           const agora = new Date().toISOString();
           const { error } = await supabase.from('oples').update({
             status_geral: 'Aguarda Emissao NF',
@@ -2962,7 +2963,7 @@ const SUB_STATUS_COR: Record<string,string> = {
         const liberarFiscalEmLote = async () => {
           const alvos = oplsEmAberto.filter((o: any) => oplsSelecionadas.has(o.id) && LIBERAVEIS_FISCAL.includes(o.status_geral));
           if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está pronta para liberação ao Fiscal.'); return; }
-          if (!window.confirm(`Liberar ${alvos.length} OP(s) selecionada(s) para o Fiscal emitir a NF?`)) return;
+          if (!await confirmar(`Liberar ${alvos.length} OP(s) selecionada(s) para o Fiscal emitir a NF?`)) return;
           setAplicandoLoteOpls(true);
           const agora = new Date().toISOString();
           for (const o of alvos) {
@@ -3936,7 +3937,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                 style={{ background:'#1e3a5f', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
                 disabled={salvando}
                 onClick={async () => {
-                  if (!window.confirm('Converter em Licitação (status: Aberta)?')) return;
+                  if (!await confirmar('Converter em Licitação (status: Aberta)?')) return;
                   setSalvando(true);
                   const agora = new Date().toISOString();
                   const op = modalConverterLicit;
@@ -3972,7 +3973,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                 style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'10px 14px', fontWeight:700, fontSize:11, cursor:salvando?'not-allowed':'pointer', opacity:salvando?.6:1, textAlign:'left' }}
                 disabled={salvando}
                 onClick={async () => {
-                  if (!window.confirm('Converter em Adesão a ATA?')) return;
+                  if (!await confirmar('Converter em Adesão a ATA?')) return;
                   setSalvando(true);
                   const agora = new Date().toISOString();
                   const op = modalConverterLicit;

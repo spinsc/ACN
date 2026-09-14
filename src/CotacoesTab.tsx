@@ -5,6 +5,7 @@ import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { normalizarBusca } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
+import { pedirTexto } from './Feedback';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -644,7 +645,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
 
   const aprovarSolicitacao = async (aprov) => {
     if (!isAdmin) return;
-    const resposta = prompt('Resposta (aprovado/rejeitado):');
+    const resposta = await pedirTexto('Resposta (aprovado/rejeitado):');
     if (!resposta) return;
     const status = resposta.toLowerCase().includes('rej') ? 'rejeitado' : 'aprovado';
     await supabase.from('cotacoes_aprovacoes').update({
@@ -920,7 +921,7 @@ function PainelAprovacoes({ currentUser, onClose }) {
   const responder = async (aprov, decisao) => {
     const resposta = decisao === 'aprovado'
       ? 'Aprovado pelo gestor.'
-      : prompt('Motivo da rejeição:') || 'Rejeitado.';
+      : await pedirTexto('Motivo da rejeição:') || 'Rejeitado.';
     await supabase.from('cotacoes_aprovacoes').update({
       status: decisao, aprovado_por: currentUser?.email,
       aprovado_em: new Date().toISOString(), resposta,

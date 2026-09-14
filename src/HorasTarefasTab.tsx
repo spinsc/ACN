@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { confirmar } from './Feedback';
 
 const STATUS_COR: Record<string, string> = {
   nao_iniciada: '#94a3b8', em_andamento: '#3b82f6', pausada: '#f59e0b', concluida: '#22c55e',
@@ -181,7 +182,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
   };
 
   const concluir = async () => {
-    if (!confirm('Concluir esta tarefa?')) return;
+    if (!await confirmar('Concluir esta tarefa?')) return;
     const total = tempoDecorrido(tarefa, Date.now());
     await supabase.from('engenharia_horas_tarefas').update({
       status: 'concluida', data_conclusao: new Date().toISOString(), tempo_total_segundos: total,

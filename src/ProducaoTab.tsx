@@ -16,6 +16,7 @@ import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { confirmar, pedirTexto } from './Feedback';
 
 
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -266,7 +267,7 @@ function CalendarioManutencao({ currentUser }) {
   };
 
   const cancelarAgendamento = async (ag) => {
-    if (!window.confirm(`Cancelar agendamento de ${ag.numero_opl}?`)) return;
+    if (!await confirmar(`Cancelar agendamento de ${ag.numero_opl}?`)) return;
     await supabase.from('agendamentos_manutencao').delete().eq('id', ag.id);
     await supabase.from('oples').update({ status_geral: 'Aguardando Agendamento Manutenção' }).eq('id', ag.opl_id);
     load();
@@ -794,7 +795,7 @@ function PainelSacVeicular({ currentUser }) {
   };
 
   const removerMembroEquipeOS = async (membro: any) => {
-    if (!confirm(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
+    if (!await confirmar(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
     await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
     carregarEquipeAtualOS(modalGerenciarEquipeOS);
   };
@@ -1413,7 +1414,7 @@ function VoucherServicos({ currentUser }) {
   };
 
   const excluirTipo = async (id) => {
-    if (!window.confirm('Remover este tipo de serviço?')) return;
+    if (!await confirmar('Remover este tipo de serviço?')) return;
     await supabase.from('tipos_servico_voucher').delete().eq('id', id);
     loadTipos();
   };
@@ -1449,7 +1450,7 @@ function VoucherServicos({ currentUser }) {
   };
 
   const excluir = async (id) => {
-    if (!window.confirm('Excluir este voucher?')) return;
+    if (!await confirmar('Excluir este voucher?')) return;
     await supabase.from('vouchers_servico').delete().eq('id', id);
     load();
   };
@@ -1744,7 +1745,7 @@ function EquipesSection({ currentUser }) {
   };
 
   const excluir = async (eq: any) => {
-    if (!window.confirm(`Excluir equipe "${eq.nome}"?`)) return;
+    if (!await confirmar(`Excluir equipe "${eq.nome}"?`)) return;
     await supabase.from('producao_equipes').update({ ativa: false }).eq('id', eq.id);
     load();
   };
@@ -2052,7 +2053,7 @@ export default function ProducaoTab({ currentUser }) {
     const dia = opl.data_prevista_entrega
       ? opl.data_prevista_entrega.split('-').reverse().join('/')
       : 'sem prazo';
-    const txt = window.prompt(
+    const txt = await pedirTexto(
       'Prioridade de ' + opl.opl + ' no dia ' + dia + ':' + '\n\n'
       + 'Menor numero vem primeiro (1 = primeira). Deixe vazio para tirar a prioridade.' + '\n'
       + 'Isso so muda a ordem entre OPs que vencem no mesmo dia.', atual);
@@ -2240,7 +2241,7 @@ export default function ProducaoTab({ currentUser }) {
   const iniciarProducaoEmLote = async () => {
     const alvos = opls.filter((o: any) => selecionados.has(o.id) && o.status_geral === 'Aguardando Inicio Producao');
     if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Aguardando Início Produção".'); return; }
-    if (!confirm(`Iniciar produção de ${alvos.length} OP(s) selecionada(s)? Você atribui o técnico/equipe depois, na mesma seleção.`)) return;
+    if (!await confirmar(`Iniciar produção de ${alvos.length} OP(s) selecionada(s)? Você atribui o técnico/equipe depois, na mesma seleção.`)) return;
     setAplicandoIniciarLote(true);
     const agora = new Date().toISOString();
     for (const opl of alvos) {
@@ -2263,7 +2264,7 @@ export default function ProducaoTab({ currentUser }) {
   const liberarChecklistEmLote = async () => {
     const alvos = opls.filter((o: any) => selecionados.has(o.id) && o.status_geral === 'Em Producao');
     if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está "Em Produção".'); return; }
-    if (!confirm(`Liberar ${alvos.length} OP(s) selecionada(s) para o CQ?`)) return;
+    if (!await confirmar(`Liberar ${alvos.length} OP(s) selecionada(s) para o CQ?`)) return;
     setAplicandoIniciarLote(true);
     for (const opl of alvos) {
       await liberarChecklist(opl);
@@ -2347,7 +2348,7 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const removerMembroEquipe = async (membro: any) => {
-    if (!confirm(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
+    if (!await confirmar(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
     const opl = modalGerenciarEquipe;
     await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -2519,7 +2520,7 @@ export default function ProducaoTab({ currentUser }) {
     // soldou (o nome anterior fica no histórico). Quando a serralheria é só
     // uma etapa dentro de uma adaptação, nada disso acontece.
     const vaiAdaptar = novoStatus === 'Concluido' && serralheriaSegueParaAdaptacao(opl);
-    if (vaiAdaptar && !confirm(
+    if (vaiAdaptar && !await confirmar(
       `Concluir a serralheria da OP ${opl.opl}?\n\n` +
       `Como esta venda é "fabricação serralheria com envio", a OP passa para a fila da ADAPTAÇÃO ` +
       `(aguardando iniciar). Depois da adaptação vai para o CQ e, aprovada, para embalagem e frete.`)) return;

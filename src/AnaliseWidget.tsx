@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
+import { pedirTexto } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES DE SETORES
@@ -128,7 +129,7 @@ export async function cancelarSolicitacaoAnalise(sol: any, usuario: any): Promis
     alert('Só quem pediu a análise, administradores e gerentes podem cancelá-la.');
     return false;
   }
-  const motivo = window.prompt('Motivo do cancelamento desta solicitação de análise:');
+  const motivo = await pedirTexto('Motivo do cancelamento desta solicitação de análise:');
   if (motivo == null) return false;
   if (!motivo.trim()) { alert('Informe o motivo do cancelamento.'); return false; }
   const agora = new Date().toISOString();

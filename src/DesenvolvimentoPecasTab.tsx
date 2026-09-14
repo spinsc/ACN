@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import Linkify from './Linkify';
+import { confirmar } from './Feedback';
 
 export const ETAPAS_DEV = [
   'Concepção', 'Criação', 'Desenvolvimento', 'Prototipagem',
@@ -160,8 +161,8 @@ function PainelEtapa({ demanda, etapa, idx, onAtualizado, currentUser }: any) {
     setObsTexto('');
   };
 
-  const concluir = () => {
-    if (!confirm(`Concluir etapa "${etapa.nome}"?`)) return;
+  const concluir = async () => {
+    if (!await confirmar(`Concluir etapa "${etapa.nome}"?`)) return;
     atualizarEtapas(e => {
       e.status = 'concluida';
       e.data_conclusao = new Date().toISOString();

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -99,7 +100,7 @@ function ModalDia({ data, horaInicial, eventos, currentUser, onClose, onChanged 
   };
 
   const excluir = async (id: string) => {
-    if (!confirm('Excluir este compromisso?')) return;
+    if (!await confirmar('Excluir este compromisso?')) return;
     await supabase.from('agenda_compromissos').delete().eq('id', id);
     onChanged();
   };

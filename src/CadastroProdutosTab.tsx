@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { normalizarBusca } from './SearchUtils';
+import { confirmar } from './Feedback';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -741,7 +742,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
     ordenar.col !== col ? <span style={{ opacity: .3 }}>⇅</span> : <span>{ordenar.dir === 'asc' ? '↑' : '↓'}</span>;
 
   const excluir = async (id: string) => {
-    if (!window.confirm('Excluir este produto? A estrutura BOM também será removida.')) return;
+    if (!await confirmar('Excluir este produto? A estrutura BOM também será removida.')) return;
     setDeletando(id);
     await supabase.from('cadastro_produtos').delete().eq('id', id);
     setProdutos(prev => prev.filter(p => p.id !== id));

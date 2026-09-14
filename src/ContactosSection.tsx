@@ -6,6 +6,7 @@ import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
 import { normalizarBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -199,7 +200,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   // EXCLUIR CONTATO
   // ─────────────────────────────────────────────────────────────────────────
   const excluirContato = async (c: any) => {
-    if (!confirm(`Excluir "${c.nome}"?`)) return;
+    if (!await confirmar(`Excluir "${c.nome}"?`)) return;
     await supabase.from('crm_contatos').delete().eq('id', c.id);
     if (contatoSel?.id === c.id) setContatoSel(null);
     await load();

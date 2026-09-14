@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState } from 'react';
+import { confirmar } from './Feedback';
 
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnZW1lbG51cWRpbG5nZ3htcmR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODMyNzQsImV4cCI6MjA5ODA1OTI3NH0.vX-BpSSubai0adZCn_pMQBNPCn4KHOSl91E_Dte8g5k';
@@ -72,7 +73,7 @@ export default function PedidoChicotesSerralheria({ currentUser, onClose }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Deletar pedido?')) return;
+    if (!await confirmar('Deletar pedido?')) return;
 
     try {
       const { error } = await supabase
@@ -296,7 +297,7 @@ export function PedidoSerralheriaList({ pedidos, loading, onRefresh, currentUser
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Deletar pedido?')) return;
+    if (!await confirmar('Deletar pedido?')) return;
 
     try {
       const { error } = await supabase

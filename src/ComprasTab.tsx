@@ -10,6 +10,7 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
+import { confirmar, pedirTexto } from './Feedback';
 
 const VAZIO_COTACAO = { fornecedor_nome: '', valor_unitario: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
@@ -187,9 +188,9 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
             {cmd === 'bold' ? 'B' : 'I'}
           </button>
         ))}
-        <button onMouseDown={e => {
+        <button onMouseDown={async e => {
           e.preventDefault();
-          const url = window.prompt('URL do link:');
+          const url = await pedirTexto('URL do link:');
           if (url) document.execCommand('createLink', false, url);
         }} title="Inserir link"
           style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
@@ -796,7 +797,7 @@ export default function ComprasTab({ currentUser }) {
       alert('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "Editar" para corrigir o valor em vez de excluir.');
       return;
     }
-    if (!confirm('Remover esta cotação?')) return;
+    if (!await confirmar('Remover esta cotação?')) return;
     await supabase.from('pcp_cotacoes_fornecedores').delete().eq('id', id);
     if (vencedoraId === id) setVencedoraId(null);
     abrirModalCotacoes(modalCotacoes);
@@ -1002,7 +1003,7 @@ export default function ComprasTab({ currentUser }) {
   // acompanhamento — antes disso, o pedido fica em 'Aprovado' esperando essa
   // confirmação, mesmo que quem aprovou também tenha alçada pra isso.
   const confirmarCompra = async (pedido: any) => {
-    if (!window.confirm(`Confirmar a compra do pedido ${pedido.numero_pedido}? Isso gera a Ordem de Compra e envia pro acompanhamento de recebimento.`)) return;
+    if (!await confirmar(`Confirmar a compra do pedido ${pedido.numero_pedido}? Isso gera a Ordem de Compra e envia pro acompanhamento de recebimento.`)) return;
     const { error } = await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', pedido.id);
     if (error) { alert('Erro ao confirmar compra: ' + error.message); return; }
     logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: pedido.id, changeType: 'UPDATE',
@@ -1047,7 +1048,7 @@ export default function ComprasTab({ currentUser }) {
       alert('Você não tem autorização para rejeitar este pedido. Aguardando: ' + (quem || '—'));
       return;
     }
-    const motivo = prompt('Motivo da rejeição:');
+    const motivo = await pedirTexto('Motivo da rejeição:');
     if (motivo === null) return;
     if (!motivo.trim()) { alert('Informe o motivo.'); return; }
     setRespondendoAprovacao(true);

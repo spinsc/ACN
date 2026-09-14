@@ -13,6 +13,7 @@ import OplAcompModal from './OplAcompModal';
 import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
 import Linkify from './Linkify';
+import { confirmar } from './Feedback';
 
 
 const TIPOS_PROJETO = [
@@ -99,7 +100,7 @@ function _UNUSED_CRMSection({ currentUser }) {
   const registrarContato = async () => {
     const c = modalContato;
     if (!contatoForm.observacoes.trim() && contatoForm.resultado === 'Contato Realizado') {
-      if (!window.confirm('Registrar contato sem observacao?')) return;
+      if (!await confirmar('Registrar contato sem observacao?')) return;
     }
     const agora = new Date().toISOString();
     // Insert historico
@@ -664,7 +665,7 @@ export default function ComercialTab({ currentUser }) {
       const jaEhSufixo = /\/\d+$/.test(baseOpl);
       if (qtdNova > qtdAnterior && qtdNova > 1) {
         if (!jaEhSufixo) {
-          const desmembrar = confirm(
+          const desmembrar = await confirmar(
             `Quantidade aumentou de ${qtdAnterior} para ${qtdNova}.\n\n` +
             `Deseja DESMEMBRAR agora em ${qtdNova} OPs separadas (uma por veículo/unidade)? ` +
             `Esta OP (${baseOpl}) continua sendo a 1ª unidade, com todo o histórico/status atual preservado. ` +
@@ -719,7 +720,7 @@ export default function ComercialTab({ currentUser }) {
             return;
           }
         }
-        const prosseguir = confirm(
+        const prosseguir = await confirmar(
           `Atenção: aumentar a quantidade de ${qtdAnterior} para ${qtdNova} NÃO cria OPs separadas automaticamente. ` +
           `Esta OP continuará sendo uma só, com quantidade=${qtdNova}.\n\n` +
           `Continuar mesmo assim?`

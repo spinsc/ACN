@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { normalizarBusca } from './SearchUtils';
+import { confirmar } from './Feedback';
 
 const BROADCAST_CH = 'acn-chat-v1';
 
@@ -521,7 +522,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
 
   const sairDoGrupo = async () => {
     if (!salaAtiva) return;
-    if (!window.confirm(`Sair do grupo "${nomeSala(salaAtiva)}"?`)) return;
+    if (!await confirmar(`Sair do grupo "${nomeSala(salaAtiva)}"?`)) return;
     const novos = (salaAtiva.membros || []).filter((m: any) => String(m.id) !== uid);
     await supabase.from('chat_salas').update({ membros: novos }).eq('id', salaAtiva.id);
     setModalInfoGrupo(false);

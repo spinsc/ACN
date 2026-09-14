@@ -10,6 +10,7 @@ import { notificarEvento } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import { confirmar } from './Feedback';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -459,7 +460,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
 
   // ── CONCLUIR (demanda regular) ────────────────────────────────────────────
   const concluir = async (d) => {
-    if (!window.confirm('Confirmar conclusão?')) return;
+    if (!await confirmar('Confirmar conclusão?')) return;
     const agora = new Date().toISOString();
     const inicio = d.data_inicio ? new Date(d.data_inicio) : new Date(d.data_abertura||agora);
     const tempo  = Math.max(0, horasUteis(inicio, new Date()) - (d.tempo_pausado_horas||0));

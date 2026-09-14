@@ -16,6 +16,7 @@ import { supabase } from './supabaseClient';
 import { quantidadesDosItens } from './FormacaoCalculo';
 import { UFS } from './FluxoEntrega';
 import NovaOpOsModal from './NovaOpOsModal';
+import { confirmar } from './Feedback';
 
 const n = (v) => Number(String(v ?? '').replace(',', '.')) || 0;
 const fmtQ = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -67,7 +68,7 @@ export function EnderecosEntrega({ licitacaoId }) {
 
   const remover = async (e) => {
     // pedido que usava este endereço fica sem endereço (on delete set null), não some
-    if (!confirm(`Remover o endereço "${textoEndereco(e)}"?`)) return;
+    if (!await confirmar(`Remover o endereço "${textoEndereco(e)}"?`)) return;
     await supabase.from('licitacao_enderecos').delete().eq('id', e.id);
     carregar();
   };
@@ -212,7 +213,7 @@ export function ContratoEntregas({ licit, currentUser }) {
       if (!(q > 0)) { setSalvando(false); alert('Informe a quantidade do pedido.'); return; }
       const item = itens.find(i => i.id === f.itemId);
       const { saldo } = saldoDe(item);
-      if (q > saldo && !confirm(`Este pedido (${fmtQ(q)}) é maior que o saldo do item (${fmtQ(saldo)}).\n\nSe houve aditivo, registre-o primeiro. Registrar o pedido mesmo assim?`)) {
+      if (q > saldo && !await confirmar(`Este pedido (${fmtQ(q)}) é maior que o saldo do item (${fmtQ(saldo)}).\n\nSe houve aditivo, registre-o primeiro. Registrar o pedido mesmo assim?`)) {
         setSalvando(false); return;
       }
       r = await supabase.from('licitacao_pedidos').insert([{ licitacao_id: licit.id, item_id: f.itemId, quantidade: q,
@@ -225,8 +226,8 @@ export function ContratoEntregas({ licit, currentUser }) {
   };
 
   const remover = async (tabela, reg, descricao) => {
-    if (tabela === 'licitacao_pedidos' && reg.opl && !confirm(`Este pedido já gerou a OP ${reg.opl}. Remover o pedido NÃO apaga a OP.\n\nRemover o pedido mesmo assim?`)) return;
-    if (tabela !== 'licitacao_pedidos' || !reg.opl) { if (!confirm(`Remover ${descricao}?`)) return; }
+    if (tabela === 'licitacao_pedidos' && reg.opl && !await confirmar(`Este pedido já gerou a OP ${reg.opl}. Remover o pedido NÃO apaga a OP.\n\nRemover o pedido mesmo assim?`)) return;
+    if (tabela !== 'licitacao_pedidos' || !reg.opl) { if (!await confirmar(`Remover ${descricao}?`)) return; }
     await supabase.from(tabela).delete().eq('id', reg.id);
     carregar();
   };

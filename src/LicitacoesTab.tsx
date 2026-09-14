@@ -15,6 +15,7 @@ import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
+import { confirmar, pedirTexto } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -382,7 +383,7 @@ function ContatosSection({ licitacaoId, currentUser }) {
   };
 
   const excluir = async (id: string) => {
-    if (!confirm('Remover este contato?')) return;
+    if (!await confirmar('Remover este contato?')) return;
     const { data: reg } = await supabase.from('licitacao_contatos').select('*').eq('id', id).maybeSingle();
     await supabase.from('licitacao_contatos').delete().eq('id', id);
     if (reg) registrarExclusaoParaUndo('licitacao_contatos', reg, currentUser?.nome || currentUser?.email, `Contato "${reg.nome||'—'}"`);
@@ -624,10 +625,10 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
   // Insere uma tabela em branco, editável célula a célula (mesmo <table>
   // contentEditable que já funciona pra tabelas coladas do Excel/Word —
   // ver handlePaste abaixo e o CSS .licit-area-livre table).
-  const inserirTabela = () => {
-    const linhasStr = window.prompt('Quantas linhas?', '3');
+  const inserirTabela = async () => {
+    const linhasStr = await pedirTexto('Quantas linhas?', '3');
     if (linhasStr === null) return;
-    const colunasStr = window.prompt('Quantas colunas?', '3');
+    const colunasStr = await pedirTexto('Quantas colunas?', '3');
     if (colunasStr === null) return;
     const linhas  = Math.max(1, Math.min(50, parseInt(linhasStr, 10)  || 3));
     const colunas = Math.max(1, Math.min(20, parseInt(colunasStr, 10) || 3));
@@ -643,7 +644,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
 
   // Exclui a tabela onde o cursor/seleção está posicionado — antes não existia
   // NENHUMA forma de remover uma tabela já inserida (só dava pra criar).
-  const excluirTabela = () => {
+  const excluirTabela = async () => {
     const sel = window.getSelection();
     const anchor = sel?.anchorNode;
     const el = anchor && (anchor.nodeType === 3 ? anchor.parentElement : (anchor as HTMLElement));
@@ -652,7 +653,7 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
       alert('Posicione o cursor dentro de uma tabela para excluí-la.');
       return;
     }
-    if (!window.confirm('Excluir esta tabela? Esta ação não pode ser desfeita.')) return;
+    if (!await confirmar('Excluir esta tabela? Esta ação não pode ser desfeita.')) return;
     tabela.remove();
     autosave();
   };
@@ -709,9 +710,9 @@ function AreaLivre({ licitacaoId, tabKey, areasLivres, onAreasLivresChange, curr
         </button>
         <input ref={corDestaqueRef} type="color" style={{ display:'none' }}
           onChange={e => { restaurarSelecaoEAplicar('hiliteColor', e.target.value); autosave(); }} />
-        <button onMouseDown={e => {
+        <button onMouseDown={async e => {
           e.preventDefault();
-          const url = window.prompt('URL do link:');
+          const url = await pedirTexto('URL do link:');
           if (url) document.execCommand('createLink', false, url);
         }} title="Inserir link"
           style={{ background:'#fff', border:'1px solid #d1d5db', borderRadius:3,
@@ -856,7 +857,7 @@ function SubQuadroDocumentos({ licitacaoId, categoria, label, currentUser, podeE
 
   const excluir = async (d: any) => {
     if (!podeExcluir) { alert('Você não tem permissão para excluir arquivos.'); return; }
-    if (!confirm('Remover este registro?')) return;
+    if (!await confirmar('Remover este registro?')) return;
     await supabase.from('licitacao_documentos').delete().eq('id', d.id);
     registrarExclusaoParaUndo('licitacao_documentos', d, currentUser?.nome || currentUser?.email, label);
     fetchDocs();
@@ -1354,7 +1355,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Excluir entrada de Andamento ────────────────────────────────────────────
   const excluirAndamentoDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
     if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
-    if (!confirm('Remover este registro?')) return;
+    if (!await confirmar('Remover este registro?')) return;
     const { data: reg } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
     await supabase.from(tabela).delete().eq('id', id);
     if (reg) registrarExclusaoParaUndo(tabela, reg, currentUser?.nome || currentUser?.email, 'Registro de andamento');
@@ -1408,7 +1409,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Excluir doc ───────────────────────────────────────────────────────────
   const excluirDoc = async (id: string, tabela: 'licitacao_documentos'|'licitacao_anexos') => {
     if (!podeExcluirAnexos) { alert('Você não tem permissão para excluir arquivos.'); return; }
-    if (!confirm('Remover este registro?')) return;
+    if (!await confirmar('Remover este registro?')) return;
     const { data: reg } = await supabase.from(tabela).select('*').eq('id', id).maybeSingle();
     await supabase.from(tabela).delete().eq('id', id);
     if (reg) registrarExclusaoParaUndo(tabela, reg, currentUser?.nome || currentUser?.email, 'Documento/anexo');
@@ -1514,10 +1515,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     if (['Vencida','Finalizada','Perdida','Descartada','Suspenso'].includes(s)) return 'Em Andamento';
     return null;
   };
-  const voltarFase = () => {
+  const voltarFase = async () => {
     const anterior = statusAnterior();
     if (!anterior) return;
-    if (!confirm(`Voltar de "${s}" para "${anterior}"?`)) return;
+    if (!await confirmar(`Voltar de "${s}" para "${anterior}"?`)) return;
     mudarStatus(anterior);
   };
 
@@ -2699,7 +2700,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   useEffect(() => { if (modoRecentes) carregarRecentesLicit(); }, [modoRecentes, carregarRecentesLicit]);
 
   const excluirLicitacao = async (l: any) => {
-    if (!confirm(`Excluir "${l.numero} — ${l.nome_projeto}"?`)) return;
+    if (!await confirmar(`Excluir "${l.numero} — ${l.nome_projeto}"?`)) return;
     await supabase.from('licitacoes').delete().eq('id', l.id);
     registrarExclusaoParaUndo('licitacoes', l, currentUser?.nome || currentUser?.email, `Licitação "${l.numero}"`);
     setSelected(null);

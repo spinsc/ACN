@@ -6,6 +6,7 @@ import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
+import { confirmar, pedirTexto } from './Feedback';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -349,7 +350,7 @@ function FretesPanel({ currentUser }: any) {
   const aproveitamentos = acharAproveitamentos(fretes, janelaDias);
 
   const juntarGrupo = async (g: any) => {
-    if (!confirm(
+    if (!await confirmar(
       `Juntar ${g.fretes.length} envios para ${g.regiao} numa carga só?
 
 ` +
@@ -373,7 +374,7 @@ function FretesPanel({ currentUser }: any) {
   };
 
   const desfazerGrupo = async (grupoId: string) => {
-    if (!confirm('Desfazer este agrupamento? Os envios voltam a ser cotados separadamente.')) return;
+    if (!await confirmar('Desfazer este agrupamento? Os envios voltam a ser cotados separadamente.')) return;
     await supabase.from('pcp_fretes')
       .update({ grupo_envio_id: null, grupo_envio_obs: null }).eq('grupo_envio_id', grupoId);
     fetchAll();
@@ -504,7 +505,7 @@ function FretesPanel({ currentUser }: any) {
   };
 
   const excluirCotacao = async (id: string) => {
-    if (!confirm('Remover esta cotação?')) return;
+    if (!await confirmar('Remover esta cotação?')) return;
     await supabase.from('pcp_cotacoes_fretes').delete().eq('id', id);
     if (vencedoraId === id) setVencedoraId(null);
     abrirModalFrete(modalFrete);
@@ -669,7 +670,7 @@ function FretesPanel({ currentUser }: any) {
       alert('Você não tem autorização para rejeitar este frete. Aguardando: ' + (quem || '—'));
       return;
     }
-    const motivo = prompt('Motivo da rejeição:');
+    const motivo = await pedirTexto('Motivo da rejeição:');
     if (motivo === null) return;
     if (!motivo.trim()) { alert('Informe o motivo.'); return; }
     setRespondendoAprovacao(true);
@@ -759,7 +760,7 @@ function FretesPanel({ currentUser }: any) {
   };
 
   const cancelarFrete = async (f: any) => {
-    const motivo = prompt('Motivo do cancelamento:');
+    const motivo = await pedirTexto('Motivo do cancelamento:');
     if (motivo === null) return;
     const novoRow = {
       status: 'Cancelado',

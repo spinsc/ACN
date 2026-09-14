@@ -12,6 +12,7 @@ import HorasTarefasTab from './HorasTarefasTab';
 import { horasUteis } from './utils/horasUteis';
 import { BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { confirmar } from './Feedback';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -224,7 +225,7 @@ export default function EngenhariaTab({ currentUser }) {
   const iniciarLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera Engenharia' || o.status_geral === 'Devolvida para Engenharia');
     if (pendentes.length === 0) { alert('Todas as unidades deste lote ja foram iniciadas.'); return; }
-    if (!confirm(`Iniciar a analise de engenharia para ${pendentes.length} unidade(s) de ${grupo.base}?\n\nResponsavel: ${currentUser?.nome}.`)) return;
+    if (!await confirmar(`Iniciar a analise de engenharia para ${pendentes.length} unidade(s) de ${grupo.base}?\n\nResponsavel: ${currentUser?.nome}.`)) return;
     setIniciandoLote(true);
     const agora = new Date().toISOString();
     try {

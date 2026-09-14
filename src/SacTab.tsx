@@ -11,6 +11,7 @@ import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { confirmar, pedirTexto } from './Feedback';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -665,7 +666,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   }
 
   const recusarCotacao = async (os: any) => {
-    const motivo = window.prompt('Motivo da recusa (opcional):');
+    const motivo = await pedirTexto('Motivo da recusa (opcional):');
     if (motivo === null) return;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
@@ -691,7 +692,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
 
   // SAC: cliente não confirmou a data → volta para Produção redefinir
   const rejeitarAceiteSAC = async (os: any) => {
-    if (!window.confirm('Confirmar: cliente não aceitou a data e OS voltará para Produção redefinir?')) return;
+    if (!await confirmar('Confirmar: cliente não aceitou a data e OS voltará para Produção redefinir?')) return;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
       status: 'Em Provisionamento',
@@ -707,7 +708,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   // (unificado com o caminho Remota: os dois passam por "Aguardando Início"
   // antes de iniciar o trabalho de fato, em vez de pular direto pra execução).
   const aprovarOrcamentoPresencial = async (os: any) => {
-    if (!window.confirm(`Confirmar aprovação do orçamento de manutenção pelo cliente — ${os.numero_os}?`)) return;
+    if (!await confirmar(`Confirmar aprovação do orçamento de manutenção pelo cliente — ${os.numero_os}?`)) return;
     const agora = new Date().toISOString();
     await supabase.from('sac_ordens_servico').update({
       status: 'Aguardando Início',
@@ -825,8 +826,8 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
 
 OK = ACN   |   Cancelar = DETECH`;
     let escolhida = nova;
-    if (os.empresa) { if (!window.confirm(pergunta)) return; }
-    else escolhida = window.confirm(pergunta) ? 'ACN' : 'DETECH';
+    if (os.empresa) { if (!await confirmar(pergunta)) return; }
+    else escolhida = await confirmar(pergunta) ? 'ACN' : 'DETECH';
     const { error } = await supabase.from('sac_ordens_servico')
       .update({ empresa: escolhida, atualizado_em: new Date().toISOString() }).eq('id', os.id);
     if (error) { alert('Erro ao salvar a empresa: ' + error.message); return; }
@@ -974,7 +975,7 @@ OK = ACN   |   Cancelar = DETECH`;
       if (os.status === 'Reprovado') {
         btns.push(
           <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
-            onClick={()=>{ if(window.confirm(`Reabrir ${os.numero_os}?`)) supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+            onClick={async ()=>{ if(await confirmar(`Reabrir ${os.numero_os}?`)) supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
             🔄 Reavaliar
           </button>
         );
@@ -1001,7 +1002,7 @@ OK = ACN   |   Cancelar = DETECH`;
       if (os.status === 'Reprovado')
         btns.push(
           <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
-            onClick={()=>{ if(window.confirm(`Reabrir OS ${os.numero_os} para novo orçamento?`)) supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+            onClick={async ()=>{ if(await confirmar(`Reabrir OS ${os.numero_os} para novo orçamento?`)) supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
             🔄 Reavaliar
           </button>
         );

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -263,7 +264,7 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
   };
 
   const excluir = async (id: string) => {
-    if (!confirm('Excluir este compromisso?')) return;
+    if (!await confirmar('Excluir este compromisso?')) return;
     await supabase.from('agenda_compromissos').delete().eq('id', id);
     carregar();
   };

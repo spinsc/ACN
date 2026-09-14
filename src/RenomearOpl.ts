@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { confirmar, pedirTexto } from './Feedback';
 
 // Troca o número de uma OP já criada. Só Admin e gerentes (a tela esconde o
 // botão — podeAlterarNumeroOplPv — e o banco confere de novo).
@@ -9,7 +10,7 @@ import { supabase } from './supabaseClient';
 export async function renomearOpl(op: { id: string; opl: string }, usuario: any): Promise<string | null> {
   const bruto = String(op?.opl || '');
   const atual = bruto.trim();
-  const digitado = window.prompt(`Novo número para a OP ${atual}:`, atual);
+  const digitado = await pedirTexto(`Novo número para a OP ${atual}:`, atual);
   if (digitado == null) return null;
   const novo = digitado.trim();
   if (!novo || novo === atual) return null;
@@ -28,7 +29,7 @@ export async function renomearOpl(op: { id: string; opl: string }, usuario: any)
     return null;
   }
 
-  const ok = window.confirm(
+  const ok = await confirmar(
     `Trocar o número da OP\n\n${atual}  →  ${novo}\n\n` +
     (desmembradas.length
       ? `As ${desmembradas.length} OP(s) desmembradas também mudam (${atual}/02 → ${novo}/02...).\n\n`

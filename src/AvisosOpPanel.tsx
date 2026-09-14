@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { OplDetalheModal } from './AcnTabShared';
+import { confirmar } from './Feedback';
 
 export const CONTEXTO_AVISO_OP = 'op_adaptacao';
 
@@ -64,7 +65,7 @@ export default function AvisosOpPanel({ currentUser, onClose, onCountChange }: a
 
   const limparTodos = async () => {
     if (!avisos.length) return;
-    if (!confirm(`Limpar os ${avisos.length} avisos de OP? Eles saem da lista e não ficam guardados.`)) return;
+    if (!await confirmar(`Limpar os ${avisos.length} avisos de OP? Eles saem da lista e não ficam guardados.`)) return;
     setLimpando(true);
     await supabase.from('mencoes').delete()
       .or(filtroDoUsuario(currentUser))
