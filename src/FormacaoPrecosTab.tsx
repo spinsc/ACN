@@ -917,7 +917,7 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
     color:      usarParamsGlobais ? '#94a3b8' : undefined,
   });
 
-  // Vendedor não vê custo/impostos/markup — não há nada pra expandir.
+  // Vendedor não vê custo/impostos — não há nada pra expandir (o markup fica no cabeçalho, à vista de todos).
   const temDetalhe = !isVendedor;
 
   // Rótulo de seção reutilizável nas 3 seções do corpo expandido
@@ -970,6 +970,23 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
           <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
             min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
         </div>
+        {/* Markup (ou desconto, no modo TABELA) deste produto — ao lado da quantidade,
+            à vista e editável por todos os usuários. Com "Markup Global" ligado fica
+            travado mostrando o valor global, como antes. */}
+        <div style={{ width:84 }}>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}
+            title={usarMarkupGlobal ? 'Markup Global ligado: vale o markup dos parâmetros globais' : undefined}>
+            {modoTabela ? 'Desconto %' : 'Markup %'}
+          </div>
+          <input type="number" className="acn-input"
+            aria-label={modoTabela ? 'Desconto % do produto' : 'Markup % do produto'}
+            style={{ width:'100%', ...inp11r,
+              background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
+              color: usarMarkupGlobal ? '#7c3aed' : undefined }}
+            step="0.1" value={item.markup_pct}
+            onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
+            readOnly={!!usarMarkupGlobal} />
+        </div>
         <div style={{ minWidth:90, textAlign:'right' }}>
           <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Valor Unit.</div>
           <div style={{ fontSize:12, color:'#1d4ed8', fontWeight:600, padding:'5px 0' }}>{fmtR(valorUnit)}</div>
@@ -983,10 +1000,10 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
         {temDetalhe && (
           <div>
             <div style={{ fontSize:8, color:'transparent', marginBottom:2 }}>·</div>
-            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e markup"
+            <button onClick={() => setAberto(v => !v)} title="Custo, impostos e informações do produto"
               style={{ background: aberto ? '#f0fdfa' : 'none', border:'1px solid ' + (aberto ? '#5eead4' : '#e2e8f0'),
                 color:'#0f766e', fontSize:9, fontWeight:700, cursor:'pointer', padding:'5px 8px', borderRadius:4 }}>
-              {aberto ? '▾ Menos' : '▸ Custo/impostos/markup'}
+              {aberto ? '▾ Menos' : '▸ Custo/impostos'}
             </button>
           </div>
         )}
@@ -1039,16 +1056,6 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <div style={{ fontSize:8, color:'#64748b', marginBottom:2 }}>{modoTabela ? 'Desconto%' : 'Markup%'}</div>
-              <input type="number" className="acn-input"
-                style={{ width:'100%', ...inp11r,
-                  background: usarMarkupGlobal ? '#f3e8ff' : item.markup_pct < 0 ? '#fee2e2' : undefined,
-                  color: usarMarkupGlobal ? '#7c3aed' : undefined }}
-                step="0.1" value={item.markup_pct}
-                onChange={e=>{ if(!usarMarkupGlobal) onSet('markup_pct', e.target.value); }}
-                readOnly={!!usarMarkupGlobal} />
             </div>
             {/* Markup reverso DESTE produto: digita o preço unitário desejado e o
                 markup (ou desconto, no modo TABELA) é calculado e aplicado aqui.
