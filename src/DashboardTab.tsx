@@ -188,7 +188,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-notif-contador.tom-atencao { background:#c2700f; }
 .acn-user-btn { display:flex; align-items:center; justify-content:center; width:34px; height:34px; margin-left:8px; border-radius:50%; border:none; background:#e3f2ef; color:#0a544e; font-weight:700; font-size:12px; cursor:pointer; flex-shrink:0; padding:0; }
 .acn-user-btn:hover { background:#cfe9e4; }
-.acn-user-menu { position:fixed; top:60px; right:16px; z-index:5000; min-width:240px; background:#fff; color:#17212b; border:1px solid #dee4ea; border-radius:10px; box-shadow:0 18px 48px rgba(23,33,43,.18); overflow:hidden; }
+.acn-user-menu { display:block; position:fixed; top:60px; right:16px; z-index:5000; min-width:240px; background:#fff; color:#17212b; border:1px solid #dee4ea; border-radius:10px; box-shadow:0 18px 48px rgba(23,33,43,.18); overflow:hidden; }
 .acn-user-menu .acn-user-menu-topo { padding:12px 14px; border-bottom:1px solid #edf1f4; }
 .acn-user-menu .acn-user-menu-topo strong { display:block; font-size:14px; font-weight:600; }
 .acn-user-menu .acn-user-menu-topo span { font-size:12px; color:#6b7886; }
