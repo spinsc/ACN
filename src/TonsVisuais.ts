@@ -94,7 +94,8 @@ function papelBotao(el: HTMLElement): string | null {
   if (h.l >= 0.86) {
     // fundo claro: branco/cinza = secundário; claro colorido com texto colorido = item selecionado
     if (txtH && ehVermelho(txtH)) return 'perigo-sec';
-    if (h.s >= 0.3 && h.l < 0.975) return 'selecionado';
+    // cinza-azulado claro (#e2e8f0, #f1f5f9) com texto escuro é botão apagado, não selecionado
+    if (h.s >= 0.3 && h.l < 0.975 && (h.s >= 0.6 || (txtH && txtH.s > 0.35 && txtH.l < 0.7))) return 'selecionado';
     return 'secundario';
   }
   if (h.s < 0.26 && h.l > 0.33) return 'secundario'; // cinza médio/azulado (costuma ser "desligado")
@@ -126,8 +127,19 @@ function marcarBotao(el: HTMLElement) {
   // amostras de cor e botões sem texto com fundo pintado ficam como estão
   if (!(el.textContent || '').trim() && !el.querySelector('svg, img')) { el.removeAttribute('data-acn-tom'); return; }
   const antes = el.getAttribute('data-acn-tom');
-  // ao passar o mouse a tela troca a cor: mantém o papel já dado
-  if (antes && el.matches(':hover')) return;
+  // Ao passar o mouse algumas telas trocam a cor: enquanto o mouse está em cima
+  // mantém o papel já dado e reavalia quando ele sair. (Antes o papel ficava
+  // preso: num seletor ACN/DETECH o botão clicado não mudava de cor.)
+  if (antes && el.matches(':hover')) {
+    if (!(el as any).__acnSaida) {
+      (el as any).__acnSaida = true;
+      el.addEventListener('mouseleave', () => { (el as any).__acnSaida = false; agendar(el); }, { once: true });
+    }
+    // clique mudou de claro para escuro (ou o contrário): isso não é efeito de hover
+    const p0 = papelBotao(el);
+    const grupoDe = (x: string | null) => x === 'primario' || x === 'perigo' ? 'forte' : 'claro';
+    if (!p0 || grupoDe(p0) === grupoDe(el.getAttribute('data-acn-tom-original'))) return;
+  }
   let p = papelBotao(el);
   // dentro de [data-acn-rebaixar] nada passa de secundário (ex.: anexos ao lado da ação principal)
   if ((p === 'primario' || p === 'selecionado') && el.closest('[data-acn-rebaixar]')) p = 'secundario';
