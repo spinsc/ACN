@@ -20,6 +20,12 @@
   /* ── Estrutura ─────────────────────────────────────────────────────────── */
   html body { overflow: hidden; }
   html body .acn-app { height: 100dvh; }
+  /* A coluna usava 100vh: no celular o 100vh conta a barra de endereço, então o fim da
+     tela ficava escondido atrás dela e não dava para rolar até o último item. */
+  html body .acn-coluna { height: 100dvh; min-height: 0; }
+  html body .acn-main { min-height: 0; }
+  /* folga no fim para o último item não ficar embaixo dos botões flutuantes (chat e avisos) */
+  html body .acn-main:not(.acn-main-tv) { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
 
   /* ── Cabeçalho ─────────────────────────────────────────────────────────── */
   html body .acn-header { padding: 0 8px; gap: 6px; height: 52px; }

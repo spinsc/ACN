@@ -161,7 +161,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 
 /* ── CASCA: menu lateral + coluna (cabeçalho + conteúdo) ── */
 .acn-app    { display:flex; height:100vh; width:100%; }
-.acn-coluna { flex:1; min-width:0; display:flex; flex-direction:column; height:100vh; }
+.acn-coluna { flex:1; min-width:0; display:flex; flex-direction:column; height:100%; } /* acompanha a altura real da tela (no celular .acn-app usa 100dvh) */
 
 /* ── CABEÇALHO ── */
 .acn-header { background:#fff; color:#17212b; padding:0 20px; display:flex; align-items:center; gap:14px; height:56px; flex-shrink:0; border-bottom:1px solid #dee4ea; position:relative; z-index:20; }

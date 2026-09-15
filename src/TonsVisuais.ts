@@ -165,7 +165,13 @@ function marcarAbas(pai: Element) {
     const borda = parseFloat(el.style.borderTopWidth || el.style.borderWidth || '0');
     const bg = fundoInline(el);
     if (borda >= 1.5 && el.style.borderStyle === 'solid' && filhos.some(c => parseFloat((c as HTMLElement).style.flexGrow || '0') >= 1)) tipo = 'abas';
-    else if (bg && bg.a > 0.05) { const h = hsl(bg); if (h.l > 0.9 && (h.s < 0.35 || (h.l > 0.94 && h.s < 0.55))) tipo = 'chips'; }
+    else if (bg && bg.a > 0.05) {
+      // pílulas = trilho cinza-claro (não branco) com o item ligado pintado. Barra branca com
+      // botões sem fundo e sublinhado é aba sublinhada da própria tela: fica como está.
+      const h = hsl(bg);
+      const algumPintado = filhos.some(c => { const f = fundoInline(c as HTMLElement); return !!f && f.a > 0.05; });
+      if (h.l > 0.9 && h.l < 0.985 && algumPintado && (h.s < 0.35 || (h.l > 0.94 && h.s < 0.55))) tipo = 'chips';
+    }
   }
   if ((el.getAttribute('data-acn-grupo') || null) !== tipo) {
     if (tipo) el.setAttribute('data-acn-grupo', tipo); else el.removeAttribute('data-acn-grupo');
