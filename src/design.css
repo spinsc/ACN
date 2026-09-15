@@ -483,3 +483,10 @@ body.dark .acn-b-perigo, body.dark [data-acn-tom=perigo] { background-color: #b9
   .acn-tab-cartoes .acn-barra { justify-content: flex-start; }
   html body .acn-pipe[style] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
+
+/* ── Modo escuro: correções medidas por ContrasteEscuro.ts ───────────────── */
+html body.dark [data-acn-escuro-fundo]:not(#acn) { background-color: var(--acn-escuro-fundo) !important; background-image: none !important; }
+html body.dark [data-acn-escuro-texto]:not(#acn) { color: var(--acn-escuro-texto) !important; -webkit-text-fill-color: var(--acn-escuro-texto); }
+/* rótulos e textos de apoio: o cinza #64748b some no fundo escuro */
+body.dark .sidebar-section { color: #7d8ea3 !important; }
+body.dark .acn-label, body.dark .form-group label, body.dark .acn-empty, body.dark .acn-trilha-secao { color: #94a3b8 !important; }

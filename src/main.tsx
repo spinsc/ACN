@@ -16,6 +16,7 @@ import App from './App.tsx'
 import { iniciarTabelasResponsivas } from './TabelaCartoes'
 import { FeedbackRaiz, mostrarAviso } from './Feedback'
 import { iniciarTonsVisuais } from './TonsVisuais'
+import { iniciarContrasteEscuro } from './ContrasteEscuro'
 
 // Guard contra dupla execução no Safari 10 / iOS 10:
 // O browser executa tanto o bundle moderno (type=module) quanto o legado (nomodule)
@@ -25,6 +26,7 @@ if (!(window as any).__ACN_LOADED__) {
   (window as any).__ACN_LOADED__ = true;
   iniciarTabelasResponsivas(); // só age em celular (toque); no computador não faz nada
   iniciarTonsVisuais(); // cores dos botões e etiquetas seguem a hierarquia do guia visual
+  iniciarContrasteEscuro(); // modo escuro: mede fundo e letra reais e corrige o que ficar ilegível
   // Todo alert() do sistema vira aviso no canto da tela (mesma mensagem, sem travar a tela)
   window.alert = (mensagem?: any) => mostrarAviso(mensagem);
   createRoot(document.getElementById('root')!).render(
