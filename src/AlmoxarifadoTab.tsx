@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
-import { soEnvio, fluxoLabel, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO } from './FluxoEntrega';
+import { soEnvio, fluxoLabel, fluxoEfetivo, UFS, STATUS_EMBALAGEM, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
 import { notificarEvento, msg } from './whatsappHelper';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -104,6 +104,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
   // vendida. Guardado em oples.seriais_itens e repetido em texto em
   // seriais_equipamentos (e-mail ao Fiscal e telas antigas leem esse).
   const ehVendaEnvioOp = (o) => o?.tipo_projeto === TIPO_VENDA_ENVIO;
+  // "Venda para Envio" vale como envio mesmo sem o campo Fluxo de Entrega preenchido
+  const ehEnvio = (o) => soEnvio(fluxoEfetivo(o?.tipo_projeto, o?.fluxo_entrega));
   const linhasSeriaisIniciais = (o) => {
     if (Array.isArray(o?.seriais_itens) && o.seriais_itens.length) return o.seriais_itens.map(x => ({ produto: x.produto || '', serial: x.serial || '' }));
     return Array.from({ length: Math.max(1, Number(o?.quantidade) || 1) }, () => ({ produto: '', serial: '' }));
@@ -378,7 +380,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
                             </button>
                           ) : (<>
                           {o.status_almox !== 'Kit OK' && (
-                            soEnvio(o.fluxo_entrega) ? (
+                            ehEnvio(o) ? (
                               <button className="acn-btn" style={{background:'#0f766e'}}
                                 title="Esta OP não passa por produção: separar, embalar e enviar"
                                 onClick={()=>abrirModalEmbalagem(o)}>

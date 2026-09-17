@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
-import { soEnvio, fluxoLabel } from './FluxoEntrega';
+import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -146,6 +146,57 @@ export default function PCPTab({ currentUser }) {
     fetchAll();
   };
 
+  // OP de envio não passa por produção: do PCP ela vai para a embalagem no
+  // Almoxarifado, que pesa, mede e abre a cotação de frete (ver FluxoEntrega.ts).
+  // Sem esta ação a OP ficava parada em "Kit OK - Aguardando PCP": o botão de
+  // produção é barrado de propósito e a tela do Almoxarifado já não a lista.
+  const liberarEmbalagem = async (opl) => {
+    const agora = new Date().toISOString();
+    const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
+    const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
+    await supabase.from('oples').update({
+      status_geral: STATUS_EMBALAGEM,
+      data_liberacao_pcp: agora,
+      liberado_producao_por: currentUser?.nome,
+      ...(tempoPcp != null ? { tempo_pcp_horas: tempoPcp } : {}),
+    }).eq('id', opl.id);
+    logChange({ module: 'pcp', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+      oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: STATUS_EMBALAGEM }, user: currentUser });
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+      evento: `OPL de envio liberada para embalagem no Almoxarifado por ${currentUser?.nome}`,
+      status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
+      usuario_nome: currentUser?.nome, data_hora: agora,
+    }]);
+    notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl, 'Almoxarifado (embalagem)', currentUser?.nome));
+    fetchAll();
+  };
+
+  const liberarEmbalagemLote = async (grupo) => {
+    const pendentes = grupo.irmaos.filter(o => prontoParaEmbalagem(o));
+    if (pendentes.length === 0) { alert('Nenhuma unidade de envio deste lote está pronta para embalagem.'); return; }
+    if (!await confirmar(`Liberar embalagem de ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
+    setProcessandoLote(true);
+    const agora = new Date().toISOString();
+    try {
+      for (const opl of pendentes) {
+        await supabase.from('oples').update({
+          status_geral: STATUS_EMBALAGEM, data_liberacao_pcp: agora, liberado_producao_por: currentUser?.nome,
+        }).eq('id', opl.id);
+      }
+      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+        evento: `OPL de envio liberada para embalagem em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
+        status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
+        usuario_nome: currentUser?.nome, data_hora: agora,
+      })));
+      notificarEvento('pcp_libera_almox', `*Embalagem liberada em lote* — ${grupo.base}\n${pendentes.length} OPs de envio no Almoxarifado.\nPor: ${currentUser?.nome}`);
+    } finally {
+      setProcessandoLote(false);
+      fetchAll();
+    }
+  };
+
   const devolverEngenharia = async () => {
     const opl = modalDevolver;
     const agora = new Date().toISOString();
@@ -277,12 +328,17 @@ export default function PCPTab({ currentUser }) {
   // fundos do "Liberado com Pendencia": ela e separada, embalada e enviada.
   // Sem esta guarda, faltar material num envio permitia o PCP mandar pra
   // Adaptacao assim mesmo -- exatamente o que o fluxo_entrega existe pra evitar.
+  // O tipo de projeto "Venda para Envio" já diz a rota: vale como envio mesmo se o
+  // campo Fluxo de Entrega tiver ficado em branco. Sem isso, unidades do mesmo lote
+  // se dividiam entre produção e envio conforme o campo estivesse preenchido ou não.
+  const ehEnvio = (o) => soEnvio(fluxoEfetivo(o.tipo_projeto, o.fluxo_entrega));
   const podeLiberar = (o) =>
-    !soEnvio(o.fluxo_entrega) && (
+    !ehEnvio(o) && (
       o.status_geral === 'Kit OK - Aguardando PCP' ||         // Almox liberou 100%
       o.status_almox === 'Liberado com Pendencia'             // Almox liberou c/ pendência
     );
-  const kitOk = (o) => podeLiberar(o); // mantido por compatibilidade com Envio Direto
+  // OP de envio que o Almoxarifado devolveu como "Kit OK": segue para a embalagem
+  const prontoParaEmbalagem = (o) => ehEnvio(o) && o.status_geral === 'Kit OK - Aguardando PCP';
 
   // Criterio unico de "nao tem linha de producao": vale o fluxo_entrega quando
   // estiver preenchido. O casamento por texto do tipo_projeto (criterio antigo,
@@ -290,9 +346,7 @@ export default function PCPTab({ currentUser }) {
   // sem fluxo -- senao os dois criterios discordariam entre si.
   const TIPOS_ENVIO_DIRETO = ['Envio de Material para Terceiro','Envio de Produto Vendido','Demanda Direta para Engenharia'];
   const isEnvioDireto = (o) =>
-    o.fluxo_entrega
-      ? soEnvio(o.fluxo_entrega)
-      : (o.item_envio === true || TIPOS_ENVIO_DIRETO.some(t => (o.tipo_projeto||'').includes(t)));
+    ehEnvio(o) || o.item_envio === true || TIPOS_ENVIO_DIRETO.some(t => (o.tipo_projeto||'').includes(t));
 
   return (
     <div>
@@ -434,11 +488,15 @@ export default function PCPTab({ currentUser }) {
                           onClick={()=>setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') })}>
                           + Demanda
                         </button>
-                        {kitOk(o) && (
-                          <button className="acn-btn" style={{background:'#f59e0b',color:'#78350f',fontWeight:700}}
-                            onClick={()=>liberarProducao(o)}>
-                            📤 LIBERAR ENVIO
+                        {prontoParaEmbalagem(o) && (
+                          <button className="acn-btn" style={{background:'#0f766e',fontWeight:700}}
+                            title="Kit conferido: segue para o Almoxarifado pesar, medir, embalar e abrir a cotação de frete"
+                            onClick={()=>liberarEmbalagem(o)}>
+                            📦 LIBERAR EMBALAGEM
                           </button>
+                        )}
+                        {o.status_geral === 'Aguardando Almox' && (
+                          <span style={{fontSize:9,color:'#92400e'}}>Almoxarifado separa e embala</span>
                         )}
                         <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                       </div>
@@ -530,6 +588,13 @@ export default function PCPTab({ currentUser }) {
                               {o.status_almox==='Kit OK' ? 'LIBERAR PRODUCAO' : 'LIBERAR C/ PENDENCIA'}
                             </button>
                           )}
+                          {prontoParaEmbalagem(o) && (
+                            <button className="acn-btn" style={{background:'#0f766e'}}
+                              title="OP de envio não passa por produção: vai para a embalagem no Almoxarifado"
+                              onClick={()=>liberarEmbalagem(o)}>
+                              📦 LIBERAR EMBALAGEM
+                            </button>
+                          )}
                           {o.status_geral === 'Aguardando Almox' && !o.status_almox && (
                             <span className="acn-badge" style={{background:'#cbd5e1',color:'#475569'}}>AGUARD. KITING</span>
                           )}
@@ -554,7 +619,8 @@ export default function PCPTab({ currentUser }) {
                     const qtdEspera = irmaos.filter(o => o.status_geral === 'Em Espera PCP').length;
                     const qtdAguardAlmox = irmaos.filter(o => o.status_geral === 'Aguardando Almox').length;
                     const qtdProntoProducao = irmaos.filter(o => podeLiberar(o)).length;
-                    const qtdOutros = irmaos.length - qtdEspera - qtdAguardAlmox - qtdProntoProducao;
+                    const qtdProntoEmbalagem = irmaos.filter(o => prontoParaEmbalagem(o)).length;
+                    const qtdOutros = irmaos.length - qtdEspera - qtdAguardAlmox - qtdProntoProducao - qtdProntoEmbalagem;
                     return (
                       <React.Fragment key={base}>
                         <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
@@ -574,6 +640,7 @@ export default function PCPTab({ currentUser }) {
                             {qtdEspera > 0 && <span className="acn-badge" style={{background:'#f59e0b',fontSize:9,marginRight:4}}>{qtdEspera} aguard. BOM/kiting</span>}
                             {qtdAguardAlmox > 0 && <span className="acn-badge" style={{background:'#3b82f6',fontSize:9,marginRight:4}}>{qtdAguardAlmox} no Almox</span>}
                             {qtdProntoProducao > 0 && <span className="acn-badge" style={{background:'#22c55e',fontSize:9,marginRight:4}}>{qtdProntoProducao} prontas p/ Produção</span>}
+                            {qtdProntoEmbalagem > 0 && <span className="acn-badge" style={{background:'#0f766e',fontSize:9,marginRight:4}}>{qtdProntoEmbalagem} prontas p/ Embalagem</span>}
                             {qtdOutros > 0 && <span className="acn-badge" style={{background:'#ef4444',fontSize:9}}>{qtdOutros} devolvida/retrabalho</span>}
                           </td>
                           <td>{fmtDt(rep.data_prevista_entrega)}</td>
@@ -587,6 +654,11 @@ export default function PCPTab({ currentUser }) {
                               {qtdProntoProducao > 0 && (
                                 <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} disabled={processandoLote} onClick={()=>liberarProducaoLote(item)}>
                                   🏭 PRODUÇÃO EM LOTE ({qtdProntoProducao})
+                                </button>
+                              )}
+                              {qtdProntoEmbalagem > 0 && (
+                                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} disabled={processandoLote} onClick={()=>liberarEmbalagemLote(item)}>
+                                  📦 EMBALAGEM EM LOTE ({qtdProntoEmbalagem})
                                 </button>
                               )}
                               <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setLotesExpandidos(s=>({...s,[base]:!expandido}))}>
