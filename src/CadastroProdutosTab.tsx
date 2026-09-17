@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { normalizarBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import * as XLSX from 'xlsx';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -113,8 +114,306 @@ function ItemBuscador({ onSelect, excluirIds = [] }: { onSelect: (item: any) => 
   );
 }
 
+// ─── Adicionar vários itens ao kit ───────────────────────────────────────────
+// Kit grande não se monta item por item: aqui dá para marcar vários na busca (por
+// código ou nome), colar uma lista de códigos, importar uma planilha ou trazer os
+// itens de outro kit já montado. Tudo cai na mesma estrutura (BOM) do produto.
+const MODOS_ADICIONAR = [
+  { id: 'buscar',   rotulo: '🔍 Buscar e marcar' },
+  { id: 'colar',    rotulo: '📋 Colar lista' },
+  { id: 'planilha', rotulo: '📥 Planilha' },
+  { id: 'kit',      rotulo: '🧩 Outro kit' },
+];
+
+// PostgREST usa vírgula e parênteses na sintaxe do filtro: fora do texto buscado
+const limparBusca = (v: string) => normalizarBusca(v).replace(/[,()*%\\]/g, ' ').trim();
+
+/** Itens do catálogo pelos códigos informados (em lotes, sem acento e sem caixa) */
+async function itensPorCodigo(codigos: string[]) {
+  const achados = new Map<string, any>();
+  const unicos = [...new Set(codigos.map(c => normalizarBusca(String(c ?? '').trim())).filter(Boolean))];
+  for (let i = 0; i < unicos.length; i += 150) {
+    const lote = unicos.slice(i, i + 150);
+    const { data } = await supabase.from('cadastro_itens').select('*').in('codigo_norm', lote);
+    (data || []).forEach((it: any) => achados.set(normalizarBusca(String(it.codigo || '').trim()), it));
+  }
+  return achados;
+}
+
+/** "1832" · "1832;2" · "1832 x 3" · "1832<tab>2,5" → { codigo, quantidade } */
+function lerLinhaDaLista(linha: string) {
+  const m = linha.match(/^(.*?)[\s;,\t]+x?\s*(\d+(?:[.,]\d+)?)$/i);
+  if (m && m[1].trim()) return { codigo: m[1].trim(), quantidade: Number(m[2].replace(',', '.')) || 1 };
+  return { codigo: linha.trim(), quantidade: 1 };
+}
+
+const CABECALHOS_CODIGO = ['codigo', 'código', 'cod', 'item', 'coditem', 'codigo do item', 'código do item'];
+const CABECALHOS_QTD = ['quantidade', 'qtd', 'qtde', 'qt', 'quant'];
+const CABECALHOS_OBS = ['observacao', 'observação', 'obs', 'observacoes', 'observações'];
+
+function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
+  const [modo, setModo] = useState('buscar');
+  const [q, setQ] = useState('');
+  const [resultados, setResultados] = useState<any[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [marcados, setMarcados] = useState<Record<string, number>>({});
+  const [texto, setTexto] = useState('');
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [kitSel, setKitSel] = useState('');
+  const [processando, setProcessando] = useState(false);
+  const [relatorio, setRelatorio] = useState<any>(null);
+
+  // busca por código ou nome, com bem mais resultados que o campo de um item só
+  useEffect(() => {
+    const alvo = limparBusca(q);
+    if (!alvo) { setResultados([]); return; }
+    setBuscando(true);
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('cadastro_itens')
+        .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
+        .eq('ativo', true)
+        .or(`nome_norm.ilike.%${alvo}%,codigo_norm.ilike.%${alvo}%`)
+        .order('nome')
+        .limit(200);
+      setResultados(data || []);
+      setBuscando(false);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    if (modo !== 'kit' || produtos.length) return;
+    supabase.from('cadastro_produtos').select('id, codigo, nome, categoria').eq('ativo', true).order('nome')
+      .then(({ data }) => setProdutos((data || []).filter((p: any) => p.id !== produtoId)));
+  }, [modo, produtoId]);
+
+  const marcar = (item: any) => setMarcados(m => {
+    const novo = { ...m };
+    if (novo[item.id] != null) delete novo[item.id]; else novo[item.id] = 1;
+    return novo;
+  });
+
+  const concluir = (itens: any[], naoEncontrados: string[] = []) => {
+    const n = onAdicionar(itens);
+    setRelatorio({ adicionados: n.novos, somados: n.somados, naoEncontrados });
+    setProcessando(false);
+  };
+
+  const adicionarMarcados = () => {
+    const itens = resultados.filter(r => marcados[r.id] != null)
+      .map(r => ({ item: r, quantidade: marcados[r.id] || 1 }));
+    if (!itens.length) { alert('Marque pelo menos um item.'); return; }
+    setMarcados({});
+    concluir(itens);
+  };
+
+  const adicionarDaLista = async () => {
+    const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(lerLinhaDaLista);
+    if (!linhas.length) { alert('Cole a lista de códigos (um por linha).'); return; }
+    setProcessando(true);
+    const achados = await itensPorCodigo(linhas.map(l => l.codigo));
+    const itens: any[] = [];
+    const faltando: string[] = [];
+    linhas.forEach(l => {
+      const item = achados.get(normalizarBusca(l.codigo));
+      if (item) itens.push({ item, quantidade: l.quantidade });
+      else faltando.push(l.codigo);
+    });
+    setTexto('');
+    concluir(itens, faltando);
+  };
+
+  const importarPlanilha = async (file: File) => {
+    setProcessando(true);
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const aba = wb.Sheets[wb.SheetNames[0]];
+      const linhas: any[] = aba ? XLSX.utils.sheet_to_json(aba, { defval: '' }) : [];
+      if (!linhas.length) { alert('A planilha está vazia.'); setProcessando(false); return; }
+      const chaves = Object.keys(linhas[0]);
+      const achaCol = (nomes: string[]) => chaves.find(k => nomes.includes(normalizarBusca(k).trim()));
+      const colCod = achaCol(CABECALHOS_CODIGO);
+      const colQtd = achaCol(CABECALHOS_QTD);
+      const colObs = achaCol(CABECALHOS_OBS);
+      if (!colCod) {
+        alert('A planilha precisa de uma coluna "Código" (aceita também Cod, Item ou CODITEM).');
+        setProcessando(false);
+        return;
+      }
+      const pedidos = linhas.map(l => ({
+        codigo: String(l[colCod] ?? '').trim(),
+        quantidade: Number(String(colQtd ? l[colQtd] : 1).replace(',', '.')) || 1,
+        observacoes: colObs ? String(l[colObs] ?? '').trim() : '',
+      })).filter(p => p.codigo);
+      const achados = await itensPorCodigo(pedidos.map(p => p.codigo));
+      const itens: any[] = [];
+      const faltando: string[] = [];
+      pedidos.forEach(p => {
+        const item = achados.get(normalizarBusca(p.codigo));
+        if (item) itens.push({ item, quantidade: p.quantidade, observacoes: p.observacoes });
+        else faltando.push(p.codigo);
+      });
+      concluir(itens, faltando);
+    } catch (e: any) {
+      alert('Não foi possível ler a planilha: ' + e.message);
+      setProcessando(false);
+    }
+  };
+
+  const trazerDoKit = async () => {
+    if (!kitSel) { alert('Escolha o kit de onde vêm os itens.'); return; }
+    setProcessando(true);
+    const { data } = await supabase.from('cadastro_produtos_itens')
+      .select('quantidade, observacoes, cadastro_itens(*)')
+      .eq('produto_id', kitSel).order('ordem');
+    const itens = (data || []).filter((l: any) => l.cadastro_itens)
+      .map((l: any) => ({ item: l.cadastro_itens, quantidade: Number(l.quantidade) || 1, observacoes: l.observacoes || '' }));
+    if (!itens.length) { alert('Esse kit não tem itens na estrutura.'); setProcessando(false); return; }
+    concluir(itens);
+  };
+
+  const cx: React.CSSProperties = { width: '100%', padding: '6px 9px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, boxSizing: 'border-box' };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: '#fff', borderRadius: 10, width: 720, maxWidth: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,.28)' }}>
+        <div style={{ background: '#7c3aed', color: '#fff', padding: '12px 16px', borderRadius: '10px 10px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 13 }}>➕ Adicionar vários itens</div>
+            <div style={{ fontSize: 10, color: '#ddd6fe', marginTop: 1 }}>Item repetido soma na quantidade que já está no kit</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, padding: '10px 14px 0', flexWrap: 'wrap' }}>
+          {MODOS_ADICIONAR.map(m => (
+            <button key={m.id} onClick={() => { setModo(m.id); setRelatorio(null); }}
+              style={{ padding: '5px 12px', border: '1px solid ' + (modo === m.id ? '#7c3aed' : '#d1d5db'), background: modo === m.id ? '#ede9fe' : '#fff', color: modo === m.id ? '#6d28d9' : '#374151', borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+              {m.rotulo}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+          {relatorio && (
+            <div style={{ background: relatorio.naoEncontrados.length ? '#fef9c3' : '#dcfce7', border: '1px solid ' + (relatorio.naoEncontrados.length ? '#fde68a' : '#bbf7d0'), borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 10, color: '#374151' }}>
+              <div style={{ fontWeight: 700 }}>
+                {relatorio.adicionados} item(ns) adicionado(s){relatorio.somados ? ` · ${relatorio.somados} já estavam no kit e tiveram a quantidade somada` : ''}
+              </div>
+              {relatorio.naoEncontrados.length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  Não encontrados no catálogo ({relatorio.naoEncontrados.length}): {relatorio.naoEncontrados.slice(0, 30).join(', ')}
+                  {relatorio.naoEncontrados.length > 30 ? '…' : ''}
+                </div>
+              )}
+            </div>
+          )}
+
+          {modo === 'buscar' && (
+            <div>
+              <input value={q} onChange={e => setQ(e.target.value)} autoFocus style={cx}
+                placeholder="🔍 Buscar por código ou nome (ex.: 1832, cabo, sirene)" />
+              <div style={{ fontSize: 10, color: '#64748b', margin: '6px 0' }}>
+                {buscando ? 'Buscando…' : `${resultados.length} item(ns) · ${Object.keys(marcados).length} marcado(s)`}
+                {resultados.length === 200 && ' · mostrando os 200 primeiros, refine a busca'}
+              </div>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, maxHeight: 320, overflowY: 'auto' }}>
+                {resultados.map(it => {
+                  const marcado = marcados[it.id] != null;
+                  return (
+                    <div key={it.id} onClick={() => marcar(it)}
+                      style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: marcado ? '#f0fdf4' : '#fff' }}>
+                      <input type="checkbox" checked={marcado} onChange={() => marcar(it)} onClick={e => e.stopPropagation()} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600 }}>{it.nome}</div>
+                        <div style={{ fontSize: 9, color: '#9ca3af' }}>{[it.codigo, it.marca, it.unidade].filter(Boolean).join(' · ')}</div>
+                      </div>
+                      {marcado && (
+                        <input type="number" min={0.001} step="0.001" value={marcados[it.id]} onClick={e => e.stopPropagation()}
+                          onChange={e => setMarcados(m => ({ ...m, [it.id]: Number(e.target.value) || 1 }))}
+                          style={{ width: 62, padding: '3px 5px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 10, textAlign: 'right' }} />
+                      )}
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', whiteSpace: 'nowrap' }}>{fmtR(it.custo_unit)}</div>
+                    </div>
+                  );
+                })}
+                {!buscando && !resultados.length && (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 11, fontStyle: 'italic' }}>
+                    {q.trim() ? 'Nenhum item encontrado.' : 'Digite parte do código ou do nome do item.'}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {modo === 'colar' && (
+            <div>
+              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6 }}>
+                Um código por linha. Para informar a quantidade, use espaço, ponto e vírgula ou tabulação: <b>1832 3</b> ou <b>1832;3</b>.
+                Também funciona colando duas colunas do Excel.
+              </div>
+              <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={12} autoFocus
+                placeholder={'1832\n1827 2\n1828;10'} style={{ ...cx, resize: 'vertical', fontFamily: "'IBM Plex Mono', monospace" }} />
+            </div>
+          )}
+
+          {modo === 'planilha' && (
+            <div>
+              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+                A planilha precisa de uma coluna <b>Código</b>. As colunas <b>Quantidade</b> e <b>Observação</b> são opcionais.
+                Serve Excel (.xlsx, .xls), LibreOffice (.ods) e CSV.
+              </div>
+              <input type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.ods,.csv,text/csv"
+                onChange={e => { const f = e.target.files?.[0]; if (f) importarPlanilha(f); e.target.value = ''; }}
+                style={{ fontSize: 11 }} />
+            </div>
+          )}
+
+          {modo === 'kit' && (
+            <div>
+              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6 }}>
+                Traz para este kit todos os itens da estrutura de outro produto já montado, com as quantidades dele.
+                Os itens passam a fazer parte deste kit: mudanças posteriores no outro kit não vêm junto.
+              </div>
+              <select value={kitSel} onChange={e => setKitSel(e.target.value)} style={cx}>
+                <option value="">Escolha o kit…</option>
+                {produtos.map(p => <option key={p.id} value={p.id}>{[p.codigo, p.nome].filter(Boolean).join(' — ')}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '10px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 8, background: '#fafafa', borderRadius: '0 0 10px 10px' }}>
+          <button onClick={onClose} style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+            Fechar
+          </button>
+          {modo === 'buscar' && (
+            <button onClick={adicionarMarcados} disabled={!Object.keys(marcados).length}
+              style={{ padding: '6px 18px', border: 'none', borderRadius: 5, background: Object.keys(marcados).length ? '#7c3aed' : '#9ca3af', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              ➕ Adicionar {Object.keys(marcados).length || ''} item(ns)
+            </button>
+          )}
+          {modo === 'colar' && (
+            <button onClick={adicionarDaLista} disabled={processando || !texto.trim()}
+              style={{ padding: '6px 18px', border: 'none', borderRadius: 5, background: texto.trim() ? '#7c3aed' : '#9ca3af', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              {processando ? 'Adicionando…' : '➕ Adicionar lista'}
+            </button>
+          )}
+          {modo === 'kit' && (
+            <button onClick={trazerDoKit} disabled={processando || !kitSel}
+              style={{ padding: '6px 18px', border: 'none', borderRadius: 5, background: kitSel ? '#7c3aed' : '#9ca3af', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              {processando ? 'Trazendo…' : '🧩 Trazer itens do kit'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal de criação/edição de produto ──────────────────────────────────────
-function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
+function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: any) {
   const isEdit = !!produto?.id;
 
   const [form, setForm] = useState<any>({
@@ -122,11 +421,13 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
     markup_pct: 100, custo_fixo_pct: 3, imposto_pct: 16, difal_pct: 0,
     garantia_meses: 12,
     preco_manual: false, preco_venda: 0, observacoes: '', ativo: true,
-    ...produto,
+    // campo nulo no banco vira texto vazio: input controlado não aceita null
+    ...Object.fromEntries(Object.entries(produto || {}).map(([k, v]) => [k, v ?? ''])),
   });
   const [linhas, setLinhas]       = useState<any[]>([]);
   const [salvando, setSalvando]   = useState(false);
   const [loadingBom, setLoadingBom] = useState(false);
+  const [adicionarVarios, setAdicionarVarios] = useState(false);
   // Fotos e catálogo
   const [fotos, setFotos]         = useState<string[]>(produto?.fotos || []);
   const [catalogoUrl, setCatalogoUrl] = useState<string>(produto?.catalogo_url || '');
@@ -168,37 +469,60 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
 
   const set = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
 
-  // Carrega BOM existente ao editar
+  // Carrega o BOM ao editar — e também ao duplicar, copiando a estrutura do outro kit
+  const idDoBom = produto?.id || copiarBomDe;
   useEffect(() => {
-    if (!produto?.id) return;
+    if (!idDoBom) return;
     setLoadingBom(true);
     supabase
       .from('cadastro_produtos_itens')
       .select('*, cadastro_itens(*)')
-      .eq('produto_id', produto.id)
+      .eq('produto_id', idDoBom)
       .order('ordem')
       .then(({ data }) => {
         setLinhas((data || []).map(l => ({
           ...l,
+          id: produto?.id ? l.id : undefined,
+          _tmpId: Math.random().toString(36).slice(2),
           _item: l.cadastro_itens || { nome: l.item_nome, custo_unit: 0 },
         })));
         setLoadingBom(false);
       });
-  }, [produto?.id]);
+  }, [idDoBom]);
 
-  const addItem = (item: any) => {
-    setLinhas(prev => [...prev, {
-      _tmpId: Math.random().toString(36).slice(2),
-      item_id:    item.id,
-      item_nome:  item.nome,
-      item_codigo: item.codigo,
-      quantidade: 1,
-      unidade:    item.unidade || 'UN',
-      observacoes: '',
-      ordem:      prev.length,
-      _item:      item,
-    }]);
+  // Um item ou uma leva inteira. Item que já está no kit soma na quantidade,
+  // em vez de virar linha repetida.
+  const adicionarItens = (novos: any[]) => {
+    const resumo = { novos: 0, somados: 0 };
+    setLinhas(prev => {
+      const lista = [...prev];
+      novos.forEach(({ item, quantidade, observacoes }) => {
+        if (!item?.id) return;
+        const qt = Number(quantidade) || 1;
+        const i = lista.findIndex(l => l.item_id === item.id);
+        if (i >= 0) {
+          lista[i] = { ...lista[i], quantidade: (Number(lista[i].quantidade) || 0) + qt };
+          resumo.somados++;
+        } else {
+          lista.push({
+            _tmpId: Math.random().toString(36).slice(2),
+            item_id: item.id,
+            item_nome: item.nome,
+            item_codigo: item.codigo,
+            quantidade: qt,
+            unidade: item.unidade || 'UN',
+            observacoes: observacoes || '',
+            ordem: lista.length,
+            _item: item,
+          });
+          resumo.novos++;
+        }
+      });
+      return lista;
+    });
+    return resumo;
   };
+  const addItem = (item: any) => adicionarItens([{ item, quantidade: 1 }]);
 
   const removeItem = (idx: number) => setLinhas(prev => prev.filter((_, i) => i !== idx));
 
@@ -274,7 +598,6 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
     marginBottom: 2, textTransform: 'uppercase', letterSpacing: '.4px',
   };
 
-  const excluirIds = linhas.map(l => l.item_id).filter(Boolean);
 
   return (
     <div style={{
@@ -502,10 +825,14 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ padding: '14px 14px 8px', flexShrink: 0 }}>
               <div style={{ fontSize: 9, fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '.6px', borderBottom: '1px solid #e2e8f0', paddingBottom: 3, marginBottom: 10 }}>
-                🔩 Estrutura do Produto (BOM — {linhas.length} item{linhas.length !== 1 ? 'ns' : ''})
+                🔩 Estrutura do Produto (BOM — {linhas.length} {linhas.length === 1 ? 'item' : 'itens'})
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <ItemBuscador onSelect={addItem} excluirIds={excluirIds} />
+                <ItemBuscador onSelect={addItem} />
+                <button onClick={() => setAdicionarVarios(true)} title="Buscar e marcar vários, colar lista, importar planilha ou trazer de outro kit"
+                  style={{ padding: '6px 12px', border: 'none', borderRadius: 5, background: '#7c3aed', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  ➕ Vários itens
+                </button>
               </div>
             </div>
 
@@ -583,6 +910,14 @@ function ProdutoModal({ produto, onSave, onClose, currentUser }: any) {
             </div>
           </div>
         </div>
+
+        {adicionarVarios && (
+          <ModalAdicionarItens
+            produtoId={produto?.id || copiarBomDe}
+            onAdicionar={adicionarItens}
+            onClose={() => setAdicionarVarios(false)}
+          />
+        )}
 
         {/* Footer */}
         <div style={{
@@ -706,6 +1041,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
   const [filtAtivo, setFiltAtivo]     = useState<'todos' | 'ativo' | 'inativo'>('ativo');
   const [modal, setModal]             = useState<any>(null);
   const [bomView, setBomView]         = useState<any>(null);
+  const [duplicarDe, setDuplicarDe]   = useState<string | null>(null);
   const [deletando, setDeletando]     = useState<string | null>(null);
   const [ordenar, setOrdenar]         = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'nome', dir: 'asc' });
 
@@ -784,7 +1120,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
             </div>
           ))}
           <button
-            onClick={() => setModal({})}
+            onClick={() => { setDuplicarDe(null); setModal({}); }}
             style={{ padding: '7px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11 }}
           >
             ➕ Novo Produto
@@ -872,7 +1208,11 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
                           style={{ padding: '3px 7px', border: '1px solid #ddd6fe', background: '#ede9fe', borderRadius: 4, cursor: 'pointer', fontSize: 10, color: '#7c3aed', fontWeight: 700 }}>
                           🔩
                         </button>
-                        <button onClick={() => setModal(p)} title="Editar"
+                        <button onClick={() => { setDuplicarDe(p.id); setModal({ ...p, id: undefined, codigo: '', nome: `${p.nome} (cópia)` }); }} title="Duplicar este kit como um novo produto"
+                          style={{ padding: '3px 8px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 10 }}>
+                          ⧉
+                        </button>
+                        <button onClick={() => { setDuplicarDe(null); setModal(p); }} title="Editar"
                           style={{ padding: '3px 8px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 10 }}>
                           ✏️
                         </button>
@@ -894,8 +1234,9 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
       {modal !== null && (
         <ProdutoModal
           produto={modal}
-          onSave={() => { setModal(null); carregar(); }}
-          onClose={() => setModal(null)}
+          copiarBomDe={duplicarDe}
+          onSave={() => { setModal(null); setDuplicarDe(null); carregar(); }}
+          onClose={() => { setModal(null); setDuplicarDe(null); }}
           currentUser={currentUser}
         />
       )}
