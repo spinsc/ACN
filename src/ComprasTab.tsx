@@ -11,11 +11,168 @@ import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto } from './Feedback';
+import { Botao, MenuAcoes, Selo } from './Interface';
+import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight } from '@mdi/js';
+import { ModalReceberPedido } from './LogisticaTab';
+import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
+  podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
+  ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra } from './ComprasFluxo';
 
-const VAZIO_COTACAO = { fornecedor_nome: '', valor_unitario: '', valor: '', condicao_pagamento: '', prazo_entrega: '' };
+const VAZIO_COTACAO = {
+  fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
+  frete_tipo: 'gratis', frete_valor: '', servicos: [] as { descricao: string; valor: string }[], desconto_valor: '', outras_taxas: '',
+};
 // Mesmo parse pt-BR já usado em todo o arquivo pra campos de valor digitados
 // (ex: "1.500,00" -> 1500.00) — separador de milhar "." e decimal ",".
 const parseValorBr = (v: any) => parseFloat(String(v ?? '').replace(/\./g,'').replace(',','.')) || null;
+const valorBrTexto = (n: any) => n == null || n === '' ? '' : String(Number(n).toFixed(2)).replace('.', ',');
+
+// Composição do preço de um orçamento: itens (unitário × quantidade) + frete +
+// serviços adicionais + outras taxas − desconto. O total é sempre calculado.
+function totalComposicao(f: any) {
+  const unit = parseValorBr(f.valor_unitario) || 0;
+  const qtd = Number(String(f.quantidade ?? '').replace(',', '.')) || 0;
+  const itens = unit * qtd;
+  const frete = f.frete_tipo === 'pago' ? (parseValorBr(f.frete_valor) || 0) : 0;
+  const servicos = (f.servicos || []).reduce((s: number, x: any) => s + (parseValorBr(x.valor) || 0), 0);
+  const taxas = parseValorBr(f.outras_taxas) || 0;
+  const desconto = parseValorBr(f.desconto_valor) || 0;
+  return { itens, frete, servicos, taxas, desconto, total: Math.max(0, itens + frete + servicos + taxas - desconto) };
+}
+
+// Linha da cotação para o formulário (nova ou corrigir)
+function formDaCotacao(c: any, qtdPedido: any) {
+  const qtd = c.quantidade ?? qtdPedido ?? 1;
+  const unit = c.valor_unitario ?? (c.valor != null && Number(qtd) ? Number(c.valor) / Number(qtd) : null);
+  return {
+    fornecedor_nome: c.fornecedor_nome || '', valor_unitario: valorBrTexto(unit), quantidade: String(qtd),
+    condicao_pagamento: c.condicao_pagamento || '', prazo_entrega: c.prazo_entrega || '',
+    frete_tipo: c.frete_tipo || 'gratis', frete_valor: valorBrTexto(c.frete_valor),
+    servicos: Array.isArray(c.servicos) ? c.servicos.map((s: any) => ({ descricao: s.descricao || '', valor: valorBrTexto(s.valor) })) : [],
+    desconto_valor: valorBrTexto(c.desconto_valor), outras_taxas: valorBrTexto(c.outras_taxas),
+  };
+}
+
+function payloadDaCotacao(f: any) {
+  const t = totalComposicao(f);
+  return {
+    fornecedor_nome: f.fornecedor_nome.trim(),
+    valor_unitario: parseValorBr(f.valor_unitario),
+    quantidade: Number(String(f.quantidade).replace(',', '.')) || null,
+    valor: Number(t.total.toFixed(2)),
+    condicao_pagamento: String(f.condicao_pagamento || '').trim() || null,
+    prazo_entrega: String(f.prazo_entrega || '').trim() || null,
+    frete_tipo: f.frete_tipo || 'gratis',
+    frete_valor: f.frete_tipo === 'pago' ? parseValorBr(f.frete_valor) : null,
+    servicos: (f.servicos || []).filter((s: any) => s.descricao.trim() || parseValorBr(s.valor))
+      .map((s: any) => ({ descricao: s.descricao.trim(), valor: parseValorBr(s.valor) || 0 })),
+    desconto_valor: parseValorBr(f.desconto_valor),
+    outras_taxas: parseValorBr(f.outras_taxas),
+  };
+}
+
+const moedaBr = (v: any) => new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(Number(v) || 0);
+
+function ComposicaoCotacao({ form, setForm }: any) {
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const t = totalComposicao(form);
+  const servicos = form.servicos || [];
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8 }}>
+        <div>
+          <label className="acn-label">Fornecedor *</label>
+          <input className="acn-input" style={{width:'100%'}} value={form.fornecedor_nome} onChange={e=>set('fornecedor_nome', e.target.value)} />
+        </div>
+        <div>
+          <label className="acn-label">Valor unitário (R$) *</label>
+          <input className="acn-input" style={{width:'100%'}} value={form.valor_unitario} placeholder="Ex: 15,00" inputMode="decimal"
+            onChange={e=>set('valor_unitario', e.target.value)} />
+        </div>
+        <div>
+          <label className="acn-label">Quantidade *</label>
+          <input className="acn-input" style={{width:'100%'}} value={form.quantidade} inputMode="decimal"
+            onChange={e=>set('quantidade', e.target.value)} />
+        </div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <div>
+          <label className="acn-label">Frete</label>
+          <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+            <div className="acn-chips" role="group" aria-label="Frete">
+              <button type="button" className={form.frete_tipo !== 'pago' ? 'on' : ''} aria-pressed={form.frete_tipo !== 'pago'} onClick={()=>set('frete_tipo','gratis')}>Grátis</button>
+              <button type="button" className={form.frete_tipo === 'pago' ? 'on' : ''} aria-pressed={form.frete_tipo === 'pago'} onClick={()=>set('frete_tipo','pago')}>Pago</button>
+            </div>
+            {form.frete_tipo === 'pago' && (
+              <input className="acn-input" style={{flex:1, minWidth:0}} value={form.frete_valor} placeholder="Valor do frete" inputMode="decimal"
+                onChange={e=>set('frete_valor', e.target.value)} aria-label="Valor do frete" />
+            )}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          <div>
+            <label className="acn-label">Outras taxas (R$)</label>
+            <input className="acn-input" style={{width:'100%'}} value={form.outras_taxas} inputMode="decimal" onChange={e=>set('outras_taxas', e.target.value)} />
+          </div>
+          <div>
+            <label className="acn-label">Desconto (R$)</label>
+            <input className="acn-input" style={{width:'100%'}} value={form.desconto_valor} inputMode="decimal" onChange={e=>set('desconto_valor', e.target.value)} />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label className="acn-label">Serviços adicionais</label>
+        {servicos.map((s: any, i: number) => (
+          <div key={i} style={{ display:'flex', gap:6, marginBottom:4 }}>
+            <input className="acn-input" style={{flex:2, minWidth:0}} value={s.descricao} placeholder="Ex.: instalação, montagem, garantia estendida"
+              onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, descricao: e.target.value } : x))} aria-label="Descrição do serviço" />
+            <input className="acn-input" style={{flex:1, minWidth:0}} value={s.valor} placeholder="Valor" inputMode="decimal"
+              onChange={e=>set('servicos', servicos.map((x: any, j: number) => j === i ? { ...x, valor: e.target.value } : x))} aria-label="Valor do serviço" />
+            <button type="button" className="acn-b acn-b-discreto acn-b-p" aria-label="Remover serviço"
+              onClick={()=>set('servicos', servicos.filter((_: any, j: number) => j !== i))}>✕</button>
+          </div>
+        ))}
+        <button type="button" className="acn-b acn-b-secundario acn-b-p" onClick={()=>set('servicos', [...servicos, { descricao:'', valor:'' }])}>+ Serviço</button>
+      </div>
+      <div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          <div>
+            <label className="acn-label">Condição de pagamento</label>
+            <input className="acn-input" style={{width:'100%'}} value={form.condicao_pagamento} placeholder="Ex: 30/60 dias" onChange={e=>set('condicao_pagamento', e.target.value)} />
+          </div>
+          <div>
+            <label className="acn-label">Prazo de entrega</label>
+            <input className="acn-input" style={{width:'100%'}} value={form.prazo_entrega} placeholder="Ex: 10 dias úteis" onChange={e=>set('prazo_entrega', e.target.value)} />
+          </div>
+        </div>
+      </div>
+      <div style={{ background:'var(--acn-surface)', border:'1px solid var(--acn-line)', borderRadius:8, padding:'8px 10px', fontSize:12 }}>
+        <div style={{ display:'flex', justifyContent:'space-between' }}><span>Itens ({form.quantidade || 0} × {moedaBr(parseValorBr(form.valor_unitario))})</span><span className="acn-num">{moedaBr(t.itens)}</span></div>
+        <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-muted)' }}><span>Frete {form.frete_tipo === 'pago' ? '' : '(grátis)'}</span><span className="acn-num">{moedaBr(t.frete)}</span></div>
+        {t.servicos > 0 && <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-muted)' }}><span>Serviços adicionais</span><span className="acn-num">{moedaBr(t.servicos)}</span></div>}
+        {t.taxas > 0 && <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-muted)' }}><span>Outras taxas</span><span className="acn-num">{moedaBr(t.taxas)}</span></div>}
+        {t.desconto > 0 && <div style={{ display:'flex', justifyContent:'space-between', color:'var(--acn-ok)' }}><span>Desconto</span><span className="acn-num">− {moedaBr(t.desconto)}</span></div>}
+        <div style={{ display:'flex', justifyContent:'space-between', fontWeight:600, color:'var(--acn-ink)', borderTop:'1px solid var(--acn-line-soft)', marginTop:4, paddingTop:4 }}>
+          <span>Total do orçamento</span><span className="acn-num">{moedaBr(t.total)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Texto curto da composição (lista de cotações e resumo)
+function textoComposicao(c: any) {
+  const partes: string[] = [];
+  if (c.valor_unitario != null && c.quantidade != null) partes.push(`${c.quantidade} × ${moedaBr(c.valor_unitario)}`);
+  else if (c.valor_unitario != null) partes.push(`${moedaBr(c.valor_unitario)}/un.`);
+  if (c.frete_tipo === 'pago') partes.push(`frete ${moedaBr(c.frete_valor)}`);
+  else if (c.frete_tipo === 'gratis') partes.push('frete grátis');
+  const serv = Array.isArray(c.servicos) ? c.servicos.reduce((s: number, x: any) => s + (Number(x.valor) || 0), 0) : 0;
+  if (serv > 0) partes.push(`serviços ${moedaBr(serv)}`);
+  if (Number(c.outras_taxas) > 0) partes.push(`taxas ${moedaBr(c.outras_taxas)}`);
+  if (Number(c.desconto_valor) > 0) partes.push(`desconto ${moedaBr(c.desconto_valor)}`);
+  return partes.join(' · ');
+}
 
 async function uploadCotacaoArquivo(file: File): Promise<{ url: string; nome: string; error?: string }> {
   const nomeLimpo = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -240,10 +397,8 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
 }
 
 // ─── STATUS (colunas do Kanban e ordem do fluxo) ───────────────────────────────
-const STATUS_COMPRAS = ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'];
-const COR_STATUS_COMPRA: Record<string,string> = {
-  'Pendente':'#f59e0b','Em Andamento':'#3b82f6','Aguardando Aprovação':'#ea580c','Aprovado':'#0ea5e9','Comprado':'#7c3aed','Concluído':'#22c55e',
-};
+const STATUS_COMPRAS = [...ETAPAS_COMPRA, DESCARTADA];
+const COR_STATUS_COMPRA: Record<string,string> = COR_ETAPA_COMPRA;
 
 // ─── DESCRIÇÃO COMPACTA ───────────────────────────────────────────────────────
 // A descrição da compra ocupava a linha inteira (e o card do kanban) quando o
@@ -328,7 +483,7 @@ function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
 }
 
 // ─── RESUMO DA SOLICITAÇÃO ─────────────────────────────────────────────────────
-function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose }) {
+function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, currentUser }) {
   const [cotacoes, setCotacoes] = useState<any[] | null>(null);
   const [aprovacoes, setAprovacoes] = useState<any[]>([]);
   const [acomp, setAcomp] = useState<any[]>([]);
@@ -376,6 +531,9 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose }) {
         <Linha k="Prazo prometido" v={p.prazo_prometido_entrega ? `${data(p.prazo_prometido_entrega)} (${p.prazo_prometido_destino === 'cliente' ? 'cliente' : 'produção'})` : null} />
         <Linha k="NF" v={p.numero_nf} />
         <Linha k="Solicitado por" v={[p.criado_por_nome || p.criado_por, p.data_criacao ? data(p.data_criacao) : null].filter(Boolean).join(' · ')} />
+        <Linha k="Comprador" v={p.comprador_nome} />
+        <Linha k="Reprocessos" v={p.reprocessos > 0 ? `${p.reprocessos} (ver histórico)` : null} />
+        <Linha k="Descarte" v={p.status_compra === 'Descartada' ? `${p.motivo_descarte || '—'}${p.descartado_por_nome ? ` — ${p.descartado_por_nome}` : ''}` : null} />
         {p.observacoes_compra && (
           <>
             <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'10px 0 4px' }}>Observações</div>
@@ -389,6 +547,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose }) {
           <div key={c.id} style={{ display:'flex', gap:8, alignItems:'center', fontSize:11, padding:'4px 6px', borderBottom:'1px solid #f1f5f9',
             background: c.id === p.vencedora_id ? '#f0fdf4' : undefined }}>
             <span style={{ flex:1, fontWeight: c.id === p.vencedora_id ? 800 : 600 }}>{c.id === p.vencedora_id ? '🏆 ' : ''}{c.fornecedor_nome}</span>
+            {canVerValor && <span style={{ color:'#64748b', fontSize:10 }}>{textoComposicao(c)}</span>}
             {canVerValor && <span>{moeda(c.valor)}</span>}
             {c.prazo_entrega && <span style={{ color:'#64748b', fontSize:10 }}>prazo {c.prazo_entrega}</span>}
             {c.arquivo_url && <a href={c.arquivo_url} target="_blank" rel="noreferrer" style={{ fontSize:10 }}>📎</a>}
@@ -405,6 +564,10 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose }) {
             ))}
           </>
         )}
+        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Anexos</div>
+        <AnexosCompra pedido={p} currentUser={currentUser} podeEditar={podeEditarSolicitacao(p, currentUser)} />
+        <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Histórico da requisição</div>
+        <HistoricoCompra pedidoId={p.id} />
         {acomp.length > 0 && (
           <>
             <div style={{ fontSize:10, fontWeight:800, color:'#475569', textTransform:'uppercase', margin:'12px 0 4px' }}>Acompanhamento (últimos)</div>
@@ -493,6 +656,12 @@ export default function ComprasTab({ currentUser }) {
   const celular = useCelular();
   const [etapaCel, setEtapaCel] = useState<string | null>(null);
 
+  // Fluxo: voltar etapa (reprocesso), descartar, reativar, iniciar, confirmar compra, editar, receber
+  const [modalFluxo, setModalFluxo] = useState<{ tipo: string; pedido: any } | null>(null);
+  const abrirFluxo = (tipo: string, pedido: any) => setModalFluxo({ tipo, pedido });
+  const [arrastando, setArrastando] = useState<string | null>(null);
+  const [colunaAlvo, setColunaAlvo] = useState<string | null>(null);
+
   // Valores inline por pedido: { [id]: { valor, prazo, salvando } }
   const [inline, setInline] = useState<Record<string,{valor:string,prazo:string,salvando:boolean}>>({});
 
@@ -516,7 +685,7 @@ export default function ComprasTab({ currentUser }) {
   };
 
   const COR: Record<string,string> = {
-    'Pendente':'#fbbf24','Em Andamento':'#3b82f6','Aguardando Aprovação':'#ea580c','Aprovado':'#0ea5e9','Comprado':'#7c3aed','Concluído':'#22c55e',
+    ...COR_ETAPA_COMPRA, 'Pendente':'#fbbf24',
   };
 
   useEffect(() => {
@@ -666,23 +835,53 @@ export default function ComprasTab({ currentUser }) {
   const setInlineField = (id: string, field: string, val: string) =>
     setInline(prev => ({ ...prev, [id]: { ...prev[id], [field]: val } }));
 
-  const avancarStatus = async (p: any) => {
-    // 'Comprado' → 'Concluído' não está mais aqui de propósito — a partir da
-    // Fase 3, só fecha via conferência técnica na Logística (seriais/volume/NF).
-    const prox: Record<string,string> = {
-      'Pendente':'Em Andamento',
-    };
-    const novoStatus = prox[p.status_compra];
-    if (!novoStatus) return;
-    const updates: any = { status_compra: novoStatus };
-    const { error } = await supabase.from('pcp_pedidos_compra').update(updates).eq('id', p.id);
-    if (error) alert('Erro: ' + error.message);
-    else {
-      logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: p.id, changeType: 'UPDATE',
-        oldRow: { status_compra: p.status_compra }, newRow: { status_compra: novoStatus }, user: currentUser });
-      setFiltro(''); load();
+  // Pendente → Em Andamento: pede o comprador responsável (ModalIniciarCotacao)
+  const avancarStatus = (p: any) => abrirFluxo('iniciar', p);
+
+  // Mover uma requisição (arrastar no kanban, "Mover para…" no toque ou menu):
+  // avançar abre a janela com o que a etapa exige; voltar é reprocesso com motivo.
+  const moverPara = (p: any, destino: string) => {
+    const atual = p.status_compra;
+    if (!destino || destino === atual) return;
+    const gestor = podeGerirCompras(currentUser);
+    if (destino === DESCARTADA) {
+      if (atual === 'Concluído') { alert('Uma compra concluída não pode ser descartada.'); return; }
+      if (!gestor && !ehSolicitante(p, currentUser)) { alert('Só Compras, gerentes, administradores ou quem solicitou podem descartar.'); return; }
+      abrirFluxo('descartar', p); return;
     }
+    if (atual === DESCARTADA) {
+      if (!gestor) { alert('Só Compras, gerentes ou administradores podem reativar uma requisição.'); return; }
+      abrirFluxo('reativar', p); return;
+    }
+    const iA = ETAPAS_COMPRA.indexOf(atual), iD = ETAPAS_COMPRA.indexOf(destino);
+    if (iD < iA) {
+      if (!gestor) { alert('Só Compras, gerentes ou administradores podem voltar a etapa.'); return; }
+      if (ETAPA_ANTERIOR[atual] !== destino) { alert(`Volte uma etapa por vez: de "${atual}" a etapa anterior é "${ETAPA_ANTERIOR[atual]}".`); return; }
+      abrirFluxo('voltar', p); return;
+    }
+    // avançar
+    if (atual === 'Pendente' && destino === 'Em Andamento') {
+      if (!gestor) { alert('Só Compras, gerentes ou administradores iniciam a cotação.'); return; }
+      abrirFluxo('iniciar', p); return;
+    }
+    if ((atual === 'Em Andamento' && ['Aguardando Aprovação', 'Aprovado'].includes(destino)) || (atual === 'Aguardando Aprovação' && destino === 'Aprovado')) {
+      abrirModalCotacoes(p);
+      mostrarDica(atual === 'Em Andamento'
+        ? 'Para avançar, lance as cotações e aprove a vencedora (com a previsão de recebimento). Se houver alçada, ela vai para Aguardando Aprovação.'
+        : 'Para aprovar, o aprovador clica em "Aprovar" na cotação vencedora.');
+      return;
+    }
+    if (atual === 'Aprovado' && destino === 'Comprado') {
+      if (!gestor) { alert('Só Compras, gerentes ou administradores confirmam a compra.'); return; }
+      abrirFluxo('confirmar', p); return;
+    }
+    if (atual === 'Comprado' && destino === 'Concluído') {
+      if (!gestor && currentUser?.perfil !== 'Almoxarifado') { alert('O recebimento é registrado por Compras, Almoxarifado, gerentes ou administradores.'); return; }
+      abrirFluxo('receber', p); return;
+    }
+    alert(`Avance uma etapa por vez: depois de "${atual}" vem "${PROXIMA_ETAPA[atual] || '—'}".`);
   };
+  const mostrarDica = (t: string) => alert(t);
 
   // ── Mesa de Cotações ──────────────────────────────────────────────────────
   // Removido de propósito: existia um atalho manual "✅ Concluir" que fechava
@@ -692,7 +891,7 @@ export default function ComprasTab({ currentUser }) {
   // é agora o único caminho de Em Andamento → Comprado.
   const abrirModalCotacoes = async (p: any) => {
     setModalCotacoes(p);
-    setNovaCotacao({ ...VAZIO_COTACAO });
+    setNovaCotacao({ ...VAZIO_COTACAO, quantidade: String(p.quantidade || 1) });
     setNovoAnexoCotacao(null);
     setVencedoraId(p.vencedora_id || null);
     setLoadingCotacoes(true);
@@ -712,8 +911,8 @@ export default function ComprasTab({ currentUser }) {
 
   const adicionarCotacao = async () => {
     if (!modalCotacoes) return;
-    if (!novaCotacao.fornecedor_nome.trim() || !novaCotacao.valor) {
-      alert('Informe ao menos o nome do fornecedor e o valor.'); return;
+    if (!novaCotacao.fornecedor_nome.trim() || !parseValorBr(novaCotacao.valor_unitario) || !(Number(String(novaCotacao.quantidade).replace(',', '.')) > 0)) {
+      alert('Informe o fornecedor, o valor unitário e a quantidade.'); return;
     }
     if (novoAnexoCotacao && novoAnexoCotacao.size > 10 * 1024 * 1024) {
       alert(`Anexo muito grande (${(novoAnexoCotacao.size/1024/1024).toFixed(1)} MB). O limite é 10 MB.`);
@@ -728,11 +927,7 @@ export default function ComprasTab({ currentUser }) {
     }
     const { error } = await supabase.from('pcp_cotacoes_fornecedores').insert([{
       pedido_id: modalCotacoes.id,
-      fornecedor_nome: novaCotacao.fornecedor_nome.trim(),
-      valor_unitario: parseValorBr(novaCotacao.valor_unitario),
-      valor: parseValorBr(novaCotacao.valor),
-      condicao_pagamento: novaCotacao.condicao_pagamento.trim() || null,
-      prazo_entrega: novaCotacao.prazo_entrega.trim() || null,
+      ...payloadDaCotacao(novaCotacao),
       anexo_url: anexo?.url || null,
       anexo_nome: anexo?.nome || null,
       criado_por: currentUser?.email,
@@ -746,7 +941,7 @@ export default function ComprasTab({ currentUser }) {
     if (cotacoes.length === 0 && modalCotacoes.departamento_id) {
       await dispararAprovacaoDepartamento(modalCotacoes);
     }
-    setNovaCotacao({ ...VAZIO_COTACAO });
+    setNovaCotacao({ ...VAZIO_COTACAO, quantidade: String(modalCotacoes.quantidade || 1) });
     setNovoAnexoCotacao(null);
     abrirModalCotacoes(modalCotacoes);
   };
@@ -805,13 +1000,7 @@ export default function ComprasTab({ currentUser }) {
 
   const iniciarEdicaoCotacao = (c: any) => {
     setEditandoCotacaoId(c.id);
-    setEditCotacaoForm({
-      fornecedor_nome: c.fornecedor_nome || '',
-      valor_unitario: c.valor_unitario != null ? String(c.valor_unitario).replace('.', ',') : '',
-      valor: c.valor != null ? String(c.valor).replace('.', ',') : '',
-      condicao_pagamento: c.condicao_pagamento || '',
-      prazo_entrega: c.prazo_entrega || '',
-    });
+    setEditCotacaoForm(formDaCotacao(c, modalCotacoes?.quantidade));
   };
 
   // Corrige uma cotação já lançada (Admin). Se for a vencedora do pedido,
@@ -819,19 +1008,12 @@ export default function ComprasTab({ currentUser }) {
   // campo que Centro de Custo/Financeiro de fato leem, então é aqui que o
   // erro "entrou errado no centro de custo" se corrige de verdade.
   const salvarEdicaoCotacao = async (c: any) => {
-    if (!editCotacaoForm.fornecedor_nome?.trim() || !editCotacaoForm.valor) {
-      alert('Informe ao menos o nome do fornecedor e o valor total.'); return;
+    if (!editCotacaoForm.fornecedor_nome?.trim() || !parseValorBr(editCotacaoForm.valor_unitario) || !(Number(String(editCotacaoForm.quantidade).replace(',', '.')) > 0)) {
+      alert('Informe o fornecedor, o valor unitário e a quantidade.'); return;
     }
     setSalvandoEdicaoCotacao(true);
-    const novoValorUnitario = parseValorBr(editCotacaoForm.valor_unitario);
-    const novoValorTotal    = parseValorBr(editCotacaoForm.valor);
-    const payload = {
-      fornecedor_nome: editCotacaoForm.fornecedor_nome.trim(),
-      valor_unitario: novoValorUnitario,
-      valor: novoValorTotal,
-      condicao_pagamento: editCotacaoForm.condicao_pagamento.trim() || null,
-      prazo_entrega: editCotacaoForm.prazo_entrega.trim() || null,
-    };
+    const payload: any = { ...payloadDaCotacao(editCotacaoForm), atualizado_em: new Date().toISOString(), atualizado_por_nome: currentUser?.nome || null };
+    const novoValorTotal = payload.valor;
     const { error } = await supabase.from('pcp_cotacoes_fornecedores').update(payload).eq('id', c.id);
     if (error) { setSalvandoEdicaoCotacao(false); alert('Erro ao salvar correção: ' + error.message); return; }
     logChange({ module: 'compras', entityType: 'pcp_cotacoes_fornecedores', entityId: c.id, changeType: 'UPDATE',
@@ -937,12 +1119,19 @@ export default function ComprasTab({ currentUser }) {
     if (niveis.length === 0 && !jaTemPendencia) {
       const { error } = await supabase.from('pcp_pedidos_compra')
         .update({ ...extraUpdates, status_compra: 'Aprovado' }).eq('id', pedidoId);
+      if (!error) await registrarHistorico(pedidoId, { tipo: 'avanco', de: 'Em Andamento', para: 'Aprovado',
+        motivo: `Vencedora: ${extraUpdates.fornecedor || '—'} (${fmt(extraUpdates.valor_compra)})` }, currentUser);
       return { error };
     }
     const { data: pedidoAtual } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoId).maybeSingle();
     const { error } = await supabase.from('pcp_pedidos_compra')
       .update({ ...extraUpdates, status_compra: 'Aguardando Aprovação' }).eq('id', pedidoId);
     if (error) return { error };
+    await registrarHistorico(pedidoId, { tipo: 'avanco', de: pedidoAtual?.status_compra || 'Em Andamento', para: 'Aguardando Aprovação',
+      motivo: `Vencedora: ${extraUpdates.fornecedor || '—'} (${fmt(extraUpdates.valor_compra)})` }, currentUser);
+    if (pedidoAtual) await mencionarSolicitante(pedidoAtual,
+      `Sua requisição ${pedidoAtual.numero_pedido} (${String(pedidoAtual.descricao_material || '').slice(0, 80)}) está aguardando aprovação — vencedora: ${extraUpdates.fornecedor || '—'}, ${fmt(extraUpdates.valor_compra)}.`,
+      currentUser, 'aguardando_aprovacao');
     if (niveis.length > 0) {
       await supabase.from('pcp_aprovacoes').insert(niveis.map(n => ({
         pedido_id: pedidoId, nivel: n.nivel, nivel_nome: n.nome, valor_no_momento: valorCompra,
@@ -993,6 +1182,7 @@ export default function ComprasTab({ currentUser }) {
         .select('vencedora_id').eq('id', pedido.id).maybeSingle();
       if (pedidoAtual?.vencedora_id) {
         await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Aprovado' }).eq('id', pedido.id);
+        await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aguardando Aprovação', para: 'Aprovado', motivo: 'Aprovações concluídas.' }, currentUser);
         await notificarCriadorPedido(pedido, `Compra aprovada — aguardando confirmação de compra — pedido ${pedido.numero_pedido}.`);
       }
     }
@@ -1002,16 +1192,20 @@ export default function ComprasTab({ currentUser }) {
   // (status_compra='Comprado'), gera número de OC (trigger) e cria a demanda de
   // acompanhamento — antes disso, o pedido fica em 'Aprovado' esperando essa
   // confirmação, mesmo que quem aprovou também tenha alçada pra isso.
-  const confirmarCompra = async (pedido: any) => {
-    if (!await confirmar(`Confirmar a compra do pedido ${pedido.numero_pedido}? Isso gera a Ordem de Compra e envia pro acompanhamento de recebimento.`)) return;
-    const { error } = await supabase.from('pcp_pedidos_compra').update({ status_compra: 'Comprado' }).eq('id', pedido.id);
-    if (error) { alert('Erro ao confirmar compra: ' + error.message); return; }
+  const confirmarCompra = async (pedido: any, prazo?: string) => {
+    const upd: any = { status_compra: 'Comprado' };
+    if (prazo) upd.data_prevista_recebimento = prazo;
+    const { error } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', pedido.id);
+    if (error) { alert('Erro ao confirmar compra: ' + error.message); return false; }
     logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: pedido.id, changeType: 'UPDATE',
-      oldRow: { status_compra: 'Aprovado' }, newRow: { status_compra: 'Comprado' }, user: currentUser });
+      oldRow: { status_compra: 'Aprovado' }, newRow: upd, user: currentUser });
+    await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aprovado', para: 'Comprado',
+      motivo: prazo ? `Prazo de entrega: ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : null }, currentUser);
     await criarDemandaComprasFinalizada(pedido.id);
     await notificarCriadorPedido(pedido, `Compra confirmada — pedido ${pedido.numero_pedido}.`);
     setFiltro('');
     load();
+    return true;
   };
 
   // Checa se o usuário logado pode aprovar a pendência atual — mesma regra pra
@@ -1048,7 +1242,7 @@ export default function ComprasTab({ currentUser }) {
       alert('Você não tem autorização para rejeitar este pedido. Aguardando: ' + (quem || '—'));
       return;
     }
-    const motivo = await pedirTexto('Motivo da rejeição:');
+    const motivo = await pedirTexto('Não aprovar e devolver para refazer a cotação.\nMotivo:');
     if (motivo === null) return;
     if (!motivo.trim()) { alert('Informe o motivo.'); return; }
     setRespondendoAprovacao(true);
@@ -1061,7 +1255,10 @@ export default function ComprasTab({ currentUser }) {
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
     await supabase.from('pcp_pedidos_compra').update({
       status_compra: 'Em Andamento', vencedora_id: null, justificativa_vencedora: null,
+      reprocessos: (Number(modalCotacoes.reprocessos) || 0) + 1,
     }).eq('id', modalCotacoes.id);
+    await registrarHistorico(modalCotacoes.id, { tipo: 'retorno', de: 'Aguardando Aprovação', para: 'Em Andamento', motivo: `Não aprovado — ${motivo.trim()}`,
+      dados: { refazer: 'Rever as cotações e reenviar para aprovação', nivel: nivelAtivo.nivel_nome, reprocesso: (Number(modalCotacoes.reprocessos) || 0) + 1 } }, currentUser);
     await notificarCriadorPedido(modalCotacoes, `Compra rejeitada (Nível ${nivelAtivo.nivel} — ${nivelAtivo.nivel_nome}). Motivo: ${motivo.trim()}`);
     setRespondendoAprovacao(false);
     setVencedoraId(null);
@@ -1188,8 +1385,22 @@ export default function ComprasTab({ currentUser }) {
     setSalvandoObs(false);
   };
 
+  const itensMenuFluxo = (p: any) => {
+    const gestor = podeGerirCompras(currentUser);
+    const st = p.status_compra;
+    return [
+      { rotulo: 'Editar solicitação', icone: mdiPencilOutline, onClick: () => abrirFluxo('editar', p), oculto: !podeEditarSolicitacao(p, currentUser) },
+      { rotulo: `Avançar para ${PROXIMA_ETAPA[st] === 'Aprovado' && st === 'Em Andamento' ? 'aprovação' : PROXIMA_ETAPA[st] || ''}`, icone: mdiArrowRight,
+        onClick: () => moverPara(p, PROXIMA_ETAPA[st]), oculto: !PROXIMA_ETAPA[st] || !(gestor || (st === 'Comprado' && currentUser?.perfil === 'Almoxarifado')) },
+      { rotulo: `Voltar para ${ETAPA_ANTERIOR[st] || ''} (reprocesso)`, icone: mdiUndoVariant, onClick: () => moverPara(p, ETAPA_ANTERIOR[st]), oculto: !ETAPA_ANTERIOR[st] || !gestor },
+      { rotulo: 'Reativar', icone: mdiRestore, onClick: () => moverPara(p, 'Pendente'), oculto: st !== DESCARTADA || !gestor },
+      { rotulo: 'Descartar', icone: mdiCloseCircleOutline, onClick: () => moverPara(p, DESCARTADA), perigo: true,
+        oculto: st === DESCARTADA || st === 'Concluído' || !(gestor || ehSolicitante(p, currentUser)) },
+    ];
+  };
+
   const total = pedidos.length;
-  const kpis = ['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'].map(s => ({
+  const kpis = [...ETAPAS_COMPRA, DESCARTADA].map(s => ({
     label: s, n: pedidos.filter(p=>p.status_compra===s).length, cor: COR[s],
   }));
 
@@ -1198,8 +1409,8 @@ export default function ComprasTab({ currentUser }) {
   // filtro de status específico (ex: só "Concluído") continua mostrando
   // exatamente o que foi filtrado, sem o agrupamento.
   const agruparPorStatus  = filtro === '';
-  const pedidosAtivos     = agruparPorStatus ? pedidos.filter((p:any) => p.status_compra !== 'Concluído') : pedidos;
-  const pedidosConcluidos = agruparPorStatus ? pedidos.filter((p:any) => p.status_compra === 'Concluído') : [];
+  const pedidosAtivos     = agruparPorStatus ? pedidos.filter((p:any) => !['Concluído', DESCARTADA].includes(p.status_compra)) : pedidos;
+  const pedidosConcluidos = agruparPorStatus ? pedidos.filter((p:any) => ['Concluído', DESCARTADA].includes(p.status_compra)) : [];
 
   const renderPedidoRow = (p: any) => {
     const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
@@ -1323,6 +1534,8 @@ export default function ComprasTab({ currentUser }) {
             background:COR[p.status_compra]||'#9ca3af'}}>
             {p.status_compra||'—'}
           </span>
+          {p.reprocessos > 0 && <div style={{marginTop:4}}><Selo familia="atencao" ponto={false} title="Voltou de etapa — veja o motivo no Resumo">Reprocesso nº {p.reprocessos}</Selo></div>}
+          {p.status_compra === DESCARTADA && p.motivo_descarte && <div style={{marginTop:4,fontSize:10,color:'#64748b',maxWidth:180}} title={p.motivo_descarte}>{String(p.motivo_descarte).slice(0,60)}</div>}
           {p.numero_oc && (
             <div style={{marginTop:4}}>
               <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}} title="Ordem de Compra">
@@ -1356,7 +1569,7 @@ export default function ComprasTab({ currentUser }) {
 
           {/* 🛒 Aprovado → Comprado — ação explícita e separada da aprovação */}
           {isAprovado && (
-            <button onClick={()=>confirmarCompra(p)} style={{...btn,background:'#0ea5e9',marginRight:3}}>
+            <button onClick={()=>abrirFluxo('confirmar', p)} style={{...btn,background:'#0ea5e9',marginRight:3}}>
               🛒 Confirmar Compra
             </button>
           )}
@@ -1406,6 +1619,7 @@ export default function ComprasTab({ currentUser }) {
           {/* 🖨️ Imprimir */}
           <button onClick={()=>imprimirSolicitacao(p)}
             style={{...btn,background:'#475569'}}>🖨️</button>
+          <span style={{ display:'inline-block', verticalAlign:'middle', marginLeft:3 }}><MenuAcoes itens={itensMenuFluxo(p)} rotulo="Etapa, edição e descarte" /></span>
 
           {/* 📋 Imprimir Ordem de Compra — só existe depois de Comprado */}
           {p.numero_oc && (
@@ -1440,7 +1654,7 @@ export default function ComprasTab({ currentUser }) {
         <select value={filtro} onChange={e=>setFiltro(e.target.value)}
           style={{padding:'5px 10px',border:'1px solid #d1d5db',borderRadius:6,fontSize:11}}>
           <option value="">Todos os status</option>
-          {['Pendente','Em Andamento','Aguardando Aprovação','Aprovado','Comprado','Concluído'].map(s=><option key={s}>{s}</option>)}
+          {[...ETAPAS_COMPRA, DESCARTADA].map(s=><option key={s}>{s}</option>)}
         </select>
         </div>
       </div>
@@ -1459,14 +1673,24 @@ export default function ComprasTab({ currentUser }) {
         {celular && <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />}
         <div style={{ display:'flex', gap:8, overflowX:'auto', alignItems:'flex-start', paddingBottom:6 }}>
           {colunas.filter(st => !celular || st === ativa).map(st => (
-            <KanbanColuna key={st} titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={celular ? 0 : 230}
+            <div key={st} style={{ flex: celular ? '1 1 auto' : '1 1 230px', minWidth: celular ? 0 : 230, maxWidth: 420, display:'flex', borderRadius:10,
+                outline: colunaAlvo === st && arrastando ? '2px dashed var(--acn-brand)' : undefined, outlineOffset: 2,
+                background: colunaAlvo === st && arrastando ? 'var(--acn-brand-soft)' : undefined }}
+              onDragOver={e => { if (!arrastando) return; e.preventDefault(); if (colunaAlvo !== st) setColunaAlvo(st); }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setColunaAlvo(c => c === st ? null : c); }}
+              onDrop={e => { e.preventDefault(); const p = pedidos.find((x:any) => x.id === arrastando); setArrastando(null); setColunaAlvo(null); if (p) moverPara(p, st); }}>
+            <KanbanColuna titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={0}
               {...(celular ? { visiveis: 100000 } : {})}
               itens={pedidos.filter((p:any) => p.status_compra === st)} vazio="Nenhuma requisição"
               renderCard={(p:any) => {
                 const naoLido = pedidosNaoLidos.has(String(p.id));
                 return (
-                  <div key={p.id} style={{ background:'#fff', border:`1px solid ${naoLido ? '#eab308' : '#e2e8f0'}`, borderLeft:`4px solid ${COR_STATUS_COMPRA[st]}`,
-                    borderRadius:6, padding:'7px 9px', boxShadow:'0 1px 2px #0000000d', fontSize:11 }}>
+                  <div key={p.id} draggable={!celular}
+                    onDragStart={e => { setArrastando(p.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', p.id); } catch {} }}
+                    onDragEnd={() => { setArrastando(null); setColunaAlvo(null); }}
+                    title={celular ? undefined : 'Arraste para outra etapa'}
+                    style={{ background:'#fff', border:`1px solid ${naoLido ? '#eab308' : '#e2e8f0'}`, borderLeft:`4px solid ${COR_STATUS_COMPRA[st]}`,
+                    borderRadius:6, padding:'7px 9px', boxShadow:'0 1px 2px #0000000d', fontSize:11, cursor: celular ? undefined : 'grab', opacity: arrastando === p.id ? .55 : 1 }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
                       <strong style={{ fontSize:11, color:'#1e293b' }}>{p.numero_pedido}</strong>
                       {p.numero_oc && <span style={{ fontSize:8, fontWeight:700, color:'#7c3aed' }}>📋 {p.numero_oc}</span>}
@@ -1476,6 +1700,19 @@ export default function ComprasTab({ currentUser }) {
                       Qtd {p.quantidade || 1}{p.fornecedor ? ` · ${p.fornecedor}` : ''}{p.opl ? ` · OP ${p.opl}` : ''}
                     </div>
                     <VinculoLinkCompra p={p} compacto />
+                    {(p.reprocessos > 0 || p.status_compra === DESCARTADA) && (
+                      <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:4 }}>
+                        {p.reprocessos > 0 && <Selo familia="atencao" ponto={false}>Reprocesso nº {p.reprocessos}</Selo>}
+                        {p.status_compra === DESCARTADA && p.motivo_descarte && <span style={{ fontSize:10, color:'#64748b' }} title={p.motivo_descarte}>{String(p.motivo_descarte).slice(0,70)}</span>}
+                      </div>
+                    )}
+                    {celular && (
+                      <select className="acn-input" value="" style={{ width:'100%', marginTop:6 }} aria-label="Mover para outra etapa"
+                        onChange={e => { const d = e.target.value; if (d) moverPara(p, d); }}>
+                        <option value="">Mover para…</option>
+                        {STATUS_COMPRAS.filter(x => x !== p.status_compra).map(x => <option key={x} value={x}>{x}</option>)}
+                      </select>
+                    )}
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:4, marginTop:5, flexWrap:'wrap' }}>
                       <span style={{ fontSize:9 }}>
                         {canVerValor && p.valor_compra ? <strong style={{ color:'#16a34a', marginRight:6 }}>{fmt(p.valor_compra)}</strong> : null}
@@ -1485,15 +1722,17 @@ export default function ComprasTab({ currentUser }) {
                         {p.status_compra==='Pendente' && <button onClick={()=>avancarStatus(p)} style={{...btn,background:'#3b82f6',padding:'2px 6px',fontSize:9}}>▶️ Iniciar</button>}
                         {p.status_compra==='Em Andamento' && <button onClick={()=>abrirModalCotacoes(p)} style={{...btn,background:'#d97706',padding:'2px 6px',fontSize:9}}>🏷️ Cotações{p.vencedora_id ? ' ✓' : ''}</button>}
                         {p.status_compra==='Aguardando Aprovação' && <button onClick={()=>abrirModalCotacoes(p)} style={{...btn,background:'#ea580c',padding:'2px 6px',fontSize:9}}>🔒 Aprovação</button>}
-                        {p.status_compra==='Aprovado' && <button onClick={()=>confirmarCompra(p)} style={{...btn,background:'#0ea5e9',padding:'2px 6px',fontSize:9}}>🛒 Confirmar</button>}
+                        {p.status_compra==='Aprovado' && <button onClick={()=>abrirFluxo('confirmar', p)} style={{...btn,background:'#0ea5e9',padding:'2px 6px',fontSize:9}}>🛒 Confirmar</button>}
                         <button onClick={()=>setModalResumo(p)} title="Resumo" style={{...btn,background:'#0f766e',padding:'2px 6px',fontSize:9}}>🔍</button>
                         <button onClick={()=>setModalVinculo(p)} title="Vínculo e link" style={{...btn,background:(p.vinculo_tipo||p.link_url)?'#0369a1':'#94a3b8',padding:'2px 6px',fontSize:9}}>🔗</button>
                         <button onClick={()=>setModalAcomp(p)} title="Acompanhamento" style={{...btn,background:'#7c3aed',padding:'2px 6px',fontSize:9}}>🗨️</button>
+                        <MenuAcoes itens={itensMenuFluxo(p)} rotulo="Etapa, edição e descarte" />
                       </div>
                     </div>
                   </div>
                 );
               }} />
+            </div>
           ))}
         </div>
         </>);
@@ -1528,7 +1767,7 @@ export default function ComprasTab({ currentUser }) {
                     <button onClick={()=>setMostrarConcluidos(v=>!v)}
                       style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
                         background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
-                      {mostrarConcluidos ? '▲ Ocultar' : '▼ Mostrar'} Concluídos ({pedidosConcluidos.length})
+                      {mostrarConcluidos ? '▲ Ocultar' : '▼ Mostrar'} Concluídos e descartados ({pedidosConcluidos.length})
                     </button>
                   </td>
                 </tr>
@@ -1789,7 +2028,7 @@ export default function ComprasTab({ currentUser }) {
                           Aprove clicando em "✅ Aprovar" na cotação vencedora, abaixo.
                         </div>
                         <button className="acn-btn" style={{background:'#ef4444'}} onClick={rejeitarNivelAtivo} disabled={respondendoAprovacao}>
-                          ❌ Rejeitar
+                          ↩ Não aprovar (devolver para refazer)
                         </button>
                       </div>
                     ) : (
@@ -1801,6 +2040,12 @@ export default function ComprasTab({ currentUser }) {
                     <div style={{fontSize:10,color:'#16a34a',fontWeight:700}}>Todos os níveis aprovados.</div>
                   ) : (
                     <div style={{fontSize:10,color:'#78716c'}}>Nenhuma aprovação pendente no momento.</div>
+                  )}
+                  {nivelAtivo && (ehSolicitante(modalCotacoes, currentUser) || podeGerirCompras(currentUser)) && (
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:8,paddingTop:8,borderTop:'1px dashed #fdba74'}}>
+                      <span style={{flex:1,fontSize:10,color:'#92400e'}}>A compra não é mais necessária? Quem solicitou pode descartar em vez de aguardar a aprovação.</span>
+                      <Botao pequeno variante="perigo-sec" icone={mdiCloseCircleOutline} onClick={()=>{ const p = modalCotacoes; setModalCotacoes(null); abrirFluxo('descartar', p); }}>Descartar solicitação</Botao>
+                    </div>
                   )}
                   {historico.length > 0 && (
                     <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:4}}>
@@ -1835,42 +2080,7 @@ export default function ComprasTab({ currentUser }) {
                   }}>
                     {emEdicao ? (
                       <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
-                          <div>
-                            <label className="acn-label">Fornecedor *</label>
-                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.fornecedor_nome}
-                              onChange={e=>setEditCotacaoForm(f=>({...f,fornecedor_nome:e.target.value}))} />
-                          </div>
-                          <div />
-                          <div>
-                            <label className="acn-label">Valor Unitário (R$)</label>
-                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.valor_unitario}
-                              placeholder="Ex: 15,00"
-                              onChange={e=>{
-                                const un = e.target.value;
-                                const qtd = Number(modalCotacoes?.quantidade) || 1;
-                                const unNum = parseValorBr(un);
-                                setEditCotacaoForm(f=>({ ...f, valor_unitario: un,
-                                  valor: unNum != null ? String((unNum*qtd).toFixed(2)).replace('.',',') : f.valor }));
-                              }} />
-                          </div>
-                          <div>
-                            <label className="acn-label">Valor Total (R$) *</label>
-                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.valor}
-                              placeholder="Ex: 1.500,00"
-                              onChange={e=>setEditCotacaoForm(f=>({...f,valor:e.target.value}))} />
-                          </div>
-                          <div>
-                            <label className="acn-label">Condição de Pagamento</label>
-                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.condicao_pagamento}
-                              onChange={e=>setEditCotacaoForm(f=>({...f,condicao_pagamento:e.target.value}))} />
-                          </div>
-                          <div>
-                            <label className="acn-label">Prazo de Entrega</label>
-                            <input className="acn-input" style={{width:'100%'}} value={editCotacaoForm.prazo_entrega}
-                              onChange={e=>setEditCotacaoForm(f=>({...f,prazo_entrega:e.target.value}))} />
-                          </div>
-                        </div>
+                        <ComposicaoCotacao form={editCotacaoForm} setForm={setEditCotacaoForm} />
                         <div style={{display:'flex',gap:6}}>
                           <button className="acn-btn" style={{background:'#16a34a',flex:1}} disabled={salvandoEdicaoCotacao}
                             onClick={()=>salvarEdicaoCotacao(c)}>
@@ -1887,8 +2097,8 @@ export default function ComprasTab({ currentUser }) {
                           {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
                         </div>
                         <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
-                          {c.valor_unitario ? `${fmt(c.valor_unitario)}/un. · ` : ''}
-                          {c.valor ? fmt(c.valor) : '—'}
+                          {textoComposicao(c) ? `${textoComposicao(c)} · ` : ''}
+                          <strong style={{color:'#1e293b'}}>{c.valor ? fmt(c.valor) : '—'}</strong>
                           {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
                           {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
                         </div>
@@ -1896,7 +2106,7 @@ export default function ComprasTab({ currentUser }) {
                           <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
                         )}
                       </div>
-                      {currentUser?.perfil==='Admin' && (
+                      {podeGerirCompras(currentUser) && (
                         <button onClick={()=>iniciarEdicaoCotacao(c)} title="Corrigir valores desta cotação"
                           style={{...btn,background:'#6366f1',padding:'2px 7px',fontSize:9}}>✏️</button>
                       )}
@@ -1930,47 +2140,12 @@ export default function ComprasTab({ currentUser }) {
               {modalCotacoes?.quantidade > 1 && (
                 <div style={{fontSize:9,color:'#94a3b8',marginBottom:6}}>Quantidade do pedido: {modalCotacoes.quantidade}</div>
               )}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                <div>
-                  <label className="acn-label">Fornecedor *</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.fornecedor_nome}
-                    onChange={e=>setNovaCotacao(f=>({...f,fornecedor_nome:e.target.value}))} />
-                </div>
-                <div />
-                <div>
-                  <label className="acn-label">Valor Unitário (R$)</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor_unitario}
-                    placeholder="Ex: 15,00"
-                    onChange={e=>{
-                      const un = e.target.value;
-                      const qtd = Number(modalCotacoes?.quantidade) || 1;
-                      const unNum = parseValorBr(un);
-                      setNovaCotacao(f=>({ ...f, valor_unitario: un,
-                        valor: unNum != null ? String((unNum*qtd).toFixed(2)).replace('.',',') : f.valor }));
-                    }} />
-                </div>
-                <div>
-                  <label className="acn-label">Valor Total (R$) *</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor}
-                    placeholder="Ex: 1.500,00"
-                    onChange={e=>setNovaCotacao(f=>({...f,valor:e.target.value}))} />
-                </div>
-                <div>
-                  <label className="acn-label">Condição de Pagamento</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.condicao_pagamento}
-                    placeholder="Ex: 30/60 dias"
-                    onChange={e=>setNovaCotacao(f=>({...f,condicao_pagamento:e.target.value}))} />
-                </div>
-                <div>
-                  <label className="acn-label">Prazo de Entrega</label>
-                  <input className="acn-input" style={{width:'100%'}} value={novaCotacao.prazo_entrega}
-                    placeholder="Ex: 10 dias úteis"
-                    onChange={e=>setNovaCotacao(f=>({...f,prazo_entrega:e.target.value}))} />
-                </div>
+              <div style={{marginBottom:8}}>
+                <ComposicaoCotacao form={novaCotacao} setForm={setNovaCotacao} />
               </div>
               <div style={{marginBottom:8}}>
-                <label className="acn-label">Anexo (PDF ou imagem)</label>
-                <input type="file" accept=".pdf,.png,.jpg,.jpeg"
+                <label className="acn-label">Anexo (PDF, imagem, planilha…)</label>
+                <input type="file"
                   onChange={e=>setNovoAnexoCotacao(e.target.files?.[0]||null)} />
               </div>
               <button className="acn-btn" style={{background:'#d97706',width:'100%'}} onClick={adicionarCotacao} disabled={enviandoCotacao}>
@@ -2024,7 +2199,23 @@ export default function ComprasTab({ currentUser }) {
       {/* MODAL ACOMPANHAMENTO (timeline/chat) */}
       {modalResumo && (
         <ResumoCompraModal pedido={modalResumo} canVerValor={canVerValor} departamentos={departamentosConfig}
-          onClose={()=>setModalResumo(null)} />
+          currentUser={currentUser} onClose={()=>setModalResumo(null)} />
+      )}
+      {modalFluxo?.tipo === 'voltar' && <ModalVoltarEtapa pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)} onFeito={()=>{ setModalFluxo(null); setFiltro(''); load(); }} />}
+      {modalFluxo?.tipo === 'descartar' && <ModalDescartar pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)} onFeito={()=>{ setModalFluxo(null); load(); }} />}
+      {modalFluxo?.tipo === 'reativar' && <ModalReativar pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)} onFeito={()=>{ setModalFluxo(null); load(); }} />}
+      {modalFluxo?.tipo === 'iniciar' && <ModalIniciarCotacao pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)} onFeito={()=>{ setModalFluxo(null); setFiltro(''); load(); }} />}
+      {modalFluxo?.tipo === 'confirmar' && <ModalConfirmarCompra pedido={modalFluxo.pedido} onClose={()=>setModalFluxo(null)} onConfirmar={confirmarCompra} />}
+      {modalFluxo?.tipo === 'editar' && <ModalEditarSolicitacao pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)} onFeito={()=>{ setModalFluxo(null); load(); }} />}
+      {modalFluxo?.tipo === 'receber' && (
+        <ModalReceberPedido pedido={modalFluxo.pedido} currentUser={currentUser} onClose={()=>setModalFluxo(null)}
+          onFeito={async (confere: boolean) => {
+            const p = modalFluxo.pedido;
+            await registrarHistorico(p.id, confere
+              ? { tipo: 'avanco', de: 'Comprado', para: 'Concluído', motivo: 'Recebimento registrado e conferido.' }
+              : { tipo: 'posicao_entrega', de: 'Comprado', para: 'Comprado', motivo: 'Recebimento com divergência — a compra continua em Comprado até resolver.' }, currentUser);
+            setModalFluxo(null); load();
+          }} />
       )}
       {modalVinculo && (
         <ModalVinculoCompra pedido={modalVinculo} onClose={()=>setModalVinculo(null)}

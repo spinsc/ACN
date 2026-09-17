@@ -97,7 +97,8 @@ export function VinculoPicker({ value, onSelect, onClear }: {
   onSelect: (v: VinculoValue) => void;
   onClear: () => void;
 }) {
-  const [tipo, setTipo]           = useState('op');
+  // começa sem tipo escolhido: o vínculo é opcional, a pessoa escolhe se precisar
+  const [tipo, setTipo]           = useState('');
   const [q, setQ]                 = useState('');
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [aberto, setAberto]       = useState(false);
@@ -123,10 +124,12 @@ export function VinculoPicker({ value, onSelect, onClear }: {
   const handleChange = (v: string) => {
     setQ(v);
     clearTimeout(timerRef.current);
+    if (!tipo) return;
     timerRef.current = setTimeout(() => buscar(tipo, v), 300);
   };
 
-  const trocarTipo = (t: string) => { setTipo(t); setQ(''); setSugestoes([]); setAberto(false); };
+  // clicar de novo no tipo escolhido desmarca
+  const trocarTipo = (t: string) => { setTipo(atual => atual === t ? '' : t); setQ(''); setSugestoes([]); setAberto(false); };
 
   const selecionar = (item: { id: string; descricao: string }) => {
     onSelect({ tipo, id: item.id, descricao: item.descricao });
@@ -160,14 +163,19 @@ export function VinculoPicker({ value, onSelect, onClear }: {
           </button>
         ))}
       </div>
-      <input
-        value={q}
-        onChange={e => handleChange(e.target.value)}
-        placeholder={`Buscar ${TIPO_LABEL[tipo]}...`}
-        style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #d1d5db',
-          borderRadius: 4, fontSize: 11 }}
-        autoComplete="off"
-      />
+      {tipo ? (
+        <input
+          value={q}
+          onChange={e => handleChange(e.target.value)}
+          placeholder={`Buscar ${TIPO_LABEL[tipo]}...`}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #d1d5db',
+            borderRadius: 4, fontSize: 11 }}
+          autoComplete="off"
+          autoFocus
+        />
+      ) : (
+        <div style={{ fontSize: 11, color: '#94a3b8' }}>Nenhum vínculo. Escolha o tipo acima se quiser ligar a um processo.</div>
+      )}
       {aberto && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
           background: 'white', border: '1px solid #d1d5db', borderRadius: 6,

@@ -7,6 +7,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { normalizarBusca } from './SearchUtils';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
+import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
@@ -877,6 +878,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [qtdEtapas, setQtdEtapas] = useState(1);
   const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
   const [vinculo, setVinculo] = useState<VinculoValue | null>(vinculoInicial || null);
+  const [anexos, setAnexos] = useState<File[]>([]);   // foto, planilha, PDF... enviados junto com a demanda
   const [salvando, setSalvando] = useState(false);
   const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}));
 
@@ -937,6 +939,17 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
     }
     const { data: nova } = await supabase.from('demandas_avulsas').insert([payload]).select('id').single();
+    if (nova?.id && anexos.length) {
+      const falhas: string[] = [];
+      for (const f of anexos) {
+        const url = await uploadAnexo(f, nova.id);
+        if (!url) { falhas.push(f.name); continue; }
+        await supabase.from('demanda_avulsa_anexos').insert([{
+          demanda_id: nova.id, nome: f.name, url, tipo: f.type.startsWith('image/') ? 'foto' : 'documento', criado_por: currentUser?.nome,
+        }]);
+      }
+      if (falhas.length) alert('A demanda foi criada, mas estes anexos não foram enviados: ' + falhas.join(', '));
+    }
     if (form.descricao?.trim() && nova?.id) {
       await salvarMencoes({
         texto:             form.descricao,
@@ -1025,6 +1038,14 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
               Vincular a um processo (opcional)
             </label>
             <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+          </div>
+
+          {/* Anexos já na criação (foto, planilha, PDF...) */}
+          <div>
+            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+              Anexos (opcional)
+            </label>
+            <EscolherAnexos arquivos={anexos} onChange={setAnexos} />
           </div>
 
           {/* Seletor de quantidade de etapas */}

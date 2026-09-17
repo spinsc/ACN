@@ -23,6 +23,7 @@ import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
+import { EscolherAnexos, enviarAnexosCompra } from './ComprasFluxo';
 import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag } from './Interface';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
@@ -153,6 +154,7 @@ const VAZIO_COMPRA: any = {
   observacoes_compra: '',
   vinculo: null as any,   // PV/OP/OS/outra compra/OFI (VinculoPicker)
   link_url: '',
+  anexos: [] as File[],   // foto, planilha, PDF... enviados junto com a solicitação
 };
 
 // Monta o estado editável (formOp) a partir de uma linha crua do banco —
@@ -733,7 +735,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       `Solicitado por: ${currentUser?.nome || '—'}`,
     ].filter(Boolean).join('\n');
 
-    const { error } = await supabase.from('pcp_pedidos_compra').insert([{
+    const { data: criado, error } = await supabase.from('pcp_pedidos_compra').insert([{
       numero_pedido:        numeroPedido,
       opl:                  oplRef,
       descricao_material:   formCompras.descricao_material || modalCompras.titulo || '—',
@@ -747,7 +749,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       vinculo_descricao:    formCompras.vinculo?.descricao || null,
       link_url:             String(formCompras.link_url || '').trim() || null,
       data_criacao:         agora,
-    }]);
+      // quem solicitou recebe os avisos do andamento (aprovação, reprocesso, descarte)
+      criado_por:           currentUser?.email || null,
+      criado_por_nome:      currentUser?.nome || null,
+      criado_por_setor:     currentUser?.perfil || null,
+    }]).select('id').maybeSingle();
+    if (!error && criado?.id && formCompras.anexos?.length) {
+      const erros = await enviarAnexosCompra(criado.id, formCompras.anexos, currentUser);
+      if (erros.length) alert('A solicitação foi criada, mas alguns anexos não foram enviados: ' + erros.join('; '));
+    }
     setSalvandoCompra(false);
     if (error) { alert('Erro ao emitir pedido: ' + error.message); return; }
     // Menção/histórico ficam vinculados à oportunidade CRM — só fazem
@@ -4143,6 +4153,11 @@ const SUB_STATUS_COR: Record<string,string> = {
               <input value={formCompras.link_url || ''} onChange={e => setFormCompras(f => ({ ...f, link_url: e.target.value }))}
                 placeholder="https://... (página do produto, especificação, cotação online)"
                 style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
+            </div>
+
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Anexos (opcional)</div>
+              <EscolherAnexos arquivos={formCompras.anexos || []} onChange={arqs => setFormCompras(f => ({ ...f, anexos: arqs }))} />
             </div>
 
             <div style={{ marginBottom:14 }}>

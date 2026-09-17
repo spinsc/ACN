@@ -1321,33 +1321,13 @@ const VAZIO_RECEBIMENTO = {
   quantidade_recebida: '', confere: true, observacoes: '', seriais: '', volume: '',
 };
 
-function PainelRecebimento({ currentUser }: any) {
-  const [pedidos, setPedidos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalReceber, setModalReceber] = useState<any>(null);
-  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO });
+// Janela de recebimento de um pedido de compra (NF, data, quantidade, seriais,
+// volume e conferência). Usada no painel "Aguardando Recebimento" daqui e ao
+// arrastar um card para "Concluído" no kanban de Compras — o mesmo registro
+// (manifesto + fechamento + liberação do faturamento) nos dois caminhos.
+export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: any) {
+  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO, quantidade_recebida: pedido?.quantidade != null ? String(pedido.quantidade) : '' });
   const [salvando, setSalvando] = useState(false);
-
-  const fetchAll = async () => {
-    setLoading(true);
-    const { data } = await supabase.from('pcp_pedidos_compra')
-      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome')
-      .eq('status_compra', 'Comprado')
-      .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
-    setPedidos(data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchAll(); }, []);
-
-  const abrirReceber = (p: any) => {
-    setModalReceber(p);
-    setForm({ ...VAZIO_RECEBIMENTO, quantidade_recebida: p.quantidade != null ? String(p.quantidade) : '' });
-  };
-
-  const fmt = (v: any) => v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
-  const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-  const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(new Date().toISOString().slice(0, 10));
 
   // Mesmo padrão de notificarCriadorPedido (ComprasTab.tsx) / notificarCriadorFrete
   // (FretesPanel acima) — avisa quem fez a compra que a divergência precisa ser resolvida.
@@ -1370,11 +1350,9 @@ function PainelRecebimento({ currentUser }: any) {
   const numOrNull = (v: any) => v === '' || v == null ? null : parseFloat(String(v).replace(',', '.'));
 
   const confirmarRecebimento = async () => {
-    if (!modalReceber) return;
     if (!form.numero_nf.trim()) { alert('Informe o número da NF.'); return; }
     if (!form.confere && !form.observacoes.trim()) { alert('Descreva a divergência.'); return; }
     setSalvando(true);
-    const pedido = modalReceber;
     const agora = new Date().toISOString();
 
     // Registra o recebimento como manifesto de Logística também — mesma tabela/
@@ -1430,9 +1408,109 @@ function PainelRecebimento({ currentUser }: any) {
     }
 
     setSalvando(false);
-    setModalReceber(null);
-    fetchAll();
+    onFeito?.(form.confere);
   };
+
+
+  return (
+      <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
+        <div className="modal-box" style={{ maxWidth: 520 }}>
+          <div className="modal-title">📥 Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}</div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+            {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="acn-label">Número da NF *</label>
+              <input className="acn-input" style={{ width: '100%' }} value={form.numero_nf}
+                onChange={e => setForm(f => ({ ...f, numero_nf: e.target.value }))} placeholder="Ex: 004821" />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Data de Recebimento</label>
+              <input type="date" className="acn-input" style={{ width: '100%' }} value={form.data_recebimento_real}
+                onChange={e => setForm(f => ({ ...f, data_recebimento_real: e.target.value }))} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="acn-label">Quantidade Recebida</label>
+              <input type="number" className="acn-input" style={{ width: '100%' }} value={form.quantidade_recebida}
+                onChange={e => setForm(f => ({ ...f, quantidade_recebida: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label">Volume (embalagens)</label>
+              <input type="number" className="acn-input" style={{ width: '100%' }} value={form.volume}
+                onChange={e => setForm(f => ({ ...f, volume: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <label className="acn-label">Números de Série (opcional)</label>
+            <input className="acn-input" style={{ width: '100%' }} value={form.seriais}
+              placeholder="Ex: SN12345, SN12346..."
+              onChange={e => setForm(f => ({ ...f, seriais: e.target.value }))} />
+          </div>
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={() => setForm(f => ({ ...f, confere: true }))}
+                style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+                  border: form.confere ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                  background: form.confere ? '#f0fdf4' : '#fff', color: form.confere ? '#16a34a' : '#64748b' }}>
+                ✅ Confere com o pedido
+              </button>
+              <button type="button" onClick={() => setForm(f => ({ ...f, confere: false }))}
+                style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+                  border: !form.confere ? '2px solid #dc2626' : '1px solid #e2e8f0',
+                  background: !form.confere ? '#fef2f2' : '#fff', color: !form.confere ? '#dc2626' : '#64748b' }}>
+                ⚠️ Tem divergência
+              </button>
+            </div>
+            {!form.confere && (
+              <textarea className="acn-input" rows={2} style={{ width: '100%', marginTop: 8, resize: 'vertical' }}
+                value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                placeholder="Descreva a divergência (qtd errada, item trocado, avaria...)" />
+            )}
+          </div>
+          {!form.confere && (
+            <div style={{ fontSize: 9, color: '#92400e', marginBottom: 8 }}>
+              Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="acn-btn" style={{ background: form.confere ? '#16a34a' : '#dc2626', flex: 1 }} onClick={confirmarRecebimento} disabled={salvando}>
+              {salvando ? 'Salvando...' : form.confere ? '✅ Confirmar Recebimento' : '⚠️ Registrar Divergência'}
+            </button>
+            <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => onClose()} disabled={salvando}>Cancelar</button>
+          </div>
+        </div>
+      </div>
+    
+  );
+}
+
+function PainelRecebimento({ currentUser }: any) {
+  const [pedidos, setPedidos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalReceber, setModalReceber] = useState<any>(null);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('pcp_pedidos_compra')
+      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome')
+      .eq('status_compra', 'Comprado')
+      .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
+    setPedidos(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const abrirReceber = (p: any) => setModalReceber(p);
+
+  const fmt = (v: any) => v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
+  const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+  const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(new Date().toISOString().slice(0, 10));
 
   return (
     <div className="sec-card">
@@ -1461,78 +1539,9 @@ function PainelRecebimento({ currentUser }: any) {
       </div>
 
       {modalReceber && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) setModalReceber(null); }}>
-          <div className="modal-box" style={{ maxWidth: 520 }}>
-            <div className="modal-title">📥 Receber Pedido — {modalReceber.numero_pedido || modalReceber.numero_oc || '—'}</div>
-            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-              {modalReceber.descricao_material || '—'} · Fornecedor: {modalReceber.fornecedor || '—'} · Qtd pedida: {modalReceber.quantidade ?? '—'}
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="acn-label">Número da NF *</label>
-                <input className="acn-input" style={{ width: '100%' }} value={form.numero_nf}
-                  onChange={e => setForm(f => ({ ...f, numero_nf: e.target.value }))} placeholder="Ex: 004821" />
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Data de Recebimento</label>
-                <input type="date" className="acn-input" style={{ width: '100%' }} value={form.data_recebimento_real}
-                  onChange={e => setForm(f => ({ ...f, data_recebimento_real: e.target.value }))} />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="acn-label">Quantidade Recebida</label>
-                <input type="number" className="acn-input" style={{ width: '100%' }} value={form.quantidade_recebida}
-                  onChange={e => setForm(f => ({ ...f, quantidade_recebida: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="acn-label">Volume (embalagens)</label>
-                <input type="number" className="acn-input" style={{ width: '100%' }} value={form.volume}
-                  onChange={e => setForm(f => ({ ...f, volume: e.target.value }))} />
-              </div>
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <label className="acn-label">Números de Série (opcional)</label>
-              <input className="acn-input" style={{ width: '100%' }} value={form.seriais}
-                placeholder="Ex: SN12345, SN12346..."
-                onChange={e => setForm(f => ({ ...f, seriais: e.target.value }))} />
-            </div>
-
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 10, marginBottom: 10 }}>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" onClick={() => setForm(f => ({ ...f, confere: true }))}
-                  style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                    border: form.confere ? '2px solid #16a34a' : '1px solid #e2e8f0',
-                    background: form.confere ? '#f0fdf4' : '#fff', color: form.confere ? '#16a34a' : '#64748b' }}>
-                  ✅ Confere com o pedido
-                </button>
-                <button type="button" onClick={() => setForm(f => ({ ...f, confere: false }))}
-                  style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                    border: !form.confere ? '2px solid #dc2626' : '1px solid #e2e8f0',
-                    background: !form.confere ? '#fef2f2' : '#fff', color: !form.confere ? '#dc2626' : '#64748b' }}>
-                  ⚠️ Tem divergência
-                </button>
-              </div>
-              {!form.confere && (
-                <textarea className="acn-input" rows={2} style={{ width: '100%', marginTop: 8, resize: 'vertical' }}
-                  value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
-                  placeholder="Descreva a divergência (qtd errada, item trocado, avaria...)" />
-              )}
-            </div>
-            {!form.confere && (
-              <div style={{ fontSize: 9, color: '#92400e', marginBottom: 8 }}>
-                Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="acn-btn" style={{ background: form.confere ? '#16a34a' : '#dc2626', flex: 1 }} onClick={confirmarRecebimento} disabled={salvando}>
-                {salvando ? 'Salvando...' : form.confere ? '✅ Confirmar Recebimento' : '⚠️ Registrar Divergência'}
-              </button>
-              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setModalReceber(null)} disabled={salvando}>Cancelar</button>
-            </div>
-          </div>
-        </div>
+        <ModalReceberPedido pedido={modalReceber} currentUser={currentUser}
+          onClose={() => setModalReceber(null)}
+          onFeito={() => { setModalReceber(null); fetchAll(); }} />
       )}
     </div>
   );

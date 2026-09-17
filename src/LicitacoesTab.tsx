@@ -1451,6 +1451,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       numero_pedido: numero, opl: licit.numero || null,
       descricao_material: licit.numero || licit.tipo_objeto || licit.objeto_principal || '—',
       quantidade: 1, status_compra: 'Pendente', observacoes_compra: obs, data_criacao: agora,
+      criado_por: currentUser?.email || null, criado_por_nome: currentUser?.nome || null, criado_por_setor: currentUser?.perfil || null,
     }]);
     setEmitindoPedido(false);
     if (error) { alert('Erro ao emitir pedido de compra: ' + error.message); return; }

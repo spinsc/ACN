@@ -33,6 +33,7 @@ import FinanceiroTab from './FinanceiroTab';
 import ChatWidget from './ChatWidget';
 import AnaliseInboxPanel, { contarAnalisesDoUsuario } from './AnaliseInboxPanel';
 import AvisosOpPanel, { contarAvisosOp } from './AvisosOpPanel';
+import { AlertasComprasPanel, JanelaParadasObrigatoria, carregarAlertasCompras, alertasDoUsuario, dispararMencoesEntrega } from './ComprasFluxo';
 import Icone from './Icone';
 import {
   mdiViewDashboardOutline, mdiCalendarMonthOutline, mdiHandshakeOutline, mdiGavel, mdiFileDocumentOutline,
@@ -713,6 +714,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   const [showMencoesPanel, setShowMencoesPanel] = useState(false);
   const [avisosOpCount, setAvisosOpCount]       = useState(0);
   const [showAvisosOp, setShowAvisosOp]         = useState(false);
+  // Compras (e Almoxarifado, nas entregas atrasadas): o botão Avisos mostra os alertas de compras
+  const usaAlertasCompras = ['Compras', 'Almoxarifado'].includes(currentUser?.perfil);
+  const [alertasCompras, setAlertasCompras]     = useState<any[]>([]);
+  const [showAlertasCompras, setShowAlertasCompras] = useState(false);
 
   // Ctrl+K (ou ⌘K) leva direto para a busca geral
   useEffect(() => {
@@ -784,6 +789,24 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     const iv = setInterval(fetchMencoes, 30000);
     return () => clearInterval(iv);
   }, [currentUser?.id]);
+
+  // Alertas de Compras: parados (48h/24h úteis) e entregas atrasadas
+  const recarregarAlertasCompras = React.useCallback(async () => {
+    if (!usaAlertasCompras) return;
+    try {
+      const todos = await carregarAlertasCompras();
+      setAlertasCompras(alertasDoUsuario(todos, currentUser));
+      dispararMencoesEntrega(todos, currentUser);
+    } catch (e) { console.warn('Falha ao carregar alertas de compras:', e); }
+  }, [usaAlertasCompras, currentUser?.email, currentUser?.perfil]);
+  useEffect(() => {
+    if (!usaAlertasCompras) return;
+    recarregarAlertasCompras();
+    const iv = setInterval(recarregarAlertasCompras, 120000);
+    const foco = () => recarregarAlertasCompras();
+    window.addEventListener('focus', foco);
+    return () => { clearInterval(iv); window.removeEventListener('focus', foco); };
+  }, [recarregarAlertasCompras]);
 
   // ── Collapse global: clique em qualquer .sec-hdr colapsa/expande o .sec-card pai ──
   useEffect(() => {
@@ -1384,13 +1407,21 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
               {mencoesCount > 0 && <span className="acn-notif-contador tom-info">{mencoesCount}</span>}
             </div>
             {/* Avisos automáticos de andamento das OPs */}
-            <div className={`acn-notif${avisosOpCount > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0}
-              title={avisosOpCount > 0 ? `${avisosOpCount} aviso(s) de OP` : 'Avisos de OP'}
-              onClick={() => setShowAvisosOp(true)}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowAvisosOp(true); }}>
-              <span className="acn-notif-icone"><Icone path={mdiBellOutline} size={18} /><span className="acn-rotulo">Avisos</span></span>
-              {avisosOpCount > 0 && <span className="acn-notif-contador tom-marca">{avisosOpCount}</span>}
-            </div>
+            {(() => {
+              // Compras vê só os alertas de compras; Almoxarifado vê avisos de OP + entregas atrasadas
+              const qtd = currentUser?.perfil === 'Compras' ? alertasCompras.length : avisosOpCount + (usaAlertasCompras ? alertasCompras.length : 0);
+              const abrir = () => usaAlertasCompras ? setShowAlertasCompras(true) : setShowAvisosOp(true);
+              const titulo = currentUser?.perfil === 'Compras'
+                ? (qtd ? `${qtd} alerta(s) de compras` : 'Avisos de compras')
+                : (qtd ? `${qtd} aviso(s)` : 'Avisos');
+              return (
+                <div className={`acn-notif${qtd > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0} title={titulo}
+                  onClick={abrir} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') abrir(); }}>
+                  <span className="acn-notif-icone"><Icone path={mdiBellOutline} size={18} /><span className="acn-rotulo">Avisos</span></span>
+                  {qtd > 0 && <span className={`acn-notif-contador ${usaAlertasCompras && alertasCompras.length ? 'tom-atencao' : 'tom-marca'}`}>{qtd}</span>}
+                </div>
+              );
+            })()}
             {currentUser?.id && (
               <div className={`acn-notif${analiseAlertCount > 0 ? ' com-contador' : ''}`} role="button" tabIndex={0}
                 title={analiseAlertCount > 0 ? `${analiseAlertCount} análise(s) pendente(s) do seu setor` : 'Análises'}
@@ -1621,6 +1652,20 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
           onCountChange={n => setAnaliseAlertCount(n)}
           onNavigate={(tab) => { setShowAnalisePanel(false); setActiveTab(tab); }}
         />
+      )}
+
+      {/* Painel de Avisos de Compras (Compras e Almoxarifado) */}
+      {showAlertasCompras && (
+        <AlertasComprasPanel currentUser={currentUser}
+          onClose={() => { setShowAlertasCompras(false); recarregarAlertasCompras(); }}
+          onCountChange={() => recarregarAlertasCompras()}
+          onAbrirCompras={isVisible('compras') ? () => { setShowAlertasCompras(false); setActiveTab('compras'); } : undefined}
+          onAvisosOp={currentUser?.perfil !== 'Compras' ? () => { setShowAlertasCompras(false); setShowAvisosOp(true); } : undefined}
+          qtdAvisosOp={avisosOpCount} />
+      )}
+      {/* Requisições paradas: Compras precisa informar o motivo antes de seguir */}
+      {currentUser?.perfil === 'Compras' && !sessaoOriginalAdmin && (
+        <JanelaParadasObrigatoria alertas={alertasCompras} currentUser={currentUser} onRespondido={recarregarAlertasCompras} />
       )}
 
       {/* Painel de Avisos de OP */}
