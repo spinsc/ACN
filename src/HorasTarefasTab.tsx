@@ -348,6 +348,43 @@ const fmtHoras = (seg: number) => {
 };
 const nomeResp = (t: any) => t.responsavel_nome || 'Sem responsável';
 
+// Tarefas criadas no período ou em execução em algum momento dele (mesma seleção nos dois relatórios)
+async function buscarTarefasDoPeriodo(de: string, ate: string) {
+  const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const ini = iso(new Date(de + 'T00:00:00')), fim = iso(new Date(ate + 'T23:59:59'));
+  const { data, error } = await supabase.from('engenharia_horas_tarefas').select('*')
+    .or(`and(criado_em.gte.${ini},criado_em.lte.${fim}),and(data_inicio.lte.${fim},data_conclusao.gte.${ini}),and(data_inicio.lte.${fim},data_conclusao.is.null)`)
+    .order('criado_em', { ascending: false });
+  return { tarefas: data || [], error };
+}
+type Periodo = { de: string; ate: string };
+const noPeriodo = (d: string, periodo: Periodo) => !!d && d >= periodo.de && d <= periodo.ate;
+// Cada tarefa com seus intervalos e as horas úteis dentro do período
+function horasDasTarefas(tarefas: any[], periodo: Periodo, agora: number) {
+  return tarefas.map(t => {
+    const { rodando, pausada } = intervalosDaTarefa(t, agora);
+    const trabalho = segundosPorDia(rodando);
+    return {
+      t, rodando, pausada, trabalho,
+      concluidaNoPeriodo: t.status === 'concluida' && noPeriodo(diaISO(t.data_conclusao), periodo),
+      seg: somaDias(trabalho, periodo.de, periodo.ate),
+      total: somaDias(trabalho),
+      pausas: (t.pausas || []).filter((p: any) => noPeriodo(diaISO(p.pausado_em), periodo)),
+      aberta: t.status === 'em_andamento' || t.status === 'pausada',
+    };
+  });
+}
+// Horas de um grupo de tarefas: por pessoa, a união dos intervalos (tarefas em paralelo
+// não contam em dobro); entre pessoas diferentes, soma.
+function porDiaDaPessoa(itens: any[], campo: 'rodando' | 'pausada' = 'rodando') {
+  const grupos: Record<string, number[][]> = {};
+  itens.forEach(x => { const k = nomeResp(x.t); grupos[k] = (grupos[k] || []).concat(x[campo]); });
+  return Object.fromEntries(Object.entries(grupos).map(([k, ints]) => [k, segundosPorDia(unirIntervalos(ints))])) as Record<string, Record<string, number>>;
+}
+function horasDoGrupo(itens: any[], periodo: Periodo, campo: 'rodando' | 'pausada' = 'rodando') {
+  return Object.values(porDiaDaPessoa(itens, campo)).reduce((s, dias) => s + somaDias(dias, periodo.de, periodo.ate), 0);
+}
+
 // ─── Relatório gerencial (Gerentes e Admin) ─────────────────────────────────────
 function RelatorioGerencial() {
   const [de, setDe] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toLocaleDateString('sv-SE'); });
@@ -362,14 +399,8 @@ function RelatorioGerencial() {
   const buscar = async () => {
     if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
     setCarregando(true);
-    const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
-    const ini = iso(new Date(de + 'T00:00:00')), fim = iso(new Date(ate + 'T23:59:59'));
-    // tarefas criadas no período ou em execução em algum momento dele
-    const { data, error } = await supabase.from('engenharia_horas_tarefas').select('*')
-      .or(`and(criado_em.gte.${ini},criado_em.lte.${fim}),and(data_inicio.lte.${fim},data_conclusao.gte.${ini}),and(data_inicio.lte.${fim},data_conclusao.is.null)`)
-      .order('criado_em', { ascending: false });
+    const { tarefas: lista, error } = await buscarTarefasDoPeriodo(de, ate);
     if (error) { setCarregando(false); alert('Não foi possível carregar as tarefas: ' + error.message); return; }
-    const lista = data || [];
     const ids = [...new Set(lista.map(t => t.opl_id).filter(Boolean))];
     let mapa: Record<string, string> = {};
     if (ids.length) {
@@ -382,36 +413,15 @@ function RelatorioGerencial() {
   useEffect(() => { buscar(); }, []);
 
   const pessoas = [...new Set(dados.map(nomeResp))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const noPeriodo = (d: string) => d >= periodo.de && d <= periodo.ate;
-  const itens = dados.filter(t => !pessoa || nomeResp(t) === pessoa).map(t => {
-    const { rodando, pausada } = intervalosDaTarefa(t, agora);
-    const trabalho = segundosPorDia(rodando);
-    return {
-      t, rodando, pausada, trabalho,
-      concluidaNoPeriodo: t.status === 'concluida' && !!t.data_conclusao && noPeriodo(diaISO(t.data_conclusao)),
-      seg: somaDias(trabalho, periodo.de, periodo.ate),
-      total: somaDias(trabalho),
-      pausas: (t.pausas || []).filter((p: any) => p.pausado_em && noPeriodo(diaISO(p.pausado_em))),
-      aberta: t.status === 'em_andamento' || t.status === 'pausada',
-    };
-  });
+  const itens = horasDasTarefas(dados.filter(t => !pessoa || nomeResp(t) === pessoa), periodo, agora);
   const soma = (xs: any[], k: string) => xs.reduce((s, x) => s + x[k], 0);
   const media = (xs: any[]) => xs.length ? soma(xs, 'total') / xs.length : 0;
-  // Horas de um grupo de tarefas: por pessoa, a união dos intervalos (tarefas em paralelo
-  // não contam em dobro); entre pessoas diferentes, soma.
-  const porDiaDaPessoa = (xs: any[], campo: 'rodando' | 'pausada') => {
-    const grupos: Record<string, number[][]> = {};
-    xs.forEach(x => { const k = nomeResp(x.t); grupos[k] = (grupos[k] || []).concat(x[campo]); });
-    return Object.fromEntries(Object.entries(grupos).map(([k, ints]) => [k, segundosPorDia(unirIntervalos(ints))]));
-  };
-  const horasDoGrupo = (xs: any[], campo: 'rodando' | 'pausada' = 'rodando') =>
-    Object.values(porDiaDaPessoa(xs, campo)).reduce((s: number, dias: any) => s + somaDias(dias, periodo.de, periodo.ate), 0);
 
   const concluidas = itens.filter(x => x.concluidaNoPeriodo);
-  const totalSeg = horasDoGrupo(itens);
-  const totalPausado = horasDoGrupo(itens, 'pausada');
+  const totalSeg = horasDoGrupo(itens, periodo);
+  const totalPausado = horasDoGrupo(itens, periodo, 'pausada');
   const nPausas = itens.reduce((s, x) => s + x.pausas.length, 0);
-  const diasPorPessoa: Record<string, Record<string, number>> = porDiaDaPessoa(itens, 'rodando');
+  const diasPorPessoa = porDiaDaPessoa(itens);
 
   const porPessoa = [...new Set(itens.map(x => nomeResp(x.t)))].map(nome => {
     const xs = itens.filter(x => nomeResp(x.t) === nome);
@@ -419,11 +429,11 @@ function RelatorioGerencial() {
     return {
       nome, tarefas: xs.length, concluidas: conc.length, abertas: xs.filter(x => x.aberta).length,
       naoIniciadas: xs.filter(x => x.t.status === 'nao_iniciada').length,
-      seg: horasDoGrupo(xs), media: media(conc), pausado: horasDoGrupo(xs, 'pausada'), pausas: xs.reduce((s, x) => s + x.pausas.length, 0),
+      seg: horasDoGrupo(xs, periodo), media: media(conc), pausado: horasDoGrupo(xs, periodo, 'pausada'), pausas: xs.reduce((s, x) => s + x.pausas.length, 0),
     };
   }).sort((a, b) => b.seg - a.seg || a.nome.localeCompare(b.nome, 'pt-BR'));
 
-  const dias = [...new Set(Object.values(diasPorPessoa).flatMap(d => Object.keys(d)))].filter(noPeriodo).sort().reverse();
+  const dias = [...new Set(Object.values(diasPorPessoa).flatMap(d => Object.keys(d)))].filter(d => noPeriodo(d, periodo)).sort().reverse();
   const porDia = dias.map(dia => {
     const linha: Record<string, any> = { dia, total: 0 };
     porPessoa.forEach(p => { linha[p.nome] = diasPorPessoa[p.nome]?.[dia] || 0; linha.total += linha[p.nome]; });
@@ -437,7 +447,7 @@ function RelatorioGerencial() {
     acc[k].itens.push(x); acc[k].pessoas.add(nomeResp(x.t));
     if (x.t.numero_opl) acc[k].ops.add(x.t.numero_opl);
     return acc;
-  }, {})) as any[]).map(g => ({ ...g, tarefas: g.itens.length, seg: horasDoGrupo(g.itens) })).sort((a, b) => b.seg - a.seg);
+  }, {})) as any[]).map(g => ({ ...g, tarefas: g.itens.length, seg: horasDoGrupo(g.itens, periodo) })).sort((a, b) => b.seg - a.seg);
   const porOp = agrupar(x => x.t.numero_opl || 'Sem OP');
   const opsComHoras = porOp.filter(o => o.nome !== 'Sem OP' && o.seg > 0);
   const mediaPorOp = opsComHoras.length ? soma(opsComHoras, 'seg') / opsComHoras.length : 0;
@@ -653,37 +663,38 @@ function RelatorioGerencial() {
 function RelatorioHoras({ currentUser }: any) {
   const gestor = ehGestorEngenharia(currentUser);
   const [pessoa, setPessoa] = useState('');
-  const [de, setDe] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]; });
-  const [ate, setAte] = useState(() => new Date().toISOString().split('T')[0]);
+  const [de, setDe] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toLocaleDateString('sv-SE'); });
+  const [ate, setAte] = useState(() => new Date().toLocaleDateString('sv-SE'));
+  const [periodo, setPeriodo] = useState({ de: '', ate: '' });
   const [doPeriodo, setDados] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [agora, setAgora] = useState(() => Date.now());
 
   const buscar = async () => {
+    if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
     setCarregando(true);
-    const { data } = await supabase.from('engenharia_horas_tarefas').select('*')
-      .gte('criado_em', de + 'T00:00:00').lte('criado_em', ate + 'T23:59:59')
-      .order('criado_em', { ascending: false });
+    const { tarefas, error } = await buscarTarefasDoPeriodo(de, ate);
+    if (error) { setCarregando(false); alert('Não foi possível carregar as tarefas: ' + error.message); return; }
     // quem não é gerente/admin vê só as tarefas em que é o responsável
     const meusNomes = gestor ? [] : await nomesDoUsuario(currentUser);
-    setDados((data || []).filter(t => gestor || mesmaPessoa(t.responsavel_nome, meusNomes)));
+    setDados(tarefas.filter(t => gestor || mesmaPessoa(t.responsavel_nome, meusNomes)));
+    setPeriodo({ de, ate }); setAgora(Date.now());
     setCarregando(false);
   };
 
   useEffect(() => { buscar(); }, []);
 
-  const pessoasRel = [...new Set(doPeriodo.map(t => t.responsavel_nome || 'Sem responsável'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const dados = doPeriodo.filter(t => !pessoa || (t.responsavel_nome || 'Sem responsável') === pessoa);
-  const concluidas = dados.filter(t => t.status === 'concluida');
-  const tempoTotal = concluidas.reduce((a, t) => a + (t.tempo_total_segundos || 0), 0);
-  const porResponsavel = dados.reduce((acc: any, t) => {
-    const k = t.responsavel_nome || 'Sem responsável';
-    if (!acc[k]) acc[k] = { total: 0, concluidas: 0, tempoSegundos: 0 };
-    acc[k].total++;
-    if (t.status === 'concluida') { acc[k].concluidas++; acc[k].tempoSegundos += (t.tempo_total_segundos || 0); }
-    return acc;
-  }, {});
+  const pessoasRel = [...new Set(doPeriodo.map(nomeResp))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  // horas úteis com a mesma conta do relatório gerencial
+  const itens = horasDasTarefas(doPeriodo.filter(t => !pessoa || nomeResp(t) === pessoa), periodo, agora);
+  const concluidas = itens.filter(x => x.concluidaNoPeriodo);
+  const tempoTotal = horasDoGrupo(itens, periodo);
+  const porResponsavel = [...new Set(itens.map(x => nomeResp(x.t)))].map(nome => {
+    const xs = itens.filter(x => nomeResp(x.t) === nome);
+    return { nome, total: xs.length, concluidas: xs.filter(x => x.concluidaNoPeriodo).length, seg: horasDoGrupo(xs, periodo) };
+  }).sort((a, b) => b.seg - a.seg || a.nome.localeCompare(b.nome, 'pt-BR'));
   const motivosPausa: Record<string, number> = {};
-  dados.forEach(t => (t.pausas || []).forEach((p: any) => { motivosPausa[p.motivo] = (motivosPausa[p.motivo] || 0) + 1; }));
+  itens.forEach(x => x.pausas.forEach((p: any) => { motivosPausa[p.motivo] = (motivosPausa[p.motivo] || 0) + 1; }));
 
   return (
     <div>
@@ -712,6 +723,9 @@ function RelatorioHoras({ currentUser }: any) {
               <button className="acn-btn" style={{ background: '#1e293b' }} onClick={buscar}>Filtrar</button>
             </div>
           </div>
+          <div className="acn-fraco" style={{ fontSize: 12, marginTop: 6 }}>
+            Horas úteis: segunda a sexta, 8:00–17:45, sem as pausas. Entram as tarefas criadas no período ou em execução em algum momento dele.
+          </div>
         </div>
       </div>
 
@@ -720,10 +734,10 @@ function RelatorioHoras({ currentUser }: any) {
         <div className="sec-body">
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {[
-              { label: 'Tarefas no Período', val: dados.length, cor: '#1e293b' },
-              { label: 'Concluídas', val: concluidas.length, cor: '#22c55e' },
-              { label: 'Em Andamento/Pausadas', val: dados.filter(t => t.status === 'em_andamento' || t.status === 'pausada').length, cor: '#3b82f6' },
-              { label: 'Horas Trabalhadas (concluídas)', val: fmtDuracao(tempoTotal), cor: '#7c3aed' },
+              { label: 'Tarefas no Período', val: itens.length, cor: '#1e293b' },
+              { label: 'Concluídas no Período', val: concluidas.length, cor: '#22c55e' },
+              { label: 'Em Andamento/Pausadas', val: itens.filter(x => x.aberta).length, cor: '#3b82f6' },
+              { label: 'Horas Trabalhadas', val: fmtHoras(tempoTotal), cor: '#7c3aed' },
             ].map(c => (
               <div key={c.label} style={{ flex: '1 1 150px', minWidth: 130, background: 'white', border: '1px solid #e2e8f0', borderTop: `3px solid ${c.cor}`, borderRadius: 4, padding: '8px 10px' }}>
                 <div style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}>{c.label}</div>
@@ -737,13 +751,13 @@ function RelatorioHoras({ currentUser }: any) {
       <div className="sec-card">
         <div className="sec-hdr"><span>Por Responsável</span></div>
         <div className="sec-body" style={{ overflowX: 'auto' }}>
-          {Object.keys(porResponsavel).length === 0 ? <div className="acn-empty">Nenhuma tarefa no período.</div> : (
+          {porResponsavel.length === 0 ? <div className="acn-empty">Nenhuma tarefa no período.</div> : (
             <table>
-              <thead><tr><th>Responsável</th><th>Tarefas</th><th>Concluídas</th><th>Horas (concluídas)</th></tr></thead>
+              <thead><tr><th>Responsável</th><th>Tarefas</th><th>Concluídas</th><th>Horas</th></tr></thead>
               <tbody>
-                {Object.entries(porResponsavel).map(([nome, v]: any) => (
-                  <tr key={nome}>
-                    <td>{nome}</td><td>{v.total}</td><td>{v.concluidas}</td><td>{fmtDuracao(v.tempoSegundos)}</td>
+                {porResponsavel.map(v => (
+                  <tr key={v.nome}>
+                    <td>{v.nome}</td><td>{v.total}</td><td>{v.concluidas}</td><td>{fmtHoras(v.seg)}</td>
                   </tr>
                 ))}
               </tbody>
