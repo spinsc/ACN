@@ -43,6 +43,13 @@ const TODAS_ABAS = [
   { id:'rh',           label:'RH' },
   { id:'relatorios',      label:'Relatorios' },
   { id:'formacao_precos', label:'Formação de Preços' },
+  // Abas que existiam no menu mas ficaram de fora desta lista — sem estar aqui,
+  // o Admin não conseguia liberá-las para ninguém (17/09/2026).
+  { id:'cadastro_itens',    label:'Cadastro de Itens' },
+  { id:'cadastro_produtos', label:'Produtos e Mercadorias' },
+  { id:'clientes',          label:'Clientes' },
+  { id:'calendario',        label:'Calendário' },
+  { id:'financeiro',        label:'Financeiro' },
   { id:'admin',           label:'Admin' },
 ];
 
@@ -50,8 +57,8 @@ const TODAS_ABAS = [
 const PERFIS_PADRAO_ABAS: Record<string, string[]> = {
   'Admin':             ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','telecom','crm','licitacoes','rh','relatorios','admin'],
   'Gerente':           ['dashboard','comercial','engenharia','ajustes','pcp','serralheria','chicotes','laboratorio','compras','almoxarifado','producao','qualidade','logistica','vistorias','fiscal','marketing','sac','telecom','crm','licitacoes','rh','relatorios','admin'],
-  'Gerente Comercial': ['dashboard','comercial','crm','licitacoes','relatorios','rh'],
-  'Comercial':         ['dashboard','comercial'],
+  'Gerente Comercial': ['dashboard','comercial','crm','licitacoes','relatorios','rh','cotacoes','formacao_precos','cadastro_itens','cadastro_produtos'],
+  'Comercial':         ['dashboard','comercial','crm','licitacoes','cotacoes','formacao_precos','cadastro_itens','cadastro_produtos','logistica','sac','ajustes'],
   'Engenharia':        ['dashboard','engenharia','ajustes','compras','almoxarifado'],
   'PCP':               ['dashboard','pcp','comercial','engenharia'],
   'Produção':          ['dashboard','producao','pcp'],
@@ -66,7 +73,7 @@ const PERFIS_PADRAO_ABAS: Record<string, string[]> = {
   'Fiscal':            ['dashboard','fiscal','comercial'],
   'SAC':               ['dashboard','sac','comercial'],
   'CRM':               ['dashboard','crm','comercial'],
-  'Licitações':        ['dashboard','licitacoes','crm'],
+  'Licitações':        ['dashboard','licitacoes','crm','comercial','cotacoes','formacao_precos','cadastro_itens','cadastro_produtos','logistica','sac','ajustes'],
   'RH':                ['dashboard','rh'],
   'Marketing':         ['dashboard','marketing','sac'],
   'Visualizador':      ['dashboard'],
