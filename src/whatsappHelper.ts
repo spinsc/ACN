@@ -70,6 +70,21 @@ export async function notificarEvento(
   }
 }
 
+/**
+ * Envia para o número de uma pessoa específica (ex.: o gestor que aprova uma hora
+ * extra), somente se o evento estiver ativo na config. Os perfis do evento não são usados.
+ */
+export async function notificarPessoa(evento: string, numero: string | null | undefined, mensagem: string): Promise<void> {
+  try {
+    if (!numero) return;
+    const cfg = await getConfig();
+    if (!cfg[evento]?.ativo) return;
+    await notificarWhatsApp({ numero }, mensagem);
+  } catch (e) {
+    console.warn('[WhatsApp] notificarPessoa falhou:', e);
+  }
+}
+
 // ─── Templates de mensagem ────────────────────────────────────────────────────
 export const msg = {
   oplEnviada: (opl: string, para: string, usuario: string) =>

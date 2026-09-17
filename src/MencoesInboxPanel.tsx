@@ -36,6 +36,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
   compra:           'Compra',
   licitacao:        'Licitação',
   compra_aprovacao: 'Aprovação de Compra',
+  hora_extra:       'Hora extra',
   frete_aprovacao:  'Aprovação de Frete',
 };
 
@@ -43,7 +44,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
 // aprovação em si; ela se resolve sozinha quando alguém aprova/rejeita
 // (ComprasTab.tsx/LogisticaTab.tsx chamam resolverMencoesRespondidas na
 // hora). Não faz sentido oferecer uma caixa de resposta de texto aqui.
-const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao']);
+const CONTEXTOS_SEM_RESPOSTA = new Set(['compra_aprovacao', 'frete_aprovacao', 'hora_extra']);
 
 // Responder uma menção — grava a resposta EXATAMENTE no mesmo lugar que a
 // tela de origem gravaria (então ela aparece lá também, não só aqui), e em

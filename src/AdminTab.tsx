@@ -5,6 +5,7 @@ import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
 import { CentrosCustoManager } from './CentroCustoShared';
 import { confirmar } from './Feedback';
+import PainelFeriados from './FeriadosAdmin';
 
 
 const PERFIS = [
@@ -2834,6 +2835,7 @@ const ABAS_ADMIN = [
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
+  { id:'feriados',       label:'📅 Feriados' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
   { id:'avisos',         label:'📢 Avisos' },
@@ -3308,6 +3310,7 @@ export default function AdminTab() {
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
+      {abaAtiva === 'feriados'     && <PainelFeriados />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}
       {abaAtiva === 'avisos'       && <PainelAvisos />}

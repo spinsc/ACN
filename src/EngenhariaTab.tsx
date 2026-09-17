@@ -93,6 +93,22 @@ export default function EngenhariaTab({ currentUser }) {
     window.addEventListener('engenharia:abrir-desenvolvimento', handler);
     return () => window.removeEventListener('engenharia:abrir-desenvolvimento', handler);
   }, []);
+  // Menção de hora extra (painel de Menções) abre Horas/Tarefas › Horas extras. Usa o
+  // global __acnDeepLink porque a aba pode montar depois do clique (mesmo padrão de Compras).
+  const [horasAbaInicial, setHorasAbaInicial] = useState(undefined);
+  useEffect(() => {
+    const tentarAbrir = () => {
+      const pend = (window as any).__acnDeepLink;
+      if (!pend || pend.contexto !== 'hora_extra') return;
+      (window as any).__acnDeepLink = null;
+      setHorasAbaInicial('extras');
+      setAbaEng('horas');
+      window.dispatchEvent(new CustomEvent('engenharia:abrir-horas-extras'));
+    };
+    tentarAbrir();
+    window.addEventListener('acn:abrir-registro', tentarAbrir);
+    return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
+  }, []);
   const [opls, setOpls] = useState([]);
   // Linhas com alteração não vista por este usuário ganham borda amarela —
   // mesmo padrão usado nas outras telas de OP (ver AuditSystem.tsx).
@@ -381,7 +397,7 @@ export default function EngenhariaTab({ currentUser }) {
         <button style={{flex:1,padding:'8px',background:abaEng==='desenvolvimento'?'#7c3aed':'white',color:abaEng==='desenvolvimento'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
           onClick={()=>setAbaEng('desenvolvimento')}>🔩 Desenvolvimento</button>
         <button style={{flex:1,padding:'8px',background:abaEng==='horas'?'#0891b2':'white',color:abaEng==='horas'?'white':'#0891b2',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaEng('horas')}>⏱️ Horas/Tarefas</button>
+          onClick={()=>{ setHorasAbaInicial(undefined); setAbaEng('horas'); }}>⏱️ Horas/Tarefas</button>
       </div>
 
       {abaEng === 'desenvolvimento' ? (
@@ -390,7 +406,7 @@ export default function EngenhariaTab({ currentUser }) {
         </div>
       ) : abaEng === 'horas' ? (
         <div style={{ padding:'0 12px' }}>
-          <HorasTarefasTab currentUser={currentUser} />
+          <HorasTarefasTab currentUser={currentUser} abaInicial={horasAbaInicial} />
         </div>
       ) : <>
       {/* AGENDA */}

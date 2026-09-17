@@ -4,13 +4,20 @@
 // Controle de tarefas com início/fim; toda pausa exige motivo. Relatório de
 // horas e tarefas por período.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
-import { normalizarBusca } from './SearchUtils';
-import { segundosUteis } from './utils/horasUteis';
+import { Faixa } from './Interface';
+import {
+  ehGestorEngenharia, mesmaPessoa, normNome, nomesDoUsuario, carregarContextoHorario, extrasAprovadas, horasExtrasDaPessoa,
+  textoPeriodo, CONTEXTO_VAZIO, PainelHorasExtras, ModalHoraExtra, type ContextoHorario,
+} from './HorasExtras';
+import {
+  trechosDaTarefa, aplicarHorario, separarNormalExtra, segundosPorDia, unirIntervalos, intersecao, janelasPermitidas,
+  janelaNoInstante, segundosContados, pausaAutomaticaPendente, somaMs, MOTIVO_PAUSA_AUTOMATICA, HORARIO_CONTAGEM_TEXTO,
+} from './HorarioContagem';
 
 const STATUS_COR: Record<string, string> = {
   nao_iniciada: '#94a3b8', em_andamento: '#3b82f6', pausada: '#f59e0b', concluida: '#22c55e',
@@ -29,21 +36,27 @@ function fmtDuracao(segundos: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// Tempo decorrido líquido (descontando pausas) em segundos
-function tempoDecorrido(tarefa: any, agora: number) {
-  if (!tarefa.data_inicio) return 0;
-  const fim = tarefa.status === 'concluida' && tarefa.data_conclusao
-    ? new Date(tarefa.data_conclusao).getTime()
-    : agora;
-  const bruto = (fim - new Date(tarefa.data_inicio).getTime()) / 1000;
-  let pausadoAtual = 0;
-  if (tarefa.status === 'pausada') {
-    const ultimaPausa = (tarefa.pausas || [])[tarefa.pausas.length - 1];
-    if (ultimaPausa && !ultimaPausa.retomado_em) {
-      pausadoAtual = (agora - new Date(ultimaPausa.pausado_em).getTime()) / 1000;
-    }
+// Iniciar e retomar gravam atualizado_em: a pausa automática só é gravada se a
+// tarefa não mudou desde que foi lida.
+async function iniciarTarefa(tarefa: any) {
+  const agora = new Date().toISOString();
+  await supabase.from('engenharia_horas_tarefas').update({
+    status: 'em_andamento', data_inicio: agora, atualizado_em: agora,
+  }).eq('id', tarefa.id);
+}
+
+async function retomarTarefa(tarefa: any) {
+  const pausas = [...(tarefa.pausas || [])];
+  const ultima = pausas[pausas.length - 1];
+  let acumulado = tarefa.tempo_pausado_segundos || 0;
+  const agoraIso = new Date().toISOString();
+  if (ultima && !ultima.retomado_em) {
+    acumulado += (new Date(agoraIso).getTime() - new Date(ultima.pausado_em).getTime()) / 1000;
+    pausas[pausas.length - 1] = { ...ultima, retomado_em: agoraIso };
   }
-  return Math.max(0, bruto - (tarefa.tempo_pausado_segundos || 0) - pausadoAtual);
+  await supabase.from('engenharia_horas_tarefas').update({
+    status: 'em_andamento', pausas, tempo_pausado_segundos: acumulado, atualizado_em: agoraIso,
+  }).eq('id', tarefa.id);
 }
 
 // ─── Modal Nova Tarefa ────────────────────────────────────────────────────────
@@ -155,37 +168,35 @@ function ModalPausar({ tarefa, onClose, onPausado }: any) {
 }
 
 // ─── Linha de tarefa ──────────────────────────────────────────────────────────
-function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
+function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHorario }: any) {
   const [modalPausar, setModalPausar] = useState(false);
   const [verLog, setVerLog] = useState(false);
 
-  const decorrido = tempoDecorrido(tarefa, agora);
+  // o tempo só conta no horário de contagem ou em hora extra aprovada da pessoa
+  const extras = extrasAprovadas(ctx, tarefa.responsavel_nome || '');
+  const decorrido = segundosContados(tarefa, agora, ctx.feriados, extras);
+  const liberadoAgora = () => !!janelaNoInstante(Date.now(), ctx.feriados, extras);
+  const ultimaPausa = (tarefa.pausas || [])[(tarefa.pausas || []).length - 1];
+  const pausaAutomatica = tarefa.status === 'pausada' && ultimaPausa?.automatica && !ultimaPausa?.retomado_em;
+  const extraAgora = extras.find(([a, b]) => a <= agora && agora < b);
+  const pedidoPendente = horasExtrasDaPessoa(ctx.extras, tarefa.responsavel_nome || '', 'pendente')
+    .find((x: any) => new Date(x.fim).getTime() > agora);
 
   const iniciar = async () => {
-    await supabase.from('engenharia_horas_tarefas').update({
-      status: 'em_andamento', data_inicio: new Date().toISOString(),
-    }).eq('id', tarefa.id);
+    if (!liberadoAgora()) { onForaDoHorario(tarefa, 'iniciar'); return; }
+    await iniciarTarefa(tarefa);
     onAtualizado();
   };
 
   const retomar = async () => {
-    const pausas = [...(tarefa.pausas || [])];
-    const ultima = pausas[pausas.length - 1];
-    let acumulado = tarefa.tempo_pausado_segundos || 0;
-    if (ultima && !ultima.retomado_em) {
-      const agoraIso = new Date().toISOString();
-      acumulado += (new Date(agoraIso).getTime() - new Date(ultima.pausado_em).getTime()) / 1000;
-      ultima.retomado_em = agoraIso;
-    }
-    await supabase.from('engenharia_horas_tarefas').update({
-      status: 'em_andamento', pausas, tempo_pausado_segundos: acumulado,
-    }).eq('id', tarefa.id);
+    if (!liberadoAgora()) { onForaDoHorario(tarefa, 'retomar'); return; }
+    await retomarTarefa(tarefa);
     onAtualizado();
   };
 
   const concluir = async () => {
     if (!await confirmar('Concluir esta tarefa?')) return;
-    const total = tempoDecorrido(tarefa, Date.now());
+    const total = segundosContados(tarefa, Date.now(), ctx.feriados, extras);
     await supabase.from('engenharia_horas_tarefas').update({
       status: 'concluida', data_conclusao: new Date().toISOString(), tempo_total_segundos: total,
     }).eq('id', tarefa.id);
@@ -200,7 +211,18 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
           {tarefa.numero_opl && <div style={{ fontSize: 9, color: '#64748b' }}>OPL: {tarefa.numero_opl}</div>}
         </td>
         <td>{tarefa.responsavel_nome || '—'}</td>
-        <td><span className="acn-badge" style={{ background: STATUS_COR[tarefa.status] }}>{STATUS_LABEL[tarefa.status]}</span></td>
+        <td>
+          <span className="acn-badge" style={{ background: STATUS_COR[tarefa.status] }}>{STATUS_LABEL[tarefa.status]}</span>
+          {pausaAutomatica && <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>automática · fim do horário</div>}
+          {tarefa.status !== 'concluida' && extraAgora && (
+            <div style={{ fontSize: 10, color: '#15803d', marginTop: 2 }}>
+              hora extra até {new Date(extraAgora[1]).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
+          {tarefa.status !== 'concluida' && !extraAgora && pedidoPendente && (
+            <div style={{ fontSize: 10, color: '#b45309', marginTop: 2 }}>hora extra aguardando aprovação</div>
+          )}
+        </td>
         <td style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", fontWeight: 700, color: tarefa.status === 'pausada' ? '#f59e0b' : '#2563eb' }}>
           {tarefa.data_inicio ? fmtDuracao(decorrido) : '—'}
         </td>
@@ -248,95 +270,11 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
   );
 }
 
-// ─── Quem vê a equipe inteira ──────────────────────────────────────────────────
-// Gerentes (qualquer perfil "Gerente …") e Admins veem horas e tarefas de todos;
-// os demais veem só as tarefas em que são o responsável.
-export const ehGestorEngenharia = (u: any) => u?.perfil === 'Admin' || String(u?.perfil || '').startsWith('Gerente');
-const normNome = (v: any) => normalizarBusca(String(v || '')).replace(/\s+/g, ' ').trim();
-function distanciaLetras(a: string, b: string) {
-  const d = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let anterior = d[0]; d[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const tmp = d[j];
-      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, anterior + (a[i - 1] === b[j - 1] ? 0 : 1));
-      anterior = tmp;
-    }
-  }
-  return d[b.length];
-}
-// O responsável da tarefa vem do cadastro do RH, que pode estar escrito diferente do login
-// (ex.: uma letra trocada no sobrenome). Conta como a mesma pessoa: nome igual, o nome do RH
-// ligado ao login (pelo usuário ou pelo e-mail) ou mesmo primeiro nome com até 2 letras de diferença.
-function mesmaPessoa(nomeTarefa: any, nomesUsuario: string[]) {
-  const n = normNome(nomeTarefa);
-  if (!n) return false;
-  return nomesUsuario.some(u => u === n || (
-    u.split(' ')[0] === n.split(' ')[0] && Math.min(u.length, n.length) >= 12 && distanciaLetras(u, n) <= 2
-  ));
-}
-async function nomesDoUsuario(u: any) {
-  const nomes = [u?.nome];
-  const { data } = await supabase.from('rh_funcionarios').select('nome, email, usuario_id');
-  (data || []).forEach((f: any) => {
-    if ((u?.id && f.usuario_id === u.id) || (u?.email && f.email && normNome(f.email) === normNome(u.email))) nomes.push(f.nome);
-  });
-  return [...new Set(nomes.map(normNome).filter(Boolean))];
-}
-
-// ─── Horas úteis das tarefas ───────────────────────────────────────────────────
-// O relatório gerencial conta horas úteis (seg–sex 8:00–17:45, o mesmo critério dos
-// tempos das OPLs): o expediente em que a tarefa esteve rodando, do início à conclusão
-// (ou agora), sem as pausas. Noite, fim de semana e tarefa esquecida aberta de um dia
-// para o outro não inflam o total. Tarefas da mesma pessoa rodando ao mesmo tempo contam
-// uma vez só nas horas dessa pessoa (união dos intervalos).
-function fimDaTarefa(t: any, agora: number) {
-  const ini = new Date(t.data_inicio).getTime();
-  return t.status !== 'concluida' ? agora
-    : t.data_conclusao ? new Date(t.data_conclusao).getTime()
-    : ini + (Number(t.tempo_total_segundos) || 0) * 1000;
-}
-function unirIntervalos(intervalos: number[][]) {
-  const ordenados = intervalos.filter(([a, b]) => b > a).map(([a, b]) => [a, b]).sort((x, y) => x[0] - y[0]);
-  const res: number[][] = [];
-  for (const [a, b] of ordenados) {
-    const ultimo = res[res.length - 1];
-    if (ultimo && a <= ultimo[1]) ultimo[1] = Math.max(ultimo[1], b);
-    else res.push([a, b]);
-  }
-  return res;
-}
-// Intervalos (em ms) em que a tarefa esteve rodando e em que esteve pausada
-function intervalosDaTarefa(t: any, agora: number) {
-  const vazio = { rodando: [] as number[][], pausada: [] as number[][] };
-  if (!t.data_inicio) return vazio;
-  const ini = new Date(t.data_inicio).getTime();
-  const fim = fimDaTarefa(t, agora);
-  if (!(fim > ini)) return vazio;
-  const pausada = unirIntervalos((t.pausas || []).filter((p: any) => p.pausado_em).map((p: any) => [
-    Math.max(ini, new Date(p.pausado_em).getTime()),
-    Math.min(fim, p.retomado_em ? new Date(p.retomado_em).getTime() : fim),
-  ]));
-  const rodando: number[][] = [];
-  let cursor = ini;
-  for (const [a, b] of pausada) { if (a > cursor) rodando.push([cursor, a]); cursor = Math.max(cursor, b); }
-  if (fim > cursor) rodando.push([cursor, fim]);
-  return { rodando, pausada };
-}
-// Segundos úteis por dia (AAAA-MM-DD) de intervalos que não se sobrepõem
-function segundosPorDia(intervalos: number[][]) {
-  const res: Record<string, number> = {};
-  for (const [x, y] of intervalos) {
-    const dia = new Date(x); dia.setHours(0, 0, 0, 0);
-    while (dia.getTime() < y) {
-      const proximo = new Date(dia); proximo.setDate(proximo.getDate() + 1);
-      const s = segundosUteis(new Date(Math.max(x, dia.getTime())), new Date(Math.min(y, proximo.getTime())));
-      if (s > 0) { const k = dia.toLocaleDateString('sv-SE'); res[k] = (res[k] || 0) + s; }
-      dia.setTime(proximo.getTime());
-    }
-  }
-  return res;
-}
+// ─── Horas das tarefas nos relatórios ──────────────────────────────────────────
+// Mesma regra do cronômetro (HorarioContagem.ts): conta de segunda a sexta, das 6:00 às
+// 19:45, fora dos feriados, ou dentro de hora extra aprovada; sem as pausas. Tarefa
+// esquecida rodando para de contar no fim do horário. Tarefas da mesma pessoa rodando ao
+// mesmo tempo contam uma vez só nas horas dessa pessoa (união dos intervalos).
 const somaDias = (porDia: Record<string, number>, de?: string, ate?: string) =>
   Object.entries(porDia).reduce((s, [d, v]) => (!de || (d >= de && d <= ate!)) ? s + v : s, 0);
 const diaISO = (d: any) => d ? new Date(d).toLocaleDateString('sv-SE') : '';
@@ -359,13 +297,21 @@ async function buscarTarefasDoPeriodo(de: string, ate: string) {
 }
 type Periodo = { de: string; ate: string };
 const noPeriodo = (d: string, periodo: Periodo) => !!d && d >= periodo.de && d <= periodo.ate;
-// Cada tarefa com seus intervalos e as horas úteis dentro do período
-function horasDasTarefas(tarefas: any[], periodo: Periodo, agora: number) {
+// Cada tarefa com o tempo contado (normal e hora extra) e as pausas no horário
+function horasDasTarefas(tarefas: any[], periodo: Periodo, agora: number, ctx: ContextoHorario) {
   return tarefas.map(t => {
-    const { rodando, pausada } = intervalosDaTarefa(t, agora);
-    const trabalho = segundosPorDia(rodando);
+    const extras = extrasAprovadas(ctx, t.responsavel_nome || '');
+    const { rodando: trechos, pausada: pausasRegistradas } = trechosDaTarefa(t, agora);
+    const { contados, cortes } = aplicarHorario(trechos, ctx.feriados, extras);
+    const { extra } = separarNormalExtra(contados, ctx.feriados);
+    // parada = pausas registradas + tempo depois da pausa automática, só dentro do horário
+    const paradas = unirIntervalos([...pausasRegistradas, ...cortes]);
+    const pausada = paradas.length
+      ? intersecao(paradas, janelasPermitidas(paradas[0][0], paradas[paradas.length - 1][1], ctx.feriados, extras))
+      : [];
+    const trabalho = segundosPorDia(contados);
     return {
-      t, rodando, pausada, trabalho,
+      t, rodando: contados, pausada, extra, extras, trabalho,
       concluidaNoPeriodo: t.status === 'concluida' && noPeriodo(diaISO(t.data_conclusao), periodo),
       seg: somaDias(trabalho, periodo.de, periodo.ate),
       total: somaDias(trabalho),
@@ -376,14 +322,16 @@ function horasDasTarefas(tarefas: any[], periodo: Periodo, agora: number) {
 }
 // Horas de um grupo de tarefas: por pessoa, a união dos intervalos (tarefas em paralelo
 // não contam em dobro); entre pessoas diferentes, soma.
-function porDiaDaPessoa(itens: any[], campo: 'rodando' | 'pausada' = 'rodando') {
+function porDiaDaPessoa(itens: any[], campo: 'rodando' | 'pausada' | 'extra' = 'rodando') {
   const grupos: Record<string, number[][]> = {};
   itens.forEach(x => { const k = nomeResp(x.t); grupos[k] = (grupos[k] || []).concat(x[campo]); });
   return Object.fromEntries(Object.entries(grupos).map(([k, ints]) => [k, segundosPorDia(unirIntervalos(ints))])) as Record<string, Record<string, number>>;
 }
-function horasDoGrupo(itens: any[], periodo: Periodo, campo: 'rodando' | 'pausada' = 'rodando') {
+function horasDoGrupo(itens: any[], periodo: Periodo, campo: 'rodando' | 'pausada' | 'extra' = 'rodando') {
   return Object.values(porDiaDaPessoa(itens, campo)).reduce((s, dias) => s + somaDias(dias, periodo.de, periodo.ate), 0);
 }
+
+const SITUACAO_EXTRA: Record<string, string> = { pendente: 'Aguardando aprovação', aprovada: 'Aprovada', recusada: 'Recusada', cancelada: 'Cancelada' };
 
 // ─── Relatório gerencial (Gerentes e Admin) ─────────────────────────────────────
 function RelatorioGerencial() {
@@ -395,6 +343,8 @@ function RelatorioGerencial() {
   const [clientes, setClientes] = useState<Record<string, string>>({});
   const [carregando, setCarregando] = useState(false);
   const [agora, setAgora] = useState(() => Date.now());
+  const [ctx, setCtx] = useState<ContextoHorario>(CONTEXTO_VAZIO);
+  const [pedidos, setPedidos] = useState<any[]>([]);
 
   const buscar = async () => {
     if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
@@ -407,21 +357,31 @@ function RelatorioGerencial() {
       const { data: ops } = await supabase.from('oples').select('id, cliente_nome').in('id', ids);
       mapa = Object.fromEntries((ops || []).map(o => [o.id, o.cliente_nome || '—']));
     }
-    setDados(lista); setClientes(mapa); setPeriodo({ de, ate }); setAgora(Date.now());
+    const [contexto, { data: pedidosDoPeriodo }] = await Promise.all([
+      carregarContextoHorario(),
+      supabase.from('horas_extras').select('*')
+        .lt('inicio', new Date(ate + 'T23:59:59').toISOString()).gt('fim', new Date(de + 'T00:00:00').toISOString())
+        .order('inicio', { ascending: false }),
+    ]);
+    setDados(lista); setClientes(mapa); setCtx(contexto); setPedidos(pedidosDoPeriodo || []);
+    setPeriodo({ de, ate }); setAgora(Date.now());
     setCarregando(false);
   };
   useEffect(() => { buscar(); }, []);
 
   const pessoas = [...new Set(dados.map(nomeResp))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const itens = horasDasTarefas(dados.filter(t => !pessoa || nomeResp(t) === pessoa), periodo, agora);
+  const itens = horasDasTarefas(dados.filter(t => !pessoa || nomeResp(t) === pessoa), periodo, agora, ctx);
   const soma = (xs: any[], k: string) => xs.reduce((s, x) => s + x[k], 0);
   const media = (xs: any[]) => xs.length ? soma(xs, 'total') / xs.length : 0;
 
   const concluidas = itens.filter(x => x.concluidaNoPeriodo);
   const totalSeg = horasDoGrupo(itens, periodo);
   const totalPausado = horasDoGrupo(itens, periodo, 'pausada');
+  const totalExtra = horasDoGrupo(itens, periodo, 'extra');
   const nPausas = itens.reduce((s, x) => s + x.pausas.length, 0);
   const diasPorPessoa = porDiaDaPessoa(itens);
+  const extrasPorPessoa = porDiaDaPessoa(itens, 'extra');
+  const pedidosVisiveis = pedidos.filter(x => !pessoa || mesmaPessoa(x.pessoa_nome, [normNome(pessoa)]));
 
   const porPessoa = [...new Set(itens.map(x => nomeResp(x.t)))].map(nome => {
     const xs = itens.filter(x => nomeResp(x.t) === nome);
@@ -429,14 +389,19 @@ function RelatorioGerencial() {
     return {
       nome, tarefas: xs.length, concluidas: conc.length, abertas: xs.filter(x => x.aberta).length,
       naoIniciadas: xs.filter(x => x.t.status === 'nao_iniciada').length,
-      seg: horasDoGrupo(xs, periodo), media: media(conc), pausado: horasDoGrupo(xs, periodo, 'pausada'), pausas: xs.reduce((s, x) => s + x.pausas.length, 0),
+      seg: horasDoGrupo(xs, periodo), extra: horasDoGrupo(xs, periodo, 'extra'), media: media(conc),
+      pausado: horasDoGrupo(xs, periodo, 'pausada'), pausas: xs.reduce((s, x) => s + x.pausas.length, 0),
     };
   }).sort((a, b) => b.seg - a.seg || a.nome.localeCompare(b.nome, 'pt-BR'));
 
   const dias = [...new Set(Object.values(diasPorPessoa).flatMap(d => Object.keys(d)))].filter(d => noPeriodo(d, periodo)).sort().reverse();
   const porDia = dias.map(dia => {
-    const linha: Record<string, any> = { dia, total: 0 };
-    porPessoa.forEach(p => { linha[p.nome] = diasPorPessoa[p.nome]?.[dia] || 0; linha.total += linha[p.nome]; });
+    const linha: Record<string, any> = { dia, total: 0, extra: 0 };
+    porPessoa.forEach(p => {
+      linha[p.nome] = diasPorPessoa[p.nome]?.[dia] || 0;
+      linha.total += linha[p.nome];
+      linha.extra += extrasPorPessoa[p.nome]?.[dia] || 0;
+    });
     return linha;
   });
 
@@ -456,7 +421,7 @@ function RelatorioGerencial() {
   const inicioPeriodo = periodo.de ? new Date(periodo.de + 'T00:00:00').getTime() : 0;
   const fimPeriodo = periodo.ate ? new Date(periodo.ate + 'T00:00:00').getTime() + 86400000 : 0;
   const motivos = Object.values(itens.reduce((acc: any, x) => {
-    const fimTarefa = x.t.data_inicio ? fimDaTarefa(x.t, agora) : agora;
+    const fimTarefa = x.t.status === 'concluida' && x.t.data_conclusao ? new Date(x.t.data_conclusao).getTime() : agora;
     (x.t.pausas || []).forEach((p: any) => {
       if (!p.pausado_em) return;
       const k = String(p.motivo || '—').trim();
@@ -464,7 +429,8 @@ function RelatorioGerencial() {
       if (x.pausas.includes(p)) acc[k].vezes++;
       const pi = Math.max(new Date(p.pausado_em).getTime(), inicioPeriodo);
       const pf = Math.min(p.retomado_em ? new Date(p.retomado_em).getTime() : fimTarefa, fimPeriodo);
-      acc[k].seg += segundosUteis(new Date(pi), new Date(pf));
+      // só o tempo parado dentro do horário de contagem (ou de hora extra aprovada)
+      if (pf > pi) acc[k].seg += Math.round(somaMs(intersecao([[pi, pf]], janelasPermitidas(pi, pf, ctx.feriados, x.extras))) / 1000);
     });
     return acc;
   }, {})).filter((m: any) => m.vezes > 0 || m.seg > 0).sort((a: any, b: any) => b.vezes - a.vezes || b.seg - a.seg) as any[];
@@ -480,11 +446,12 @@ function RelatorioGerencial() {
       .sub{color:#6b7886}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dee4ea;padding:4px 6px;text-align:left;vertical-align:top}
       th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#6b7886}</style></head><body>
       <h1>Relatório gerencial da Engenharia</h1>
-      <div class="sub">${dataBr(periodo.de)} a ${dataBr(periodo.ate)} · ${esc(pessoa || 'equipe inteira')} · horas úteis (seg–sex 8:00–17:45), sem as pausas</div>
-      <p>Horas trabalhadas: <b>${fmtHoras(totalSeg)}</b> · Tarefas: ${itens.length} (${concluidas.length} concluídas no período) · Média por tarefa concluída: ${fmtHoras(media(concluidas))} · Média por OP: ${fmtHoras(mediaPorOp)} · Em pausa: ${fmtHoras(totalPausado)}</p>
-      <h2>Por pessoa</h2>${tabela(['Pessoa', 'Tarefas', 'Concluídas', 'Em aberto', 'Horas', 'Média/tarefa', 'Em pausa'], porPessoa.map(p => [p.nome, p.tarefas, p.concluidas, p.abertas, fmtHoras(p.seg), fmtHoras(p.media), fmtHoras(p.pausado)]))}
-      <h2>Horas por dia</h2>${tabela(['Dia', ...porPessoa.map(p => p.nome), 'Total'], porDia.map(l => [dataBr(l.dia), ...porPessoa.map(p => fmtHoras(l[p.nome])), fmtHoras(l.total)]))}
+      <div class="sub">${dataBr(periodo.de)} a ${dataBr(periodo.ate)} · ${esc(pessoa || 'equipe inteira')} · o tempo conta ${HORARIO_CONTAGEM_TEXTO}, sem as pausas; fora disso, só hora extra aprovada</div>
+      <p>Horas trabalhadas: <b>${fmtHoras(totalSeg)}</b> (${fmtHoras(totalExtra)} de hora extra) · Tarefas: ${itens.length} (${concluidas.length} concluídas no período) · Média por tarefa concluída: ${fmtHoras(media(concluidas))} · Média por OP: ${fmtHoras(mediaPorOp)} · Em pausa: ${fmtHoras(totalPausado)}</p>
+      <h2>Por pessoa</h2>${tabela(['Pessoa', 'Tarefas', 'Concluídas', 'Em aberto', 'Horas', 'Hora extra', 'Média/tarefa', 'Em pausa'], porPessoa.map(p => [p.nome, p.tarefas, p.concluidas, p.abertas, fmtHoras(p.seg), fmtHoras(p.extra), fmtHoras(p.media), fmtHoras(p.pausado)]))}
+      <h2>Horas por dia</h2>${tabela(['Dia', ...porPessoa.map(p => p.nome), 'Hora extra', 'Total'], porDia.map(l => [dataBr(l.dia), ...porPessoa.map(p => fmtHoras(l[p.nome])), fmtHoras(l.extra), fmtHoras(l.total)]))}
       <h2>Horas por OP</h2>${tabela(['OP', 'Cliente', 'Tarefas', 'Horas', 'Pessoas'], porOp.map(o => [o.nome, o.cliente, o.tarefas, fmtHoras(o.seg), [...o.pessoas].join(', ')]))}
+      ${pedidosVisiveis.length ? `<h2>Pedidos de hora extra</h2>${tabela(['Pessoa', 'Quando', 'Motivo', 'Situação', 'Decidido por'], pedidosVisiveis.map(x => [x.pessoa_nome, textoPeriodo(x.inicio, x.fim), x.motivo, (SITUACAO_EXTRA[x.status] || x.status) + (x.registro_direto ? ' (direto)' : ''), x.decidido_por_nome || '—']))}` : ''}
       ${motivos.length ? `<h2>Motivos de pausa</h2>${tabela(['Motivo', 'Vezes', 'Horas em pausa'], motivos.map(m => [m.motivo, m.vezes, fmtHoras(m.seg)]))}` : ''}
       </body></html>`);
     w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
@@ -516,12 +483,12 @@ function RelatorioGerencial() {
           <button className="acn-b acn-b-secundario acn-filtros-dir" onClick={imprimir} disabled={carregando || !itens.length}>Imprimir</button>
         </div>
         <div className="sec-body acn-fraco" style={{ fontSize: 12 }}>
-          Horas úteis: segunda a sexta, 8:00–17:45, sem as pausas. Entram as tarefas criadas no período ou em execução em algum momento dele.
+          O tempo conta {HORARIO_CONTAGEM_TEXTO}, sem as pausas; fora disso, só com hora extra aprovada. Entram as tarefas criadas no período ou em execução em algum momento dele.
         </div>
       </div>
 
       <div className="acn-kpis">
-        {kpi('Horas trabalhadas', fmtHoras(totalSeg), 'horas úteis no período', 'var(--acn-brand)')}
+        {kpi('Horas trabalhadas', fmtHoras(totalSeg), totalExtra ? `${fmtHoras(totalExtra)} de hora extra` : 'no período, sem hora extra', 'var(--acn-brand)')}
         {kpi('Tarefas', itens.length, `${concluidas.length} concluídas · ${itens.filter(x => x.aberta).length} em aberto`, 'var(--acn-info)')}
         {kpi('Média por tarefa', fmtHoras(media(concluidas)), 'das concluídas no período', 'var(--acn-ok)')}
         {kpi('Tempo em pausa', fmtHoras(totalPausado), `${nPausas} pausa(s) no período`, 'var(--acn-warn)')}
@@ -532,7 +499,7 @@ function RelatorioGerencial() {
         <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
           {porPessoa.length === 0 ? vazio : (
             <table className="acn-tabela">
-              <thead><tr><th>Pessoa</th><th style={direita}>Tarefas</th><th style={direita}>Concluídas</th><th style={direita}>Em aberto</th><th style={direita}>Não iniciadas</th><th style={direita}>Horas</th><th style={direita}>Média/tarefa</th><th style={direita}>Em pausa</th></tr></thead>
+              <thead><tr><th>Pessoa</th><th style={direita}>Tarefas</th><th style={direita}>Concluídas</th><th style={direita}>Em aberto</th><th style={direita}>Não iniciadas</th><th style={direita}>Horas</th><th style={direita}>Hora extra</th><th style={direita}>Média/tarefa</th><th style={direita}>Em pausa</th></tr></thead>
               <tbody>
                 {porPessoa.map(p => (
                   <tr key={p.nome}>
@@ -542,6 +509,7 @@ function RelatorioGerencial() {
                     <td className="acn-num" style={direita}>{p.abertas}</td>
                     <td className="acn-num" style={direita}>{p.naoIniciadas}</td>
                     <td className="acn-num acn-forte" style={direita}>{fmtHoras(p.seg)}</td>
+                    <td className="acn-num" style={direita}>{fmtHoras(p.extra)}</td>
                     <td className="acn-num" style={direita}>{fmtHoras(p.media)}</td>
                     <td className="acn-num" style={direita}>{fmtHoras(p.pausado)}{p.pausas ? ` (${p.pausas})` : ''}</td>
                   </tr>
@@ -557,12 +525,13 @@ function RelatorioGerencial() {
           <div className="sec-hdr"><span>Horas por dia</span></div>
           <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
             <table className="acn-tabela">
-              <thead><tr><th>Dia</th>{porPessoa.map(p => <th key={p.nome} style={direita}>{p.nome}</th>)}<th style={direita}>Total</th></tr></thead>
+              <thead><tr><th>Dia</th>{porPessoa.map(p => <th key={p.nome} style={direita}>{p.nome}</th>)}<th style={direita}>Hora extra</th><th style={direita}>Total</th></tr></thead>
               <tbody>
                 {porDia.map(l => (
                   <tr key={l.dia}>
                     <td className="acn-num">{new Date(l.dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td>
                     {porPessoa.map(p => <td key={p.nome} className="acn-num" style={direita}>{fmtHoras(l[p.nome])}</td>)}
+                    <td className="acn-num" style={direita}>{fmtHoras(l.extra)}</td>
                     <td className="acn-num acn-forte" style={direita}>{fmtHoras(l.total)}</td>
                   </tr>
                 ))}
@@ -630,6 +599,31 @@ function RelatorioGerencial() {
         </div>
       )}
 
+      {pedidosVisiveis.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr"><span>Pedidos de hora extra ({pedidosVisiveis.length})</span></div>
+          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+            <table className="acn-tabela">
+              <thead><tr><th>Pessoa</th><th>Quando</th><th>Motivo</th><th>Situação</th><th>Decidido por</th></tr></thead>
+              <tbody>
+                {pedidosVisiveis.map(x => (
+                  <tr key={x.id}>
+                    <td className="acn-forte">{x.pessoa_nome}</td>
+                    <td className="acn-num" style={{ whiteSpace: 'nowrap' }}>{textoPeriodo(x.inicio, x.fim)}</td>
+                    <td style={{ minWidth: 200, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.motivo}</td>
+                    <td>{SITUACAO_EXTRA[x.status] || x.status}{x.registro_direto ? ' (direto)' : ''}</td>
+                    <td>
+                      {x.decidido_por_nome || (x.status === 'pendente' ? `com ${x.aprovador_nome || '—'}` : '—')}
+                      {x.resposta && <div className="acn-fraco" style={{ fontSize: 12 }}>{x.resposta}</div>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="sec-card">
         <div className="sec-hdr"><span>Atividades do período ({itens.length})</span></div>
         <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
@@ -669,6 +663,7 @@ function RelatorioHoras({ currentUser }: any) {
   const [doPeriodo, setDados] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [agora, setAgora] = useState(() => Date.now());
+  const [ctx, setCtx] = useState<ContextoHorario>(CONTEXTO_VAZIO);
 
   const buscar = async () => {
     if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
@@ -676,22 +671,26 @@ function RelatorioHoras({ currentUser }: any) {
     const { tarefas, error } = await buscarTarefasDoPeriodo(de, ate);
     if (error) { setCarregando(false); alert('Não foi possível carregar as tarefas: ' + error.message); return; }
     // quem não é gerente/admin vê só as tarefas em que é o responsável
-    const meusNomes = gestor ? [] : await nomesDoUsuario(currentUser);
+    const [meusNomes, contexto] = await Promise.all([
+      gestor ? Promise.resolve([] as string[]) : nomesDoUsuario(currentUser),
+      carregarContextoHorario(),
+    ]);
     setDados(tarefas.filter(t => gestor || mesmaPessoa(t.responsavel_nome, meusNomes)));
-    setPeriodo({ de, ate }); setAgora(Date.now());
+    setCtx(contexto); setPeriodo({ de, ate }); setAgora(Date.now());
     setCarregando(false);
   };
 
   useEffect(() => { buscar(); }, []);
 
   const pessoasRel = [...new Set(doPeriodo.map(nomeResp))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  // horas úteis com a mesma conta do relatório gerencial
-  const itens = horasDasTarefas(doPeriodo.filter(t => !pessoa || nomeResp(t) === pessoa), periodo, agora);
+  // mesma conta do relatório gerencial
+  const itens = horasDasTarefas(doPeriodo.filter(t => !pessoa || nomeResp(t) === pessoa), periodo, agora, ctx);
   const concluidas = itens.filter(x => x.concluidaNoPeriodo);
   const tempoTotal = horasDoGrupo(itens, periodo);
+  const tempoExtra = horasDoGrupo(itens, periodo, 'extra');
   const porResponsavel = [...new Set(itens.map(x => nomeResp(x.t)))].map(nome => {
     const xs = itens.filter(x => nomeResp(x.t) === nome);
-    return { nome, total: xs.length, concluidas: xs.filter(x => x.concluidaNoPeriodo).length, seg: horasDoGrupo(xs, periodo) };
+    return { nome, total: xs.length, concluidas: xs.filter(x => x.concluidaNoPeriodo).length, seg: horasDoGrupo(xs, periodo), extra: horasDoGrupo(xs, periodo, 'extra') };
   }).sort((a, b) => b.seg - a.seg || a.nome.localeCompare(b.nome, 'pt-BR'));
   const motivosPausa: Record<string, number> = {};
   itens.forEach(x => x.pausas.forEach((p: any) => { motivosPausa[p.motivo] = (motivosPausa[p.motivo] || 0) + 1; }));
@@ -724,7 +723,7 @@ function RelatorioHoras({ currentUser }: any) {
             </div>
           </div>
           <div className="acn-fraco" style={{ fontSize: 12, marginTop: 6 }}>
-            Horas úteis: segunda a sexta, 8:00–17:45, sem as pausas. Entram as tarefas criadas no período ou em execução em algum momento dele.
+            O tempo conta {HORARIO_CONTAGEM_TEXTO}, sem as pausas; fora disso, só com hora extra aprovada. Entram as tarefas criadas no período ou em execução em algum momento dele.
           </div>
         </div>
       </div>
@@ -738,6 +737,7 @@ function RelatorioHoras({ currentUser }: any) {
               { label: 'Concluídas no Período', val: concluidas.length, cor: '#22c55e' },
               { label: 'Em Andamento/Pausadas', val: itens.filter(x => x.aberta).length, cor: '#3b82f6' },
               { label: 'Horas Trabalhadas', val: fmtHoras(tempoTotal), cor: '#7c3aed' },
+              { label: 'Horas Extras', val: fmtHoras(tempoExtra), cor: '#b45309' },
             ].map(c => (
               <div key={c.label} style={{ flex: '1 1 150px', minWidth: 130, background: 'white', border: '1px solid #e2e8f0', borderTop: `3px solid ${c.cor}`, borderRadius: 4, padding: '8px 10px' }}>
                 <div style={{ fontSize: 9, color: '#64748b', marginBottom: 2 }}>{c.label}</div>
@@ -753,11 +753,11 @@ function RelatorioHoras({ currentUser }: any) {
         <div className="sec-body" style={{ overflowX: 'auto' }}>
           {porResponsavel.length === 0 ? <div className="acn-empty">Nenhuma tarefa no período.</div> : (
             <table>
-              <thead><tr><th>Responsável</th><th>Tarefas</th><th>Concluídas</th><th>Horas</th></tr></thead>
+              <thead><tr><th>Responsável</th><th>Tarefas</th><th>Concluídas</th><th>Horas</th><th>Hora extra</th></tr></thead>
               <tbody>
                 {porResponsavel.map(v => (
                   <tr key={v.nome}>
-                    <td>{v.nome}</td><td>{v.total}</td><td>{v.concluidas}</td><td>{fmtHoras(v.seg)}</td>
+                    <td>{v.nome}</td><td>{v.total}</td><td>{v.concluidas}</td><td>{fmtHoras(v.seg)}</td><td>{fmtHoras(v.extra)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -786,8 +786,8 @@ function RelatorioHoras({ currentUser }: any) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
-  const [aba, setAba] = useState<'tarefas' | 'relatorio' | 'gerencial'>('tarefas');
+export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUser: any; abaInicial?: string }) {
+  const [aba, setAba] = useState<string>(abaInicial || 'tarefas');
   const gestor = ehGestorEngenharia(currentUser);
   const [operador, setOperador] = useState('');
   const [tarefas, setTarefas] = useState<any[]>([]);
@@ -797,14 +797,82 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
   const [modalNova, setModalNova] = useState(false);
   const [tick, setTick] = useState(Date.now());
 
-  const carregar = async () => {
-    setLoading(true);
-    const { data } = await supabase.from('engenharia_horas_tarefas').select('*').order('criado_em', { ascending: false });
+  const [ctx, setCtx] = useState<ContextoHorario>(CONTEXTO_VAZIO);
+  const [ctxPronto, setCtxPronto] = useState(false);
+  const [horaExtra, setHoraExtra] = useState<{ tarefa: any; acao: 'iniciar' | 'retomar' } | null>(null);
+  const tentativasPausa = useRef<Record<string, number>>({});
+
+  // tarefas + feriados e horas extras; a cada minuto em silêncio
+  const carregar = async (silencioso = false) => {
+    if (!silencioso) setLoading(true);
+    const [{ data }, contexto] = await Promise.all([
+      supabase.from('engenharia_horas_tarefas').select('*').order('criado_em', { ascending: false }),
+      carregarContextoHorario(),
+    ]);
     setTarefas(data || []);
-    setLoading(false);
+    setCtx(contexto); setCtxPronto(true);
+    if (!silencioso) setLoading(false);
   };
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    carregar();
+    const t = setInterval(() => carregar(true), 60000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    const abrir = () => setAba('extras');
+    window.addEventListener('engenharia:abrir-horas-extras', abrir);
+    return () => window.removeEventListener('engenharia:abrir-horas-extras', abrir);
+  }, []);
+
+  // Pausa automática: a tarefa que segue rodando depois do fim do horário (ou da hora
+  // extra) fica registrada como pausada no instante em que o horário acabou.
+  const minuto = Math.floor(tick / 60000);
+  useEffect(() => {
+    if (!ctxPronto) return;
+    const agoraMs = Date.now();
+    const pendentes = tarefas
+      .map(t => ({ t, corte: pausaAutomaticaPendente(t, agoraMs, ctx.feriados, extrasAprovadas(ctx, t.responsavel_nome || '')) }))
+      .filter(x => x.corte != null && tentativasPausa.current[x.t.id] !== x.corte);
+    if (!pendentes.length) return;
+    (async () => {
+      let gravou = false;
+      for (const { t, corte } of pendentes) {
+        tentativasPausa.current[t.id] = corte as number;
+        const pausas = [...(t.pausas || []), { motivo: MOTIVO_PAUSA_AUTOMATICA, pausado_em: new Date(corte as number).toISOString(), retomado_em: null, automatica: true }];
+        let q = supabase.from('engenharia_horas_tarefas').update({ status: 'pausada', pausas, atualizado_em: new Date().toISOString() })
+          .eq('id', t.id).eq('status', 'em_andamento');
+        q = t.atualizado_em ? q.eq('atualizado_em', t.atualizado_em) : q.is('atualizado_em', null);
+        const { data } = await q.select('id');
+        if (data?.length) gravou = true;
+      }
+      if (gravou) carregar(true);
+    })();
+  }, [tarefas, ctx, ctxPronto, minuto]);
+
+  // Iniciar/retomar fora do horário: pede (ou registra) hora extra
+  const foraDoHorario = (tarefa: any, acao: 'iniciar' | 'retomar') => {
+    const pendente = horasExtrasDaPessoa(ctx.extras, tarefa.responsavel_nome || '', 'pendente')
+      .find((x: any) => new Date(x.fim).getTime() > Date.now());
+    if (pendente && !gestor) {
+      alert(`Fora do horário de contagem. O pedido de hora extra (${textoPeriodo(pendente.inicio, pendente.fim)}) ainda aguarda a aprovação de ${pendente.aprovador_nome || 'seu gestor'}.`);
+      return;
+    }
+    setHoraExtra({ tarefa, acao });
+  };
+  const horaExtraRegistrada = async (registro: any) => {
+    const alvo = horaExtra;
+    setHoraExtra(null);
+    const agoraMs = Date.now();
+    // gerente/admin: a hora extra já vale, então a tarefa inicia ou retoma na hora
+    if (alvo && registro?.status === 'aprovada' && new Date(registro.inicio).getTime() <= agoraMs && agoraMs < new Date(registro.fim).getTime()) {
+      if (alvo.acao === 'iniciar') await iniciarTarefa(alvo.tarefa); else await retomarTarefa(alvo.tarefa);
+    }
+    carregar(true);
+  };
+  const admin = currentUser?.perfil === 'Admin';
+  const aguardandoMinhaAprovacao = ctx.extras.filter(x => x.status === 'pendente'
+    && (admin || (!!x.aprovador_id && String(x.aprovador_id) === String(currentUser?.id)))).length;
   useEffect(() => { const t = setInterval(() => setTick(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   const operadores = [...new Set(tarefas.map(t => t.responsavel_nome || 'Sem responsável'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -825,14 +893,24 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
           onClick={() => setAba('tarefas')}>⏱️ Tarefas</button>
         <button style={{ flex: 1, padding: '8px', background: aba === 'relatorio' ? '#1e293b' : 'white', color: aba === 'relatorio' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
           onClick={() => setAba('relatorio')}>📊 Relatório por Período</button>
+        <button style={{ flex: 1, padding: '8px', background: aba === 'extras' ? '#1e293b' : 'white', color: aba === 'extras' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+          onClick={() => setAba('extras')}>🕒 Horas extras{aguardandoMinhaAprovacao ? ` (${aguardandoMinhaAprovacao})` : ''}</button>
         {gestor && (
           <button style={{ flex: 1, padding: '8px', background: aba === 'gerencial' ? '#1e293b' : 'white', color: aba === 'gerencial' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
             onClick={() => setAba('gerencial')}>📈 Relatório gerencial</button>
         )}
       </div>
 
-      {aba === 'gerencial' && gestor ? <RelatorioGerencial /> : aba === 'relatorio' ? <RelatorioHoras currentUser={currentUser} /> : (
+      {aba === 'extras' ? <PainelHorasExtras currentUser={currentUser} onAtualizado={() => carregar(true)} />
+        : aba === 'gerencial' && gestor ? <RelatorioGerencial /> : aba === 'relatorio' ? <RelatorioHoras currentUser={currentUser} /> : (
         <>
+          {aguardandoMinhaAprovacao > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <Faixa tom="atencao" acao={<button className="acn-b acn-b-secundario acn-b-p" onClick={() => setAba('extras')}>Ver pedidos</button>}>
+                {aguardandoMinhaAprovacao === 1 ? '1 pedido de hora extra aguarda' : `${aguardandoMinhaAprovacao} pedidos de hora extra aguardam`} sua aprovação.
+              </Faixa>
+            </div>
+          )}
           <div className="sec-card">
             <div className="sec-hdr">
               <span>⏱️ Controle de Horas/Tarefas ({filtradas.length})</span>
@@ -848,6 +926,9 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
               ))}
               <input placeholder="🔍 Buscar por título, OPL ou responsável..." value={busca} onChange={e => setBusca(e.target.value)}
                 style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
+              <span className="acn-fraco" style={{ fontSize: 12, flexBasis: '100%' }}>
+                O tempo conta {HORARIO_CONTAGEM_TEXTO}. Às 19:45 a tarefa pausa sozinha; fora do horário, só com hora extra.
+              </span>
               {gestor && (
                 <select className="acn-input" value={operador} onChange={e => setOperador(e.target.value)} aria-label="Operador" style={{ width: 'auto', minWidth: 180 }}>
                   <option value="">Operador: todos</option>
@@ -863,7 +944,8 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
                   <thead><tr><th>Tarefa</th><th>Responsável</th><th>Status</th><th>Tempo</th><th>Início</th><th>Ações</th></tr></thead>
                   <tbody>
                     {filtradas.map(t => (
-                      <LinhaTarefa key={t.id} tarefa={t} agora={tick} onAtualizado={carregar} currentUser={currentUser} />
+                      <LinhaTarefa key={t.id} tarefa={t} agora={tick} onAtualizado={() => carregar(true)} currentUser={currentUser}
+                        ctx={ctx} onForaDoHorario={foraDoHorario} />
                     ))}
                   </tbody>
                 </table>
@@ -873,6 +955,10 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
         </>
       )}
 
+      {horaExtra && (
+        <ModalHoraExtra currentUser={currentUser} pessoaNome={horaExtra.tarefa.responsavel_nome || currentUser?.nome}
+          tarefa={horaExtra.tarefa} acao={horaExtra.acao} onClose={() => setHoraExtra(null)} onFeito={horaExtraRegistrada} />
+      )}
       {modalNova && (
         <ModalNovaTarefa currentUser={currentUser} onClose={() => setModalNova(false)}
           onCriado={() => { setModalNova(false); carregar(); }} />
