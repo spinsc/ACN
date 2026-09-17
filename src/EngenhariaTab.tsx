@@ -13,8 +13,71 @@ import { horasUteis } from './utils/horasUteis';
 import { BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar } from './Feedback';
+import { OrigemVendaBadge } from './OrigemVenda';
+import { fluxoLabel } from './FluxoEntrega';
 
 const semDado = (v) => !v || !String(v).trim();
+
+// ─── Informações comerciais da OPL (logo abaixo de cada linha) ──────────────────
+// Quem projeta precisa saber sem abrir o detalhe: para quem é, de onde veio a venda
+// e quem vendeu, quando tem que ser entregue, por qual fluxo, o que foi vendido e o
+// que o comercial pediu atenção.
+const CAMPOS_INFO_COMERCIAL = ['cliente_nome', 'origem_venda', 'responsavel_comercial', 'vendedor', 'data_prevista_entrega',
+  'prazo_entrega_comercial', 'fluxo_entrega', 'destino_cidade', 'destino_uf', 'kit_nome', 'faturamento_empresa',
+  'resumo_servicos', 'observacoes_comercial', 'observacoes_atencao'];
+// Unidade de lote com as mesmas informações da linha do lote não repete o bloco
+const mesmaInfoComercial = (a, b) => CAMPOS_INFO_COMERCIAL.every(k => String(a?.[k] ?? '').trim() === String(b?.[k] ?? '').trim());
+
+function PrazoEntregaOpl({ o }) {
+  const data = o.data_prevista_entrega || o.prazo_entrega_comercial;
+  if (!data) return <span style={{ color: 'var(--acn-neutral)' }}>sem data</span>;
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dias = Math.round((new Date(String(data).slice(0, 10) + 'T00:00:00').getTime() - hoje.getTime()) / 86400000);
+  const situacao = dias < 0 ? `${-dias} dia${dias === -1 ? '' : 's'} em atraso`
+    : dias === 0 ? 'vence hoje' : `faltam ${dias} dia${dias === 1 ? '' : 's'}`;
+  return (
+    <span className={'acn-eng-prazo' + (dias < 0 ? ' atrasado' : dias <= 7 ? ' perto' : '')}>
+      {String(data).slice(0, 10).split('-').reverse().join('/')} · {situacao}
+    </span>
+  );
+}
+
+function InfoOplEngenharia({ o, colunas, style }) {
+  const [servicosAbertos, setServicosAbertos] = useState(false);
+  const comercial = o.responsavel_comercial || o.vendedor;
+  const outroVendedor = o.vendedor && o.responsavel_comercial && o.vendedor.trim().toUpperCase() !== o.responsavel_comercial.trim().toUpperCase() ? o.vendedor : null;
+  const destino = [o.destino_cidade, o.destino_uf].filter(Boolean).join('/');
+  const servicos = String(o.resumo_servicos || '').trim();
+  const servicosLongos = servicos.length > 180 || servicos.split('\n').length > 2;
+  return (
+    <tr className="acn-eng-info" style={style}>
+      <td colSpan={colunas}>
+        <div className="acn-eng-fatos">
+          <span><b>Cliente</b><strong>{o.cliente_nome || '—'}</strong></span>
+          <OrigemVendaBadge origem={o.origem_venda} />
+          <span><b>Comercial</b>{comercial || '—'}{outroVendedor && ` · vendedor ${outroVendedor}`}</span>
+          <span><b>Entrega</b><PrazoEntregaOpl o={o} /></span>
+          <span><b>Fluxo</b>{fluxoLabel(o.fluxo_entrega)}</span>
+          {destino && <span><b>Destino</b>{destino}</span>}
+          {o.kit_nome && <span><b>Kit</b>{o.kit_nome}</span>}
+          {o.faturamento_empresa && <span><b>Faturamento</b>{o.faturamento_empresa}</span>}
+        </div>
+        {o.observacoes_atencao && <div className="acn-eng-texto acn-eng-atencao"><b>⚠ Atenção:</b> {o.observacoes_atencao}</div>}
+        {o.observacoes_comercial && <div className="acn-eng-texto"><b>Obs. comercial:</b> {o.observacoes_comercial}</div>}
+        {servicos && (
+          <div className={'acn-eng-texto' + (servicosLongos && !servicosAbertos ? ' fechado' : '')}>
+            <b>Serviços:</b> {servicos}
+          </div>
+        )}
+        {servicosLongos && (
+          <button type="button" className="acn-b acn-b-discreto acn-b-p" style={{ marginTop: 2 }} onClick={() => setServicosAbertos(v => !v)}>
+            {servicosAbertos ? 'Recolher serviços' : 'Ver todos os serviços'}
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
 
 export default function EngenhariaTab({ currentUser }) {
   const [abaEng, setAbaEng] = useState('analise');
@@ -375,7 +438,7 @@ export default function EngenhariaTab({ currentUser }) {
                     }
                   }
 
-                  const renderLinhaOpl = (o) => {
+                  const renderLinhaOpl = (o, comInfo = true) => {
                     const emAndamento = o.status_geral === 'Em Analise Engenharia';
                     const inicio = o.data_inicio_engenharia ? new Date(o.data_inicio_engenharia) : null;
                     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(o.tempo_pausado_horas) || 0)) : null;
@@ -391,7 +454,8 @@ export default function EngenhariaTab({ currentUser }) {
                       : envioDireto ? { background:'#fffbeb', borderLeft:'4px solid #f59e0b' }
                       : naoLida ? { background:'#fffdf0', borderLeft:'4px solid #eab308' } : {};
                     return (
-                      <tr key={o.id} style={rowStyle}>
+                      <React.Fragment key={o.id}>
+                      <tr className={comInfo ? 'acn-eng-linha' : undefined} style={rowStyle}>
                         <td>{fmtDt(o.data_entrada)}</td>
                         <td>
                           <LinkOpl opl={o} currentUser={currentUser} />
@@ -480,6 +544,8 @@ export default function EngenhariaTab({ currentUser }) {
                           </div>
                         </td>
                       </tr>
+                      {comInfo && <InfoOplEngenharia o={o} colunas={11} style={rowStyle} />}
+                      </React.Fragment>
                     );
                   };
 
@@ -494,7 +560,7 @@ export default function EngenhariaTab({ currentUser }) {
                     const envioDireto = isEnvioDireto(rep);
                     return (
                       <React.Fragment key={base}>
-                        <tr style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
+                        <tr className="acn-eng-linha" style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
                           <td>{fmtDt(rep.data_entrada)}</td>
                           <td>
                             <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
@@ -533,7 +599,8 @@ export default function EngenhariaTab({ currentUser }) {
                             </div>
                           </td>
                         </tr>
-                        {expandido && irmaos.map(o => renderLinhaOpl(o))}
+                        <InfoOplEngenharia o={rep} colunas={11} style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}} />
+                        {expandido && irmaos.map(o => renderLinhaOpl(o, !mesmaInfoComercial(o, rep)))}
                       </React.Fragment>
                     );
                   });

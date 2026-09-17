@@ -234,3 +234,13 @@
   html body table.acn-tab-planilha :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
   html body table.acn-tab-planilha th:first-child { background: #1e293b !important; }
 }
+
+/* Engenharia no celular: o bloco de informações da OPL fecha o cartão da linha de cima */
+@media (hover: none) and (pointer: coarse) and (max-width: 639.98px) {
+  html body table.acn-tab-cartoes > tbody > tr.acn-eng-linha { margin-bottom: 0; border-bottom: none; border-radius: 8px 8px 0 0; }
+  html body table.acn-tab-cartoes > tbody > tr.acn-eng-info.acn-linha-inteira {
+    margin: 0 0 8px; padding: 6px 10px 8px; border: 1px solid var(--acn-line); border-top: 1px dashed var(--acn-line-soft);
+    border-radius: 0 0 8px 8px; background: var(--acn-surface);
+  }
+  html body:is(.dark, :not(.dark)) table.acn-tab-cartoes > tbody > tr.acn-eng-info > td { padding: 0 !important; border: none !important; }
+}

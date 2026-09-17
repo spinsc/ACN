@@ -9,6 +9,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
+import { normalizarBusca } from './SearchUtils';
+import { segundosUteis } from './utils/horasUteis';
 
 const STATUS_COR: Record<string, string> = {
   nao_iniciada: '#94a3b8', em_andamento: '#3b82f6', pausada: '#f59e0b', concluida: '#22c55e',
@@ -246,11 +248,414 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser }: any) {
   );
 }
 
+// ─── Quem vê a equipe inteira ──────────────────────────────────────────────────
+// Gerentes (qualquer perfil "Gerente …") e Admins veem horas e tarefas de todos;
+// os demais veem só as tarefas em que são o responsável.
+export const ehGestorEngenharia = (u: any) => u?.perfil === 'Admin' || String(u?.perfil || '').startsWith('Gerente');
+const normNome = (v: any) => normalizarBusca(String(v || '')).replace(/\s+/g, ' ').trim();
+function distanciaLetras(a: string, b: string) {
+  const d = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let anterior = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, anterior + (a[i - 1] === b[j - 1] ? 0 : 1));
+      anterior = tmp;
+    }
+  }
+  return d[b.length];
+}
+// O responsável da tarefa vem do cadastro do RH, que pode estar escrito diferente do login
+// (ex.: uma letra trocada no sobrenome). Conta como a mesma pessoa: nome igual, o nome do RH
+// ligado ao login (pelo usuário ou pelo e-mail) ou mesmo primeiro nome com até 2 letras de diferença.
+function mesmaPessoa(nomeTarefa: any, nomesUsuario: string[]) {
+  const n = normNome(nomeTarefa);
+  if (!n) return false;
+  return nomesUsuario.some(u => u === n || (
+    u.split(' ')[0] === n.split(' ')[0] && Math.min(u.length, n.length) >= 12 && distanciaLetras(u, n) <= 2
+  ));
+}
+async function nomesDoUsuario(u: any) {
+  const nomes = [u?.nome];
+  const { data } = await supabase.from('rh_funcionarios').select('nome, email, usuario_id');
+  (data || []).forEach((f: any) => {
+    if ((u?.id && f.usuario_id === u.id) || (u?.email && f.email && normNome(f.email) === normNome(u.email))) nomes.push(f.nome);
+  });
+  return [...new Set(nomes.map(normNome).filter(Boolean))];
+}
+
+// ─── Horas úteis das tarefas ───────────────────────────────────────────────────
+// O relatório gerencial conta horas úteis (seg–sex 8:00–17:45, o mesmo critério dos
+// tempos das OPLs): o expediente em que a tarefa esteve rodando, do início à conclusão
+// (ou agora), sem as pausas. Noite, fim de semana e tarefa esquecida aberta de um dia
+// para o outro não inflam o total. Tarefas da mesma pessoa rodando ao mesmo tempo contam
+// uma vez só nas horas dessa pessoa (união dos intervalos).
+function fimDaTarefa(t: any, agora: number) {
+  const ini = new Date(t.data_inicio).getTime();
+  return t.status !== 'concluida' ? agora
+    : t.data_conclusao ? new Date(t.data_conclusao).getTime()
+    : ini + (Number(t.tempo_total_segundos) || 0) * 1000;
+}
+function unirIntervalos(intervalos: number[][]) {
+  const ordenados = intervalos.filter(([a, b]) => b > a).map(([a, b]) => [a, b]).sort((x, y) => x[0] - y[0]);
+  const res: number[][] = [];
+  for (const [a, b] of ordenados) {
+    const ultimo = res[res.length - 1];
+    if (ultimo && a <= ultimo[1]) ultimo[1] = Math.max(ultimo[1], b);
+    else res.push([a, b]);
+  }
+  return res;
+}
+// Intervalos (em ms) em que a tarefa esteve rodando e em que esteve pausada
+function intervalosDaTarefa(t: any, agora: number) {
+  const vazio = { rodando: [] as number[][], pausada: [] as number[][] };
+  if (!t.data_inicio) return vazio;
+  const ini = new Date(t.data_inicio).getTime();
+  const fim = fimDaTarefa(t, agora);
+  if (!(fim > ini)) return vazio;
+  const pausada = unirIntervalos((t.pausas || []).filter((p: any) => p.pausado_em).map((p: any) => [
+    Math.max(ini, new Date(p.pausado_em).getTime()),
+    Math.min(fim, p.retomado_em ? new Date(p.retomado_em).getTime() : fim),
+  ]));
+  const rodando: number[][] = [];
+  let cursor = ini;
+  for (const [a, b] of pausada) { if (a > cursor) rodando.push([cursor, a]); cursor = Math.max(cursor, b); }
+  if (fim > cursor) rodando.push([cursor, fim]);
+  return { rodando, pausada };
+}
+// Segundos úteis por dia (AAAA-MM-DD) de intervalos que não se sobrepõem
+function segundosPorDia(intervalos: number[][]) {
+  const res: Record<string, number> = {};
+  for (const [x, y] of intervalos) {
+    const dia = new Date(x); dia.setHours(0, 0, 0, 0);
+    while (dia.getTime() < y) {
+      const proximo = new Date(dia); proximo.setDate(proximo.getDate() + 1);
+      const s = segundosUteis(new Date(Math.max(x, dia.getTime())), new Date(Math.min(y, proximo.getTime())));
+      if (s > 0) { const k = dia.toLocaleDateString('sv-SE'); res[k] = (res[k] || 0) + s; }
+      dia.setTime(proximo.getTime());
+    }
+  }
+  return res;
+}
+const somaDias = (porDia: Record<string, number>, de?: string, ate?: string) =>
+  Object.entries(porDia).reduce((s, [d, v]) => (!de || (d >= de && d <= ate!)) ? s + v : s, 0);
+const diaISO = (d: any) => d ? new Date(d).toLocaleDateString('sv-SE') : '';
+const fmtHoras = (seg: number) => {
+  if (!seg || seg < 60) return '—';
+  if (seg < 3600) return Math.round(seg / 60) + ' min';
+  const h = seg / 3600;
+  return (h < 10 ? h.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : Math.round(h).toLocaleString('pt-BR')) + ' h';
+};
+const nomeResp = (t: any) => t.responsavel_nome || 'Sem responsável';
+
+// ─── Relatório gerencial (Gerentes e Admin) ─────────────────────────────────────
+function RelatorioGerencial() {
+  const [de, setDe] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toLocaleDateString('sv-SE'); });
+  const [ate, setAte] = useState(() => new Date().toLocaleDateString('sv-SE'));
+  const [periodo, setPeriodo] = useState({ de: '', ate: '' });
+  const [pessoa, setPessoa] = useState('');
+  const [dados, setDados] = useState<any[]>([]);
+  const [clientes, setClientes] = useState<Record<string, string>>({});
+  const [carregando, setCarregando] = useState(false);
+  const [agora, setAgora] = useState(() => Date.now());
+
+  const buscar = async () => {
+    if (!de || !ate || de > ate) { alert('Período inválido: a data inicial precisa ser igual ou anterior à final.'); return; }
+    setCarregando(true);
+    const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const ini = iso(new Date(de + 'T00:00:00')), fim = iso(new Date(ate + 'T23:59:59'));
+    // tarefas criadas no período ou em execução em algum momento dele
+    const { data, error } = await supabase.from('engenharia_horas_tarefas').select('*')
+      .or(`and(criado_em.gte.${ini},criado_em.lte.${fim}),and(data_inicio.lte.${fim},data_conclusao.gte.${ini}),and(data_inicio.lte.${fim},data_conclusao.is.null)`)
+      .order('criado_em', { ascending: false });
+    if (error) { setCarregando(false); alert('Não foi possível carregar as tarefas: ' + error.message); return; }
+    const lista = data || [];
+    const ids = [...new Set(lista.map(t => t.opl_id).filter(Boolean))];
+    let mapa: Record<string, string> = {};
+    if (ids.length) {
+      const { data: ops } = await supabase.from('oples').select('id, cliente_nome').in('id', ids);
+      mapa = Object.fromEntries((ops || []).map(o => [o.id, o.cliente_nome || '—']));
+    }
+    setDados(lista); setClientes(mapa); setPeriodo({ de, ate }); setAgora(Date.now());
+    setCarregando(false);
+  };
+  useEffect(() => { buscar(); }, []);
+
+  const pessoas = [...new Set(dados.map(nomeResp))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const noPeriodo = (d: string) => d >= periodo.de && d <= periodo.ate;
+  const itens = dados.filter(t => !pessoa || nomeResp(t) === pessoa).map(t => {
+    const { rodando, pausada } = intervalosDaTarefa(t, agora);
+    const trabalho = segundosPorDia(rodando);
+    return {
+      t, rodando, pausada, trabalho,
+      concluidaNoPeriodo: t.status === 'concluida' && !!t.data_conclusao && noPeriodo(diaISO(t.data_conclusao)),
+      seg: somaDias(trabalho, periodo.de, periodo.ate),
+      total: somaDias(trabalho),
+      pausas: (t.pausas || []).filter((p: any) => p.pausado_em && noPeriodo(diaISO(p.pausado_em))),
+      aberta: t.status === 'em_andamento' || t.status === 'pausada',
+    };
+  });
+  const soma = (xs: any[], k: string) => xs.reduce((s, x) => s + x[k], 0);
+  const media = (xs: any[]) => xs.length ? soma(xs, 'total') / xs.length : 0;
+  // Horas de um grupo de tarefas: por pessoa, a união dos intervalos (tarefas em paralelo
+  // não contam em dobro); entre pessoas diferentes, soma.
+  const porDiaDaPessoa = (xs: any[], campo: 'rodando' | 'pausada') => {
+    const grupos: Record<string, number[][]> = {};
+    xs.forEach(x => { const k = nomeResp(x.t); grupos[k] = (grupos[k] || []).concat(x[campo]); });
+    return Object.fromEntries(Object.entries(grupos).map(([k, ints]) => [k, segundosPorDia(unirIntervalos(ints))]));
+  };
+  const horasDoGrupo = (xs: any[], campo: 'rodando' | 'pausada' = 'rodando') =>
+    Object.values(porDiaDaPessoa(xs, campo)).reduce((s: number, dias: any) => s + somaDias(dias, periodo.de, periodo.ate), 0);
+
+  const concluidas = itens.filter(x => x.concluidaNoPeriodo);
+  const totalSeg = horasDoGrupo(itens);
+  const totalPausado = horasDoGrupo(itens, 'pausada');
+  const nPausas = itens.reduce((s, x) => s + x.pausas.length, 0);
+  const diasPorPessoa: Record<string, Record<string, number>> = porDiaDaPessoa(itens, 'rodando');
+
+  const porPessoa = [...new Set(itens.map(x => nomeResp(x.t)))].map(nome => {
+    const xs = itens.filter(x => nomeResp(x.t) === nome);
+    const conc = xs.filter(x => x.concluidaNoPeriodo);
+    return {
+      nome, tarefas: xs.length, concluidas: conc.length, abertas: xs.filter(x => x.aberta).length,
+      naoIniciadas: xs.filter(x => x.t.status === 'nao_iniciada').length,
+      seg: horasDoGrupo(xs), media: media(conc), pausado: horasDoGrupo(xs, 'pausada'), pausas: xs.reduce((s, x) => s + x.pausas.length, 0),
+    };
+  }).sort((a, b) => b.seg - a.seg || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  const dias = [...new Set(Object.values(diasPorPessoa).flatMap(d => Object.keys(d)))].filter(noPeriodo).sort().reverse();
+  const porDia = dias.map(dia => {
+    const linha: Record<string, any> = { dia, total: 0 };
+    porPessoa.forEach(p => { linha[p.nome] = diasPorPessoa[p.nome]?.[dia] || 0; linha.total += linha[p.nome]; });
+    return linha;
+  });
+
+  const agrupar = (chave: (x: any) => string | null) => (Object.values(itens.reduce((acc: any, x) => {
+    const k = chave(x);
+    if (k == null) return acc;
+    if (!acc[k]) acc[k] = { nome: k, cliente: x.t.opl_id ? (clientes[x.t.opl_id] || '—') : '—', itens: [], ops: new Set(), pessoas: new Set() };
+    acc[k].itens.push(x); acc[k].pessoas.add(nomeResp(x.t));
+    if (x.t.numero_opl) acc[k].ops.add(x.t.numero_opl);
+    return acc;
+  }, {})) as any[]).map(g => ({ ...g, tarefas: g.itens.length, seg: horasDoGrupo(g.itens) })).sort((a, b) => b.seg - a.seg);
+  const porOp = agrupar(x => x.t.numero_opl || 'Sem OP');
+  const opsComHoras = porOp.filter(o => o.nome !== 'Sem OP' && o.seg > 0);
+  const mediaPorOp = opsComHoras.length ? soma(opsComHoras, 'seg') / opsComHoras.length : 0;
+  const porCliente = agrupar(x => x.t.opl_id ? (clientes[x.t.opl_id] || '—') : null);
+
+  const inicioPeriodo = periodo.de ? new Date(periodo.de + 'T00:00:00').getTime() : 0;
+  const fimPeriodo = periodo.ate ? new Date(periodo.ate + 'T00:00:00').getTime() + 86400000 : 0;
+  const motivos = Object.values(itens.reduce((acc: any, x) => {
+    const fimTarefa = x.t.data_inicio ? fimDaTarefa(x.t, agora) : agora;
+    (x.t.pausas || []).forEach((p: any) => {
+      if (!p.pausado_em) return;
+      const k = String(p.motivo || '—').trim();
+      if (!acc[k]) acc[k] = { motivo: k, vezes: 0, seg: 0 };
+      if (x.pausas.includes(p)) acc[k].vezes++;
+      const pi = Math.max(new Date(p.pausado_em).getTime(), inicioPeriodo);
+      const pf = Math.min(p.retomado_em ? new Date(p.retomado_em).getTime() : fimTarefa, fimPeriodo);
+      acc[k].seg += segundosUteis(new Date(pi), new Date(pf));
+    });
+    return acc;
+  }, {})).filter((m: any) => m.vezes > 0 || m.seg > 0).sort((a: any, b: any) => b.vezes - a.vezes || b.seg - a.seg) as any[];
+
+  const dataBr = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+  const imprimir = () => {
+    const w = window.open('', '_blank');
+    if (!w) { alert('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.'); return; }
+    const esc = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
+    const tabela = (cab: string[], linhas: any[][]) => `<table><thead><tr>${cab.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${linhas.map(l => `<tr>${l.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório gerencial da Engenharia</title>
+      <style>body{font:12px Arial,sans-serif;color:#17212b;margin:24px}h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;margin:18px 0 6px}
+      .sub{color:#6b7886}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dee4ea;padding:4px 6px;text-align:left;vertical-align:top}
+      th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#6b7886}</style></head><body>
+      <h1>Relatório gerencial da Engenharia</h1>
+      <div class="sub">${dataBr(periodo.de)} a ${dataBr(periodo.ate)} · ${esc(pessoa || 'equipe inteira')} · horas úteis (seg–sex 8:00–17:45), sem as pausas</div>
+      <p>Horas trabalhadas: <b>${fmtHoras(totalSeg)}</b> · Tarefas: ${itens.length} (${concluidas.length} concluídas no período) · Média por tarefa concluída: ${fmtHoras(media(concluidas))} · Média por OP: ${fmtHoras(mediaPorOp)} · Em pausa: ${fmtHoras(totalPausado)}</p>
+      <h2>Por pessoa</h2>${tabela(['Pessoa', 'Tarefas', 'Concluídas', 'Em aberto', 'Horas', 'Média/tarefa', 'Em pausa'], porPessoa.map(p => [p.nome, p.tarefas, p.concluidas, p.abertas, fmtHoras(p.seg), fmtHoras(p.media), fmtHoras(p.pausado)]))}
+      <h2>Horas por dia</h2>${tabela(['Dia', ...porPessoa.map(p => p.nome), 'Total'], porDia.map(l => [dataBr(l.dia), ...porPessoa.map(p => fmtHoras(l[p.nome])), fmtHoras(l.total)]))}
+      <h2>Horas por OP</h2>${tabela(['OP', 'Cliente', 'Tarefas', 'Horas', 'Pessoas'], porOp.map(o => [o.nome, o.cliente, o.tarefas, fmtHoras(o.seg), [...o.pessoas].join(', ')]))}
+      ${motivos.length ? `<h2>Motivos de pausa</h2>${tabela(['Motivo', 'Vezes', 'Horas em pausa'], motivos.map(m => [m.motivo, m.vezes, fmtHoras(m.seg)]))}` : ''}
+      </body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+  };
+
+  const kpi = (rot: string, val: any, sub: string, cor: string) => (
+    <div key={rot} className="acn-kpi">
+      <span className="rot"><i style={{ background: cor }} />{rot}</span>
+      <span className="val acn-num">{carregando ? '…' : val}</span>
+      <span className="sub">{sub}</span>
+    </div>
+  );
+  const direita = { textAlign: 'right' } as const;
+  const vazio = <div className="acn-empty">Nenhuma tarefa com atividade no período.</div>;
+
+  return (
+    <div>
+      <div className="sec-card">
+        <div className="acn-filtros" style={{ alignItems: 'flex-end' }}>
+          <div><label className="acn-label">De</label><input type="date" className="acn-input" value={de} onChange={e => setDe(e.target.value)} /></div>
+          <div><label className="acn-label">Até</label><input type="date" className="acn-input" value={ate} onChange={e => setAte(e.target.value)} /></div>
+          <div><label className="acn-label">Pessoa</label>
+            <select className="acn-input" value={pessoa} onChange={e => setPessoa(e.target.value)}>
+              <option value="">Equipe inteira</option>
+              {pessoas.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <button className="acn-b acn-b-primario" onClick={buscar} disabled={carregando}>{carregando ? 'Carregando…' : 'Atualizar'}</button>
+          <button className="acn-b acn-b-secundario acn-filtros-dir" onClick={imprimir} disabled={carregando || !itens.length}>Imprimir</button>
+        </div>
+        <div className="sec-body acn-fraco" style={{ fontSize: 12 }}>
+          Horas úteis: segunda a sexta, 8:00–17:45, sem as pausas. Entram as tarefas criadas no período ou em execução em algum momento dele.
+        </div>
+      </div>
+
+      <div className="acn-kpis">
+        {kpi('Horas trabalhadas', fmtHoras(totalSeg), 'horas úteis no período', 'var(--acn-brand)')}
+        {kpi('Tarefas', itens.length, `${concluidas.length} concluídas · ${itens.filter(x => x.aberta).length} em aberto`, 'var(--acn-info)')}
+        {kpi('Média por tarefa', fmtHoras(media(concluidas)), 'das concluídas no período', 'var(--acn-ok)')}
+        {kpi('Tempo em pausa', fmtHoras(totalPausado), `${nPausas} pausa(s) no período`, 'var(--acn-warn)')}
+      </div>
+
+      <div className="sec-card">
+        <div className="sec-hdr"><span>Por pessoa</span></div>
+        <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          {porPessoa.length === 0 ? vazio : (
+            <table className="acn-tabela">
+              <thead><tr><th>Pessoa</th><th style={direita}>Tarefas</th><th style={direita}>Concluídas</th><th style={direita}>Em aberto</th><th style={direita}>Não iniciadas</th><th style={direita}>Horas</th><th style={direita}>Média/tarefa</th><th style={direita}>Em pausa</th></tr></thead>
+              <tbody>
+                {porPessoa.map(p => (
+                  <tr key={p.nome}>
+                    <td className="acn-forte">{p.nome}</td>
+                    <td className="acn-num" style={direita}>{p.tarefas}</td>
+                    <td className="acn-num" style={direita}>{p.concluidas}</td>
+                    <td className="acn-num" style={direita}>{p.abertas}</td>
+                    <td className="acn-num" style={direita}>{p.naoIniciadas}</td>
+                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(p.seg)}</td>
+                    <td className="acn-num" style={direita}>{fmtHoras(p.media)}</td>
+                    <td className="acn-num" style={direita}>{fmtHoras(p.pausado)}{p.pausas ? ` (${p.pausas})` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {porDia.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr"><span>Horas por dia</span></div>
+          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+            <table className="acn-tabela">
+              <thead><tr><th>Dia</th>{porPessoa.map(p => <th key={p.nome} style={direita}>{p.nome}</th>)}<th style={direita}>Total</th></tr></thead>
+              <tbody>
+                {porDia.map(l => (
+                  <tr key={l.dia}>
+                    <td className="acn-num">{new Date(l.dia + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td>
+                    {porPessoa.map(p => <td key={p.nome} className="acn-num" style={direita}>{fmtHoras(l[p.nome])}</td>)}
+                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(l.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>Horas por OP</span>
+          {opsComHoras.length > 0 && <span className="acn-fraco" style={{ fontWeight: 400 }}>média de {fmtHoras(mediaPorOp)} por OP</span>}
+        </div>
+        <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          {porOp.length === 0 ? vazio : (
+            <table className="acn-tabela">
+              <thead><tr><th>OP</th><th>Cliente</th><th style={direita}>Tarefas</th><th style={direita}>Horas</th><th>Pessoas</th></tr></thead>
+              <tbody>
+                {porOp.map(o => (
+                  <tr key={o.nome}>
+                    <td className="acn-mono acn-forte">{o.nome}</td>
+                    <td>{o.cliente}</td>
+                    <td className="acn-num" style={direita}>{o.tarefas}</td>
+                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(o.seg)}</td>
+                    <td className="acn-fraco">{[...o.pessoas].join(', ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {porCliente.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr"><span>Horas por cliente</span></div>
+          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+            <table className="acn-tabela">
+              <thead><tr><th>Cliente</th><th style={direita}>OPs</th><th style={direita}>Tarefas</th><th style={direita}>Horas</th></tr></thead>
+              <tbody>
+                {porCliente.map(c => (
+                  <tr key={c.nome}>
+                    <td className="acn-forte">{c.nome}</td>
+                    <td className="acn-num" style={direita}>{c.ops.size}</td>
+                    <td className="acn-num" style={direita}>{c.tarefas}</td>
+                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(c.seg)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {motivos.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr"><span>Motivos de pausa</span></div>
+          <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+            <table className="acn-tabela">
+              <thead><tr><th>Motivo</th><th style={direita}>Vezes</th><th style={direita}>Horas em pausa</th></tr></thead>
+              <tbody>{motivos.map(m => <tr key={m.motivo}><td style={{ whiteSpace: 'pre-wrap' }}>{m.motivo}</td><td className="acn-num" style={direita}>{m.vezes}</td><td className="acn-num" style={direita}>{fmtHoras(m.seg)}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="sec-card">
+        <div className="sec-hdr"><span>Atividades do período ({itens.length})</span></div>
+        <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+          {itens.length === 0 ? vazio : (
+            <table className="acn-tabela">
+              <thead><tr><th>Tarefa</th><th>Pessoa</th><th>OP</th><th>Status</th><th>Início</th><th>Conclusão</th><th style={direita}>No período</th><th style={direita}>Total</th></tr></thead>
+              <tbody>
+                {itens.map(({ t, seg, total }) => (
+                  <tr key={t.id}>
+                    <td style={{ minWidth: 200 }}>{t.titulo}</td>
+                    <td>{nomeResp(t)}</td>
+                    <td className="acn-mono">{t.numero_opl || '—'}</td>
+                    <td>{STATUS_LABEL[t.status] || t.status}</td>
+                    <td className="acn-num">{fmtDtHr(t.data_inicio)}</td>
+                    <td className="acn-num">{fmtDtHr(t.data_conclusao)}</td>
+                    <td className="acn-num acn-forte" style={direita}>{fmtHoras(seg)}</td>
+                    <td className="acn-num" style={direita}>{fmtHoras(total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Relatório por Período ─────────────────────────────────────────────────────
-function RelatorioHoras() {
+// Gerentes e Admin: equipe inteira (com filtro por pessoa). Demais: só as próprias horas.
+function RelatorioHoras({ currentUser }: any) {
+  const gestor = ehGestorEngenharia(currentUser);
+  const [pessoa, setPessoa] = useState('');
   const [de, setDe] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]; });
   const [ate, setAte] = useState(() => new Date().toISOString().split('T')[0]);
-  const [dados, setDados] = useState<any[]>([]);
+  const [doPeriodo, setDados] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(false);
 
   const buscar = async () => {
@@ -258,12 +663,16 @@ function RelatorioHoras() {
     const { data } = await supabase.from('engenharia_horas_tarefas').select('*')
       .gte('criado_em', de + 'T00:00:00').lte('criado_em', ate + 'T23:59:59')
       .order('criado_em', { ascending: false });
-    setDados(data || []);
+    // quem não é gerente/admin vê só as tarefas em que é o responsável
+    const meusNomes = gestor ? [] : await nomesDoUsuario(currentUser);
+    setDados((data || []).filter(t => gestor || mesmaPessoa(t.responsavel_nome, meusNomes)));
     setCarregando(false);
   };
 
   useEffect(() => { buscar(); }, []);
 
+  const pessoasRel = [...new Set(doPeriodo.map(t => t.responsavel_nome || 'Sem responsável'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const dados = doPeriodo.filter(t => !pessoa || (t.responsavel_nome || 'Sem responsável') === pessoa);
   const concluidas = dados.filter(t => t.status === 'concluida');
   const tempoTotal = concluidas.reduce((a, t) => a + (t.tempo_total_segundos || 0), 0);
   const porResponsavel = dados.reduce((acc: any, t) => {
@@ -279,7 +688,7 @@ function RelatorioHoras() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr"><span>Filtros do Relatório</span></div>
+        <div className="sec-hdr"><span>{gestor ? 'Filtros do Relatório' : `Suas horas — ${currentUser?.nome || ''}`}</span></div>
         <div className="sec-body">
           <div className="form-row">
             <div className="form-group">
@@ -290,6 +699,15 @@ function RelatorioHoras() {
               <label className="acn-label">Até</label>
               <input type="date" className="acn-input" style={{ width: '100%' }} value={ate} onChange={e => setAte(e.target.value)} />
             </div>
+            {gestor && (
+              <div className="form-group">
+                <label className="acn-label">Pessoa</label>
+                <select className="acn-input" style={{ width: '100%' }} value={pessoa} onChange={e => setPessoa(e.target.value)}>
+                  <option value="">Equipe inteira</option>
+                  {pessoasRel.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button className="acn-btn" style={{ background: '#1e293b' }} onClick={buscar}>Filtrar</button>
             </div>
@@ -355,7 +773,9 @@ function RelatorioHoras() {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
-  const [aba, setAba] = useState<'tarefas' | 'relatorio'>('tarefas');
+  const [aba, setAba] = useState<'tarefas' | 'relatorio' | 'gerencial'>('tarefas');
+  const gestor = ehGestorEngenharia(currentUser);
+  const [operador, setOperador] = useState('');
   const [tarefas, setTarefas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filtro, setFiltro] = useState<'todas' | 'nao_iniciada' | 'em_andamento' | 'pausada' | 'concluida'>('todas');
@@ -373,8 +793,10 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
   useEffect(() => { carregar(); }, []);
   useEffect(() => { const t = setInterval(() => setTick(Date.now()), 1000); return () => clearInterval(t); }, []);
 
+  const operadores = [...new Set(tarefas.map(t => t.responsavel_nome || 'Sem responsável'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const filtradas = tarefas.filter(t => {
     if (filtro !== 'todas' && t.status !== filtro) return false;
+    if (gestor && operador && (t.responsavel_nome || 'Sem responsável') !== operador) return false;
     if (busca.trim()) {
       const alvo = `${t.titulo||''} ${t.numero_opl||''} ${t.responsavel_nome||''}`.toLowerCase();
       if (!alvo.includes(busca.trim().toLowerCase())) return false;
@@ -389,9 +811,13 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
           onClick={() => setAba('tarefas')}>⏱️ Tarefas</button>
         <button style={{ flex: 1, padding: '8px', background: aba === 'relatorio' ? '#1e293b' : 'white', color: aba === 'relatorio' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
           onClick={() => setAba('relatorio')}>📊 Relatório por Período</button>
+        {gestor && (
+          <button style={{ flex: 1, padding: '8px', background: aba === 'gerencial' ? '#1e293b' : 'white', color: aba === 'gerencial' ? 'white' : '#1e293b', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+            onClick={() => setAba('gerencial')}>📈 Relatório gerencial</button>
+        )}
       </div>
 
-      {aba === 'relatorio' ? <RelatorioHoras /> : (
+      {aba === 'gerencial' && gestor ? <RelatorioGerencial /> : aba === 'relatorio' ? <RelatorioHoras currentUser={currentUser} /> : (
         <>
           <div className="sec-card">
             <div className="sec-hdr">
@@ -408,6 +834,12 @@ export default function HorasTarefasTab({ currentUser }: { currentUser: any }) {
               ))}
               <input placeholder="🔍 Buscar por título, OPL ou responsável..." value={busca} onChange={e => setBusca(e.target.value)}
                 style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
+              {gestor && (
+                <select className="acn-input" value={operador} onChange={e => setOperador(e.target.value)} aria-label="Operador" style={{ width: 'auto', minWidth: 180 }}>
+                  <option value="">Operador: todos</option>
+                  {operadores.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              )}
             </div>
             <div className="sec-body" style={{ overflowX: 'auto', paddingTop: 0 }}>
               {loading ? <div className="acn-empty">Carregando...</div> : filtradas.length === 0 ? (
