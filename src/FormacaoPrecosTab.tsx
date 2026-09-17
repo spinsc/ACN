@@ -6,6 +6,7 @@ import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgr
          somarResultados, estruturaFormacao } from './FormacaoCalculo';
 import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { buscarPorPalavras } from './SearchUtils';
+import { estruturaDoKit } from './KitEstrutura';
 import { confirmar, pedirTexto } from './Feedback';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -745,6 +746,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
 
   const selecionarProdutoKit = (p) => {
     onFill({
+      kit_id: p.id, kit_nome: p.nome,
       produto: p.nome, marca: '', fornecedor: '', moeda: 'REAL',
       custo_unit: p.preco_venda || 0, ipi_pct: 0, st_pct: 0,
       markup_pct: 0, difal_pct: p.difal_pct ?? 0,
@@ -753,24 +755,26 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
     setQ(p.nome); setOpen(false);
   };
 
+  // Abre o kit item a item, com os sub-kits vinculados já expandidos. O kit manda
+  // na COMPOSIÇÃO; custo, markup e demais valores são desta formação (começam
+  // pelos do catálogo e ficam livres para ajuste aqui).
   const expandirBom = async (p) => {
-    const { data: bom } = await supabase
-      .from('cadastro_produtos_itens')
-      .select('*, cadastro_itens(nome,marca,fornecedor,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct)')
-      .eq('produto_id', p.id).order('ordem');
+    const linhasKit = await estruturaDoKit(p.id);
     setOpen(false);
-    if (!bom || bom.length === 0) { selecionarProdutoKit(p); return; }
-    const linhas = bom.map(l => {
-      const it = l.cadastro_itens || {};
+    if (!linhasKit.length) { selecionarProdutoKit(p); return; }
+    const linhas = linhasKit.map(l => {
+      const it = l.item || {};
       return {
-        produto: l.item_nome || it.nome || '', marca: it.marca || '', fornecedor: it.fornecedor || '',
-        moeda: normMoeda(it.moeda), qt: Number(l.quantidade) || 1,
+        kit_id: p.id, kit_nome: p.nome,
+        produto: it.nome || '', marca: it.marca || '', fornecedor: it.fornecedor || '',
+        moeda: normMoeda(it.moeda), qt: l.quantidade || 1,
+        observacao_kit: l.origem.length ? `Kit ${l.origem.join(' › ')}` : '',
         custo_unit: it.custo_unit || 0, ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
         tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-        markup_pct: it.markup_pct ?? p.markup_pct ?? 30,
-        difal_pct: it.difal_pct ?? p.difal_pct ?? 0,
-        imposto_pct: it.imposto_pct ?? p.imposto_pct ?? 16,
-        custo_fixo_pct: it.custo_fixo_pct ?? p.custo_fixo_pct ?? 3,
+        markup_pct: it.markup_pct ?? 30,
+        difal_pct: it.difal_pct ?? 0,
+        imposto_pct: it.imposto_pct ?? 16,
+        custo_fixo_pct: it.custo_fixo_pct ?? 3,
       };
     });
     onExpand(linhas);

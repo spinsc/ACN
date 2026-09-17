@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
+import { linhasDoKit, custoDoKit, usosDoKit } from './KitEstrutura';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -18,7 +19,8 @@ function fmtPct(v: number) {
   return `${Number(v || 0).toFixed(1)}%`;
 }
 
-/** Calcula custo total e preço de venda estimado do produto a partir do BOM */
+/** Calcula custo total e preço de venda estimado do produto a partir do BOM
+ *  (linha de sub-kit entra com o custo do kit todo, já calculado ao carregar) */
 function calcProduto(linhas: any[], markup_pct: number, difal_pct: number, imposto_pct: number, custo_fixo_pct: number) {
   const custoTotal = linhas.reduce((acc, l) => {
     const item = l._item || {};
@@ -146,7 +148,7 @@ const CABECALHOS_CODIGO = ['codigo', 'código', 'cod', 'item', 'coditem', 'codig
 const CABECALHOS_QTD = ['quantidade', 'qtd', 'qtde', 'qt', 'quant'];
 const CABECALHOS_OBS = ['observacao', 'observação', 'obs', 'observacoes', 'observações'];
 
-function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
+function ModalAdicionarItens({ produtoId, onAdicionar, onVincularKit, onClose }: any) {
   const [modo, setModo] = useState('buscar');
   const [q, setQ] = useState('');
   const [resultados, setResultados] = useState<any[]>([]);
@@ -251,6 +253,15 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
     }
   };
 
+  const vincularKit = async () => {
+    if (!kitSel) { alert('Escolha o kit que vai dentro deste.'); return; }
+    setProcessando(true);
+    const kit = produtos.find((p: any) => p.id === kitSel);
+    const r = await onVincularKit(kit);
+    setRelatorio({ adicionados: r.novos, somados: r.somados, naoEncontrados: [], kit: kit?.nome });
+    setProcessando(false);
+  };
+
   const trazerDoKit = async () => {
     if (!kitSel) { alert('Escolha o kit de onde vêm os itens.'); return; }
     setProcessando(true);
@@ -290,7 +301,9 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
           {relatorio && (
             <div style={{ background: relatorio.naoEncontrados.length ? '#fef9c3' : '#dcfce7', border: '1px solid ' + (relatorio.naoEncontrados.length ? '#fde68a' : '#bbf7d0'), borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 10, color: '#374151' }}>
               <div style={{ fontWeight: 700 }}>
-                {relatorio.adicionados} item(ns) adicionado(s){relatorio.somados ? ` · ${relatorio.somados} já estavam no kit e tiveram a quantidade somada` : ''}
+                {relatorio.kit
+                  ? (relatorio.adicionados ? `Kit "${relatorio.kit}" vinculado` : `O kit "${relatorio.kit}" já estava vinculado: somou 1 na quantidade`)
+                  : `${relatorio.adicionados} item(ns) adicionado(s)${relatorio.somados ? ` · ${relatorio.somados} já estavam no kit e tiveram a quantidade somada` : ''}`}
               </div>
               {relatorio.naoEncontrados.length > 0 && (
                 <div style={{ marginTop: 4 }}>
@@ -364,8 +377,10 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
           {modo === 'kit' && (
             <div>
               <div style={{ fontSize: 10, color: '#64748b', marginBottom: 6 }}>
-                Traz para este kit todos os itens da estrutura de outro produto já montado, com as quantidades dele.
-                Os itens passam a fazer parte deste kit: mudanças posteriores no outro kit não vêm junto.
+                <b>Vincular</b> deixa o kit escolhido dentro deste: a composição continua sendo a do cadastro dele,
+                então mudou lá, muda aqui e nas formações de preço feitas com este kit.
+                <br />
+                <b>Copiar itens</b> traz os itens de uma vez, e depois cada kit segue seu caminho.
               </div>
               <select value={kitSel} onChange={e => setKitSel(e.target.value)} style={cx}>
                 <option value="">Escolha o kit…</option>
@@ -392,10 +407,16 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
             </button>
           )}
           {modo === 'kit' && (
-            <button onClick={trazerDoKit} disabled={processando || !kitSel}
-              style={{ padding: '6px 18px', border: 'none', borderRadius: 5, background: kitSel ? '#7c3aed' : '#9ca3af', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-              {processando ? 'Trazendo…' : '🧩 Trazer itens do kit'}
-            </button>
+            <>
+              <button onClick={trazerDoKit} disabled={processando || !kitSel}
+                style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                {processando ? '…' : '📄 Copiar itens'}
+              </button>
+              <button onClick={vincularKit} disabled={processando || !kitSel}
+                style={{ padding: '6px 18px', border: 'none', borderRadius: 5, background: kitSel ? '#7c3aed' : '#9ca3af', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                {processando ? 'Vinculando…' : '🧩 Vincular kit'}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -465,18 +486,20 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
   useEffect(() => {
     if (!idDoBom) return;
     setLoadingBom(true);
-    supabase
-      .from('cadastro_produtos_itens')
-      .select('*, cadastro_itens(*)')
-      .eq('produto_id', idDoBom)
-      .order('ordem')
-      .then(({ data }) => {
-        setLinhas((data || []).map(l => ({
-          ...l,
-          id: produto?.id ? l.id : undefined,
-          _tmpId: Math.random().toString(36).slice(2),
-          _item: l.cadastro_itens || { nome: l.item_nome, custo_unit: 0 },
-        })));
+    linhasDoKit(idDoBom)
+      .then(async (linhasSalvas: any[]) => {
+        const montadas = [];
+        for (const l of linhasSalvas) {
+          const base = { ...l, id: produto?.id ? l.id : undefined, _tmpId: Math.random().toString(36).slice(2) };
+          if (l.produto_filho_id) {
+            // sub-kit vinculado: custo é o do kit de origem, sempre o atual
+            const custo = await custoDoKit(l.produto_filho_id);
+            montadas.push({ ...base, _kit: l.filho || { nome: l.item_nome }, _item: { nome: l.item_nome, custo_unit: custo, ipi_pct: 0, st_pct: 0 } });
+          } else {
+            montadas.push({ ...base, _item: l.cadastro_itens || { nome: l.item_nome, custo_unit: 0 } });
+          }
+        }
+        setLinhas(montadas);
         setLoadingBom(false);
       });
   }, [idDoBom]);
@@ -514,6 +537,36 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
     return resumo;
   };
   const addItem = (item: any) => adicionarItens([{ item, quantidade: 1 }]);
+
+  // Kit dentro de kit VINCULADO: guarda a referência, não os itens. A composição
+  // do sub-kit é sempre lida do cadastro dele — mudou lá, muda aqui.
+  const vincularKit = async (kit: any, quantidade = 1) => {
+    if (produto?.id && kit.id === produto.id) { alert('Um kit não pode conter ele mesmo.'); return { novos: 0, somados: 0 }; }
+    const custo = await custoDoKit(kit.id);
+    let resumo = { novos: 0, somados: 0 };
+    setLinhas(prev => {
+      const i = prev.findIndex(l => l.produto_filho_id === kit.id);
+      if (i >= 0) {
+        resumo = { novos: 0, somados: 1 };
+        return prev.map((l, j) => j === i ? { ...l, quantidade: (Number(l.quantidade) || 0) + quantidade } : l);
+      }
+      resumo = { novos: 1, somados: 0 };
+      return [...prev, {
+        _tmpId: Math.random().toString(36).slice(2),
+        produto_filho_id: kit.id,
+        item_id: null,
+        item_nome: kit.nome,
+        item_codigo: kit.codigo || null,
+        quantidade,
+        unidade: 'KIT',
+        observacoes: '',
+        ordem: prev.length,
+        _kit: kit,
+        _item: { nome: kit.nome, custo_unit: custo, ipi_pct: 0, st_pct: 0 },
+      }];
+    });
+    return resumo;
+  };
 
   const removeItem = (idx: number) => setLinhas(prev => prev.filter((_, i) => i !== idx));
 
@@ -565,6 +618,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
           linhas.map((l, idx) => ({
             produto_id:  produtoId,
             item_id:     l.item_id || null,
+            produto_filho_id: l.produto_filho_id || null,
             item_nome:   l.item_nome,
             item_codigo: l.item_codigo || null,
             quantidade:  Number(l.quantidade) || 1,
@@ -854,7 +908,15 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
                         <tr key={l._tmpId || l.id} style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
                           <td style={{ padding: '4px 7px', fontSize: 9, color: '#9ca3af', textAlign: 'center' }}>{idx + 1}</td>
                           <td style={{ padding: '4px 7px', fontSize: 10, fontWeight: 600 }}>
-                            <div>{l.item_nome}</div>
+                            <div>
+                              {l.produto_filho_id && (
+                                <span title="Kit vinculado: a composição vem do cadastro dele e acompanha as mudanças"
+                                  style={{ background: '#ede9fe', color: '#6d28d9', borderRadius: 10, padding: '1px 6px', fontSize: 8, fontWeight: 800, marginRight: 4 }}>
+                                  🧩 KIT
+                                </span>
+                              )}
+                              {l.item_nome}
+                            </div>
                             {l.item_codigo && <div style={{ fontSize: 8, color: '#9ca3af' }}>{l.item_codigo}</div>}
                           </td>
                           <td style={{ padding: '4px 7px' }}>
@@ -906,6 +968,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
           <ModalAdicionarItens
             produtoId={produto?.id || copiarBomDe}
             onAdicionar={adicionarItens}
+            onVincularKit={vincularKit}
             onClose={() => setAdicionarVarios(false)}
           />
         )}
@@ -1066,11 +1129,23 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
     ordenar.col !== col ? <span style={{ opacity: .3 }}>⇅</span> : <span>{ordenar.dir === 'asc' ? '↑' : '↓'}</span>;
 
   const excluir = async (id: string) => {
-    if (!await confirmar('Excluir este produto? A estrutura BOM também será removida.')) return;
     setDeletando(id);
-    await supabase.from('cadastro_produtos').delete().eq('id', id);
-    setProdutos(prev => prev.filter(p => p.id !== id));
+    // produto usado em outro kit ou numa formação de preço não pode sumir
+    const { kits, formacoes, bloqueado } = await usosDoKit(id);
+    if (bloqueado) {
+      setDeletando(null);
+      const partes = [
+        kits.length ? `${kits.length} kit(s): ${kits.map((k: any) => k.nome).join(', ')}` : '',
+        formacoes.length ? `${formacoes.length} formação(ões) de preço: ${formacoes.map((f: any) => f.nome || f.numero_cotacao).join(', ')}` : '',
+      ].filter(Boolean);
+      alert(`Este produto não pode ser excluído porque está em uso — ${partes.join(' e ')}. Tire o vínculo lá ou deixe o produto inativo.`);
+      return;
+    }
+    if (!await confirmar('Excluir este produto? A estrutura BOM também será removida.')) { setDeletando(null); return; }
+    const { error } = await supabase.from('cadastro_produtos').delete().eq('id', id);
     setDeletando(null);
+    if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+    setProdutos(prev => prev.filter(p => p.id !== id));
   };
 
   const stats = {
