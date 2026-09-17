@@ -6,6 +6,16 @@ import { EXT_PLANILHAS } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { combinaBusca } from './SearchUtils';
+import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
+
+// ─── Campos próprios de cada setor ───────────────────────────────────────────
+// A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
+// informação a mais. Compras abre o apontamento de centro de custo. Para
+// acrescentar campo de outro setor, inclua aqui e trate no formulário/detalhe.
+const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean }> = {
+  Compras: { centroCusto: true },
+};
+const camposDoSetor = (setor: string) => CAMPOS_POR_SETOR[String(setor || '').trim()] || {};
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
@@ -338,6 +348,17 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     initial.vinculo_tipo ? { tipo: initial.vinculo_tipo, id: initial.vinculo_id, descricao: initial.vinculo_descricao } : null
   );
   const [designarForm, setDesignarForm] = useState({ responsavel_nome: initial.responsavel_nome || '', responsavel_email: initial.responsavel_email || '', prazo: initial.prazo ? isoToDate(initial.prazo) : '' });
+  const camposSetor = camposDoSetor(initial.setor);
+  const [centrosDet, setCentrosDet] = useState<any[]>([]);
+  useEffect(() => { if (camposSetor.centroCusto) fetchCentrosCusto().then(setCentrosDet); }, [camposSetor.centroCusto]);
+  const gravarCentroCusto = async (id: string | null) => {
+    const c = centrosDet.find((x: any) => x.id === id);
+    await supabase.from('demandas_avulsas').update({
+      centro_custo_id: id, centro_custo: c ? `${c.codigo} — ${c.nome}` : null, atualizado_em: new Date().toISOString(),
+    }).eq('id', d.id);
+    await reload();
+    onRefresh();
+  };
   const [reprogramarForm, setReprogramarForm] = useState({ nova_data: '', motivo: '' });
   const [mostrarReprogramar, setMostrarReprogramar] = useState(false);
   const [mostrarDesignar, setMostrarDesignar] = useState(false);
@@ -590,6 +611,17 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
         </div>
 
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
+
+          {/* ── Centro de custo (setor Compras) ── */}
+          {camposSetor.centroCusto && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'6px 10px',
+              border:'1px solid #e2e8f0', background:'#f8fafc', borderRadius:6, fontSize:11 }}>
+              <span style={{ fontWeight:700, color:'#475569' }}>🏷️ Centro de custo</span>
+              {editando
+                ? <CentroCustoSelect value={d.centro_custo_id} onChange={gravarCentroCusto} style={{ flex:1, minWidth:180, fontSize:11 }} />
+                : <span style={{ color: d.centro_custo ? '#1e293b' : '#94a3b8' }}>{d.centro_custo || 'não informado'}</span>}
+            </div>
+          )}
 
           {/* ── Vínculo a um processo já em andamento (opcional) ── */}
           {!editando && vinculo && (
@@ -880,6 +912,14 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [vinculo, setVinculo] = useState<VinculoValue | null>(vinculoInicial || null);
   const [anexos, setAnexos] = useState<File[]>([]);   // foto, planilha, PDF... enviados junto com a demanda
   const [salvando, setSalvando] = useState(false);
+  const [centroCustoId, setCentroCustoId] = useState<string | null>(null);
+  const [centros, setCentros] = useState<any[]>([]);
+  const campos = camposDoSetor(setorAlvo);
+  useEffect(() => { if (campos.centroCusto && !centros.length) fetchCentrosCusto().then(setCentros); }, [campos.centroCusto]);
+  const nomeCentro = (id: string | null) => {
+    const c = centros.find((x: any) => x.id === id);
+    return c ? `${c.codigo} — ${c.nome}` : null;
+  };
   const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}));
 
   // Ajusta array de etapas quando qtd muda
@@ -931,6 +971,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       vinculo_tipo: vinculo?.tipo || null,
       vinculo_id: vinculo?.id || null,
       vinculo_descricao: vinculo?.descricao || null,
+      // campo do setor: Compras aponta o centro de custo
+      centro_custo_id: campos.centroCusto ? centroCustoId : null,
+      centro_custo: campos.centroCusto ? nomeCentro(centroCustoId) : null,
     };
     // Para demanda simples, deixa campos no nível raiz vazios
     if (qtdEtapas === 1) {
@@ -1000,6 +1043,19 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                     {s}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Campo do setor de destino — Compras: centro de custo */}
+          {campos.centroCusto && (
+            <div>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
+                Centro de Custo
+              </label>
+              <CentroCustoSelect value={centroCustoId} onChange={setCentroCustoId} style={{ width:'100%', fontSize:11 }} />
+              <div style={{ fontSize:9, color:'#9ca3af', marginTop:3 }}>
+                Onde a compra desta demanda será apontada. Dá para deixar em branco e informar depois.
               </div>
             </div>
           )}
