@@ -9,7 +9,7 @@ import OplAcompModal from './OplAcompModal';
 import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca } from './SearchUtils';
 import { FLUXOS, filaDe, fluxoLabel, temSerralheria, motivoSerralheria, SERRALHERIA_STATUS,
          serralheriaSegueParaAdaptacao, filaDaOp } from './FluxoEntrega';
 import { notificarEnvolvidosOp } from './NotificarEnvolvidos';
@@ -2544,13 +2544,10 @@ export default function ProducaoTab({ currentUser }) {
       const tec = o.modo_execucao === 'equipe' ? o.equipe_nome : o.responsavel_producao;
       if (tec !== filtroTecnico) return false;
     }
-    if (filtroCliente.trim() && !normalizarBusca(o.cliente_nome).includes(normalizarBusca(filtroCliente))) return false;
+    if (filtroCliente.trim() && !combinaBusca(o.cliente_nome, filtroCliente)) return false;
     if (filtroEntregaDe && (!o.data_prevista_entrega || o.data_prevista_entrega < filtroEntregaDe)) return false;
     if (filtroEntregaAte && (!o.data_prevista_entrega || o.data_prevista_entrega > filtroEntregaAte)) return false;
-    if (filtroBusca.trim()) {
-      const t = normalizarBusca(filtroBusca);
-      if (!(normalizarBusca(o.opl).includes(t) || normalizarBusca(o.chassi).includes(t) || normalizarBusca(o.cliente_nome).includes(t))) return false;
-    }
+    if (filtroBusca.trim() && !combinaBusca([o.opl, o.chassi, o.cliente_nome], filtroBusca)) return false;
     return true;
   });
   // Mesmo destaque usado em outras telas — linha fica com a lateral amarela

@@ -6,7 +6,7 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
 import { soEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
@@ -1109,13 +1109,7 @@ export function LinkOpl({ opl, currentUser, color }: { opl: any; currentUser?: a
 // Filtro comum: OPL, chassi, cliente, tipo_projeto
 export function filtrarOpls(opls: any[], busca: string): any[] {
   if (!busca) return opls;
-  const q = normalizarBusca(busca);
-  return opls.filter(o =>
-    normalizarBusca(o.opl).includes(q) ||
-    normalizarBusca(o.chassi).includes(q) ||
-    normalizarBusca(o.cliente_nome).includes(q) ||
-    normalizarBusca(o.tipo_projeto).includes(q)
-  );
+  return opls.filter(o => combinaBusca([o.opl, o.chassi, o.cliente_nome, o.tipo_projeto], busca));
 }
 
 // ─── Input de busca padrão ────────────────────────────────────────────────────

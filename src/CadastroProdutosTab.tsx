@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { normalizarBusca } from './SearchUtils';
+import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
 
@@ -50,12 +50,10 @@ function ItemBuscador({ onSelect, excluirIds = [] }: { onSelect: (item: any) => 
   useEffect(() => {
     if (!q.trim()) { setItens([]); setOpen(false); return; }
     const t = setTimeout(async () => {
-      const { data } = await supabase
+      const { data } = await buscarPorPalavras(supabase
         .from('cadastro_itens')
         .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
-        .eq('ativo', true)
-        .ilike('nome', `%${q}%`)
-        .limit(20);
+        .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(20);
       setItens((data || []).filter(i => !excluirIds.includes(i.id)));
       setOpen(true);
     }, 250);
@@ -125,9 +123,6 @@ const MODOS_ADICIONAR = [
   { id: 'kit',      rotulo: '🧩 Outro kit' },
 ];
 
-// PostgREST usa vírgula e parênteses na sintaxe do filtro: fora do texto buscado
-const limparBusca = (v: string) => normalizarBusca(v).replace(/[,()*%\\]/g, ' ').trim();
-
 /** Itens do catálogo pelos códigos informados (em lotes, sem acento e sem caixa) */
 async function itensPorCodigo(codigos: string[]) {
   const achados = new Map<string, any>();
@@ -165,16 +160,12 @@ function ModalAdicionarItens({ produtoId, onAdicionar, onClose }: any) {
 
   // busca por código ou nome, com bem mais resultados que o campo de um item só
   useEffect(() => {
-    const alvo = limparBusca(q);
-    if (!alvo) { setResultados([]); return; }
+    if (!q.trim()) { setResultados([]); return; }
     setBuscando(true);
     const t = setTimeout(async () => {
-      const { data } = await supabase.from('cadastro_itens')
+      const { data } = await buscarPorPalavras(supabase.from('cadastro_itens')
         .select('id, codigo, nome, marca, fornecedor, unidade, custo_unit, ipi_pct, st_pct, moeda')
-        .eq('ativo', true)
-        .or(`nome_norm.ilike.%${alvo}%,codigo_norm.ilike.%${alvo}%`)
-        .order('nome')
-        .limit(200);
+        .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).order('nome').limit(200);
       setResultados(data || []);
       setBuscando(false);
     }, 250);
@@ -1061,10 +1052,7 @@ export default function CadastroProdutosTab({ currentUser }: { currentUser: any 
     if (filtAtivo === 'ativo'   && !p.ativo) return false;
     if (filtAtivo === 'inativo' &&  p.ativo) return false;
     if (filtCat && p.categoria !== filtCat) return false;
-    if (busca.trim()) {
-      const t = normalizarBusca(busca);
-      return normalizarBusca(p.nome).includes(t) || normalizarBusca(p.codigo).includes(t) || normalizarBusca(p.categoria).includes(t);
-    }
+    if (busca.trim()) return combinaBusca([p.nome, p.codigo, p.categoria], busca);
     return true;
   });
 

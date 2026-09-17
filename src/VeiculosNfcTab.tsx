@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { perfilComPoderes } from './utils/permissoes';
 import { CabecalhoTela, Botao } from './Interface';
@@ -384,11 +384,9 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
 
   const buscarProdutos = async (q: string) => {
     if (q.length < 2) { setProdResults([]); return; }
-    const { data } = await supabase.from('cadastro_produtos')
+    const { data } = await buscarPorPalavras(supabase.from('cadastro_produtos')
       .select('id, nome, garantia_meses, codigo')
-      .ilike('nome', `%${q}%`)
-      .eq('ativo', true)
-      .limit(8);
+      .eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(8);
     setProdResults(data || []);
   };
 
@@ -1086,13 +1084,7 @@ export default function VeiculosNfcTab({ currentUser }) {
   };
 
   const veiculosFiltrados = veiculos.filter(v => {
-    const q = normalizarBusca(busca);
-    const ok_busca = !busca ||
-      normalizarBusca(v.chassi).includes(q) ||
-      normalizarBusca(v.placa).includes(q) ||
-      normalizarBusca(v.modelo).includes(q) ||
-      normalizarBusca(v.orgao_cliente).includes(q) ||
-      normalizarBusca(v.opl_numero).includes(q);
+    const ok_busca = combinaBusca([v.chassi, v.placa, v.modelo, v.orgao_cliente, v.opl_numero], busca);
     const ativa = calcGarantia(v.data_fim_garantia);
     const ok_gar = !filtroGar ||
       (filtroGar === 'ativa' && ativa === true) ||

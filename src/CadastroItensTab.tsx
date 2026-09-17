@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
-import { normalizarBusca } from './SearchUtils';
+import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
@@ -444,16 +444,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
     if (filtAtivo === 'ativo'   && !it.ativo) return false;
     if (filtAtivo === 'inativo' &&  it.ativo) return false;
     if (filtCat && it.categoria !== filtCat) return false;
-    if (busca.trim()) {
-      const t = normalizarBusca(busca);
-      return (
-        normalizarBusca(it.nome).includes(t) ||
-        normalizarBusca(it.codigo).includes(t) ||
-        normalizarBusca(it.marca).includes(t) ||
-        normalizarBusca(it.fornecedor).includes(t) ||
-        normalizarBusca(it.ncm).includes(t)
-      );
-    }
+    if (busca.trim()) return combinaBusca([it.nome, it.codigo, it.marca, it.fornecedor, it.ncm], busca);
     return true;
   });
 

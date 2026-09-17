@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca } from './SearchUtils';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
@@ -1280,7 +1280,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
     if (filtroStatusSpec && d.status !== filtroStatusSpec) return false;
     // Filtro por responsável
     if (filtroResp) {
-      if (!normalizarBusca(d.responsavel_nome).includes(normalizarBusca(filtroResp))) return false;
+      if (!combinaBusca(d.responsavel_nome, filtroResp)) return false;
     }
     return true;
   });

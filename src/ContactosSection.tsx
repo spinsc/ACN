@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import WhatsAppConexoesWidget from './WhatsAppConexoesWidget';
 import Linkify from './Linkify';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
 import { confirmar } from './Feedback';
 import { perfilComPoderes } from './utils/permissoes';
@@ -145,14 +145,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
   const contatosFiltrados = contatos.filter(c => {
     if (!veTodos && c.operador_nome !== currentUser?.nome) return false;
     if (filtroOp && c.operador_nome !== filtroOp) return false;
-    if (busca) {
-      const b = normalizarBusca(busca);
-      return normalizarBusca(c.nome).includes(b)
-          || normalizarBusca(c.empresa).includes(b)
-          || normalizarBusca(c.cargo).includes(b)
-          || c.whatsapp?.includes(b)
-          || normalizarBusca(c.email).includes(b);
-    }
+    if (busca) return combinaBusca([c.nome, c.empresa, c.cargo, c.whatsapp, c.email], busca);
     return true;
   });
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
 import { perfilComPoderes } from './utils/permissoes';
@@ -1122,11 +1122,9 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
     if (!busca.trim()) { setResultados([]); return; }
     clearTimeout(busRef.current);
     busRef.current = setTimeout(async () => {
-      const { data } = await supabase.from('cadastro_produtos')
+      const { data } = await buscarPorPalavras(supabase.from('cadastro_produtos')
         .select('id,codigo,nome,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,fotos,catalogo_url,garantia_meses')
-        .eq('ativo', true)
-        .ilike('nome', `%${busca.trim()}%`)
-        .limit(10);
+        .eq('ativo', true), ['nome_norm', 'codigo_norm'], busca).limit(10);
       setResultados(data || []);
     }, 250);
     return () => clearTimeout(busRef.current);
@@ -1411,12 +1409,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   }, [carregarConfig, carregarCotacoes, carregarPendentes]);
 
   const cotacoesFiltradas = cotacoes.filter(c => {
-    const okBuscaTermo = normalizarBusca(busca);
-    const ok_busca = !busca ||
-      normalizarBusca(c.nome).includes(okBuscaTermo) ||
-      normalizarBusca(c.numero_cotacao).includes(okBuscaTermo) ||
-      normalizarBusca(c.opl_numero).includes(okBuscaTermo) ||
-      normalizarBusca(c.criado_por).includes(okBuscaTermo);
+    const ok_busca = combinaBusca([c.nome, c.numero_cotacao, c.opl_numero, c.criado_por], busca);
     const ok_status = !filtroStatus || c.status === filtroStatus;
     const ok_aba    = abaLista === 'todas' || !c.crm_oportunidade_id;
     return ok_busca && ok_status && ok_aba;

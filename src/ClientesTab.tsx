@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { ClienteAutocomplete, fmtTelefones, fmtEmails } from './ClienteUtils';
 import RichTextInput from './RichTextInput';
-import { normalizarBusca } from './SearchUtils';
+import { buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
 
 const CLIENTE_VAZIO = {
@@ -361,10 +361,7 @@ export default function ClientesTab({ currentUser }) {
     // Carrega clientes + nome da empresa vinculada (self-join via empresa_id)
     // Alias "empresa_vinculada" para não conflitar com a coluna de texto "empresa"
     let q = supabase.from('clientes').select('*, empresa_vinculada:empresa_id(id,nome)').order('nome');
-    if (busca.length >= 2) {
-      const b = normalizarBusca(busca);
-      q = q.or(`nome_norm.ilike.%${b}%,documento_norm.ilike.%${b}%,empresa_norm.ilike.%${b}%,cidade_norm.ilike.%${b}%`);
-    }
+    if (busca.length >= 2) q = buscarPorPalavras(q, ['nome_norm', 'documento_norm', 'empresa_norm', 'cidade_norm'], busca);
     if (filtroTipo) q = q.eq('tipo', filtroTipo);
     const { data } = await q.limit(200);
     setClientes(data || []);

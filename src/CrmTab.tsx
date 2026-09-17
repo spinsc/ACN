@@ -29,7 +29,7 @@ import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag } from './Inter
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
-import { normalizarBusca } from './SearchUtils';
+import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
@@ -514,13 +514,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const opsFiltradas   = opsFunil.filter(o => {
     if (filtResp && o.responsavel_nome !== filtResp) return false;
     if (filtTemp && o.temperatura !== filtTemp) return false;
-    if (!busca) return true;
-    const buscaNorm = normalizarBusca(busca);
-    return (
-      normalizarBusca(o.titulo).includes(buscaNorm) ||
-      normalizarBusca(o.orgao).includes(buscaNorm) ||
-      normalizarBusca(o.numero_edital).includes(buscaNorm)
-    );
+    return combinaBusca([o.titulo, o.orgao, o.numero_edital], busca);
   });
 
   // Quais cards do quadro têm alteração ainda não vista por este usuário — 2
@@ -2828,13 +2822,7 @@ const SUB_STATUS_COR: Record<string,string> = {
           // nunca serem aplicados aqui.
           if (filtResp && o.responsavel_comercial !== filtResp) return false;
           if (filtStatusOpl && o.status_geral !== filtStatusOpl) return false;
-          if (!busca) return true;
-          const b = normalizarBusca(busca);
-          return (
-            normalizarBusca(o.opl).includes(b) ||
-            normalizarBusca(o.cliente_nome).includes(b) ||
-            normalizarBusca(o.modelo).includes(b)
-          );
+          return combinaBusca([o.opl, o.cliente_nome, o.modelo], busca);
         });
         return (
           <div style={{ padding:'8px 4px' }}>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
-import { normalizarBusca } from './SearchUtils';
+import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 
 const BROADCAST_CH = 'acn-chat-v1';
@@ -155,7 +155,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
   // primeiro — igual WhatsApp. O badge/negrito continuam sinalizando não-lida,
   // mas não reordenam mais a lista.
   const salasOrdenadas = [...salas]
-    .filter(s => !busca || normalizarBusca(nomeSala(s)).includes(buscaL))
+    .filter(s => !busca || combinaBusca(nomeSala(s), busca))
     .sort((a, b) => {
       const ta = ultimasMsg[a.id]?.criado_em || a.criado_em || '';
       const tb = ultimasMsg[b.id]?.criado_em || b.criado_em || '';
@@ -177,7 +177,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     const id = String(u.id || u.email);
     if (idsComDM.has(id)) return false;
     if (!busca) return true;
-    return normalizarBusca(u.nome || u.email).includes(buscaL);
+    return combinaBusca([u.nome, u.email], busca);
   });
 
   // ── Sync refs ─────────────────────────────────────────────────────────────
@@ -1128,7 +1128,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                   style={{ width: '100%', padding: '6px 9px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 11, boxSizing: 'border-box', marginBottom: 4 }} />
                 {addMembroBusca.trim().length > 0 && usuariosVisiveis
                   .filter(u => !(salaAtiva.membros || []).some((m: any) => String(m.id) === String(u.id || u.email)))
-                  .filter(u => normalizarBusca(u.nome).includes(normalizarBusca(addMembroBusca)))
+                  .filter(u => combinaBusca(u.nome, addMembroBusca))
                   .slice(0, 5)
                   .map(u => (
                     <div key={u.id || u.email} onClick={() => { adicionarMembroGrupo(u); setAddMembroBusca(''); }}

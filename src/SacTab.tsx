@@ -6,7 +6,7 @@ import { notificarEvento } from './whatsappHelper';
 import { ClienteAutocomplete, clienteToForm, salvarClienteAuto } from './ClienteUtils';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
-import { normalizarBusca } from './SearchUtils';
+import { combinaBusca } from './SearchUtils';
 import Linkify from './Linkify';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
@@ -843,10 +843,7 @@ OK = ACN   |   Cancelar = DETECH`;
     if (filtroAvaliacao === 'Veicular' && !o.is_manutencao_veicular) return false;
     if (filtroEmpresa === 'sem' && o.empresa) return false;
     if (filtroEmpresa && filtroEmpresa !== 'sem' && o.empresa !== filtroEmpresa) return false;
-    if (busca) {
-      const b = normalizarBusca(busca);
-      return normalizarBusca(o.numero_os).includes(b) || normalizarBusca(o.cliente_nome).includes(b) || normalizarBusca(o.equipamento_nome).includes(b);
-    }
+    if (busca) return combinaBusca([o.numero_os, o.cliente_nome, o.equipamento_nome], busca);
     return true;
   });
 

@@ -65,7 +65,7 @@ import AvisoSistemaWidget from './AvisoSistemaWidget';
 import ContatoAlertWidget from './ContatoAlertWidget';
 import ContatoComercialAlertWidget from './ContatoComercialAlertWidget';
 import { OplDetalheModal } from './AcnTabShared';
-import { normalizarBusca } from './SearchUtils';
+import { normalizarBusca, palavrasDaBusca, combinaBusca, buscarPorPalavras } from './SearchUtils';
 
 
 interface Props { currentUser: any; onLogout: () => void; }
@@ -1058,16 +1058,31 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     // caractere acentuado em base+marca, e a marca removida é exatamente o
     // que o NFD acrescentou) — então o índice encontrado no texto
     // normalizado aponta certo pro texto original, com acento e tudo.
-    const idx = normalizarBusca(s).indexOf(normalizarBusca(termo));
-    if (idx === -1) return s;
-    return (
-      <>{s.slice(0, idx)}<mark style={{ background:'#fef08a', padding:0, borderRadius:2, fontWeight:700 }}>{s.slice(idx, idx + termo.length)}</mark>{s.slice(idx + termo.length)}</>
-    );
+    // Cada palavra digitada é marcada onde aparecer, na ordem que estiver.
+    const alvo = normalizarBusca(s);
+    const faixas: number[][] = [];
+    palavrasDaBusca(termo).forEach(palavra => {
+      for (let i = alvo.indexOf(palavra); i !== -1; i = alvo.indexOf(palavra, i + palavra.length)) {
+        faixas.push([i, i + palavra.length]);
+      }
+    });
+    if (!faixas.length) return s;
+    faixas.sort((a, b) => a[0] - b[0]);
+    const partes: React.ReactNode[] = [];
+    let cursor = 0;
+    faixas.forEach(([ini, fim], i) => {
+      if (fim <= cursor) return;
+      const de = Math.max(ini, cursor);
+      if (de > cursor) partes.push(s.slice(cursor, de));
+      partes.push(<mark key={i} style={{ background:'#fef08a', padding:0, borderRadius:2, fontWeight:700 }}>{s.slice(de, fim)}</mark>);
+      cursor = fim;
+    });
+    partes.push(s.slice(cursor));
+    return <>{partes}</>;
   };
 
   const getContexto = (r: any, termo: string): { campo: string; valor: string } | null => {
-    const t = normalizarBusca(termo);
-    const chk = (v: string) => v && normalizarBusca(v).includes(t);
+    const chk = (v: string) => !!v && combinaBusca(v, termo);
     if (r._tipo === 'crm') {
       if (chk(r.numero_edital)) return { campo: 'Edital', valor: r.numero_edital };
       if (chk(r.orgao))         return { campo: 'Órgão',  valor: r.orgao };
@@ -1105,38 +1120,30 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     // lower+unaccent) em vez das colunas cruas — ignora acento/maiúscula.
     // O termo digitado também precisa ir normalizado, senão "É"/"e" nunca
     // bateriam com o que foi salvo em minúsculo sem acento na coluna gerada.
-    const t = normalizarBusca(termo);
     const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
-      supabase.from('crm_oportunidades')
-        .select('id,titulo,numero_edital,orgao,responsavel_nome,funil')
-        .or(`titulo_norm.ilike.%${t}%,numero_edital_norm.ilike.%${t}%,orgao_norm.ilike.%${t}%,responsavel_nome_norm.ilike.%${t}%`)
-        .limit(6),
-      supabase.from('oples')
-        .select('id,opl,cliente_nome,modelo,veiculo,status_geral,tipo_projeto')
-        .or(`opl_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,modelo_norm.ilike.%${t}%,veiculo_norm.ilike.%${t}%`)
-        .limit(6),
+      buscarPorPalavras(supabase.from('crm_oportunidades')
+        .select('id,titulo,numero_edital,orgao,responsavel_nome,funil'),
+        ['titulo_norm', 'numero_edital_norm', 'orgao_norm', 'responsavel_nome_norm'], termo).limit(6),
+      buscarPorPalavras(supabase.from('oples')
+        .select('id,opl,cliente_nome,modelo,veiculo,status_geral,tipo_projeto'),
+        ['opl_norm', 'cliente_nome_norm', 'modelo_norm', 'veiculo_norm'], termo).limit(6),
       // colunas certas dessa tabela são veiculo_modelo/equipamento_nome (não
       // veiculo/modelo, que não existem aqui — corrigido de brinde)
-      supabase.from('sac_ordens_servico')
-        .select('id,numero_os,cliente_nome,veiculo_modelo,equipamento_nome,status')
-        .or(`numero_os_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,veiculo_modelo_norm.ilike.%${t}%,equipamento_nome_norm.ilike.%${t}%`)
-        .limit(6),
-      supabase.from('licitacoes')
-        .select('id,numero,nome_projeto,orgao,status')
-        .or(`numero_norm.ilike.%${t}%,nome_projeto_norm.ilike.%${t}%,orgao_norm.ilike.%${t}%`)
-        .limit(6),
-      supabase.from('cadastro_itens')
-        .select('id,codigo,nome,marca,fornecedor')
-        .or(`nome_norm.ilike.%${t}%,codigo_norm.ilike.%${t}%,marca_norm.ilike.%${t}%`)
-        .limit(6),
-      supabase.from('cadastro_produtos')
-        .select('id,codigo,nome,categoria')
-        .or(`nome_norm.ilike.%${t}%,codigo_norm.ilike.%${t}%`)
-        .limit(6),
-      supabase.from('engenharia_desenvolvimento')
-        .select('id,titulo,numero_opl,cliente_nome,descricao')
-        .or(`titulo_norm.ilike.%${t}%,numero_opl_norm.ilike.%${t}%,cliente_nome_norm.ilike.%${t}%,descricao_norm.ilike.%${t}%`)
-        .limit(6),
+      buscarPorPalavras(supabase.from('sac_ordens_servico')
+        .select('id,numero_os,cliente_nome,veiculo_modelo,equipamento_nome,status'),
+        ['numero_os_norm', 'cliente_nome_norm', 'veiculo_modelo_norm', 'equipamento_nome_norm'], termo).limit(6),
+      buscarPorPalavras(supabase.from('licitacoes')
+        .select('id,numero,nome_projeto,orgao,status'),
+        ['numero_norm', 'nome_projeto_norm', 'orgao_norm'], termo).limit(6),
+      buscarPorPalavras(supabase.from('cadastro_itens')
+        .select('id,codigo,nome,marca,fornecedor'),
+        ['nome_norm', 'codigo_norm', 'marca_norm'], termo).limit(6),
+      buscarPorPalavras(supabase.from('cadastro_produtos')
+        .select('id,codigo,nome,categoria'),
+        ['nome_norm', 'codigo_norm'], termo).limit(6),
+      buscarPorPalavras(supabase.from('engenharia_desenvolvimento')
+        .select('id,titulo,numero_opl,cliente_nome,descricao'),
+        ['titulo_norm', 'numero_opl_norm', 'cliente_nome_norm', 'descricao_norm'], termo).limit(6),
     ]);
     const res = [
       ...(r1.data||[]).map(r => ({ _tipo:'crm', ...r })),

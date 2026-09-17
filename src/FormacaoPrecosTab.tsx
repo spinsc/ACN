@@ -5,6 +5,7 @@ import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
          somarResultados, estruturaFormacao } from './FormacaoCalculo';
 import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
+import { buscarPorPalavras } from './SearchUtils';
 import { confirmar, pedirTexto } from './Feedback';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -708,12 +709,12 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
     deb.current = setTimeout(async () => {
       setBuscando(true);
       const [{ data: itens }, { data: produtos }] = await Promise.all([
-        supabase.from('cadastro_itens')
+        buscarPorPalavras(supabase.from('cadastro_itens')
           .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
-          .eq('ativo', true).ilike('nome', `%${termo}%`).limit(8),
-        supabase.from('cadastro_produtos')
+          .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(8),
+        buscarPorPalavras(supabase.from('cadastro_produtos')
           .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
-          .eq('ativo', true).ilike('nome', `%${termo}%`).limit(5),
+          .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(5),
       ]);
       setRes({ itens: itens || [], produtos: produtos || [] });
       setOpen(true);
