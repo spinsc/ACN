@@ -51,6 +51,9 @@ export function podeAlterarNumeroOplPv(usuarioAtual: any): boolean {
 // do setor pode fazer tudo que o seu gerente faz (sem virar Admin):
 //   Comercial e CRM → Gerente Comercial · Licitações → Gerente de Licitações.
 // As travas voltam aos poucos: basta tirar o perfil daqui (e de renomear_opl no banco).
+// Continuam só com gerentes de verdade (conferem o perfil real, não este mapa):
+// relatórios e relatório de vendedores, contatos de todos e filtro por operador,
+// agenda da equipe e calendário de todos, aprovar cotação e cancelar análise de outra pessoa.
 const GERENTE_DO_SETOR: Record<string, string> = {
   comercial: 'Gerente Comercial',
   crm: 'Gerente Comercial',

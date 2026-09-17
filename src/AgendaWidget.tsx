@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
-import { perfilComPoderes } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -208,13 +207,12 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
   // Perfil "gerente" cobre Admin e qualquer variação de Gerente (Gerente,
   // Gerente Comercial, Gerente de Licitações, etc) — antes só comparava
   // com a string exata 'gerente' minúscula, que nunca batia de verdade.
-  const isGerente = /gerente|admin/i.test(perfilComPoderes(currentUser));
-  // Agenda de Licitações é pública: todos os usuários do setor veem os
-  // compromissos de todo mundo (sem precisar ser gerente), mas só
-  // concluem/excluem os próprios — ver CompromissoCard/podeEditar abaixo.
-  // Os demais setores continuam com a regra original (só o gerente pode
-  // ver "Equipe"/"Todos").
-  const agendaPublica = setor === 'licitacoes';
+  // Agenda da equipe/todos: só gerentes; os demais veem só a própria
+  const isGerente = /gerente|admin/i.test(currentUser?.perfil || '');
+  // Agenda pública (todos do setor veem os compromissos de todos) foi desligada
+  // em 17/09/2026, inclusive em Licitações: quem não é gerente vê só a própria.
+  // Para reabrir num setor, volte a comparar o setor aqui.
+  const agendaPublica = false;
   const timerRef = useRef<any>(null);
 
   // Equipe = usuários que têm este usuário como gestor (auth_usuarios.gestor_id)

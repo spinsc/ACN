@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { temPoderDeGerente } from './utils/permissoes';
+import { ehAdminOuGerente } from './utils/permissoes';
 import { pedirTexto } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ export async function concluirAnaliseSetor(setor: any, solicitacao: any, opts: {
 // ─────────────────────────────────────────────────────────────────────────────
 export function podeCancelarAnalise(sol: any, usuario: any): boolean {
   if (!sol || sol.status !== 'em_andamento' || !usuario) return false;
-  if (temPoderDeGerente(usuario)) return true;
+  if (ehAdminOuGerente(usuario)) return true;
   const quem = String(sol.criado_por || '').trim().toLowerCase();
   return !!quem && (quem === String(usuario.nome || '').trim().toLowerCase()
                  || quem === String(usuario.email || '').trim().toLowerCase());

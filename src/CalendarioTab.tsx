@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
-import { perfilComPoderes } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -221,7 +220,8 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
   const [loading, setLoading]     = useState(true);
   const [diaAberto, setDiaAberto] = useState<{ data: Date; hora?: string } | null>(null);
 
-  const isGerente = ['Admin', 'Gerente', 'Gerente Comercial'].includes(perfilComPoderes(currentUser));
+  // Compromissos de todos: só gerentes; os demais veem só os próprios
+  const isGerente = ['Admin', 'Gerente', 'Gerente Comercial'].includes(currentUser?.perfil);
 
   const dias = useMemo(() => (modo === 'mes' ? getMonthGrid(cursor) : getWeekDays(cursor)), [modo, cursor]);
   const rangeInicio = dias[0];

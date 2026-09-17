@@ -66,6 +66,9 @@ const VAZIO_INTERACAO: any = {
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ContactosSection({ currentUser }: { currentUser: any }) {
+  // Ver os contatos de todos e filtrar por operador: só gerentes. As demais funções
+  // de gerente (conexões WhatsApp, trocar operador) valem para a equipe comercial.
+  const veTodos = ['Admin', 'Gerente Comercial'].includes(currentUser?.perfil);
   const isGerente = ['Admin', 'Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   // dados
@@ -140,7 +143,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
 
   // ─── filtros ───
   const contatosFiltrados = contatos.filter(c => {
-    if (!isGerente && c.operador_nome !== currentUser?.nome) return false;
+    if (!veTodos && c.operador_nome !== currentUser?.nome) return false;
     if (filtroOp && c.operador_nome !== filtroOp) return false;
     if (busca) {
       const b = normalizarBusca(busca);
@@ -318,7 +321,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
                 </span>
               )}
             </div>
-            {isGerente && c.operador_nome && (
+            {veTodos && c.operador_nome && (
               <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>👤 {c.operador_nome}</div>
             )}
           </div>
@@ -379,7 +382,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
               onClick={() => { setFormC({ ...VAZIO_CONTATO, ...c }); setModalContato(c); }}>
               ✏️ Editar
             </button>
-            {(isGerente || c.operador_nome === currentUser?.nome) && (
+            {(veTodos || c.operador_nome === currentUser?.nome) && (
               <button className="acn-btn" style={{ background:'#ef4444' }} onClick={() => excluirContato(c)}>✕</button>
             )}
           </div>
@@ -608,7 +611,7 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
           value={busca} onChange={e => setBusca(e.target.value)}
           style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9, width:200 }}
         />
-        {isGerente && operadoresUnicos.length > 1 && (
+        {veTodos && operadoresUnicos.length > 1 && (
           <select value={filtroOp} onChange={e => setFiltroOp(e.target.value)}
             style={{ padding:'3px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:9 }}>
             <option value="">Todos os operadores</option>

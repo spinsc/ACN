@@ -607,6 +607,8 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const timerRef = useRef(null);
 
   const isAdmin  = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
+  // Aprovar cotação: só gerentes de verdade (a equipe comercial não aprova)
+  const podeAprovar = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
 
   useEffect(() => {
     supabase.from('cotacoes_propostas').select('*')
@@ -645,7 +647,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   };
 
   const aprovarSolicitacao = async (aprov) => {
-    if (!isAdmin) return;
+    if (!podeAprovar) return;
     const resposta = await pedirTexto('Resposta (aprovado/rejeitado):');
     if (!resposta) return;
     const status = resposta.toLowerCase().includes('rej') ? 'rejeitado' : 'aprovado';
@@ -833,7 +835,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
                   <div style={{ fontSize:9, color:'#475569', marginBottom:2 }}>Por: {a.solicitado_por} · {new Date(a.solicitado_em).toLocaleString('pt-BR')}</div>
                   {a.motivo && <div style={{ fontSize:9, color:'#374151' }}>Motivo: {a.motivo}</div>}
                   {a.resposta && <div style={{ fontSize:9, color:'#374151', marginTop:3 }}>Resposta: <Linkify text={a.resposta} /> (por {a.aprovado_por})</div>}
-                  {isAdmin && a.status === 'pendente' && (
+                  {podeAprovar && a.status === 'pendente' && (
                     <button onClick={() => aprovarSolicitacao(a)}
                       style={{ marginTop:8, background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
                         padding:'4px 12px', fontSize:9, cursor:'pointer', fontWeight:700 }}>
@@ -1360,6 +1362,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
 
   const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
   const isVendedor = !isAdmin;
+  const podeAprovar = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
   const { naoLidoSet: cotacoesNaoLidas, marcarLidoLocal: marcarCotacaoLidaLocal } = useUnreadMap('cotacoes_precos', cotacoes.map(c => c.id), currentUser);
   const marcarCotacaoLida = useMarkAsRead('cotacoes_precos', modalDetalhe?.id, currentUser);
 
@@ -1395,11 +1398,11 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
   }, [isVendedor]);
 
   const carregarPendentes = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!podeAprovar) return;
     const { count } = await supabase.from('cotacoes_aprovacoes')
       .select('id', { count: 'exact', head: true }).eq('status', 'pendente');
     setPendCount(count || 0);
-  }, [isAdmin]);
+  }, [podeAprovar]);
 
   useEffect(() => {
     carregarConfig();
@@ -1435,7 +1438,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
             </div>
           </div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-            {isAdmin && pendCount > 0 && (
+            {podeAprovar && pendCount > 0 && (
               <button onClick={() => setModalAprovs(true)}
                 style={{ background:'#dc2626', color:'#fff', border:'none', borderRadius:5,
                   padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer',
