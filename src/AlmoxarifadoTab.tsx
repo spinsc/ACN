@@ -344,7 +344,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
                             passagem, o que faria parecer que não há o que fazer. */}
                         {o.status_geral === STATUS_EMBALAGEM && (
                           <div><span style={{ fontSize:9, fontWeight:800, background:'#0f766e', color:'#fff',
-                            padding:'1px 5px', borderRadius:10 }}>📦 EMBALAR — PRODUÇÃO CONCLUÍDA</span></div>
+                            padding:'1px 5px', borderRadius:10 }}>
+                            {ehEnvio(o) ? '📦 EMBALAR — NÃO PASSA POR PRODUÇÃO' : '📦 EMBALAR — PRODUÇÃO CONCLUÍDA'}
+                          </span></div>
                         )}
                       </td>
                       <td style={{fontSize:10}}>
