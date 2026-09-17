@@ -31,7 +31,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
 import { normalizarBusca } from './SearchUtils';
 import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
-import { podeAlterarNumeroOplPv } from './utils/permissoes';
+import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
@@ -201,7 +201,7 @@ function mascaraOpComLetra(valor: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 function CotacoesCrmPanelCrm({ oportunidadeId, currentUser }) {
   const [cfg, setCfg] = React.useState({ verCustos: false, verFornec: false, verMarkup: false });
-  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
+  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   React.useEffect(() => {
     supabase.from('configuracoes_sistema')

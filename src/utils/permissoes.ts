@@ -43,7 +43,30 @@ export function podeDeletarRegistro(usuarioAtual: any): boolean {
  * A troca do número da OP é conferida de novo no banco (renomear_opl).
  */
 export function podeAlterarNumeroOplPv(usuarioAtual: any): boolean {
-  return ehAdminOuGerente(usuarioAtual);
+  return temPoderDeGerente(usuarioAtual);
+}
+
+// ── Comercial/CRM e Licitações: a equipe tem os poderes do gerente do setor ──
+// Decisão de 17/09/2026: limitar funções estava atrapalhando o processo. Quem é
+// do setor pode fazer tudo que o seu gerente faz (sem virar Admin):
+//   Comercial e CRM → Gerente Comercial · Licitações → Gerente de Licitações.
+// As travas voltam aos poucos: basta tirar o perfil daqui (e de renomear_opl no banco).
+const GERENTE_DO_SETOR: Record<string, string> = {
+  comercial: 'Gerente Comercial',
+  crm: 'Gerente Comercial',
+  licitacoes: 'Gerente de Licitações',
+};
+const semAcento = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+/** Perfil usado nas conferências de permissão: a equipe de Comercial/CRM e Licitações vale como o gerente do setor. */
+export function perfilComPoderes(usuarioAtual: any): string {
+  const perfil = String(usuarioAtual?.perfil || '').trim();
+  return GERENTE_DO_SETOR[semAcento(perfil)] || perfil;
+}
+
+/** Admin, gerente, ou equipe com os poderes do gerente (Comercial/CRM e Licitações). */
+export function temPoderDeGerente(usuarioAtual: any): boolean {
+  return ehAdminOuGerente({ perfil: perfilComPoderes(usuarioAtual) });
 }
 
 /** Admin ou qualquer perfil "Gerente ..." (Comercial, Administrativo, Produção...). */

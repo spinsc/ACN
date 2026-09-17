@@ -6,6 +6,7 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { normalizarBusca } from './SearchUtils';
 import { estruturaFormacao } from './FormacaoCalculo';
 import { pedirTexto } from './Feedback';
+import { perfilComPoderes } from './utils/permissoes';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://qgemelnuqdilnggxmrdw.supabase.co';
@@ -605,7 +606,7 @@ function ModalDetalhe({ cotacao, currentUser, verCustos, verFornec, verMarkup,
   const [emitindoProposta, setEmitindoProposta] = useState<any>(null);
   const timerRef = useRef(null);
 
-  const isAdmin  = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
+  const isAdmin  = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   useEffect(() => {
     supabase.from('cotacoes_propostas').select('*')
@@ -1357,7 +1358,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
     verMarkup:  false,
   });
 
-  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
+  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
   const isVendedor = !isAdmin;
   const { naoLidoSet: cotacoesNaoLidas, marcarLidoLocal: marcarCotacaoLidaLocal } = useUnreadMap('cotacoes_precos', cotacoes.map(c => c.id), currentUser);
   const marcarCotacaoLida = useMarkAsRead('cotacoes_precos', modalDetalhe?.id, currentUser);
@@ -1680,7 +1681,7 @@ export function CotacoesCrmPanel({ oportunidadeId, currentUser, verCustos, verFo
   const [loading,    setLoading]    = useState(true);
   const [modalDesc,  setModalDesc]  = useState(null);
 
-  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(currentUser?.perfil);
+  const isAdmin = ['Admin','Gerente','Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   const carregar = useCallback(async () => {
     setLoading(true);

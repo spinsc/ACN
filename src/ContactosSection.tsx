@@ -7,6 +7,7 @@ import Linkify from './Linkify';
 import { normalizarBusca } from './SearchUtils';
 import RichTextInput, { htmlSeguro } from './RichTextInput';
 import { confirmar } from './Feedback';
+import { perfilComPoderes } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -65,7 +66,7 @@ const VAZIO_INTERACAO: any = {
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ContactosSection({ currentUser }: { currentUser: any }) {
-  const isGerente = ['Admin', 'Gerente Comercial'].includes(currentUser?.perfil);
+  const isGerente = ['Admin', 'Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   // dados
   const [contatos, setContatos]       = useState<any[]>([]);

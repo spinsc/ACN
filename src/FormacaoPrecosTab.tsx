@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
          somarResultados, estruturaFormacao } from './FormacaoCalculo';
-import { ehAdminOuGerente } from './utils/permissoes';
+import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { confirmar, pedirTexto } from './Feedback';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -1362,7 +1362,7 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
         <div style={{ fontWeight:800, fontSize:15, color:'#1e293b', flex:1 }}>📋 Preços Formados</div>
         <FiltroCategoria lista={cotacoes} valor={filtroCat} onChange={setFiltroCat} />
-        {ehAdminOuGerente(currentUser) && (
+        {temPoderDeGerente(currentUser) && (
           <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={() => setGerindoCat(g => !g)}>
             ⚙️ Categorias
           </button>
@@ -2076,7 +2076,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formacoesVinculo, vinculo?.id]);
 
-  const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(currentUser?.perfil);
+  const isVendedor = ['Comercial', 'Licitações', 'CRM'].includes(perfilComPoderes(currentUser));
   const setP = (k, v) => setParams(p => ({ ...p, [k]: v }));
 
   // ── Resize da tabela de itens ─────────────────────────────────────────────
@@ -3141,7 +3141,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                       </select>
                     );
                   })()}
-                  {editandoId && formacoesVinculo.some((m: any) => m.id === editandoId) && ehAdminOuGerente(currentUser) && (
+                  {editandoId && formacoesVinculo.some((m: any) => m.id === editandoId) && temPoderDeGerente(currentUser) && (
                     <button onClick={desvincularFormacao}
                       title="Tira esta formação deste processo (não apaga a formação) — Gerentes e Admins"
                       style={{ padding:'5px 10px', fontSize:10, fontWeight:700, borderRadius:20, cursor:'pointer', border:'1px solid #fca5a5',
@@ -3598,7 +3598,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
               nomeInicial={nomeCotacao}
               tipoInicial={tipoCotacao || undefined}
               editando={!!editandoId}
-              podeGerirCategorias={ehAdminOuGerente(currentUser)}
+              podeGerirCategorias={temPoderDeGerente(currentUser)}
             />
           )}
           {modalResumo && (

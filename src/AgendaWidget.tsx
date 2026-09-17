@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { perfilComPoderes } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -207,7 +208,7 @@ export default function AgendaWidget({ setor, currentUser }: { setor: string; cu
   // Perfil "gerente" cobre Admin e qualquer variação de Gerente (Gerente,
   // Gerente Comercial, Gerente de Licitações, etc) — antes só comparava
   // com a string exata 'gerente' minúscula, que nunca batia de verdade.
-  const isGerente = /gerente|admin/i.test(currentUser?.perfil || '');
+  const isGerente = /gerente|admin/i.test(perfilComPoderes(currentUser));
   // Agenda de Licitações é pública: todos os usuários do setor veem os
   // compromissos de todo mundo (sem precisar ser gerente), mas só
   // concluem/excluem os próprios — ver CompromissoCard/podeEditar abaixo.

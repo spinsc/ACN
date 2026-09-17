@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { normalizarBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { perfilComPoderes } from './utils/permissoes';
 import { CabecalhoTela, Botao } from './Interface';
 import { mdiPlus } from '@mdi/js';
 
@@ -1028,7 +1029,7 @@ export default function VeiculosNfcTab({ currentUser }) {
   const [modalForm,   setModalForm]   = useState(null); // null | {} (novo) | {...veiculo} (editar)
   const [baseUrl,     setBaseUrl]     = useState('https://seudominio.com.br/veiculo.html');
   const [portalUrl,   setPortalUrl]   = useState('https://seudominio.com.br/portal.html');
-  const isAdmin = ['Admin', 'Gerente', 'Gerente Comercial'].includes(currentUser?.perfil);
+  const isAdmin = ['Admin', 'Gerente', 'Gerente Comercial'].includes(perfilComPoderes(currentUser));
 
   const carregarVeiculos = useCallback(async () => {
     setCarregando(true);
