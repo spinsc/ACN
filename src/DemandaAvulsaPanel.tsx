@@ -24,7 +24,7 @@ import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
 import {
-  ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView,
+  ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView, CATEGORIA_DO_SETOR,
   itemVazio, itensPreenchidos, vinculosDaDemanda, camposDosVinculos,
 } from './DemandaItens';
 
@@ -967,7 +967,7 @@ const etapaVazia = (num: number) => ({
   vinculo_descricao: null,
 });
 
-export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoInicial, onClose, onSaved }: {
+export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoInicial, origem, onClose, onSaved }: {
   currentUser: any;
   setor?: string;
   // Quando presente com mais de 1 opção, mostra um seletor "Setor de Destino"
@@ -977,6 +977,8 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   // Pré-preenche o vínculo ao abrir — usado pelo botão "+Demanda" por OPL
   // (PCPTab.tsx), que já sabe a qual OP a demanda deve ficar vinculada.
   vinculoInicial?: VinculoValue | null;
+  // de onde foi aberta (ex.: 'engenharia'), gravado na demanda
+  origem?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1038,6 +1040,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       status: 'Pendente',
       informacoes: [],
       itens: itensPreenchidos(itens),
+      origem: origem || null,
       etapas: qtdEtapas > 1 ? etapas.map(e => ({
         ...e,
         responsavel_email: e.responsavel_email || emails[e.responsavel_nome] || '',
@@ -1153,8 +1156,8 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
               </label>
               <MencaoTextarea value={form.descricao} onChange={v=>set('descricao',v)} rows={2} style={{fontSize:11}} />
             </div>
-            <ItensDemandaEditor itens={itens} onChange={setItens}
-              titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : 'Itens (opcional)'} />
+            <ItensDemandaEditor itens={itens} onChange={setItens} categoriaPreferida={CATEGORIA_DO_SETOR[setorAlvo] || ''}
+              titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : CATEGORIA_DO_SETOR[setorAlvo] ? 'Modelos e quantidades' : 'Itens (opcional)'} />
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>
               <div style={{ display:'flex', gap:6 }}>

@@ -19,6 +19,12 @@ import { estruturaDoKit } from './KitEstrutura';
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import type { VinculoValue } from './VinculoPicker';
+import { notificarEvento, msg } from './whatsappHelper';
+
+// Fabricação interna: cada setor fabricante tem a sua categoria de produto
+// (os modelos ficam em Produtos e mercadorias, com a estrutura de cada um)
+export const SETORES_FABRICACAO = ['Chicotes', 'Serralheria'];
+export const CATEGORIA_DO_SETOR: Record<string, string> = { Chicotes: 'Chicote', Serralheria: 'Serralheria' };
 
 export type ItemDemanda = {
   nome: string;
@@ -56,7 +62,7 @@ export async function estruturaParaDemanda(produtoId: string) {
 }
 
 // ── Busca no cadastro (produtos e itens do catálogo) ─────────────────────────
-function BuscaCadastro({ valor, onTexto, onEscolher, placeholder }) {
+function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categoriaPreferida = '' }) {
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [aberto, setAberto] = useState(false);
   const timer = useRef<any>(null);
@@ -69,10 +75,12 @@ function BuscaCadastro({ valor, onTexto, onEscolher, placeholder }) {
   const buscar = async (q: string) => {
     if (q.trim().length < 2) { setSugestoes([]); setAberto(false); return; }
     const [p, i] = await Promise.all([
-      buscarPorPalavras(supabase.from('cadastro_produtos').select('id,codigo,nome,unidade').eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(6),
+      buscarPorPalavras(supabase.from('cadastro_produtos').select('id,codigo,nome,unidade,categoria').eq('ativo', true), ['nome_norm', 'codigo_norm'], q).limit(8),
       buscarPorPalavras(supabase.from('cadastro_itens').select('id,codigo,nome,unidade'), ['nome_norm', 'codigo_norm'], q).limit(6),
     ]);
-    const produtos = p.data || [];
+    // modelos da categoria do setor (ex.: Chicote) aparecem primeiro
+    const produtos = [...(p.data || [])].sort((a: any, b: any) =>
+      Number(b.categoria === categoriaPreferida) - Number(a.categoria === categoriaPreferida));
     // quais produtos têm estrutura
     const ids = produtos.map((x: any) => x.id);
     let comEstrutura = new Set<string>();
@@ -100,7 +108,7 @@ function BuscaCadastro({ valor, onTexto, onEscolher, placeholder }) {
               style={{ padding: '6px 10px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: 11, display: 'flex', gap: 6, alignItems: 'center' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
               <span style={{ fontSize: 9, fontWeight: 700, color: s.tipo === 'produto' ? '#7c3aed' : '#0369a1', minWidth: 52 }}>
-                {s.tipo === 'produto' ? (s.temEstrutura ? '🧩 PRODUTO' : 'PRODUTO') : 'ITEM'}
+                {s.tipo === 'produto' ? (categoriaPreferida && s.categoria === categoriaPreferida ? '🧩 MODELO' : s.temEstrutura ? '🧩 PRODUTO' : 'PRODUTO') : 'ITEM'}
               </span>
               {s.codigo && <span style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 10 }}>{s.codigo}</span>}
               <span style={{ flex: 1 }}>{s.nome}</span>
@@ -113,7 +121,7 @@ function BuscaCadastro({ valor, onTexto, onEscolher, placeholder }) {
 }
 
 // ── Editor da lista de itens ─────────────────────────────────────────────────
-export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens' }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string }) {
+export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '' }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string }) {
   const [abertos, setAbertos] = useState<Record<number, boolean>>({});
   const set = (i: number, patch: Partial<ItemDemanda>) => onChange(itens.map((x, j) => j === i ? { ...x, ...patch } : x));
   const escolher = async (i: number, s: any) => {
@@ -129,11 +137,13 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens' }: { iten
   return (
     <div>
       <label style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>{titulo}</label>
+      {dica && <div style={{ fontSize: 9, color: '#64748b', marginTop: -2, marginBottom: 4 }}>{dica}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {itens.map((it, i) => (
           <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: 6, background: '#f8fafc' }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <BuscaCadastro valor={it.nome} placeholder="Nome do item — digite ou busque no cadastro"
+              <BuscaCadastro valor={it.nome} categoriaPreferida={categoriaPreferida}
+                placeholder={categoriaPreferida ? `Modelo (${categoriaPreferida}) ou nome do item` : 'Nome do item — digite ou busque no cadastro'}
                 onTexto={v => set(i, { nome: v, ...(it.produto_id || it.item_id ? { produto_id: null, item_id: null, produto_codigo: null, estrutura: [] } : {}) })}
                 onEscolher={s => escolher(i, s)} />
               <input type="number" min="0" step="any" value={it.quantidade} aria-label="Quantidade"
@@ -315,4 +325,67 @@ export function VinculosView({ vinculos }: { vinculos: VinculoValue[] }) {
       ))}
     </div>
   );
+}
+
+// ── Fabricação interna na liberação de BOM / kiting ──────────────────────────
+// Engenharia (ao liberar a BOM) ou PCP (ao liberar o kiting) indicam os modelos
+// e quantidades de chicote e serralharia; o sistema abre a demanda avulsa de
+// cada setor já com os itens, a estrutura e as OPs vinculadas.
+export const fabricacaoVazia = () => Object.fromEntries(SETORES_FABRICACAO.map(s => [s, [itemVazio()]]));
+export const temFabricacao = (valor: any) => SETORES_FABRICACAO.some(s => itensPreenchidos(valor?.[s] || []).length > 0);
+
+export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1 }: { valor: any; onChange: (v: any) => void; qtdOps?: number }) {
+  const [aberto, setAberto] = useState(temFabricacao(valor));
+  return (
+    <div style={{ border: '1px solid #ddd6fe', background: '#faf5ff', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
+      <button type="button" onClick={() => setAberto(a => !a)} aria-expanded={aberto}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, fontWeight: 800, color: '#6d28d9' }}>
+        {aberto ? '▼' : '▶'} 🔌 Fabricação interna — chicotes e serralheria (opcional)
+      </button>
+      {aberto && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+          <div style={{ fontSize: 9, color: '#6b21a8' }}>
+            Escolha o modelo e a quantidade{qtdOps > 1 ? ` por OP (vale para as ${qtdOps} OPs)` : ''}. Cada setor recebe uma demanda com os itens,
+            a estrutura do modelo e as OPs vinculadas.
+          </div>
+          {SETORES_FABRICACAO.map(setor => (
+            <ItensDemandaEditor key={setor} titulo={setor} categoriaPreferida={CATEGORIA_DO_SETOR[setor]}
+              itens={valor?.[setor] || [itemVazio()]} onChange={v => onChange({ ...valor, [setor]: v })} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Abre uma demanda avulsa por setor com itens. Quantidade do editor é por OP. */
+export async function gerarDemandasFabricacao({ valor, ops, origem, currentUser, obs = '' }: {
+  valor: any; ops: any[]; origem: string; currentUser: any; obs?: string;
+}) {
+  const agora = new Date().toISOString();
+  const vinculos = ops.map(o => ({ tipo: 'op', id: String(o.id), descricao: `${o.opl} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '') }));
+  const base = ops.length > 1 ? String(ops[0].opl || '').replace(/\/\d+$/, '') : ops[0]?.opl;
+  const quem = origem.startsWith('engenharia') ? 'Engenharia' : 'PCP';
+  const criadas: string[] = [];
+  const falhas: string[] = [];
+  for (const setor of SETORES_FABRICACAO) {
+    const itens = itensPreenchidos(valor?.[setor] || []).map(i => ({
+      ...i,
+      descricao: [i.descricao, ops.length > 1 ? `${i.quantidade} por OP × ${ops.length} OPs` : ''].filter(Boolean).join(' · '),
+      quantidade: Number(i.quantidade) * ops.length,
+    }));
+    if (!itens.length) continue;
+    const titulo = `${setor === 'Chicotes' ? 'Chicotes' : 'Serralheria'} — ${base}${ops.length > 1 ? ` (${ops.length} OPs)` : ''}`;
+    const { error } = await supabase.from('demandas_avulsas').insert([{
+      setor, titulo, status: 'Pendente', prioridade: 'Média',
+      descricao: `Aberta pela ${quem} ao ${origem.endsWith('kiting') ? 'liberar o kiting' : 'liberar a BOM'}.${obs ? ' ' + obs : ''}`,
+      itens, informacoes: [], etapas: [], origem,
+      ...camposDosVinculos(vinculos),
+      criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, criado_em: agora, atualizado_em: agora,
+    }]);
+    if (error) { falhas.push(`${setor}: ${error.message}`); continue; }
+    criadas.push(setor);
+    notificarEvento('demanda_criada_setor', msg.demandaCriada(setor, ops.map(o => o.opl).join(', '), titulo, currentUser?.nome || ''), setor);
+  }
+  return { criadas, falhas };
 }

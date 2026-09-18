@@ -7,6 +7,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao } from './DemandaItens';
 import { confirmar } from './Feedback';
 
 
@@ -31,6 +32,10 @@ export default function PCPTab({ currentUser }) {
   // linha de lote — mesmo padrao da Engenharia (EngenhariaTab.tsx).
   const [lotesExpandidos, setLotesExpandidos] = useState({});
   const [processandoLote, setProcessandoLote] = useState(false);
+  // Liberar kiting abre esta janela: dá para pedir chicotes/serralheria junto
+  const [modalKiting, setModalKiting] = useState<any>(null);   // { ops, grupo? }
+  const [fabKiting, setFabKiting] = useState<any>(fabricacaoVazia());
+  const [liberandoKiting, setLiberandoKiting] = useState(false);
   // Controle de liberação parcial p/ Serralheria — Engenharia pode antecipar
   // a parte metálica/estrutural sem esperar o resto do BOM, então essas OPs
   // aparecem aqui mesmo antes de "Em Espera PCP" (a trilha é independente do
@@ -241,10 +246,37 @@ export default function PCPTab({ currentUser }) {
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
   const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
-  const liberarKitingLote = async (grupo) => {
+  const abrirKiting = (ops, grupo = null) => {
+    if (!ops.length) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
+    setFabKiting(fabricacaoVazia());
+    setModalKiting({ ops, grupo });
+  };
+  const confirmarKiting = async () => {
+    const { ops, grupo } = modalKiting;
+    setLiberandoKiting(true);
+    try {
+      if (grupo) await liberarKitingLote(grupo, true); else await liberarAlmox(ops[0]);
+      if (temFabricacao(fabKiting)) {
+        const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabKiting, ops, origem: 'pcp_kiting', currentUser });
+        if (criadas.length) await supabase.from('logs_movimentacao_opl').insert(ops.map(opl => ({
+          opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+          evento: `Demanda de fabricação aberta na liberação do kiting: ${criadas.join(', ')}.`,
+          status_anterior: 'Aguardando Almox', status_novo: 'Aguardando Almox',
+          usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+        })));
+        if (falhas.length) alert('Kiting liberado, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
+      }
+    } finally {
+      setLiberandoKiting(false);
+      setModalKiting(null);
+      fetchAll();
+    }
+  };
+
+  const liberarKitingLote = async (grupo, jaConfirmado = false) => {
     const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera PCP');
     if (pendentes.length === 0) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
-    if (!await confirmar(`Liberar kiting (Almoxarifado) para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
+    if (!jaConfirmado && !await confirmar(`Liberar kiting (Almoxarifado) para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {
@@ -393,6 +425,26 @@ export default function PCPTab({ currentUser }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {modalKiting && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{maxWidth:560}}>
+            <div className="modal-title">
+              Liberar kiting — {modalKiting.grupo ? `${modalKiting.grupo.base} (${modalKiting.ops.length} OPs)` : modalKiting.ops[0].opl}
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
+              {modalKiting.ops.length > 1 ? `${modalKiting.ops.length} unidades vão` : 'A OP vai'} para o Almoxarifado separar o kit.
+            </div>
+            <FabricacaoInternaEditor valor={fabKiting} onChange={setFabKiting} qtdOps={modalKiting.ops.length} />
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#3b82f6',flex:1,opacity:liberandoKiting?0.6:1}} disabled={liberandoKiting} onClick={confirmarKiting}>
+                {liberandoKiting ? 'Liberando...' : temFabricacao(fabKiting) ? 'LIBERAR KITING E ABRIR DEMANDAS' : 'LIBERAR KITING'}
+              </button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} disabled={liberandoKiting} onClick={()=>setModalKiting(null)}>Cancelar</button>
+            </div>
           </div>
         </div>
       )}
@@ -577,7 +629,7 @@ export default function PCPTab({ currentUser }) {
                             + Demanda
                           </button>
                           {o.status_geral === 'Em Espera PCP' && (
-                            <button className="acn-btn" style={{background:'#3b82f6'}} onClick={()=>liberarAlmox(o)}>
+                            <button className="acn-btn" style={{background:'#3b82f6'}} onClick={()=>abrirKiting([o])}>
                               LIBERAR KITING
                             </button>
                           )}
@@ -647,7 +699,7 @@ export default function PCPTab({ currentUser }) {
                           <td>
                             <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                               {qtdEspera > 0 && (
-                                <button className="acn-btn" style={{background:'#3b82f6',fontSize:9}} disabled={processandoLote} onClick={()=>liberarKitingLote(item)}>
+                                <button className="acn-btn" style={{background:'#3b82f6',fontSize:9}} disabled={processandoLote} onClick={()=>abrirKiting(item.irmaos.filter(x => x.status_geral === 'Em Espera PCP'), item)}>
                                   📦 KITING EM LOTE ({qtdEspera})
                                 </button>
                               )}

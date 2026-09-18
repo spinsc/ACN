@@ -10,7 +10,9 @@ import { ProdutoArquivos } from './ProdutoArquivos';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
   'Kit Instalação', 'Adaptação Veicular', 'Rastreamento', 'Comunicação',
-  'Segurança', 'Câmera', 'Elétrico', 'Mecânico', 'Acessório', 'Serviço', 'Outro',
+  'Segurança', 'Câmera', 'Elétrico', 'Mecânico', 'Acessório', 'Serviço',
+  // modelos fabricados internamente (a demanda do setor busca estes primeiro)
+  'Chicote', 'Serralheria', 'Outro',
 ];
 
 function fmtR(v: number) {

@@ -3,7 +3,8 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { ColaboradorSelect } from './ColaboradorSelect';
-import DemandaAvulsaPanel from './DemandaAvulsaPanel';
+import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
+import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, SETORES_FABRICACAO } from './DemandaItens';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
@@ -115,6 +116,11 @@ export default function EngenhariaTab({ currentUser }) {
   const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
+  // chicotes/serralheria indicados na liberação da BOM (viram demandas dos setores)
+  const [fabBom, setFabBom] = useState<any>(fabricacaoVazia());
+  const [fabBomLote, setFabBomLote] = useState<any>(fabricacaoVazia());
+  // "+ Chicote/Serralheria" a qualquer momento (várias demandas por OP)
+  const [modalFabricacao, setModalFabricacao] = useState<any>(null);
   const [obsBom, setObsBom] = useState('');
   // Liberação parcial de BOM p/ Serralheria — Engenharia antecipa a parte
   // metálica/estrutural sem esperar terminar o resto do BOM. Trilha própria
@@ -244,7 +250,16 @@ export default function EngenhariaTab({ currentUser }) {
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
     notificarEvento('engenharia_libera_pcp', msg.oplEnviada(opl.opl,'PCP',currentUser?.nome));
-    setModalBom(null); setObsBom(''); fetchAll();
+    if (temFabricacao(fabBom)) {
+      const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabBom, ops: [opl], origem: 'engenharia_bom', currentUser });
+      if (criadas.length) await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
+        evento: `Demanda de fabricação aberta na liberação da BOM: ${criadas.join(', ')}.`,
+        status_anterior: 'Em Espera PCP', status_novo: 'Em Espera PCP', usuario_nome: currentUser?.nome, data_hora: agora,
+      }]);
+      if (falhas.length) alert('BOM liberada, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
+    }
+    setModalBom(null); setObsBom(''); setFabBom(fabricacaoVazia()); fetchAll();
   };
 
   // Libera só a parte da Serralheria (metálica/estrutural), antecipando o
@@ -294,6 +309,7 @@ export default function EngenhariaTab({ currentUser }) {
     irmaos.forEach(o => { marcados[o.id] = true; });
     setSelecionadosLote(marcados);
     setObsBomLote('');
+    setFabBomLote(fabricacaoVazia());
     setModalBomLote({ base, irmaos });
   };
 
@@ -355,9 +371,13 @@ export default function EngenhariaTab({ currentUser }) {
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
       notificarEvento('engenharia_libera_pcp', `*BOM liberado em lote* — ${modalBomLote.base}\n${selecionados.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
+      if (temFabricacao(fabBomLote)) {
+        const { falhas } = await gerarDemandasFabricacao({ valor: fabBomLote, ops: selecionados, origem: 'engenharia_bom', currentUser });
+        if (falhas.length) alert('BOM liberada, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
+      }
     } finally {
       setLiberandoLote(false);
-      setModalBomLote(null); setObsBomLote(''); setSelecionadosLote({});
+      setModalBomLote(null); setObsBomLote(''); setSelecionadosLote({}); setFabBomLote(fabricacaoVazia());
       fetchAll();
     }
   };
@@ -542,9 +562,13 @@ export default function EngenhariaTab({ currentUser }) {
                                 <button className="acn-btn" style={{background:'#475569'}} onClick={()=>{setModalObs(o);setNovaObs('');}}>
                                   OBS
                                 </button>
-                                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalBom(o);setObsBom('');}}>
+                                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalBom(o);setObsBom('');setFabBom(fabricacaoVazia());}}>
                                     LIBERAR BOM
                                   </button>
+                                <button className="acn-btn" style={{background:'#6d28d9',fontSize:9}} title="Pedir chicotes ou serralheria para esta OP (pode abrir quantas demandas precisar)"
+                                  onClick={()=>setModalFabricacao(o)}>
+                                  🔌 + Chicote/Serralheria
+                                </button>
                                 {!o.serralheria_status && (
                                   <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}} title="Antecipar a parte metálica/estrutural pra Serralheria sem esperar o resto do BOM"
                                     onClick={()=>{setModalSerralheria(o);setObsSerralheria('');}}>
@@ -782,6 +806,7 @@ export default function EngenhariaTab({ currentUser }) {
                 </div>
               </div>
             )}
+            <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom} />
             <label className="acn-label">Observacoes para PCP/Almoxarifado</label>
             <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="Detalhes do BOM, itens especiais, pendencias..."
@@ -792,6 +817,12 @@ export default function EngenhariaTab({ currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {modalFabricacao && (
+        <NovaDemandaModal currentUser={currentUser} setoresDestino={SETORES_FABRICACAO} origem="engenharia"
+          vinculoInicial={{ tipo:'op', id:String(modalFabricacao.id), descricao:`${modalFabricacao.opl} — ${modalFabricacao.cliente_nome||modalFabricacao.modelo||''}`.replace(/ — $/, '') }}
+          onClose={()=>setModalFabricacao(null)} onSaved={fetchAll} />
       )}
 
       {/* MODAL LIBERAÇÃO PARCIAL SERRALHERIA — antecipa a parte metálica/estrutural sem esperar o resto do BOM */}
@@ -837,6 +868,7 @@ export default function EngenhariaTab({ currentUser }) {
                 </label>
               ))}
             </div>
+            <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length} />
             <label className="acn-label">Observações para PCP/Almoxarifado (aplicadas a todas as selecionadas)</label>
             <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="Detalhes do BOM, itens especiais, pendencias..."
