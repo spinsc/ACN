@@ -14,6 +14,7 @@ import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
+import { ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
@@ -275,6 +276,13 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // em massa: Liberar Fiscal e Confirmar Entrega, mesmo padrão do
   // ProducaoTab.tsx (Iniciar Produção/Liberar CQ em lote).
   const [oplsSelecionadas, setOplsSelecionadas] = useState<Set<string>>(new Set());
+  // Admin/Gerente: alterar um campo (qualquer um, inclusive status) nas OPs marcadas
+  const [editarLoteOpls, setEditarLoteOpls] = useState<any[] | null>(null);
+  const abrirEditarLoteOpls = async () => {
+    const { data, error } = await supabase.from('oples').select('*').in('id', [...oplsSelecionadas]);
+    if (error) { alert('Não foi possível carregar as OPs: ' + error.message); return; }
+    setEditarLoteOpls([...(data || [])].sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })));
+  };
   const toggleOplSelecionada = (id: string) => setOplsSelecionadas(prev => {
     const novo = new Set(prev);
     if (novo.has(id)) novo.delete(id); else novo.add(id);
@@ -3215,10 +3223,20 @@ const SUB_STATUS_COR: Record<string,string> = {
                   }}>
                   ✅ Confirmar Entrega em Lote
                 </button>
+                {podeEditarOplCompleta(currentUser) && (
+                  <button className="acn-btn" style={{ background:'#2563eb', fontSize:10 }} onClick={abrirEditarLoteOpls}
+                    title="Alterar um campo em todas as OPs marcadas (Admin/Gerente)">
+                    ✏️ Editar selecionadas
+                  </button>
+                )}
                 <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={()=>setOplsSelecionadas(new Set())}>
                   ✕ Limpar seleção
                 </button>
               </div>
+            )}
+            {editarLoteOpls && (
+              <ModalEditarOplLote ops={editarLoteOpls} currentUser={currentUser} onClose={()=>setEditarLoteOpls(null)}
+                onSalvo={()=>{ setEditarLoteOpls(null); setOplsSelecionadas(new Set()); fetchOplsEmAberto(); }} />
             )}
 
             {/* ── Modal Confirmar Entrega (individual e em lote — mesmo nome de quem recebeu para todas) ── */}

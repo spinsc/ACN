@@ -13,6 +13,7 @@ import { soEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
+import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -634,6 +635,18 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   // Nem toda tela que abre este modal passa currentUser — cai na sessão salva.
   const usuario = currentUser || (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
   const podeTrocarNumero = podeAlterarNumeroOplPv(usuario);
+  // Admin/Gerente: todos os campos e valores da OP (inclusive status), uma ou o lote
+  const podeEditarTudo = podeEditarOplCompleta(usuario);
+  const [editando, setEditando] = useState(false);
+  const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
+  const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
+    .order('data_hora', { ascending: false }).limit(50).then(({ data }) => setLogs(data || []));
+  const abrirEdicaoLote = async () => {
+    const ids = (await buscarUnidadesDoLote(opl.opl)).map((u: any) => u.id);
+    if (!ids.length) return;
+    const { data } = await supabase.from('oples').select('*').in('id', ids);
+    setEditandoLote([...(data || [])].sort((a: any, b: any) => String(a.opl).localeCompare(String(b.opl), 'pt-BR', { numeric: true })));
+  };
 
   // Lote: só mostra o "Resumo do lote" se houver unidades /NN desta base
   const [qtdLote, setQtdLote] = useState(0);
@@ -763,6 +776,19 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   return (
     <div className="modal-overlay">
       {verResumoLote && <ResumoLoteModal opl={opl.opl} onClose={() => setVerResumoLote(false)} />}
+      {editando && (
+        <ModalEditarOpl opl={opl} currentUser={usuario} onClose={() => setEditando(false)}
+          onSalvo={(nova: any) => { setOpl(nova); setEditando(false); recarregarLogs(); }} />
+      )}
+      {editandoLote && (
+        <ModalEditarOplLote ops={editandoLote} currentUser={usuario} onClose={() => setEditandoLote(null)}
+          onSalvo={async () => {
+            setEditandoLote(null);
+            const { data } = await supabase.from('oples').select('*').eq('id', opl.id).maybeSingle();
+            if (data) setOpl(data);
+            recarregarLogs();
+          }} />
+      )}
       <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto' }}>
 
         {/* Cabeçalho */}
@@ -783,6 +809,22 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 </button>
               )}
               <OrigemVendaBadge origem={opl.origem_venda} />
+              {podeEditarTudo && (
+                <button onClick={() => setEditando(true)}
+                  title="Editar todos os campos e valores desta OP, inclusive o status (Admin/Gerente)"
+                  style={{ background: '#2563eb', border: 'none', color: '#fff', borderRadius: 5,
+                    padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                  ✏️ Editar OP
+                </button>
+              )}
+              {podeEditarTudo && qtdLote > 1 && (
+                <button onClick={abrirEdicaoLote}
+                  title="Alterar um campo em todas as unidades deste lote"
+                  style={{ background: '#7c3aed', border: 'none', color: '#fff', borderRadius: 5,
+                    padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                  ✏️ Editar lote
+                </button>
+              )}
               {qtdLote > 1 && (
                 <button onClick={() => setVerResumoLote(true)}
                   title="Todas as unidades deste lote numa tabela"
