@@ -1104,7 +1104,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 // Usar em qualquer lugar onde o número da OP aparece como texto.
 // Recebe o objeto OPL completo OU apenas o número (string) — abre OplDetalheModal ao clicar.
 // Quando recebe string, busca o objeto completo no banco ao clicar.
-export function LinkOpl({ opl, currentUser, color }: { opl: any; currentUser?: any; color?: string }) {
+export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: any; currentUser?: any; color?: string; discreto?: boolean }) {
   const [open, setOpen]       = useState(false);
   const [fetched, setFetched] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -1128,7 +1128,7 @@ export function LinkOpl({ opl, currentUser, color }: { opl: any; currentUser?: a
       <span
         onClick={handleClick}
         style={{
-          color: color || '#2563eb', fontWeight: 700,
+          color: color || '#2563eb', fontWeight: discreto ? 400 : 700,
           cursor: 'pointer',
           textDecoration: 'underline dotted',
           textUnderlineOffset: 2,

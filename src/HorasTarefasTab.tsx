@@ -9,7 +9,8 @@ import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
-import { Faixa } from './Interface';
+import { Faixa, MenuAcoes } from './Interface';
+import { LinkOpl } from './AcnTabShared';
 import {
   ehGestorEngenharia, mesmaPessoa, normNome, nomesDoUsuario, carregarContextoHorario, extrasAprovadas, horasExtrasDaPessoa,
   textoPeriodo, CONTEXTO_VAZIO, PainelHorasExtras, ModalHoraExtra, type ContextoHorario,
@@ -59,21 +60,80 @@ async function retomarTarefa(tarefa: any) {
   }).eq('id', tarefa.id);
 }
 
+// ─── Busca de OP/OS para vincular à tarefa ────────────────────────────────────
+// Se a pessoa digitar o número inteiro e não clicar na sugestão, a OP com esse
+// número exato é vinculada assim mesmo (antes ficava sem vínculo).
+function BuscaOplTarefa({ selecionada, onSelecionar }: { selecionada: any; onSelecionar: (o: any) => void }) {
+  const [busca, setBusca] = useState(selecionada?.opl || '');
+  const [resultados, setResultados] = useState<any[]>([]);
+  const buscar = async (q: string) => {
+    setBusca(q);
+    if (!q.trim()) { setResultados([]); onSelecionar(null); return; }
+    const { data } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q.trim()}%`).order('opl', { ascending: false }).limit(8);
+    const lista = data || [];
+    setResultados(lista);
+    const exata = lista.find((o: any) => String(o.opl).trim().toLowerCase() === q.trim().toLowerCase());
+    onSelecionar(exata || null);
+  };
+  return (
+    <>
+      <input className="acn-input" style={{ width: '100%', marginBottom: 4 }} aria-label="Buscar OP"
+        placeholder="Buscar por número da OP..." value={busca} onChange={e => buscar(e.target.value)} />
+      {resultados.length > 0 && !(selecionada && resultados.length === 1) && (
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, marginBottom: 8, maxHeight: 140, overflowY: 'auto' }}>
+          {resultados.map(o => (
+            <div key={o.id} onClick={() => { onSelecionar(o); setBusca(o.opl); setResultados([]); }}
+              style={{ padding: '5px 8px', fontSize: 11, cursor: 'pointer', borderBottom: '1px solid #f1f5f9',
+                background: selecionada?.id === o.id ? '#f0fdf4' : undefined }}>
+              <strong>{o.opl}</strong> — {o.cliente_nome || '—'}
+            </div>
+          ))}
+        </div>
+      )}
+      {selecionada && <div style={{ fontSize: 10, color: '#15803d', marginBottom: 8 }}>✅ Vinculado a {selecionada.opl}</div>}
+    </>
+  );
+}
+
+// Vincular (ou trocar/tirar) a OP de uma tarefa já criada
+function ModalVincularOpl({ tarefa, onClose, onSalvo }: any) {
+  const [op, setOp] = useState<any>(tarefa.opl_id ? { id: tarefa.opl_id, opl: tarefa.numero_opl } : null);
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async (alvo: any) => {
+    setSalvando(true);
+    const { error } = await supabase.from('engenharia_horas_tarefas')
+      .update({ opl_id: alvo?.id || null, numero_opl: alvo?.opl || null }).eq('id', tarefa.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível salvar a OP: ' + error.message); return; }
+    onSalvo();
+  };
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 440 }}>
+        <div className="modal-title">🔗 OP da tarefa — {tarefa.titulo}</div>
+        <BuscaOplTarefa selecionada={op} onSelecionar={setOp} />
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando || !op} onClick={() => salvar(op)}>
+            {salvando ? 'Salvando...' : 'Vincular'}
+          </button>
+          {tarefa.opl_id && (
+            <button className="acn-btn" style={{ background: '#fff', color: '#b91c1c', border: '1px solid #fca5a5' }} disabled={salvando} onClick={() => salvar(null)}>
+              Tirar vínculo
+            </button>
+          )}
+          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal Nova Tarefa ────────────────────────────────────────────────────────
 function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
   const [titulo, setTitulo] = useState('');
   const [responsavel, setResponsavel] = useState(currentUser?.nome || '');
-  const [opBusca, setOpBusca] = useState('');
-  const [opResultados, setOpResultados] = useState<any[]>([]);
   const [opSelecionada, setOpSelecionada] = useState<any>(null);
   const [salvando, setSalvando] = useState(false);
-
-  const buscarOps = async (q: string) => {
-    setOpBusca(q); setOpSelecionada(null);
-    if (!q.trim()) { setOpResultados([]); return; }
-    const { data } = await supabase.from('oples').select('id,opl,cliente_nome').ilike('opl', `%${q}%`).limit(8);
-    setOpResultados(data || []);
-  };
 
   const criar = async () => {
     if (!titulo.trim()) { alert('Informe o título da tarefa.'); return; }
@@ -103,23 +163,11 @@ function ModalNovaTarefa({ onClose, onCriado, currentUser }: any) {
 
         <label className="acn-label">Responsável</label>
         <div style={{ marginBottom: 8 }}>
-          <ColaboradorSelect value={responsavel} onChange={setResponsavel} placeholder="Selecione o responsável" />
+          <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
         </div>
 
         <label className="acn-label">Vincular a uma OP/OS (opcional)</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 4 }}
-          placeholder="Buscar por número da OP..." value={opBusca} onChange={e => buscarOps(e.target.value)} />
-        {opResultados.length > 0 && (
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, marginBottom: 8, maxHeight: 120, overflowY: 'auto' }}>
-            {opResultados.map(o => (
-              <div key={o.id} onClick={() => { setOpSelecionada(o); setOpBusca(o.opl); setOpResultados([]); }}
-                style={{ padding: '5px 8px', fontSize: 11, cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
-                <strong>{o.opl}</strong> — {o.cliente_nome || '—'}
-              </div>
-            ))}
-          </div>
-        )}
-        {opSelecionada && <div style={{ fontSize: 10, color: '#15803d', marginBottom: 8 }}>✅ Vinculado a {opSelecionada.opl}</div>}
+        <BuscaOplTarefa selecionada={opSelecionada} onSelecionar={setOpSelecionada} />
 
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando} onClick={criar}>
@@ -208,6 +256,7 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
   const [verLog, setVerLog] = useState(false);
   const [editTitulo, setEditTitulo] = useState<string | null>(null);
   const [modalObs, setModalObs] = useState(false);
+  const [modalOpl, setModalOpl] = useState(false);
   const temObs = !!String(tarefa.observacoes || '').trim();
   const salvarTitulo = async () => {
     const novo = (editTitulo || '').trim();
@@ -267,14 +316,17 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
           ) : (
             <>
               {tarefa.titulo}
-              {tarefa.status !== 'concluida' && (
-                <button onClick={() => setEditTitulo(tarefa.titulo || '')} title="Editar a descrição da tarefa"
-                  aria-label="Editar a descrição da tarefa"
-                  style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, padding: 0, color: '#64748b' }}>✏️</button>
+              {temObs && (
+                <button onClick={() => setModalObs(true)} title="Tem observações — clique para ver" aria-label="Ver observações"
+                  style={{ marginLeft: 5, border: 'none', background: 'none', cursor: 'pointer', fontSize: 10, padding: 0, opacity: .6 }}>📝</button>
               )}
             </>
           )}
-          {tarefa.numero_opl && <div style={{ fontSize: 9, color: '#64748b' }}>OPL: {tarefa.numero_opl}</div>}
+          {tarefa.numero_opl && (
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
+              🔗 <LinkOpl opl={tarefa.numero_opl} currentUser={currentUser} color="#94a3b8" discreto />
+            </div>
+          )}
         </td>
         <td>{tarefa.responsavel_nome || '—'}</td>
         <td>
@@ -307,16 +359,13 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
             {(tarefa.status === 'em_andamento' || tarefa.status === 'pausada') && (
               <button className="acn-btn" style={{ background: '#22c55e', fontSize: 9 }} onClick={concluir}>✅ Concluir</button>
             )}
-            <button className="acn-btn" onClick={() => setModalObs(true)}
-              title={temObs ? 'Ver e editar as observações desta tarefa' : 'Adicionar observações a esta tarefa'}
-              style={{ background: temObs ? '#0f766e' : '#fff', color: temObs ? '#fff' : '#0f766e', border: '1px solid #0f766e', fontSize: 9 }}>
-              📝 {temObs ? 'VER OBS' : 'OBS'}
-            </button>
-            {(tarefa.pausas || []).length > 0 && (
-              <button className="acn-btn" style={{ background: '#475569', fontSize: 9 }} onClick={() => setVerLog(v => !v)}>
-                📋 Pausas ({tarefa.pausas.length})
-              </button>
-            )}
+            {/* Só as ações rápidas ficam à vista; o resto vai para o ⋯ */}
+            <MenuAcoes rotulo="Mais ações da tarefa" itens={[
+              { rotulo: temObs ? '📝 Ver observações' : '📝 Adicionar observação', onClick: () => setModalObs(true) },
+              { rotulo: `📋 ${verLog ? 'Ocultar' : 'Ver'} pausas (${(tarefa.pausas || []).length})`, onClick: () => setVerLog(v => !v), oculto: !(tarefa.pausas || []).length },
+              { rotulo: '✏️ Editar descrição', onClick: () => setEditTitulo(tarefa.titulo || ''), oculto: tarefa.status === 'concluida' },
+              { rotulo: tarefa.numero_opl ? '🔗 Trocar OP vinculada' : '🔗 Vincular a uma OP', onClick: () => setModalOpl(true) },
+            ]} />
           </div>
         </td>
       </tr>
@@ -331,6 +380,11 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
             ))}
           </td>
         </tr>
+      )}
+      {modalOpl && createPortal(
+        <ModalVincularOpl tarefa={tarefa} onClose={() => setModalOpl(false)}
+          onSalvo={() => { setModalOpl(false); onAtualizado(); }} />,
+        document.body,
       )}
       {modalObs && createPortal(
         <ModalObs tarefa={tarefa} onClose={() => setModalObs(false)}
