@@ -37,7 +37,15 @@ const STATUS_COR: Record<string,string> = {
 // do processo ("CADASTRADO - PE 55/2026...", "PEGAR ATA - ...") por falta
 // de campo. Escrever no nome quebra busca e relatorio, entao viraram
 // marcador de verdade.
-const MARCADORES = ['Em Recurso','Em Defesa','Impugnado','Cadastrado','Pendente','Pegar ATA'];
+const MARCADORES = ['Em Recurso','Em Defesa','Impugnado','Cadastrado','Pendente','Pegar ATA','Esclarecimento','Arrematado','Perdida'];
+// Marcadores da disputa em andamento: não mudam o status da licitação. "Perdida" aqui
+// é estar perdendo no lance com a disputa ainda aberta (o status Perdida é o resultado).
+const FAMILIA_MARCADOR: Record<string, string> = { Esclarecimento: 'info', Arrematado: 'ok', Perdida: 'atencao' };
+const AJUDA_MARCADOR: Record<string, string> = {
+  Esclarecimento: 'Em fase de esclarecimento',
+  Arrematado: 'Arrematamos o lance; a disputa segue (habilitação/homologação)',
+  Perdida: 'Perdendo no lance, disputa ainda em andamento (não é o status Perdida)',
+};
 // prefixos legados detectados nos nomes, usados pra sugerir a limpeza
 const PREFIXOS_LEGADOS: Record<string,string> = {
   'CADASTRADO': 'Cadastrado', 'PENDENTE': 'Pendente', 'PEGAR ATA': 'Pegar ATA',
@@ -179,7 +187,8 @@ const TABS_DIREITO = [
 // viva) foram reclassificados por nome de arquivo, e os de "custos" viraram
 // edital_anexos.
 const SUBQUADROS_ARQUIVOS: { categoria: string; label: string }[][] = [
-  [{ categoria:'edital_anexos', label:'📄 Edital / Anexos' }, { categoria:'cotacoes_fornecedores', label:'🧾 Cotações de Fornecedores' }],
+  // Cotações de Fornecedores foram para o rodapé da aba Formação de Preços; o lugar virou Erratas
+  [{ categoria:'edital_anexos', label:'📄 Edital / Anexos' }, { categoria:'erratas', label:'📝 Erratas' }],
   [{ categoria:'impugnacao', label:'⚠️ Impugnações' }, { categoria:'impugnacao_decisao', label:'⚖️ Decisão' }],
   [{ categoria:'esclarecimento', label:'❓ Esclarecimento' }, { categoria:'esclarecimento_resposta', label:'💬 Respostas' }],
   [{ categoria:'recurso', label:'📮 Recursos' }, { categoria:'recurso_defesa', label:'🛡️ Defesa' }, { categoria:'recurso_decisao', label:'⚖️ Decisão' }],
@@ -992,7 +1001,7 @@ const COLUNAS_LISTA_LICITACOES = 'id,numero,nome_projeto,objeto_principal,orgao,
   + 'data_registro,data_limite_esclarecimentos,data_limite_proposta,data_disputa,data_limite_analise_tecnica,'
   + 'analista_nome,analista_email,coordenador_nome,coordenador_email,obs_encerramento,historico,criado_por,criado_por_nome,'
   + 'criado_em,atualizado_em,faturamento_empresa,operador,valor_estimado,horario_sessao,tipo_objeto,julgamento,forma_disputa,'
-  + 'fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_entrega';
+  + 'fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_entrega,epp';
 
 function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir }) {
   const [licit, setLicit] = useState<any>(licitProp);
@@ -1243,8 +1252,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       ['data_limite_proposta','Limite de Proposta'],
       ['data_disputa','Data da Disputa'],
       ['data_limite_analise_tecnica','Limite de Análise Técnica'],
-      ['prazo_entrega','Prazo de Entrega'],
-    ];
+    ];  // Prazo de Entrega agora é texto livre
     for (const [campo, rotulo] of camposData) {
       if (dataForaDeFaixa((formEdit as any)[campo])) {
         alert(`${rotulo}: ano fora da faixa (${ANO_MIN}–${ANO_MAX}). Confira se não sobrou um dígito a mais.`);
@@ -1264,7 +1272,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       data_limite_proposta:        inputBRParaUtc(editaveis.data_limite_proposta),
       data_disputa:                inputBRParaUtc(editaveis.data_disputa),
       data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
-      prazo_entrega: editaveis.prazo_entrega || null,   // coluna date: '' não é data
+      prazo_entrega: (editaveis.prazo_entrega || '').trim() || null,   // texto livre (ex.: 30 dias após o empenho)
       atualizado_em: agora,
     };
     const { error } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
@@ -1478,6 +1486,20 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   const alternar = (lista: string[], m: string) =>
     lista.includes(m) ? lista.filter(x => x !== m) : [...lista, m];
 
+  // EPP fica no topo junto dos marcadores e grava na hora, como eles
+  const alternarEpp = async () => {
+    const novo = !formEdit.epp;
+    setFormEdit((f: any) => ({ ...f, epp: novo }));
+    const { error } = await supabase.from('licitacoes')
+      .update({ epp: novo, atualizado_em: new Date().toISOString() }).eq('id', licit.id);
+    if (error) {
+      setFormEdit((f: any) => ({ ...f, epp: !novo }));
+      alert('Não foi possível salvar o EPP: ' + error.message);
+      return;
+    }
+    onRefresh();
+  };
+
   const toggleMarcador = (m: string) => {
     const novos = alternar(marcadoresRef.current, m);
     marcadoresRef.current = novos;
@@ -1579,11 +1601,15 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
           {/* Marcadores */}
           <div style={{ padding:'6px 12px', background:'#f8fafc', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', flexShrink:0 }}>
-            {formEdit.forma_disputa && (
-              <span style={{ background:'#374151', color:'#fff', borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:700 }}>⚖️ {formEdit.forma_disputa}</span>
-            )}
+            <button onClick={() => alternarEpp()} aria-pressed={!!formEdit.epp}
+              title="Empresas de pequeno porte (ME/EPP): licitação exclusiva ou com cota reservada"
+              style={{ border:`1.5px solid ${formEdit.epp?'#0f766e':'#d1d5db'}`,
+                background: formEdit.epp?'#ccfbf1':'#fff', color: formEdit.epp?'#0f766e':'#6b7280',
+                borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:800, cursor:'pointer' }}>
+              {formEdit.epp ? '✓ ' : ''}EPP
+            </button>
             {MARCADORES.map(m => (
-              <button key={m} onClick={() => toggleMarcador(m)}
+              <button key={m} onClick={() => toggleMarcador(m)} title={AJUDA_MARCADOR[m]}
                 style={{ border:`1.5px solid ${marcadores.includes(m)?'#dc2626':'#d1d5db'}`,
                   background: marcadores.includes(m)?'#fef2f2':'#fff',
                   color: marcadores.includes(m)?'#dc2626':'#6b7280',
@@ -1596,32 +1622,31 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           {/* Form (scrollable) */}
           <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
 
-            {/* Faturamento — sempre visível */}
-            <div style={campoDestaque('faturamento_empresa')}>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>ACN / Detech</label>
-              <div style={{ display:'flex', gap:6 }}>
-                {FATURAMENTO_OPTIONS.map(opt => (
-                  <button key={opt} onClick={() => setF('faturamento_empresa', opt)}
-                    style={{ flex:1, padding:'5px 4px', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4,
-                      border:`1.5px solid ${formEdit.faturamento_empresa===opt?'#2563eb':'#d1d5db'}`,
-                      background: formEdit.faturamento_empresa===opt ? '#dbeafe' : '#fff',
-                      color: formEdit.faturamento_empresa===opt ? '#1d4ed8' : '#374151' }}>
-                    {opt}
-                  </button>
-                ))}
+            {/* Seletores compactos: faturamento, classificação e tipo numa linha */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+              <div style={campoDestaque('faturamento_empresa')}>
+                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>ACN / Detech</label>
+                <select value={formEdit.faturamento_empresa||''} onChange={e=>setF('faturamento_empresa',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                  {!formEdit.faturamento_empresa && <option value="">—</option>}
+                  {FATURAMENTO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
               </div>
-            </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              <div style={campoDestaque('numero')}><FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} /></div>
               <div style={campoDestaque('classificacao')}>
                 <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Classificação</label>
-                <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                <select value={formEdit.classificacao||'Direta'} onChange={e=>setF('classificacao',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
                   <option>Direta</option><option>Parceiro</option><option>Adesão a ATA</option>
                 </select>
               </div>
+              <div style={campoDestaque('tipo_objeto')}>
+                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Tipo</label>
+                <select value={formEdit.tipo_objeto||''} onChange={e=>setF('tipo_objeto',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                  <option value="">—</option>
+                  {['Registro de Preços','Contrato'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
             </div>
+
+            <div style={campoDestaque('numero')}><FInput label="Nome do Projeto" value={formEdit.numero} onChange={v=>setF('numero',v)} /></div>
 
             {/* Fluxo de Entrega e endereços: só em Vencida (nos outros status não
                 há o que entregar ainda). Mesma classificação usada na OP. */}
@@ -1646,21 +1671,6 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 
             <div style={campoDestaque('nome_projeto')}><FInput label="Nome completo do Órgão" value={formEdit.nome_projeto} onChange={v=>setF('nome_projeto',v)} /></div>
             <div style={campoDestaque('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
-
-            <div style={campoDestaque('tipo_objeto')}>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Tipo</label>
-              <div style={{ display:'flex', gap:6 }}>
-                {['Registro de Preços','Contrato'].map(opt => (
-                  <button key={opt} onClick={() => setF('tipo_objeto', opt)}
-                    style={{ flex:1, padding:'5px 4px', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4,
-                      border:`1.5px solid ${formEdit.tipo_objeto===opt?'#2563eb':'#d1d5db'}`,
-                      background: formEdit.tipo_objeto===opt ? '#dbeafe' : '#fff',
-                      color: formEdit.tipo_objeto===opt ? '#1d4ed8' : '#374151' }}>
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             <QuadroFormacaoLicitacao licitacaoId={licit.id} />
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
@@ -1688,18 +1698,11 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             </div>
 
             <div style={campoDestaque('forma_disputa')}>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Forma de Disputa</label>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                {FORMA_DISPUTA_OPCOES.map(opt => (
-                  <button key={opt} onClick={() => setF('forma_disputa', opt)}
-                    style={{ flex:'1 0 30%', padding:'4px', border:`1.5px solid ${formEdit.forma_disputa===opt?'#2563eb':'#d1d5db'}`,
-                      background: formEdit.forma_disputa===opt ? '#dbeafe' : '#fff',
-                      color: formEdit.forma_disputa===opt ? '#1d4ed8' : '#374151',
-                      borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                    {opt}
-                  </button>
-                ))}
-              </div>
+              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Forma de Disputa</label>
+              <select value={formEdit.forma_disputa||''} onChange={e=>setF('forma_disputa',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                <option value="">—</option>
+                {FORMA_DISPUTA_OPCOES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
             </div>
 
             {/* PRAZOS */}
@@ -1710,7 +1713,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 <div style={campoDestaque('data_limite_proposta')}><FInput label="Limite Proposta" value={formEdit.data_limite_proposta} onChange={v=>setF('data_limite_proposta',v)} type="datetime-local" /></div>
                 <div style={campoDestaque('data_disputa')}><FInput label="Data/Hora de Disputa" value={formEdit.data_disputa} onChange={v=>setF('data_disputa',v)} type="datetime-local" /></div>
                 <div style={campoDestaque('data_limite_analise_tecnica')}><FInput label="Limite Análise Técnica" value={formEdit.data_limite_analise_tecnica} onChange={v=>setF('data_limite_analise_tecnica',v)} type="datetime-local" /></div>
-                <div style={campoDestaque('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} type="date" /></div>
+                <div style={campoDestaque('prazo_entrega')}><FInput label="Prazo de Entrega" value={formEdit.prazo_entrega} onChange={v=>setF('prazo_entrega',v)} placeholder="Ex.: 30 dias após o empenho" /></div>
               </div>
             </div>
 
@@ -2023,6 +2026,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   rotulo={licit.numero || licit.nome_projeto || ''}
                   embutido
                 />
+                {/* Rodapé: cotações dos fornecedores usadas para montar os custos */}
+                <div style={{ marginTop:14, display:'flex' }}>
+                  <SubQuadroDocumentos licitacaoId={licit.id} categoria="cotacoes_fornecedores" label="🧾 Cotações de Fornecedores"
+                    currentUser={currentUser} podeExcluir={podeExcluirAnexos}
+                    areasLivres={areasLivres} onAreasLivresChange={setAreasLivres}
+                    itemNaoLido={itemNaoLido} areaLivreNaoLida={camposNaoLidos.has('area_livre_processo:cotacoes_fornecedores')} />
+                </div>
               </div>
             )}
 
@@ -2134,7 +2144,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
 // LicitacaoModal, uma nova função seria criada a cada re-render/tecla
 // digitada, fazendo o React desmontar e remontar o <input> e tirar o foco).
 // ─────────────────────────────────────────────────────────────────────────────
-function FInput({ label, value, onChange, type='text' }: { label:string; value:any; onChange:(v:string)=>void; type?:string }) {
+function FInput({ label, value, onChange, type='text', placeholder }: { label:string; value:any; onChange:(v:string)=>void; type?:string; placeholder?:string }) {
   if (type === 'money') {
     return (
       <div>
@@ -2148,7 +2158,7 @@ function FInput({ label, value, onChange, type='text' }: { label:string; value:a
   return (
     <div>
       <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>{label}</label>
-      <input type={type} value={value||''} onChange={e=>onChange(e.target.value)}
+      <input type={type} value={value||''} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
         style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
     </div>
   );
@@ -2353,8 +2363,9 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
             título usa `numero`, e não `nome_projeto`. */}
         <h6>
           {(Array.isArray(l.marcadores) ? l.marcadores : []).map(m => (
-            <Selo key={m} familia="erro" ponto={false}>{m}</Selo>
+            <Selo key={m} familia={FAMILIA_MARCADOR[m] || 'erro'} ponto={false}>{m}</Selo>
           ))}
+          {l.epp && <Selo familia="neutro" ponto={false}>EPP</Selo>}
           <span>{l.numero || '—'}</span>
         </h6>
         <div className="acn-kmeta">

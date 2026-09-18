@@ -241,7 +241,7 @@ export function ContratoEntregas({ licit, currentUser }) {
       cliente_nome:   licit.nome_projeto || '',          // coluna legada: é o NOME DO ÓRGÃO
       quantidade:     qtd,
       veiculos:       Array.from({ length: qtd }, () => ({ chassi:'', placa:'' })),
-      prazo_entrega:  pedido.prazo_entrega || licit.prazo_entrega || '',
+      prazo_entrega:  pedido.prazo_entrega || '',
       origem_venda:   'licitacao',
       fluxo_entrega:  licit.fluxo_entrega || '',
       destino_cidade: end?.cidade || '', destino_uf: end?.uf || '', destino_cep: end?.cep || '',
@@ -275,7 +275,7 @@ export function ContratoEntregas({ licit, currentUser }) {
             <div style={{ fontWeight:800, fontSize:12, color:'#1e293b' }}>📦 Contrato e Entregas</div>
             <div style={{ fontSize:9, color:'#64748b' }}>
               Por item do edital: contratado + aditivos − pedidos = saldo. Cada pedido gera a sua OP.
-              {licit.prazo_entrega && <> · Prazo de entrega do edital: <strong>{fmtD(licit.prazo_entrega)}</strong></>}
+              {licit.prazo_entrega && <> · Prazo de entrega do edital: <strong>{licit.prazo_entrega}</strong></>}
             </div>
           </div>
           <div style={{ display:'flex', gap:6 }}>
@@ -359,7 +359,7 @@ export function ContratoEntregas({ licit, currentUser }) {
                 <div style={{ fontSize:16, fontWeight:900, color:corSaldo }}>{fmtQ(s.saldo)} <span style={{ fontSize:10 }}>{item.unidade}</span></div>
               </div>
               <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                <button type="button" onClick={() => setForm({ tipo:'pedido', itemId:item.id, data:hoje(), prazo:licit.prazo_entrega || '', enderecoId: enderecos.length === 1 ? enderecos[0].id : '' })} style={btn('#0369a1')}>+ Pedido</button>
+                <button type="button" onClick={() => setForm({ tipo:'pedido', itemId:item.id, data:hoje(), prazo:'', enderecoId: enderecos.length === 1 ? enderecos[0].id : '' })} style={btn('#0369a1')}>+ Pedido</button>
                 <button type="button" onClick={() => setForm({ tipo:'aditivo', itemId:item.id, data:hoje() })} style={btn('#7c3aed', false)}>+ Aditivo</button>
                 <button type="button" onClick={() => setForm({ tipo:'item', ...item })} title="Editar item" style={{ ...btn('#475569', false), padding:'4px 7px' }}>✏️</button>
                 <button type="button" onClick={() => remover('licitacao_contrato_itens', item, `o item "${item.descricao}" com todos os seus pedidos e aditivos`)} title="Remover item" style={{ ...btn('#dc2626', false), padding:'4px 7px' }}>🗑</button>
