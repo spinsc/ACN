@@ -167,11 +167,48 @@ function ModalPausar({ tarefa, onClose, onPausado }: any) {
   );
 }
 
+// ─── Observações da tarefa ─────────────────────────────────────────────────────
+// Texto livre da tarefa. Abre já com o que foi escrito, pronto para completar ou
+// corrigir. Não mexe em atualizado_em: a pausa automática usa esse campo para
+// não gravar por cima de outra alteração, e uma observação não muda o tempo.
+function ModalObs({ tarefa, onClose, onSalvo }: any) {
+  const [texto, setTexto] = useState(tarefa.observacoes || '');
+  const [salvando, setSalvando] = useState(false);
+  const temAntes = !!String(tarefa.observacoes || '').trim();
+  const salvar = async () => {
+    setSalvando(true);
+    const { error } = await supabase.from('engenharia_horas_tarefas')
+      .update({ observacoes: texto.trim() || null }).eq('id', tarefa.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível salvar a observação: ' + error.message); return; }
+    onSalvo();
+  };
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 480 }}>
+        <div className="modal-title">📝 Observações — {tarefa.titulo}</div>
+        <textarea className="acn-input" rows={7} style={{ width: '100%', resize: 'vertical', marginBottom: 12 }}
+          placeholder="Anote informações desta tarefa: medidas, pendências, contatos, decisões..."
+          aria-label="Observações da tarefa" value={texto} onChange={e => setTexto(e.target.value)} autoFocus
+          onFocus={e => { const n = e.target.value.length; e.target.setSelectionRange(n, n); }} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="acn-btn" style={{ background: '#0f766e', flex: 1 }} disabled={salvando || texto === (tarefa.observacoes || '')} onClick={salvar}>
+            {salvando ? 'Salvando...' : temAntes ? 'Salvar alterações' : 'Salvar observação'}
+          </button>
+          <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Linha de tarefa ──────────────────────────────────────────────────────────
 function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHorario }: any) {
   const [modalPausar, setModalPausar] = useState(false);
   const [verLog, setVerLog] = useState(false);
   const [editTitulo, setEditTitulo] = useState<string | null>(null);
+  const [modalObs, setModalObs] = useState(false);
+  const temObs = !!String(tarefa.observacoes || '').trim();
   const salvarTitulo = async () => {
     const novo = (editTitulo || '').trim();
     if (!novo) { alert('A descrição da tarefa não pode ficar em branco.'); return; }
@@ -270,6 +307,11 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
             {(tarefa.status === 'em_andamento' || tarefa.status === 'pausada') && (
               <button className="acn-btn" style={{ background: '#22c55e', fontSize: 9 }} onClick={concluir}>✅ Concluir</button>
             )}
+            <button className="acn-btn" onClick={() => setModalObs(true)}
+              title={temObs ? 'Ver e editar as observações desta tarefa' : 'Adicionar observações a esta tarefa'}
+              style={{ background: temObs ? '#0f766e' : '#fff', color: temObs ? '#fff' : '#0f766e', border: '1px solid #0f766e', fontSize: 9 }}>
+              📝 {temObs ? 'VER OBS' : 'OBS'}
+            </button>
             {(tarefa.pausas || []).length > 0 && (
               <button className="acn-btn" style={{ background: '#475569', fontSize: 9 }} onClick={() => setVerLog(v => !v)}>
                 📋 Pausas ({tarefa.pausas.length})
@@ -289,6 +331,11 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
             ))}
           </td>
         </tr>
+      )}
+      {modalObs && createPortal(
+        <ModalObs tarefa={tarefa} onClose={() => setModalObs(false)}
+          onSalvo={() => { setModalObs(false); onAtualizado(); }} />,
+        document.body,
       )}
       {modalPausar && createPortal(
         <ModalPausar tarefa={tarefa} onClose={() => setModalPausar(false)}
