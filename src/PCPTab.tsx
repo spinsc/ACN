@@ -10,6 +10,7 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
+import { MenuAcoes } from './Interface';
 
 
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -404,7 +405,7 @@ export default function PCPTab({ currentUser }) {
                           onClick={()=>sanarPendenciaPCP(o)}>
                           SANAR PENDENCIA
                         </button>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                        <MenuAcoes rotulo="Mais ações da OP" itens={[{ rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) }]} />
                       </div>
                     </td>
                   </tr>
@@ -475,7 +476,7 @@ export default function PCPTab({ currentUser }) {
                           ) : (
                             <span style={{fontSize:9,color:'#94a3b8'}}>Aguardando Serralheria terminar</span>
                           )}
-                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                          <MenuAcoes rotulo="Mais ações da OP" itens={[{ rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) }]} />
                         </div>
                       </td>
                     </tr>
@@ -522,10 +523,6 @@ export default function PCPTab({ currentUser }) {
                     <td>{fmtDt(o.data_prevista_entrega)}</td>
                     <td>
                       <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:10}}
-                          onClick={()=>setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') })}>
-                          + Demanda
-                        </button>
                         {prontoParaEmbalagem(o) && (
                           <button className="acn-btn" style={{background:'#0f766e',fontWeight:700}}
                             title="Kit conferido: segue para o Almoxarifado pesar, medir, embalar e abrir a cotação de frete"
@@ -536,7 +533,7 @@ export default function PCPTab({ currentUser }) {
                         {o.status_geral === 'Aguardando Almox' && (
                           <span style={{fontSize:9,color:'#92400e'}}>Almoxarifado separa e embala</span>
                         )}
-                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                        <MenuAcoes rotulo="Mais ações da OP" itens={[{ rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) }, { rotulo: '➕ Nova demanda para esta OP', onClick: () => setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') }) }]} />
                       </div>
                     </td>
                   </tr>
@@ -610,10 +607,6 @@ export default function PCPTab({ currentUser }) {
                       <td>{fmtDt(o.data_prevista_entrega)}</td>
                       <td>
                         <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                          <button className="acn-btn" style={{background:'#475569',fontSize:10}}
-                            onClick={()=>setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') })}>
-                            + Demanda
-                          </button>
                           {o.status_geral === 'Em Espera PCP' && (
                             <button className="acn-btn" style={{background:'#3b82f6'}} onClick={()=>abrirKiting([o])}>
                               LIBERAR KITING
@@ -639,10 +632,11 @@ export default function PCPTab({ currentUser }) {
                           {o.status_almox === 'Falta de Material' && (
                             <span className="acn-badge" style={{background:'#ef4444'}}>🚫 FALTA MATERIAL</span>
                           )}
-                          <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
-                            DEVOLVER
-                          </button>
-                          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                          <MenuAcoes rotulo="Mais ações da OP" itens={[
+                            { rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) },
+                            { rotulo: '➕ Nova demanda para esta OP', onClick: () => setPendingVinculoOP({ tipo:'op', id:String(o.id), descricao:`${o.opl} — ${o.cliente_nome||o.modelo||''}`.replace(/ — $/, '') }) },
+                            { rotulo: '↩️ Devolver (Almoxarifado ou Engenharia)', perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
+                          ]} />
                         </div>
                       </td>
                     </tr>
