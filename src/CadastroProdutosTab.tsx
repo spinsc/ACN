@@ -706,6 +706,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
                 <select style={inp} value={form.categoria} onChange={e => set('categoria', e.target.value)}>
                   <option value="">— Selecionar —</option>
                   {CATEGORIAS_DEFAULT.map(c => <option key={c} value={c}>{c}</option>)}
+                  {form.categoria && !CATEGORIAS_DEFAULT.includes(form.categoria) && <option value={form.categoria}>{form.categoria}</option>}
                 </select>
               </div>
               <div style={{ flex: 0.6 }}>

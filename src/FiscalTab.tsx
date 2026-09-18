@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmar } from './Feedback';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -76,6 +77,7 @@ export default function FiscalTab({ currentUser }) {
     if (!nf) { alert('Informe o numero da NF-e!'); return; }
     const itens = opls.filter(o => selecionados.has(o.id) && o.status_geral === 'Aguarda Emissao NF');
     if (itens.length === 0) return;
+    if (!await confirmar(`Faturar ${itens.length} OPL(s) com a NF-e ${nf}?`)) return;
     setFaturandoLote(true);
     const agora = new Date().toISOString();
     const obsCombinado = itens.length > 1
@@ -130,6 +132,7 @@ export default function FiscalTab({ currentUser }) {
   const faturar = async (opl) => {
     const nf = nfs[opl.id];
     if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
+    if (!await confirmar(`Confirmar o faturamento da OPL ${opl.opl} com a NF-e ${nf.trim()}?`)) return;
     setFaturandoId(opl.id);
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
@@ -166,6 +169,7 @@ export default function FiscalTab({ currentUser }) {
   const faturarOS = async (os) => {
     const nf = nfs[os.id];
     if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
+    if (!await confirmar(`Confirmar o faturamento da OS ${os.numero_os || ''} com a NF-e ${nf.trim()}?`)) return;
     const agora = new Date().toISOString();
     const inicioFiscal = os.data_cq ? new Date(os.data_cq) : null;
     const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;

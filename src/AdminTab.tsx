@@ -9,7 +9,7 @@ import PainelFeriados from './FeriadosAdmin';
 
 
 const PERFIS = [
-  'Admin','Gerente','Gerente Comercial','Comercial',
+  'Admin','Gerente','Gerente Comercial','Gerente administrativo','Gerente Produção','Gerente de Licitações','Comercial',
   'Engenharia','PCP','Produção','Chicote','Serralheria',
   'Laboratório','Compras','Almoxarifado','CQ',
   'Logística','Vistorias','Fiscal','SAC','CRM',
@@ -41,6 +41,7 @@ const TODAS_ABAS = [
   { id:'licitacoes',   label:'Licitações' },
   { id:'cotacoes',     label:'Cotações' },
   { id:'rh',           label:'RH' },
+  { id:'comissoes_tecnicos', label:'Comissões de Técnicos (sem o RH inteiro)' },
   { id:'relatorios',      label:'Relatorios' },
   { id:'formacao_precos', label:'Formação de Preços' },
   // Abas que existiam no menu mas ficaram de fora desta lista — sem estar aqui,
@@ -1543,18 +1544,32 @@ function PainelDados() {
 }
 
 // ---- PAINEL NOTIFICAÇÕES ----
-const PERFIS_WA = ['Admin','Gerente','Comercial','Engenharia','PCP','Almoxarifado','Producao','CQ','Fiscal','Logistica','Marketing','Compras','Laboratorio'];
+// Destinatários do WhatsApp: o envio compara o perfil do usuário por nome EXATO (com
+// acento). A lista junta os perfis padrão, os que existem em usuários e os já
+// marcados; perfil sem nenhum usuário ativo aparece apagado (não recebe ninguém).
 
 function PainelNotificacoes() {
   const [eventos, setEventos] = useState([]);
   const [salvando, setSalvando] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const [usuariosPorPerfil, setUsuariosPorPerfil] = useState<Record<string, number>>({});
   useEffect(() => { fetchEventos(); }, []);
+  const PERFIS_WA = [...new Set([
+    ...PERFIS,
+    ...Object.keys(usuariosPorPerfil),
+    ...eventos.flatMap((e: any) => e.destinatarios_perfis || []),
+  ])];
 
   const fetchEventos = async () => {
     setLoading(true);
-    const { data } = await supabase.from('notificacoes_config').select('*').order('evento');
+    const [{ data }, { data: us }] = await Promise.all([
+      supabase.from('notificacoes_config').select('*').order('evento'),
+      supabase.from('auth_usuarios').select('perfil').eq('ativo', true),
+    ]);
+    const cont: Record<string, number> = {};
+    (us || []).forEach((u: any) => { if (u.perfil) cont[u.perfil] = (cont[u.perfil] || 0) + 1; });
+    setUsuariosPorPerfil(cont);
     setEventos(data || []);
     setLoading(false);
   };
@@ -1616,7 +1631,8 @@ function PainelNotificacoes() {
                         const carregando = salvando === ev.evento;
                         return (
                           <button key={p} onClick={()=>!carregando && togglePerfil(ev,p)}
-                            style={{
+                            title={usuariosPorPerfil[p] ? `${usuariosPorPerfil[p]} usuário(s) ativo(s) com este perfil` : 'Nenhum usuário ativo com este perfil — ninguém recebe'}
+                            style={{ opacity: usuariosPorPerfil[p] ? 1 : .5,
                               fontSize:9, padding:'2px 6px', border:'1px solid',
                               borderRadius:3, cursor: carregando ? 'default' : 'pointer',
                               background: selecionado ? '#0f766e' : 'transparent',

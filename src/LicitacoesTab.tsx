@@ -175,7 +175,7 @@ const SORT_OPTIONS = [
   { value:'data_limite_analise_tecnica', label:'Limite Análise Técnica' },
   { value:'orgao',                       label:'Órgão' },
   { value:'status',                      label:'Status' },
-  { value:'criado_em',                   label:'Mais Recentes' },
+  { value:'disputa_recente',             label:'Mais Recentes (disputa)' },
 ];
 
 const TABS_DIREITO = [
@@ -1280,6 +1280,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       data_disputa:                inputBRParaUtc(editaveis.data_disputa),
       data_limite_analise_tecnica: inputBRParaUtc(editaveis.data_limite_analise_tecnica),
       prazo_entrega: (editaveis.prazo_entrega || '').trim() || null,   // texto livre (ex.: 30 dias após o empenho)
+      // campo de valor apagado = sem valor (antes ia texto vazio e o banco recusava o salvamento)
+      ...Object.fromEntries(Object.keys(editaveis).filter(k => k.startsWith('valor_'))
+        .map(k => [k, editaveis[k] === '' || editaveis[k] == null ? null : Number(editaveis[k])])),
       atualizado_em: agora,
     };
     const { error } = await supabase.from('licitacoes').update(novoRow).eq('id', licit.id);
@@ -1708,9 +1711,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
             <div style={campoDestaque('orgao')}><FInput label="Portal" value={formEdit.orgao} onChange={v=>setF('orgao',v)} /></div>
 
             <QuadroFormacaoLicitacao licitacaoId={licit.id} />
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              <div style={campoDestaque('valor_estimado')}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
-              <div style={campoDestaque('julgamento')}>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'flex-end' }}>
+              <div style={{ ...campoDestaque('valor_estimado'), flex:'1 1 140px', minWidth:130 }}><FInput label="Valor Global Previsto (R$)" value={formEdit.valor_estimado} onChange={v=>setF('valor_estimado',v)} type="money" /></div>
+              <div style={{ ...campoDestaque('julgamento'), flex:'0 1 auto' }}>
                 <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:4 }}>Julgamento</label>
                 <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
                   {JULGAMENTO_OPCOES.map(opt => {
@@ -1730,14 +1733,13 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   })}
                 </div>
               </div>
-            </div>
-
-            <div style={campoDestaque('forma_disputa')}>
-              <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Forma de Disputa</label>
-              <select value={formEdit.forma_disputa||''} onChange={e=>setF('forma_disputa',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
-                <option value="">—</option>
-                {FORMA_DISPUTA_OPCOES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <div style={{ ...campoDestaque('forma_disputa'), flex:'1 1 120px', minWidth:110 }}>
+                <label style={{ display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 }}>Forma de Disputa</label>
+                <select value={formEdit.forma_disputa||''} onChange={e=>setF('forma_disputa',e.target.value)} style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }}>
+                  <option value="">—</option>
+                  {FORMA_DISPUTA_OPCOES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
             </div>
 
             {/* PRAZOS */}
@@ -2646,7 +2648,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [markupPorLicit, setMarkupPorLicit] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
-  const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [filtroTipo, setFiltroTipo] = useState<string>('Direta');
   const [filtroTemp, setFiltroTemp] = useState<string>('');
   const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
   const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
@@ -2803,6 +2805,12 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       }
       if (sortBy === 'status') return a.status.localeCompare(b.status);
       if (sortBy === 'orgao') return (a.orgao||'').localeCompare(b.orgao||'');
+      if (sortBy === 'disputa_recente') {
+        // disputa mais recente primeiro; sem data de disputa vai para o fim
+        const da = a.data_disputa ? new Date(a.data_disputa).getTime() : -Infinity;
+        const db2 = b.data_disputa ? new Date(b.data_disputa).getTime() : -Infinity;
+        return db2 - da;
+      }
       const da = a[sortBy] ? new Date(a[sortBy]).getTime() : Infinity;
       const db2 = b[sortBy] ? new Date(b[sortBy]).getTime() : Infinity;
       return da - db2;
@@ -2930,9 +2938,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
               <option value="semestre">Semestre</option>
             </select>
           </div>
-          {(filtroTipo!=='todos'||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
+          {(filtroTipo!=='Direta'||filtroAnaliseSetor!=='todas'||filtroPeriodoDe||filtroPeriodoAte||agrupamentoPeriodo) && (
             <Botao pequeno variante="discreto" icone={mdiClose}
-              onClick={() => { setFiltroTipo('todos'); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}>
+              onClick={() => { setFiltroTipo('Direta'); setFiltroAnaliseSetor('todas'); setFiltroPeriodoDe(''); setFiltroPeriodoAte(''); setAgrupamentoPeriodo(''); }}>
               Limpar filtros
             </Botao>
           )}

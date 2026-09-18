@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { confirmar } from './Feedback';
 import { SETOR_LABEL, concluirAnaliseSetor, reabrirAnaliseSetor, podeCancelarAnalise, cancelarSolicitacaoAnalise } from './AnaliseWidget';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export default function AnaliseInboxPanel({ currentUser, onClose, onCountChange,
   useEffect(() => { refreshCount(); }, [refreshCount]);
 
   const concluirSetor = async (solicitacao: any, setor: any) => {
+    if (!await confirmar(`Concluir a análise do setor ${setor?.setor || setor?.nome || ''}?`)) return;
     const key = setor.id;
     setSalvando(prev => ({ ...prev, [key]: true }));
     try {

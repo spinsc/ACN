@@ -2681,6 +2681,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const finalizar = async () => {
     if (!oplVinculada) { alert('Vincule uma OP/OS primeiro para gerar o PDF.'); return; }
     if (itens.length === 0) { alert('Adicione itens antes de finalizar.'); return; }
+    if (!await confirmar('Finalizar esta formação de preços e gerar o PDF?')) return;
     setFinalizando(true);
     try {
       const { jsPDF } = await import('jspdf');

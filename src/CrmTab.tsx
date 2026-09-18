@@ -15,6 +15,7 @@ import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
 import { ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
+import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import FormacaoPrecosTab from './FormacaoPrecosTab';
@@ -1507,8 +1508,11 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (colisao) return null; // número já em uso — deixa pro fluxo manual resolver
 
     const agora = new Date().toISOString();
+    // itens vendidos: da formação de preços ligada ao card (oficial; senão a mais recente)
+    const { itens: itensVendidos } = await itensDaFormacao({ crmId: op.id });
     const { data: novaOp, error } = await supabase.from('oples').insert([{
       opl:                   baseOpl,
+      itens_vendidos:        itensVendidos || [],
       modelo:                op.titulo,
       valor_total:           op.valor_registrado ?? null,
       cliente_nome:          op.orgao || op.titulo,
@@ -1528,7 +1532,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (novaOp) {
       await supabase.from('crm_historico').insert({
         oportunidade_id: op.id, tipo: 'conversao_op',
-        conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}`, usuario_nome: currentUser?.nome,
+        conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}${itensVendidos?.length ? ` (${itensVendidos.length} item(ns) vendido(s) da formação de preços)` : ' (sem formação de preços: informe os itens vendidos no detalhe da OP)'}`, usuario_nome: currentUser?.nome,
       });
     }
     return baseOpl;
@@ -1898,7 +1902,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     const acoes = [
       { rotulo: 'Atualizar andamento', icone: mdiUpdate, onClick: () => abrirAndamento(op) },
       { rotulo: 'Abrir', icone: mdiFolderOpenOutline, onClick: abrir, oculto: perdido || desistiu },
-      { rotulo: 'Lançar OP', icone: mdiClipboardTextOutline, onClick: () => { setModalConverter(op); setTipoConverter('op'); setNumOp(''); }, oculto: !ganho },
+      { rotulo: 'Lançar OP', icone: mdiClipboardTextOutline, onClick: () => setModalNovaOpOs({ crmCard: op }), oculto: !ganho },
       { rotulo: 'Lançar OS', icone: mdiWrenchOutline, onClick: () => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }, oculto: !(ganho && funil === 'venda_direta') },
       { rotulo: 'Nova venda', icone: mdiPlus, onClick: () => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }, oculto: !ganho },
       { rotulo: 'Compras', icone: mdiPackageVariantClosed, onClick: () => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }, oculto: !ganho },

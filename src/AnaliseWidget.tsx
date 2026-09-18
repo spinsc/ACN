@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
-import { pedirTexto } from './Feedback';
+import { pedirTexto, confirmar } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES DE SETORES
@@ -369,6 +369,7 @@ export function AnaliseStatusPanel({ origemId, origemTitulo, origemNumero, orige
   }, [load]);
 
   const concluirSetor = async (setor: any, sol: any) => {
+    if (!await confirmar(`Concluir a análise do setor ${setor?.setor || setor?.nome || ''}?`)) return;
     setFinalizando(setor.id);
     const usuario = currentUser?.nome || currentUser?.email || 'Sistema';
     await concluirAnaliseSetor(setor, sol, { notas: obsSetor[setor.id], usuario });

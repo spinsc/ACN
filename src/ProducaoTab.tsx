@@ -2375,6 +2375,7 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const concluirRetrabalho = async (opl) => {
+    if (!await confirmar(`Concluir o retrabalho da OPL ${opl?.opl || ''}? Ela volta para o CQ.`)) return;
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_retrabalho ? new Date(opl.data_inicio_retrabalho) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;

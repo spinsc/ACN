@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { confirmar } from './Feedback';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
@@ -1340,6 +1341,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   };
 
   const concluir = async (d: any) => {
+    if (!await confirmar(`Concluir a demanda${d?.numero_opl ? ` da OPL ${d.numero_opl}` : ''}? Ela sai da lista de pendentes.`)) return;
     const agora = new Date().toISOString();
     const seg = d.data_inicio ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, null) : 0;
     const tempo = seg / 3600;

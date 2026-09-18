@@ -18,7 +18,7 @@ import { NovaDemandaModal } from './DemandaAvulsaPanel';
 // saem — o criador já é registrado (currentUser), igual em todo o resto do
 // sistema unificado; Tipo de Solicitação já não era gravado há tempos
 // (sempre null no insert antigo).
-const SETORES_DESTINO = ['Comercial','Serralheria','Chicotes','Laboratorio','Compras','Almoxarifado','Engenharia','Producao','PCP'];
+const SETORES_DESTINO = ['Comercial','Serralheria','Chicotes','Laboratorio','Telecom','Compras','Almoxarifado','Engenharia','Producao','PCP'];
 
 export default function AjustesProjetoTab({ currentUser }) {
   const [ajustes, setAjustes] = useState([]);

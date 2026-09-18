@@ -237,8 +237,19 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         responsavel:  crmCard.responsavel_nome || '',
         observacoes:  crmCard.titulo || '',
         origem_venda: origemDeOportunidade(crmCard),
+        // dados do card (PV): empresa, valor, fluxo e destino
+        ...(crmCard.empresa_vencedora || crmCard.faturamento_empresa
+          ? { empresa: /detech/i.test(crmCard.empresa_vencedora || crmCard.faturamento_empresa) ? 'Detech' : 'ACN' } : {}),
+        ...(crmCard.valor_registrado != null ? { valor_total: String(crmCard.valor_registrado).replace('.', ',') } : {}),
+        ...(crmCard.fluxo_entrega ? { fluxo_entrega: crmCard.fluxo_entrega } : {}),
+        ...(crmCard.destino_cidade ? { destino_cidade: crmCard.destino_cidade } : {}),
+        ...(crmCard.destino_uf ? { destino_uf: crmCard.destino_uf } : {}),
+        ...(crmCard.destino_cep ? { destino_cep: crmCard.destino_cep } : {}),
+        ...(crmCard.prazo_entrega_comercial ? { prazo_entrega: String(crmCard.prazo_entrega_comercial).slice(0, 10) } : {}),
+        ...(crmCard.ctrl_prazo_garantia ? { prazo_garantia: crmCard.ctrl_prazo_garantia } : {}),
         ...(pre || {}),
       }));
+      if (Number(crmCard.quantidade) > 1) setF('quantidade', Number(crmCard.quantidade));
       // card com PV: já preenche o pedido de venda (e o número da OP)
       const pvDoCard = String(crmCard.numero_pv || '').replace(/\D/g, '').slice(0, 4);
       if (pvDoCard) setF('pedido_venda', pvDoCard);
@@ -320,10 +331,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           if (errGrupos) { setErro(errGrupos); setSalvando(false); return; }
         }
 
-        // Verificar duplicata da base
-        const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
-        if (existente) {
-          alert(`OP "${desmembrar ? baseOpl+'/01' : baseOpl}" já está cadastrada. Use um número diferente.`);
+        // Número repetido: confere todos os números que serão criados (no lote, cada /NN),
+        // antes de gravar — senão o lote parava no meio ao bater num número já existente
+        const numeros = desmembrar ? Array.from({ length: qty }, (_, i) => `${baseOpl}/${String(i + 1).padStart(2, '0')}`) : [baseOpl];
+        const { data: existentes } = await supabase.from('oples').select('opl').in('opl', numeros);
+        if (existentes?.length) {
+          setErro(`Já existe OP com este número: ${existentes.map((e: any) => e.opl).join(', ')}. Use um número diferente.`);
           setSalvando(false);
           return;
         }

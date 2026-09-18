@@ -13,7 +13,8 @@ import { confirmar } from './Feedback';
 import { MenuAcoes } from './Interface';
 
 
-const SETORES = ['Chicotes','Serralheria','Laboratorio','Compras'];
+// setores que recebem demanda avulsa (cada um tem o seu painel)
+const SETORES = ['Chicotes','Serralheria','Laboratorio','Telecom','Compras','Almoxarifado','Engenharia'];
 const semDado = (v) => !v || !String(v).trim();
 
 export default function PCPTab({ currentUser }) {

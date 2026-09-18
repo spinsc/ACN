@@ -410,6 +410,67 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   useEffect(() => { if (!editando) setItensEdit((d.itens || []).length ? d.itens : [itemVazio()]); }, [editando, JSON.stringify(d.itens || [])]);
 
   // ── Cancelar (quem abriu a demanda) ───────────────────────────────────────
+  // ── Compras: vira pedido de compra (Mesa de Cotações, aprovação, OC, valor gasto) ──
+  const [pedidoCompra, setPedidoCompra] = useState<any>(null);
+  useEffect(() => {
+    if (!d.pedido_compra_id) { setPedidoCompra(null); return; }
+    supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,status_compra,valor_compra,fornecedor,data_prevista_recebimento')
+      .eq('id', d.pedido_compra_id).maybeSingle().then(({ data }) => setPedidoCompra(data));
+  }, [d.pedido_compra_id]);
+  const gerarPedidoCompra = async () => {
+    const itens = d.itens || [];
+    if (!itens.length && !String(d.descricao || '').trim()) { alert('Informe os itens (ou a descrição) antes de gerar o pedido de compra.'); return; }
+    if (!await confirmar('Gerar o pedido de compra desta demanda? Cotações, aprovação e o valor gasto passam a ser feitos no pedido, em Compras.')) return;
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const listaItens = itens.map((i: any) => `${i.quantidade}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}${i.valor_unitario != null && i.valor_unitario !== '' ? ` — R$ ${Number(i.valor_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un` : ''}`).join('\n');
+    const v0 = vinculosDaDemanda(d)[0];
+    const { data: novo, error } = await supabase.from('pcp_pedidos_compra').insert([{
+      numero_pedido: `PC-DA-${Date.now().toString().slice(-7)}`,
+      opl: v0?.tipo === 'op' ? String(v0.descricao || '').split(' — ')[0] : null,
+      descricao_material: [d.titulo, listaItens].filter(Boolean).join('\n'),
+      quantidade: itens.length === 1 ? Number(itens[0].quantidade) || 1 : 1,
+      status_compra: 'Pendente',
+      observacoes_compra: [d.descricao && `Motivo: ${d.descricao}`, `Demanda avulsa de Compras: ${d.titulo}`].filter(Boolean).join('\n'),
+      centro_custo_id: d.centro_custo_id || null, centro_custo: d.centro_custo || null,
+      vinculo_tipo: v0?.tipo || null, vinculo_id: v0?.id || null, vinculo_descricao: v0?.descricao || null,
+      data_criacao: agora,
+      // quem pediu recebe os avisos do andamento (aprovação, reprocesso, descarte)
+      criado_por: d.criado_por || currentUser?.email || null, criado_por_nome: d.criado_por_nome || currentUser?.nome || null,
+      criado_por_setor: 'Demanda avulsa',
+    }]).select('id,numero_pedido').single();
+    if (error) { setSalvando(false); alert('Não foi possível gerar o pedido: ' + error.message); return; }
+    const info = [...(d.informacoes || []), { texto: `Pedido de compra ${novo.numero_pedido} gerado — cotações e valor seguem em Compras.`, usuario: currentUser?.nome || '', data: agora }];
+    await supabase.from('demandas_avulsas').update({
+      pedido_compra_id: novo.id, informacoes: info, atualizado_em: agora,
+      ...(d.status === 'Pendente' ? { status: 'Em Andamento', data_inicio: agora } : {}),
+    }).eq('id', d.id);
+    setSalvando(false);
+    await reload(); onRefresh();
+  };
+
+  // ── Admin: reabrir demanda concluída/cancelada por engano ──
+  const ehAdmin = currentUser?.perfil === 'Admin';
+  const [mostrarReabrir, setMostrarReabrir] = useState(false);
+  const [reabrirForm, setReabrirForm] = useState({ status: 'Pendente', motivo: '' });
+  const reabrirDemanda = async () => {
+    if (!reabrirForm.motivo.trim()) { alert('Informe o motivo da reabertura.'); return; }
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const info = [...(d.informacoes || []), { tipo: 'reabertura', usuario: currentUser?.nome || '', data: agora,
+      texto: `Reaberta (${d.status} → ${reabrirForm.status}) — Motivo: ${reabrirForm.motivo.trim()}` }];
+    const { error } = await supabase.from('demandas_avulsas').update({
+      status: reabrirForm.status, data_fim: null,
+      ...(reabrirForm.status === 'Pendente' ? { data_inicio: null } : {}),
+      cancelada_em: null, cancelada_por: null, motivo_cancelamento: null,
+      informacoes: info, atualizado_em: agora,
+    }).eq('id', d.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível reabrir: ' + error.message); return; }
+    setMostrarReabrir(false); setReabrirForm({ status: 'Pendente', motivo: '' });
+    await reload(); onRefresh();
+  };
+
   const cancelarDemanda = async () => {
     if (!motivoCancelar.trim()) { alert('Informe o motivo do cancelamento.'); return; }
     setSalvando(true);
@@ -512,7 +573,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     await reload(); onRefresh();
   };
   const concluir = async () => {
-    if (!await confirmar('Marcar como concluída?')) return;
+    if (!await confirmar(`Concluir a demanda "${d.titulo}"? Ela sai da lista de ativas.`)) return;
     const agora = new Date().toISOString();
     await supabase.from('demandas_avulsas').update({ status: 'Concluída', data_fim: agora, atualizado_em: agora }).eq('id', d.id);
     await reload(); onRefresh();
@@ -657,6 +718,20 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               ✏️ Editar
             </button>
           )}
+          {camposSetor.valorItens && !d.pedido_compra_id && ehComprador(currentUser, d) && !ENCERRADA(d.status) && (
+            <button onClick={gerarPedidoCompra} disabled={salvando}
+              title="Leva esta demanda para o fluxo de compra: Mesa de Cotações (com desconto), aprovação, OC e valor gasto"
+              style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              🛒 Gerar pedido de compra
+            </button>
+          )}
+          {ehAdmin && ENCERRADA(d.status) && (
+            <button onClick={() => setMostrarReabrir(v => !v)}
+              title="Admin: volta a demanda concluída ou cancelada por engano"
+              style={{ background: mostrarReabrir ? '#6b7280' : '#fff', color: mostrarReabrir ? '#fff' : '#1d4ed8', border:'1px solid #93c5fd', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              ↺ Reabrir
+            </button>
+          )}
           {podeCancelar(d, currentUser) && (
             <button onClick={() => { setMostrarCancelar(v => !v); setEditando(false); setMostrarDesignar(false); setMostrarReprogramar(false); }}
               style={{ marginLeft:'auto', background: mostrarCancelar ? '#6b7280' : '#fff', color: mostrarCancelar ? '#fff' : '#b91c1c', border:'1px solid #fca5a5', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
@@ -684,6 +759,43 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               {!d.centro_custo && !editando && !ehComprador(currentUser, d) && (
                 <span style={{ fontSize:9, color:'#94a3b8' }}>o comprador pode completar</span>
               )}
+            </div>
+          )}
+
+          {/* ── Reabrir (Admin) ── */}
+          {mostrarReabrir && (
+            <div style={{ background:'#eff6ff', border:'1px solid #93c5fd', borderRadius:6, padding:12 }}>
+              <div style={{ fontWeight:700, fontSize:10, color:'#1d4ed8', marginBottom:8 }}>↺ REABRIR DEMANDA ({d.status})</div>
+              <div style={{ display:'flex', gap:8, marginBottom:8, flexWrap:'wrap' }}>
+                <select value={reabrirForm.status} onChange={e => setReabrirForm(f => ({ ...f, status: e.target.value }))} aria-label="Voltar para"
+                  style={{ padding:'5px 8px', border:'1px solid #93c5fd', borderRadius:4, fontSize:11 }}>
+                  <option value="Pendente">Voltar para Pendente</option>
+                  <option value="Em Andamento">Voltar para Em Andamento</option>
+                </select>
+                <input value={reabrirForm.motivo} onChange={e => setReabrirForm(f => ({ ...f, motivo: e.target.value }))} aria-label="Motivo da reabertura"
+                  placeholder="Motivo (ex.: concluída sem querer)" style={{ flex:1, minWidth:180, padding:'5px 8px', border:'1px solid #93c5fd', borderRadius:4, fontSize:11 }} />
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={reabrirDemanda} disabled={salvando}
+                  style={{ background:'#1d4ed8', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                  {salvando ? '...' : 'Confirmar reabertura'}
+                </button>
+                <button onClick={() => setMostrarReabrir(false)}
+                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>Voltar</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Pedido de compra gerado desta demanda ── */}
+          {pedidoCompra && (
+            <div onClick={() => abrirVinculo({ tipo: 'compra', id: pedidoCompra.id, descricao: pedidoCompra.numero_pedido })} role="link" tabIndex={0}
+              style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'6px 10px', border:'1px solid #86efac', background:'#f0fdf4', borderRadius:6, fontSize:11, cursor:'pointer' }}>
+              <strong style={{ color:'#15803d' }}>🛒 {pedidoCompra.numero_pedido}</strong>
+              {pedidoCompra.numero_oc && <span style={{ color:'#7c3aed', fontWeight:700 }}>{pedidoCompra.numero_oc}</span>}
+              <span className="acn-badge" style={{ background:'#475569' }}>{pedidoCompra.status_compra}</span>
+              {pedidoCompra.fornecedor && <span>{pedidoCompra.fornecedor}</span>}
+              {pedidoCompra.valor_compra != null && <strong>{Number(pedidoCompra.valor_compra).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}</strong>}
+              <span style={{ marginLeft:'auto', color:'#16a34a', fontSize:9 }}>abrir em Compras →</span>
             </div>
           )}
 

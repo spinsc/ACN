@@ -93,6 +93,7 @@ function ModalDia({ data, horaInicial, eventos, currentUser, onClose, onChanged 
   };
 
   const concluir = async (id: string) => {
+    if (!await confirmar('Marcar este compromisso como concluído?')) return;
     await supabase.from('agenda_compromissos').update({
       concluido: true, concluido_em: new Date().toISOString(),
     }).eq('id', id);
