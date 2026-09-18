@@ -12,6 +12,8 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { dividirValorEmUnidades } from './AcnTabShared';
 import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA, type GrupoLote } from './LoteMisto';
+import { ItensVendidosEditor } from './OpItens';
+import { itensPreenchidos } from './DemandaItens';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -136,6 +138,9 @@ const VAZIO = {
 
   // ── Resumo dos Serviços ───────────────────────────────────────────────────
   resumo_servicos:        '',
+  // O que foi vendido (obrigatório na OP): informa a Engenharia. No lote, por unidade.
+  itens_vendidos:         [] as any[],
+  licitacao_id:           null as string | null,   // vem do prefill da Licitação (formação ligada a ela)
 
   // ── Campos OS ────────────────────────────────────────────────────────────
   tipo_servico:           'Manutenção Corretiva',
@@ -266,6 +271,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Adaptação por omissão — que é justamente o problema que isto resolve.
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
+    if (form.tipo === 'OP' && itensPreenchidos(form.itens_vendidos || []).length === 0) {
+      setErro('Informe pelo menos 1 item vendido (o que a Engenharia vai receber para esta OP).'); return;
+    }
 
 
     setSalvando(true);
@@ -330,6 +338,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           tipo_servico_terceiro:  !ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length ? form.tipos_servico_terceiro[0] : null,
           obs_servico_terceiro:   (!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
           resumo_servicos:        form.resumo_servicos || null,
+          itens_vendidos:         itensPreenchidos(form.itens_vendidos || []),
         });
 
         let firstData: any;
@@ -794,6 +803,20 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               </div>
               </>)}
             </>
+          )}
+
+          {/* Itens vendidos — obrigatório na OP (por unidade no lote) */}
+          {isOP && (
+            <div style={{ marginBottom: 10 }}>
+              <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
+                crmId={crmCard?.id || null} licitacaoId={form.licitacao_id || null}
+                unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
+              {loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
+                <div style={{ fontSize: 10, color: '#6b21a8', marginTop: 4 }}>
+                  Lote misto: esta lista vale para todas as unidades; se um grupo levar itens diferentes, ajuste no detalhe da OP daquela unidade.
+                </div>
+              )}
+            </div>
           )}
 
           {/* Resumo dos Serviços — OP (no lote misto, cada unidade usa o do seu grupo) */}

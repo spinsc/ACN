@@ -11,6 +11,7 @@ import { VinculoPicker } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
 import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
+import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -46,6 +47,11 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [aplicandoSeriaisLote, setAplicandoSeriaisLote] = useState(false);
   // Venda para Envio: kiting 100% do lote com os seriais de todos os produtos
   const [modalKitEnvioLote, setModalKitEnvioLote] = useState(null); // { base, ops }
+  // Conferência do kit contra a BOM da Engenharia (quando a OP tem BOM)
+  const [conferencia, setConferencia] = useState<any[]>([]);
+  // em lote não há conferência linha a linha: registra a BOM como separada inteira
+  const conferenciaLote = (o) => (o?.bom_itens || []).length
+    ? { kit_conferencia: registroConferencia(conferenciaInicial({ bom_itens: o.bom_itens }), currentUser, true) } : {};
   const [modalDevolver, setModalDevolver] = useState(null);
   // Solicitação de reposição de estoque (nova) — pedido de compra/fabricação
   // interna que precisa de liberação do PCP antes de cair no setor certo.
@@ -137,6 +143,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
   };
 
   const abrirModalEmbalagem = (opl) => {
+    // se o kit já foi conferido (kiting em lote), não pede de novo
+    setConferencia(opl.kit_conferencia ? [] : conferenciaInicial(opl));
     setEmbForm({
       itens: linhasSeriaisIniciais(opl),
       seriais: opl.seriais_equipamentos || '',
@@ -165,6 +173,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
       }
     } else if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
     if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
+    const erroConf = validarConferencia(conferencia);
+    if (erroConf) { alert(erroConf); return; }
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
       alert('Informe a cidade e a UF de entrega — sem isso a Logística não consegue cotar o frete.'); return;
     }
@@ -173,7 +183,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
     const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
 
     // 1) a OP sai do caminho da produção e passa a aguardar a cotação de frete
-    await setAlmox(opl, 'Kit OK', 'Aguardando Cotacao Frete', f.observacoes || '', {
+    const difEmb = divergencias(conferencia).length ? 'Diferença com a BOM — ' + resumoDivergencias(conferencia) : '';
+    await setAlmox(opl, 'Kit OK', 'Aguardando Cotacao Frete', [f.observacoes, difEmb].filter(Boolean).join(' · '), {
+      ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
       seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
       ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
       destino_cidade: f.destino_cidade.trim(),
@@ -221,14 +233,28 @@ export default function AlmoxarifadoTab({ currentUser }) {
   };
 
   const abrirModalSeriais = (opl, pendenciaSanada=false) => {
+    setConferencia(conferenciaInicial(opl));
     setSeriaisKitForm(opl.seriais_equipamentos || '');
     setModalSeriais({ ...opl, _pendenciaSanada: pendenciaSanada });
   };
 
   const confirmarKitOkComSeriais = async () => {
     if (!seriaisKitForm.trim()) { alert('Informe os números de série dos equipamentos deste kit.'); return; }
+    const erroConf = validarConferencia(conferencia);
+    if (erroConf) { alert(erroConf); return; }
+    const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };
+    if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser);
+    if (divergencias(conferencia).length) {
+      // separado diferente da BOM: o kit segue, mas com pendência visível para PCP e Engenharia
+      const texto = 'Diferença com a BOM — ' + resumoDivergencias(conferencia);
+      await setAlmox(modalSeriais, 'Liberado com Pendencia', 'Aguardando Almox', texto, extra);
+      notificarEvento('kit_pendencia', msg.kitPendencia(modalSeriais.opl, texto, currentUser?.nome));
+      setModalSeriais(null); setSeriaisKitForm('');
+      fetchAll();
+      return;
+    }
     const obs = modalSeriais._pendenciaSanada ? 'Pendencia sanada' : '';
-    await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, { seriais_equipamentos: seriaisKitForm.trim() });
+    await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, extra);
     notificarEvento('kit_ok', msg.kitOk(modalSeriais.opl, currentUser?.nome));
     setModalSeriais(null); setSeriaisKitForm('');
     fetchAll();
@@ -271,7 +297,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
     setAplicandoSeriaisLote(true);
     try {
       for (let i = 0; i < linhas.length && i < irmaos.length; i++) {
-        await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', '', { seriais_equipamentos: linhas[i] });
+        await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', '', { seriais_equipamentos: linhas[i], ...conferenciaLote(irmaos[i]) });
       }
       notificarEvento('kit_ok', msg.kitOk(modalSeriaisLote.base, currentUser?.nome) + ` (${Math.min(linhas.length, irmaos.length)} unidades em lote)`);
     } finally {
@@ -292,6 +318,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
         await setAlmox(o, 'Kit OK', STATUS_EMBALAGEM, `Kit 100% em lote (${ops.length} unidades de ${base})`, {
           seriais_itens: itens,
           seriais_equipamentos: itens.map(x => `${x.produto}: ${x.serial}`).join('\n'),
+          ...conferenciaLote(o),
         });
       }
       notificarEvento('kit_ok', msg.kitOk(base, currentUser?.nome) + ` (${ops.length} unidades em lote — seguem para embalagem)`);
@@ -702,6 +729,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
               </div>
             </div>
 
+            <ConferenciaKit linhas={conferencia} onChange={setConferencia} />
             <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
             <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:14 }}
               value={embForm.observacoes||''} onChange={e=>setEmbForm(f=>({...f, observacoes:e.target.value}))} />
@@ -718,17 +746,20 @@ export default function AlmoxarifadoTab({ currentUser }) {
 
       {modalSeriais && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">🔢 Números de Série — OPL {modalSeriais.opl}</div>
+          <div className="modal-box" style={{maxWidth:640,width:'96vw'}}>
+            <div className="modal-title">🔢 Kiting — OPL {modalSeriais.opl}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>
               Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
             </div>
+            <ConferenciaKit linhas={conferencia} onChange={setConferencia} />
             <label className="acn-label">Números de série dos equipamentos instalados *</label>
             <textarea autoFocus className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}}
               placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."
               value={seriaisKitForm} onChange={e=>setSeriaisKitForm(e.target.value)} />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarKitOkComSeriais}>CONFIRMAR KITING 100%</button>
+              <button className="acn-btn" style={{background: divergencias(conferencia).length ? '#f97316' : '#22c55e',flex:1}} onClick={confirmarKitOkComSeriais}>
+                {divergencias(conferencia).length ? 'CONFIRMAR KIT COM PENDÊNCIA' : 'CONFIRMAR KITING 100%'}
+              </button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalSeriais(null);setSeriaisKitForm('');}}>Cancelar</button>
             </div>
           </div>

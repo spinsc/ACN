@@ -14,6 +14,8 @@ import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
+import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
+import { itensPreenchidos } from './DemandaItens';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -637,6 +639,26 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const podeTrocarNumero = podeAlterarNumeroOplPv(usuario);
   // Admin/Gerente: todos os campos e valores da OP (inclusive status), uma ou o lote
   const podeEditarTudo = podeEditarOplCompleta(usuario);
+  // Itens vendidos: o Comercial ajusta até a Engenharia liberar a BOM; depois só Admin/Gerente
+  const perfilComercial = /comercial|crm|licita/i.test(String(usuario?.perfil || ''));
+  const podeEditarVendido = podeEditarTudo || (opl?.status_bom !== 'BOM Liberado'
+    && (perfilComercial || (!!usuario?.nome && usuario.nome === opl?.responsavel_comercial)));
+  const [editandoVendido, setEditandoVendido] = useState<any[] | null>(null);
+  const salvarVendido = async () => {
+    const itens = itensPreenchidos(editandoVendido || []);
+    if (!itens.length) { alert('A OP precisa de pelo menos 1 item vendido.'); return; }
+    const { error } = await supabase.from('oples').update({ itens_vendidos: itens }).eq('id', opl.id);
+    if (error) { alert('Não foi possível salvar: ' + error.message); return; }
+    await supabase.from('logs_movimentacao_opl').insert([{
+      opl_id: opl.id, numero_opl: opl.opl, setor: usuario?.perfil || 'Comercial',
+      evento: `Itens vendidos alterados: ${itens.map((v: any) => `${v.quantidade}× ${v.nome}`).join('; ')}`,
+      status_anterior: opl.status_geral, status_novo: opl.status_geral,
+      usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: new Date().toISOString(),
+    }]);
+    setOpl((o: any) => ({ ...o, itens_vendidos: itens }));
+    setEditandoVendido(null);
+    recarregarLogs();
+  };
   const [editando, setEditando] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
@@ -1007,6 +1029,31 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Fiscal"       value={opl.responsavel_fiscal} field="responsavel_fiscal" />
           <Campo label="Qualidade"    value={opl.responsavel_qualidade} field="responsavel_qualidade" />
         </div>
+
+        {/* ── Vendido × BOM × Separado ── */}
+        <Sec title="📦 Vendido × BOM × Separado no kit" />
+        {editandoVendido ? (
+          <div style={{ marginBottom: 10 }}>
+            <ItensVendidosEditor itens={editandoVendido} onChange={setEditandoVendido} crmId={opl.crm_oportunidade_id || null} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <button className="acn-btn" style={{ background: '#2563eb' }} onClick={salvarVendido}>Salvar itens vendidos</button>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setEditandoVendido(null)}>Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <QuadroItensOp opl={opl} />
+            {!(opl.itens_vendidos || []).length && !(opl.bom_itens || []).length && (
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Sem itens vendidos nem BOM registrados.</div>
+            )}
+            {podeEditarVendido && (
+              <button className="acn-btn" style={{ background: '#fff', color: '#1d4ed8', border: '1px solid #93c5fd', fontSize: 10, marginBottom: 8 }}
+                onClick={() => setEditandoVendido((opl.itens_vendidos || []).length ? opl.itens_vendidos : [])}>
+                ✏️ {(opl.itens_vendidos || []).length ? 'Editar itens vendidos' : 'Informar itens vendidos'}
+              </button>
+            )}
+          </>
+        )}
 
         {/* ── Seriais de Equipamentos ── */}
         {opl.seriais_equipamentos && (

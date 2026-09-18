@@ -1484,6 +1484,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
       destino_uf:     licit.destino_uf     || '',
       destino_cep:    licit.destino_cep    || '',
       observacoes: `${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} vencida: ${licit.numero} — ${licit.nome_projeto}`,
+      licitacao_id:   licit.id,   // permite carregar os itens vendidos da formação de preços dela
     };
     localStorage.setItem('acn_nova_op_prefill', JSON.stringify(prefill));
     alert('Dados salvos!' + '\n\n' + 'Va em Comercial/CRM e clique em "Nova OP / OS" - o formulario ja abre preenchido' + (licit.fluxo_entrega ? ', inclusive com o Fluxo de Entrega.' : '.' + '\n\n' + 'Atencao: o Fluxo de Entrega nao foi definido nesta licitacao - sera preciso escolher na criacao da OP.'));

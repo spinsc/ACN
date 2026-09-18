@@ -16,6 +16,8 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar } from './Feedback';
 import { OrigemVendaBadge } from './OrigemVenda';
 import { fluxoLabel } from './FluxoEntrega';
+import { BomEditor, bomPreenchida, sugerirBom } from './OpItens';
+import { MenuAcoes } from './Interface';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -63,6 +65,11 @@ function InfoOplEngenharia({ o, colunas, style }) {
           {o.kit_nome && <span><b>Kit</b>{o.kit_nome}</span>}
           {o.faturamento_empresa && <span><b>Faturamento</b>{o.faturamento_empresa}</span>}
         </div>
+        {(o.itens_vendidos || []).length > 0 && (
+          <div className="acn-eng-texto"><b>Vendido:</b>{' '}
+            {o.itens_vendidos.map((v: any) => `${Number(v.quantidade).toLocaleString('pt-BR')}× ${v.nome}`).join(' · ')}
+          </div>
+        )}
         {o.observacoes_atencao && <div className="acn-eng-texto acn-eng-atencao"><b>⚠ Atenção:</b> {o.observacoes_atencao}</div>}
         {o.observacoes_comercial && <div className="acn-eng-texto"><b>Obs. comercial:</b> {o.observacoes_comercial}</div>}
         {servicos && (
@@ -118,6 +125,18 @@ export default function EngenhariaTab({ currentUser }) {
   const [modalBom, setModalBom] = useState(null);
   // chicotes/serralheria indicados na liberação da BOM (viram demandas dos setores)
   const [fabBom, setFabBom] = useState<any>(fabricacaoVazia());
+  // BOM estruturada (material por unidade) — obrigatória para liberar
+  const [bomLinhas, setBomLinhas] = useState<any[]>([]);
+  const [bomLote, setBomLote] = useState<any[]>([]);
+  const prepararBom = async (o: any, setter: (v: any[]) => void) => {
+    if ((o?.bom_itens || []).length) { setter(o.bom_itens); return; }
+    setter([]);
+    if ((o?.itens_vendidos || []).length) setter(await sugerirBom(o.itens_vendidos));
+  };
+  const abrirLiberarBom = (o: any) => {
+    setModalBom(o); setObsBom(''); setFabBom(fabricacaoVazia());
+    prepararBom(o, setBomLinhas);
+  };
   const [fabBomLote, setFabBomLote] = useState<any>(fabricacaoVazia());
   // "+ Chicote/Serralheria" a qualquer momento (várias demandas por OP)
   const [modalFabricacao, setModalFabricacao] = useState<any>(null);
@@ -229,6 +248,8 @@ export default function EngenhariaTab({ currentUser }) {
 
   const liberarBOM = async () => {
     const opl = modalBom;
+    const bom = bomPreenchida(bomLinhas);
+    if (!bom.length) { alert('Preencha a BOM com pelo menos 1 item: o material que será usado nesta OP.'); return; }
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
@@ -236,6 +257,7 @@ export default function EngenhariaTab({ currentUser }) {
       status_geral: 'Em Espera PCP',
       status_bom: 'BOM Liberado',
       obs_liberacao_bom: obsBom,
+      bom_itens: bom,
       data_liberacao_bom: agora,
       tempo_engenharia_horas: tempo,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
@@ -245,7 +267,7 @@ export default function EngenhariaTab({ currentUser }) {
       newRow: { status_geral: 'Em Espera PCP', status_bom: 'BOM Liberado', obs_liberacao_bom: obsBom }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
-      evento: `BOM liberado para PCP/Almoxarifado. Qtd: ${opl.quantidade||1} un. Obs: ${obsBom || 'Sem observacoes'}.`,
+      evento: `BOM liberado para PCP/Almoxarifado (${bom.length} item(ns)). Qtd: ${opl.quantidade||1} un. Obs: ${obsBom || 'Sem observacoes'}.`,
       status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -311,6 +333,7 @@ export default function EngenhariaTab({ currentUser }) {
     setObsBomLote('');
     setFabBomLote(fabricacaoVazia());
     setModalBomLote({ base, irmaos });
+    prepararBom(irmaos.find(o => (o.bom_itens || []).length) || irmaos.find(o => (o.itens_vendidos || []).length) || irmaos[0], setBomLote);
   };
 
   // Inicia de uma vez a analise de todas as unidades ainda nao iniciadas
@@ -347,6 +370,8 @@ export default function EngenhariaTab({ currentUser }) {
     const { irmaos } = modalBomLote;
     const selecionados = irmaos.filter(o => selecionadosLote[o.id]);
     if (selecionados.length === 0) { alert('Selecione ao menos uma OP.'); return; }
+    const bom = bomPreenchida(bomLote);
+    if (!bom.length) { alert('Preencha a BOM com pelo menos 1 item: o material de cada unidade.'); return; }
     setLiberandoLote(true);
     const agora = new Date().toISOString();
     try {
@@ -357,6 +382,7 @@ export default function EngenhariaTab({ currentUser }) {
           status_geral: 'Em Espera PCP',
           status_bom: 'BOM Liberado',
           obs_liberacao_bom: obsBomLote,
+          bom_itens: bom,
           data_liberacao_bom: agora,
           tempo_engenharia_horas: tempo,
           responsavel_engenharia: opl.responsavel_engenharia || currentUser?.nome,
@@ -559,28 +585,20 @@ export default function EngenhariaTab({ currentUser }) {
                                 <BotaoPausar pausado={o.pausado}
                                   onPausar={()=>pausarOpl(supabase,o).then(fetchAll)}
                                   onRetomar={()=>retomarOpl(supabase,o).then(fetchAll)} />
-                                <button className="acn-btn" style={{background:'#475569'}} onClick={()=>{setModalObs(o);setNovaObs('');}}>
-                                  OBS
-                                </button>
-                                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalBom(o);setObsBom('');setFabBom(fabricacaoVazia());}}>
+                                <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirLiberarBom(o)}>
                                     LIBERAR BOM
                                   </button>
-                                <button className="acn-btn" style={{background:'#6d28d9',fontSize:9}} title="Pedir chicotes ou serralheria para esta OP (pode abrir quantas demandas precisar)"
-                                  onClick={()=>setModalFabricacao(o)}>
-                                  🔌 + Chicote/Serralheria
-                                </button>
-                                {!o.serralheria_status && (
-                                  <button className="acn-btn" style={{background:'#7c3aed',fontSize:9}} title="Antecipar a parte metálica/estrutural pra Serralheria sem esperar o resto do BOM"
-                                    onClick={()=>{setModalSerralheria(o);setObsSerralheria('');}}>
-                                    🔧 Parcial Serralheria
-                                  </button>
-                                )}
-                                <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
-                                  DEVOLVER
-                                </button>
                               </>
                             )}
-                            <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                            {/* Só as ações rápidas ficam à vista; o resto no ⋯ */}
+                            <MenuAcoes rotulo="Mais ações da OP" itens={[
+                              { rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) },
+                              { rotulo: '📝 Observação', onClick: () => { setModalObs(o); setNovaObs(''); }, oculto: !emAndamento },
+                              { rotulo: '🔌 Pedir chicote/serralheria', titulo: 'Pode abrir quantas demandas precisar', onClick: () => setModalFabricacao(o), oculto: !emAndamento },
+                              { rotulo: '🔧 Liberação parcial p/ Serralheria', titulo: 'Antecipar a parte metálica/estrutural sem esperar o resto do BOM',
+                                onClick: () => { setModalSerralheria(o); setObsSerralheria(''); }, oculto: !emAndamento || !!o.serralheria_status },
+                              { rotulo: '↩️ Devolver ao Comercial', onClick: () => { setModalDevolver(o); setObsDevolver(''); }, perigo: true, oculto: !emAndamento },
+                            ]} />
                           </div>
                         </td>
                       </tr>
@@ -792,7 +810,7 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL BOM */}
       {modalBom && (
         <div className="modal-overlay">
-          <div className="modal-box">
+          <div className="modal-box" style={{maxWidth:820,width:'96vw',maxHeight:'92vh',overflowY:'auto'}}>
             <div className="modal-title">Liberar BOM — {modalBom.opl}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               Tipo: {modalBom.tipo_projeto} | Chassi: {modalBom.chassi || '—'}
@@ -806,6 +824,13 @@ export default function EngenhariaTab({ currentUser }) {
                 </div>
               </div>
             )}
+            {(modalBom.itens_vendidos || []).length > 0 && (
+              <div style={{fontSize:11,background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:6,padding:'6px 10px',marginBottom:8}}>
+                <strong style={{color:'#1d4ed8'}}>Vendido:</strong>{' '}
+                {modalBom.itens_vendidos.map((v: any) => `${Number(v.quantidade).toLocaleString('pt-BR')}× ${v.nome}`).join(' · ')}
+              </div>
+            )}
+            <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
             <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom} />
             <label className="acn-label">Observacoes para PCP/Almoxarifado</label>
             <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
@@ -851,7 +876,7 @@ export default function EngenhariaTab({ currentUser }) {
       {/* MODAL BOM EM LOTE — OPs desmembradas (mesmo numero base) */}
       {modalBomLote && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth:820,width:'96vw',maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">🏷️ Liberar BOM em Lote — {modalBomLote.base}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               {modalBomLote.irmaos.length} OPs desmembradas deste número. Desmarque as que não devem receber este BOM
@@ -868,6 +893,9 @@ export default function EngenhariaTab({ currentUser }) {
                 </label>
               ))}
             </div>
+            <BomEditor linhas={bomLote} onChange={setBomLote}
+              vendidos={(modalBomLote.irmaos.find(o => (o.itens_vendidos || []).length) || {}).itens_vendidos || []} />
+            <div style={{fontSize:10,color:'#64748b',marginTop:-6,marginBottom:10}}>A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>
             <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length} />
             <label className="acn-label">Observações para PCP/Almoxarifado (aplicadas a todas as selecionadas)</label>
             <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}

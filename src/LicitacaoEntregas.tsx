@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { quantidadesDosItens } from './FormacaoCalculo';
-import { UFS } from './FluxoEntrega';
+import { UFS, soEnvio } from './FluxoEntrega';
 import NovaOpOsModal from './NovaOpOsModal';
 import { confirmar } from './Feedback';
 
@@ -246,6 +246,13 @@ export function ContratoEntregas({ licit, currentUser }) {
       fluxo_entrega:  licit.fluxo_entrega || '',
       destino_cidade: end?.cidade || '', destino_uf: end?.uf || '', destino_cep: end?.cep || '',
       resumo_servicos: `${item?.descricao || ''} — ${fmtQ(pedido.quantidade)} ${item?.unidade || 'UN'}`,
+      licitacao_id:   licit.id,
+      // o item do edital pedido já é o vendido: 1 por unidade quando vira lote
+      itens_vendidos: item?.descricao ? [{
+        nome: item.descricao,
+        quantidade: qtd > 1 && !soEnvio(licit.fluxo_entrega) ? 1 : n(pedido.quantidade),
+        descricao: [licit.numero && `Licitação ${licit.numero}`, pedido.documento && `pedido ${pedido.documento}`].filter(Boolean).join(' · '),
+      }] : [],
       observacoes: [
         `Licitação ${licit.numero || ''}`,
         pedido.documento ? `Pedido/empenho ${pedido.documento}` : null,

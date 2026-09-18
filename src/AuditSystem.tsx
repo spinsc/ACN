@@ -41,6 +41,12 @@ const fmtValor = (v) => {
 // só; o histórico grava o texto já resolvido, não o valor bruto.
 // metadata (opcional): objeto livre extra (ex: snapshot completo em CREATE).
 // ─────────────────────────────────────────────────────────────────────────────
+// Nome de canal único por instância: com o mesmo nome, duas telas (ou dois detalhes
+// da mesma OP) abertas juntas recebiam o MESMO canal já assinado, e o
+// supabase-js derrubava a página ("cannot add postgres_changes ... after subscribe()").
+let contadorCanal = 0;
+const idCanal = () => `${Date.now().toString(36)}${(++contadorCanal).toString(36)}`;
+
 export async function logChange({ module, entityType, entityId, changeType, oldRow, newRow, user, formatters, metadata }) {
   if (!entityId || !user) return;
   const userNome = user.nome || user.email || 'Sistema';
@@ -137,7 +143,7 @@ export function useUnreadChanges(entityType, entityId, currentUser) {
 
   useEffect(() => {
     if (!entityType || !entityId) return;
-    const ch = supabase.channel(`audit-${entityType}-${entityId}`)
+    const ch = supabase.channel(`audit-${entityType}-${entityId}-${idCanal()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log', filter: `entity_id=eq.${entityId}` }, (payload) => {
         if (payload.new?.entity_type !== entityType) return;
         if (payload.new?.user_id === currentUser?.id) return; // própria alteração não gera "não lido" pra mim mesmo
@@ -191,7 +197,7 @@ export function useUnreadMap(entityType, entityIds, currentUser) {
 
   useEffect(() => {
     if (!entityType || !currentUser?.id) return;
-    const ch = supabase.channel(`audit-map-${entityType}`)
+    const ch = supabase.channel(`audit-map-${entityType}-${idCanal()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log' }, (payload) => {
         if (payload.new?.entity_type !== entityType) return;
         if (payload.new?.user_id === currentUser.id) return;
@@ -207,7 +213,7 @@ export function useUnreadMap(entityType, entityIds, currentUser) {
   // entity_views, mas esse Set em memória não sabia disso sozinho).
   useEffect(() => {
     if (!entityType || !currentUser?.id) return;
-    const ch = supabase.channel(`views-map-${entityType}-${currentUser.id}`)
+    const ch = supabase.channel(`views-map-${entityType}-${currentUser.id}-${idCanal()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'entity_views', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
         const row = payload.new;
         if (!row || row.entity_type !== entityType) return;

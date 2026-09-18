@@ -80,7 +80,7 @@ export async function estruturaParaDemanda(produtoId: string) {
 }
 
 // ── Busca no cadastro (produtos e itens do catálogo) ─────────────────────────
-function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categoriaPreferida = '' }) {
+export function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categoriaPreferida = '' }) {
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [aberto, setAberto] = useState(false);
   const timer = useRef<any>(null);
