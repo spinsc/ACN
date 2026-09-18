@@ -2852,7 +2852,8 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
       {/* PIPELINE — mesma faixa do Comercial/CRM */}
       <div style={{ flexShrink:0 }}>
-        <PipelineCardsLicitacoes licitacoes={licitacoes} />
+        {/* Pipeline segue os mesmos filtros dos cards (status, tipo, temperatura, análise, período) */}
+        <PipelineCardsLicitacoes licitacoes={lista} />
       </div>
 
       <div className="sec-card" style={{ marginBottom:0, overflow:'visible' }}>

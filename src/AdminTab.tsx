@@ -1554,6 +1554,29 @@ function PainelNotificacoes() {
   const [loading, setLoading] = useState(false);
 
   const [usuariosPorPerfil, setUsuariosPorPerfil] = useState<Record<string, number>>({});
+  // Quem responde por um perfil sem ter esse perfil (ex.: PCP → Matheus)
+  const [responsaveis, setResponsaveis] = useState<any[]>([]);
+  const [usuariosAtivos, setUsuariosAtivos] = useState<any[]>([]);
+  const [novoResp, setNovoResp] = useState({ perfil: '', usuario_id: '' });
+  const carregarResponsaveis = async () => {
+    const [{ data: r }, { data: u }] = await Promise.all([
+      supabase.from('notificacoes_responsaveis').select('id, perfil, usuario_id, usuario:auth_usuarios(nome)').order('perfil'),
+      supabase.from('auth_usuarios').select('id, nome, perfil').eq('ativo', true).order('nome'),
+    ]);
+    setResponsaveis(r || []); setUsuariosAtivos(u || []);
+  };
+  useEffect(() => { carregarResponsaveis(); }, []);
+  const addResponsavel = async () => {
+    if (!novoResp.perfil || !novoResp.usuario_id) { alert('Escolha o perfil e a pessoa.'); return; }
+    const { error } = await supabase.from('notificacoes_responsaveis').insert([novoResp]);
+    if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
+    setNovoResp({ perfil: '', usuario_id: '' }); carregarResponsaveis();
+  };
+  const removerResponsavel = async (id: string) => {
+    await supabase.from('notificacoes_responsaveis').delete().eq('id', id);
+    carregarResponsaveis();
+  };
+  const alcance = (p: string) => (usuariosPorPerfil[p] || 0) + responsaveis.filter((r: any) => r.perfil === p).length;
   useEffect(() => { fetchEventos(); }, []);
   const PERFIS_WA = [...new Set([
     ...PERFIS,
@@ -1595,6 +1618,35 @@ function PainelNotificacoes() {
   return (
     <div>
       <div className="sec-card">
+        <div className="sec-hdr"><span>👤 Quem responde por cada perfil</span></div>
+        <div className="sec-body" style={{ fontSize:11 }}>
+          <div style={{ fontSize:10, color:'#64748b', marginBottom:8 }}>
+            Recebe os avisos de um perfil sem ter esse perfil (ex.: PCP → quem cuida do PCP). As permissões da pessoa não mudam.
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+            {responsaveis.map((r: any) => (
+              <span key={r.id} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 9px', border:'1px solid #99f6e4', background:'#f0fdfa', borderRadius:12 }}>
+                <strong>{r.perfil}</strong> → {r.usuario?.nome || '—'}
+                <button onClick={() => removerResponsavel(r.id)} aria-label={`Remover ${r.usuario?.nome} de ${r.perfil}`}
+                  style={{ border:'none', background:'none', color:'#94a3b8', cursor:'pointer', padding:0 }}>✕</button>
+              </span>
+            ))}
+            {!responsaveis.length && <span style={{ color:'#94a3b8' }}>Nenhum definido.</span>}
+          </div>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            <select className="acn-input" style={{ width:'auto' }} value={novoResp.perfil} onChange={e => setNovoResp(f => ({ ...f, perfil: e.target.value }))} aria-label="Perfil">
+              <option value="">Perfil...</option>
+              {PERFIS_WA.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select className="acn-input" style={{ width:'auto' }} value={novoResp.usuario_id} onChange={e => setNovoResp(f => ({ ...f, usuario_id: e.target.value }))} aria-label="Pessoa">
+              <option value="">Pessoa...</option>
+              {usuariosAtivos.map((u: any) => <option key={u.id} value={u.id}>{u.nome} ({u.perfil})</option>)}
+            </select>
+            <button className="acn-btn" style={{ background:'#0f766e' }} onClick={addResponsavel}>Adicionar</button>
+          </div>
+        </div>
+      </div>
+      <div className="sec-card">
         <div className="sec-hdr">
           <span>Configuração de Notificações WhatsApp ({eventos.length} eventos)</span>
           <button className="acn-btn" style={{background:'#475569'}} onClick={fetchEventos}>Atualizar</button>
@@ -1631,8 +1683,8 @@ function PainelNotificacoes() {
                         const carregando = salvando === ev.evento;
                         return (
                           <button key={p} onClick={()=>!carregando && togglePerfil(ev,p)}
-                            title={usuariosPorPerfil[p] ? `${usuariosPorPerfil[p]} usuário(s) ativo(s) com este perfil` : 'Nenhum usuário ativo com este perfil — ninguém recebe'}
-                            style={{ opacity: usuariosPorPerfil[p] ? 1 : .5,
+                            title={alcance(p) ? `${usuariosPorPerfil[p] || 0} usuário(s) com este perfil + ${responsaveis.filter((r: any) => r.perfil === p).length} responsável(is)` : 'Ninguém recebe: nenhum usuário com este perfil nem responsável definido'}
+                            style={{ opacity: alcance(p) ? 1 : .5,
                               fontSize:9, padding:'2px 6px', border:'1px solid',
                               borderRadius:3, cursor: carregando ? 'default' : 'pointer',
                               background: selecionado ? '#0f766e' : 'transparent',

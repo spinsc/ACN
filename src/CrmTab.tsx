@@ -177,11 +177,12 @@ function mascaraOp(valor: string): string {
 }
 
 // MMAA do mês/ano atual (usado na numeração da OP gerada a partir do PV)
+// Padrão do número da OP: A (ACN) ou D (Detech) + PV + "." + ano + mês (ex.: A1651.2609)
 function mmaaAtual(): string {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const aa = String(d.getFullYear()).slice(-2);
-  return mm + aa;
+  return aa + mm;
 }
 
 // Número da OP a partir do PV: A/D + 4 dígitos do PV + . + MMAA

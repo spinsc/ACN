@@ -25,6 +25,29 @@ export function invalidarCacheNotif() {
   _cache = null;
 }
 
+// ─── Setor → perfil ───────────────────────────────────────────────────────────
+// Vários avisos são mandados pelo NOME DO SETOR (ex.: demanda para "Chicotes"),
+// mas o envio procura o perfil do usuário pelo nome exato ("Chicote"). Sem esta
+// tradução esses avisos não chegavam a ninguém.
+const PERFIL_DO_SETOR: Record<string, string[]> = {
+  Chicotes: ['Chicote'], Laboratorio: ['Laboratório'], Producao: ['Produção'], Logistica: ['Logística'],
+  Licitacoes: ['Licitações'], Qualidade: ['CQ'], 'Controle de Qualidade': ['CQ'],
+};
+export function expandirPerfis(perfis: string[]) {
+  return [...new Set(perfis.flatMap(p => [p, ...(PERFIL_DO_SETOR[p] || [])]))];
+}
+
+// Pessoas que respondem por um perfil sem ter esse perfil (ex.: PCP → Matheus).
+// Quem já tem um dos perfis não é repetido (o envio por perfil já o alcança).
+async function responsaveisDosPerfis(perfis: string[]): Promise<string[]> {
+  const { data } = await supabase.from('notificacoes_responsaveis')
+    .select('perfil, usuario:auth_usuarios(whatsapp, perfil, ativo)').in('perfil', perfis);
+  return [...new Set((data || [])
+    .map((r: any) => r.usuario)
+    .filter((u: any) => u?.ativo && u?.whatsapp && !perfis.includes(u.perfil))
+    .map((u: any) => u.whatsapp))];
+}
+
 // ─── Envio base ───────────────────────────────────────────────────────────────
 export async function notificarWhatsApp(
   destino: { setor?: string; perfis?: string[]; numero?: string; grupo?: string },
@@ -63,8 +86,12 @@ export async function notificarEvento(
       perfis = ev.destinatarios_perfis;
     }
     if (!perfis || perfis.length === 0) return;
+    perfis = expandirPerfis(perfis);
 
     await notificarWhatsApp({ perfis }, mensagem);
+    // quem responde por um perfil sem ter esse perfil (Admin › Notificações › Responsáveis)
+    const extras = await responsaveisDosPerfis(perfis);
+    for (const numero of extras) await notificarWhatsApp({ numero }, mensagem);
   } catch (e) {
     console.warn('[WhatsApp] notificarEvento falhou:', e);
   }

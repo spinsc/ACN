@@ -279,12 +279,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const setF = (k: string, v: any) => setForm(f => {
     const next = { ...f, [k]: v };
     // Ao digitar pedido_venda, deriva o número da OP automaticamente
-    if (k === 'pedido_venda') {
-      const pv = String(v).replace(/\D/g,'').slice(0,4);
+    // Número da OP: A (ACN) ou D (Detech) + PV + "." + ano + mês (ex.: A1651.2609).
+    // Trocar a empresa troca a letra.
+    if (k === 'pedido_venda' || (k === 'empresa' && f.pedido_venda)) {
+      const pv = String(k === 'pedido_venda' ? v : f.pedido_venda).replace(/\D/g,'').slice(0,4);
       const now = new Date();
       const yy = String(now.getFullYear()).slice(-2);
       const mm = String(now.getMonth() + 1).padStart(2,'0');
-      next.opl = pv ? `${pv.padStart(4,'0')}.${yy}${mm}` : '';
+      const letra = /detech/i.test(k === 'empresa' ? v : next.empresa) ? 'D' : 'A';
+      next.opl = pv ? `${letra}${pv.padStart(4,'0')}.${yy}${mm}` : '';
     }
     // Ao mudar quantidade, ajusta o array veiculos
     if (k === 'quantidade') {
@@ -599,7 +602,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     borderRadius:5, padding:'6px 10px', fontSize:11, fontWeight:800,
                     color: form.opl ? '#166534' : '#9ca3af', letterSpacing:1, minHeight:30,
                     display:'flex', alignItems:'center' }}>
-                    {form.opl || 'PPPP.AAММ'}
+                    {form.opl || 'A0000.AAMM'}
                     {form.opl && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
                       <span style={{ fontSize:9, marginLeft:6, color:'#7c3aed', fontWeight:700 }}>
                         → /01…/{String(form.quantidade).padStart(2,'0')}
