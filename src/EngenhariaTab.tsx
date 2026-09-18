@@ -511,7 +511,7 @@ export default function EngenhariaTab({ currentUser }) {
                         <td>
                           <span className="acn-badge" style={{background: emAndamento?'#3b82f6': kpi48h?'#ef4444':'#f59e0b'}}>
                             {o.status_geral}
-                            {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}}>REVISAO</span>}
+                            {o.status_geral==='Devolvida para Engenharia' && <span style={{marginLeft:4,color:'#fef2f2',fontSize:9}} title={o.obs_devolucao_pcp ? `Motivo: ${o.obs_devolucao_pcp}` : undefined}>REVISAO</span>}
                           </span>
                           {o.serralheria_status && (
                             <div style={{marginTop:2}}>

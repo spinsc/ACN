@@ -8,6 +8,7 @@ import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao } from './DemandaItens';
+import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
 
 
@@ -202,22 +203,7 @@ export default function PCPTab({ currentUser }) {
     }
   };
 
-  const devolverEngenharia = async () => {
-    const opl = modalDevolver;
-    const agora = new Date().toISOString();
-    await supabase.from('oples').update({
-      status_geral: 'Devolvida para Engenharia',
-      obs_devolucao_pcp: obsDevolver,
-    }).eq('id', opl.id);
-    await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-      evento: `Devolvida para Engenharia. Motivo: ${obsDevolver}`,
-      status_anterior: opl.status_geral, status_novo: 'Devolvida para Engenharia',
-      usuario_nome: currentUser?.nome, data_hora: agora,
-    }]);
-    notificarEvento('pcp_devolve_engenharia', msg.oplDevolvida(opl.opl,'Engenharia',obsDevolver,currentUser?.nome));
-    setModalDevolver(null); setObsDevolver(''); fetchAll();
-  };
+  // Devolução (Almoxarifado ou Engenharia): ver DevolverOp.tsx
 
 
   const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
@@ -764,20 +750,10 @@ export default function PCPTab({ currentUser }) {
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
-      {/* MODAL DEVOLVER */}
+      {/* MODAL DEVOLVER — escolhe o destino: Almoxarifado (refazer kit) ou Engenharia (reanalisar) */}
       {modalDevolver && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Devolver para Engenharia — OPL {modalDevolver.opl}</div>
-            <label className="acn-label">Motivo / Problema identificado *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverEngenharia}>CONFIRMAR DEVOLUCAO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
+        <ModalDevolverOp opl={modalDevolver} setorOrigem="PCP" currentUser={currentUser}
+          onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); setObsDevolver(''); fetchAll(); }} />
       )}
     </div>
   );

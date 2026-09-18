@@ -9,6 +9,8 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { VinculoPicker } from './VinculoPicker';
 import type { VinculoValue } from './VinculoPicker';
+import { ModalDevolverOp } from './DevolverOp';
+import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -42,6 +44,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [modalSeriaisLote, setModalSeriaisLote] = useState(null); // { base, irmaos }
   const [seriaisLoteTexto, setSeriaisLoteTexto] = useState('');
   const [aplicandoSeriaisLote, setAplicandoSeriaisLote] = useState(false);
+  // Venda para Envio: kiting 100% do lote com os seriais de todos os produtos
+  const [modalKitEnvioLote, setModalKitEnvioLote] = useState(null); // { base, ops }
+  const [modalDevolver, setModalDevolver] = useState(null);
   // Solicitação de reposição de estoque (nova) — pedido de compra/fabricação
   // interna que precisa de liberação do PCP antes de cair no setor certo.
   const [modalReposicao, setModalReposicao] = useState(false);
@@ -276,6 +281,27 @@ export default function AlmoxarifadoTab({ currentUser }) {
     }
   };
 
+  // Kit 100% do lote de Venda para Envio: seriais produto a produto (mesmo formato da
+  // embalagem) e a OP segue direto para a embalagem, como no EMBALAR E ENVIAR unitário.
+  const aplicarKitEnvioLote = async (porOp) => {
+    const { base, ops } = modalKitEnvioLote;
+    setProcessandoLote(true);
+    try {
+      for (const o of ops) {
+        const itens = porOp[String(o.id)] || [];
+        await setAlmox(o, 'Kit OK', STATUS_EMBALAGEM, `Kit 100% em lote (${ops.length} unidades de ${base})`, {
+          seriais_itens: itens,
+          seriais_equipamentos: itens.map(x => `${x.produto}: ${x.serial}`).join('\n'),
+        });
+      }
+      notificarEvento('kit_ok', msg.kitOk(base, currentUser?.nome) + ` (${ops.length} unidades em lote — seguem para embalagem)`);
+    } finally {
+      setProcessandoLote(false);
+      setModalKitEnvioLote(null);
+      fetchAll();
+    }
+  };
+
   const abrirLoteAcao = (tipo, grupo) => {
     setObsLoteAcao('');
     setModalLoteAcao({ tipo, base: grupo.base, irmaos: grupo.irmaos });
@@ -406,6 +432,10 @@ export default function AlmoxarifadoTab({ currentUser }) {
                             </button>
                           )}
                           </>)}
+                          <button className="acn-btn" style={{background:'#b91c1c',fontSize:9}} title="Devolver para refazer o kit ou para a Engenharia reanalisar"
+                            onClick={()=>setModalDevolver(o)}>
+                            ↩️ DEVOLVER
+                          </button>
                           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
                         </div>
                       </td>
@@ -446,11 +476,21 @@ export default function AlmoxarifadoTab({ currentUser }) {
                           <td>—</td>
                           <td>
                             <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                              {(qtdPendente + qtdFalta + qtdComPendencia) > 0 && (
+                              {(qtdPendente + qtdFalta + qtdComPendencia) > 0 && (irmaos.every(ehVendaEnvioOp) ? (
+                                <button className="acn-btn" style={{background:'#0f766e',fontSize:9}} disabled={processandoLote}
+                                  title="Venda para Envio: seriais de todos os produtos de todas as unidades numa tela só"
+                                  onClick={()=>{
+                                    const ops = irmaos.filter(o => o.status_geral === 'Aguardando Almox' && o.status_almox !== 'Kit OK');
+                                    if (!ops.length) { alert('Nenhuma unidade do lote está aguardando kit.'); return; }
+                                    setModalKitEnvioLote({ base, ops });
+                                  }}>
+                                  📦 KITING 100% EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
+                                </button>
+                              ) : (
                                 <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} disabled={processandoLote} onClick={()=>kitOkLote(item)}>
                                   📥 IMPORTAR SERIAIS EM LOTE ({qtdPendente + qtdFalta + qtdComPendencia})
                                 </button>
-                              )}
+                              ))}
                               <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} disabled={processandoLote} onClick={()=>abrirLoteAcao('falta', item)}>
                                 ❌ FALTA MATERIAL EM LOTE
                               </button>
@@ -696,6 +736,17 @@ export default function AlmoxarifadoTab({ currentUser }) {
       )}
 
       {/* MODAL IMPORTAR SERIAIS EM LOTE — cada linha colada = uma unidade, na ordem /01..NN */}
+      {modalKitEnvioLote && (
+        <ModalKitingLoteEnvio base={modalKitEnvioLote.base} ops={modalKitEnvioLote.ops}
+          onClose={() => setModalKitEnvioLote(null)} onConfirmar={aplicarKitEnvioLote} />
+      )}
+      {modalDevolver && (
+        <ModalDevolverOp opl={modalDevolver} setorOrigem="Almoxarifado" currentUser={currentUser}
+          // refazer o kit só faz sentido se já houve kit; senão, só a Engenharia
+          destinos={modalDevolver.status_almox === 'Kit OK' || modalDevolver.status_geral === STATUS_EMBALAGEM || modalDevolver.status_almox ? ['almox', 'engenharia'] : ['engenharia']}
+          onClose={() => setModalDevolver(null)} onFeito={() => { setModalDevolver(null); fetchAll(); }} />
+      )}
+
       {modalSeriaisLote && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget && !aplicandoSeriaisLote) setModalSeriaisLote(null);}}>
           <div className="modal-box" style={{maxWidth:560,width:'95vw'}}>
