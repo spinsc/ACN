@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS } from './FormatosArquivo';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
-import { combinaBusca } from './SearchUtils';
+import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
@@ -16,6 +16,8 @@ const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean }> = {
   Compras: { centroCusto: true },
 };
 const camposDoSetor = (setor: string) => CAMPOS_POR_SETOR[String(setor || '').trim()] || {};
+// chave da aba do setor ("Laboratório" → "laboratorio"), para listar também os usuários com acesso a ela
+const abaDoSetor = (setor: string) => normalizarBusca(String(setor || '').trim()) || undefined;
 import { VinculoPicker, abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
@@ -643,6 +645,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>NOME *</label>
                   <ColaboradorSelect value={designarForm.responsavel_nome}
                     onChange={v=>setDesignarForm(f=>({...f,responsavel_nome:v}))}
+                    incluirUsuariosDaAba={abaDoSetor(initial.setor)}
                     placeholder="Selecione" style={{ width:'100%', padding:'5px 8px', border:'1px solid #c4b5fd', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                 </div>
                 <div>
@@ -1137,6 +1140,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                     </label>
                     <ColaboradorSelect value={e.responsavel_nome}
                       onChange={v=>setEtapa(i,'responsavel_nome',v)}
+                      incluirUsuariosDaAba={abaDoSetor(e.setor || setorAlvo)}
                       placeholder="Selecione o responsável"
                       style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.responsavel_nome?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                   </div>

@@ -63,26 +63,51 @@ export function useUsers(): any[] {
 // resolver, ver salvarMencoes abaixo) quanto quando ele aprova/rejeita algo
 // que estava pendente pra ele (ver ComprasTab.tsx/LogisticaTab.tsx). Nunca
 // apaga nada — só marca o status, sempre reversível via "Reabrir" no painel.
+//
+// Quem mencionou recebe de volta uma menção avisando que foi respondido (com o
+// trecho da resposta, quando houver), no mesmo registro e na mesma aba.
 export async function resolverMencoesRespondidas(opts: {
   contexto: string;
   contextoId: string;
   autorId: string;
   autorNome: string;
+  resposta?: string;
 }) {
   const { contexto, contextoId, autorId, autorNome } = opts;
   if (!contexto || !contextoId || !autorId) return;
   const uid = String(autorId);
   let orFilter = `mencionado_id.eq.${uid}`;
   if (autorNome) orFilter += `,mencionado_nome.ilike.%${autorNome}%`;
-  const { error } = await supabase.from('mencoes')
+  const { data: resolvidas, error } = await supabase.from('mencoes')
     .update({
       resolvida: true, resolvida_em: new Date().toISOString(),
       resolvida_por: autorNome || null, lida: true,
     })
     .eq('contexto', contexto).eq('contexto_id', String(contextoId))
     .eq('resolvida', false)
-    .or(orFilter);
-  if (error) console.error('[resolverMencoesRespondidas] erro:', error.message);
+    .or(orFilter)
+    .select('mencionante_id, mencionante_nome, contexto_descricao, campo, aba_destino, texto_trecho');
+  if (error) { console.error('[resolverMencoesRespondidas] erro:', error.message); return; }
+
+  // avisa cada pessoa que mencionou (uma vez por pessoa), menos o próprio autor
+  const resposta = (opts.resposta || '').replace(/<[^>]*>/g, '').trim();
+  const avisados = new Set<string>();
+  for (const m of resolvidas || []) {
+    const quem = String(m.mencionante_id || '');
+    if (!quem || quem === uid || avisados.has(quem)) continue;
+    // o próprio aviso de resposta não gera outro aviso (senão vira pingue-pongue)
+    if (String(m.texto_trecho || '').startsWith('↩️')) continue;
+    avisados.add(quem);
+    const { error: errAviso } = await supabase.from('mencoes').insert({
+      mencionado_id: quem, mencionado_nome: m.mencionante_nome,
+      mencionante_id: uid, mencionante_nome: autorNome,
+      contexto, contexto_id: String(contextoId), contexto_descricao: m.contexto_descricao,
+      campo: m.campo, aba_destino: m.aba_destino,
+      texto_trecho: ('↩️ Respondeu sua menção' + (resposta ? ': ' + resposta : '')).slice(0, 200),
+      lida: false, criado_em: new Date().toISOString(),
+    });
+    if (errAviso) console.error('[resolverMencoesRespondidas] aviso ao autor:', errAviso.message);
+  }
 }
 
 // ── salvarMencoes: chamar após salvar o registro pai ─────────────────────────
@@ -109,7 +134,7 @@ export async function salvarMencoes(opts: {
   // respondeu/resolveu qualquer menção pendente que tivesse ali (não precisa
   // ter usado @ de novo pra isso contar). Roda sempre, mesmo sem @ no texto.
   await resolverMencoesRespondidas({
-    contexto, contextoId, autorId: mencionanteId, autorNome: mencionanteNome,
+    contexto, contextoId, autorId: mencionanteId, autorNome: mencionanteNome, resposta: texto,
   });
 
   if (!texto || !texto.includes('@')) return;

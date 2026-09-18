@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { normalizarBusca } from './SearchUtils';
 
 // ── Cache de módulo (única requisição por sessão) ──────────────────────────
 let _cache: any[] | null = null;
@@ -43,6 +44,21 @@ function loadColaboradores(): Promise<any[]> {
   return _promise;
 }
 
+// Usuários do sistema com acesso a uma aba (ex.: Admin que executa tarefa de
+// Engenharia sem estar no cadastro do RH). Cache por aba.
+const _usuariosPorAba: Record<string, Promise<any[]>> = {};
+function loadUsuariosDaAba(aba: string): Promise<any[]> {
+  if (!_usuariosPorAba[aba]) {
+    _usuariosPorAba[aba] = supabase.from('auth_usuarios')
+      .select('id,nome,perfil,abas_permitidas')
+      .eq('ativo', true).order('nome')
+      .then(({ data }) => (data || []).filter((u: any) =>
+        u.perfil === 'Admin' || (Array.isArray(u.abas_permitidas) && u.abas_permitidas.includes(aba))));
+  }
+  return _usuariosPorAba[aba];
+}
+const _chaveNome = (n: string) => normalizarBusca(String(n || '').trim());
+
 export function useColaboradores() {
   const [list, setList] = useState<any[]>(_cache || []);
   const [loaded, setLoaded] = useState(!!_cache);
@@ -68,13 +84,26 @@ interface Props {
   className?: string;
   autoFocus?: boolean;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  /** também lista os usuários do sistema com acesso a esta aba (e os Admin) */
+  incluirUsuariosDaAba?: string;
 }
 
 export function ColaboradorSelect({
   value, onChange, placeholder = 'Selecione o colaborador',
-  style, className, autoFocus, onKeyDown,
+  style, className, autoFocus, onKeyDown, incluirUsuariosDaAba,
 }: Props) {
-  const { list, loaded } = useColaboradores();
+  const { list: colaboradores, loaded } = useColaboradores();
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  useEffect(() => {
+    if (incluirUsuariosDaAba) loadUsuariosDaAba(incluirUsuariosDaAba).then(setUsuarios);
+  }, [incluirUsuariosDaAba]);
+  // RH + usuários da aba, sem repetir nome; o valor atual sempre aparece
+  const vistos = new Set(colaboradores.map(c => _chaveNome(c.nome)));
+  const extras = usuarios.filter(u => !vistos.has(_chaveNome(u.nome)))
+    .map(u => ({ id: 'u-' + u.id, nome: u.nome, cargo: u.perfil }));
+  extras.forEach(u => vistos.add(_chaveNome(u.nome)));
+  if (value && !vistos.has(_chaveNome(value))) extras.push({ id: 'v-atual', nome: value, cargo: '' });
+  const list = [...colaboradores, ...extras].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 
   const baseStyle: React.CSSProperties = {
     width: '100%',

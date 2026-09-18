@@ -6,7 +6,6 @@ import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
 import { logChange, useUnreadMap } from './AuditSystem';
-import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
@@ -1792,7 +1791,8 @@ export default function ComprasTab({ currentUser }) {
         ))}
       </div>
 
-      <DemandaAvulsaPanel currentUser={currentUser} setor="Compras" />
+      {/* As demandas avulsas de Compras aparecem uma vez só, no painel do setor
+          (SetorDemandaTab) que o DashboardTab desenha acima desta tela. */}
 
       {/* MODAL CENTRO DE CUSTO */}
       {modalCentro && (

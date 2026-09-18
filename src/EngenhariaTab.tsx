@@ -731,6 +731,7 @@ export default function EngenhariaTab({ currentUser }) {
             <label className="acn-label">Responsável pela Execução *</label>
             <ColaboradorSelect
               value={responsavelEng} onChange={setResponsavelEng}
+              incluirUsuariosDaAba="engenharia"
               placeholder="Selecione o responsável"
               className="acn-input" style={{width:'100%',marginBottom:4}}
               autoFocus onKeyDown={e=>e.key==='Enter'&&confirmarIniciarEng()} />

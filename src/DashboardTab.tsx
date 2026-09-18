@@ -1452,6 +1452,11 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
                   <strong>{currentUser?.nome || 'Usuário'}</strong>
                   <span>{currentUser?.perfil || ''}</span>
                 </div>
+                {isVisible('admin') && (
+                  <button role="menuitem" onClick={() => { setMenuUsuario(false); setActiveTab('admin'); }}>
+                    <Icone path={mdiShieldAccountOutline} size={18} />Administração
+                  </button>
+                )}
                 <button role="menuitem" onClick={() => { setMenuUsuario(false); setDark(d => !d); }}>
                   <Icone path={dark ? mdiWhiteBalanceSunny : mdiWeatherNight} size={18} />{dark ? 'Modo claro' : 'Modo escuro'}
                 </button>

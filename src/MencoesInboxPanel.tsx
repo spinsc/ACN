@@ -113,7 +113,7 @@ async function responderMencao(m: any, texto: string, currentUser: any): Promise
   }
 
   await resolverMencoesRespondidas({
-    contexto: m.contexto, contextoId, autorId: currentUser?.id, autorNome: nome,
+    contexto: m.contexto, contextoId, autorId: currentUser?.id, autorNome: nome, resposta: texto,
   });
   return true;
 }

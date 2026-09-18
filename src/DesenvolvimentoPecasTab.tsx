@@ -180,7 +180,7 @@ function PainelEtapa({ demanda, etapa, idx, onAtualizado, currentUser }: any) {
           <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 160 }}>
               <label className="acn-label">Responsável *</label>
-              <ColaboradorSelect value={responsavel} onChange={setResponsavel} placeholder="Selecione o responsável" />
+              <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="engenharia" placeholder="Selecione o responsável" />
             </div>
             <div style={{ width: 150 }}>
               <label className="acn-label">Data Prevista</label>

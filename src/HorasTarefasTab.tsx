@@ -171,6 +171,18 @@ function ModalPausar({ tarefa, onClose, onPausado }: any) {
 function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHorario }: any) {
   const [modalPausar, setModalPausar] = useState(false);
   const [verLog, setVerLog] = useState(false);
+  const [editTitulo, setEditTitulo] = useState<string | null>(null);
+  const salvarTitulo = async () => {
+    const novo = (editTitulo || '').trim();
+    if (!novo) { alert('A descrição da tarefa não pode ficar em branco.'); return; }
+    if (novo !== tarefa.titulo) {
+      const { error } = await supabase.from('engenharia_horas_tarefas')
+        .update({ titulo: novo, atualizado_em: new Date().toISOString() }).eq('id', tarefa.id);
+      if (error) { alert('Não foi possível salvar a descrição: ' + error.message); return; }
+    }
+    setEditTitulo(null);
+    onAtualizado();
+  };
 
   // o tempo só conta no horário de contagem ou em hora extra aprovada da pessoa
   const extras = extrasAprovadas(ctx, tarefa.responsavel_nome || '');
@@ -207,7 +219,24 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
     <>
       <tr>
         <td>
-          {tarefa.titulo}
+          {editTitulo != null ? (
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input className="acn-input" autoFocus value={editTitulo} onChange={e => setEditTitulo(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvarTitulo(); if (e.key === 'Escape') setEditTitulo(null); }}
+                aria-label="Descrição da tarefa" style={{ minWidth: 200, fontSize: 11 }} />
+              <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={salvarTitulo}>Salvar</button>
+              <button className="acn-btn" style={{ background: '#94a3b8', fontSize: 9 }} onClick={() => setEditTitulo(null)}>Cancelar</button>
+            </div>
+          ) : (
+            <>
+              {tarefa.titulo}
+              {tarefa.status !== 'concluida' && (
+                <button onClick={() => setEditTitulo(tarefa.titulo || '')} title="Editar a descrição da tarefa"
+                  aria-label="Editar a descrição da tarefa"
+                  style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', fontSize: 11, padding: 0, color: '#64748b' }}>✏️</button>
+              )}
+            </>
+          )}
           {tarefa.numero_opl && <div style={{ fontSize: 9, color: '#64748b' }}>OPL: {tarefa.numero_opl}</div>}
         </td>
         <td>{tarefa.responsavel_nome || '—'}</td>
@@ -801,6 +830,10 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
   const [ctxPronto, setCtxPronto] = useState(false);
   const [horaExtra, setHoraExtra] = useState<{ tarefa: any; acao: 'iniciar' | 'retomar' } | null>(null);
   const tentativasPausa = useRef<Record<string, number>>({});
+  // quem não é gerente/admin vê só as tarefas em que é o responsável
+  const [meusNomes, setMeusNomes] = useState<string[] | null>(null);
+  useEffect(() => { if (!gestor) nomesDoUsuario(currentUser).then(setMeusNomes); }, [gestor, currentUser?.id]);
+  const minhas = gestor ? tarefas : meusNomes ? tarefas.filter(t => mesmaPessoa(t.responsavel_nome, meusNomes)) : [];
 
   // tarefas + feriados e horas extras; a cada minuto em silêncio
   const carregar = async (silencioso = false) => {
@@ -876,7 +909,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
   useEffect(() => { const t = setInterval(() => setTick(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   const operadores = [...new Set(tarefas.map(t => t.responsavel_nome || 'Sem responsável'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const filtradas = tarefas.filter(t => {
+  const filtradas = minhas.filter(t => {
     if (filtro !== 'todas' && t.status !== filtro) return false;
     if (gestor && operador && (t.responsavel_nome || 'Sem responsável') !== operador) return false;
     if (busca.trim()) {
@@ -913,7 +946,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
           )}
           <div className="sec-card">
             <div className="sec-hdr">
-              <span>⏱️ Controle de Horas/Tarefas ({filtradas.length})</span>
+              <span>⏱️ {gestor ? 'Controle de Horas/Tarefas' : 'Minhas tarefas'} ({filtradas.length})</span>
               <button className="acn-btn" style={{ background: '#0f766e', fontSize: 10 }} onClick={() => setModalNova(true)}>+ Nova Tarefa</button>
             </div>
             <div className="sec-body" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -937,7 +970,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
               )}
             </div>
             <div className="sec-body" style={{ overflowX: 'auto', paddingTop: 0 }}>
-              {loading ? <div className="acn-empty">Carregando...</div> : filtradas.length === 0 ? (
+              {loading || (!gestor && !meusNomes) ? <div className="acn-empty">Carregando...</div> : filtradas.length === 0 ? (
                 <div className="acn-empty">Nenhuma tarefa {filtro !== 'todas' ? 'nesse filtro' : 'cadastrada ainda'}.</div>
               ) : (
                 <table>
