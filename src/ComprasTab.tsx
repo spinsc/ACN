@@ -1681,6 +1681,20 @@ export default function ComprasTab({ currentUser }) {
         </div>
       </div>
 
+      {/* KPIs — resumo no topo, antes da lista */}
+      <div style={{marginBottom:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10}}>
+        <div style={{...kpi,borderColor:'#1e293b'}}>
+          <div style={{fontSize:20,fontWeight:700,color:'#1e293b'}}>{total}</div>
+          <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>Total</div>
+        </div>
+        {kpis.map(k=>(
+          <div key={k.label} style={{...kpi,borderColor:k.cor}}>
+            <div style={{fontSize:20,fontWeight:700,color:k.cor}}>{k.n}</div>
+            <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
       {queryError && (
         <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,padding:'10px 14px',marginBottom:12,fontSize:11,color:'#dc2626'}}>
           ⚠️ Erro ao carregar dados: <strong>{queryError}</strong>
@@ -1799,20 +1813,6 @@ export default function ComprasTab({ currentUser }) {
           </table>
         </div>
       )}
-
-      {/* KPIs */}
-      <div style={{marginTop:16,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10}}>
-        <div style={{...kpi,borderColor:'#1e293b'}}>
-          <div style={{fontSize:20,fontWeight:700,color:'#1e293b'}}>{total}</div>
-          <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>Total</div>
-        </div>
-        {kpis.map(k=>(
-          <div key={k.label} style={{...kpi,borderColor:k.cor}}>
-            <div style={{fontSize:20,fontWeight:700,color:k.cor}}>{k.n}</div>
-            <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>{k.label}</div>
-          </div>
-        ))}
-      </div>
 
       {/* As demandas avulsas de Compras aparecem uma vez só, no painel do setor
           (SetorDemandaTab) que o DashboardTab desenha acima desta tela. */}

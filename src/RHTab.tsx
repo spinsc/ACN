@@ -860,7 +860,8 @@ function KpiRH({ funcionarios, lancamentos }) {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroMes, setFiltroMes] = useState(hoje.getMonth()+1);
   const [filtroAno, setFiltroAno] = useState(hoje.getFullYear());
-  const [collapsed, setCollapsed] = useState(false);
+  // no topo da tela: começa só com os totais; gráfico e lista abrem no clique
+  const [collapsed, setCollapsed] = useState(true);
 
   const filtered = lancamentos.filter(l =>
     (!filtroFunc || l.funcionario_id === filtroFunc) &&
@@ -919,6 +920,33 @@ function KpiRH({ funcionarios, lancamentos }) {
           </button>
         </div>
       </div>
+
+      {/* Totais do mês — sempre visíveis */}
+      {(() => {
+        const soma = (k: string) => (filtroFunc ? porFunc.filter(p => funcionarios.find(f => f.id === filtroFunc)?.nome === p.nome) : porFunc).reduce((a, p) => a + p[k], 0);
+        const ausencia = soma('faltas') + soma('atestados');
+        const base = MINUTOS_MES * (filtroFunc ? 1 : Math.max(1, porFunc.length));
+        const cards = [
+          ['Faltas', fmtMin(soma('faltas')), CORES.faltas],
+          ['Atestados', fmtMin(soma('atestados')), CORES.atestados],
+          ['Atrasos', fmtMin(soma('atrasos')), CORES.atrasos],
+          ['Horas extras', fmtMin(soma('extras')), CORES.extras],
+          ['Absenteísmo', `${((ausencia / base) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`, '#7c3aed'],
+        ];
+        return (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', padding:'10px 16px', borderBottom:'1px solid #f1f5f9', alignItems:'center' }}>
+            {cards.map(([rot, val, cor]) => (
+              <div key={rot} style={{ borderLeft:`3px solid ${cor}`, background:'#fff', padding:'4px 10px', minWidth:100 }}>
+                <div style={{ fontSize:9, color:'#6b7280', textTransform:'uppercase', fontWeight:700 }}>{rot}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:cor }}>{val || '0'}</div>
+              </div>
+            ))}
+            <button onClick={()=>setCollapsed(c=>!c)} style={{ marginLeft:'auto', fontSize:10, fontWeight:700, padding:'4px 10px', border:'1px solid #cbd5e1', background:'#f8fafc', borderRadius:5, cursor:'pointer', color:'#475569' }}>
+              {collapsed ? '▾ Ver gráfico e lançamentos' : '▴ Recolher detalhes'}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Gráfico de barras simples em SVG */}
       {!collapsed && porFunc.length > 0 && (
@@ -2358,6 +2386,8 @@ export default function RHTab({ currentUser }) {
         <div className="acn-empty">Carregando...</div>
       ) : (
         <>
+          {/* Resumo (KPIs de absenteísmo e horas) no topo, antes das listas */}
+          <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <PainelStatus
             funcionarios={funcionarios}
             onRefresh={fetch}
@@ -2372,7 +2402,6 @@ export default function RHTab({ currentUser }) {
           />
           <BancoHoras funcionarios={funcionarios} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
-          <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <RelatorioTecnicos funcionarios={funcionarios} />
           <RelatorioUniformes funcionarios={funcionarios} />
           <ComissoesRH funcionarios={funcionarios} currentUser={currentUser} />
