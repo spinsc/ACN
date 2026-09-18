@@ -41,6 +41,13 @@ const MARCADORES = ['Em Recurso','Em Defesa','Impugnado','Cadastrado','Pendente'
 // Marcadores da disputa em andamento: não mudam o status da licitação. "Perdida" aqui
 // é estar perdendo no lance com a disputa ainda aberta (o status Perdida é o resultado).
 const FAMILIA_MARCADOR: Record<string, string> = { Esclarecimento: 'info', Arrematado: 'ok', Perdida: 'atencao' };
+// Termômetro da proposta — mesmas faixas e cores do Comercial/CRM
+const TEMPERATURAS = [
+  { v: 'frio',   label: 'Frio',   emoji: '🧊', cor: '#245fb8' },
+  { v: 'morno',  label: 'Morno',  emoji: '🌤️', cor: '#8b5cf6' },
+  { v: 'quente', label: 'Quente', emoji: '🔥', cor: '#b9302a' },
+] as const;
+const infoTemp = (t: string) => TEMPERATURAS.find(x => x.v === t);
 const AJUDA_MARCADOR: Record<string, string> = {
   Esclarecimento: 'Em fase de esclarecimento',
   Arrematado: 'Arrematamos o lance; a disputa segue (habilitação/homologação)',
@@ -1001,7 +1008,7 @@ const COLUNAS_LISTA_LICITACOES = 'id,numero,nome_projeto,objeto_principal,orgao,
   + 'data_registro,data_limite_esclarecimentos,data_limite_proposta,data_disputa,data_limite_analise_tecnica,'
   + 'analista_nome,analista_email,coordenador_nome,coordenador_email,obs_encerramento,historico,criado_por,criado_por_nome,'
   + 'criado_em,atualizado_em,faturamento_empresa,operador,valor_estimado,horario_sessao,tipo_objeto,julgamento,forma_disputa,'
-  + 'fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_entrega,epp';
+  + 'fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_entrega,epp,temperatura';
 
 function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onExcluir }) {
   const [licit, setLicit] = useState<any>(licitProp);
@@ -1500,6 +1507,20 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     onRefresh();
   };
 
+  const trocarTemperatura = async (t: string) => {
+    const nova = formEdit.temperatura === t ? null : t;   // clicar de novo limpa
+    const antes = formEdit.temperatura || null;
+    setFormEdit((f: any) => ({ ...f, temperatura: nova }));
+    const { error } = await supabase.from('licitacoes')
+      .update({ temperatura: nova, atualizado_em: new Date().toISOString() }).eq('id', licit.id);
+    if (error) {
+      setFormEdit((f: any) => ({ ...f, temperatura: antes }));
+      alert('Não foi possível salvar a temperatura: ' + error.message);
+      return;
+    }
+    onRefresh();
+  };
+
   const toggleMarcador = (m: string) => {
     const novos = alternar(marcadoresRef.current, m);
     marcadoresRef.current = novos;
@@ -1608,6 +1629,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                 borderRadius:4, padding:'1px 7px', fontSize:9, fontWeight:800, cursor:'pointer' }}>
               {formEdit.epp ? '✓ ' : ''}EPP
             </button>
+            <span role="radiogroup" aria-label="Temperatura da proposta" title="Temperatura da proposta"
+              style={{ display:'inline-flex', border:'1px solid #d1d5db', borderRadius:4, overflow:'hidden' }}>
+              {TEMPERATURAS.map(t => {
+                const sel = formEdit.temperatura === t.v;
+                return (
+                  <button key={t.v} role="radio" aria-checked={sel} onClick={() => trocarTemperatura(t.v)} title={`${t.label}${sel ? ' (clique de novo para limpar)' : ''}`}
+                    style={{ border:'none', padding:'1px 7px', fontSize:9, fontWeight:800, cursor:'pointer',
+                      background: sel ? t.cor : '#fff', color: sel ? '#fff' : '#6b7280' }}>
+                    {t.emoji} {t.label}
+                  </button>
+                );
+              })}
+            </span>
             {MARCADORES.map(m => (
               <button key={m} onClick={() => toggleMarcador(m)} title={AJUDA_MARCADOR[m]}
                 style={{ border:`1.5px solid ${marcadores.includes(m)?'#dc2626':'#d1d5db'}`,
@@ -2366,6 +2400,9 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
             <Selo key={m} familia={FAMILIA_MARCADOR[m] || 'erro'} ponto={false}>{m}</Selo>
           ))}
           {l.epp && <Selo familia="neutro" ponto={false}>EPP</Selo>}
+          {infoTemp(l.temperatura) && (
+            <span title={`Temperatura: ${infoTemp(l.temperatura).label}`} style={{ lineHeight:1 }}>{infoTemp(l.temperatura).emoji}</span>
+          )}
           <span>{l.numero || '—'}</span>
         </h6>
         <div className="acn-kmeta">
@@ -2609,6 +2646,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [filtroTemp, setFiltroTemp] = useState<string>('');
   const [filtroAnaliseSetor, setFiltroAnaliseSetor] = useState<string>('todas');
   const [analisesPendentesPorLicit, setAnalisesPendentesPorLicit] = useState<Record<string,string[]>>({});
   const [filtroPeriodoDe, setFiltroPeriodoDe] = useState('');
@@ -2737,6 +2775,7 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
   const lista = listaRecentes || licitacoes
     .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
+    .filter(l => !filtroTemp || l.temperatura === filtroTemp)
     .filter(l => filtroAnaliseSetor === 'todas' || (analisesPendentesPorLicit[l.id]||[]).includes(filtroAnaliseSetor))
     .filter(l => {
       if (!filtroPeriodoDe && !filtroPeriodoAte) return true;
@@ -2816,6 +2855,34 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
             onClick={() => setModoRecentes(v => !v)} aria-pressed={modoRecentes}>Últimas visualizadas</Botao>
           <Chips rotulo="Status" ativo={filtroStatus} onChange={setFiltroStatus}
             itens={[{ id:'todas', rotulo:'Todas', contagem: licitacoes.length }, ...STATUS_LIST.map(st => ({ id: st, rotulo: st, contagem: conts[st] || 0 }))]} />
+          {/* Temperatura das propostas — mini gráfico de barras clicável (mesmo do CRM) */}
+          {(() => {
+            const base = licitacoes.filter(l => filtroStatus === 'todas' || l.status === filtroStatus);
+            const cont: Record<string, number> = { frio: 0, morno: 0, quente: 0 };
+            base.forEach(l => { if (cont[l.temperatura] !== undefined) cont[l.temperatura]++; });
+            const max = Math.max(1, cont.frio, cont.morno, cont.quente);
+            return (
+              <div title="Temperatura das propostas — clique numa barra para filtrar" className="acn-temp-barras">
+                {TEMPERATURAS.map(t => {
+                  const n = cont[t.v];
+                  const ativo = filtroTemp === t.v;
+                  return (
+                    <div key={t.v} role="button" tabIndex={0} aria-pressed={ativo} aria-label={`${t.label}: ${n}`}
+                      onClick={() => setFiltroTemp(ativo ? '' : t.v)} onKeyDown={e => { if (e.key === 'Enter') setFiltroTemp(ativo ? '' : t.v); }}
+                      title={`${t.emoji} ${t.label}: ${n}`}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', cursor:'pointer', width:16, height:20 }}>
+                      <div style={{ width:10, height: Math.max(3, Math.round((n / max) * 18)), borderRadius:'2px 2px 0 0', background: t.cor, opacity: ativo || !filtroTemp ? 1 : .35 }} />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          {filtroTemp && (
+            <Botao pequeno variante="discreto" onClick={() => setFiltroTemp('')} title="Limpar filtro de temperatura">
+              {infoTemp(filtroTemp)?.emoji} {infoTemp(filtroTemp)?.label} ✕
+            </Botao>
+          )}
         </div>
 
         {/* FILTROS */}
