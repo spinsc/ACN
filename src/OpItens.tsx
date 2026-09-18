@@ -35,16 +35,17 @@ export async function itensDaFormacao({ crmId, licitacaoId }: { crmId?: string |
   const { data: vinc } = await supabase.from('cotacoes_precos_vinculos').select('cotacao_id').or(filtros.join(','));
   const ids = [...new Set((vinc || []).map((v: any) => v.cotacao_id))];
   if (!ids.length) return { formacao: null, itens: [] };
-  const { data } = await supabase.from('cotacoes_precos').select('id,nome,versao,status,criado_em,itens').in('id', ids);
-  // a finalizada mais nova; senão a versão mais alta
+  const { data } = await supabase.from('cotacoes_precos').select('id,nome,versao,status,vencedora,criado_em,itens').in('id', ids);
+  // a oficial (vencedora); sem ela, a finalizada mais nova; senão a versão mais alta
   const f = [...(data || [])].sort((a: any, b: any) =>
-    Number(b.status === 'finalizada') - Number(a.status === 'finalizada') || (b.versao || 1) - (a.versao || 1)
+    Number(!!b.vencedora) - Number(!!a.vencedora)
+    || Number(b.status === 'finalizada') - Number(a.status === 'finalizada') || (b.versao || 1) - (a.versao || 1)
     || String(b.criado_em).localeCompare(String(a.criado_em)))[0];
   if (!f) return { formacao: null, itens: [] };
   const itens = (f.itens || []).filter((l: any) => String(l.produto || '').trim()).map((l: any) => ({
     nome: String(l.produto).trim(),
     quantidade: num(l.qt) || 1,
-    descricao: [l.marca, l.modelo, l.lote_nome && `Lote ${l.lote_nome}`].filter(Boolean).join(' · '),
+    descricao: [l.marca, l.modelo, l.lote_nome && (/^lote/i.test(String(l.lote_nome).trim()) ? l.lote_nome : `Lote ${l.lote_nome}`)].filter(Boolean).join(' · '),
     produto_id: l.kit_id || null,
     item_id: l.item_id || null,
   }));
@@ -65,7 +66,7 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
     if (!formacao || !vindos.length) { setAviso('Nenhuma formação de preços com itens ligada a esta venda. Preencha à mão.'); return; }
     const jaPreenchidos = itensPreenchidos(itens);
     onChange([...jaPreenchidos, ...vindos]);
-    setAviso(`Carregado de "${formacao.nome || 'formação'}" v${formacao.versao || 1}: ${vindos.length} item(ns). Confira nomes e quantidades.`
+    setAviso(`Carregado da formação ${formacao.vencedora ? 'oficial' : '(nenhuma marcada como oficial; usada a mais recente)'} "${formacao.nome || 'formação'}" v${formacao.versao || 1}: ${vindos.length} item(ns). Confira nomes e quantidades.`
       + (unidades > 1 ? ' As quantidades da formação são do total da venda.' : ''));
   };
   const dividir = () => {
@@ -84,7 +85,7 @@ export function ItensVendidosEditor({ itens, onChange, crmId, licitacaoId, unida
           {temVinculo && (
             <button type="button" onClick={carregar} disabled={carregando}
               style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, border: '1px solid #2563eb', background: '#fff', color: '#1d4ed8', cursor: 'pointer' }}>
-              {carregando ? 'Carregando...' : '⬇ Carregar da formação de preços'}
+              {carregando ? 'Carregando...' : '⬇ Carregar da formação oficial'}
             </button>
           )}
           {unidades > 1 && itensPreenchidos(itens).length > 0 && (

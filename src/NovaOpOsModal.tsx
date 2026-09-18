@@ -172,6 +172,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState('');
+  // Pedido de venda: com PV, a OP se liga à oportunidade do CRM com aquele número
+  // (e libera carregar os itens da formação oficial); sem PV, o número da OP é digitado.
+  const [semPv, setSemPv]         = useState(false);
+  const [pvAchados, setPvAchados] = useState<any[] | null>(null);   // null = ainda não buscou
+  const [pvCard, setPvCard]       = useState<any>(null);
   // Lote misto: adaptações diferentes entre os veículos do mesmo lote
   const [loteMisto, setLoteMisto] = useState(false);
   const [grupos, setGrupos]       = useState<GrupoLote[]>(grupoInicial(1));
@@ -234,11 +239,31 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         origem_venda: origemDeOportunidade(crmCard),
         ...(pre || {}),
       }));
+      // card com PV: já preenche o pedido de venda (e o número da OP)
+      const pvDoCard = String(crmCard.numero_pv || '').replace(/\D/g, '').slice(0, 4);
+      if (pvDoCard) setF('pedido_venda', pvDoCard);
     } else {
       setForm({ ...VAZIO, data_entrada: new Date().toISOString().split('T')[0], ...(pre || {}) });
     }
+    setSemPv(false); setPvAchados(null); setPvCard(null);
     setErro('');
   }, [isOpen, crmCard?.id]);
+
+  useEffect(() => {
+    const pv = String(form.pedido_venda || '');
+    if (!isOpen || semPv || crmCard || pv.length !== 4) { setPvAchados(null); setPvCard(null); return; }
+    let vivo = true;
+    supabase.from('crm_oportunidades').select('id,titulo,numero_pv,responsavel_nome,orgao,cliente_id,funil')
+      .eq('numero_pv', pv).limit(5)
+      .then(({ data }) => {
+        if (!vivo) return;
+        const lista = data || [];
+        setPvAchados(lista);
+        setPvCard(lista.length === 1 ? lista[0] : null);
+      });
+    return () => { vivo = false; };
+  }, [form.pedido_venda, semPv, isOpen, crmCard?.id]);
+  const oportunidadeVinculada = crmCard || pvCard;
 
   const setF = (k: string, v: any) => setForm(f => {
     const next = { ...f, [k]: v };
@@ -263,7 +288,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const salvar = async () => {
     setErro('');
     if (!form.cliente_nome.trim()) { setErro('Informe o cliente.'); return; }
-    if (form.tipo === 'OP' && !form.opl.trim()) { setErro('Informe o número da OP.'); return; }
+    if (form.tipo === 'OP' && !form.opl.trim()) {
+      setErro(semPv ? 'Informe o número da OP.' : 'Informe o pedido de venda (4 dígitos) ou marque "OP sem pedido de venda".'); return;
+    }
     if (form.tipo === 'OS' && !form.descricao_problema.trim()) { setErro('Descreva o problema/serviço.'); return; }
     if (!form.prazo_entrega) { setErro('Informe o prazo de entrega.'); return; }
     if (!form.responsavel.trim()) { setErro('Informe o responsável.'); return; }
@@ -330,7 +357,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           status_geral:           'Em Espera Engenharia',
           criado_por:             currentUser?.email,
           criado_por_nome:        currentUser?.nome,
-          crm_oportunidade_id:    crmCard?.id || null,
+          crm_oportunidade_id:    oportunidadeVinculada?.id || null,
           servico_terceiro:       !ehVendaEnvio && !!form.servico_terceiro,
           ...(!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.length > 0
             ? { tipos_servico_terceiro: form.tipos_servico_terceiro }
@@ -514,9 +541,43 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               {/* Número OP: Pedido de Venda → PPPP.YYMMM */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>N° Pedido de Venda * (4 dígitos)</div>
-                  <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 1212" maxLength={4}
-                    value={form.pedido_venda} onChange={e => setF('pedido_venda', e.target.value.replace(/\D/g,''))} />
+                  {semPv ? (
+                    <>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número da OP * (sem pedido de venda)</div>
+                      <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 0000.2609 ou A1530.2608" aria-label="Número da OP"
+                        value={form.opl} onChange={e => setForm(f => ({ ...f, opl: e.target.value.trimStart() }))} />
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>N° Pedido de Venda * (4 dígitos)</div>
+                      <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 1212" maxLength={4} aria-label="Pedido de venda"
+                        value={form.pedido_venda} onChange={e => setF('pedido_venda', e.target.value.replace(/\D/g,''))} />
+                    </>
+                  )}
+                  <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:10, color:'#475569', marginTop:4, cursor:'pointer' }}>
+                    <input type="checkbox" checked={semPv} disabled={!!crmCard?.numero_pv}
+                      onChange={e => { const v = e.target.checked; setSemPv(v); setForm(f => ({ ...f, pedido_venda: '', opl: '' })); }} />
+                    OP sem pedido de venda
+                  </label>
+                  {!semPv && crmCard && (
+                    <div style={{ fontSize:10, color:'#15803d', marginTop:3 }}>🔗 Vinculada ao card do CRM: {crmCard.titulo}</div>
+                  )}
+                  {!semPv && !crmCard && pvAchados && (
+                    pvAchados.length === 0 ? (
+                      <div style={{ fontSize:10, color:'#b45309', marginTop:3 }}>PV {form.pedido_venda} não encontrado no CRM — a OP será criada sem vínculo.</div>
+                    ) : pvAchados.length === 1 ? (
+                      <div style={{ fontSize:10, color:'#15803d', marginTop:3 }}>🔗 Vinculada ao PV {pvCard?.numero_pv}: {pvCard?.titulo}</div>
+                    ) : (
+                      <div style={{ marginTop:3 }}>
+                        <div style={{ fontSize:10, color:'#b45309' }}>Mais de uma oportunidade com o PV {form.pedido_venda}. Escolha:</div>
+                        <select className="acn-input" style={{ width:'100%', fontSize:10 }} aria-label="Oportunidade do PV"
+                          value={pvCard?.id || ''} onChange={e => setPvCard(pvAchados.find(x => x.id === e.target.value) || null)}>
+                          <option value="">— nenhuma (sem vínculo) —</option>
+                          {pvAchados.map(x => <option key={x.id} value={x.id}>{x.titulo}</option>)}
+                        </select>
+                      </div>
+                    )
+                  )}
                 </div>
                 <div>
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Número OP gerado</div>
@@ -809,7 +870,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           {isOP && (
             <div style={{ marginBottom: 10 }}>
               <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
-                crmId={crmCard?.id || null} licitacaoId={form.licitacao_id || null}
+                crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null}
                 unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
               {loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
                 <div style={{ fontSize: 10, color: '#6b21a8', marginTop: 4 }}>
