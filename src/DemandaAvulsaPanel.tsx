@@ -23,6 +23,23 @@ import { EscolherAnexos } from './ComprasFluxo';
 import type { VinculoValue } from './VinculoPicker';
 import { notificarEvento, msg } from './whatsappHelper';
 import { confirmar } from './Feedback';
+import {
+  ItensDemandaEditor, ItensDemandaView, VinculosEditor, VinculosView,
+  itemVazio, itensPreenchidos, vinculosDaDemanda, camposDosVinculos,
+} from './DemandaItens';
+
+// e-mail dos responsáveis sai do cadastro de usuários (não precisa digitar)
+async function emailsDosResponsaveis(nomes: string[]) {
+  const unicos = [...new Set(nomes.filter(Boolean))];
+  if (!unicos.length) return {};
+  const { data } = await supabase.from('auth_usuarios').select('nome,email').in('nome', unicos);
+  return Object.fromEntries((data || []).map((u: any) => [u.nome, u.email]));
+}
+// quem abriu a demanda (ou Admin) pode cancelá-la enquanto não foi concluída
+const podeCancelar = (d: any, u: any) =>
+  !['Concluída', 'Cancelada'].includes(d.status)
+  && (u?.perfil === 'Admin' || (!!u?.email && u.email === d.criado_por) || (!!u?.nome && u.nome === d.criado_por_nome));
+const ENCERRADA = (st: string) => st === 'Concluída' || st === 'Cancelada';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -31,6 +48,7 @@ const STATUS_COR: Record<string, string> = {
   'Pendente':    '#d97706',
   'Em Andamento':'#2563eb',
   'Concluída':   '#16a34a',
+  'Cancelada':   '#6b7280',
 };
 const PRIO_COR: Record<string, string> = {
   'Alta':'#dc2626', 'Média':'#d97706', 'Baixa':'#16a34a',
@@ -68,7 +86,7 @@ const diasParaVencer = (prazo: string): number | null => {
   return Math.ceil((new Date(prazo).getTime() - Date.now()) / 86400000);
 };
 const alertClass = (prazo: string, status: string): 'vencida' | 'urgente' | null => {
-  if (!prazo || status === 'Concluída') return null;
+  if (!prazo || status === 'Concluída' || status === 'Cancelada') return null;
   const d = diasParaVencer(prazo);
   if (d === null) return null;
   if (d < 0) return 'vencida';
@@ -346,9 +364,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   const [novaInfo, setNovaInfo] = useState('');
   const [editando, setEditando] = useState(false);
   const [editForm, setEditForm] = useState({ titulo: initial.titulo, descricao: initial.descricao || '', observacoes: initial.observacoes || '', prioridade: initial.prioridade });
-  const [vinculo, setVinculo] = useState<VinculoValue | null>(
-    initial.vinculo_tipo ? { tipo: initial.vinculo_tipo, id: initial.vinculo_id, descricao: initial.vinculo_descricao } : null
-  );
+  const [vinculos, setVinculos] = useState<VinculoValue[]>(vinculosDaDemanda(initial));
+  const [itensEdit, setItensEdit] = useState<any[]>((initial.itens || []).length ? initial.itens : [itemVazio()]);
+  const [mostrarCancelar, setMostrarCancelar] = useState(false);
+  const [motivoCancelar, setMotivoCancelar] = useState('');
   const [designarForm, setDesignarForm] = useState({ responsavel_nome: initial.responsavel_nome || '', responsavel_email: initial.responsavel_email || '', prazo: initial.prazo ? isoToDate(initial.prazo) : '' });
   const camposSetor = camposDoSetor(initial.setor);
   const [centrosDet, setCentrosDet] = useState<any[]>([]);
@@ -382,17 +401,39 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
   // Mantém o vínculo local em sincronia sempre que `d` for recarregado
   // (ex.: após salvarEdicao/reload), sem depender de o usuário reabrir o modal.
   useEffect(() => {
-    setVinculo(d.vinculo_tipo ? { tipo: d.vinculo_tipo, id: d.vinculo_id, descricao: d.vinculo_descricao } : null);
-  }, [d.vinculo_tipo, d.vinculo_id, d.vinculo_descricao]);
+    setVinculos(vinculosDaDemanda(d));
+  }, [d.vinculo_tipo, d.vinculo_id, d.vinculo_descricao, JSON.stringify(d.vinculos || [])]);
+  useEffect(() => { if (!editando) setItensEdit((d.itens || []).length ? d.itens : [itemVazio()]); }, [editando, JSON.stringify(d.itens || [])]);
+
+  // ── Cancelar (quem abriu a demanda) ───────────────────────────────────────
+  const cancelarDemanda = async () => {
+    if (!motivoCancelar.trim()) { alert('Informe o motivo do cancelamento.'); return; }
+    setSalvando(true);
+    const agora = new Date().toISOString();
+    const infoAtual = [...(d.informacoes || []), {
+      tipo: 'cancelamento', usuario: currentUser?.nome || '', data: agora,
+      texto: `Demanda cancelada — Motivo: ${motivoCancelar.trim()}`,
+    }];
+    const { error } = await supabase.from('demandas_avulsas').update({
+      status: 'Cancelada', cancelada_em: agora, cancelada_por: currentUser?.nome || currentUser?.email || null,
+      motivo_cancelamento: motivoCancelar.trim(), informacoes: infoAtual, atualizado_em: agora,
+    }).eq('id', d.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível cancelar: ' + error.message); return; }
+    if (d.responsavel_nome && d.responsavel_nome !== currentUser?.nome) {
+      notificarEvento('demanda_criada_setor', `*Demanda cancelada* — ${d.titulo}\nSetor: ${d.setor}\nMotivo: ${motivoCancelar.trim()}\nPor: ${currentUser?.nome || ''}`, d.setor);
+    }
+    setMostrarCancelar(false); setMotivoCancelar('');
+    await reload(); onRefresh();
+  };
 
   // ── Salvar edição básica ─────────────────────────────────────────────────
   const salvarEdicao = async () => {
     setSalvando(true);
     await supabase.from('demandas_avulsas').update({
       ...editForm,
-      vinculo_tipo: vinculo?.tipo || null,
-      vinculo_id: vinculo?.id || null,
-      vinculo_descricao: vinculo?.descricao || null,
+      ...camposDosVinculos(vinculos),
+      itens: itensPreenchidos(itensEdit),
       atualizado_em: new Date().toISOString(),
     }).eq('id', d.id);
     for (const [campo, texto] of [['descricao', editForm.descricao], ['observacoes', editForm.observacoes]]) {
@@ -594,23 +635,37 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
               ✓ Concluir
             </button>
           )}
-          {!temEtapas && (
+          {!temEtapas && d.status !== 'Cancelada' && (
             <button onClick={() => setMostrarDesignar(v => !v)}
               style={{ background: mostrarDesignar ? '#6b7280' : '#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
               👤 {d.responsavel_nome ? 'Reatribuir' : 'Designar'}
             </button>
           )}
-          {d.status !== 'Concluída' && (
+          {!ENCERRADA(d.status) && (
             <button onClick={() => { setMostrarReprogramar(v => !v); setMostrarDesignar(false); setEditando(false); }}
               style={{ background: mostrarReprogramar ? '#6b7280' : '#f97316', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
               📅 Reprogramar
             </button>
           )}
-          <button onClick={() => { setEditando(v => !v); setMostrarDesignar(false); setMostrarReprogramar(false); }}
-            style={{ background: editando ? '#6b7280' : '#475569', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-            ✏️ Editar
-          </button>
+          {d.status !== 'Cancelada' && (
+            <button onClick={() => { setEditando(v => !v); setMostrarDesignar(false); setMostrarReprogramar(false); }}
+              style={{ background: editando ? '#6b7280' : '#475569', color:'#fff', border:'none', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              ✏️ Editar
+            </button>
+          )}
+          {podeCancelar(d, currentUser) && (
+            <button onClick={() => { setMostrarCancelar(v => !v); setEditando(false); setMostrarDesignar(false); setMostrarReprogramar(false); }}
+              style={{ marginLeft:'auto', background: mostrarCancelar ? '#6b7280' : '#fff', color: mostrarCancelar ? '#fff' : '#b91c1c', border:'1px solid #fca5a5', borderRadius:4, padding:'5px 12px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+              ✖ Cancelar demanda
+            </button>
+          )}
         </div>
+
+        {d.status === 'Cancelada' && (
+          <div style={{ padding:'6px 16px', background:'#f1f5f9', borderBottom:'1px solid #cbd5e1', color:'#475569', fontSize:11, flexShrink:0 }}>
+            <strong>Cancelada</strong> por {d.cancelada_por || '—'} em {fmtDT(d.cancelada_em)}{d.motivo_cancelamento ? ` — ${d.motivo_cancelamento}` : ''}
+          </div>
+        )}
 
         <div style={{ flex:1, overflowY:'auto', padding:14, display:'flex', flexDirection:'column', gap:12 }}>
 
@@ -625,16 +680,32 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* ── Vínculo a um processo já em andamento (opcional) ── */}
-          {!editando && vinculo && (
-            <div onClick={() => abrirVinculo(vinculo)}
-              style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px',
-                border:'1px solid #93c5fd', background:'#eff6ff', borderRadius:6, fontSize:11, cursor:'pointer' }}>
-              <span style={{ fontWeight:700, color:'#1d4ed8', flexShrink:0 }}>🔗 {TIPO_LABEL[vinculo.tipo] || vinculo.tipo}</span>
-              <span style={{ color:'#1e293b', flex:1, textDecoration:'underline' }}>{vinculo.descricao}</span>
-              <span style={{ color:'#93c5fd', fontSize:9 }}>abrir →</span>
+          {/* ── Cancelar demanda ── */}
+          {mostrarCancelar && (
+            <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:6, padding:12 }}>
+              <div style={{ fontWeight:700, fontSize:10, color:'#b91c1c', marginBottom:8 }}>✖ CANCELAR DEMANDA</div>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>MOTIVO *</label>
+              <input value={motivoCancelar} onChange={e=>setMotivoCancelar(e.target.value)} autoFocus aria-label="Motivo do cancelamento"
+                placeholder="Ex.: não é mais necessária, aberta em duplicidade..."
+                style={{ width:'100%', padding:'5px 8px', border:'1px solid #fca5a5', borderRadius:4, fontSize:11, boxSizing:'border-box', marginBottom:8 }} />
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={cancelarDemanda} disabled={salvando}
+                  style={{ background:'#b91c1c', color:'#fff', border:'none', borderRadius:4, padding:'6px 14px', fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                  {salvando ? '...' : 'Confirmar cancelamento'}
+                </button>
+                <button onClick={() => setMostrarCancelar(false)}
+                  style={{ padding:'6px 12px', border:'1px solid #d1d5db', borderRadius:4, background:'#fff', fontSize:11, cursor:'pointer' }}>
+                  Voltar
+                </button>
+              </div>
             </div>
           )}
+
+          {/* ── Vínculos (várias OPs, lote, outros processos) ── */}
+          {!editando && <VinculosView vinculos={vinculos} />}
+
+          {/* ── Itens da demanda ── */}
+          {!editando && <ItensDemandaView itens={d.itens || []} />}
 
           {/* ── Designar responsável (demanda simples) ── */}
           {mostrarDesignar && !temEtapas && (
@@ -734,9 +805,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                     ))}
                   </div>
                 </div>
+                <ItensDemandaEditor itens={itensEdit} onChange={setItensEdit} />
                 <div>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULO A UM PROCESSO (OPCIONAL)</label>
-                  <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULOS (OPCIONAL)</label>
+                  <VinculosEditor vinculos={vinculos} onChange={setVinculos} />
                 </div>
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>OBSERVAÇÕES</label>
@@ -912,7 +984,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [setorAlvo, setSetorAlvo] = useState(setor || setoresDestino?.[0] || '');
   const [qtdEtapas, setQtdEtapas] = useState(1);
   const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
-  const [vinculo, setVinculo] = useState<VinculoValue | null>(vinculoInicial || null);
+  const [vinculos, setVinculos] = useState<VinculoValue[]>(vinculoInicial ? [vinculoInicial] : []);
+  const vinculo = vinculos[0] || null;
+  const [itens, setItens] = useState<any[]>([itemVazio()]);
   const [anexos, setAnexos] = useState<File[]>([]);   // foto, planilha, PDF... enviados junto com a demanda
   const [salvando, setSalvando] = useState(false);
   const [centroCustoId, setCentroCustoId] = useState<string | null>(null);
@@ -957,23 +1031,24 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     }
     setSalvando(true);
     const agora = new Date().toISOString();
+    const emails = await emailsDosResponsaveis(etapas.map(e => e.responsavel_nome));
     const payload: any = {
       ...form,
       setor: setorAlvo,
       status: 'Pendente',
       informacoes: [],
+      itens: itensPreenchidos(itens),
       etapas: qtdEtapas > 1 ? etapas.map(e => ({
         ...e,
+        responsavel_email: e.responsavel_email || emails[e.responsavel_nome] || '',
         prazo: e.prazo ? dateToISO(e.prazo) : null,
       })) : [],
       criado_por: currentUser?.email,
       criado_por_nome: currentUser?.nome,
       criado_em: agora,
       atualizado_em: agora,
-      // Vínculo é sempre opcional — só grava os 3 campos se algo foi selecionado.
-      vinculo_tipo: vinculo?.tipo || null,
-      vinculo_id: vinculo?.id || null,
-      vinculo_descricao: vinculo?.descricao || null,
+      // Vínculos são opcionais: várias OPs, o lote inteiro ou outros processos
+      ...camposDosVinculos(vinculos),
       // campo do setor: Compras aponta o centro de custo
       centro_custo_id: campos.centroCusto ? centroCustoId : null,
       centro_custo: campos.centroCusto ? nomeCentro(centroCustoId) : null,
@@ -981,7 +1056,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     // Para demanda simples, deixa campos no nível raiz vazios
     if (qtdEtapas === 1) {
       payload.responsavel_nome = etapas[0].responsavel_nome || null;
-      payload.responsavel_email = etapas[0].responsavel_email || null;
+      payload.responsavel_email = etapas[0].responsavel_email || emails[etapas[0].responsavel_nome] || null;
       payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
     }
     const { data: nova } = await supabase.from('demandas_avulsas').insert([payload]).select('id').single();
@@ -1012,7 +1087,8 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     // aviso que o sistema antigo ("Enviar Demanda para Setor") já mandava.
     if (setoresDestino && setoresDestino.length > 1) {
       const nomeCriador = currentUser?.nome || currentUser?.email || 'Usuário';
-      notificarEvento('demanda_criada_setor', msg.demandaCriada(setorAlvo, vinculo?.tipo === 'op' ? vinculo.descricao : '', form.titulo, nomeCriador), setorAlvo);
+      const ops = vinculos.filter(v => v.tipo === 'op').map(v => String(v.descricao || '').split(' — ')[0]);
+      notificarEvento('demanda_criada_setor', msg.demandaCriada(setorAlvo, ops.join(', '), form.titulo, nomeCriador), setorAlvo);
     }
     setSalvando(false);
     onSaved();
@@ -1072,9 +1148,13 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                 style={{ width:'100%', padding:'6px 8px', border: form.titulo ? '1px solid #d1d5db' : '1px solid #fca5a5', borderRadius:4, fontSize:12, boxSizing:'border-box' }} />
             </div>
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Descrição</label>
+              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                {setorAlvo === 'Compras' ? 'Descrição — motivo da compra' : 'Descrição'}
+              </label>
               <MencaoTextarea value={form.descricao} onChange={v=>set('descricao',v)} rows={2} style={{fontSize:11}} />
             </div>
+            <ItensDemandaEditor itens={itens} onChange={setItens}
+              titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : 'Itens (opcional)'} />
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>
               <div style={{ display:'flex', gap:6 }}>
@@ -1094,9 +1174,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
           {/* Vínculo opcional a um processo já em andamento */}
           <div>
             <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>
-              Vincular a um processo (opcional)
+              Vincular a processos (opcional — várias OPs ou o lote inteiro)
             </label>
-            <VinculoPicker value={vinculo} onSelect={setVinculo} onClear={() => setVinculo(null)} />
+            <VinculosEditor vinculos={vinculos} onChange={setVinculos} />
           </div>
 
           {/* Anexos já na criação (foto, planilha, PDF...) */}
@@ -1145,28 +1225,27 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
                       style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.responsavel_nome?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>E-mail</label>
-                    <input type="email" value={e.responsavel_email} onChange={ev=>setEtapa(i,'responsavel_email',ev.target.value)}
-                      style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                      Prazo{qtdEtapas > 1 ? ' *' : ''}
+                    </label>
+                    <input type="date" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
+                      style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.prazo?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
                   </div>
                 </div>
-                <div style={{ marginBottom:8 }}>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
-                    Prazo{qtdEtapas > 1 ? ' *' : ''}
-                  </label>
-                  <input type="date" value={e.prazo} onChange={ev=>setEtapa(i,'prazo',ev.target.value)}
-                    style={{ width:'100%', padding:'5px 8px', border:`1px solid ${qtdEtapas>1&&!e.prazo?'#fca5a5':'#d1d5db'}`, borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-                </div>
-                <div style={{ marginBottom:8 }}>
-                  <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
-                    Vincular esta etapa a um processo (opcional)
-                  </label>
-                  <VinculoPicker
-                    value={e.vinculo_tipo ? { tipo: e.vinculo_tipo, id: e.vinculo_id, descricao: e.vinculo_descricao } : null}
-                    onSelect={v => setEtapaVinculo(i, v)}
-                    onClear={() => setEtapaVinculo(i, null)}
-                  />
-                </div>
+                {/* Vínculo próprio só faz sentido quando há mais de uma etapa;
+                    na demanda simples vale o vínculo geral lá de cima */}
+                {qtdEtapas > 1 && (
+                  <div style={{ marginBottom:8 }}>
+                    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+                      Processo desta etapa, se for outro (opcional)
+                    </label>
+                    <VinculoPicker
+                      value={e.vinculo_tipo ? { tipo: e.vinculo_tipo, id: e.vinculo_id, descricao: e.vinculo_descricao } : null}
+                      onSelect={v => setEtapaVinculo(i, v)}
+                      onClear={() => setEtapaVinculo(i, null)}
+                    />
+                  </div>
+                )}
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observações</label>
                   <textarea value={e.obs_criacao} onChange={ev=>setEtapa(i,'obs_criacao',ev.target.value)} rows={2}
@@ -1232,6 +1311,12 @@ function DemandaCard({ d, onClick }) {
             {d.vinculo_tipo && (
               <span style={{ background:'#eff6ff', color:'#1d4ed8', border:'1px solid #93c5fd', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
                 🔗 {TIPO_LABEL[d.vinculo_tipo] || d.vinculo_tipo}: {d.vinculo_descricao}
+                {vinculosDaDemanda(d).length > 1 && ` +${vinculosDaDemanda(d).length - 1}`}
+              </span>
+            )}
+            {(d.itens || []).length > 0 && (
+              <span style={{ background:'#f5f3ff', color:'#6d28d9', border:'1px solid #ddd6fe', borderRadius:3, padding:'1px 5px', fontSize:9, fontWeight:700 }}>
+                📦 {d.itens.length} ite{d.itens.length > 1 ? 'ns' : 'm'}
               </span>
             )}
           </div>
@@ -1325,7 +1410,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
   }, []);
 
   const isVencida = (d: any) => {
-    if (d.status === 'Concluída') return false;
+    if (ENCERRADA(d.status)) return false;
     const etapas = d.etapas || [];
     if (etapas.length > 0) return etapas.some((e: any) => alertClass(e.prazo, e.status) === 'vencida');
     return alertClass(d.prazo, d.status) === 'vencida';
@@ -1333,8 +1418,8 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
 
   const lista = demandas.filter(d => {
     // Filtro principal de aba
-    if (filtroStatus === 'ativas' && d.status === 'Concluída') return false;
-    if (filtroStatus === 'concluidas' && d.status !== 'Concluída') return false;
+    if (filtroStatus === 'ativas' && ENCERRADA(d.status)) return false;
+    if (filtroStatus === 'concluidas' && !ENCERRADA(d.status)) return false;
     if (filtroStatus === 'vencidas' && !isVencida(d)) return false;
     // Filtro por status específico
     if (filtroStatusSpec && d.status !== filtroStatusSpec) return false;
@@ -1352,7 +1437,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
 
   const vencidas = demandas.filter(isVencida).length;
   const urgentes = demandas.filter(d => {
-    if (d.status === 'Concluída') return false;
+    if (ENCERRADA(d.status)) return false;
     const etapas = d.etapas || [];
     if (etapas.length > 0) return etapas.some((e: any) => alertClass(e.prazo, e.status) === 'urgente') && !etapas.some((e: any) => alertClass(e.prazo, e.status) === 'vencida');
     return alertClass(d.prazo, d.status) === 'urgente';
@@ -1383,7 +1468,7 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
       </div>
 
       <div style={{ padding:'6px 12px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
-        {[['ativas','Ativas'],['concluidas','Concluídas'],['vencidas','Vencidas'],['todas','Todas']].map(([v,l]) => (
+        {[['ativas','Ativas'],['concluidas','Encerradas'],['vencidas','Vencidas'],['todas','Todas']].map(([v,l]) => (
           <button key={v} onClick={() => setFiltroStatus(v)}
             style={{ border:'none', borderRadius:12, padding:'2px 10px', fontSize:9, fontWeight:700, cursor:'pointer',
               background: filtroStatus===v?(v==='vencidas'?'#dc2626':'#2563eb'):'#f1f5f9',
@@ -1393,12 +1478,13 @@ export default function DemandaAvulsaPanel({ currentUser, setor, setoresDestino,
         ))}
         <div style={{ width:1, background:'#e2e8f0', height:18, margin:'0 2px' }} />
         {/* Filtro por status específico */}
-        <select value={filtroStatusSpec} onChange={e=>{setFiltroStatusSpec(e.target.value);if(filtroStatus==='concluidas'&&e.target.value&&e.target.value!=='Concluída')setFiltroStatus('ativas');}}
+        <select value={filtroStatusSpec} onChange={e=>{const v=e.target.value;setFiltroStatusSpec(v);if(ENCERRADA(v))setFiltroStatus('concluidas');else if(v&&filtroStatus==='concluidas')setFiltroStatus('ativas');}}
           style={{ fontSize:9, padding:'2px 6px', border:'1px solid #e2e8f0', borderRadius:8, background:'#f8fafc', color:'#374151', cursor:'pointer' }}>
           <option value="">Status: Todos</option>
           <option value="Pendente">Pendente</option>
           <option value="Em Andamento">Em Andamento</option>
           <option value="Concluída">Concluída</option>
+          <option value="Cancelada">Cancelada</option>
         </select>
         {/* Filtro por responsável */}
         {responsaveis.length > 0 && (

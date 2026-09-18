@@ -5,6 +5,7 @@ import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils'
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
 import { linhasDoKit, custoDoKit, usosDoKit } from './KitEstrutura';
+import { ProdutoArquivos } from './ProdutoArquivos';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -863,6 +864,13 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
                     style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 11, padding: 0 }}>✕</button>
                 </div>
               )}
+
+              {/* Arquivos de projeto da estrutura (desenho, esquema, DXF...) */}
+              {isEdit ? (
+                <ProdutoArquivos produtoId={produto.id} currentUser={currentUser} />
+              ) : (
+                <div style={{ marginTop: 8, fontSize: 9, color: '#94a3b8' }}>📐 Arquivos de projeto: cadastre o produto para poder anexar.</div>
+              )}
             </div>
           </div>
 
@@ -1035,6 +1043,7 @@ function BomViewer({ produto, onClose }: any) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ overflowY: 'auto', flex: 1, padding: 14 }}>
+          <div style={{ marginBottom: 8 }}><ProdutoArquivos produtoId={produto.id} somenteLeitura /></div>
           {loading ? (
             <div style={{ textAlign: 'center', padding: 20, color: '#9ca3af' }}>Carregando...</div>
           ) : linhas.length === 0 ? (
