@@ -33,18 +33,36 @@ export type ItemDemanda = {
   produto_id?: string | null;
   produto_codigo?: string | null;
   item_id?: string | null;           // item do catálogo (cadastro_itens)
+  valor_unitario?: number | string | null;  // Compras: quem pede ou o comprador informa
   estrutura?: any[];                 // por unidade do produto
 };
 
 export const itemVazio = (): ItemDemanda => ({ nome: '', quantidade: 1, descricao: '' });
-const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+// aceita "1.234,56" e "1234.56"
+const num = (v: any) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  let t = String(v ?? '').replace(/[R$\s]/g, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  const n = Number(t);
+  return Number.isFinite(n) ? n : 0;
+};
 const fmtQ = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 
 /** Itens preenchidos (sem as linhas em branco), com a quantidade como número */
 export function itensPreenchidos(itens: ItemDemanda[]) {
   return (itens || [])
     .filter(i => String(i.nome || '').trim())
-    .map(i => ({ ...i, nome: String(i.nome).trim(), descricao: String(i.descricao || '').trim(), quantidade: num(i.quantidade) || 1 }));
+    .map(i => ({
+      ...i, nome: String(i.nome).trim(), descricao: String(i.descricao || '').trim(), quantidade: num(i.quantidade) || 1,
+      ...(i.valor_unitario !== undefined ? { valor_unitario: String(i.valor_unitario ?? '').trim() === '' ? null : num(i.valor_unitario) } : {}),
+    }));
+}
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+/** Total dos itens com valor (null se nenhum tem valor) */
+export function totalDosItens(itens: ItemDemanda[]) {
+  const comValor = (itens || []).filter(i => i.valor_unitario != null && i.valor_unitario !== '');
+  if (!comValor.length) return null;
+  return comValor.reduce((s, i) => s + num(i.valor_unitario) * (num(i.quantidade) || 1), 0);
 }
 
 /** Estrutura do produto (sub-kits abertos), por unidade, no formato gravado na demanda */
@@ -121,7 +139,7 @@ function BuscaCadastro({ valor, onTexto, onEscolher, placeholder, categoriaPrefe
 }
 
 // ── Editor da lista de itens ─────────────────────────────────────────────────
-export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '' }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string }) {
+export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categoriaPreferida = '', dica = '', comValor = false }: { itens: ItemDemanda[]; onChange: (v: ItemDemanda[]) => void; titulo?: string; categoriaPreferida?: string; dica?: string; comValor?: boolean }) {
   const [abertos, setAbertos] = useState<Record<number, boolean>>({});
   const set = (i: number, patch: Partial<ItemDemanda>) => onChange(itens.map((x, j) => j === i ? { ...x, ...patch } : x));
   const escolher = async (i: number, s: any) => {
@@ -149,6 +167,11 @@ export function ItensDemandaEditor({ itens, onChange, titulo = 'Itens', categori
               <input type="number" min="0" step="any" value={it.quantidade} aria-label="Quantidade"
                 onChange={e => set(i, { quantidade: e.target.value })}
                 style={{ width: 70, padding: '5px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+              {comValor && (
+                <input inputMode="decimal" value={it.valor_unitario ?? ''} placeholder="R$ un." aria-label="Valor unitário"
+                  onChange={e => set(i, { valor_unitario: e.target.value })}
+                  style={{ width: 80, padding: '5px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+              )}
               <button type="button" onClick={() => remover(i)} title="Remover item" aria-label="Remover item"
                 style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 13 }}>✕</button>
             </div>
@@ -203,13 +226,45 @@ function TabelaEstrutura({ estrutura, quantidade }) {
 }
 
 // ── Leitura (detalhe da demanda) ─────────────────────────────────────────────
-export function ItensDemandaView({ itens }: { itens: ItemDemanda[] }) {
+export function ItensDemandaView({ itens, mostrarValor = false, onSalvarValores }: {
+  itens: ItemDemanda[]; mostrarValor?: boolean;
+  // quando presente (comprador), permite preencher/ajustar o valor de cada item
+  onSalvarValores?: (itens: ItemDemanda[]) => Promise<void>;
+}) {
   const [abertos, setAbertos] = useState<Record<number, boolean>>({});
+  const [editando, setEditando] = useState(false);
+  const [valores, setValores] = useState<string[]>([]);
+  const [salvando, setSalvando] = useState(false);
   if (!itens?.length) return null;
+  const faltaValor = itens.some(i => i.valor_unitario == null || i.valor_unitario === '');
+  const total = totalDosItens(itens);
+  const comecar = () => { setValores(itens.map(i => i.valor_unitario == null ? '' : String(i.valor_unitario).replace('.', ','))); setEditando(true); };
+  const salvar = async () => {
+    setSalvando(true);
+    await onSalvarValores!(itens.map((it, k) => ({ ...it, valor_unitario: valores[k]?.trim() ? num(valores[k]) : null })));
+    setSalvando(false); setEditando(false);
+  };
   return (
     <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
-      <div style={{ background: '#f8fafc', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0' }}>
-        📦 Itens ({itens.length})
+      <div style={{ background: '#f8fafc', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0',
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ flex: 1 }}>📦 Itens ({itens.length}){mostrarValor && total != null ? ` · total ${brl(total)}` : ''}</span>
+        {onSalvarValores && !editando && (
+          <button type="button" onClick={comecar}
+            style={{ background: faltaValor ? '#16a34a' : '#fff', color: faltaValor ? '#fff' : '#15803d', border: '1px solid #16a34a', borderRadius: 4, padding: '2px 9px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
+            💲 {faltaValor ? 'Preencher valores' : 'Ajustar valores'}
+          </button>
+        )}
+        {editando && (
+          <>
+            <button type="button" onClick={salvar} disabled={salvando}
+              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 9px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
+              {salvando ? '...' : '✓ Salvar valores'}
+            </button>
+            <button type="button" onClick={() => setEditando(false)}
+              style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 4, padding: '2px 9px', fontSize: 9, cursor: 'pointer' }}>Cancelar</button>
+          </>
+        )}
       </div>
       {itens.map((it, i) => (
         <div key={i} style={{ padding: '6px 10px', borderTop: i ? '1px solid #f1f5f9' : 'none', fontSize: 11 }}>
@@ -224,6 +279,17 @@ export function ItensDemandaView({ itens }: { itens: ItemDemanda[] }) {
                 style={{ background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 9, fontWeight: 700 }}>
                 🧩 estrutura {abertos[i] ? '▲' : '▼'}
               </button>
+            )}
+            {editando ? (
+              <input inputMode="decimal" value={valores[i] ?? ''} placeholder="R$ un." aria-label={`Valor unitário de ${it.nome}`}
+                onChange={e => setValores(v => v.map((x, k) => k === i ? e.target.value : x))}
+                style={{ width: 90, padding: '3px 6px', border: '1px solid #86efac', borderRadius: 4, fontSize: 11 }} />
+            ) : mostrarValor && (
+              <span style={{ fontSize: 10, color: it.valor_unitario != null && it.valor_unitario !== '' ? '#15803d' : '#94a3b8', whiteSpace: 'nowrap' }}>
+                {it.valor_unitario != null && it.valor_unitario !== ''
+                  ? `${brl(num(it.valor_unitario))} un. · ${brl(num(it.valor_unitario) * (num(it.quantidade) || 1))}`
+                  : 'sem valor'}
+              </span>
             )}
           </div>
           {it.descricao && <div style={{ fontSize: 10, color: '#64748b', marginLeft: 48 }}>{it.descricao}</div>}

@@ -12,9 +12,13 @@ import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
 // informação a mais. Compras abre o apontamento de centro de custo. Para
 // acrescentar campo de outro setor, inclua aqui e trate no formulário/detalhe.
-const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean }> = {
-  Compras: { centroCusto: true },
+const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean; valorItens?: boolean }> = {
+  Compras: { centroCusto: true, valorItens: true },
 };
+// quem compra: completa valor dos itens e centro de custo que o solicitante deixou em branco
+const ehComprador = (u: any, d: any) =>
+  ['Admin', 'Compras'].includes(u?.perfil) || String(u?.perfil || '').startsWith('Gerente')
+  || (!!u?.nome && u.nome === d?.responsavel_nome);
 const camposDoSetor = (setor: string) => CAMPOS_POR_SETOR[String(setor || '').trim()] || {};
 // chave da aba do setor ("Laboratório" → "laboratorio"), para listar também os usuários com acesso a ela
 const abaDoSetor = (setor: string) => normalizarBusca(String(setor || '').trim()) || undefined;
@@ -674,9 +678,12 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
             <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'6px 10px',
               border:'1px solid #e2e8f0', background:'#f8fafc', borderRadius:6, fontSize:11 }}>
               <span style={{ fontWeight:700, color:'#475569' }}>🏷️ Centro de custo</span>
-              {editando
+              {editando || (!d.centro_custo && ehComprador(currentUser, d) && !ENCERRADA(d.status))
                 ? <CentroCustoSelect value={d.centro_custo_id} onChange={gravarCentroCusto} style={{ flex:1, minWidth:180, fontSize:11 }} />
                 : <span style={{ color: d.centro_custo ? '#1e293b' : '#94a3b8' }}>{d.centro_custo || 'não informado'}</span>}
+              {!d.centro_custo && !editando && !ehComprador(currentUser, d) && (
+                <span style={{ fontSize:9, color:'#94a3b8' }}>o comprador pode completar</span>
+              )}
             </div>
           )}
 
@@ -705,7 +712,15 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
           {!editando && <VinculosView vinculos={vinculos} />}
 
           {/* ── Itens da demanda ── */}
-          {!editando && <ItensDemandaView itens={d.itens || []} />}
+          {!editando && (
+            <ItensDemandaView itens={d.itens || []} mostrarValor={!!camposSetor.valorItens}
+              onSalvarValores={camposSetor.valorItens && ehComprador(currentUser, d) && !ENCERRADA(d.status) ? async (novos) => {
+                const { error } = await supabase.from('demandas_avulsas')
+                  .update({ itens: novos, atualizado_em: new Date().toISOString() }).eq('id', d.id);
+                if (error) { alert('Não foi possível salvar os valores: ' + error.message); return; }
+                await reload(); onRefresh();
+              } : undefined} />
+          )}
 
           {/* ── Designar responsável (demanda simples) ── */}
           {mostrarDesignar && !temEtapas && (
@@ -805,7 +820,8 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
                     ))}
                   </div>
                 </div>
-                <ItensDemandaEditor itens={itensEdit} onChange={setItensEdit} />
+                <ItensDemandaEditor itens={itensEdit} onChange={setItensEdit} comValor={!!camposSetor.valorItens}
+                  categoriaPreferida={CATEGORIA_DO_SETOR[d.setor] || ''} />
                 <div>
                   <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2 }}>VÍNCULOS (OPCIONAL)</label>
                   <VinculosEditor vinculos={vinculos} onChange={setVinculos} />
@@ -1157,6 +1173,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
               <MencaoTextarea value={form.descricao} onChange={v=>set('descricao',v)} rows={2} style={{fontSize:11}} />
             </div>
             <ItensDemandaEditor itens={itens} onChange={setItens} categoriaPreferida={CATEGORIA_DO_SETOR[setorAlvo] || ''}
+              comValor={!!campos.valorItens} dica={campos.valorItens ? 'Valor é opcional: se não souber, o comprador completa.' : ''}
               titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : CATEGORIA_DO_SETOR[setorAlvo] ? 'Modelos e quantidades' : 'Itens (opcional)'} />
             <div>
               <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Prioridade</label>

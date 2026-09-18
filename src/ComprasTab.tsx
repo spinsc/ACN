@@ -637,6 +637,22 @@ export default function ComprasTab({ currentUser }) {
 
   // Prazo Prometido de Entrega (Fase 1)
   const [modalPrazoProm, setModalPrazoProm]     = useState<any>(null);
+  // Comprador ajusta o prazo de entrega (prev. recebimento) depois da compra
+  const [modalPrazoEntrega, setModalPrazoEntrega] = useState<any>(null);   // { p, data, motivo }
+  const salvarPrazoEntrega = async () => {
+    const { p, data, motivo } = modalPrazoEntrega;
+    if (!data) { alert('Informe a nova data de entrega.'); return; }
+    const antes = p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0, 10) : null;
+    const { error } = await supabase.from('pcp_pedidos_compra').update({ data_prevista_recebimento: data }).eq('id', p.id);
+    if (error) { alert('Não foi possível salvar o prazo: ' + error.message); return; }
+    logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: p.id, changeType: 'UPDATE',
+      oldRow: { data_prevista_recebimento: antes }, newRow: { data_prevista_recebimento: data }, user: currentUser });
+    const br = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    await registrarHistorico(p.id, { tipo: 'edicao', motivo: motivo?.trim() || null,
+      dados: { campos: [{ campo: 'Prazo de entrega', de: br(antes), para: br(data) }] } }, currentUser);
+    setModalPrazoEntrega(null);
+    load();
+  };
   const [prazoPromData, setPrazoPromData]       = useState('');
   const [prazoPromDestino, setPrazoPromDestino] = useState<'producao'|'cliente'>('producao');
   const [salvandoPrazoProm, setSalvandoPrazoProm] = useState(false);
@@ -1505,7 +1521,14 @@ export default function ComprasTab({ currentUser }) {
               style={{width:130,padding:'5px 7px',border:'2px solid #16a34a',borderRadius:5,fontSize:12,outline:'none'}}
             />
           ) : (
-            fmtData(p.data_prevista_recebimento)
+            <div style={{display:'flex',alignItems:'center',gap:4}}>
+              {fmtData(p.data_prevista_recebimento)}
+              {podeGerirCompras(currentUser) && !['Pendente', DESCARTADA].includes(p.status_compra) && (
+                <button onClick={()=>setModalPrazoEntrega({ p, data: p.data_prevista_recebimento ? String(p.data_prevista_recebimento).slice(0,10) : '', motivo: '' })}
+                  title="Alterar o prazo de entrega" aria-label="Alterar o prazo de entrega"
+                  style={{...btn,background:'transparent',color:'#6366f1',fontSize:12,padding:'0 2px'}}>✏️</button>
+              )}
+            </div>
           )}
         </td>
 
@@ -1962,6 +1985,26 @@ export default function ComprasTab({ currentUser }) {
       )}
 
       {/* MODAL PRAZO PROMETIDO DE ENTREGA */}
+      {modalPrazoEntrega && (
+        <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalPrazoEntrega(null);}}>
+          <div className="modal-box" style={{maxWidth:420}}>
+            <div className="modal-title">📅 Prazo de entrega — {modalPrazoEntrega.p.numero_pedido}</div>
+            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>{modalPrazoEntrega.p.descricao_material}</div>
+            <label className="acn-label">Nova data de entrega *</label>
+            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}} aria-label="Nova data de entrega"
+              value={modalPrazoEntrega.data} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,data:e.target.value}))} />
+            <label className="acn-label">Motivo (opcional)</label>
+            <input className="acn-input" style={{width:'100%',marginBottom:12}} placeholder="Ex.: fornecedor adiou o envio"
+              value={modalPrazoEntrega.motivo} onChange={e=>setModalPrazoEntrega((m:any)=>({...m,motivo:e.target.value}))} />
+            <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>A alteração fica no histórico do pedido, com a data anterior.</div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={salvarPrazoEntrega}>Salvar prazo</button>
+              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalPrazoEntrega(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalPrazoProm && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalPrazoProm(null);}}>
           <div className="modal-box" style={{maxWidth:420}}>
