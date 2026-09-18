@@ -115,6 +115,26 @@ function imprimirAutorizacao(aut: any, func: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL — CADASTRAR FUNCIONÁRIO
 // ─────────────────────────────────────────────────────────────────────────────
+// ─── Uniforme, endereço e contato de emergência ─────────────────────────────
+const TAMANHOS_CAMISETA = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG'];
+const TAMANHOS_CALCA = ['34', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54', '56'];
+const TAMANHOS_SAPATO = Array.from({ length: 14 }, (_, i) => String(33 + i));   // 33 a 46
+const PARENTESCOS = ['Cônjuge', 'Companheiro(a)', 'Pai', 'Mãe', 'Filho(a)', 'Irmão(ã)', 'Avô/Avó', 'Tio(a)', 'Amigo(a)', 'Outro'];
+const UFS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const CAMPOS_EXTRAS_FUNC = ['tamanho_camiseta', 'tamanho_calca', 'tamanho_sapato', 'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento', 'endereco_bairro', 'endereco_cidade', 'endereco_uf', 'emergencia_nome', 'emergencia_parentesco', 'emergencia_telefone'];
+
+// Consulta o CEP (ViaCEP) e devolve rua, bairro, cidade e UF, ou null
+async function consultarCep(cep: string) {
+  const num = String(cep || '').replace(/\D/g, '');
+  if (num.length !== 8) return null;
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${num}/json/`);
+    const j = await r.json();
+    if (j?.erro) return null;
+    return { endereco_logradouro: j.logradouro || '', endereco_bairro: j.bairro || '', endereco_cidade: j.localidade || '', endereco_uf: j.uf || '' };
+  } catch { return null; }
+}
+
 function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
   const { campoDestaque, marcarComoLido } = useFieldHighlight('rh_funcionarios', func?.id, currentUser);
   const fecharModal = () => { marcarComoLido(); onClose(); };
@@ -123,6 +143,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
     tipo_colaborador:'Funcionário',
     salario:'', valor_servicos:'',
     recebe_comissao: false, percentual_comissao:'', incide_em:'Faturamento',
+    ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, ''])),
   };
   const [form, setForm] = useState(func ? {
     nome: func.nome||'', email: func.email||'', cpf: func.cpf||'', cnpj: func.cnpj||'',
@@ -134,7 +155,19 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
     recebe_comissao: func.recebe_comissao||false,
     percentual_comissao: func.percentual_comissao!=null ? String(func.percentual_comissao) : '',
     incide_em: func.incide_em||'Faturamento',
+    ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, func[k] || ''])),
   } : vazio);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [avisoCep, setAvisoCep] = useState('');
+  const preencherPeloCep = async (cep: string) => {
+    if (String(cep).replace(/\D/g, '').length !== 8) { setAvisoCep(''); return; }
+    setBuscandoCep(true);
+    const achado = await consultarCep(cep);
+    setBuscandoCep(false);
+    if (!achado) { setAvisoCep('CEP não encontrado. Preencha o endereço à mão.'); return; }
+    setAvisoCep('');
+    setForm(f => ({ ...f, ...achado }));
+  };
   const [salvando, setSalvando] = useState(false);
   const set = (k, v) => setForm(f=>({...f,[k]:v}));
 
@@ -172,6 +205,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
       recebe_comissao: form.recebe_comissao,
       percentual_comissao: form.recebe_comissao && form.percentual_comissao ? Number(form.percentual_comissao) : null,
       incide_em: form.recebe_comissao ? form.incide_em : null,
+      ...Object.fromEntries(CAMPOS_EXTRAS_FUNC.map(k => [k, String(form[k] || '').trim() || null])),
     };
     if (func) {
       await supabase.from('rh_funcionarios').update(payload).eq('id', func.id);
@@ -222,6 +256,74 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
               {lbl(isFuncionario ? 'Data de Admissão' : 'Data de Início')}
               <input type="date" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)}
                 style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+            </div>
+          </div>
+
+          {/* UNIFORME */}
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>👕 Tamanhos do uniforme</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+              {[['tamanho_camiseta','Camiseta',TAMANHOS_CAMISETA],['tamanho_calca','Calça',TAMANHOS_CALCA],['tamanho_sapato','Sapato',TAMANHOS_SAPATO]].map(([k, l, ops]: any) => (
+                <div key={k} style={campoDestaque(k)}>
+                  {lbl(l)}
+                  <select value={form[k]} onChange={e=>set(k, e.target.value)} aria-label={`Tamanho ${l}`}
+                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', background:'#fff' }}>
+                    <option value="">—</option>
+                    {ops.map((o: string) => <option key={o} value={o}>{o}</option>)}
+                    {form[k] && !ops.includes(form[k]) && <option value={form[k]}>{form[k]}</option>}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ENDEREÇO */}
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>🏠 Endereço</div>
+            <div style={{ display:'grid', gridTemplateColumns:'130px 1fr', gap:8 }}>
+              <div style={campoDestaque('cep')}>
+                {lbl('CEP')}
+                <input value={form.cep} placeholder="00000-000" inputMode="numeric"
+                  onChange={e => { set('cep', e.target.value); if (e.target.value.replace(/\D/g, '').length === 8) preencherPeloCep(e.target.value); }}
+                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+              </div>
+              <div style={campoDestaque('endereco_logradouro')}>{lbl('Rua / Logradouro')}{inp('endereco_logradouro')}</div>
+            </div>
+            {(buscandoCep || avisoCep) && (
+              <div style={{ fontSize:9, color: avisoCep ? '#b45309' : '#64748b' }}>{buscandoCep ? 'Buscando o CEP...' : avisoCep}</div>
+            )}
+            <div style={{ display:'grid', gridTemplateColumns:'90px 1fr 1fr', gap:8 }}>
+              <div style={campoDestaque('endereco_numero')}>{lbl('Número')}{inp('endereco_numero')}</div>
+              <div style={campoDestaque('endereco_complemento')}>{lbl('Complemento')}{inp('endereco_complemento','Apto, bloco...')}</div>
+              <div style={campoDestaque('endereco_bairro')}>{lbl('Bairro')}{inp('endereco_bairro')}</div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 90px', gap:8 }}>
+              <div style={campoDestaque('endereco_cidade')}>{lbl('Cidade')}{inp('endereco_cidade')}</div>
+              <div style={campoDestaque('endereco_uf')}>
+                {lbl('UF')}
+                <select value={form.endereco_uf} onChange={e=>set('endereco_uf', e.target.value)} aria-label="UF"
+                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', background:'#fff' }}>
+                  <option value="">—</option>
+                  {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* CONTATO DE EMERGÊNCIA */}
+          <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontWeight:700, fontSize:10, color:'#b91c1c', marginBottom:2 }}>🚨 Contato de emergência</div>
+            <div style={campoDestaque('emergencia_nome')}>{lbl('Nome')}{inp('emergencia_nome')}</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              <div style={campoDestaque('emergencia_parentesco')}>
+                {lbl('Parentesco')}
+                <select value={form.emergencia_parentesco} onChange={e=>set('emergencia_parentesco', e.target.value)} aria-label="Parentesco"
+                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', background:'#fff' }}>
+                  <option value="">—</option>
+                  {PARENTESCOS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div style={campoDestaque('emergencia_telefone')}>{lbl('Telefone')}{inp('emergencia_telefone','(00) 00000-0000','tel')}</div>
             </div>
           </div>
 
@@ -1115,6 +1217,104 @@ function imprimirRelatorio(titulo: string, periodoLabel: string, linhas: any[]) 
   const html = gerarHtmlRelatorio(titulo, periodoLabel, linhas, totais);
   const w = window.open('', '_blank');
   if (w) { w.document.write(html); w.document.close(); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO — RELATÓRIO DE UNIFORMES (nomes e tamanhos, para compra/entrega)
+// ─────────────────────────────────────────────────────────────────────────────
+const escHtml = (v: any) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as any)[c]);
+function contarTamanhos(funcs: any[], campo: string, ordem: string[]) {
+  const cont: Record<string, number> = {};
+  funcs.forEach(f => { const t = f[campo]; if (t) cont[t] = (cont[t] || 0) + 1; });
+  return Object.entries(cont).sort((a, b) => {
+    const ia = ordem.indexOf(a[0]), ib = ordem.indexOf(b[0]);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a[0].localeCompare(b[0]);
+  });
+}
+function RelatorioUniformes({ funcionarios }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const [tipo, setTipo] = useState('todos');
+  const lista = funcionarios.filter(f => tipo === 'todos' || (f.tipo_colaborador || 'Funcionário') === tipo);
+  const semTamanho = lista.filter(f => !f.tamanho_camiseta && !f.tamanho_calca && !f.tamanho_sapato).length;
+  const totais = [
+    ['Camiseta', contarTamanhos(lista, 'tamanho_camiseta', TAMANHOS_CAMISETA)],
+    ['Calça', contarTamanhos(lista, 'tamanho_calca', TAMANHOS_CALCA)],
+    ['Sapato', contarTamanhos(lista, 'tamanho_sapato', TAMANHOS_SAPATO)],
+  ] as [string, [string, number][]][];
+
+  const imprimir = () => {
+    const rows = lista.map(f =>
+      `<tr><td>${escHtml(f.nome)}</td><td>${escHtml(f.cargo || '')}</td><td class="c">${escHtml(f.tamanho_camiseta || '—')}</td>` +
+      `<td class="c">${escHtml(f.tamanho_calca || '—')}</td><td class="c">${escHtml(f.tamanho_sapato || '—')}</td><td class="ass"></td></tr>`).join('');
+    const resumo = totais.map(([peca, t]) =>
+      `<div class="bloco"><strong>${peca}</strong> ${t.length ? t.map(([tam, n]) => `${escHtml(tam)}: <b>${n}</b>`).join(' · ') : '—'}</div>`).join('');
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatorio de Uniformes</title>` +
+      `<style>body{font-family:Arial,sans-serif;font-size:11px;margin:25px;}h2{text-align:center;font-size:14px;margin-bottom:2px}` +
+      `.sub{text-align:center;font-size:10px;color:#555;margin-bottom:14px;}.bloco{margin:3px 0;font-size:11px}.resumo{border:1px solid #cbd5e1;padding:8px 10px;margin-bottom:14px}` +
+      `table{width:100%;border-collapse:collapse;}th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}` +
+      `td{padding:5px 8px;border-bottom:1px solid #e2e8f0;font-size:11px;}.c{text-align:center}th.c{text-align:center}.ass{width:160px}` +
+      `@media print{body{margin:12mm;}}</style></head><body>` +
+      `<h2>ACN SINAL VERDE — TAMANHOS DE UNIFORME</h2>` +
+      `<div class="sub">${lista.length} colaborador(es)${tipo !== 'todos' ? ' · ' + escHtml(tipo) : ''} · Emitido em ${new Date().toLocaleString('pt-BR')}</div>` +
+      `<div class="resumo">${resumo}</div>` +
+      `<table><thead><tr><th>Nome</th><th>Cargo</th><th class="c">Camiseta</th><th class="c">Calça</th><th class="c">Sapato</th><th>Assinatura (recebido)</th></tr></thead>` +
+      `<tbody>${rows}</tbody></table>` +
+      `<scr` + `ipt>window.onload=function(){window.print()}<\/scr` + `ipt></body></html>`;
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
+  return (
+    <div style={{ marginTop:20, border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
+      <div className="sec-hdr" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6, cursor:'pointer' }}
+        onClick={()=>setCollapsed(c=>!c)}>
+        <span>👕 Relatório de Uniformes</span>
+        <div style={{ display:'flex', gap:6 }} onClick={e=>e.stopPropagation()}>
+          <select value={tipo} onChange={e=>setTipo(e.target.value)} aria-label="Tipo de colaborador"
+            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+            <option value="todos">Todos</option><option value="Funcionário">Funcionários</option><option value="Terceiro">Terceiros</option>
+          </select>
+          <button onClick={imprimir}
+            style={{ background:'#1e293b', color:'#fff', border:'none', borderRadius:4, padding:'3px 12px', fontSize:10, cursor:'pointer' }}>
+            🖨️ Imprimir
+          </button>
+          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} aria-label={collapsed ? 'Expandir' : 'Recolher'}
+            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
+            {collapsed?'▸':'▾'}
+          </button>
+        </div>
+      </div>
+      {!collapsed && (
+        <div style={{ padding:12 }}>
+          {/* resumo no topo: quantos de cada tamanho */}
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+            {totais.map(([peca, t]) => (
+              <div key={peca} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:'6px 10px', fontSize:11, background:'#f8fafc' }}>
+                <strong style={{ color:'#0f766e' }}>{peca}</strong>{' '}
+                {t.length ? t.map(([tam, n]) => <span key={tam} style={{ marginLeft:6 }}>{tam}: <b>{n}</b></span>) : <span style={{ color:'#94a3b8' }}>—</span>}
+              </div>
+            ))}
+            {semTamanho > 0 && (
+              <div style={{ fontSize:10, color:'#b45309', alignSelf:'center' }}>{semTamanho} sem tamanho cadastrado</div>
+            )}
+          </div>
+          <div style={{ overflowX:'auto' }}>
+            <table>
+              <thead><tr><th>Nome</th><th>Cargo</th><th>Camiseta</th><th>Calça</th><th>Sapato</th></tr></thead>
+              <tbody>
+                {lista.map(f => (
+                  <tr key={f.id}>
+                    <td>{f.nome}</td><td>{f.cargo || '—'}</td>
+                    <td>{f.tamanho_camiseta || '—'}</td><td>{f.tamanho_calca || '—'}</td><td>{f.tamanho_sapato || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2174,6 +2374,7 @@ export default function RHTab({ currentUser }) {
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <RelatorioTecnicos funcionarios={funcionarios} />
+          <RelatorioUniformes funcionarios={funcionarios} />
           <ComissoesRH funcionarios={funcionarios} currentUser={currentUser} />
           <ListaAutorizacoes
             funcionarios={funcionarios}
