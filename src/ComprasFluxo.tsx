@@ -681,3 +681,58 @@ export function JanelaParadasObrigatoria({ alertas, currentUser, onRespondido }:
     </Janela>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TODA DEMANDA DE COMPRA NASCE AQUI
+//
+// Decidido com o usuário em 21/09/2026: o Compras olha UM lugar só. Não existe
+// mais lista de "demandas avulsas" do setor ao lado do quadro — qualquer
+// pedido de compra, venha de uma OP, de outro setor ou de um pedido geral,
+// entra como requisição, na coluna Pendente, com cotação, aprovação e OC
+// disponíveis desde o começo.
+//
+// O que diferencia uma da outra é só o vínculo: requisição com OP vinculada é
+// "Demanda de OP"; sem vínculo é "Demanda geral" (ver origemDaRequisicao).
+// ─────────────────────────────────────────────────────────────────────────────
+export function origemDaRequisicao(p: any) {
+  const temOp = p?.vinculo_tipo === 'op' || p?.vinculo_tipo === 'opl' || !!String(p?.opl || '').trim();
+  return temOp
+    ? { tipo: 'op' as const, label: 'Demanda de OP', cor: '#7c3aed',
+        detalhe: p?.vinculo_descricao || p?.opl || '' }
+    : { tipo: 'geral' as const, label: 'Demanda geral', cor: '#64748b', detalhe: '' };
+}
+
+/** Cria a requisição de compra. Devolve { id, numero_pedido } ou { erro }. */
+export async function criarRequisicaoCompra({
+  titulo, descricao = '', itens = [], prioridade = '', prazo = null, observacoes = '',
+  centro_custo = null, centro_custo_id = null, vinculo = null, opl = null,
+  responsavel_nome = null, origemSetor = 'Demanda geral', demandaAvulsaId = null, currentUser,
+}: any) {
+  const agora = new Date().toISOString();
+  const lista = (itens || []).filter((i: any) => String(i?.nome || '').trim());
+  const linhas = lista.map((i: any) => `${i.quantidade || 1}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}`).join('\n');
+  const qtd = lista.reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0);
+
+  const { data, error } = await supabase.from('pcp_pedidos_compra').insert([{
+    numero_pedido: `PC-${Date.now().toString(36).toUpperCase().slice(-6)}`,
+    descricao_material: [String(titulo || '').trim(), String(descricao || '').trim(), linhas].filter(Boolean).join('\n'),
+    quantidade: Math.max(1, Math.round(qtd) || 1),
+    status_compra: 'Pendente',
+    itens: lista,
+    observacoes_compra: [prioridade ? `Prioridade: ${prioridade}` : '', observacoes].filter(Boolean).join('\n') || null,
+    prazo_entrega: prazo ? String(prazo).slice(0, 10) : null,
+    centro_custo, centro_custo_id,
+    vinculo_tipo: vinculo?.tipo || null, vinculo_id: vinculo?.id || null, vinculo_descricao: vinculo?.descricao || null,
+    opl: opl || (vinculo?.tipo === 'op' ? String(vinculo.descricao || '').split(' — ')[0] : null),
+    comprador_nome: responsavel_nome || null,
+    demanda_avulsa_id: demandaAvulsaId,
+    // quem pediu recebe os avisos do andamento (aprovação, reprocesso, descarte)
+    criado_por: currentUser?.email || null,
+    criado_por_nome: currentUser?.nome || null,
+    criado_por_setor: origemSetor,
+    data_criacao: agora, data_solicitacao: agora,
+  }]).select('id,numero_pedido').single();
+
+  if (error) return { erro: error.message };
+  return { id: data.id, numero_pedido: data.numero_pedido };
+}

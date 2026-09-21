@@ -311,7 +311,12 @@ function RelatoriosSetor({ setor, cor }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function SetorDemandaTab({ currentUser, setor, cor }) {
+// layoutUnico + slotRequisicoes: a tela do Compras deixou de ter abas e de ter
+// uma lista de demandas avulsas própria — tudo vira requisição no quadro. A
+// ordem pedida pelo usuário em 21/09/2026 é: relatório, requisições, análise,
+// "Compras — Demandas" e histórico de movimentações. Os outros setores seguem
+// com as duas abas de sempre.
+export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico = false, slotRequisicoes = null }) {
   const [demandas, setDemandas]       = useState([]);
   const [sacOrdensMap, setSacOrdensMap] = useState<Record<string,any>>({});
   const [loading, setLoading]         = useState(false);
@@ -810,67 +815,94 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
   const demandasAtivas     = agruparPorStatusDemanda ? demandas.filter((d:any) => d.status !== 'Concluido') : demandas;
   const demandasConcluidas = agruparPorStatusDemanda ? demandas.filter((d:any) => d.status === 'Concluido') : [];
 
+  // Usados nas duas disposições (setor comum e tela única do Compras)
+  const cardDemandas = (
+      <div className="sec-card">
+        <div className="sec-hdr" style={{background:cor||'#1e293b',color:'white'}}>
+          <span>{setor} — Demandas</span>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+            <span style={{fontSize:10,opacity:.8}}>
+              {pendentes} pend. | {andamento} em and. {mediaT?`| média: ${fmtH(mediaT)}`:''}
+            </span>
+            {['Pendente','Em Andamento','Concluido','Todos'].map(s=>(
+              <button key={s} className="acn-btn"
+                style={{background:filtro===s?'white':'rgba(255,255,255,0.2)',color:filtro===s?(cor||'#1e293b'):'white',fontSize:10,padding:'3px 8px'}}
+                onClick={()=>setFiltro(s)}>{s}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Legenda horas úteis */}
+        <div style={{background:'#f0fdf4',borderBottom:'1px solid #bbf7d0',padding:'4px 12px',fontSize:9,color:'#166534',display:'flex',alignItems:'center',gap:8}}>
+          <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:45) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
+        </div>
+
+        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+          {loading ? <div className="acn-empty">Carregando...</div> : demandas.length===0 ? (
+            <div className="acn-empty">Nenhuma demanda {filtro!=='Todos'?`com status "${filtro}"`:''}.</div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th>Data</th><th>OPL Ref.</th><th>Descrição</th><th>Status</th>
+                <th>Responsável</th><th>Timer (h úteis)</th><th>KPI</th><th>Ações</th>
+              </tr></thead>
+              <tbody>
+                {demandasAtivas.map(renderDemandaRow)}
+                {agruparPorStatusDemanda && demandasConcluidas.length > 0 && (
+                  <tr>
+                    <td colSpan={8} style={{padding:0}}>
+                      <button onClick={()=>setMostrarConcluidas(v=>!v)}
+                        style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
+                          background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+                        {mostrarConcluidas ? '▲ Ocultar' : '▼ Mostrar'} Concluídas ({demandasConcluidas.length})
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                {agruparPorStatusDemanda && mostrarConcluidas && demandasConcluidas.map(renderDemandaRow)}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+  );
+
+  const painelAnalise = (
+      <AnaliseWidget
+        setor={setor}
+        currentUser={currentUser}
+        onAbrirOrigem={(origem, origemId) => {
+          window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem, origemId } }));
+        }}
+      />
+  );
+
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div>
-      {/* SELECTOR ABAS */}
-      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:`2px solid ${cor||'#1e293b'}`}}>
-        <button style={{flex:1,padding:'8px',background:abaAtiva==='demandas'?(cor||'#1e293b'):'white',color:abaAtiva==='demandas'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaAtiva('demandas')}>Demandas Ativas</button>
-        <button style={{flex:1,padding:'8px',background:abaAtiva==='relatorios'?(cor||'#1e293b'):'white',color:abaAtiva==='relatorios'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaAtiva('relatorios')}>Relatórios</button>
-      </div>
+      {/* SELECTOR ABAS — a tela do Compras é uma só, sem abas */}
+      {!layoutUnico && (
+        <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:`2px solid ${cor||'#1e293b'}`}}>
+          <button style={{flex:1,padding:'8px',background:abaAtiva==='demandas'?(cor||'#1e293b'):'white',color:abaAtiva==='demandas'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+            onClick={()=>setAbaAtiva('demandas')}>Demandas Ativas</button>
+          <button style={{flex:1,padding:'8px',background:abaAtiva==='relatorios'?(cor||'#1e293b'):'white',color:abaAtiva==='relatorios'?'white':(cor||'#1e293b'),border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
+            onClick={()=>setAbaAtiva('relatorios')}>Relatórios</button>
+        </div>
+      )}
 
-      {abaAtiva === 'relatorios' ? <RelatoriosSetor setor={setor} cor={cor} /> : (
+      {layoutUnico ? (
+        /* Ordem pedida: relatório → requisições → análise → demandas → histórico */
         <>
-          <div className="sec-card">
-            <div className="sec-hdr" style={{background:cor||'#1e293b',color:'white'}}>
-              <span>{setor} — Demandas</span>
-              <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-                <span style={{fontSize:10,opacity:.8}}>
-                  {pendentes} pend. | {andamento} em and. {mediaT?`| média: ${fmtH(mediaT)}`:''}
-                </span>
-                {['Pendente','Em Andamento','Concluido','Todos'].map(s=>(
-                  <button key={s} className="acn-btn"
-                    style={{background:filtro===s?'white':'rgba(255,255,255,0.2)',color:filtro===s?(cor||'#1e293b'):'white',fontSize:10,padding:'3px 8px'}}
-                    onClick={()=>setFiltro(s)}>{s}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* Legenda horas úteis */}
-            <div style={{background:'#f0fdf4',borderBottom:'1px solid #bbf7d0',padding:'4px 12px',fontSize:9,color:'#166534',display:'flex',alignItems:'center',gap:8}}>
-              <span>🕐 KPIs em <strong>horas úteis</strong> (Seg–Sex 8:00–17:45) · Timer pausa fora do horário e quando PAUSADO manualmente</span>
-            </div>
-
-            <div className="sec-body" style={{overflowX:'auto',padding:0}}>
-              {loading ? <div className="acn-empty">Carregando...</div> : demandas.length===0 ? (
-                <div className="acn-empty">Nenhuma demanda {filtro!=='Todos'?`com status "${filtro}"`:''}.</div>
-              ) : (
-                <table>
-                  <thead><tr>
-                    <th>Data</th><th>OPL Ref.</th><th>Descrição</th><th>Status</th>
-                    <th>Responsável</th><th>Timer (h úteis)</th><th>KPI</th><th>Ações</th>
-                  </tr></thead>
-                  <tbody>
-                    {demandasAtivas.map(renderDemandaRow)}
-                    {agruparPorStatusDemanda && demandasConcluidas.length > 0 && (
-                      <tr>
-                        <td colSpan={8} style={{padding:0}}>
-                          <button onClick={()=>setMostrarConcluidas(v=>!v)}
-                            style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
-                              background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
-                            {mostrarConcluidas ? '▲ Ocultar' : '▼ Mostrar'} Concluídas ({demandasConcluidas.length})
-                          </button>
-                        </td>
-                      </tr>
-                    )}
-                    {agruparPorStatusDemanda && mostrarConcluidas && demandasConcluidas.map(renderDemandaRow)}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
+          <RelatoriosSetor setor={setor} cor={cor} />
+          {slotRequisicoes}
+          {painelAnalise}
+          {cardDemandas}
+          <OplMovimentadas setor={setor} />
+          <DemandaFooter setor={setor} />
+        </>
+      ) : abaAtiva === 'relatorios' ? <RelatoriosSetor setor={setor} cor={cor} /> : (
+        <>
+          {cardDemandas}
 
           {['Chicotes','Serralheria','Laboratorio'].includes(setor) && (
             <OfiQueueSection setor={setor} cor={cor} currentUser={currentUser} />
@@ -880,13 +912,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor }) {
               (que agora despacham pra cá em vez do antigo demandas_setoriais). */}
           <DemandaAvulsaPanel currentUser={currentUser} setor={setor} />
 
-          <AnaliseWidget
-            setor={setor}
-            currentUser={currentUser}
-            onAbrirOrigem={(origem, origemId) => {
-              window.dispatchEvent(new CustomEvent('analise:abrir-origem', { detail: { origem, origemId } }));
-            }}
-          />
+          {painelAnalise}
           <OplMovimentadas setor={setor} />
           <DemandaFooter setor={setor} />
         </>

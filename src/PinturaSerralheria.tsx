@@ -18,7 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React from 'react';
 import { supabase } from './supabaseClient';
-import { itensPreenchidos, vinculosDaDemanda, camposDosVinculos } from './DemandaItens';
+import { itensPreenchidos, vinculosDaDemanda } from './DemandaItens';
+import { criarRequisicaoCompra } from './ComprasFluxo';
 import { notificarEvento } from './whatsappHelper';
 
 export const ehSerralheria = (setor: any) =>
@@ -76,33 +77,29 @@ export async function abrirPedidoPintura(d: any, currentUser: any) {
   if (!d?.pintura || d.pintura_pedido_id) return null;
   const agora = new Date().toISOString();
   const pecas = itensPreenchidos(d.itens || []);
-  const lista = pecas.map((i: any) => `${i.quantidade}× ${i.nome}${i.descricao ? ` (${i.descricao})` : ''}`).join('\n');
   const vinculos = vinculosDaDemanda(d);
 
-  const { data: pedido, error } = await supabase.from('demandas_avulsas').insert([{
-    setor: 'Compras',
+  // Entra no quadro do Compras como qualquer outra requisição — cotação,
+  // aprovação e OC do mesmo jeito (unificação de 21/09/2026).
+  const pedido = await criarRequisicaoCompra({
     titulo: `Pintura — ${d.titulo}`,
-    status: 'Pendente',
-    prioridade: d.prioridade || 'Média',
     descricao: [
       'Serviço de terceiro: PINTURA de peça fabricada na Serralheria.',
       `Tipo pedido: ${String(d.pintura_tipo || '').trim() || '(não informado)'}`,
-      pecas.length ? `Peças:\n${lista}` : '',
       'A peça está pronta na Serralheria.',
-    ].filter(Boolean).join('\n'),
+    ].join('\n'),
     itens: pecas.map((i: any) => ({ nome: i.nome, quantidade: i.quantidade, descricao: i.descricao || '' })),
-    informacoes: [],
-    etapas: [],
-    origem: 'serralheria_pintura',
-    ...camposDosVinculos(vinculos),
-    criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
-    criado_em: agora, atualizado_em: agora,
-  }]).select('id').single();
+    prioridade: d.prioridade || 'Média',
+    vinculo: vinculos[0] || null,
+    origemSetor: 'Serralheria — pintura',
+    demandaAvulsaId: d.id,
+    currentUser,
+  });
 
-  if (error) return { erro: error.message };
+  if (pedido.erro) return { erro: pedido.erro };
 
   const info = [...(d.informacoes || []), {
-    texto: `Serralheria concluída com pintura pedida (${String(d.pintura_tipo || '').trim() || 'tipo não informado'}). Pedido de pintura aberto para o Compras.`,
+    texto: `Serralheria concluída com pintura pedida (${String(d.pintura_tipo || '').trim() || 'tipo não informado'}). Requisição ${pedido.numero_pedido} aberta para o Compras cotar.`,
     usuario: currentUser?.nome || '', data: agora,
   }];
   await supabase.from('demandas_avulsas')
@@ -110,8 +107,8 @@ export async function abrirPedidoPintura(d: any, currentUser: any) {
     .eq('id', d.id);
 
   notificarEvento('demanda_criada_setor',
-    `*Pintura para cotar* — ${d.titulo}\n${String(d.pintura_tipo || '').trim() || 'Tipo não informado'}\nPeça pronta na Serralheria.`,
+    `*Pintura para cotar* — ${d.titulo}\n${String(d.pintura_tipo || '').trim() || 'Tipo não informado'}\nPeça pronta na Serralheria. Requisição ${pedido.numero_pedido}.`,
     'Compras');
 
-  return { id: pedido.id };
+  return { id: pedido.id, numero_pedido: pedido.numero_pedido };
 }

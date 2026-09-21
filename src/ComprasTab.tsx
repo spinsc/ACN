@@ -15,7 +15,7 @@ import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, md
 import { ModalReceberPedido } from './LogisticaTab';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
-  ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra } from './ComprasFluxo';
+  ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao } from './ComprasFluxo';
 
 const VAZIO_COTACAO = {
   fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
@@ -424,6 +424,21 @@ function DescricaoCompacta({ texto, linhas = 2 }: { texto: string; linhas?: numb
   );
 }
 
+// ─── ORIGEM: demanda de OP ou demanda geral ───────────────────────────────────
+// Com a unificação (21/09/2026) o quadro recebe TODA demanda de compra. O que
+// diferencia uma da outra é só isto — e é o que o comprador precisa ver de
+// relance no card e no detalhe.
+function SeloOrigemCompra({ p, grande = false }: { p: any; grande?: boolean }) {
+  const o = origemDaRequisicao(p);
+  return (
+    <span title={o.detalhe ? `${o.label}: ${o.detalhe}` : o.label}
+      style={{ display:'inline-block', marginTop:3, fontSize: grande ? 10 : 8.5, fontWeight:800,
+        padding: grande ? '2px 8px' : '1px 6px', borderRadius:10, color:'#fff', background:o.cor }}>
+      {o.tipo === 'op' ? '🔗' : '📋'} {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
+    </span>
+  );
+}
+
 // ─── VÍNCULO / LINK na requisição ──────────────────────────────────────────────
 function VinculoLinkCompra({ p, compacto = false }: { p: any; compacto?: boolean }) {
   if (!p?.vinculo_tipo && !p?.link_url) return null;
@@ -510,6 +525,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
             <div style={{ fontSize:14, fontWeight:800, color:'#1a3a52' }}>🔍 Resumo — {p.numero_pedido}</div>
             <span style={{ padding:'2px 9px', borderRadius:4, color:'#fff', fontSize:10, fontWeight:700, background: COR_STATUS_COMPRA[p.status_compra] || '#9ca3af' }}>{p.status_compra || '—'}</span>
             {p.numero_oc && <span style={{ marginLeft:8, fontSize:10, fontWeight:700, color:'#7c3aed' }}>📋 {p.numero_oc}</span>}
+            <div><SeloOrigemCompra p={p} grande /></div>
           </div>
           <button className="acn-btn" style={{ background:'#475569' }} onClick={() => imprimirSolicitacao(p)}>🖨️ Imprimir</button>
           <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
@@ -518,6 +534,7 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
         <div style={{ fontSize:12, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 10px', whiteSpace:'pre-wrap', wordBreak:'break-word', marginBottom:6 }}>
           {p.descricao_material || '—'}
         </div>
+        <Linha k="Tipo" v={origemDaRequisicao(p).label} />
         <Linha k="Quantidade" v={p.quantidade} />
         <Linha k="OP" v={p.opl} />
         <Linha k="Vínculo" v={p.vinculo_tipo ? `${TIPO_LABEL[p.vinculo_tipo] || p.vinculo_tipo}: ${p.vinculo_descricao || ''}` : null} />
@@ -1437,7 +1454,10 @@ export default function ComprasTab({ currentUser }) {
       <tr key={p.id} style={{borderBottom:'1px solid #f1f5f9',
         background: naoLido ? '#fffdf0' : isEM ? '#f0fdf4' : isAguardandoAprovacao ? '#fff7ed' : isAprovado ? '#f0f9ff' : undefined,
         borderLeft: naoLido ? '4px solid #eab308' : undefined}}>
-        <td style={td}><strong>{p.numero_pedido}</strong></td>
+        <td style={td}>
+          <strong>{p.numero_pedido}</strong>
+          <div><SeloOrigemCompra p={p} /></div>
+        </td>
         <td style={td}>
           {p.opl ? (
             <button onClick={async () => {
@@ -1659,7 +1679,7 @@ export default function ComprasTab({ currentUser }) {
       {/* CABEÇALHO */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <h2 style={{fontSize:15,fontWeight:700,color:'#1a3a52',margin:0}}>🛒 Requisições de Compra — OP Vinculada</h2>
+          <h2 style={{fontSize:15,fontWeight:700,color:'#1a3a52',margin:0}}>🛒 Requisições de Compra</h2>
           <button onClick={()=>setModalGerCentros(true)}
             style={{...btn,background:'#6366f1',fontSize:10,whiteSpace:'nowrap'}}>⚙️ Centros de Custo</button>
         </div>
@@ -1735,6 +1755,7 @@ export default function ComprasTab({ currentUser }) {
                     <div style={{ fontSize:9, color:'#64748b' }}>
                       Qtd {p.quantidade || 1}{p.fornecedor ? ` · ${p.fornecedor}` : ''}{p.opl ? ` · OP ${p.opl}` : ''}
                     </div>
+                    <SeloOrigemCompra p={p} />
                     <VinculoLinkCompra p={p} compacto />
                     {(p.reprocessos > 0 || p.status_compra === DESCARTADA) && (
                       <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:4 }}>

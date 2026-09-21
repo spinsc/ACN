@@ -8,6 +8,7 @@ import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from './PinturaSerralheria';
+import { criarRequisicaoCompra } from './ComprasFluxo';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
@@ -1212,6 +1213,25 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       payload.responsavel_nome = etapas[0].responsavel_nome || null;
       payload.responsavel_email = etapas[0].responsavel_email || emails[etapas[0].responsavel_nome] || null;
       payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
+    }
+    // Compras não tem mais lista própria de demanda: o pedido entra direto no
+    // quadro de Requisições, com cotação e aprovação (decidido em 21/09/2026).
+    if (setorAlvo === 'Compras') {
+      const r = await criarRequisicaoCompra({
+        titulo: form.titulo, descricao: form.descricao, itens: itensPreenchidos(itens),
+        prioridade: form.prioridade, prazo: etapas[0]?.prazo ? dateToISO(etapas[0].prazo) : null,
+        observacoes: form.observacoes,
+        centro_custo: campos.centroCusto ? nomeCentro(centroCustoId) : null,
+        centro_custo_id: campos.centroCusto ? centroCustoId : null,
+        vinculo: vinculos[0] || null,
+        responsavel_nome: etapas[0]?.responsavel_nome || null,
+        origemSetor: origem || 'Demanda geral', currentUser,
+      });
+      setSalvando(false);
+      if (r.erro) { alert('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
+      alert(`Requisição ${r.numero_pedido} aberta no quadro do Compras.`);
+      onSaved(); onClose();
+      return;
     }
     const { data: nova } = await supabase.from('demandas_avulsas').insert([payload]).select('id').single();
     if (nova?.id && anexos.length) {
