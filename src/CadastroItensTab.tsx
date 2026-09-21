@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
+import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
@@ -183,9 +184,17 @@ function ItemModal({
 }) {
   const [form, setForm] = useState<any>({ ...ITEM_VAZIO, ...item });
   const [salvando, setSalvando] = useState(false);
+  const [alterado, setAlterado] = useState(false);
+  const fundoRef = useRef(false);
   const isEdit = !!item?.id;
 
-  const set = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
+  const set = (k: string, v: any) => { setAlterado(true); setForm((p: any) => ({ ...p, [k]: v })); };
+
+  // fechar sem salvar: com alteração pendente, pergunta antes de descartar
+  const fechar = async () => {
+    if (alterado && !await confirmar('Fechar sem salvar? As alterações deste item serão perdidas.')) return;
+    onClose();
+  };
 
   const handleSave = async () => {
     if (!form.nome?.trim()) return;
@@ -214,24 +223,27 @@ function ItemModal({
     setSalvando(false);
   };
 
-  // Calcula preço final estimado
-  const precoFinal = (() => {
-    const cu = Number(form.custo_unit) || 0;
-    const ipi = 1 + (Number(form.ipi_pct) || 0) / 100;
-    const st  = 1 + (Number(form.st_pct) || 0) / 100;
-    const imp = 1 - (Number(form.imposto_pct) || 0) / 100;
-    const cf  = 1 - (Number(form.custo_fixo_pct) || 0) / 100;
-    const mk  = 1 - (Number(form.markup_pct) || 0) / 100;
-    const di  = 1 + (Number(form.difal_pct) || 0) / 100;
-    if (imp <= 0 || cf <= 0 || mk <= 0) return 0;
-    return (cu * ipi * st * di) / (imp * cf * mk);
-  })();
+  // Preço de referência — mesma conta da Formação de Preços
+  // (FormacaoCalculo.precoUnitario): markup sobre o custo e DIFAL no
+  // denominador. Aqui é só uma estimativa: quem manda no preço de cada venda
+  // é a formação, onde markup, custo e DIFAL são livres por proposta.
+  const custoCImp  = custoComImpostos(form.custo_unit, form.ipi_pct, form.st_pct);
+  const precoFinal = precoUnitario(custoCImp, form.markup_pct, form.difal_pct);
 
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
-    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    }}
+      // Só fecha quando o clique COMEÇA e TERMINA no fundo. Antes bastava soltar
+      // o botão aqui: selecionar o número de um campo arrastando para fora
+      // fechava o modal e perdia tudo o que tinha sido digitado.
+      onMouseDown={e => { fundoRef.current = e.target === e.currentTarget; }}
+      onMouseUp={e => {
+        const noFundo = fundoRef.current && e.target === e.currentTarget;
+        fundoRef.current = false;
+        if (noFundo) fechar();
+      }}>
       <div style={{
         background: '#fff', borderRadius: 10, width: 660, maxWidth: '96vw',
         maxHeight: '90vh', display: 'flex', flexDirection: 'column',
@@ -251,7 +263,7 @@ function ItemModal({
               Cadastro de Itens — base para cotações e compras
             </div>
           </div>
-          <button onClick={onClose} style={{
+          <button onClick={fechar} style={{
             background: 'none', border: 'none', color: '#fff',
             fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 4,
           }}>✕</button>
@@ -325,7 +337,15 @@ function ItemModal({
             </Field>
           </Row>
 
-          <Section title="📊 Impostos e Markup" />
+          <Section title="📊 Impostos e Markup (sugestão de partida)" />
+          <div style={{
+            fontSize: 10, color: '#475569', background: '#f8fafc', border: '1px solid #e2e8f0',
+            borderRadius: 4, padding: '6px 9px', marginBottom: 8, lineHeight: 1.5,
+          }}>
+            Estes percentuais são só o ponto de partida do catálogo. O preço de cada venda é
+            fechado na <strong>Formação de Preços</strong>, onde markup, custo e DIFAL são livres —
+            global ou item a item — e mexer numa proposta não altera as outras nem este cadastro.
+          </div>
           <Row>
             <Field label="IPI (%)">
               <input style={inp} type="number" min={0} max={100} step="0.01"
@@ -335,7 +355,7 @@ function ItemModal({
               <input style={inp} type="number" min={0} max={100} step="0.01"
                 value={form.st_pct} onChange={e => set('st_pct', e.target.value)} />
             </Field>
-            <Field label="DIFAL (%)">
+            <Field label="DIFAL (%) — 0 dentro do estado">
               <input style={inp} type="number" min={0} max={100} step="0.01"
                 value={form.difal_pct} onChange={e => set('difal_pct', e.target.value)} />
             </Field>
@@ -345,15 +365,15 @@ function ItemModal({
             </Field>
           </Row>
           <Row>
-            <Field label="Markup (%)">
-              <input style={inp} type="number" min={0} max={200} step="0.5"
+            <Field label="Markup sugerido (%)">
+              <input style={inp} type="number" min={0} max={1000} step="1"
                 value={form.markup_pct} onChange={e => set('markup_pct', e.target.value)} />
             </Field>
             <Field label="Custo Fixo (%)">
               <input style={inp} type="number" min={0} max={100} step="0.5"
                 value={form.custo_fixo_pct} onChange={e => set('custo_fixo_pct', e.target.value)} />
             </Field>
-            <Field label="Preço Final Estimado" flex={2}>
+            <Field label="Preço de referência (a formação decide)" flex={2}>
               <div style={{
                 padding: '5px 10px', background: '#f0fdf4', border: '1px solid #86efac',
                 borderRadius: 4, fontSize: 13, fontWeight: 800, color: '#15803d',
@@ -370,7 +390,7 @@ function ItemModal({
           justifyContent: 'flex-end', gap: 8, flexShrink: 0, background: '#fafafa',
           borderRadius: '0 0 10px 10px',
         }}>
-          <button onClick={onClose} style={{
+          <button onClick={fechar} style={{
             padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 5,
             background: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#374151',
           }}>Cancelar</button>

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { loteDe, grupoDe, subgrupoDe, chaveItem, chaveSub, qtdDoItem, qtdDoSubgrupo,
-         somarResultados, estruturaFormacao } from './FormacaoCalculo';
+         somarResultados, estruturaFormacao, custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { temPoderDeGerente, perfilComPoderes } from './utils/permissoes';
 import { buscarPorPalavras } from './SearchUtils';
 import { estruturaDoKit } from './KitEstrutura';
@@ -81,7 +81,7 @@ export function calcItem(item, params) {
            : item.moeda === 'EURO'  ? (Number(params.ptax_euro)  || 6.40)
            : 1;
 
-  const custoUnitBrl = custo_unit * (1 + ipi_pct / 100) * (1 + st_pct / 100) * fx;
+  const custoUnitBrl = custoComImpostos(custo_unit, ipi_pct, st_pct, fx);
   const custoTotal   = custoUnitBrl * qt;
 
   let valorUnit, totalImposto, margem;
@@ -89,13 +89,13 @@ export function calcItem(item, params) {
     // Modo TABELA: "custo" informado é o preço de tabela do fabricante, não
     // o custo real — a planilha original aproxima o custo real como metade
     // do preço de tabela (custoUnitBrl/2) só no cálculo de margem.
-    valorUnit    = difal_pct < 100 ? custoUnitBrl * (1 - markup_pct / 100) / (1 - difal_pct / 100) : 0;
+    valorUnit    = precoUnitario(custoUnitBrl, markup_pct, difal_pct, true);
     totalImposto = custoUnitBrl * (1 - markup_pct / 100) * qt * (imposto_pct / 100);
     margem       = (custoUnitBrl / 2 - custoUnitBrl * markup_pct / 100) * qt
                   - totalImposto
                   - (custo_fixo_pct / 100) * (custoUnitBrl - custoUnitBrl * markup_pct / 100) * qt;
   } else {
-    valorUnit    = difal_pct < 100 ? custoUnitBrl * (1 + markup_pct / 100) / (1 - difal_pct / 100) : 0;
+    valorUnit    = precoUnitario(custoUnitBrl, markup_pct, difal_pct);
     const receitaBruta = custoUnitBrl * (1 + markup_pct / 100) * qt;
     totalImposto = receitaBruta * (imposto_pct / 100);
     margem       = receitaBruta - totalImposto - (custo_fixo_pct / 100 * receitaBruta) - custoTotal;
@@ -732,14 +732,23 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
   // normaliza moeda do catálogo (USD/EUR) para o padrão do FormacaoPrecos (DOLAR/EURO)
   const normMoeda = (m) => m === 'USD' ? 'DOLAR' : m === 'EUR' ? 'EURO' : m || 'REAL';
 
+  // Markup, DIFAL, imposto e custo fixo saem dos parâmetros DESTA formação —
+  // o cadastro de itens manda só o custo e os dados do produto. Assim mexer no
+  // markup de uma proposta não respinga em nenhuma outra nem no catálogo.
+  const paramsDaFormacao = () => ({
+    markup_pct:     Number(params?.markup_pct     ?? 100),
+    difal_pct:      Number(params?.difal_pct      ?? 0),
+    imposto_pct:    Number(params?.imposto_pct    ?? 16),
+    custo_fixo_pct: Number(params?.custo_fixo_pct ?? 3),
+  });
+
   const selecionarItem = (it) => {
     onFill({
       produto: it.nome, marca: it.marca || '', fornecedor: it.fornecedor || '',
       moeda: normMoeda(it.moeda), custo_unit: it.custo_unit || 0,
       ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
       tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-      markup_pct: it.markup_pct ?? 30, difal_pct: it.difal_pct ?? 0,
-      imposto_pct: it.imposto_pct ?? 16, custo_fixo_pct: it.custo_fixo_pct ?? 3,
+      ...paramsDaFormacao(),
     });
     setQ(it.nome); setOpen(false);
   };
@@ -749,8 +758,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       kit_id: p.id, kit_nome: p.nome,
       produto: p.nome, marca: '', fornecedor: '', moeda: 'REAL',
       custo_unit: p.preco_venda || 0, ipi_pct: 0, st_pct: 0,
-      markup_pct: 0, difal_pct: p.difal_pct ?? 0,
-      imposto_pct: p.imposto_pct ?? 16, custo_fixo_pct: p.custo_fixo_pct ?? 3,
+      ...paramsDaFormacao(), markup_pct: 0,   // kit fechado entra pelo preço do produto
     });
     setQ(p.nome); setOpen(false);
   };
@@ -771,10 +779,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
         observacao_kit: l.origem.length ? `Kit ${l.origem.join(' › ')}` : '',
         custo_unit: it.custo_unit || 0, ipi_pct: it.ipi_pct || 0, st_pct: it.st_pct || 0,
         tipo_calculo: it.tipo_calculo === 'TABELA' ? 'TABELA' : 'CUSTO',
-        markup_pct: it.markup_pct ?? 30,
-        difal_pct: it.difal_pct ?? 0,
-        imposto_pct: it.imposto_pct ?? 16,
-        custo_fixo_pct: it.custo_fixo_pct ?? 3,
+        ...paramsDaFormacao(),
       };
     });
     onExpand(linhas);

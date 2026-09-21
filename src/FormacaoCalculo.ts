@@ -137,3 +137,39 @@ export function quantidadesDosItens(componentes: any[], params: any): { lote: st
     produtos: it.indices.map(i => componentes[i]?.produto).filter(Boolean),
   }));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRA OFICIAL DO PREÇO DE VENDA — uma conta só para o sistema inteiro
+//
+// Decidido com o usuário em 21/09/2026: markup, custo e DIFAL são definidos
+// DENTRO de cada formação de preços (global ou item a item) — o cadastro de
+// itens e de produtos guarda apenas uma sugestão de partida. O preço que
+// aparece em qualquer tela é sempre esta conta:
+//
+//   custo c/ impostos = custo × (1 + IPI%) × (1 + ST%) × câmbio
+//   preço unitário    = custo c/ impostos × (1 + markup%) ÷ (1 − DIFAL%)
+//
+// Impostos sobre a venda e custo fixo NÃO entram no preço: descontam da
+// margem (ver calcItem em FormacaoPrecosTab). Antes o Cadastro de Itens e o
+// Cadastro de Produtos usavam markup como divisor ("por dentro"), o que dava
+// preços diferentes da formação e zerava a tela com markup de 100%.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Custo com IPI, ST e câmbio aplicados. */
+export function custoComImpostos(custo_unit: any, ipi_pct: any, st_pct: any, fx = 1): number {
+  return (Number(custo_unit) || 0)
+    * (1 + (Number(ipi_pct) || 0) / 100)
+    * (1 + (Number(st_pct)  || 0) / 100)
+    * (Number(fx) || 1);
+}
+
+/** Preço unitário de venda. No modo TABELA o percentual é DESCONTO sobre o
+ *  preço de tabela, não markup — mesmo campo, igual à planilha original. */
+export function precoUnitario(custoCImpostos: number, markup_pct: any, difal_pct: any, modoTabela = false): number {
+  const divisor = 1 - (Number(difal_pct) || 0) / 100;
+  if (divisor <= 0) return 0;                       // DIFAL de 100% ou mais não tem preço possível
+  const fator = modoTabela
+    ? 1 - (Number(markup_pct) || 0) / 100
+    : 1 + (Number(markup_pct) || 0) / 100;
+  return (Number(custoCImpostos) || 0) * fator / divisor;
+}

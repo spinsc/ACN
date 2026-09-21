@@ -6,6 +6,7 @@ import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
 import { linhasDoKit, custoDoKit, usosDoKit } from './KitEstrutura';
 import { ProdutoArquivos } from './ProdutoArquivos';
+import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const CATEGORIAS_DEFAULT = [
@@ -28,19 +29,14 @@ function calcProduto(linhas: any[], markup_pct: number, difal_pct: number, impos
   const custoTotal = linhas.reduce((acc, l) => {
     const item = l._item || {};
     const qt   = Number(l.quantidade) || 1;
-    const cu   = Number(item.custo_unit) || 0;
     // aplica IPI e ST do item
-    const cu_c = cu * (1 + (Number(item.ipi_pct) || 0) / 100) * (1 + (Number(item.st_pct) || 0) / 100);
-    return acc + cu_c * qt;
+    return acc + custoComImpostos(item.custo_unit, item.ipi_pct, item.st_pct) * qt;
   }, 0);
 
-  const mk  = 1 - (Number(markup_pct) || 0) / 100;
-  const di  = 1 + (Number(difal_pct) || 0) / 100;
-  const imp = 1 - (Number(imposto_pct) || 0) / 100;
-  const cf  = 1 - (Number(custo_fixo_pct) || 0) / 100;
-  const precoVenda = (mk > 0 && imp > 0 && cf > 0)
-    ? (custoTotal * di) / (mk * imp * cf)
-    : 0;
+  // Mesma conta da Formação de Preços (ver FormacaoCalculo.precoUnitario):
+  // markup sobre o custo e DIFAL no denominador. Imposto e custo fixo ficam
+  // fora do preço — descontam da margem, não encarecem o produto.
+  const precoVenda = precoUnitario(custoTotal, markup_pct, difal_pct);
 
   return { custoTotal, precoVenda };
 }
