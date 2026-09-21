@@ -8,7 +8,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
-import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao } from './DemandaItens';
+import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
 import { MenuAcoes } from './Interface';
@@ -257,17 +257,37 @@ export default function PCPTab({ currentUser }) {
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
   const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
-  // Ao abrir o kiting, o sistema já separa o que é fabricado aqui dentro —
-  // lendo a BOM da OP e o cadastro de cada item (origem_producao/setor_fabricante).
-  // Preenche a lista; quem libera confere e confirma (decidido em 21/09/2026).
+  // Ao abrir o kiting, o sistema mostra o que naquela OP é fabricado aqui
+  // dentro (lendo a BOM e o cadastro de cada item: origem_producao/
+  // setor_fabricante). É só SUGESTÃO: nem todo chicote precisa ser feito, boa
+  // parte já está no estoque. Nada vem marcado — o PCP escolhe o que solicitar,
+  // e OP sem nada marcado sai sem demanda nenhuma (regra de 21/09/2026).
+  // Quando o estoque estiver controlado, com saldo e estoque mínimo, a marcação
+  // passa a ser automática para o que faltar.
   const [sugestaoFab, setSugestaoFab] = useState(null);
+  const [fabPedidos, setFabPedidos] = useState(new Set());
   const abrirKiting = async (ops, grupo = null) => {
     if (!ops.length) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
     setFabKiting(fabricacaoVazia());
     setSugestaoFab(null);
+    setFabPedidos(new Set());
     setModalKiting({ ops, grupo });
-    const { valor, achados, origem } = await sugerirFabricacao(ops);
-    if (achados.length) { setFabKiting(valor); setSugestaoFab({ achados, origem }); }
+    const { achados, origem } = await sugerirFabricacao(ops);
+    if (achados.length) setSugestaoFab({ achados, origem });
+  };
+
+  // Marcar/desmarcar uma sugestão: entra ou sai da lista de fabricação, sem
+  // mexer no que a pessoa tenha digitado à mão.
+  const alternarSugestao = (a, i) => {
+    const jaPedido = fabPedidos.has(i);
+    setFabKiting(prev => {
+      const lista = (prev?.[a.setor] || []).filter(x => String(x.nome || '').trim());
+      const semEle = lista.filter(x => !(x.nome === a.nome && (x.item_id || null) === (a.item_id || null)));
+      const nova = jaPedido ? semEle
+        : [...semEle, { nome: a.nome, quantidade: a.quantidade, descricao: a.descricao || '', item_id: a.item_id }];
+      return { ...prev, [a.setor]: [...nova, itemVazio()] };
+    });
+    setFabPedidos(s => { const n = new Set(s); if (jaPedido) n.delete(i); else n.add(i); return n; });
   };
   const confirmarKiting = async () => {
     const { ops, grupo } = modalKiting;
@@ -457,13 +477,27 @@ export default function PCPTab({ currentUser }) {
               {modalKiting.ops.length > 1 ? `${modalKiting.ops.length} unidades vão` : 'A OP vai'} para o Almoxarifado separar o kit.
             </div>
             {sugestaoFab && (
-              <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'7px 10px', marginBottom:8 }}>
-                <div style={{ fontSize:10.5, fontWeight:800, color:'#15803d' }}>
-                  🏭 {sugestaoFab.achados.length} item(ns) de fabricação interna encontrados na {sugestaoFab.origem}
+              <div style={{ background:'#f8fafc', border:'1px solid #cbd5e1', borderRadius:6, padding:'8px 10px', marginBottom:8 }}>
+                <div style={{ fontSize:10.5, fontWeight:800, color:'#334155' }}>
+                  🏭 {sugestaoFab.achados.length} item(ns) desta OP são fabricados aqui dentro
                 </div>
-                <div style={{ fontSize:10, color:'#166534', marginTop:2 }}>
-                  Já preenchidos abaixo: {sugestaoFab.achados.map(a => `${a.setor} — ${a.nome}`).join(' · ')}.
-                  Confira quantidades e descrições antes de liberar; dá para editar ou apagar.
+                <div style={{ fontSize:10, color:'#64748b', margin:'2px 0 6px' }}>
+                  Encontrados na {sugestaoFab.origem}. <strong>Marque só o que precisa ser fabricado</strong> —
+                  o que já tem no estoque não precisa de demanda. Sem marcar nada, nenhuma demanda é aberta.
+                </div>
+                {sugestaoFab.achados.map((a, i) => (
+                  <label key={`${a.item_id}-${i}`}
+                    style={{ display:'flex', alignItems:'center', gap:7, padding:'3px 0', cursor:'pointer',
+                      borderTop: i ? '1px solid #e2e8f0' : 'none' }}>
+                    <input type="checkbox" checked={fabPedidos.has(i)} onChange={() => alternarSugestao(a, i)} />
+                    <span style={{ fontSize:10.5 }}>
+                      <span style={{ color:'#6d28d9', fontWeight:800 }}>{a.setor}</span> · {a.nome}
+                      <span style={{ color:'#94a3b8' }}> — {a.quantidade}{modalKiting.ops.length > 1 ? ' por OP' : ''}</span>
+                    </span>
+                  </label>
+                ))}
+                <div style={{ fontSize:9, color:'#94a3b8', marginTop:5 }}>
+                  Quando o estoque estiver controlado, o sistema vai marcar sozinho só o que faltar para esta OP.
                 </div>
               </div>
             )}

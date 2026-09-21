@@ -367,7 +367,7 @@ function ItemModal({
               <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.45 }}>
                 {form.origem_producao === 'interna'
                   ? (form.setor_fabricante
-                      ? `Ao liberar o kiting de uma OP com este item, o PCP já recebe a demanda de ${form.setor_fabricante} preenchida para conferir e abrir.`
+                      ? `Ao liberar o kiting de uma OP com este item, o PCP vê a sugestão de mandar fabricar em ${form.setor_fabricante} — e decide, porque pode já ter no estoque.`
                       : 'Escolha o setor: é ele que vai receber a demanda automaticamente.')
                   : 'Item comprado: entra no kit pelo estoque ou por pedido de compra.'}
               </div>

@@ -407,13 +407,18 @@ export const fabricacaoVazia = () => Object.fromEntries(SETORES_FABRICACAO.map(s
 // que o PCP já usa para rotear a reposição do Almoxarifado.
 //
 // Só entra item ligado ao catálogo (item_id). Linha digitada à mão fica de
-// fora de propósito: adivinhar pelo nome abriria demanda errada, e a pessoa
-// ainda revisa a lista antes de liberar o kiting.
+// fora de propósito: adivinhar pelo nome abriria demanda errada.
+//
+// IMPORTANTE: isto é SUGESTÃO, não pedido. Nem todo chicote precisa ser
+// fabricado — muitas vezes já tem no estoque. Quem decide o que vai virar
+// demanda é o PCP, marcando item a item ao liberar o kiting; nada vem
+// marcado. Quando o estoque estiver controlado (saldo e estoque mínimo), a
+// conta passa a ser automática: só sugere/abre o que faltar para a OP.
 // ─────────────────────────────────────────────────────────────────────────────
 const semAcento = (t: any) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 
 export async function sugerirFabricacao(ops: any[]) {
-  const vazio = { valor: fabricacaoVazia(), achados: [] as any[], origem: '' };
+  const vazio = { achados: [] as any[], origem: '' };
   const base = ops?.[0];
   if (!base) return vazio;
   const daBom = Array.isArray(base.bom_itens) && base.bom_itens.length;
@@ -427,20 +432,16 @@ export async function sugerirFabricacao(ops: any[]) {
   const porId = new Map((data || []).map((i: any) => [i.id, i]));
   if (!porId.size) return vazio;
 
-  const valor = fabricacaoVazia();
   const achados: any[] = [];
   for (const l of linhas) {
     const item: any = porId.get(l.item_id);
     if (!item?.setor_fabricante) continue;
     const setor = SETORES_FABRICACAO.find(s => semAcento(s) === semAcento(item.setor_fabricante));
     if (!setor) continue;                       // setor fabricante fora dos que abrem demanda
-    const preenchidos = valor[setor].filter((x: any) => String(x.nome || '').trim());
-    preenchidos.push({ nome: l.nome, quantidade: num(l.quantidade) || 1,
+    achados.push({ setor, nome: l.nome, quantidade: num(l.quantidade) || 1,
       descricao: String(l.descricao || '').trim(), item_id: l.item_id });
-    valor[setor] = [...preenchidos, itemVazio()];
-    achados.push({ setor, nome: l.nome, quantidade: num(l.quantidade) || 1 });
   }
-  return { valor, achados, origem: daBom ? 'BOM da Engenharia' : 'itens vendidos' };
+  return { achados, origem: daBom ? 'BOM da Engenharia' : 'itens vendidos' };
 }
 export const temFabricacao = (valor: any) => SETORES_FABRICACAO.some(s => itensPreenchidos(valor?.[s] || []).length > 0);
 
