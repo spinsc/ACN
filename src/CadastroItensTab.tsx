@@ -21,7 +21,13 @@ const ITEM_VAZIO = {
   ncm: '', marca: '', fornecedor: '', moeda: 'REAL', custo_unit: 0,
   ipi_pct: 0, st_pct: 0, difal_pct: 0, imposto_pct: 16,   // DIFAL começa zerado (depende do destino da venda)
   markup_pct: 30, custo_fixo_pct: 3, ativo: true,
+  // Fabricação interna: é o que faz o PCP abrir a demanda do setor sozinho ao
+  // liberar o kiting, e o que já roteia a reposição do Almoxarifado.
+  origem_producao: 'externa', setor_fabricante: '',
 };
+
+/** Setores que fabricam item aqui dentro (mesma lista das demandas) */
+const SETORES_FABRICANTES = ['Chicotes', 'Serralheria'];
 
 function moedaSimbolo(m: string) {
   if (m === 'USD') return '$';
@@ -216,6 +222,8 @@ function ItemModal({
       imposto_pct:   Number(form.imposto_pct) || 0,
       markup_pct:    Number(form.markup_pct) || 0,
       custo_fixo_pct: Number(form.custo_fixo_pct) || 0,
+      origem_producao: form.origem_producao === 'interna' ? 'interna' : 'externa',
+      setor_fabricante: form.origem_producao === 'interna' ? (form.setor_fabricante || null) : null,
       ativo:         form.ativo !== false,
       criado_por:    form.criado_por || currentUser?.email || '',
     };
@@ -334,6 +342,35 @@ function ItemModal({
               <input style={inp} type="number" min={0} step="0.01"
                 value={form.custo_unit} onChange={e => set('custo_unit', e.target.value)}
                 placeholder="0,00" />
+            </Field>
+          </Row>
+
+          <Section title="🏭 Origem do item" />
+          <Row>
+            <Field label="Como este item chega" flex={1.3}>
+              <select style={inp} value={form.origem_producao || 'externa'}
+                onChange={e => { const v = e.target.value; set('origem_producao', v); if (v !== 'interna') set('setor_fabricante', ''); }}>
+                <option value="externa">Comprado de fornecedor</option>
+                <option value="interna">Fabricado aqui dentro</option>
+              </select>
+            </Field>
+            {form.origem_producao === 'interna' && (
+              <Field label="Setor que fabrica" flex={1.3}>
+                <select style={inp} value={form.setor_fabricante || ''}
+                  onChange={e => set('setor_fabricante', e.target.value)}>
+                  <option value="">— escolha o setor —</option>
+                  {SETORES_FABRICANTES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label=" " flex={2}>
+              <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.45 }}>
+                {form.origem_producao === 'interna'
+                  ? (form.setor_fabricante
+                      ? `Ao liberar o kiting de uma OP com este item, o PCP já recebe a demanda de ${form.setor_fabricante} preenchida para conferir e abrir.`
+                      : 'Escolha o setor: é ele que vai receber a demanda automaticamente.')
+                  : 'Item comprado: entra no kit pelo estoque ou por pedido de compra.'}
+              </div>
             </Field>
           </Row>
 

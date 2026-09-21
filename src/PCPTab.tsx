@@ -8,7 +8,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
-import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao } from './DemandaItens';
+import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
 import { MenuAcoes } from './Interface';
@@ -257,10 +257,17 @@ export default function PCPTab({ currentUser }) {
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
   const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
-  const abrirKiting = (ops, grupo = null) => {
+  // Ao abrir o kiting, o sistema já separa o que é fabricado aqui dentro —
+  // lendo a BOM da OP e o cadastro de cada item (origem_producao/setor_fabricante).
+  // Preenche a lista; quem libera confere e confirma (decidido em 21/09/2026).
+  const [sugestaoFab, setSugestaoFab] = useState(null);
+  const abrirKiting = async (ops, grupo = null) => {
     if (!ops.length) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
     setFabKiting(fabricacaoVazia());
+    setSugestaoFab(null);
     setModalKiting({ ops, grupo });
+    const { valor, achados, origem } = await sugerirFabricacao(ops);
+    if (achados.length) { setFabKiting(valor); setSugestaoFab({ achados, origem }); }
   };
   const confirmarKiting = async () => {
     const { ops, grupo } = modalKiting;
@@ -449,6 +456,17 @@ export default function PCPTab({ currentUser }) {
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               {modalKiting.ops.length > 1 ? `${modalKiting.ops.length} unidades vão` : 'A OP vai'} para o Almoxarifado separar o kit.
             </div>
+            {sugestaoFab && (
+              <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'7px 10px', marginBottom:8 }}>
+                <div style={{ fontSize:10.5, fontWeight:800, color:'#15803d' }}>
+                  🏭 {sugestaoFab.achados.length} item(ns) de fabricação interna encontrados na {sugestaoFab.origem}
+                </div>
+                <div style={{ fontSize:10, color:'#166534', marginTop:2 }}>
+                  Já preenchidos abaixo: {sugestaoFab.achados.map(a => `${a.setor} — ${a.nome}`).join(' · ')}.
+                  Confira quantidades e descrições antes de liberar; dá para editar ou apagar.
+                </div>
+              </div>
+            )}
             <FabricacaoInternaEditor valor={fabKiting} onChange={setFabKiting} qtdOps={modalKiting.ops.length} />
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#3b82f6',flex:1,opacity:liberandoKiting?0.6:1}} disabled={liberandoKiting} onClick={confirmarKiting}>

@@ -398,10 +398,61 @@ export function VinculosView({ vinculos }: { vinculos: VinculoValue[] }) {
 // e quantidades de chicote e serralharia; o sistema abre a demanda avulsa de
 // cada setor já com os itens, a estrutura e as OPs vinculadas.
 export const fabricacaoVazia = () => Object.fromEntries(SETORES_FABRICACAO.map(s => [s, [itemVazio()]]));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUGESTÃO AUTOMÁTICA DE FABRICAÇÃO
+// A partir da BOM da OP (ou, sem BOM, do que foi vendido), separa o que é
+// fabricado aqui dentro e por qual setor. Quem responde isso é o cadastro do
+// item: `origem_producao = 'interna'` + `setor_fabricante` — os mesmos campos
+// que o PCP já usa para rotear a reposição do Almoxarifado.
+//
+// Só entra item ligado ao catálogo (item_id). Linha digitada à mão fica de
+// fora de propósito: adivinhar pelo nome abriria demanda errada, e a pessoa
+// ainda revisa a lista antes de liberar o kiting.
+// ─────────────────────────────────────────────────────────────────────────────
+const semAcento = (t: any) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+export async function sugerirFabricacao(ops: any[]) {
+  const vazio = { valor: fabricacaoVazia(), achados: [] as any[], origem: '' };
+  const base = ops?.[0];
+  if (!base) return vazio;
+  const daBom = Array.isArray(base.bom_itens) && base.bom_itens.length;
+  const linhas = daBom ? base.bom_itens : (Array.isArray(base.itens_vendidos) ? base.itens_vendidos : []);
+  const ids = [...new Set(linhas.map((l: any) => l.item_id).filter(Boolean))];
+  if (!ids.length) return vazio;
+
+  const { data } = await supabase.from('cadastro_itens')
+    .select('id,nome,origem_producao,setor_fabricante')
+    .in('id', ids).eq('origem_producao', 'interna');
+  const porId = new Map((data || []).map((i: any) => [i.id, i]));
+  if (!porId.size) return vazio;
+
+  const valor = fabricacaoVazia();
+  const achados: any[] = [];
+  for (const l of linhas) {
+    const item: any = porId.get(l.item_id);
+    if (!item?.setor_fabricante) continue;
+    const setor = SETORES_FABRICACAO.find(s => semAcento(s) === semAcento(item.setor_fabricante));
+    if (!setor) continue;                       // setor fabricante fora dos que abrem demanda
+    const preenchidos = valor[setor].filter((x: any) => String(x.nome || '').trim());
+    preenchidos.push({ nome: l.nome, quantidade: num(l.quantidade) || 1,
+      descricao: String(l.descricao || '').trim(), item_id: l.item_id });
+    valor[setor] = [...preenchidos, itemVazio()];
+    achados.push({ setor, nome: l.nome, quantidade: num(l.quantidade) || 1 });
+  }
+  return { valor, achados, origem: daBom ? 'BOM da Engenharia' : 'itens vendidos' };
+}
 export const temFabricacao = (valor: any) => SETORES_FABRICACAO.some(s => itensPreenchidos(valor?.[s] || []).length > 0);
 
 export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1 }: { valor: any; onChange: (v: any) => void; qtdOps?: number }) {
   const [aberto, setAberto] = useState(temFabricacao(valor));
+  // A sugestão automática chega depois que o modal já abriu (é uma consulta):
+  // quando ela preenche a lista, abre sozinha uma vez, para a pessoa conferir
+  // o que vai ser aberto antes de liberar. Depois disso quem manda é o clique.
+  const abriuSozinho = useRef(false);
+  useEffect(() => {
+    if (!abriuSozinho.current && temFabricacao(valor)) { abriuSozinho.current = true; setAberto(true); }
+  }, [valor]);
   return (
     <div style={{ border: '1px solid #ddd6fe', background: '#faf5ff', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
       <button type="button" onClick={() => setAberto(a => !a)} aria-expanded={aberto}
