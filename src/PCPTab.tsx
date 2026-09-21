@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM } from './FluxoEntrega';
+import { indicePendencias, ChecklistPendencias, travaConclusaoProducao } from './OpPendencias';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -70,6 +71,7 @@ export default function PCPTab({ currentUser }) {
     ]);
     setOpls(oplsRes.data || []);
     setOplsFalta(faltaRes.data || []);
+    carregarPendenciasAbertas();
     setOplsSerralheria(serralheriaRes.data || []);
     setSolicitacoesAlmox(solicRes.data || []);
     if (!silent) setLoading(false);
@@ -130,6 +132,27 @@ export default function PCPTab({ currentUser }) {
     }]);
     setSanandoSerralheria(null);
     fetchAll();
+  };
+
+  // ── Pendências de fabricação/compra que o PCP precisa liberar ─────────────
+  // Depois que o setor conclui e o Almoxarifado confirma o recebimento, é o PCP
+  // que solta aquela peça para a produção. Sem isso a produção não fecha a OP.
+  const [oplsPendencia, setOplsPendencia] = useState([]);
+  const [pendPorOp, setPendPorOp] = useState(new Map());
+  // fechado por padrão: com lote grande são dezenas de linhas, e o pedido foi
+  // que o checklist ficasse discreto — o número no cabeçalho já dá o recado
+  const [painelPendenciasAberto, setPainelPendenciasAberto] = useState(false);
+  const carregarPendenciasAbertas = async () => {
+    const mapa = await indicePendencias();
+    setPendPorOp(mapa);
+    const ids = [...mapa.keys()];
+    if (!ids.length) { setOplsPendencia([]); return; }
+    const { data } = await supabase.from('oples')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,status_geral,status_almox,pendencias_kit,quantidade,fluxo_entrega,tipo_projeto')
+      .in('id', ids)
+      .not('status_geral', 'in', '("Faturado","Faturado e Disponivel para Entrega","Cancelado")');
+    // só as que realmente têm etapa faltando
+    setOplsPendencia((data || []).filter(o => travaConclusaoProducao(mapa.get(String(o.id)) || [], o).length));
   };
 
   const liberarProducao = async (opl) => {
@@ -489,6 +512,36 @@ export default function PCPTab({ currentUser }) {
         </div>
       )}
 
+
+      {/* PENDÊNCIAS DE FABRICAÇÃO/COMPRA — checklist até 100% */}
+      {oplsPendencia.length > 0 && (
+        <div className="sec-card">
+          <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b',cursor:'pointer'}}
+            onClick={()=>setPainelPendenciasAberto(a=>!a)}>
+            <span style={{color:'#b45309'}}>🧰 Pendências de fabricação/compra ({oplsPendencia.length})</span>
+            <span style={{fontSize:11,color:'#94a3b8'}}>{painelPendenciasAberto ? '▾' : '▸'}</span>
+          </div>
+          {painelPendenciasAberto && (
+            <div className="sec-body">
+              <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
+                Cada pendência fecha em três etapas: o setor conclui, o Almoxarifado confirma o recebimento
+                e o PCP libera para a produção. A produção não conclui a OP enquanto faltar alguma.
+              </div>
+              {oplsPendencia.map(o => (
+                <div key={o.id} style={{marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:700}}>
+                    <LinkOpl opl={o} currentUser={currentUser} />
+                    <span style={{color:'#64748b',fontWeight:400,marginLeft:6}}>{o.cliente_nome || '—'} · {o.status_geral}</span>
+                  </div>
+                  <ChecklistPendencias op={o} vinculos={(pendPorOp.get(String(o.id)) || []).map(p => ({ ...p, grupo: 'demanda' }))}
+                    modo="pcp" currentUser={currentUser} compacto
+                    onMudou={() => carregarPendenciasAbertas()} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ENVIO DIRETO ALERT */}
       {opls.filter(isEnvioDireto).length > 0 && (

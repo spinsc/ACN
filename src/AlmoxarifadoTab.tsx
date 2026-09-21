@@ -12,6 +12,8 @@ import type { VinculoValue } from './VinculoPicker';
 import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
+import { indicePendencias, travaKit100, textoFaltando, ChecklistPendencias } from './OpPendencias';
+import { confirmar } from './Feedback';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -67,8 +69,15 @@ export default function AlmoxarifadoTab({ currentUser }) {
     setMinhasSolicitacoes(data || []);
   };
 
+  // Quais OPs têm demanda de Serralheria/Chicotes/Compras pendurada — o kit
+  // 100% fica barrado enquanto o material não estiver aqui dentro.
+  const [pendPorOp, setPendPorOp] = useState(new Map());
+  const pendenciasDe = (o) => pendPorOp.get(String(o?.id)) || [];
+  const faltandoPara = (o) => travaKit100(pendenciasDe(o), o);
+
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
+    indicePendencias().then(setPendPorOp);
     const { data } = await supabase.from('oples').select('*')
       // 'Aguardando Embalagem' = OP que JA foi produzida (hoje: fabricação da
       // serralheria com envio) e voltou só para ser pesada, medida e embalada.
@@ -178,6 +187,17 @@ export default function AlmoxarifadoTab({ currentUser }) {
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
       alert('Informe a cidade e a UF de entrega — sem isso a Logística não consegue cotar o frete.'); return;
     }
+    // Fluxo de envio: aqui a mercadoria sai da empresa. Se ainda há peça de
+    // fabricação ou compra em aberto, o risco é enviar incompleto — então
+    // avisa e pede confirmação (bloquear de vez pararia envio parcial, que é
+    // legítimo; o Kit 100% do kiting esse sim fica barrado).
+    const faltaEnvio = faltandoPara(modalEmbalagem);
+    if (faltaEnvio.length && !await confirmar(
+      `Esta OP tem ${faltaEnvio.length} item(ns) de fabricação/compra em aberto:
+
+${textoFaltando(faltaEnvio)}
+
+Embalar e enviar assim mesmo?`)) return;
     setSalvandoEmb(true);
     const opl = modalEmbalagem;
     const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
@@ -240,6 +260,14 @@ export default function AlmoxarifadoTab({ currentUser }) {
 
   const confirmarKitOkComSeriais = async () => {
     if (!seriaisKitForm.trim()) { alert('Informe os números de série dos equipamentos deste kit.'); return; }
+    // Kit 100% quer dizer "está tudo aqui". Com peça de Serralheria/Chicotes ou
+    // compra ainda em aberto (ou já pronta mas não recebida), o caminho é
+    // LIBERAR C/ PENDÊNCIA — que continua do lado, funcionando como sempre.
+    const falta = faltandoPara(modalSeriais);
+    if (falta.length) {
+      alert(`Não dá para fechar o Kit 100%: ${falta.length} item(ns) de fabricação/compra ainda não chegaram.\n\n${textoFaltando(falta)}\n\nUse LIBERAR C/ PENDÊNCIA e confirme o recebimento no checklist quando o material chegar.`);
+      return;
+    }
     const erroConf = validarConferencia(conferencia);
     if (erroConf) { alert(erroConf); return; }
     const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };
@@ -280,6 +308,11 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
   const kitOkLote = async (grupo) => {
+    const comFalta = grupo.irmaos.filter(o => faltandoPara(o).length);
+    if (comFalta.length) {
+      alert(`Não dá para fechar o Kit 100% em lote: ${comFalta.length} unidade(s) ainda esperam material de fabricação/compra (${comFalta.map(o => o.opl).join(', ')}).\n\nUse C/ PENDÊNCIA EM LOTE.`);
+      return;
+    }
     const pendentes = grupo.irmaos.filter(o => o.status_almox !== 'Kit OK');
     if (pendentes.length === 0) { alert('Todas as unidades deste lote ja estao com kit 100%.'); return; }
     setSeriaisLoteTexto('');
@@ -442,9 +475,20 @@ export default function AlmoxarifadoTab({ currentUser }) {
                                 📦 EMBALAR E ENVIAR
                               </button>
                             ) : (
-                              <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>abrirModalSeriais(o)}>
-                                KITING 100%
-                              </button>
+                              (() => {
+                                const falta = faltandoPara(o);
+                                return (
+                                  <button className="acn-btn"
+                                    style={{ background: falta.length ? '#cbd5e1' : '#22c55e', cursor: falta.length ? 'not-allowed' : 'pointer' }}
+                                    disabled={!!falta.length}
+                                    title={falta.length
+                                      ? `Esperando material de fabricação/compra:\n${textoFaltando(falta)}\n\nUse LIBERAR C/ PENDENCIA.`
+                                      : 'Fechar o kit: tudo separado e conferido'}
+                                    onClick={()=>abrirModalSeriais(o)}>
+                                    KITING 100%{falta.length ? ` (${falta.length} p/ chegar)` : ''}
+                                  </button>
+                                );
+                              })()
                             )
                           )}
                           <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>{setModalFalta(o);setObsFalta('');}}>
@@ -752,6 +796,9 @@ export default function AlmoxarifadoTab({ currentUser }) {
               Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
             </div>
             <ConferenciaKit linhas={conferencia} onChange={setConferencia} />
+            <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
+              modo="almox" currentUser={currentUser}
+              onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />
             <label className="acn-label">Números de série dos equipamentos instalados *</label>
             <textarea autoFocus className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace"}}
               placeholder="Um por linha ou separados por vírgula. Ex: SN-00123, SN-00124..."

@@ -17,6 +17,7 @@ import ProducaoKanban from './ProducaoKanban';
 import { useTempoUtil, BotaoPausar, BadgeForaExpediente, pausarOpl, retomarOpl } from './PausaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
+import { carregarPendencias } from './OpPendencias';
 import { CabecalhoTela, Abas, Chips, Botao, MenuAcoes, Faixa, Selo, Tag, rotuloStatus, diasAtraso } from './Interface';
 import { mdiTableLarge, mdiViewColumnOutline, mdiCameraOutline, mdiFilterVariant, mdiPlay, mdiTicketPercentOutline, mdiCarWrench,
   mdiCogOutline, mdiTagOutline, mdiCalendarMonthOutline, mdiAccountMultipleOutline, mdiPencilOutline, mdiArrowULeftTop, mdiEyeOutline,
@@ -2335,6 +2336,14 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const liberarChecklist = async (opl) => {
+    // A adaptação não fecha a sua etapa com peça de fabricação/compra em aberto:
+    // a demanda tem que estar concluída no setor, recebida pelo Almoxarifado e
+    // liberada pelo PCP (as três etapas do checklist — ver OpPendencias.tsx).
+    const { abertas } = await carregarPendencias(opl);
+    if (abertas.length) {
+      alert(`Não dá para concluir esta OP: ${abertas.length} pendência(s) de fabricação/compra ainda não fecharam.\n\n${abertas.map(v => `• ${v.setor || '—'}: ${v.titulo}`).join('\n')}\n\nCada uma precisa ser concluída no setor, recebida pelo Almoxarifado e liberada pelo PCP.`);
+      return;
+    }
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_producao ? new Date(opl.data_inicio_producao) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
