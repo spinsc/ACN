@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM } from './FluxoEntrega';
 import { indicePendencias, ChecklistPendencias, travaConclusaoProducao } from './OpPendencias';
+import { PinturaCampos } from './PinturaSerralheria';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
@@ -266,11 +267,13 @@ export default function PCPTab({ currentUser }) {
   // passa a ser automática para o que faltar.
   const [sugestaoFab, setSugestaoFab] = useState(null);
   const [fabPedidos, setFabPedidos] = useState(new Set());
+  const [pinturaKiting, setPinturaKiting] = useState({ pintura: false, pintura_tipo: '' });
   const abrirKiting = async (ops, grupo = null) => {
     if (!ops.length) { alert('Nenhuma unidade deste lote esta aguardando liberacao de kiting.'); return; }
     setFabKiting(fabricacaoVazia());
     setSugestaoFab(null);
     setFabPedidos(new Set());
+    setPinturaKiting({ pintura: false, pintura_tipo: '' });
     setModalKiting({ ops, grupo });
     const { achados, origem } = await sugerirFabricacao(ops);
     if (achados.length) setSugestaoFab({ achados, origem });
@@ -295,7 +298,7 @@ export default function PCPTab({ currentUser }) {
     try {
       if (grupo) await liberarKitingLote(grupo, true); else await liberarAlmox(ops[0]);
       if (temFabricacao(fabKiting)) {
-        const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabKiting, ops, origem: 'pcp_kiting', currentUser });
+        const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabKiting, ops, origem: 'pcp_kiting', currentUser, pintura: pinturaKiting });
         if (criadas.length) await supabase.from('logs_movimentacao_opl').insert(ops.map(opl => ({
           opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
           evento: `Demanda de fabricação aberta na liberação do kiting: ${criadas.join(', ')}.`,
@@ -501,7 +504,8 @@ export default function PCPTab({ currentUser }) {
                 </div>
               </div>
             )}
-            <FabricacaoInternaEditor valor={fabKiting} onChange={setFabKiting} qtdOps={modalKiting.ops.length} />
+            <FabricacaoInternaEditor valor={fabKiting} onChange={setFabKiting} qtdOps={modalKiting.ops.length}
+              pinturaSlot={<PinturaCampos valor={pinturaKiting} onChange={v => setPinturaKiting(p => ({ ...p, ...v }))} />} />
             <div style={{display:'flex',gap:8}}>
               <button className="acn-btn" style={{background:'#3b82f6',flex:1,opacity:liberandoKiting?0.6:1}} disabled={liberandoKiting} onClick={confirmarKiting}>
                 {liberandoKiting ? 'Liberando...' : temFabricacao(fabKiting) ? 'LIBERAR KITING E ABRIR DEMANDAS' : 'LIBERAR KITING'}

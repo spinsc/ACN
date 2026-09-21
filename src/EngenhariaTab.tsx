@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, L
 import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, SETORES_FABRICACAO } from './DemandaItens';
+import { PinturaCampos } from './PinturaSerralheria';
 import OplAnexosWidget from './OplAnexosWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import AgendaWidget from './AgendaWidget';
@@ -125,6 +126,7 @@ export default function EngenhariaTab({ currentUser }) {
   const [modalBom, setModalBom] = useState(null);
   // chicotes/serralheria indicados na liberação da BOM (viram demandas dos setores)
   const [fabBom, setFabBom] = useState<any>(fabricacaoVazia());
+  const [pinturaBom, setPinturaBom] = useState({ pintura: false, pintura_tipo: '' });
   // BOM estruturada (material por unidade) — obrigatória para liberar
   const [bomLinhas, setBomLinhas] = useState<any[]>([]);
   const [bomLote, setBomLote] = useState<any[]>([]);
@@ -138,6 +140,7 @@ export default function EngenhariaTab({ currentUser }) {
     prepararBom(o, setBomLinhas);
   };
   const [fabBomLote, setFabBomLote] = useState<any>(fabricacaoVazia());
+  const [pinturaBomLote, setPinturaBomLote] = useState({ pintura: false, pintura_tipo: '' });
   // "+ Chicote/Serralheria" a qualquer momento (várias demandas por OP)
   const [modalFabricacao, setModalFabricacao] = useState<any>(null);
   const [obsBom, setObsBom] = useState('');
@@ -273,7 +276,7 @@ export default function EngenhariaTab({ currentUser }) {
     }]);
     notificarEvento('engenharia_libera_pcp', msg.oplEnviada(opl.opl,'PCP',currentUser?.nome));
     if (temFabricacao(fabBom)) {
-      const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabBom, ops: [opl], origem: 'engenharia_bom', currentUser });
+      const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabBom, ops: [opl], origem: 'engenharia_bom', currentUser, pintura: pinturaBom });
       if (criadas.length) await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
         evento: `Demanda de fabricação aberta na liberação da BOM: ${criadas.join(', ')}.`,
@@ -398,7 +401,7 @@ export default function EngenhariaTab({ currentUser }) {
       })));
       notificarEvento('engenharia_libera_pcp', `*BOM liberado em lote* — ${modalBomLote.base}\n${selecionados.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
       if (temFabricacao(fabBomLote)) {
-        const { falhas } = await gerarDemandasFabricacao({ valor: fabBomLote, ops: selecionados, origem: 'engenharia_bom', currentUser });
+        const { falhas } = await gerarDemandasFabricacao({ valor: fabBomLote, ops: selecionados, origem: 'engenharia_bom', currentUser, pintura: pinturaBomLote });
         if (falhas.length) alert('BOM liberada, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
       }
     } finally {
@@ -831,7 +834,8 @@ export default function EngenhariaTab({ currentUser }) {
               </div>
             )}
             <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
-            <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom} />
+            <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom}
+              pinturaSlot={<PinturaCampos valor={pinturaBom} onChange={v => setPinturaBom(p => ({ ...p, ...v }))} />} />
             <label className="acn-label">Observacoes para PCP/Almoxarifado</label>
             <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="Detalhes do BOM, itens especiais, pendencias..."
@@ -896,7 +900,8 @@ export default function EngenhariaTab({ currentUser }) {
             <BomEditor linhas={bomLote} onChange={setBomLote}
               vendidos={(modalBomLote.irmaos.find(o => (o.itens_vendidos || []).length) || {}).itens_vendidos || []} />
             <div style={{fontSize:10,color:'#64748b',marginTop:-6,marginBottom:10}}>A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>
-            <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length} />
+            <FabricacaoInternaEditor valor={fabBomLote} onChange={setFabBomLote} qtdOps={Object.values(selecionadosLote).filter(Boolean).length}
+              pinturaSlot={<PinturaCampos valor={pinturaBomLote} onChange={v => setPinturaBomLote(p => ({ ...p, ...v }))} />} />
             <label className="acn-label">Observações para PCP/Almoxarifado (aplicadas a todas as selecionadas)</label>
             <textarea className="acn-input" rows={4} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="Detalhes do BOM, itens especiais, pendencias..."

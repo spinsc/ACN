@@ -445,7 +445,11 @@ export async function sugerirFabricacao(ops: any[]) {
 }
 export const temFabricacao = (valor: any) => SETORES_FABRICACAO.some(s => itensPreenchidos(valor?.[s] || []).length > 0);
 
-export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1 }: { valor: any; onChange: (v: any) => void; qtdOps?: number }) {
+export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1, pinturaSlot = null }:
+  { valor: any; onChange: (v: any) => void; qtdOps?: number;
+    /** bloco de pintura da Serralheria, montado por quem usa o editor — fica
+     *  aqui embaixo da lista de peças (ver PinturaSerralheria.tsx) */
+    pinturaSlot?: React.ReactNode }) {
   const [aberto, setAberto] = useState(temFabricacao(valor));
   // A sugestão automática chega depois que o modal já abriu (é uma consulta):
   // quando ela preenche a lista, abre sozinha uma vez, para a pessoa conferir
@@ -467,8 +471,12 @@ export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1 }: { valor
             a estrutura do modelo e as OPs vinculadas.
           </div>
           {SETORES_FABRICACAO.map(setor => (
-            <ItensDemandaEditor key={setor} titulo={setor} categoriaPreferida={CATEGORIA_DO_SETOR[setor]}
-              itens={valor?.[setor] || [itemVazio()]} onChange={v => onChange({ ...valor, [setor]: v })} />
+            <div key={setor}>
+              <ItensDemandaEditor titulo={setor} categoriaPreferida={CATEGORIA_DO_SETOR[setor]}
+                itens={valor?.[setor] || [itemVazio()]} onChange={v => onChange({ ...valor, [setor]: v })} />
+              {/* peça de serralheria pode ir para pintura (serviço de terceiro) */}
+              {setor === 'Serralheria' && pinturaSlot && itensPreenchidos(valor?.[setor] || []).length > 0 && pinturaSlot}
+            </div>
           ))}
         </div>
       )}
@@ -477,8 +485,10 @@ export function FabricacaoInternaEditor({ valor, onChange, qtdOps = 1 }: { valor
 }
 
 /** Abre uma demanda avulsa por setor com itens. Quantidade do editor é por OP. */
-export async function gerarDemandasFabricacao({ valor, ops, origem, currentUser, obs = '' }: {
+export async function gerarDemandasFabricacao({ valor, ops, origem, currentUser, obs = '', pintura = null }: {
   valor: any; ops: any[]; origem: string; currentUser: any; obs?: string;
+  /** Só para a Serralheria: { pintura, pintura_tipo } — ver PinturaSerralheria.tsx */
+  pintura?: any;
 }) {
   const agora = new Date().toISOString();
   const vinculos = ops.map(o => ({ tipo: 'op', id: String(o.id), descricao: `${o.opl} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '') }));
@@ -498,6 +508,9 @@ export async function gerarDemandasFabricacao({ valor, ops, origem, currentUser,
       setor, titulo, status: 'Pendente', prioridade: 'Média',
       descricao: `Aberta pela ${quem} ao ${origem.endsWith('kiting') ? 'liberar o kiting' : 'liberar a BOM'}.${obs ? ' ' + obs : ''}`,
       itens, informacoes: [], etapas: [], origem,
+      // pintura é coisa de peça de serralheria; o Chicotes não usa
+      ...(setor === 'Serralheria' && pintura?.pintura
+        ? { pintura: true, pintura_tipo: String(pintura.pintura_tipo || '').trim() || null } : {}),
       ...camposDosVinculos(vinculos),
       criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, criado_em: agora, atualizado_em: agora,
     }]);

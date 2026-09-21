@@ -7,13 +7,17 @@ import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
+import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from './PinturaSerralheria';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
 // informação a mais. Compras abre o apontamento de centro de custo. Para
 // acrescentar campo de outro setor, inclua aqui e trate no formulário/detalhe.
-const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean; valorItens?: boolean }> = {
+const CAMPOS_POR_SETOR: Record<string, { centroCusto?: boolean; valorItens?: boolean; pintura?: boolean }> = {
   Compras: { centroCusto: true, valorItens: true },
+  // Serralheria: a peça pode precisar de pintura, que é serviço de terceiro —
+  // ver PinturaSerralheria.tsx (o pedido ao Compras nasce ao concluir a peça).
+  Serralheria: { pintura: true },
 };
 // quem compra: completa valor dos itens e centro de custo que o solicitante deixou em branco
 const ehComprador = (u: any, d: any) =>
@@ -573,9 +577,15 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
     await reload(); onRefresh();
   };
   const concluir = async () => {
-    if (!await confirmar(`Concluir a demanda "${d.titulo}"? Ela sai da lista de ativas.`)) return;
+    const vaiPintar = ehSerralheria(d.setor) && d.pintura && !d.pintura_pedido_id;
+    if (!await confirmar(`Concluir a demanda "${d.titulo}"? Ela sai da lista de ativas.${
+      vaiPintar ? '\n\nComo esta peça tem pintura, o pedido do serviço será aberto para o Compras.' : ''}`)) return;
     const agora = new Date().toISOString();
     await supabase.from('demandas_avulsas').update({ status: 'Concluída', data_fim: agora, atualizado_em: agora }).eq('id', d.id);
+    if (vaiPintar) {
+      const r = await abrirPedidoPintura(d, currentUser);
+      if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
+    }
     await reload(); onRefresh();
   };
 
@@ -593,6 +603,10 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       if (novoStatus === 'Concluída') upd.data_fim = agora;
     }
     await supabase.from('demandas_avulsas').update(upd).eq('id', d.id);
+    if (upd.status === 'Concluída' && ehSerralheria(d.setor) && d.pintura && !d.pintura_pedido_id) {
+      const r = await abrirPedidoPintura(d, currentUser);
+      if (r?.erro) alert('Demanda concluída, mas não foi possível abrir o pedido de pintura: ' + r.erro);
+    }
     await reload(); onRefresh();
   };
 
@@ -822,6 +836,11 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
 
           {/* ── Vínculos (várias OPs, lote, outros processos) ── */}
           {!editando && <VinculosView vinculos={vinculos} />}
+
+          {/* ── Pintura pedida (Serralheria): quem abriu definiu, aqui é leitura ── */}
+          {!editando && camposSetor.pintura && d.pintura && (
+            <PinturaCampos valor={d} onChange={() => {}} somenteLeitura />
+          )}
 
           {/* ── Itens da demanda ── */}
           {!editando && (
@@ -1111,6 +1130,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({ titulo:'', descricao:'', prioridade:'Média', observacoes:'' });
+  const [pintura, setPintura] = useState({ pintura: false, pintura_tipo: '' });
   const [setorAlvo, setSetorAlvo] = useState(setor || setoresDestino?.[0] || '');
   const [qtdEtapas, setQtdEtapas] = useState(1);
   const [etapas, setEtapas] = useState<any[]>([etapaVazia(1)]);
@@ -1183,6 +1203,9 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       // campo do setor: Compras aponta o centro de custo
       centro_custo_id: campos.centroCusto ? centroCustoId : null,
       centro_custo: campos.centroCusto ? nomeCentro(centroCustoId) : null,
+      // campo do setor: Serralheria diz se a peça vai pintura (e qual)
+      pintura: campos.pintura ? !!pintura.pintura : false,
+      pintura_tipo: campos.pintura && pintura.pintura ? (pintura.pintura_tipo || '').trim() || null : null,
     };
     // Para demanda simples, deixa campos no nível raiz vazios
     if (qtdEtapas === 1) {
@@ -1284,6 +1307,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
               </label>
               <MencaoTextarea value={form.descricao} onChange={v=>set('descricao',v)} rows={2} style={{fontSize:11}} />
             </div>
+            {campos.pintura && <PinturaCampos valor={pintura} onChange={v => setPintura(p => ({ ...p, ...v }))} />}
             <ItensDemandaEditor itens={itens} onChange={setItens} categoriaPreferida={CATEGORIA_DO_SETOR[setorAlvo] || ''}
               comValor={!!campos.valorItens} dica={campos.valorItens ? 'Valor é opcional: se não souber, o comprador completa.' : ''}
               titulo={setorAlvo === 'Compras' ? 'Itens a comprar' : CATEGORIA_DO_SETOR[setorAlvo] ? 'Modelos e quantidades' : 'Itens (opcional)'} />
