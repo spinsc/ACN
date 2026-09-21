@@ -1,7 +1,12 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+
+// O dossiê importa OplProgressBar deste arquivo; para não fechar um ciclo de
+// imports, a volta é por import dinâmico (que de quebra deixa o jsPDF fora do
+// pacote principal, só baixando quando alguém abre o dossiê).
+const ModalDossieOp = lazy(() => import('./OpDossie').then(m => ({ default: m.ModalDossieOp })));
 import { ColaboradorSelect } from './ColaboradorSelect';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
@@ -661,6 +666,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     recarregarLogs();
   };
   const [editando, setEditando] = useState(false);
+  const [verDossie, setVerDossie] = useState(false);
   const [editandoLote, setEditandoLote] = useState<any[] | null>(null);
   const recarregarLogs = () => supabase.from('logs_movimentacao_opl').select('*').eq('opl_id', opl.id)
     .order('data_hora', { ascending: false }).limit(50).then(({ data }) => setLogs(data || []));
@@ -812,6 +818,11 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             recarregarLogs();
           }} />
       )}
+      {verDossie && (
+        <Suspense fallback={null}>
+          <ModalDossieOp op={opl} onClose={() => setVerDossie(false)} />
+        </Suspense>
+      )}
       <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto' }}>
 
         {/* Cabeçalho */}
@@ -832,6 +843,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 </button>
               )}
               <OrigemVendaBadge origem={opl.origem_venda} />
+              <button onClick={() => setVerDossie(true)}
+                title="Tudo que está ligado a esta OP: demandas, compras, frete, engenharia, qualidade e linha do tempo — com PDF"
+                style={{ background: '#0f766e', border: 'none', color: '#fff', borderRadius: 5,
+                  padding: '1px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                📚 Dossiê
+              </button>
               {podeEditarTudo && (
                 <button onClick={() => setEditando(true)}
                   title="Editar todos os campos e valores desta OP, inclusive o status (Admin/Gerente)"

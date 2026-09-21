@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { labelHierarquico } from './CentroCustoShared';
 import { MARKUP_BANDAS, corMarkup, mediaMarkupItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
+import { RelDossieOp } from './OpDossie';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -1543,6 +1544,7 @@ export default function RelatoriosTab({ currentUser }) {
     {id:'centrocusto',label:'Centro Custo'},
     {id:'comissoes',  label:'Comissões'},
     {id:'markup',     label:'Markup Vendedor'},
+    {id:'dossie',     label:'Dossiê da OP'},
   ];
 
   return (
@@ -1570,6 +1572,7 @@ export default function RelatoriosTab({ currentUser }) {
       {aba==='centrocusto' && <RelCentroCusto />}
       {aba==='comissoes'   && <RelComissoes />}
       {aba==='markup'      && <RelMarkupVendedor />}
+      {aba==='dossie'      && <RelDossieOp />}
     </div>
   );
 }
