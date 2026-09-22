@@ -4,7 +4,7 @@
 // anexos, histórico e alertas do setor.
 //
 // Etapas: Pendente → Em Andamento → (Aguardando Aprovação) → Aprovado → Comprado
-//         → Concluído, e Descartada (fora do fluxo, pode ser reativada).
+//         → Recebido, e Descartada (fora do fluxo, pode ser reativada).
 //
 // • Avançar (arrastando no kanban ou pelos botões) abre a janela que pede o
 //   que a etapa exige: comprador, cotação vencedora/aprovação (Mesa de
@@ -29,11 +29,15 @@ import { Botao, Selo, Faixa } from './Interface';
 import { confirmar } from './Feedback';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload } from '@mdi/js';
 
-export const ETAPAS_COMPRA = ['Pendente', 'Em Andamento', 'Aguardando Aprovação', 'Aprovado', 'Comprado', 'Concluído'];
+// A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
+// encerra a compra é o material chegar, e o nome antigo confundia com a
+// conclusão da aprovação. O valor gravado no banco também é "Recebido" — os
+// 15 pedidos antigos foram migrados, para não existirem dois nomes.
+export const ETAPAS_COMPRA = ['Pendente', 'Em Andamento', 'Aguardando Aprovação', 'Aprovado', 'Comprado', 'Recebido'];
 export const DESCARTADA = 'Descartada';
 export const COR_ETAPA_COMPRA: Record<string, string> = {
   'Pendente': '#f59e0b', 'Em Andamento': '#3b82f6', 'Aguardando Aprovação': '#ea580c', 'Aprovado': '#0ea5e9',
-  'Comprado': '#7c3aed', 'Concluído': '#22c55e', 'Descartada': '#64748b',
+  'Comprado': '#7c3aed', 'Recebido': '#22c55e', 'Descartada': '#64748b',
 };
 
 // Etapa para onde se volta num reprocesso
@@ -42,15 +46,17 @@ export const ETAPA_ANTERIOR: Record<string, string> = {
   'Aguardando Aprovação': 'Em Andamento',
   'Aprovado': 'Em Andamento',
   'Comprado': 'Aprovado',
-  'Concluído': 'Comprado',
+  'Recebido': 'Comprado',
 };
-// Próxima etapa ao avançar (Em Andamento pode ir direto a Aprovado, quando não há alçada)
+// Próxima etapa ao avançar. De "Em Andamento" o caminho é a etapa de aprovação:
+// é lá que a cotação vencedora é escolhida e aprovada (ajuste de 22/09/2026 —
+// antes a vencedora tinha de ser escolhida ANTES, o que invertia o processo).
 export const PROXIMA_ETAPA: Record<string, string> = {
   'Pendente': 'Em Andamento',
-  'Em Andamento': 'Aprovado',
+  'Em Andamento': 'Aguardando Aprovação',
   'Aguardando Aprovação': 'Aprovado',
   'Aprovado': 'Comprado',
-  'Comprado': 'Concluído',
+  'Comprado': 'Recebido',
 };
 
 export const podeGerirCompras = (u: any) =>
@@ -157,7 +163,7 @@ export function ModalVoltarEtapa({ pedido, currentUser, onClose, onFeito }: any)
       await supabase.from('pcp_aprovacoes').update({ status: 'cancelado', resposta: `Reprocesso: ${motivo.trim()}` })
         .eq('pedido_id', pedido.id).eq('status', 'pendente');
     }
-    if (destino === 'Comprado' && de === 'Concluído') upd.data_conclusao = null;
+    if (destino === 'Comprado' && de === 'Recebido') upd.data_conclusao = null;
     const { error } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', pedido.id);
     if (error) { setSalvando(false); alert('Não foi possível voltar a etapa: ' + error.message); return; }
     await registrarHistorico(pedido.id, { tipo: 'retorno', de, para: destino, motivo: motivo.trim(), dados: { ...dados, refazer: refazer.trim(), reprocesso: upd.reprocessos } }, currentUser);
@@ -220,7 +226,7 @@ export function ModalDescartar({ pedido, currentUser, onClose, onFeito }: any) {
 }
 
 export function ModalReativar({ pedido, currentUser, onClose, onFeito }: any) {
-  const destino = pedido.status_antes_descarte && ETAPAS_COMPRA.includes(pedido.status_antes_descarte) && pedido.status_antes_descarte !== 'Concluído'
+  const destino = pedido.status_antes_descarte && ETAPAS_COMPRA.includes(pedido.status_antes_descarte) && pedido.status_antes_descarte !== 'Recebido'
     ? pedido.status_antes_descarte : 'Pendente';
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -456,7 +462,7 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
   });
   const [salvando, setSalvando] = useState(false);
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
-  const temCotacaoOuCompra = ['Aprovado', 'Comprado', 'Concluído'].includes(pedido.status_compra);
+  const temCotacaoOuCompra = ['Aprovado', 'Comprado', 'Recebido'].includes(pedido.status_compra);
 
   const salvar = async () => {
     if (!form.descricao_material.trim()) { alert('A descrição não pode ficar vazia.'); return; }

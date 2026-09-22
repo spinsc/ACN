@@ -8,6 +8,7 @@ import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCu
 import { logChange, useUnreadMap } from './AuditSystem';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
+import { combinaBusca } from './SearchUtils';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { confirmar, pedirTexto } from './Feedback';
 import { Botao, MenuAcoes, Selo } from './Interface';
@@ -397,6 +398,12 @@ function CotacaoAreaLivre({ cotacao, onSaved }: any) {
 
 // ─── STATUS (colunas do Kanban e ordem do fluxo) ───────────────────────────────
 const STATUS_COMPRAS = [...ETAPAS_COMPRA, DESCARTADA];
+// Última etapa do fluxo — o quadro trata ela diferente das demais (ver kanban)
+const RECEBIDO = ETAPAS_COMPRA[ETAPAS_COMPRA.length - 1];
+/** Cards por coluna antes de a coluna começar a rolar */
+const CARDS_POR_COLUNA = 5;
+/** Quantos recebidos ficam à vista no quadro; o resto sai no "ver todos" */
+const RECEBIDOS_NO_QUADRO = 10;
 const COR_STATUS_COMPRA: Record<string,string> = COR_ETAPA_COMPRA;
 
 // ─── DESCRIÇÃO COMPACTA ───────────────────────────────────────────────────────
@@ -497,6 +504,58 @@ function ModalVinculoCompra({ pedido, onClose, onSalvo }) {
 }
 
 // ─── RESUMO DA SOLICITAÇÃO ─────────────────────────────────────────────────────
+// ─── TODOS OS RECEBIDOS ───────────────────────────────────────────────────────
+// A coluna do quadro mostra só os 10 mais recentes; o histórico inteiro fica
+// aqui, em lista, com busca — é consulta, não fila de trabalho.
+function ModalRecebidos({ lista, canVerValor, onAbrir, onClose }) {
+  const [busca, setBusca] = useState('');
+  const moedaBr = (v:any) => v ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
+  const dataBr  = (d:any) => d ? new Date(String(d).slice(0,10) + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const filtrados = busca.trim()
+    ? lista.filter((p:any) => combinaBusca([p.numero_pedido, p.numero_oc, p.descricao_material, p.fornecedor, p.opl], busca))
+    : lista;
+  return (
+    <div className="modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth:900, width:'96vw', maxHeight:'90vh', display:'flex', flexDirection:'column' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10, flexWrap:'wrap' }}>
+          <div style={{ fontSize:14, fontWeight:800, color:'#15803d', flex:1 }}>📋 Recebidos ({lista.length})</div>
+          <input value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar nos recebidos"
+            placeholder="Buscar por número, OC, descrição, fornecedor ou OP"
+            style={{ flex:'1 1 260px', padding:'6px 10px', border:'1px solid #d1d5db', borderRadius:5, fontSize:11 }} />
+          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Fechar</button>
+        </div>
+        <div style={{ overflowY:'auto', border:'1px solid #e2e8f0', borderRadius:6 }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead><tr style={{ background:'#f8fafc', position:'sticky', top:0 }}>
+              <th style={th}>Pedido</th><th style={th}>Descrição</th><th style={th}>Fornecedor</th>
+              <th style={th}>Recebido em</th>{canVerValor && <th style={{ ...th, textAlign:'right' }}>Valor</th>}
+            </tr></thead>
+            <tbody>
+              {filtrados.map((p:any) => (
+                <tr key={p.id} onClick={() => onAbrir(p)} style={{ cursor:'pointer', borderTop:'1px solid #f1f5f9' }}
+                  title="Abrir o resumo da requisição">
+                  <td style={td}>
+                    <strong>{p.numero_pedido}</strong>
+                    {p.numero_oc && <div style={{ fontSize:9, color:'#7c3aed', fontWeight:700 }}>📋 {p.numero_oc}</div>}
+                    <SeloOrigemCompra p={p} />
+                  </td>
+                  <td style={{ ...td, maxWidth:320 }}><DescricaoCompacta texto={p.descricao_material} linhas={1} /></td>
+                  <td style={td}>{p.fornecedor || '—'}</td>
+                  <td style={td}>{dataBr(p.data_conclusao)}</td>
+                  {canVerValor && <td style={{ ...td, textAlign:'right', fontWeight:700, color:'#16a34a' }}>{moedaBr(p.valor_compra)}</td>}
+                </tr>
+              ))}
+              {filtrados.length === 0 && (
+                <tr><td colSpan={canVerValor ? 5 : 4} style={{ ...td, textAlign:'center', color:'#94a3b8' }}>Nada encontrado para "{busca}".</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, currentUser }) {
   const [cotacoes, setCotacoes] = useState<any[] | null>(null);
   const [aprovacoes, setAprovacoes] = useState<any[]>([]);
@@ -679,6 +738,7 @@ export default function ComprasTab({ currentUser }) {
   // Resumo da solicitação e vínculo/link
   const [modalResumo, setModalResumo]           = useState<any>(null);
   const [modalVinculo, setModalVinculo]         = useState<any>(null);
+  const [modalRecebidos, setModalRecebidos]     = useState<any[]|null>(null);
   // Tabela x Kanban (por status) — lembra a escolha neste navegador
   const [visao, setVisaoState] = useState<'tabela'|'kanban'>(() => {
     try { return localStorage.getItem('acn:compras-visao') === 'kanban' ? 'kanban' : 'tabela'; } catch { return 'tabela'; }
@@ -877,7 +937,7 @@ export default function ComprasTab({ currentUser }) {
     if (!destino || destino === atual) return;
     const gestor = podeGerirCompras(currentUser);
     if (destino === DESCARTADA) {
-      if (atual === 'Concluído') { alert('Uma compra concluída não pode ser descartada.'); return; }
+      if (atual === 'Recebido') { alert('Uma compra já recebida não pode ser descartada.'); return; }
       if (!gestor && !ehSolicitante(p, currentUser)) { alert('Só Compras, gerentes, administradores ou quem solicitou podem descartar.'); return; }
       abrirFluxo('descartar', p); return;
     }
@@ -896,24 +956,52 @@ export default function ComprasTab({ currentUser }) {
       if (!gestor) { alert('Só Compras, gerentes ou administradores iniciam a cotação.'); return; }
       abrirFluxo('iniciar', p); return;
     }
-    if ((atual === 'Em Andamento' && ['Aguardando Aprovação', 'Aprovado'].includes(destino)) || (atual === 'Aguardando Aprovação' && destino === 'Aprovado')) {
+    // Escolher a cotação vencedora é o TRABALHO da etapa "Aguardando Aprovação",
+    // não um pré-requisito para chegar nela (ajuste de 22/09/2026). Então sair de
+    // "Em Andamento" só exige ter cotação lançada — há o que comparar e aprovar.
+    if (atual === 'Em Andamento' && destino === 'Aguardando Aprovação') {
+      if (!gestor) { alert('Só Compras, gerentes ou administradores enviam para aprovação.'); return; }
+      enviarParaAprovacao(p); return;
+    }
+    // Ir direto para "Aprovado" (pulando a aprovação) continua exigindo a
+    // vencedora — é ela que define o valor e dispara a alçada.
+    if ((atual === 'Em Andamento' && destino === 'Aprovado') || (atual === 'Aguardando Aprovação' && destino === 'Aprovado')) {
       abrirModalCotacoes(p);
-      mostrarDica(atual === 'Em Andamento'
-        ? 'Para avançar, lance as cotações e aprove a vencedora (com a previsão de recebimento). Se houver alçada, ela vai para Aguardando Aprovação.'
-        : 'Para aprovar, o aprovador clica em "Aprovar" na cotação vencedora.');
+      mostrarDica('Escolha a cotação vencedora e clique em "Aprovar" nela — é o que fecha esta etapa.');
       return;
     }
     if (atual === 'Aprovado' && destino === 'Comprado') {
       if (!gestor) { alert('Só Compras, gerentes ou administradores confirmam a compra.'); return; }
       abrirFluxo('confirmar', p); return;
     }
-    if (atual === 'Comprado' && destino === 'Concluído') {
+    if (atual === 'Comprado' && destino === 'Recebido') {
       if (!gestor && currentUser?.perfil !== 'Almoxarifado') { alert('O recebimento é registrado por Compras, Almoxarifado, gerentes ou administradores.'); return; }
       abrirFluxo('receber', p); return;
     }
     alert(`Avance uma etapa por vez: depois de "${atual}" vem "${PROXIMA_ETAPA[atual] || '—'}".`);
   };
   const mostrarDica = (t: string) => alert(t);
+
+  // "Em Andamento" → "Aguardando Aprovação": sem vencedora, só com cotação.
+  // Quem escolhe e aprova a vencedora é a própria etapa de aprovação.
+  const enviarParaAprovacao = async (p: any) => {
+    const { count } = await supabase.from('pcp_cotacoes_fornecedores')
+      .select('id', { count: 'exact', head: true }).eq('pedido_id', p.id);
+    if (!count) {
+      alert('Lance pelo menos uma cotação antes de enviar para aprovação — sem cotação não há o que aprovar.');
+      abrirModalCotacoes(p);
+      return;
+    }
+    const { error } = await supabase.from('pcp_pedidos_compra')
+      .update({ status_compra: 'Aguardando Aprovação' }).eq('id', p.id);
+    if (error) { alert('Não foi possível enviar para aprovação: ' + error.message); return; }
+    await registrarHistorico(p.id, { tipo: 'avanco', de: 'Em Andamento', para: 'Aguardando Aprovação',
+      motivo: `${count} cotação(ões) lançada(s) — aguardando escolha e aprovação da vencedora` }, currentUser);
+    await mencionarSolicitante(p,
+      `Sua requisição ${p.numero_pedido} está aguardando a escolha e aprovação da cotação vencedora.`,
+      currentUser, 'aguardando_aprovacao');
+    load(true);
+  };
 
   // ── Mesa de Cotações ──────────────────────────────────────────────────────
   // Removido de propósito: existia um atalho manual "✅ Concluir" que fechava
@@ -1122,7 +1210,7 @@ export default function ComprasTab({ currentUser }) {
       if (!pedido) return;
       await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Compras',
-        descricao: `[COMPRA CONCLUÍDA] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — ${fmt(pedido.valor_compra)}`,
+        descricao: `[COMPRA RECEBIDA] Pedido ${pedido.numero_pedido}${pedido.numero_oc ? ` (${pedido.numero_oc})` : ''} — ${pedido.descricao_material || ''} — Fornecedor: ${pedido.fornecedor || '—'} — ${fmt(pedido.valor_compra)}`,
         numero_opl: pedido.opl || null,
         status: 'Pendente',
         tipo_solicitacao: 'compra',
@@ -1422,12 +1510,12 @@ export default function ComprasTab({ currentUser }) {
     const st = p.status_compra;
     return [
       { rotulo: 'Editar solicitação', icone: mdiPencilOutline, onClick: () => abrirFluxo('editar', p), oculto: !podeEditarSolicitacao(p, currentUser) },
-      { rotulo: `Avançar para ${PROXIMA_ETAPA[st] === 'Aprovado' && st === 'Em Andamento' ? 'aprovação' : PROXIMA_ETAPA[st] || ''}`, icone: mdiArrowRight,
+      { rotulo: `Avançar para ${PROXIMA_ETAPA[st] || ''}`, icone: mdiArrowRight,
         onClick: () => moverPara(p, PROXIMA_ETAPA[st]), oculto: !PROXIMA_ETAPA[st] || !(gestor || (st === 'Comprado' && currentUser?.perfil === 'Almoxarifado')) },
       { rotulo: `Voltar para ${ETAPA_ANTERIOR[st] || ''} (reprocesso)`, icone: mdiUndoVariant, onClick: () => moverPara(p, ETAPA_ANTERIOR[st]), oculto: !ETAPA_ANTERIOR[st] || !gestor },
       { rotulo: 'Reativar', icone: mdiRestore, onClick: () => moverPara(p, 'Pendente'), oculto: st !== DESCARTADA || !gestor },
       { rotulo: 'Descartar', icone: mdiCloseCircleOutline, onClick: () => moverPara(p, DESCARTADA), perigo: true,
-        oculto: st === DESCARTADA || st === 'Concluído' || !(gestor || ehSolicitante(p, currentUser)) },
+        oculto: st === DESCARTADA || st === 'Recebido' || !(gestor || ehSolicitante(p, currentUser)) },
     ];
   };
 
@@ -1436,13 +1524,13 @@ export default function ComprasTab({ currentUser }) {
     label: s, n: pedidos.filter(p=>p.status_compra===s).length, cor: COR[s],
   }));
 
-  // Concluídos ficam agrupados/colapsados no fim da lista, pendentes e em
+  // Recebidos ficam agrupados/colapsados no fim da lista, pendentes e em
   // andamento sempre no topo — só quando a visão é "Todos os status"; um
-  // filtro de status específico (ex: só "Concluído") continua mostrando
+  // filtro de status específico (ex: só "Recebido") continua mostrando
   // exatamente o que foi filtrado, sem o agrupamento.
   const agruparPorStatus  = filtro === '';
-  const pedidosAtivos     = agruparPorStatus ? pedidos.filter((p:any) => !['Concluído', DESCARTADA].includes(p.status_compra)) : pedidos;
-  const pedidosConcluidos = agruparPorStatus ? pedidos.filter((p:any) => ['Concluído', DESCARTADA].includes(p.status_compra)) : [];
+  const pedidosAtivos     = agruparPorStatus ? pedidos.filter((p:any) => !['Recebido', DESCARTADA].includes(p.status_compra)) : pedidos;
+  const pedidosConcluidos = agruparPorStatus ? pedidos.filter((p:any) => ['Recebido', DESCARTADA].includes(p.status_compra)) : [];
 
   const renderPedidoRow = (p: any) => {
     const row   = inline[p.id] || {valor:'',prazo:'',salvando:false};
@@ -1626,7 +1714,7 @@ export default function ComprasTab({ currentUser }) {
             </button>
           )}
 
-          {/* 📦 Comprado → Concluído — só via conferência técnica na Logística (Fase 3) */}
+          {/* 📦 Comprado → Recebido — só via conferência técnica na Logística (Fase 3) */}
           {p.status_compra==='Comprado' && (
             <span title="Registre o recebimento (seriais/volume/NF conferida) na aba Logística pra fechar"
               style={{fontSize:9,color:'#78716c',marginRight:6,fontStyle:'italic'}}>
@@ -1725,6 +1813,16 @@ export default function ComprasTab({ currentUser }) {
         const colunas = STATUS_COMPRAS.filter(st => !filtro || st === filtro);
         const etapas = colunas.map(st => ({ id: st, titulo: st, cor: COR_STATUS_COMPRA[st], total: pedidos.filter((p:any) => p.status_compra === st).length }));
         const ativa = etapas.find(e => e.id === etapaCel) ? etapaCel : etapaInicial(etapas);
+        // Recebido é histórico e só cresce: a coluna mostra os 10 mais recentes
+        // e o resto fica no botão "ver todos" — senão ela vira um arquivo morto
+        // de centenas de cards ao lado das etapas que exigem ação.
+        const recebidosOrdenados = pedidos
+          .filter((p:any) => p.status_compra === RECEBIDO)
+          .sort((a:any, b:any) => String(b.data_conclusao || b.ultima_movimentacao_em || b.data_criacao || '')
+            .localeCompare(String(a.data_conclusao || a.ultima_movimentacao_em || a.data_criacao || '')));
+        const itensDaColuna = (st:string) => st === RECEBIDO
+          ? recebidosOrdenados.slice(0, RECEBIDOS_NO_QUADRO)
+          : pedidos.filter((p:any) => p.status_compra === st);
         return (<>
         {celular && <SeletorEtapas etapas={etapas} ativa={ativa} onChange={setEtapaCel} />}
         <div style={{ display:'flex', gap:8, overflowX:'auto', alignItems:'flex-start', paddingBottom:6 }}>
@@ -1735,9 +1833,10 @@ export default function ComprasTab({ currentUser }) {
               onDragOver={e => { if (!arrastando) return; e.preventDefault(); if (colunaAlvo !== st) setColunaAlvo(st); }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setColunaAlvo(c => c === st ? null : c); }}
               onDrop={e => { e.preventDefault(); const p = pedidos.find((x:any) => x.id === arrastando); setArrastando(null); setColunaAlvo(null); if (p) moverPara(p, st); }}>
+            <div style={{ display:'flex', flexDirection:'column', width:'100%' }}>
             <KanbanColuna titulo={st} cor={COR_STATUS_COMPRA[st]} fundo="#f8fafc" larguraMin={0}
-              {...(celular ? { visiveis: 100000 } : {})}
-              itens={pedidos.filter((p:any) => p.status_compra === st)} vazio="Nenhuma requisição"
+              {...(celular ? { visiveis: 100000 } : { visiveis: CARDS_POR_COLUNA })}
+              itens={itensDaColuna(st)} vazio="Nenhuma requisição"
               renderCard={(p:any) => {
                 const naoLido = pedidosNaoLidos.has(String(p.id));
                 return (
@@ -1789,6 +1888,14 @@ export default function ComprasTab({ currentUser }) {
                   </div>
                 );
               }} />
+            {st === RECEBIDO && recebidosOrdenados.length > 0 && (
+              <button onClick={() => setModalRecebidos(recebidosOrdenados)}
+                style={{ marginTop:4, padding:'5px 8px', border:'1px solid #bbf7d0', borderRadius:6,
+                  background:'#f0fdf4', color:'#15803d', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                📋 Ver todos os recebidos ({recebidosOrdenados.length})
+              </button>
+            )}
+            </div>
             </div>
           ))}
         </div>
@@ -1824,7 +1931,7 @@ export default function ComprasTab({ currentUser }) {
                     <button onClick={()=>setMostrarConcluidos(v=>!v)}
                       style={{width:'100%',padding:'7px 10px',border:'none',borderTop:'2px solid #e2e8f0',
                         background:'#f8fafc',color:'#475569',fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
-                      {mostrarConcluidos ? '▲ Ocultar' : '▼ Mostrar'} Concluídos e descartados ({pedidosConcluidos.length})
+                      {mostrarConcluidos ? '▲ Ocultar' : '▼ Mostrar'} Recebidos e descartados ({pedidosConcluidos.length})
                     </button>
                   </td>
                 </tr>
@@ -2276,10 +2383,15 @@ export default function ComprasTab({ currentUser }) {
           onFeito={async (confere: boolean) => {
             const p = modalFluxo.pedido;
             await registrarHistorico(p.id, confere
-              ? { tipo: 'avanco', de: 'Comprado', para: 'Concluído', motivo: 'Recebimento registrado e conferido.' }
+              ? { tipo: 'avanco', de: 'Comprado', para: 'Recebido', motivo: 'Recebimento registrado e conferido.' }
               : { tipo: 'posicao_entrega', de: 'Comprado', para: 'Comprado', motivo: 'Recebimento com divergência — a compra continua em Comprado até resolver.' }, currentUser);
             setModalFluxo(null); load();
           }} />
+      )}
+      {modalRecebidos && (
+        <ModalRecebidos lista={modalRecebidos} canVerValor={canVerValor}
+          onAbrir={(p:any)=>{ setModalRecebidos(null); setModalResumo(p); }}
+          onClose={()=>setModalRecebidos(null)} />
       )}
       {modalVinculo && (
         <ModalVinculoCompra pedido={modalVinculo} onClose={()=>setModalVinculo(null)}
