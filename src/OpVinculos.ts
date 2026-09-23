@@ -55,11 +55,19 @@ const estaAberto = (s: any) => {
   return ABERTOS.some(a => v.includes(a));
 };
 
+/** Elemento de uma consulta supabase: extrai a linha tanto de quem devolve lista
+ *  (`select` normal, `data: Row[]`) quanto de quem devolve um objeto só
+ *  (`.maybeSingle()`, `data: Row`) — sem isso o TS inferia T como "a lista
+ *  inteira" nas consultas em lista, e `tentar` devolvia lista de listas em vez
+ *  de lista de linhas (pendência de 22/09/2026, só não estourava build porque
+ *  quase todo uso é com `(d: any) =>`). */
+type LinhaDe<D> = D extends (infer L)[] ? L : D;
+
 /** Roda as consultas em paralelo e nunca deixa uma falha derrubar o dossiê. */
-async function tentar<T>(p: PromiseLike<{ data: T | null; error: any }>): Promise<T[]> {
+async function tentar<D>(p: PromiseLike<{ data: D | null; error: any }>): Promise<LinhaDe<D>[]> {
   try {
     const { data } = await p;
-    return (Array.isArray(data) ? data : data ? [data] : []) as T[];
+    return (Array.isArray(data) ? data : data ? [data] : []) as LinhaDe<D>[];
   } catch {
     return [];
   }
