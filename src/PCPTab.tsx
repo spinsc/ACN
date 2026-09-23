@@ -140,9 +140,6 @@ export default function PCPTab({ currentUser }) {
   // que solta aquela peça para a produção. Sem isso a produção não fecha a OP.
   const [oplsPendencia, setOplsPendencia] = useState([]);
   const [pendPorOp, setPendPorOp] = useState(new Map());
-  // fechado por padrão: com lote grande são dezenas de linhas, e o pedido foi
-  // que o checklist ficasse discreto — o número no cabeçalho já dá o recado
-  const [painelPendenciasAberto, setPainelPendenciasAberto] = useState(false);
   const carregarPendenciasAbertas = async () => {
     const mapa = await indicePendencias();
     setPendPorOp(mapa);
@@ -569,33 +566,33 @@ export default function PCPTab({ currentUser }) {
       )}
 
 
-      {/* PENDÊNCIAS DE FABRICAÇÃO/COMPRA — checklist até 100% */}
+      {/* PENDÊNCIAS DE FABRICAÇÃO/COMPRA — checklist até 100%
+          o ▾/▸ e o mostra/esconde do corpo são só do collapse global (clique em
+          qualquer .sec-hdr, ver DashboardTab.tsx) — um estado próprio aqui
+          brigava com ele e o painel nunca aparecia, mesmo com dado carregado
+          (achado em 23/09/2026: o botão "Liberar" nunca esteve acessível). */}
       {oplsPendencia.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b',cursor:'pointer'}}
-            onClick={()=>setPainelPendenciasAberto(a=>!a)}>
+          <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b'}}>
             <span style={{color:'#b45309'}}>🧰 Pendências de fabricação/compra ({oplsPendencia.length})</span>
-            <span style={{fontSize:11,color:'#94a3b8'}}>{painelPendenciasAberto ? '▾' : '▸'}</span>
           </div>
-          {painelPendenciasAberto && (
-            <div className="sec-body">
-              <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
-                Cada pendência fecha em três etapas: o setor conclui, o Almoxarifado confirma o recebimento
-                e o PCP libera para a produção. A produção não conclui a OP enquanto faltar alguma.
-              </div>
-              {oplsPendencia.map(o => (
-                <div key={o.id} style={{marginBottom:8}}>
-                  <div style={{fontSize:11,fontWeight:700}}>
-                    <LinkOpl opl={o} currentUser={currentUser} />
-                    <span style={{color:'#64748b',fontWeight:400,marginLeft:6}}>{o.cliente_nome || '—'} · {o.status_geral}</span>
-                  </div>
-                  <ChecklistPendencias op={o} vinculos={(pendPorOp.get(String(o.id)) || []).map(p => ({ ...p, grupo: 'demanda' }))}
-                    modo="pcp" currentUser={currentUser} compacto
-                    onMudou={() => carregarPendenciasAbertas()} />
-                </div>
-              ))}
+          <div className="sec-body">
+            <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
+              Cada pendência fecha em três etapas: o setor conclui, o Almoxarifado confirma o recebimento
+              e o PCP libera para a produção. A produção não conclui a OP enquanto faltar alguma.
             </div>
-          )}
+            {oplsPendencia.map(o => (
+              <div key={o.id} style={{marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700}}>
+                  <LinkOpl opl={o} currentUser={currentUser} />
+                  <span style={{color:'#64748b',fontWeight:400,marginLeft:6}}>{o.cliente_nome || '—'} · {o.status_geral}</span>
+                </div>
+                <ChecklistPendencias op={o} vinculos={(pendPorOp.get(String(o.id)) || []).map(p => ({ ...p, grupo: 'demanda' }))}
+                  modo="pcp" currentUser={currentUser} compacto
+                  onMudou={() => carregarPendenciasAbertas()} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

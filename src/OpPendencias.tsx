@@ -28,7 +28,13 @@ import { logChange } from './AuditSystem';
 export const SETORES_QUE_SEGURAM = ['Serralheria', 'Chicotes', 'Compras'];
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/** Demanda/compra cancelada ou descartada não vai virar material nenhum —
+ *  não é pendência, é trabalho que parou de existir. Achado em 23/09/2026:
+ *  itens cancelados ficavam pedindo "recebimento pelo Almoxarifado" de algo
+ *  que nunca seria fabricado, e a OP nunca mais fechava. */
+const foiCancelada = (v) => /cancelad|descartad/.test(norm(v.status));
 const seguraAOp = (v) => {
+  if (foiCancelada(v)) return false;
   if (v.grupo === 'compra') return true;
   if (v.grupo !== 'demanda') return false;
   return SETORES_QUE_SEGURAM.some(s => norm(v.setor) === norm(s));
@@ -213,11 +219,14 @@ export function ChecklistPendenciasAuto({ op, modo = 'ver', currentUser, onMudou
 // seguram. Duas consultas para a tela inteira.
 // ─────────────────────────────────────────────────────────────────────────────
 const ENCERRADOS = ['Concluido', 'Concluído', 'Concluida', 'Concluída', 'Cancelada', 'Cancelado', 'Descartado'];
+/** Cancelada/Descartado sai da lista de vez: não é pendência aguardando
+ *  recebimento, é trabalho que não vai mais existir (ver foiCancelada acima). */
+const CANCELADOS_RE = /cancelad|descartad/i;
 
 export async function indicePendencias() {
   const mapa = new Map();               // opId -> [{id, setor, titulo, aberto}]
   const add = (opId, item) => {
-    if (!opId) return;
+    if (!opId || CANCELADOS_RE.test(item.statusBruto || '')) return;
     const k = String(opId);
     if (!mapa.has(k)) mapa.set(k, []);
     if (!mapa.get(k).some(x => x.id === item.id)) mapa.get(k).push(item);
@@ -234,19 +243,19 @@ export async function indicePendencias() {
 
   (setoriais.data || []).forEach(d => add(d.opl_id, {
     id: d.id, setor: d.setor_destino, titulo: d.descricao || `Demanda ${d.setor_destino}`,
-    aberto: !ENCERRADOS.includes(String(d.status || '')),
+    aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status,
   }));
 
   (avulsas.data || []).forEach(d => {
     const item = { id: d.id, setor: d.setor, titulo: d.titulo || `Demanda ${d.setor}`,
-      aberto: !ENCERRADOS.includes(String(d.status || '')) };
+      aberto: !ENCERRADOS.includes(String(d.status || '')), statusBruto: d.status };
     add(d.vinculo_id, item);
     (Array.isArray(d.vinculos) ? d.vinculos : []).forEach(v => { if (v?.tipo === 'op' || !v?.tipo) add(v?.id, item); });
   });
 
   (compras.data || []).forEach(c => add(c.vinculo_id, {
     id: c.id, setor: 'Compras', titulo: c.descricao_material || c.numero_pedido || 'Pedido de compra',
-    aberto: !ENCERRADOS.includes(String(c.status_compra || '')),
+    aberto: !ENCERRADOS.includes(String(c.status_compra || '')), statusBruto: c.status_compra,
   }));
 
   return mapa;
@@ -260,6 +269,17 @@ export function travaKit100(pendenciasDaOp, op) {
     return p.aberto || !reg.recebido;
   });
   return faltando;
+}
+
+/** Só os itens que o SETOR JÁ CONCLUIU e ainda esperam o Almoxarifado confirmar
+ *  o recebimento — a etapa que só ele cumpre. Diferente de travaKit100 (que
+ *  também lista o que o setor ainda nem terminou): aqui é só o que dá pra agir
+ *  agora. Usado no painel de OPs que já saíram do kiting (ver AlmoxarifadoTab). */
+export function travaRecebimento(pendenciasDaOp, op) {
+  return (pendenciasDaOp || []).filter(p => {
+    const reg = (op?.pendencias_kit || {})[p.id] || {};
+    return !p.aberto && !reg.recebido;
+  });
 }
 
 /** A Produção só conclui com as três etapas cumpridas em todas as pendências. */

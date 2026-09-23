@@ -12,7 +12,7 @@ import type { VinculoValue } from './VinculoPicker';
 import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
-import { indicePendencias, travaKit100, textoFaltando, ChecklistPendencias } from './OpPendencias';
+import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -75,9 +75,18 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const pendenciasDe = (o) => pendPorOp.get(String(o?.id)) || [];
   const faltandoPara = (o) => travaKit100(pendenciasDe(o), o);
 
+  // Pendências que fecharam no setor DEPOIS que a OP já saiu do Almoxarifado
+  // (kit liberado com pendência, produção começou, e só então a Serralheria/
+  // Chicotes concluiu). Sem esta lista à parte, essas OPs somem da tela do
+  // Almoxarifado (que só mostra "Aguardando Almox"/"Aguardando Embalagem") e
+  // ninguém consegue mais confirmar o recebimento — a pendência trava a
+  // Produção para sempre. Achado em 23/09/2026 com as OPs 1653.2609/01 e /02.
+  const [oplsPendenciaAlmox, setOplsPendenciaAlmox] = useState([]);
+
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    indicePendencias().then(setPendPorOp);
+    const mapa = await indicePendencias();
+    setPendPorOp(mapa);
     const { data } = await supabase.from('oples').select('*')
       // 'Aguardando Embalagem' = OP que JA foi produzida (hoje: fabricação da
       // serralheria com envio) e voltou só para ser pesada, medida e embalada.
@@ -86,6 +95,17 @@ export default function AlmoxarifadoTab({ currentUser }) {
       .in('status_geral', ['Aguardando Almox', STATUS_EMBALAGEM])
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
+
+    const idsForaDaLista = [...mapa.keys()].filter(id => !(data || []).some(o => String(o.id) === id));
+    if (idsForaDaLista.length) {
+      const { data: pend } = await supabase.from('oples')
+        .select('id,opl,cliente_nome,modelo,status_geral,pendencias_kit')
+        .in('id', idsForaDaLista)
+        .not('status_geral', 'in', '("Faturado","Faturado e Disponivel para Entrega","Cancelado")');
+      setOplsPendenciaAlmox((pend || []).filter(o => travaRecebimento(mapa.get(String(o.id)) || [], o).length));
+    } else {
+      setOplsPendenciaAlmox([]);
+    }
     if (!silent) setLoading(false);
   };
 
@@ -391,6 +411,35 @@ Embalar e enviar assim mesmo?`)) return;
 
   return (
     <div>
+      {oplsPendenciaAlmox.length > 0 && (
+        <div className="sec-card">
+          {/* o ▾/▸ e o mostra/esconde do corpo são só do collapse global (clique em
+              qualquer .sec-hdr, ver DashboardTab.tsx) — um estado próprio aqui
+              brigava com ele e o painel nunca aparecia, mesmo com dado carregado
+              (achado em 23/09/2026, o mesmo bug do painel de pendências do PCP). */}
+          <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b'}}>
+            <span style={{color:'#b45309'}}>🧰 Pendências aguardando recebimento — OPs já em produção ({oplsPendenciaAlmox.length})</span>
+          </div>
+          <div className="sec-body">
+              <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
+                Kit foi liberado com pendência e a OP já está em produção. O setor concluiu o item —
+                falta só confirmar aqui que o material chegou, para o PCP liberar a pendência.
+              </div>
+              {oplsPendenciaAlmox.map(o => (
+                <div key={o.id} style={{marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:700}}>
+                    <LinkOpl opl={o} currentUser={currentUser} />
+                    <span style={{color:'#64748b',fontWeight:400,marginLeft:6}}>{o.cliente_nome || '—'} · {o.status_geral}</span>
+                  </div>
+                  <ChecklistPendencias op={o} vinculos={(pendPorOp.get(String(o.id)) || []).map(p => ({ ...p, grupo: 'demanda' }))}
+                    modo="almox" currentUser={currentUser} compacto
+                    onMudou={() => fetchAll(true)} />
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       <div className="sec-card">
         <div className="sec-hdr"><span>Kiting — OPLs Aguardando Conferencia ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
