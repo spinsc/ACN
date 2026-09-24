@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas } from './MencaoTextarea';
+import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas, resolverMencoesDeTodos } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
 import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
@@ -16,7 +16,8 @@ import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, md
 import { ModalReceberPedido } from './LogisticaTab';
 import { ETAPAS_COMPRA, DESCARTADA, COR_ETAPA_COMPRA, ETAPA_ANTERIOR, PROXIMA_ETAPA, podeGerirCompras, ehSolicitante,
   podeEditarSolicitacao, registrarHistorico, mencionarSolicitante, ModalVoltarEtapa, ModalDescartar, ModalReativar,
-  ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao } from './ComprasFluxo';
+  ModalIniciarCotacao, ModalConfirmarCompra, ModalEditarSolicitacao, AnexosCompra, HistoricoCompra, origemDaRequisicao,
+  podeAprovarCompra, carregarAprovadoresCompra } from './ComprasFluxo';
 
 const VAZIO_COTACAO = {
   fornecedor_nome: '', valor_unitario: '', quantidade: '', condicao_pagamento: '', prazo_entrega: '',
@@ -709,6 +710,11 @@ export default function ComprasTab({ currentUser }) {
   // Alçadas de Aprovação (Fase 2)
   const [alcadasConfig, setAlcadasConfig]       = useState<any[]>([]);
   const [aprovacoesPedido, setAprovacoesPedido] = useState<any[]>([]);
+  // Quem aprova compra (pessoas marcadas no Admin). Serve para avisar todos
+  // quando um pedido vai para aprovação e para dizer na tela quem está sendo
+  // esperado — antes a tela mostrava o nome do PERFIL, que não ajuda ninguém.
+  const [aprovadoresCompra, setAprovadoresCompra] = useState<any[]>([]);
+  const nomesAprovadores = () => aprovadoresCompra.map((a: any) => a.nome).join(', ') || '—';
   const [respondendoAprovacao, setRespondendoAprovacao] = useState(false);
 
   // Prazo Prometido de Entrega (Fase 1)
@@ -815,6 +821,7 @@ export default function ComprasTab({ currentUser }) {
   const loadAlcadas = async () => {
     const { data } = await supabase.from('compras_alcadas_aprovacao').select('*').order('nivel');
     setAlcadasConfig(data || []);
+    setAprovadoresCompra(await carregarAprovadoresCompra());
   };
 
   const loadDepartamentos = async () => {
@@ -1079,29 +1086,36 @@ export default function ComprasTab({ currentUser }) {
     await notificarGestorDepartamento(pedido, departamento);
   };
 
+  // Vai para TODOS que aprovam compra, não só para o gestor do departamento:
+  // desde 24/09/2026 quem aprova são as quatro pessoas marcadas no Admin, em
+  // qualquer caminho. O nome do departamento continua no texto, porque ajuda
+  // a entender de onde veio o pedido.
   const notificarGestorDepartamento = async (pedido: any, departamento: any) => {
     try {
+      const aprovadores = await carregarAprovadoresCompra();
+      if (!aprovadores.length) return;
       const texto = `Nova cotação lançada — pedido ${pedido.numero_pedido} (${departamento.nome}): ${pedido.descricao_material}`;
-      await supabase.from('mencoes').insert({
-        mencionado_id: departamento.gestor_id, mencionado_nome: departamento.gestor_nome,
-        mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
-        contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
-        contexto_descricao: `Pedido ${pedido.numero_pedido}`,
-        campo: 'aprovacao_departamento', texto_trecho: texto,
-        aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
-      });
-      const { data: gestor } = await supabase.from('auth_usuarios')
-        .select('email').eq('id', departamento.gestor_id).maybeSingle();
-      if (gestor?.email) {
+      for (const ap of aprovadores) {
+        await supabase.from('mencoes').insert({
+          mencionado_id: String(ap.id), mencionado_nome: ap.nome,
+          mencionante_id: String(currentUser?.id || ''), mencionante_nome: currentUser?.nome || '',
+          contexto: 'compra_aprovacao', contexto_id: String(pedido.id),
+          contexto_descricao: `Pedido ${pedido.numero_pedido}`,
+          campo: 'aprovacao_departamento', texto_trecho: texto,
+          aba_destino: 'compras', lida: false, criado_em: new Date().toISOString(),
+        });
+      }
+      const emails = aprovadores.map((a: any) => a.email).filter(Boolean);
+      if (emails.length) {
         const html = `<h3>Nova cotação para avaliar</h3>
           <p><strong>Departamento: ${departamento.nome}</strong></p>
           <p>Pedido: ${pedido.numero_pedido}<br>Descrição: ${pedido.descricao_material}</p>
           <p>Acesse o sistema (aba Compras) para acompanhar, aprovar ou rejeitar.</p>`;
         await supabase.functions.invoke('send-email', {
-          body: { to: [gestor.email], subject: `Nova cotação — Pedido ${pedido.numero_pedido}`, html },
+          body: { to: emails, subject: `Nova cotação — Pedido ${pedido.numero_pedido}`, html },
         });
       }
-    } catch (e) { console.warn('Falha ao notificar gestor do departamento:', e); }
+    } catch (e) { console.warn('Falha ao notificar aprovadores:', e); }
   };
 
   const excluirCotacao = async (id: string) => {
@@ -1153,11 +1167,10 @@ export default function ComprasTab({ currentUser }) {
   // ── Alçadas de Aprovação (Fase 2) ─────────────────────────────────────────
   const notificarAprovadoresNivel = async (pedido: any, nivelRow: any) => {
     try {
-      const perfis = nivelRow.perfis_aprovadores || [];
-      if (perfis.length === 0) return;
-      const { data: aprovadores } = await supabase.from('auth_usuarios')
-        .select('id, nome, email').in('perfil', perfis).eq('ativo', true);
-      if (!aprovadores || aprovadores.length === 0) return;
+      // Avisa TODOS que podem aprovar, não os que têm certo perfil: o pedido
+      // fica na caixa dos quatro e qualquer um resolve (regra de 24/09/2026).
+      const aprovadores = await carregarAprovadoresCompra();
+      if (!aprovadores.length) return;
       const valorFmt = fmt(pedido.valor_compra);
       const texto = `Aprovação necessária (Nível ${nivelRow.nivel} — ${nivelRow.nome}): pedido ${pedido.numero_pedido} — ${pedido.descricao_material} — ${valorFmt}`;
       for (const ap of aprovadores) {
@@ -1282,9 +1295,13 @@ export default function ComprasTab({ currentUser }) {
       status: 'aprovado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(),
     }).eq('id', nivelAtivo.id);
-    // Este usuário acabou de agir sobre a pendência dele — resolve a menção
-    // de "aprovação necessária" que o trouxe até aqui.
-    resolverMencoesRespondidas({ contexto: 'compra_aprovacao', contextoId: pedido.id, autorId: currentUser?.id, autorNome: currentUser?.nome });
+    // Aprovou: acabou para TODO MUNDO. O pedido cai na caixa das quatro
+    // pessoas que aprovam, e quando uma resolve não faz sentido as outras três
+    // continuarem com o aviso pendurado (regra do usuário em 24/09/2026).
+    // Diferente de alguém marcar a menção como resolvida sem aprovar, que só
+    // limpa a caixa de quem marcou — dizer "resolvido" não aprova nada.
+    await resolverMencoesDeTodos({ contexto: 'compra_aprovacao', contextoId: pedido.id,
+      porNome: currentUser?.nome, motivo: 'aprovado' });
     const { data: restantes } = await supabase.from('pcp_aprovacoes')
       .select('*').eq('pedido_id', pedido.id).eq('status', 'pendente').order('nivel', { ascending: true });
     if (restantes && restantes.length > 0) {
@@ -1331,13 +1348,13 @@ export default function ComprasTab({ currentUser }) {
   // Checa se o usuário logado pode aprovar a pendência atual — mesma regra pra
   // departamento (aprovador_id específico) e alçada (perfil dentro de
   // perfis_aprovadores). Sem pendência nenhuma, não há autorização especial a checar.
+  // Aprovar é das pessoas marcadas no Admin, e de mais ninguém — vale para os
+  // dois caminhos, alçada por valor e departamento (decidido em 24/09/2026).
+  // Antes valia o perfil, o que liberava Admin que não deve aprovar e barrava
+  // quem aprova mas tem outro cargo; e o gestor aprovava o próprio setor.
   const souAprovadorPara = (pendencia: any) => {
     if (!pendencia) return true;
-    if (pendencia.tipo === 'departamento') {
-      return String(currentUser?.id) === pendencia.aprovador_id || currentUser?.perfil === 'Admin';
-    }
-    const alcada = alcadasConfig.find(a => a.nivel === pendencia.nivel);
-    return !!(alcada && (alcada.perfis_aprovadores||[]).includes(currentUser?.perfil));
+    return podeAprovarCompra(currentUser);
   };
 
   const aprovarNivelAtivo = async () => {
@@ -1356,9 +1373,7 @@ export default function ComprasTab({ currentUser }) {
     // Mesma checagem de autorização que "Aprovar" já faz — rejeitar não pode
     // ser mais permissivo que aprovar.
     if (!souAprovadorPara(nivelAtivo)) {
-      const quem = nivelAtivo.tipo === 'departamento'
-        ? nivelAtivo.aprovador_nome
-        : (alcadasConfig.find(a=>a.nivel===nivelAtivo.nivel)?.perfis_aprovadores||[]).join(', ');
+      const quem = nomesAprovadores();
       alert('Você não tem autorização para rejeitar este pedido. Aguardando: ' + (quem || '—'));
       return;
     }
@@ -1370,7 +1385,10 @@ export default function ComprasTab({ currentUser }) {
       status: 'rejeitado', respondido_por: currentUser?.email, respondido_por_nome: currentUser?.nome,
       respondido_em: new Date().toISOString(), resposta: motivo.trim(),
     }).eq('id', nivelAtivo.id);
-    resolverMencoesRespondidas({ contexto: 'compra_aprovacao', contextoId: modalCotacoes.id, autorId: currentUser?.id, autorNome: currentUser?.nome });
+    // Não aprovar também encerra para todos: o pedido volta para "Em Andamento"
+    // e sai da fila de aprovação, então ninguém mais tem o que decidir nele.
+    await resolverMencoesDeTodos({ contexto: 'compra_aprovacao', contextoId: modalCotacoes.id,
+      porNome: currentUser?.nome, motivo: 'devolvido para refazer' });
     await supabase.from('pcp_aprovacoes').update({ status: 'cancelado' })
       .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
     await supabase.from('pcp_pedidos_compra').update({
@@ -1394,14 +1412,13 @@ export default function ComprasTab({ currentUser }) {
   // obrigatório — nem sempre dá pra conseguir 3 fornecedores pro mesmo item.
   const aprovarCotacaoComoVencedora = (cotacao: any) => {
     if (!modalCotacoes) return;
-    const row = inline[modalCotacoes.id];
-    if (!row?.prazo) { alert('Informe a previsão de recebimento antes de aprovar.'); return; }
+    // A previsão de recebimento saiu daqui em 24/09/2026: quem aprova decide a
+    // cotação e se libera, só isso. O prazo é combinado com o fornecedor e quem
+    // informa é o Compras ao efetivar a compra (ModalConfirmarCompra), onde ele
+    // já era obrigatório. Pedir aqui obrigava o aprovador a adivinhar uma data.
     const pendencia = aprovacoesPedido.find(a => a.status === 'pendente');
     if (pendencia && !souAprovadorPara(pendencia)) {
-      const quem = pendencia.tipo === 'departamento'
-        ? pendencia.aprovador_nome
-        : (alcadasConfig.find(a=>a.nivel===pendencia.nivel)?.perfis_aprovadores||[]).join(', ');
-      alert('Você não tem autorização para aprovar este pedido. Aguardando: ' + (quem || '—'));
+      alert('Você não tem autorização para aprovar compra.\n\nQuem aprova: ' + nomesAprovadores());
       return;
     }
     setModalConfirmarSenha(cotacao);
@@ -1423,7 +1440,6 @@ export default function ComprasTab({ currentUser }) {
       setErroSenha('Senha incorreta.');
       return;
     }
-    const row = inline[modalCotacoes.id];
     const textoJustificativa = (cotacao.area_livre || '')
       .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
       || `Cotação vencedora: ${cotacao.fornecedor_nome}`;
@@ -1432,7 +1448,7 @@ export default function ComprasTab({ currentUser }) {
       justificativa_vencedora: textoJustificativa,
       fornecedor: cotacao.fornecedor_nome,
       valor_compra: cotacao.valor,
-      data_prevista_recebimento: row.prazo,
+      // sem data_prevista_recebimento: ela é do Compras, na efetivação
     });
     if (error) {
       setVerificandoSenha(false);
@@ -2182,9 +2198,8 @@ export default function ComprasTab({ currentUser }) {
               const nivelAtivo = aprovacoesPedido.find(a => a.status === 'pendente');
               const isDepartamento = nivelAtivo?.tipo === 'departamento';
               const alcadaAtiva = (nivelAtivo && !isDepartamento) ? alcadasConfig.find(a => a.nivel === nivelAtivo.nivel) : null;
-              const souAprovador = isDepartamento
-                ? (String(currentUser?.id) === nivelAtivo.aprovador_id || currentUser?.perfil === 'Admin')
-                : !!(alcadaAtiva && (alcadaAtiva.perfis_aprovadores||[]).includes(currentUser?.perfil));
+              // quem aprova é a pessoa marcada no Admin, nos dois caminhos
+              const souAprovador = podeAprovarCompra(currentUser);
               const historico = aprovacoesPedido.filter(a => a.status !== 'pendente');
               const todosAprovados = historico.length > 0 && historico.every(a => a.status === 'aprovado');
               return (
@@ -2204,7 +2219,7 @@ export default function ComprasTab({ currentUser }) {
                       </div>
                     ) : (
                       <div style={{fontSize:10,color:'#92400e'}}>
-                        Aguardando aprovação de: {isDepartamento ? (nivelAtivo.aprovador_nome || '—') : ((alcadaAtiva?.perfis_aprovadores||[]).join(', ') || '—')}
+                        Aguardando aprovação de: {nomesAprovadores()}
                       </div>
                     )
                   ) : todosAprovados ? (

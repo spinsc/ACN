@@ -193,7 +193,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -214,6 +214,7 @@ function PainelUsuarios() {
       abas_permitidas: editForm.abas_permitidas,
       pode_autorizar_rh: editForm.pode_autorizar_rh,
       pode_enviar_avisos: editForm.pode_enviar_avisos,
+      pode_aprovar_compra: !!editForm.pode_aprovar_compra,
       permissoes_crm: editForm.permissoes_crm,
       permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
@@ -453,6 +454,22 @@ function PainelUsuarios() {
                     style={{accentColor:'#dc2626'}} />
                   <span>📢 Pode publicar Avisos do Sistema</span>
                 </label>
+              </div>
+              {/* Aprovação de compra — por pessoa, não por perfil. Regra do
+                  usuário em 24/09/2026: aprovam Rafael Nunes, Luciano Spinelli,
+                  Bruna e Raphael Weber Mello, e mais ninguém. É aqui que se
+                  habilita outra pessoa quando for necessário. */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.pode_aprovar_compra||false}
+                    onChange={e=>setEditForm(f=>({...f,pode_aprovar_compra:e.target.checked}))}
+                    style={{accentColor:'#0f766e'}} />
+                  <span>✅ Pode aprovar compra</span>
+                </label>
+                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
+                  Vale para os dois caminhos: alçada por valor e aprovação do departamento.
+                </div>
               </div>
               {/* Licitações — exclusão de anexos */}
               <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>

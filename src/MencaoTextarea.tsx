@@ -66,6 +66,38 @@ export function useUsers(): any[] {
 //
 // Quem mencionou recebe de volta uma menção avisando que foi respondido (com o
 // trecho da resposta, quando houver), no mesmo registro e na mesma aba.
+/**
+ * Resolve a menção de TODO MUNDO num assunto, não só a de quem está agindo.
+ *
+ * Existe porque aprovar compra é de quatro pessoas e o pedido cai na caixa das
+ * quatro: quando uma aprova, o assunto acabou para as outras três e a menção
+ * delas tem que sumir junto. Regra do usuário em 24/09/2026.
+ *
+ * O contrário NÃO vale e é de propósito: marcar a menção como resolvida à mão,
+ * sem aprovar, só tira da caixa de quem marcou — isso é
+ * `resolverMencoesRespondidas`. Dizer "resolvido" não faz o pedido estar
+ * aprovado, e as outras pessoas continuam precisando ver.
+ */
+export async function resolverMencoesDeTodos(opts: {
+  contexto: string;
+  contextoId: string;
+  porNome?: string;
+  motivo?: string;
+}) {
+  const { contexto, contextoId } = opts;
+  if (!contexto || !contextoId) return 0;
+  const { data, error } = await supabase.from('mencoes')
+    .update({
+      resolvida: true, resolvida_em: new Date().toISOString(),
+      resolvida_por: opts.porNome || null, lida: true,
+    })
+    .eq('contexto', contexto).eq('contexto_id', String(contextoId))
+    .eq('resolvida', false)
+    .select('id');
+  if (error) { console.error('[resolverMencoesDeTodos] erro:', error.message); return 0; }
+  return (data || []).length;
+}
+
 export async function resolverMencoesRespondidas(opts: {
   contexto: string;
   contextoId: string;

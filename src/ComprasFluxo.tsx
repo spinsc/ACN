@@ -100,6 +100,24 @@ export async function mencionarSolicitante(pedido: any, texto: string, user: any
   } catch (e) { console.warn('Falha ao avisar quem solicitou:', e); }
 }
 
+/**
+ * Quem aprova compra — pessoa, não perfil.
+ *
+ * Regra definida com o usuário em 24/09/2026: aprovar é de quatro pessoas e
+ * mais ninguém, por qualquer caminho (alçada por valor ou departamento).
+ * Antes valia o PERFIL, e isso errava nas duas pontas: liberava o perfil
+ * 'Admin' para quem não deve aprovar e barrava a Bruna, que é 'Gerente
+ * administrativo'. Quem liga e desliga é o Admin, no cadastro do usuário.
+ */
+export const podeAprovarCompra = (u: any) => u?.pode_aprovar_compra === true;
+
+/** Os aprovadores ativos, para avisar todos e para dizer na tela quem falta. */
+export async function carregarAprovadoresCompra() {
+  const { data } = await supabase.from('auth_usuarios')
+    .select('id,nome,email').eq('ativo', true).eq('pode_aprovar_compra', true).order('nome');
+  return data || [];
+}
+
 export async function mencionarPerfis(perfis: string[], pedido: any, texto: string, user: any, campo: string) {
   try {
     const { data } = await supabase.from('auth_usuarios').select('id, nome').in('perfil', perfis).eq('ativo', true);
