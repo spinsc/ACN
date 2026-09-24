@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
+import { ETAPAS_COMPRA } from './ComprasFluxo';
 import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao } from './CentroCustoShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
@@ -441,7 +442,10 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const totalGastoCompras  = comprasFiltradas.reduce((s, p) => s + (Number(p.valor_compra) || 0), 0);
   const totalGastoDespesas = despesasFiltradas.reduce((s, d) => s + (Number(d.valor) || 0), 0);
   const totalGasto    = totalGastoCompras + totalGastoDespesas;
-  const totalConcluidas = comprasFiltradas.filter(p => p.status_compra === 'Concluído').length;
+  // 'Recebido' é o nome da última etapa da compra desde 22/09/2026 (era
+  // 'Concluído'). Este contador tinha ficado com o nome antigo e por isso
+  // mostrava zero enquanto havia compras recebidas (corrigido em 24/09/2026).
+  const totalConcluidas = comprasFiltradas.filter(p => p.status_compra === 'Recebido').length;
   const totalPendentes  = comprasFiltradas.filter(p => p.status_compra === 'Pendente').length;
   const totalSemCentro  = comprasFiltradas.filter(p => !p.centro_custo).length;
 
@@ -518,7 +522,9 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
         <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
           style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
           <option value="">Todos os status</option>
-          {['Pendente','Em Andamento','Aguardando Aprovação','Comprado','Concluído'].map(s => (
+          {/* lista vinda de ComprasFluxo em vez de copiada: era a cópia que
+              ficava para trás quando uma etapa mudava de nome (24/09/2026) */}
+          {ETAPAS_COMPRA.map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
@@ -615,7 +621,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                   </thead>
                   <tbody>
                     {listacentros.map((c, i) => {
-                      const concl = c.compras.filter(p => p.status_compra === 'Concluído').length;
+                      const concl = c.compras.filter(p => p.status_compra === 'Recebido').length;
                       const pend  = c.compras.filter(p => p.status_compra === 'Pendente').length;
                       const semCC = c.key === '(Sem Centro)';
                       return (

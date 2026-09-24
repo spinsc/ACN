@@ -1382,7 +1382,10 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
       observacoes: form.observacoes.trim() || null,
     };
     if (form.confere) {
-      updatePedido.status_compra = 'Concluído';
+      // 'Recebido' é o nome da última etapa desde 22/09/2026 (era 'Concluído').
+      // Este ponto tinha ficado para trás na renomeação, e o pedido recebido
+      // caía num status fora do quadro do Compras — corrigido em 24/09/2026.
+      updatePedido.status_compra = 'Recebido';
       updatePedido.data_conclusao = new Date().toISOString().split('T')[0];
     }
     const { error: errPedido } = await supabase.from('pcp_pedidos_compra').update(updatePedido).eq('id', pedido.id);
@@ -1791,7 +1794,8 @@ export default function LogisticaTab({ currentUser }) {
       if (form.tipo === 'Recebimento' && form.pedido_compra_id && form.nf_conferida) {
         const agora = new Date().toISOString();
         const { error: errCompra } = await supabase.from('pcp_pedidos_compra')
-          .update({ status_compra: 'Concluído', data_conclusao: new Date().toISOString().split('T')[0] })
+          // 'Recebido' — ver a nota no modal de recebimento acima (24/09/2026)
+          .update({ status_compra: 'Recebido', data_conclusao: new Date().toISOString().split('T')[0] })
           .eq('id', form.pedido_compra_id);
         const { error: errFat } = await supabase.from('pcp_pedidos_faturamento')
           .update({ recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado' })

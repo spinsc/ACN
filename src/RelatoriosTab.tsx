@@ -679,7 +679,9 @@ function RelRecebimentosEnvios() {
               <tbody>{recebimentos.map(r=>{
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
                 const dt = r.data_prevista_recebimento ? new Date(r.data_prevista_recebimento.slice(0,10)+'T00:00:00') : null;
-                const atras = dt && dt < hoje && r.status_compra !== 'Concluído';
+                // 'Recebido' desde 22/09/2026 (era 'Concluído'): com o nome
+                // antigo, compra já recebida continuava saindo como atrasada
+                const atras = dt && dt < hoje && r.status_compra !== 'Recebido';
                 return <tr key={r.id} style={atras?{background:'#fef2f2'}:{}}>
                   <td><strong>{r.numero_pedido||'—'}</strong></td>
                   <td style={{ maxWidth:180, wordBreak:'break-word' }}>{r.descricao_material||'—'}</td>
@@ -687,7 +689,7 @@ function RelRecebimentosEnvios() {
                   <td>{r.quantidade||'—'}</td>
                   <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(r.data_prevista_recebimento)}</td>
                   <td>{fmtVal(r.valor_compra)}</td>
-                  <td><span className="acn-badge" style={{background:r.status_compra==='Concluído'?'#22c55e':r.status_compra==='Em Andamento'?'#3b82f6':'#94a3b8',fontSize:8}}>{r.status_compra||'—'}</span></td>
+                  <td><span className="acn-badge" style={{background:r.status_compra==='Recebido'?'#22c55e':r.status_compra==='Em Andamento'?'#3b82f6':'#94a3b8',fontSize:8}}>{r.status_compra||'—'}</span></td>
                 </tr>;
               })}</tbody></table>
             )}

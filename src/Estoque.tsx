@@ -27,10 +27,10 @@ import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
 
 /** Requisição de reposição aberta = ainda não virou material na prateleira.
- *  'Recebido' e 'Concluído' são a MESMA coisa no banco, por uma divergência que
- *  já existia: o quadro do Compras avança para 'Recebido', mas o modal de
- *  recebimento grava 'Concluído' — e os dois estão em produção. Ignorar um
- *  deles faria o item nunca mais pedir reposição depois da primeira compra. */
+ *  'Concluído' era o nome antigo de 'Recebido' e foi unificado em 24/09/2026
+ *  (código e os 5 registros que restavam). Continua na lista de propósito: se
+ *  algum caminho esquecido voltar a gravar o nome velho, o pior que acontece é
+ *  o item não pedir reposição nunca mais — e isso falharia em silêncio. */
 const COMPRA_ENCERRADA = ['Recebido', 'Concluído', 'Descartada'];
 
 /** Quem conta é quem tem o material na mão: o Almoxarifado, mais a gerência. */
