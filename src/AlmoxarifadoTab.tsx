@@ -14,6 +14,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
+import { PainelEstoque } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -659,6 +660,10 @@ Embalar e enviar assim mesmo?`)) return;
           )}
         </div>
       </div>
+
+      {/* ESTOQUE SOB CONTROLE — a lista dos itens que já têm saldo contado, o
+          mínimo definido e a contagem. Ver Estoque.tsx para a regra do opt-in. */}
+      <PainelEstoque currentUser={currentUser} />
 
       {/* SOLICITAÇÃO DE REPOSIÇÃO DE ESTOQUE — pede fabricação interna (OFI) ao
           setor que fabrica aquele item, ou Compras quando não é fabricação

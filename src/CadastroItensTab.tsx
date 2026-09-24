@@ -7,6 +7,7 @@ import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
+import { CamposEstoqueItem } from './Estoque';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -24,6 +25,10 @@ const ITEM_VAZIO = {
   // Fabricação interna: é o que faz o PCP abrir a demanda do setor sozinho ao
   // liberar o kiting, e o que já roteia a reposição do Almoxarifado.
   origem_producao: 'externa', setor_fabricante: '',
+  // Controle de estoque é opt-in (ver Estoque.tsx): item nasce sem controle e
+  // só passa a dar baixa, conferir mínimo e travar liberação quando alguém do
+  // Almoxarifado ligar o checkbox — decidido com o usuário em 24/09/2026.
+  controla_estoque: false, estoque_atual: 0, estoque_minimo: null, estoque_ideal: null,
 };
 
 /** Setores que fabricam item aqui dentro (mesma lista das demandas) */
@@ -224,6 +229,14 @@ function ItemModal({
       custo_fixo_pct: Number(form.custo_fixo_pct) || 0,
       origem_producao: form.origem_producao === 'interna' ? 'interna' : 'externa',
       setor_fabricante: form.origem_producao === 'interna' ? (form.setor_fabricante || null) : null,
+      // `estoque_atual` de propósito fora daqui: saldo só muda por contagem,
+      // baixa ou entrada, pela função do banco (ver Estoque.tsx). Se saísse
+      // neste payload, salvar o cadastro sobrescreveria o saldo real.
+      controla_estoque: !!form.controla_estoque,
+      estoque_minimo: form.controla_estoque && form.estoque_minimo !== '' && form.estoque_minimo != null
+        ? Number(form.estoque_minimo) : null,
+      estoque_ideal:  form.controla_estoque && form.estoque_ideal !== '' && form.estoque_ideal != null
+        ? Number(form.estoque_ideal) : null,
       ativo:         form.ativo !== false,
       criado_por:    form.criado_por || currentUser?.email || '',
     };
@@ -344,6 +357,9 @@ function ItemModal({
                 placeholder="0,00" />
             </Field>
           </Row>
+
+          <Section title="📦 Estoque" />
+          <CamposEstoqueItem form={form} set={set} currentUser={currentUser} />
 
           <Section title="🏭 Origem do item" />
           <Row>

@@ -1,0 +1,358 @@
+// @ts-nocheck
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTOQUE — controle ligado item a item, para adotar aos poucos
+//
+// Regra definida com o usuário em 24/09/2026. O cadastro tem 4.436 itens e
+// contar todos de uma vez é impossível, então o controle é OPT-IN: só vale
+// para o item com `controla_estoque` marcado. Numa OP com 20 itens, se 2
+// estiverem marcados, só esses 2 dão baixa, conferem mínimo e podem travar —
+// os outros 18 seguem o fluxo de sempre. Assim dá para contar o estoque
+// começando pelos mais usados e testar a compra automática com pouco volume,
+// sem parar a fábrica por causa de item que ainda não foi contado.
+//
+// Quem mexe no saldo é SEMPRE a função `estoque_movimentar` no banco, nunca a
+// tela: ler o saldo, somar e gravar de volta perde movimentação quando duas
+// pessoas dão baixa ao mesmo tempo. A função trava a linha do item, grava
+// saldo e extrato juntos, ignora item sem controle e ainda devolve se caiu
+// abaixo do mínimo e quanto comprar para repor.
+//
+// Reposição: mínimo dispara, ideal diz até onde repor. Mínimo 10, ideal 50,
+// saldo caiu para 8 → pede 42. Evita pedir de novo na semana seguinte.
+// ─────────────────────────────────────────────────────────────────────────────
+import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
+import { ehAdminOuGerente } from './utils/permissoes';
+import { normalizarBusca, combinaBusca } from './SearchUtils';
+import { confirmar } from './Feedback';
+
+/** Quem conta é quem tem o material na mão: o Almoxarifado, mais a gerência. */
+export const podeGerirEstoque = (u: any) =>
+  String(u?.perfil || '').trim() === 'Almoxarifado' || ehAdminOuGerente(u);
+
+/** De onde veio o movimento. Texto curto, aparece no extrato. */
+export const MOTIVO = {
+  CONTAGEM: 'contagem',
+  KITING: 'kiting',
+  RETIRADA: 'retirada',
+  COMPRA_RECEBIDA: 'compra_recebida',
+  AJUSTE: 'ajuste',
+};
+
+const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+export const fmtQtd = (v: any) => {
+  const n = num(v);
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+};
+
+/**
+ * Único caminho para mexer no estoque — chama a função do banco.
+ * Devolve o que ela responder:
+ *   { ignorado: true }  → item sem controle, nada aconteceu (é o esperado)
+ *   { ok: true, saldo_depois, abaixo_do_minimo, sugestao_compra, negativo }
+ *   { erro: '...' }
+ */
+export async function movimentarEstoque({
+  itemId, tipo, quantidade, motivo = null, observacoes = null,
+  vinculo = null, retiradoPor = null, currentUser = null,
+}: any) {
+  if (!itemId) return { ignorado: true, motivo: 'Sem item cadastrado.' };
+  const { data, error } = await supabase.rpc('estoque_movimentar', {
+    p_item_id: itemId,
+    p_tipo: tipo,
+    p_quantidade: num(quantidade),
+    p_motivo: motivo,
+    p_observacoes: observacoes,
+    p_vinculo_tipo: vinculo?.tipo || null,
+    p_vinculo_id: vinculo?.id ? String(vinculo.id) : null,
+    p_vinculo_descricao: vinculo?.descricao || null,
+    p_retirado_por_nome: retiradoPor || null,
+    p_criado_por: currentUser?.email || null,
+    p_criado_por_nome: currentUser?.nome || null,
+  });
+  if (error) return { erro: error.message };
+  return data || { erro: 'Resposta vazia do banco.' };
+}
+
+/** Carrega os itens que estão sob controle, com saldo e mínimo. */
+export async function carregarItensControlados() {
+  const { data } = await supabase.from('cadastro_itens')
+    .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,ativo')
+    .eq('controla_estoque', true).order('nome');
+  return data || [];
+}
+
+/** Situação do item: só para pintar a tela, a conta que vale é a do banco. */
+export function situacaoEstoque(item: any) {
+  const saldo = num(item?.estoque_atual);
+  const minimo = item?.estoque_minimo == null ? null : num(item.estoque_minimo);
+  if (saldo < 0) return { chave: 'negativo', texto: 'saldo negativo', cor: '#b91c1c', fundo: '#fee2e2' };
+  if (saldo === 0) return { chave: 'zerado', texto: 'sem saldo', cor: '#b91c1c', fundo: '#fee2e2' };
+  if (minimo != null && saldo <= minimo) return { chave: 'abaixo', texto: 'abaixo do mínimo', cor: '#b45309', fundo: '#fef3c7' };
+  return { chave: 'ok', texto: 'ok', cor: '#15803d', fundo: '#dcfce7' };
+}
+
+/** Selo de saldo, para as telas que mostram item controlado. */
+export function SeloEstoque({ item, compacto = false }: any) {
+  if (!item?.controla_estoque) return null;
+  const s = situacaoEstoque(item);
+  return (
+    <span title={`Saldo ${fmtQtd(item.estoque_atual)}${item.estoque_minimo != null ? ` · mínimo ${fmtQtd(item.estoque_minimo)}` : ''}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.fundo, color: s.cor,
+        fontSize: compacto ? 8.5 : 9.5, fontWeight: 800, padding: '1px 7px', borderRadius: 9, whiteSpace: 'nowrap' }}>
+      📦 {fmtQtd(item.estoque_atual)} {item.unidade || 'UN'}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CAMPOS NO CADASTRO DO ITEM — o checkbox que liga tudo
+// ─────────────────────────────────────────────────────────────────────────────
+export function CamposEstoqueItem({ form, set, currentUser }: any) {
+  const pode = podeGerirEstoque(currentUser);
+  const ligado = !!form.controla_estoque;
+  const inp = { width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
+    fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
+  const lbl = { fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 };
+
+  return (
+    <div style={{ marginBottom: 10, background: ligado ? '#f0fdf4' : '#f8fafc',
+      border: `1px solid ${ligado ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 6, padding: '9px 11px' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: pode ? 'pointer' : 'not-allowed',
+        fontSize: 11, fontWeight: 700, color: ligado ? '#15803d' : '#334155', opacity: pode ? 1 : .6 }}>
+        <input type="checkbox" checked={ligado} disabled={!pode}
+          onChange={e => set('controla_estoque', e.target.checked)} style={{ cursor: pode ? 'pointer' : 'not-allowed' }} />
+        📦 Controlar o estoque deste item
+      </label>
+      <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+        {ligado
+          ? 'Ligado: este item dá baixa quando sai, confere o mínimo, pede compra sozinho quando falta e trava a liberação se não houver saldo.'
+          : 'Desligado: o item circula normalmente, sem baixa, sem mínimo e sem travar nada. Ligue só depois de contar o que existe na prateleira.'}
+      </div>
+      {!pode && (
+        <div style={{ fontSize: 9, color: '#b45309', marginTop: 3 }}>
+          Só o Almoxarifado e a gerência ligam ou desligam o controle.
+        </div>
+      )}
+
+      {ligado && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 9 }}>
+          <div>
+            <div style={lbl}>Saldo atual</div>
+            <div style={{ ...inp, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+              {fmtQtd(form.estoque_atual)} {form.unidade || 'UN'}
+            </div>
+            <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>
+              muda só por contagem, baixa ou entrada — não se digita aqui
+            </div>
+          </div>
+          <div>
+            <div style={lbl}>Estoque mínimo</div>
+            <input type="number" min={0} step="any" style={inp} value={form.estoque_minimo ?? ''}
+              disabled={!pode} onChange={e => set('estoque_minimo', e.target.value)} placeholder="ex.: 10" />
+            <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>quando chegar aqui, pede compra</div>
+          </div>
+          <div>
+            <div style={lbl}>Estoque ideal</div>
+            <input type="number" min={0} step="any" style={inp} value={form.estoque_ideal ?? ''}
+              disabled={!pode} onChange={e => set('estoque_ideal', e.target.value)} placeholder="ex.: 50" />
+            <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>até onde repor na compra</div>
+          </div>
+        </div>
+      )}
+      {ligado && form.estoque_minimo != null && form.estoque_ideal != null
+        && num(form.estoque_ideal) > 0 && num(form.estoque_ideal) <= num(form.estoque_minimo) && (
+        <div style={{ fontSize: 9, color: '#b91c1c', marginTop: 6, fontWeight: 700 }}>
+          ⚠️ O ideal precisa ser maior que o mínimo, senão a compra automática pede zero.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL DO ALMOXARIFADO — os itens sob controle e a contagem
+// ─────────────────────────────────────────────────────────────────────────────
+export function PainelEstoque({ currentUser }: any) {
+  const [itens, setItens] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [contando, setContando] = useState<any>(null);   // item em contagem
+  const [valorContagem, setValorContagem] = useState('');
+  const [obsContagem, setObsContagem] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [procurarNovo, setProcurarNovo] = useState('');
+  const [achados, setAchados] = useState<any[]>([]);
+  const pode = podeGerirEstoque(currentUser);
+
+  const recarregar = async () => {
+    setCarregando(true);
+    setItens(await carregarItensControlados());
+    setCarregando(false);
+  };
+  useEffect(() => { recarregar(); }, []);
+
+  // busca no cadastro inteiro para COLOCAR um item sob controle — é assim que
+  // o controle cresce aos poucos, um item de cada vez
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const termo = procurarNovo.trim();
+      if (termo.length < 3) { setAchados([]); return; }
+      const { data } = await supabase.from('cadastro_itens')
+        .select('id,codigo,nome,unidade,controla_estoque')
+        .eq('ativo', true).eq('controla_estoque', false)
+        .or(`nome_norm.ilike.%${normalizarBusca(termo)}%,codigo_norm.ilike.%${normalizarBusca(termo)}%`)
+        .limit(8);
+      setAchados(data || []);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [procurarNovo]);
+
+  const ligarControle = async (item: any) => {
+    if (!await confirmar(`Colocar "${item.nome}" sob controle de estoque?\n\nEle começa com saldo zero — conte a prateleira logo em seguida, senão a primeira saída já vai acusar falta.`)) return;
+    await supabase.from('cadastro_itens').update({ controla_estoque: true }).eq('id', item.id);
+    setProcurarNovo(''); setAchados([]);
+    recarregar();
+  };
+
+  const gravarContagem = async () => {
+    if (valorContagem === '' || Number(valorContagem) < 0) { alert('Informe a quantidade contada.'); return; }
+    setSalvando(true);
+    const r = await movimentarEstoque({
+      itemId: contando.id, tipo: 'contagem', quantidade: valorContagem,
+      motivo: MOTIVO.CONTAGEM, observacoes: obsContagem.trim() || null, currentUser,
+    });
+    setSalvando(false);
+    if (r?.erro) { alert('Não foi possível gravar a contagem: ' + r.erro); return; }
+    if (r?.ignorado) { alert('Este item não está sob controle de estoque.'); return; }
+    setContando(null); setValorContagem(''); setObsContagem('');
+    recarregar();
+  };
+
+  const lista = itens.filter(i => combinaBusca([i.nome, i.codigo], busca));
+  const abaixo = itens.filter(i => ['abaixo', 'zerado', 'negativo'].includes(situacaoEstoque(i).chave));
+
+  return (
+    <div className="sec-card" style={{ marginTop: 12 }}>
+      <div className="sec-hdr" style={{ background: '#f0fdf4', borderBottom: '2px solid #16a34a' }}>
+        <span style={{ color: '#15803d' }}>📦 Estoque sob controle ({itens.length})</span>
+        {abaixo.length > 0 && (
+          <span style={{ fontSize: 9, fontWeight: 800, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10 }}>
+            {abaixo.length} precisando de reposição
+          </span>
+        )}
+      </div>
+      <div className="sec-body">
+        <div style={{ fontSize: 10, color: '#166534', marginBottom: 8 }}>
+          Só os itens desta lista têm controle. Os demais circulam normalmente, sem baixa e sem travar nada —
+          é assim que dá para contar a prateleira aos poucos, começando pelos itens mais usados.
+        </div>
+
+        {pode && (
+          <div style={{ marginBottom: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+              ＋ Colocar mais um item sob controle
+            </div>
+            <input value={procurarNovo} onChange={e => setProcurarNovo(e.target.value)}
+              placeholder="Procure pelo nome ou código do item (3 letras ou mais)"
+              style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+            {achados.map(a => (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: 10.5, flex: 1 }}>
+                  {a.codigo ? <b>{a.codigo}</b> : null} {a.nome}
+                </span>
+                <button onClick={() => ligarControle(a)}
+                  style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: 'none', borderRadius: 4, background: '#16a34a', color: '#fff', cursor: 'pointer' }}>
+                  Controlar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {itens.length > 6 && (
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar a lista..."
+            style={{ width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 11, marginBottom: 8, boxSizing: 'border-box' }} />
+        )}
+
+        {carregando ? (
+          <div className="acn-empty">Carregando...</div>
+        ) : !itens.length ? (
+          <div className="acn-empty">
+            Nenhum item sob controle ainda. Comece pelos que mais saem — um ou dois já bastam para testar o caminho inteiro.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
+            <thead>
+              <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+                {['Código', 'Item', 'Saldo', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
+                  <th key={h} style={{ padding: '4px 7px', fontSize: 9, fontWeight: 700, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map(i => {
+                const s = situacaoEstoque(i);
+                return (
+                  <tr key={i.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>{i.codigo || '—'}</td>
+                    <td style={{ padding: '4px 7px' }}>{i.nome}</td>
+                    <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
+                    <td style={{ padding: '4px 7px', color: '#64748b' }}>{i.estoque_minimo == null ? '—' : fmtQtd(i.estoque_minimo)}</td>
+                    <td style={{ padding: '4px 7px', color: '#64748b' }}>{i.estoque_ideal == null ? '—' : fmtQtd(i.estoque_ideal)}</td>
+                    <td style={{ padding: '4px 7px' }}>
+                      <span style={{ background: s.fundo, color: s.cor, fontSize: 8.5, fontWeight: 800, padding: '1px 7px', borderRadius: 9, whiteSpace: 'nowrap' }}>
+                        {s.texto}
+                      </span>
+                    </td>
+                    <td style={{ padding: '4px 7px', textAlign: 'right' }}>
+                      {pode && (
+                        <button onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}
+                          style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #cbd5e1', borderRadius: 4, background: '#fff', color: '#334155', cursor: 'pointer' }}>
+                          Contar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {contando && (
+        <div className="modal-overlay" style={{ zIndex: 2100 }}>
+          <div className="modal-box" style={{ maxWidth: 420 }}>
+            <div className="modal-title">📦 Contagem — {contando.nome}</div>
+            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+              O saldo passa a ser exatamente o que você contar. A diferença fica registrada no extrato,
+              com o saldo de antes e o de depois — nada é apagado.
+            </div>
+            <label className="acn-label">Quantidade contada na prateleira *</label>
+            <input type="number" min={0} step="any" autoFocus className="acn-input" style={{ width: '100%', marginBottom: 8 }}
+              value={valorContagem} onChange={e => setValorContagem(e.target.value)} />
+            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+              Sistema diz {fmtQtd(contando.estoque_atual)} {contando.unidade || 'UN'}
+              {valorContagem !== '' && Number(valorContagem) !== Number(contando.estoque_atual || 0) && (
+                <b style={{ color: '#b45309' }}>
+                  {' '}· diferença de {fmtQtd(Number(valorContagem) - Number(contando.estoque_atual || 0))}
+                </b>
+              )}
+            </div>
+            <label className="acn-label">Observação</label>
+            <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={obsContagem}
+              onChange={e => setObsContagem(e.target.value)} placeholder="Ex.: sobrou caixa fechada no fundo" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="acn-btn" style={{ background: '#16a34a', flex: 1, opacity: salvando ? .6 : 1 }}
+                disabled={salvando} onClick={gravarContagem}>
+                {salvando ? 'Gravando...' : 'Gravar contagem'}
+              </button>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando}
+                onClick={() => setContando(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
