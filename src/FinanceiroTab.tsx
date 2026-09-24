@@ -5,12 +5,13 @@ import { imprimirOrdemCompra } from './ComprasTab';
 import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao } from './CentroCustoShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
+import FinanceiroKanban from './FinanceiroKanban';
 
-// Abas do Financeiro: centros de custo (o que já existia) e conciliação bancária
+// Abas do Financeiro: centros de custo (o que já existia), conciliação bancária e o kanban de tarefas
 function AbasFinanceiro({ aba, setAba }: any) {
   return (
-    <div role="tablist" style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '2px solid #0f172a', maxWidth: 520 }}>
-      {[['centros', '🏷️ Centros de custo'], ['conciliacao', '🏦 Conciliação bancária']].map(([id, rotulo]) => (
+    <div role="tablist" style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '2px solid #0f172a', maxWidth: 680 }}>
+      {[['centros', '🏷️ Centros de custo'], ['conciliacao', '🏦 Conciliação bancária'], ['kanban', '📋 Tarefas']].map(([id, rotulo]) => (
         <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
           style={{ flex: 1, padding: '8px', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
             background: aba === id ? '#0f172a' : '#fff', color: aba === id ? '#fff' : '#0f172a' }}>
@@ -455,6 +456,15 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
         <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
         <ConciliacaoBancaria currentUser={currentUser} />
+      </div>
+    );
+  }
+
+  if (abaFin === 'kanban') {
+    return (
+      <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
+        <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
+        <FinanceiroKanban currentUser={currentUser} />
       </div>
     );
   }
