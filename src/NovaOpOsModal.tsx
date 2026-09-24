@@ -122,7 +122,7 @@ const VAZIO = {
   placa:                  '',   // sempre ativo
   modelo:                 '',
   quantidade:             1,
-  veiculos:               [] as {chassi:string, placa:string}[], // para desmembramento
+  veiculos:               [] as {chassi:string, placa:string, modelo:string}[], // para desmembramento
   valor_total:            '',
   frete_responsavel:      '',   // 'CIF' (empresa paga) | 'FOB' (cliente paga) — só Venda para Envio
   valor_mao_de_obra:      '',
@@ -178,9 +178,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   const [semPv, setSemPv]         = useState(false);
   const [pvAchados, setPvAchados] = useState<any[] | null>(null);   // null = ainda não buscou
   const [pvCard, setPvCard]       = useState<any>(null);
-  // Lote misto: adaptações diferentes entre os veículos do mesmo lote
+  // Lote misto: adaptações e itens diferentes entre os veículos do mesmo lote
   const [loteMisto, setLoteMisto] = useState(false);
   const [grupos, setGrupos]       = useState<GrupoLote[]>(grupoInicial(1));
+  // Com lote misto ativo, serviços/itens/valor vêm do grupo de cada unidade —
+  // os campos únicos (lá embaixo) somem pra não conviver com dois donos do
+  // mesmo dado.
+  const loteEhMisto = loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf);
   const [savedOp, setSavedOp] = useState<any>(null); // passo 2: documentos
 
   // Catálogo de modelos de reboque — cadastrável direto por aqui, fica salvo
@@ -294,7 +298,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (k === 'quantidade') {
       const qty = Math.max(1, parseInt(v) || 1);
       const prev = f.veiculos || [];
-      const veiculos = Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'' });
+      const veiculos = Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'', modelo:'' });
       next.veiculos = veiculos;
     }
     return next;
@@ -314,7 +318,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
     if (ehVendaEnvio && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
-    if (form.tipo === 'OP' && itensPreenchidos(form.itens_vendidos || []).length === 0) {
+    // Lote misto: cada grupo tem seus próprios itens (validado em validarGrupos,
+    // mais abaixo) — a lista única daqui não vale nesse caso.
+    if (form.tipo === 'OP' && !loteEhMisto && itensPreenchidos(form.itens_vendidos || []).length === 0) {
       setErro('Informe pelo menos 1 item vendido (o que a Engenharia vai receber para esta OP).'); return;
     }
 
@@ -360,7 +366,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           destino_cep:            form.destino_cep?.trim() || null,
           chassi:                 ehVendaEnvio ? null : ((veiculo?.chassi || form.chassi) || null),
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
-          modelo:                 ehVendaEnvio ? null : (form.modelo || null),
+          modelo:                 ehVendaEnvio ? null : ((veiculo?.modelo || form.modelo) || null),
           quantidade:             semLote ? qty : 1,
           frete_responsavel:      ehVendaEnvio ? (form.frete_responsavel || null) : null,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
@@ -400,8 +406,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             const suf = String(i + 1).padStart(2, '0');
             const payload: any = makePayload(`${baseOpl}/${suf}`, veiculos[i], { total: valoresTotal[i], mo: valoresMO[i], moSerr: valoresMOSerr[i] });
             if (unidades) {
-              // lote misto: serviços (e valor, se informado por grupo) da unidade vêm do grupo
+              // lote misto: serviços, itens vendidos (e valor, se informado por grupo) da unidade vêm do grupo
               payload.resumo_servicos = unidades[i].servicos;
+              payload.itens_vendidos = unidades[i].itens;
               if (unidades[i].valor != null) payload.valor_total = unidades[i].valor;
             }
             const { data, error } = await supabase.from('oples')
@@ -727,21 +734,33 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     <input type="checkbox" checked={loteMisto} style={{ accentColor:'#7c3aed' }}
                       onChange={e => {
                         setLoteMisto(e.target.checked);
-                        if (e.target.checked) setGrupos(grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || ''));
+                        if (e.target.checked) setGrupos(grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || '', form.itens_vendidos || []));
                       }} />
-                    Adaptações diferentes entre os veículos (lote misto)
+                    Adaptações e/ou itens diferentes entre os veículos (lote misto)
                   </label>
                   {loteMisto && (
                     <div style={{ marginBottom:10 }}>
-                      <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos} />
+                      <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos}
+                        crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null} />
+                      <div style={{ fontSize:9, color:'#6b21a8', marginTop:4 }}>
+                        Um grupo com 1 veículo é o carro personalizado sozinho — crie um grupo por unidade pra deixar o lote todo diferente.
+                      </div>
                     </div>
                   )}
+                  {/* Modelo também por unidade — carro pode variar mesmo sem lote misto
+                      (ex.: mesmo serviço em modelos diferentes). Chassi/placa já eram por unidade. */}
                   {(form.veiculos || []).map((v, i) => (
-                    <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:6, marginBottom:6, alignItems:'center' }}>
+                    <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:6, marginBottom:6, alignItems:'center' }}>
                       <span style={{ fontSize:10, fontWeight:800, color:'#7c3aed', width: loteMisto ? 44 : 28 }}>
                         {String(i+1).padStart(2,'0')}
                         {loteMisto && (() => { const u = unidadesDosGrupos(grupos)[i]; return u ? <span style={{ marginLeft:3, fontSize:8, background:'#ede9fe', borderRadius:3, padding:'0 3px' }}>{LETRA(u.grupo)}</span> : null; })()}
                       </span>
+                      <input className="acn-input" placeholder="Modelo" value={v.modelo || ''}
+                        onChange={e => {
+                          const veiculos = [...(form.veiculos||[])];
+                          veiculos[i] = { ...veiculos[i], modelo: e.target.value };
+                          setF('veiculos', veiculos);
+                        }} />
                       <input className="acn-input" placeholder="Chassi" value={v.chassi}
                         onChange={e => {
                           const veiculos = [...(form.veiculos||[])];
@@ -910,27 +929,24 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             </>
           )}
 
-          {/* Itens vendidos — obrigatório na OP (por unidade no lote) */}
-          {isOP && (
+          {/* Itens vendidos — obrigatório na OP. No lote misto cada grupo tem os
+              seus (editados lá em cima, em Dados por Veículo); fora disso é uma
+              lista só, valendo para a OP inteira (ou todas as unidades do lote). */}
+          {isOP && !loteEhMisto && (
             <div style={{ marginBottom: 10 }}>
               <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
                 crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null}
                 unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
-              {loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
-                <div style={{ fontSize: 10, color: '#6b21a8', marginTop: 4 }}>
-                  Lote misto: esta lista vale para todas as unidades; se um grupo levar itens diferentes, ajuste no detalhe da OP daquela unidade.
-                </div>
-              )}
             </div>
           )}
 
           {/* Resumo dos Serviços — OP (no lote misto, cada unidade usa o do seu grupo) */}
-          {isOP && loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf) && (
+          {isOP && loteEhMisto && (
             <div style={{ marginBottom:10, fontSize:10, color:'#6b21a8', background:'#faf5ff', border:'1px dashed #c4b5fd', borderRadius:6, padding:'6px 10px' }}>
-              🧩 Lote misto: o resumo dos serviços de cada unidade vem do seu grupo (acima, em Dados por Veículo).
+              🧩 Lote misto: o resumo dos serviços e os itens vendidos de cada unidade vêm do seu grupo (acima, em Dados por Veículo).
             </div>
           )}
-          {isOP && !(loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf)) && (
+          {isOP && !loteEhMisto && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Resumo dos Serviços a serem executados</div>
               <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', overflow: 'hidden', minHeight: 60 }}
