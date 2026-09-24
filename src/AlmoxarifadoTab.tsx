@@ -14,7 +14,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
-import { PainelEstoque } from './Estoque';
+import { PainelEstoque, baixarKitDaOp, textoDaBaixa } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -243,8 +243,14 @@ Embalar e enviar assim mesmo?`)) return;
     // 1) a OP sai do caminho da produção — pra cotação de frete (CIF) ou já
     //    pra liberação comercial (FOB, sem cotação)
     const difEmb = divergencias(conferencia).length ? 'Diferença com a BOM — ' + resumoDivergencias(conferencia) : '';
+    // OP de envio direto não passa pelo kiting: a conferência dela acontece
+    // aqui, então é aqui que o material dá baixa. Quem já foi conferido no
+    // kiting chega com `conferencia` vazia e não movimenta nada de novo.
+    const baixaEmb = conferencia.length
+      ? await baixarKitDaOp({ opl, linhas: conferencia, currentUser })
+      : null;
     await setAlmox(opl, 'Kit OK', freteComCliente ? 'Aguardando Liberacao Comercial' : 'Aguardando Cotacao Frete',
-      [f.observacoes, difEmb].filter(Boolean).join(' · '), {
+      [f.observacoes, difEmb, textoDaBaixa(baixaEmb)].filter(Boolean).join(' · '), {
       ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
       seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
       ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
@@ -319,18 +325,34 @@ Embalar e enviar assim mesmo?`)) return;
     if (erroConf) { alert(erroConf); return; }
     const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };
     if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser);
+
+    // O material sai da prateleira aqui, tanto no Kit OK quanto no liberado com
+    // pendência — nos dois casos o que foi separado já saiu. Só item com
+    // controle de estoque movimenta; o resto passa batido (ver Estoque.tsx).
+    // A baixa é da diferença, então conferir de novo (pendência sanada) não
+    // conta o material duas vezes.
+    const baixa = await baixarKitDaOp({ opl: modalSeriais, linhas: conferencia, currentUser });
+    const recado = textoDaBaixa(baixa);
+
     if (divergencias(conferencia).length) {
       // separado diferente da BOM: o kit segue, mas com pendência visível para PCP e Engenharia
       const texto = 'Diferença com a BOM — ' + resumoDivergencias(conferencia);
-      await setAlmox(modalSeriais, 'Liberado com Pendencia', 'Aguardando Almox', texto, extra);
+      await setAlmox(modalSeriais, 'Liberado com Pendencia', 'Aguardando Almox',
+        [texto, recado].filter(Boolean).join(' · '), extra);
       notificarEvento('kit_pendencia', msg.kitPendencia(modalSeriais.opl, texto, currentUser?.nome));
+      if (baixa.negativos.length) {
+        alert(`Kit liberado com pendência, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
+      }
       setModalSeriais(null); setSeriaisKitForm('');
       fetchAll();
       return;
     }
-    const obs = modalSeriais._pendenciaSanada ? 'Pendencia sanada' : '';
+    const obs = [modalSeriais._pendenciaSanada ? 'Pendencia sanada' : '', recado].filter(Boolean).join(' · ');
     await setAlmox(modalSeriais, 'Kit OK', 'Kit OK - Aguardando PCP', obs, extra);
     notificarEvento('kit_ok', msg.kitOk(modalSeriais.opl, currentUser?.nome));
+    if (baixa.negativos.length) {
+      alert(`Kit confirmado, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
+    }
     setModalSeriais(null); setSeriaisKitForm('');
     fetchAll();
   };

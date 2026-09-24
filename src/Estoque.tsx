@@ -73,6 +73,65 @@ export async function movimentarEstoque({
   return data || { erro: 'Resposta vazia do banco.' };
 }
 
+/**
+ * Baixa do kit de uma OP, a partir das linhas da conferência.
+ *
+ * Baixa a DIFERENÇA, não o valor cheio: o kit é conferido mais de uma vez
+ * quando sai "liberado com pendência" e a pendência é sanada depois, e baixar
+ * tudo de novo contaria o material duas vezes. Então soma o que esta OP já
+ * consumiu no extrato e movimenta só o que falta — se a conferência diminuiu
+ * (material voltou para a prateleira), devolve ao estoque.
+ *
+ * Linha sem `item_id` (item fora do cadastro) e item sem controle passam
+ * batido, de propósito: é o controle progressivo combinado em 24/09/2026.
+ */
+export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
+  const resumo = { movimentados: [] as any[], ignorados: 0, semCadastro: 0, negativos: [] as any[], erros: [] as string[] };
+  const comItem = (linhas || []).filter((l: any) => l?.item_id);
+  resumo.semCadastro = (linhas || []).length - comItem.length;
+  if (!comItem.length) return resumo;
+
+  // o que esta OP já tirou do estoque, pelo extrato
+  const { data: jaFeitos } = await supabase.from('estoque_movimentos')
+    .select('item_id,tipo,quantidade')
+    .eq('vinculo_tipo', 'op').eq('vinculo_id', String(opl.id)).eq('motivo', MOTIVO.KITING);
+  const jaBaixado = new Map<string, number>();
+  (jaFeitos || []).forEach((m: any) => {
+    const sinal = m.tipo === 'saida' ? 1 : -1;
+    jaBaixado.set(m.item_id, (jaBaixado.get(m.item_id) || 0) + sinal * num(m.quantidade));
+  });
+
+  const vinculo = { tipo: 'op', id: opl.id, descricao: `OP ${opl.opl}` };
+  for (const l of comItem) {
+    const delta = num(l.separado) - (jaBaixado.get(l.item_id) || 0);
+    if (delta === 0) continue;
+    const r = await movimentarEstoque({
+      itemId: l.item_id,
+      tipo: delta > 0 ? 'saida' : 'entrada',
+      quantidade: Math.abs(delta),
+      motivo: MOTIVO.KITING,
+      observacoes: delta < 0 ? 'Devolução: a conferência do kit diminuiu.' : null,
+      vinculo, currentUser,
+    });
+    if (r?.erro) { resumo.erros.push(`${l.nome}: ${r.erro}`); continue; }
+    if (r?.ignorado) { resumo.ignorados++; continue; }
+    resumo.movimentados.push({ nome: l.nome, delta, ...r });
+    if (r?.negativo) resumo.negativos.push({ nome: l.nome, saldo: r.saldo_depois });
+  }
+  return resumo;
+}
+
+/** Frase curta do que a baixa fez, para o aviso na tela. '' quando não houve nada. */
+export function textoDaBaixa(resumo: any) {
+  if (!resumo) return '';
+  const partes: string[] = [];
+  if (resumo.movimentados?.length) partes.push(`${resumo.movimentados.length} item(ns) deram baixa no estoque`);
+  if (resumo.ignorados) partes.push(`${resumo.ignorados} sem controle (seguiram normal)`);
+  if (resumo.negativos?.length) partes.push(`⚠️ saldo negativo em: ${resumo.negativos.map((n: any) => n.nome).join(', ')}`);
+  if (resumo.erros?.length) partes.push(`erro em: ${resumo.erros.join(' · ')}`);
+  return partes.join(' · ');
+}
+
 /** Carrega os itens que estão sob controle, com saldo e mínimo. */
 export async function carregarItensControlados() {
   const { data } = await supabase.from('cadastro_itens')
@@ -170,6 +229,122 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RETIRADA — alguém veio pedir material no balcão
+//
+// A lista é do que saiu, com quantidade e quem levou. Só aparecem itens sob
+// controle: item sem controle não tem saldo para baixar, e registrar a saída
+// dele aqui criaria um extrato que não movimenta nada — meia verdade pior que
+// silêncio. Para passar a controlar um item, use o painel de estoque.
+// ─────────────────────────────────────────────────────────────────────────────
+const linhaRetiradaVazia = () => ({ item: null, quantidade: '' });
+
+export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
+  const [linhas, setLinhas] = useState<any[]>([linhaRetiradaVazia()]);
+  const [quemRetirou, setQuemRetirou] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [disponiveis, setDisponiveis] = useState<any[]>([]);
+
+  useEffect(() => { carregarItensControlados().then(setDisponiveis); }, []);
+
+  const set = (i: number, patch: any) => setLinhas(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l));
+  const preenchidas = linhas.filter(l => l.item && num(l.quantidade) > 0);
+
+  const gravar = async () => {
+    if (!quemRetirou.trim()) { alert('Informe quem retirou o material.'); return; }
+    if (!preenchidas.length) { alert('Informe ao menos um item e a quantidade.'); return; }
+    setSalvando(true);
+    const falhas: string[] = [];
+    const negativos: string[] = [];
+    for (const l of preenchidas) {
+      const r = await movimentarEstoque({
+        itemId: l.item.id, tipo: 'saida', quantidade: l.quantidade,
+        motivo: MOTIVO.RETIRADA, observacoes: observacoes.trim() || null,
+        retiradoPor: quemRetirou.trim(), currentUser,
+      });
+      if (r?.erro) falhas.push(`${l.item.nome}: ${r.erro}`);
+      else if (r?.negativo) negativos.push(`${l.item.nome} (saldo ${fmtQtd(r.saldo_depois)})`);
+    }
+    setSalvando(false);
+    if (falhas.length) { alert('Nem tudo foi registrado:\n' + falhas.join('\n')); return; }
+    if (negativos.length) {
+      alert(`Retirada registrada, mas ficou com saldo negativo em:\n${negativos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
+    }
+    onFeito?.();
+    onClose();
+  };
+
+  const inp = { width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
+    fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 2100 }}>
+      <div className="modal-box" style={{ maxWidth: 620, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-title">📤 Registrar retirada de material</div>
+        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+          Só aparecem itens sob controle de estoque. O que não está sob controle sai como sempre, sem registro.
+        </div>
+
+        <label className="acn-label">Quem retirou *</label>
+        <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={quemRetirou} autoFocus
+          onChange={e => setQuemRetirou(e.target.value)} placeholder="Nome de quem levou o material" />
+
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {linhas.map((l, i) => {
+            const saldo = l.item ? num(l.item.estoque_atual) : null;
+            const pedido = num(l.quantidade);
+            const passaDoSaldo = l.item && pedido > saldo;
+            return (
+              <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 6 }}>
+                <div style={{ flex: 3 }}>
+                  <select style={inp} value={l.item?.id || ''}
+                    onChange={e => set(i, { item: disponiveis.find(d => d.id === e.target.value) || null })}>
+                    <option value="">— escolha o item —</option>
+                    {disponiveis.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.codigo ? `${d.codigo} · ` : ''}{d.nome} (saldo {fmtQtd(d.estoque_atual)} {d.unidade || 'UN'})
+                      </option>
+                    ))}
+                  </select>
+                  {passaDoSaldo && (
+                    <div style={{ fontSize: 9, color: '#b45309', marginTop: 2 }}>
+                      Pedido maior que o saldo ({fmtQtd(saldo)}): o saldo vai ficar negativo.
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <input type="number" min={0} step="any" style={inp} value={l.quantidade}
+                    onChange={e => set(i, { quantidade: e.target.value })} placeholder="Qtd" />
+                </div>
+                <button onClick={() => setLinhas(ls => ls.length > 1 ? ls.filter((_, j) => j !== i) : [linhaRetiradaVazia()])}
+                  title="Remover linha"
+                  style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', fontSize: 11 }}>✕</button>
+              </div>
+            );
+          })}
+          <button onClick={() => setLinhas(ls => [...ls, linhaRetiradaVazia()])}
+            style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', border: '1px dashed #cbd5e1', borderRadius: 4, background: '#fff', color: '#475569', cursor: 'pointer' }}>
+            ＋ Mais um item
+          </button>
+        </div>
+
+        <label className="acn-label" style={{ marginTop: 10 }}>Observação</label>
+        <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={observacoes}
+          onChange={e => setObservacoes(e.target.value)} placeholder="Ex.: para a manutenção da prensa" />
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="acn-btn" style={{ background: '#0f766e', flex: 1, opacity: salvando ? .6 : 1 }}
+            disabled={salvando} onClick={gravar}>
+            {salvando ? 'Registrando...' : `Registrar retirada (${preenchidas.length} item${preenchidas.length === 1 ? '' : 's'})`}
+          </button>
+          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DO ALMOXARIFADO — os itens sob controle e a contagem
 // ─────────────────────────────────────────────────────────────────────────────
 export function PainelEstoque({ currentUser }: any) {
@@ -182,11 +357,18 @@ export function PainelEstoque({ currentUser }: any) {
   const [salvando, setSalvando] = useState(false);
   const [procurarNovo, setProcurarNovo] = useState('');
   const [achados, setAchados] = useState<any[]>([]);
+  const [retirando, setRetirando] = useState(false);
+  const [movimentos, setMovimentos] = useState<any[]>([]);
+  const [verExtrato, setVerExtrato] = useState(false);
   const pode = podeGerirEstoque(currentUser);
 
   const recarregar = async () => {
     setCarregando(true);
     setItens(await carregarItensControlados());
+    const { data } = await supabase.from('estoque_movimentos')
+      .select('id,item_nome,tipo,quantidade,saldo_depois,motivo,retirado_por_nome,vinculo_descricao,criado_por_nome,criado_em')
+      .order('criado_em', { ascending: false }).limit(15);
+    setMovimentos(data || []);
     setCarregando(false);
   };
   useEffect(() => { recarregar(); }, []);
@@ -235,11 +417,20 @@ export function PainelEstoque({ currentUser }: any) {
     <div className="sec-card" style={{ marginTop: 12 }}>
       <div className="sec-hdr" style={{ background: '#f0fdf4', borderBottom: '2px solid #16a34a' }}>
         <span style={{ color: '#15803d' }}>📦 Estoque sob controle ({itens.length})</span>
-        {abaixo.length > 0 && (
-          <span style={{ fontSize: 9, fontWeight: 800, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10 }}>
-            {abaixo.length} precisando de reposição
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {abaixo.length > 0 && (
+            <span style={{ fontSize: 9, fontWeight: 800, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10 }}>
+              {abaixo.length} precisando de reposição
+            </span>
+          )}
+          {pode && itens.length > 0 && (
+            <button onClick={e => { e.stopPropagation(); setRetirando(true); }}
+              title="Registrar o que alguém veio buscar no balcão"
+              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#0f766e', color: '#fff', cursor: 'pointer' }}>
+              📤 Registrar retirada
+            </button>
+          )}
+        </div>
       </div>
       <div className="sec-body">
         <div style={{ fontSize: 10, color: '#166534', marginBottom: 8 }}>
@@ -318,7 +509,51 @@ export function PainelEstoque({ currentUser }: any) {
             </tbody>
           </table>
         )}
+
+        {/* extrato recente: é o que dá confiança de que o saldo não muda sozinho */}
+        {movimentos.length > 0 && (
+          <div style={{ marginTop: 10, borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
+            <button onClick={() => setVerExtrato(v => !v)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 9.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+              {verExtrato ? '▾' : '▸'} Últimos movimentos ({movimentos.length})
+            </button>
+            {verExtrato && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, marginTop: 6 }}>
+                <tbody>
+                  {movimentos.map(m => {
+                    const sinal = m.tipo === 'saida' ? '−' : m.tipo === 'entrada' ? '+' : '=';
+                    const cor = m.tipo === 'saida' ? '#b91c1c' : m.tipo === 'entrada' ? '#15803d' : '#475569';
+                    return (
+                      <tr key={m.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '3px 6px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                          {new Date(m.criado_em).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td style={{ padding: '3px 6px' }}>{m.item_nome}</td>
+                        <td style={{ padding: '3px 6px', fontWeight: 800, color: cor, whiteSpace: 'nowrap' }}>
+                          {sinal}{fmtQtd(m.quantidade)}
+                        </td>
+                        <td style={{ padding: '3px 6px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                          saldo {fmtQtd(m.saldo_depois)}
+                        </td>
+                        <td style={{ padding: '3px 6px', color: '#64748b' }}>
+                          {m.motivo === MOTIVO.RETIRADA && m.retirado_por_nome ? `retirada — ${m.retirado_por_nome}`
+                            : m.motivo === MOTIVO.KITING ? `kiting — ${m.vinculo_descricao || ''}`
+                            : m.motivo === MOTIVO.CONTAGEM ? `contagem — ${m.criado_por_nome || ''}`
+                            : m.motivo || ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
+
+      {retirando && (
+        <ModalRetirada currentUser={currentUser} onClose={() => setRetirando(false)} onFeito={recarregar} />
+      )}
 
       {contando && (
         <div className="modal-overlay" style={{ zIndex: 2100 }}>
