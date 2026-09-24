@@ -15,7 +15,7 @@ import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
-import { soEnvio, TIPO_VENDA_ENVIO } from './FluxoEntrega';
+import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
@@ -439,6 +439,31 @@ const Sec = ({ title }: { title: string }) => (
 // toda tela por onde a OP passa. No lugar, o que ela é e a quantidade.
 // Uma implementação só, para as telas não divergirem.
 // ─────────────────────────────────────────────────────────────────────────────
+/** Quem paga o frete desta OP, e o que isso faz acontecer depois da embalagem.
+ *  Até 24/09/2026 a resposta ficava guardada no banco sem aparecer em lugar
+ *  nenhum: nem no detalhe da OP, nem no dossiê, nem para quem embalava. Aqui
+ *  ela é só mostrada; quem responde e corrige são o modal de edição da OP
+ *  (OplEdicao.tsx) e a tela de embalagem (AlmoxarifadoTab.tsx). */
+export function SeloFrete({ o, compacto = false }: { o: any; compacto?: boolean }) {
+  if (!terminaEmEnvio(o?.fluxo_entrega) && o?.tipo_projeto !== TIPO_VENDA_ENVIO) return null;
+  const v = o?.frete_responsavel;
+  const cor = v === 'FOB' ? { fundo:'#fef3c7', texto:'#92400e' }
+            : v === 'CIF' ? { fundo:'#dbeafe', texto:'#1d4ed8' }
+            :               { fundo:'#fee2e2', texto:'#b91c1c' };
+  const rotulo = v === 'FOB' ? 'FOB — cliente paga o frete'
+               : v === 'CIF' ? 'CIF — a empresa paga o frete'
+               :               'Frete não informado';
+  const efeito = v === 'FOB' ? 'não vai para cotação: depois de embalada segue direto para liberação comercial'
+               : v === 'CIF' ? 'depois de embalada, abre pedido de frete para a Logística cotar'
+               :               'sem resposta, a OP é tratada como CIF e vai para cotação';
+  return (
+    <span title={efeito} style={{ display:'inline-flex', alignItems:'center', gap:5, background:cor.fundo, color:cor.texto,
+      fontSize: compacto ? 9 : 10, fontWeight:800, padding:'2px 8px', borderRadius:10, whiteSpace:'nowrap' }}>
+      🚚 {rotulo}
+    </span>
+  );
+}
+
 export function VeiculoOuEnvio({ o, semPlaca = false }: { o: any; semPlaca?: boolean }) {
   const vazio = (v: any) => !v || !String(v).trim();
   const alerta = (t: string) => <span style={{ color:'#dc2626', fontWeight:700 }}>⚠️ {t}</span>;
@@ -974,6 +999,10 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
 
         {/* ── Veículo ── */}
         <Sec title={soEnvio(opl.fluxo_entrega) ? "📦 Envio" : "🚗 Veículo"} />
+        {/* quem paga o frete só aparece em OP que sai daqui embalada */}
+        {(terminaEmEnvio(opl.fluxo_entrega) || opl.tipo_projeto === TIPO_VENDA_ENVIO) && (
+          <div style={{ marginBottom: 8 }}><SeloFrete o={opl} /></div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
           <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
           <Campo label="Chassi"                    value={opl.chassi} field="chassi" />

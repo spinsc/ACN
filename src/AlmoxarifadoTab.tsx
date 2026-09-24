@@ -182,6 +182,10 @@ export default function AlmoxarifadoTab({ currentUser }) {
       destino_cidade: opl.destino_cidade || '',
       destino_uf: opl.destino_uf || '',
       destino_cep: opl.destino_cep || '',
+      // CIF/FOB decide se esta OP abre cotação de frete ou vai direto para o
+      // Comercial. Quando a OP chega aqui sem resposta, é aqui que ela é dada
+      // — antes seguia calada como CIF (regra do usuário em 24/09/2026).
+      frete_responsavel: opl.frete_responsavel || '',
       observacoes: '',
     });
     setModalEmbalagem(opl);
@@ -207,6 +211,13 @@ export default function AlmoxarifadoTab({ currentUser }) {
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
       alert('Informe a cidade e a UF de entrega.'); return;
     }
+    // Sem CIF/FOB não dá para saber se a Logística precisa cotar. Em vez de
+    // seguir como CIF calada (como era até 24/09/2026), a resposta é pedida
+    // aqui, e fica gravada na OP.
+    if (!f.frete_responsavel) {
+      alert('Informe quem paga o frete desta OP: CIF (a empresa) ou FOB (o cliente).\n\nÉ isso que decide se a Logística vai cotar o frete ou se a OP segue direto para a liberação comercial.');
+      return;
+    }
     // Fluxo de envio: aqui a mercadoria sai da empresa. Se ainda há peça de
     // fabricação ou compra em aberto, o risco é enviar incompleto — então
     // avisa e pede confirmação (bloquear de vez pararia envio parcial, que é
@@ -224,7 +235,9 @@ Embalar e enviar assim mesmo?`)) return;
     // FOB = o cliente paga o frete: não há o que a Logística cotar, então a OP
     // pula direto pra liberação comercial (regra pedida pelo usuário em
     // 24/09/2026 — ver a pergunta CIF/FOB na criação da OP, NovaOpOsModal.tsx).
-    const freteComCliente = opl.frete_responsavel === 'FOB';
+    // Vale o que está na tela: a OP pode ter chegado aqui sem resposta, ou o
+    // Almoxarifado pode estar corrigindo o que o Comercial respondeu.
+    const freteComCliente = f.frete_responsavel === 'FOB';
 
     // 1) a OP sai do caminho da produção — pra cotação de frete (CIF) ou já
     //    pra liberação comercial (FOB, sem cotação)
@@ -237,6 +250,9 @@ Embalar e enviar assim mesmo?`)) return;
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
       destino_cep: f.destino_cep?.trim() || null,
+      // a resposta dada (ou corrigida) aqui fica na OP: da próxima vez que
+      // alguém abrir esta OP, o selo mostra quem paga o frete
+      frete_responsavel: f.frete_responsavel,
     });
 
     // 2) nasce a solicitação de frete (status default 'Cotação') pra Logística
@@ -737,6 +753,39 @@ Embalar e enviar assim mesmo?`)) return;
               {modalEmbalagem.status_geral === STATUS_EMBALAGEM ? 'produção concluída' : 'não passa por produção'}
             </div>
 
+            {/* Quem paga o frete decide para onde esta OP vai daqui. Vinha
+                respondido do Comercial, mas nem todo fluxo era perguntado —
+                quando chega em branco, é aqui que se responde (24/09/2026). */}
+            <div style={{ marginBottom:12, background: embForm.frete_responsavel ? '#f8fafc' : '#fef2f2',
+              border: `1px solid ${embForm.frete_responsavel ? '#e2e8f0' : '#fecaca'}`, borderRadius:6, padding:'8px 10px' }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>
+                🚚 Frete * {!modalEmbalagem.frete_responsavel && (
+                  <span style={{ fontWeight:400, color:'#b91c1c' }}>— esta OP chegou sem resposta, informe agora</span>
+                )}
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                {[
+                  { v:'CIF', label:'CIF — a empresa paga' },
+                  { v:'FOB', label:'FOB — o cliente paga' },
+                ].map(opt => (
+                  <button key={opt.v} type="button" onClick={()=>setEmbForm(f=>({...f, frete_responsavel: opt.v}))}
+                    style={{ flex:1, padding:'7px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer',
+                      border: embForm.frete_responsavel === opt.v ? '2px solid #2563eb' : '1px solid #d1d5db',
+                      background: embForm.frete_responsavel === opt.v ? '#dbeafe' : '#fff',
+                      color: embForm.frete_responsavel === opt.v ? '#1d4ed8' : '#374151' }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize:9, color:'#64748b', marginTop:4 }}>
+                {embForm.frete_responsavel === 'FOB'
+                  ? 'Ao concluir, esta OP vai direto para a liberação comercial — a Logística não coteia nada.'
+                  : embForm.frete_responsavel === 'CIF'
+                  ? 'Ao concluir, nasce o pedido de frete para a Logística cotar.'
+                  : 'Sem essa resposta não dá para saber se a Logística precisa cotar o frete.'}
+              </div>
+            </div>
+
             {ehVendaEnvioOp(modalEmbalagem) ? (
               <div style={{ marginBottom:10 }}>
                 <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>
@@ -778,7 +827,13 @@ Embalar e enviar assim mesmo?`)) return;
             </>)}
 
             <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
-              Embalagem (vai para a cotação de frete)
+              {/* o destino depende do CIF/FOB — o texto fixo "vai para a cotação
+                  de frete" mentia em OP FOB, que não passa pela Logística */}
+              {embForm.frete_responsavel === 'FOB'
+                ? 'Embalagem (segue direto para a liberação comercial)'
+                : embForm.frete_responsavel === 'CIF'
+                ? 'Embalagem (vai para a cotação de frete)'
+                : 'Embalagem'}
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:8, marginBottom:10 }}>
               <div>
@@ -840,7 +895,11 @@ Embalar e enviar assim mesmo?`)) return;
             <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEmbalagem(null)}>Cancelar</button>
               <button className="acn-btn" style={{background:'#0f766e'}} disabled={salvandoEmb} onClick={confirmarEmbalagem}>
-                {salvandoEmb ? 'Salvando...' : '📦 Finalizar e solicitar frete'}
+                {/* o botão dizia sempre "solicitar frete", inclusive em OP FOB,
+                    onde nenhum frete é solicitado (24/09/2026) */}
+                {salvandoEmb ? 'Salvando...'
+                  : embForm.frete_responsavel === 'FOB' ? '📦 Finalizar e liberar para o Comercial'
+                  : '📦 Finalizar e solicitar frete'}
               </button>
             </div>
           </div>

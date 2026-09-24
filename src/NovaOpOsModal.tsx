@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { EXT_PLANILHAS, contentTypeUpload } from './FormatosArquivo';
 import { ClienteAutocomplete } from './ClienteUtils';
-import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo } from './FluxoEntrega';
+import { FLUXOS, UFS, soEnvio, TIPO_VENDA_ENVIO, fluxoEfetivo, terminaEmEnvio } from './FluxoEntrega';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { dividirValorEmUnidades } from './AcnTabShared';
 import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
@@ -173,6 +173,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // Entrega some e tudo que depende do fluxo usa este valor.
   const ehVendaEnvio = form.tipo_projeto === TIPO_VENDA_ENVIO;
   const fluxoEf = fluxoEfetivo(form.tipo_projeto, form.fluxo_entrega);
+  // Quem paga o frete importa em TODA OP que sai daqui embalada, não só na
+  // "Venda para Envio": envio para adaptação de terceiro e fabricação de
+  // serralheria com envio também param na embalagem e também precisam saber
+  // se abre cotação. Antes só a venda de envio era perguntada, e as outras
+  // chegavam no Almoxarifado sem resposta (corrigido em 24/09/2026).
+  const precisaFrete = terminaEmEnvio(fluxoEf);
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro]       = useState('');
@@ -320,7 +326,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Adaptação por omissão — que é justamente o problema que isto resolve.
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
-    if (ehVendaEnvio && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
+    if (precisaFrete && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
     // Lote misto: cada grupo tem seus próprios itens (validado em validarGrupos,
     // mais abaixo) — a lista única daqui não vale nesse caso.
     if (form.tipo === 'OP' && !loteEhMisto && itensPreenchidos(form.itens_vendidos || []).length === 0) {
@@ -371,7 +377,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
           modelo:                 ehVendaEnvio ? null : ((veiculo?.modelo || form.modelo) || null),
           quantidade:             semLote ? qty : 1,
-          frete_responsavel:      ehVendaEnvio ? (form.frete_responsavel || null) : null,
+          frete_responsavel:      precisaFrete ? (form.frete_responsavel || null) : null,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
           valor_mao_de_obra:      ehVendaEnvio ? null : (valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra)),
           valor_mao_de_obra_serralheria: ehVendaEnvio ? null : (valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria)),
@@ -691,6 +697,34 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               </div>
               )}
 
+              {/* Quem paga o frete: se for o cliente (FOB), a Logística não
+                  precisa cotar — o Almoxarifado pula direto essa etapa ao
+                  embalar (regra pedida pelo usuário em 24/09/2026). Aparece em
+                  qualquer fluxo que termine com a mercadoria saindo daqui. */}
+              {precisaFrete && (
+                <div style={{ marginBottom:10, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'8px 10px' }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>🚚 Frete *</div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    {[
+                      { v:'CIF', label:'CIF — a empresa paga o frete' },
+                      { v:'FOB', label:'FOB — o cliente paga o frete' },
+                    ].map(opt => (
+                      <button key={opt.v} type="button" onClick={() => setF('frete_responsavel', opt.v)}
+                        style={{ flex:1, padding:'8px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer',
+                          border: form.frete_responsavel === opt.v ? '2px solid #2563eb' : '1px solid #d1d5db',
+                          background: form.frete_responsavel === opt.v ? '#dbeafe' : '#fff',
+                          color: form.frete_responsavel === opt.v ? '#1d4ed8' : '#374151' }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize:9, color: form.frete_responsavel === 'FOB' ? '#b45309' : '#64748b', marginTop:4 }}>
+                    {form.frete_responsavel === 'FOB'
+                      ? 'Cliente paga o frete: esta OP não vai para cotação da Logística — segue direto para liberação comercial depois de embalada.'
+                      : 'Depois de embalada, a OP abre pedido de frete para a Logística cotar.'}
+                  </div>
+                </div>
+              )}
 
               {/* Destino — pode ficar em branco agora e ser completado depois na
                   própria OPL; é o dado que o aproveitamento de frete vai usar. */}
@@ -790,31 +824,6 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor Total (R$)</div>
                   <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 45000"
                     value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
-                </div>
-                {/* Quem paga o frete: se for o cliente (FOB), a Logística não
-                    precisa cotar — o Almoxarifado pula direto essa etapa ao
-                    embalar (regra pedida pelo usuário em 24/09/2026). */}
-                <div style={{ marginBottom:10 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Frete *</div>
-                  <div style={{ display:'flex', gap:8 }}>
-                    {[
-                      { v:'CIF', label:'CIF — a empresa paga o frete' },
-                      { v:'FOB', label:'FOB — o cliente paga o frete' },
-                    ].map(opt => (
-                      <button key={opt.v} type="button" onClick={() => setF('frete_responsavel', opt.v)}
-                        style={{ flex:1, padding:'8px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer',
-                          border: form.frete_responsavel === opt.v ? '2px solid #2563eb' : '1px solid #d1d5db',
-                          background: form.frete_responsavel === opt.v ? '#dbeafe' : '#fff',
-                          color: form.frete_responsavel === opt.v ? '#1d4ed8' : '#374151' }}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  {form.frete_responsavel === 'FOB' && (
-                    <div style={{ fontSize:9, color:'#b45309', marginTop:4 }}>
-                      Cliente paga o frete: esta OP não vai para cotação da Logística — segue direto para liberação comercial depois de embalada.
-                    </div>
-                  )}
                 </div>
               </>) : (<>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
