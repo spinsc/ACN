@@ -25,7 +25,8 @@ import { ehAdminOuGerente } from './utils/permissoes';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
-import { SelectBusca } from './Interface';
+import { SelectBusca, MenuAcoes } from './Interface';
+import { mdiPencilOutline, mdiCloseCircleOutline } from '@mdi/js';
 
 /** Requisição de reposição aberta = ainda não virou material na prateleira.
  *  'Concluído' era o nome antigo de 'Recebido' e foi unificado em 24/09/2026
@@ -493,6 +494,8 @@ export function PainelEstoque({ currentUser }: any) {
   const [procurarNovo, setProcurarNovo] = useState('');
   const [achados, setAchados] = useState<any[]>([]);
   const [retirando, setRetirando] = useState(false);
+  const [definindo, setDefinindo] = useState<any>(null);   // item ajustando mínimo/ideal
+  const [formLimites, setFormLimites] = useState({ minimo: '', ideal: '' });
   const [movimentos, setMovimentos] = useState<any[]>([]);
   const [verExtrato, setVerExtrato] = useState(false);
   const pode = podeGerirEstoque(currentUser);
@@ -528,6 +531,41 @@ export function PainelEstoque({ currentUser }: any) {
     if (!await confirmar(`Colocar "${item.nome}" sob controle de estoque?\n\nEle começa com saldo zero — conte a prateleira logo em seguida, senão a primeira saída já vai acusar falta.`)) return;
     await supabase.from('cadastro_itens').update({ controla_estoque: true }).eq('id', item.id);
     setProcurarNovo(''); setAchados([]);
+    recarregar();
+  };
+
+  const abrirLimites = (item: any) => {
+    setFormLimites({ minimo: item.estoque_minimo ?? '', ideal: item.estoque_ideal ?? '' });
+    setDefinindo(item);
+  };
+
+  const gravarLimites = async () => {
+    const min = formLimites.minimo === '' ? null : num(formLimites.minimo);
+    const ideal = formLimites.ideal === '' ? null : num(formLimites.ideal);
+    if (min != null && ideal != null && ideal <= min) {
+      alert('O ideal precisa ser maior que o mínimo, senão a compra automática pediria zero.');
+      return;
+    }
+    const { error } = await supabase.from('cadastro_itens')
+      .update({ estoque_minimo: min, estoque_ideal: ideal }).eq('id', definindo.id);
+    if (error) { alert('Não foi possível salvar: ' + error.message); return; }
+    setDefinindo(null);
+    recarregar();
+  };
+
+  /** Desligar o controle não apaga o saldo: se o item voltar para o controle
+   *  depois, o número anterior continua lá — mas provavelmente estará velho,
+   *  e por isso o aviso pede uma contagem na volta. */
+  const desabilitarControle = async (item: any) => {
+    if (!await confirmar(
+      `Tirar "${item.nome}" do controle de estoque?\n\n` +
+      `Ele volta a circular como qualquer outro item: não dá mais baixa, não confere mínimo, ` +
+      `não pede compra sozinho e não trava liberação.\n\n` +
+      `O saldo de ${fmtQtd(item.estoque_atual)} e o extrato ficam guardados. Se um dia voltar ao controle, ` +
+      `conte a prateleira antes de confiar nesse número.`)) return;
+    const { error } = await supabase.from('cadastro_itens')
+      .update({ controla_estoque: false }).eq('id', item.id);
+    if (error) { alert('Não foi possível desabilitar: ' + error.message); return; }
     recarregar();
   };
 
@@ -638,10 +676,17 @@ export function PainelEstoque({ currentUser }: any) {
                     </td>
                     <td style={{ padding: '4px 7px', textAlign: 'right' }}>
                       {pode && (
-                        <button onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}
-                          style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #cbd5e1', borderRadius: 4, background: '#fff', color: '#334155', cursor: 'pointer' }}>
-                          Contar
-                        </button>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <button onClick={() => { setContando(i); setValorContagem(String(i.estoque_atual ?? '')); setObsContagem(''); }}
+                            style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #cbd5e1', borderRadius: 4, background: '#fff', color: '#334155', cursor: 'pointer' }}>
+                            Contar
+                          </button>
+                          <MenuAcoes itens={[
+                            { rotulo: 'Definir mínimo e ideal', icone: mdiPencilOutline, onClick: () => abrirLimites(i) },
+                            { rotulo: 'Tirar do controle de estoque', icone: mdiCloseCircleOutline, perigo: true,
+                              onClick: () => desabilitarControle(i) },
+                          ]} />
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -694,6 +739,43 @@ export function PainelEstoque({ currentUser }: any) {
 
       {retirando && (
         <ModalRetirada currentUser={currentUser} onClose={() => setRetirando(false)} onFeito={recarregar} />
+      )}
+
+      {definindo && (
+        <div className="modal-overlay" style={{ zIndex: 2100 }}>
+          <div className="modal-box" style={{ maxWidth: 420 }}>
+            <div className="modal-title">🎯 Mínimo e ideal — {definindo.nome}</div>
+            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+              O mínimo é onde a compra dispara. O ideal é até onde repor: o pedido é a diferença entre
+              o saldo e o ideal, para não pedir de novo na semana seguinte.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label className="acn-label">Estoque mínimo</label>
+                <input type="number" min={0} step="any" autoFocus className="acn-input" style={{ width: '100%' }}
+                  value={formLimites.minimo} onChange={e => setFormLimites(f => ({ ...f, minimo: e.target.value }))}
+                  placeholder="ex.: 10" />
+              </div>
+              <div>
+                <label className="acn-label">Estoque ideal</label>
+                <input type="number" min={0} step="any" className="acn-input" style={{ width: '100%' }}
+                  value={formLimites.ideal} onChange={e => setFormLimites(f => ({ ...f, ideal: e.target.value }))}
+                  placeholder="ex.: 50" />
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: '#64748b', margin: '8px 0 10px' }}>
+              Saldo de hoje: <b>{fmtQtd(definindo.estoque_atual)} {definindo.unidade || 'UN'}</b>.
+              {formLimites.minimo !== '' && formLimites.ideal !== '' && num(formLimites.ideal) > num(formLimites.minimo) && (
+                <> Batendo o mínimo, o pedido sairia com {fmtQtd(Math.max(num(formLimites.ideal) - num(formLimites.minimo), 0))} ou mais.</>
+              )}
+              {formLimites.minimo === '' && <> Sem mínimo, este item não pede compra sozinho.</>}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="acn-btn" style={{ background: '#16a34a', flex: 1 }} onClick={gravarLimites}>Salvar</button>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => setDefinindo(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {contando && (
