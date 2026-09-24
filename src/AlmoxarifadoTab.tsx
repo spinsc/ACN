@@ -205,7 +205,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
     const erroConf = validarConferencia(conferencia);
     if (erroConf) { alert(erroConf); return; }
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
-      alert('Informe a cidade e a UF de entrega — sem isso a Logística não consegue cotar o frete.'); return;
+      alert('Informe a cidade e a UF de entrega.'); return;
     }
     // Fluxo de envio: aqui a mercadoria sai da empresa. Se ainda há peça de
     // fabricação ou compra em aberto, o risco é enviar incompleto — então
@@ -221,10 +221,16 @@ Embalar e enviar assim mesmo?`)) return;
     setSalvandoEmb(true);
     const opl = modalEmbalagem;
     const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
+    // FOB = o cliente paga o frete: não há o que a Logística cotar, então a OP
+    // pula direto pra liberação comercial (regra pedida pelo usuário em
+    // 24/09/2026 — ver a pergunta CIF/FOB na criação da OP, NovaOpOsModal.tsx).
+    const freteComCliente = opl.frete_responsavel === 'FOB';
 
-    // 1) a OP sai do caminho da produção e passa a aguardar a cotação de frete
+    // 1) a OP sai do caminho da produção — pra cotação de frete (CIF) ou já
+    //    pra liberação comercial (FOB, sem cotação)
     const difEmb = divergencias(conferencia).length ? 'Diferença com a BOM — ' + resumoDivergencias(conferencia) : '';
-    await setAlmox(opl, 'Kit OK', 'Aguardando Cotacao Frete', [f.observacoes, difEmb].filter(Boolean).join(' · '), {
+    await setAlmox(opl, 'Kit OK', freteComCliente ? 'Aguardando Liberacao Comercial' : 'Aguardando Cotacao Frete',
+      [f.observacoes, difEmb].filter(Boolean).join(' · '), {
       ...(conferencia.length ? { kit_conferencia: registroConferencia(conferencia, currentUser) } : {}),
       seriais_equipamentos: vendaEnvio ? itensSeriais.map(x => `${x.produto}: ${x.serial}`).join('\n') : f.seriais.trim(),
       ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
@@ -234,7 +240,8 @@ Embalar e enviar assim mesmo?`)) return;
     });
 
     // 2) nasce a solicitação de frete (status default 'Cotação') pra Logística
-    const { error } = await supabase.from('pcp_fretes').insert([{
+    //    — só quando é a empresa quem paga (CIF)
+    const { error } = freteComCliente ? { error: null } : await supabase.from('pcp_fretes').insert([{
       direcao: 'outbound',
       descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim(),
       destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
@@ -252,7 +259,9 @@ Embalar e enviar assim mesmo?`)) return;
     // 3) quem vendeu precisa poder responder ao cliente sem perguntar a
     //    ninguém: "embalado, foi para cotação de frete" é exatamente o
     //    recado que falta hoje. Registra no acompanhamento e notifica.
-    const recado = `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${[f.destino_cidade, f.destino_uf].filter(Boolean).join('/')}. Solicitação de frete aberta para a Logística cotar.`;
+    const recado = freteComCliente
+      ? `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${[f.destino_cidade, f.destino_uf].filter(Boolean).join('/')}. Frete por conta do cliente (FOB) — liberado direto para o Comercial.`
+      : `Embalado: ${f.volumes || 1} volume(s), ${f.peso_total} kg, destino ${[f.destino_cidade, f.destino_uf].filter(Boolean).join('/')}. Solicitação de frete aberta para a Logística cotar.`;
     await supabase.from('op_acompanhamentos').insert({
       referencia_id: opl.opl, referencia_tipo: 'op', referencia_desc: `OP ${opl.opl}`,
       setor: 'Almoxarifado', texto: recado,
@@ -267,6 +276,7 @@ Embalar e enviar assim mesmo?`)) return;
 
     setSalvandoEmb(false);
     if (error) { alert('OP finalizada, mas houve erro ao abrir a solicitação de frete: ' + error.message); }
+    else if (freteComCliente) { alert(`Embalagem registrada. Frete por conta do cliente — OP ${opl.opl} liberada direto para o Comercial.`); }
     else { alert(`Embalagem registrada. Solicitação de frete aberta para a Logística cotar (OP ${opl.opl}).`); }
     setModalEmbalagem(null);
     fetchAll();

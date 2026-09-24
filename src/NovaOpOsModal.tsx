@@ -124,6 +124,7 @@ const VAZIO = {
   quantidade:             1,
   veiculos:               [] as {chassi:string, placa:string}[], // para desmembramento
   valor_total:            '',
+  frete_responsavel:      '',   // 'CIF' (empresa paga) | 'FOB' (cliente paga) — só Venda para Envio
   valor_mao_de_obra:      '',
   valor_mao_de_obra_serralheria: '',
   prazo_entrega:          '',
@@ -312,6 +313,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Adaptação por omissão — que é justamente o problema que isto resolve.
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
+    if (ehVendaEnvio && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
     if (form.tipo === 'OP' && itensPreenchidos(form.itens_vendidos || []).length === 0) {
       setErro('Informe pelo menos 1 item vendido (o que a Engenharia vai receber para esta OP).'); return;
     }
@@ -360,6 +362,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
           modelo:                 ehVendaEnvio ? null : (form.modelo || null),
           quantidade:             semLote ? qty : 1,
+          frete_responsavel:      ehVendaEnvio ? (form.frete_responsavel || null) : null,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
           valor_mao_de_obra:      ehVendaEnvio ? null : (valores ? valores.mo    : parseMoedaOuNull(form.valor_mao_de_obra)),
           valor_mao_de_obra_serralheria: ehVendaEnvio ? null : (valores ? valores.moSerr : parseMoedaOuNull(form.valor_mao_de_obra_serralheria)),
@@ -765,6 +768,31 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Valor Total (R$)</div>
                   <input className="acn-input" style={{ width:'100%' }} placeholder="Ex: 45000"
                     value={form.valor_total} onChange={e => setF('valor_total', e.target.value)} />
+                </div>
+                {/* Quem paga o frete: se for o cliente (FOB), a Logística não
+                    precisa cotar — o Almoxarifado pula direto essa etapa ao
+                    embalar (regra pedida pelo usuário em 24/09/2026). */}
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Frete *</div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    {[
+                      { v:'CIF', label:'CIF — a empresa paga o frete' },
+                      { v:'FOB', label:'FOB — o cliente paga o frete' },
+                    ].map(opt => (
+                      <button key={opt.v} type="button" onClick={() => setF('frete_responsavel', opt.v)}
+                        style={{ flex:1, padding:'8px 10px', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer',
+                          border: form.frete_responsavel === opt.v ? '2px solid #2563eb' : '1px solid #d1d5db',
+                          background: form.frete_responsavel === opt.v ? '#dbeafe' : '#fff',
+                          color: form.frete_responsavel === opt.v ? '#1d4ed8' : '#374151' }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {form.frete_responsavel === 'FOB' && (
+                    <div style={{ fontSize:9, color:'#b45309', marginTop:4 }}>
+                      Cliente paga o frete: esta OP não vai para cotação da Logística — segue direto para liberação comercial depois de embalada.
+                    </div>
+                  )}
                 </div>
               </>) : (<>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
