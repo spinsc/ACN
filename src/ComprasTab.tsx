@@ -441,7 +441,7 @@ function SeloOrigemCompra({ p, grande = false }: { p: any; grande?: boolean }) {
     <span title={o.detalhe ? `${o.label}: ${o.detalhe}` : o.label}
       style={{ display:'inline-block', marginTop:3, fontSize: grande ? 10 : 8.5, fontWeight:800,
         padding: grande ? '2px 8px' : '1px 6px', borderRadius:10, color:'#fff', background:o.cor }}>
-      {o.tipo === 'op' ? '🔗' : '📋'} {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
+      {o.tipo === 'op' ? '🔗' : o.tipo === 'estoque' ? '📦' : '📋'} {o.label}{o.detalhe && grande ? ` · ${o.detalhe}` : ''}
     </span>
   );
 }

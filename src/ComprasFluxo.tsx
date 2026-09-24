@@ -701,6 +701,13 @@ export function JanelaParadasObrigatoria({ alertas, currentUser, onRespondido }:
 // "Demanda de OP"; sem vínculo é "Demanda geral" (ver origemDaRequisicao).
 // ─────────────────────────────────────────────────────────────────────────────
 export function origemDaRequisicao(p: any) {
+  // Reposição nasce sozinha quando o saldo de um item controlado bate no
+  // mínimo (ver Estoque.tsx). Ganha selo próprio porque o Compras precisa
+  // saber que ninguém digitou aquilo — foi o estoque que pediu (24/09/2026).
+  if (p?.vinculo_tipo === 'estoque') {
+    return { tipo: 'estoque' as const, label: 'Reposição de estoque', cor: '#0f766e',
+      detalhe: p?.vinculo_descricao || '' };
+  }
   const temOp = p?.vinculo_tipo === 'op' || p?.vinculo_tipo === 'opl' || !!String(p?.opl || '').trim();
   return temOp
     ? { tipo: 'op' as const, label: 'Demanda de OP', cor: '#7c3aed',

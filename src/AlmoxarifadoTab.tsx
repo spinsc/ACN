@@ -14,7 +14,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
-import { PainelEstoque, baixarKitDaOp, textoDaBaixa } from './Estoque';
+import { PainelEstoque, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -323,6 +323,17 @@ Embalar e enviar assim mesmo?`)) return;
     }
     const erroConf = validarConferencia(conferencia);
     if (erroConf) { alert(erroConf); return; }
+
+    // Item sob controle sem saldo não fecha Kit 100% — mesma regra que já vale
+    // para peça de fabricação/compra que não chegou. A saída continua sendo
+    // LIBERAR C/ PENDÊNCIA, que a fábrica já conhece (decidido em 24/09/2026).
+    // Item sem controle não entra nesta conta.
+    const semSaldo = await faltaDeEstoqueNoKit({ opl: modalSeriais, linhas: conferencia });
+    if (semSaldo.length) {
+      alert(`Não dá para fechar o Kit 100%: ${semSaldo.length} item(ns) sob controle sem saldo no estoque.\n\n${textoFaltaEstoque(semSaldo)}\n\nConfira a prateleira — se o material estiver lá, faça uma contagem no painel de estoque. Se não estiver, use LIBERAR C/ PENDÊNCIA.`);
+      return;
+    }
+
     const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };
     if (conferencia.length) extra.kit_conferencia = registroConferencia(conferencia, currentUser);
 

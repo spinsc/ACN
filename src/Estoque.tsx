@@ -24,6 +24,10 @@ import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { criarRequisicaoCompra } from './ComprasFluxo';
+
+/** Requisição de reposição aberta = ainda não virou material na prateleira. */
+const COMPRA_ENCERRADA = ['Recebido', 'Descartada'];
 
 /** Quem conta é quem tem o material na mão: o Almoxarifado, mais a gerência. */
 export const podeGerirEstoque = (u: any) =>
@@ -43,6 +47,38 @@ export const fmtQtd = (v: any) => {
   const n = num(v);
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
 };
+
+/**
+ * Abre a requisição de reposição — ou não abre, se já existe uma em aberto.
+ *
+ * A trava contra repetição é essencial: sem ela, cada saída abaixo do mínimo
+ * empilharia um pedido novo do mesmo item, e o Compras acordaria com vinte
+ * requisições do mesmo parafuso. Uma requisição aberta já significa "material
+ * a caminho"; só depois de recebida (ou descartada) é que cabe pedir de novo.
+ */
+export async function garantirRequisicaoReposicao({ item, quantidade, saldo, currentUser }: any) {
+  const { data: abertas } = await supabase.from('pcp_pedidos_compra')
+    .select('id,numero_pedido,status_compra')
+    .eq('vinculo_tipo', 'estoque').eq('vinculo_id', String(item.id))
+    .not('status_compra', 'in', `(${COMPRA_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  if (abertas?.length) {
+    return { jaExistia: true, numero_pedido: abertas[0].numero_pedido, status: abertas[0].status_compra };
+  }
+
+  const qtd = Math.max(1, Math.ceil(num(quantidade)));
+  const r = await criarRequisicaoCompra({
+    titulo: `Reposição de estoque — ${item.nome}`,
+    descricao: `Saldo chegou a ${fmtQtd(saldo)} ${item.unidade || 'UN'}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`
+      + (item.estoque_ideal != null ? ` Pedido para repor até o ideal de ${fmtQtd(item.estoque_ideal)}.` : ''),
+    itens: [{ nome: item.nome, quantidade: qtd, descricao: item.codigo || '' }],
+    observacoes: 'Requisição aberta automaticamente pelo controle de estoque — ninguém digitou.',
+    vinculo: { tipo: 'estoque', id: item.id, descricao: `${item.codigo ? item.codigo + ' · ' : ''}${item.nome}` },
+    origemSetor: 'Estoque (automático)',
+    currentUser,
+  });
+  if (r?.erro) return { erro: r.erro };
+  return { criada: true, numero_pedido: r.numero_pedido, quantidade: qtd };
+}
 
 /**
  * Único caminho para mexer no estoque — chama a função do banco.
@@ -70,7 +106,21 @@ export async function movimentarEstoque({
     p_criado_por_nome: currentUser?.nome || null,
   });
   if (error) return { erro: error.message };
-  return data || { erro: 'Resposta vazia do banco.' };
+  const r = data || { erro: 'Resposta vazia do banco.' };
+
+  // A compra automática mora aqui dentro de propósito: assim toda saída que
+  // fura o mínimo pede reposição, venha ela do kiting, do balcão ou de uma
+  // contagem que revelou menos do que se pensava. Nenhuma tela pode esquecer.
+  if (r.ok && r.abaixo_do_minimo && num(r.sugestao_compra) > 0) {
+    const { data: item } = await supabase.from('cadastro_itens')
+      .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal').eq('id', itemId).maybeSingle();
+    if (item) {
+      r.requisicao = await garantirRequisicaoReposicao({
+        item, quantidade: r.sugestao_compra, saldo: r.saldo_depois, currentUser,
+      });
+    }
+  }
+  return r;
 }
 
 /**
@@ -85,22 +135,61 @@ export async function movimentarEstoque({
  * Linha sem `item_id` (item fora do cadastro) e item sem controle passam
  * batido, de propósito: é o controle progressivo combinado em 24/09/2026.
  */
+/** Quanto cada item desta OP já saiu do estoque, pelo extrato. */
+async function jaBaixadoNaOp(oplId: string) {
+  const { data } = await supabase.from('estoque_movimentos')
+    .select('item_id,tipo,quantidade')
+    .eq('vinculo_tipo', 'op').eq('vinculo_id', String(oplId)).eq('motivo', MOTIVO.KITING);
+  const mapa = new Map<string, number>();
+  (data || []).forEach((m: any) => {
+    const sinal = m.tipo === 'saida' ? 1 : -1;
+    mapa.set(m.item_id, (mapa.get(m.item_id) || 0) + sinal * num(m.quantidade));
+  });
+  return mapa;
+}
+
+/**
+ * Itens controlados que não têm saldo para o que o kit ainda precisa tirar.
+ *
+ * Olha a DIFERENÇA, pelo mesmo motivo da baixa: conferir de novo um kit já
+ * baixado não pede material nenhum, e acusar falta aí seria mentira.
+ * Devolve [] quando está tudo certo — inclusive quando não há item controlado.
+ */
+export async function faltaDeEstoqueNoKit({ opl, linhas }: any) {
+  const comItem = (linhas || []).filter((l: any) => l?.item_id);
+  if (!comItem.length) return [];
+  const { data: itens } = await supabase.from('cadastro_itens')
+    .select('id,codigo,nome,unidade,estoque_atual,controla_estoque')
+    .in('id', comItem.map((l: any) => l.item_id));
+  const controlados = new Map((itens || []).filter((i: any) => i.controla_estoque).map((i: any) => [i.id, i]));
+  if (!controlados.size) return [];
+
+  const jaBaixado = await jaBaixadoNaOp(opl.id);
+  const faltando: any[] = [];
+  for (const l of comItem) {
+    const item: any = controlados.get(l.item_id);
+    if (!item) continue;                                   // sem controle: passa batido
+    const precisa = num(l.separado) - (jaBaixado.get(l.item_id) || 0);
+    const saldo = num(item.estoque_atual);
+    if (precisa > saldo) {
+      faltando.push({ nome: item.nome, codigo: item.codigo, unidade: item.unidade,
+        precisa, saldo, falta: precisa - saldo });
+    }
+  }
+  return faltando;
+}
+
+/** Texto do que falta, para a mensagem da trava. */
+export const textoFaltaEstoque = (faltando: any[]) =>
+  (faltando || []).map(f => `• ${f.codigo ? f.codigo + ' — ' : ''}${f.nome}: precisa de ${fmtQtd(f.precisa)}, tem ${fmtQtd(f.saldo)} ${f.unidade || 'UN'} (faltam ${fmtQtd(f.falta)})`).join('\n');
+
 export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
-  const resumo = { movimentados: [] as any[], ignorados: 0, semCadastro: 0, negativos: [] as any[], erros: [] as string[] };
+  const resumo = { movimentados: [] as any[], ignorados: 0, semCadastro: 0, negativos: [] as any[], erros: [] as string[], requisicoes: [] as any[] };
   const comItem = (linhas || []).filter((l: any) => l?.item_id);
   resumo.semCadastro = (linhas || []).length - comItem.length;
   if (!comItem.length) return resumo;
 
-  // o que esta OP já tirou do estoque, pelo extrato
-  const { data: jaFeitos } = await supabase.from('estoque_movimentos')
-    .select('item_id,tipo,quantidade')
-    .eq('vinculo_tipo', 'op').eq('vinculo_id', String(opl.id)).eq('motivo', MOTIVO.KITING);
-  const jaBaixado = new Map<string, number>();
-  (jaFeitos || []).forEach((m: any) => {
-    const sinal = m.tipo === 'saida' ? 1 : -1;
-    jaBaixado.set(m.item_id, (jaBaixado.get(m.item_id) || 0) + sinal * num(m.quantidade));
-  });
-
+  const jaBaixado = await jaBaixadoNaOp(opl.id);
   const vinculo = { tipo: 'op', id: opl.id, descricao: `OP ${opl.opl}` };
   for (const l of comItem) {
     const delta = num(l.separado) - (jaBaixado.get(l.item_id) || 0);
@@ -117,6 +206,7 @@ export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
     if (r?.ignorado) { resumo.ignorados++; continue; }
     resumo.movimentados.push({ nome: l.nome, delta, ...r });
     if (r?.negativo) resumo.negativos.push({ nome: l.nome, saldo: r.saldo_depois });
+    if (r?.requisicao?.criada) resumo.requisicoes.push({ nome: l.nome, ...r.requisicao });
   }
   return resumo;
 }
@@ -128,6 +218,7 @@ export function textoDaBaixa(resumo: any) {
   if (resumo.movimentados?.length) partes.push(`${resumo.movimentados.length} item(ns) deram baixa no estoque`);
   if (resumo.ignorados) partes.push(`${resumo.ignorados} sem controle (seguiram normal)`);
   if (resumo.negativos?.length) partes.push(`⚠️ saldo negativo em: ${resumo.negativos.map((n: any) => n.nome).join(', ')}`);
+  if (resumo.requisicoes?.length) partes.push(`reposição pedida ao Compras: ${resumo.requisicoes.map((r: any) => `${r.nome} (${r.numero_pedido})`).join(', ')}`);
   if (resumo.erros?.length) partes.push(`erro em: ${resumo.erros.join(' · ')}`);
   return partes.join(' · ');
 }
@@ -256,6 +347,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
     setSalvando(true);
     const falhas: string[] = [];
     const negativos: string[] = [];
+    const pedidos: string[] = [];
     for (const l of preenchidas) {
       const r = await movimentarEstoque({
         itemId: l.item.id, tipo: 'saida', quantidade: l.quantidade,
@@ -264,12 +356,15 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
       });
       if (r?.erro) falhas.push(`${l.item.nome}: ${r.erro}`);
       else if (r?.negativo) negativos.push(`${l.item.nome} (saldo ${fmtQtd(r.saldo_depois)})`);
+      if (r?.requisicao?.criada) pedidos.push(`${l.item.nome}: ${fmtQtd(r.requisicao.quantidade)} (${r.requisicao.numero_pedido})`);
     }
     setSalvando(false);
     if (falhas.length) { alert('Nem tudo foi registrado:\n' + falhas.join('\n')); return; }
-    if (negativos.length) {
-      alert(`Retirada registrada, mas ficou com saldo negativo em:\n${negativos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
-    }
+    const avisos = [
+      negativos.length ? `Ficou com saldo negativo em:\n${negativos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.` : '',
+      pedidos.length ? `O estoque bateu no mínimo e a reposição foi pedida ao Compras sozinha:\n${pedidos.join('\n')}` : '',
+    ].filter(Boolean);
+    if (avisos.length) alert('Retirada registrada.\n\n' + avisos.join('\n\n'));
     onFeito?.();
     onClose();
   };
@@ -406,6 +501,12 @@ export function PainelEstoque({ currentUser }: any) {
     setSalvando(false);
     if (r?.erro) { alert('Não foi possível gravar a contagem: ' + r.erro); return; }
     if (r?.ignorado) { alert('Este item não está sob controle de estoque.'); return; }
+    // contagem que revela menos do que se pensava também pede reposição
+    if (r?.requisicao?.criada) {
+      alert(`Contagem gravada. O saldo ficou em ${fmtQtd(r.saldo_depois)}, no mínimo ou abaixo dele, então a reposição de ${fmtQtd(r.requisicao.quantidade)} foi pedida ao Compras sozinha (${r.requisicao.numero_pedido}).`);
+    } else if (r?.requisicao?.jaExistia) {
+      alert(`Contagem gravada. O saldo está no mínimo, mas já existe uma reposição em aberto no Compras (${r.requisicao.numero_pedido}), então nenhum pedido novo foi criado.`);
+    }
     setContando(null); setValorContagem(''); setObsContagem('');
     recarregar();
   };
