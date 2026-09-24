@@ -97,11 +97,24 @@ export default function AlmoxarifadoTab({ currentUser }) {
       .order('data_entrada', { ascending: false });
     setOpls(data || []);
 
-    const idsForaDaLista = [...mapa.keys()].filter(id => !(data || []).some(o => String(o.id) === id));
-    if (idsForaDaLista.length) {
+    // O painel de recebimento lista TODA OP com material esperando conferência,
+    // inclusive as que ainda estão na fila de kiting aqui em cima.
+    //
+    // Antes ele excluía quem estava na lista de kiting, para não repetir a OP
+    // na tela. Só que isso criava um beco sem saída (caso da A1656.2609, em
+    // 24/09/2026): a OP em "Aguardando Almox" ficava de fora do painel, e o
+    // único lugar de confirmar o recebimento era o checklist dentro do modal
+    // de kiting — que não abre, porque o botão KITING 100% fica desabilitado
+    // exatamente enquanto o material não é recebido. O chicote ficava pronto,
+    // e ninguém tinha onde dizer que ele chegou.
+    //
+    // Aparecer nos dois lugares é de propósito: em cima é a fila de separar,
+    // aqui embaixo é o que dá para resolver agora.
+    const ids = [...mapa.keys()];
+    if (ids.length) {
       const { data: pend } = await supabase.from('oples')
         .select('id,opl,cliente_nome,modelo,status_geral,pendencias_kit')
-        .in('id', idsForaDaLista)
+        .in('id', ids)
         .not('status_geral', 'in', '("Faturado","Faturado e Disponivel para Entrega","Cancelado")');
       setOplsPendenciaAlmox((pend || []).filter(o => travaRecebimento(mapa.get(String(o.id)) || [], o).length));
     } else {
@@ -478,12 +491,13 @@ Embalar e enviar assim mesmo?`)) return;
               brigava com ele e o painel nunca aparecia, mesmo com dado carregado
               (achado em 23/09/2026, o mesmo bug do painel de pendências do PCP). */}
           <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b'}}>
-            <span style={{color:'#b45309'}}>🧰 Pendências aguardando recebimento — OPs já em produção ({oplsPendenciaAlmox.length})</span>
+            <span style={{color:'#b45309'}}>🧰 Material de pendência aguardando recebimento ({oplsPendenciaAlmox.length})</span>
           </div>
           <div className="sec-body">
               <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
-                Kit foi liberado com pendência e a OP já está em produção. O setor concluiu o item —
-                falta só confirmar aqui que o material chegou, para o PCP liberar a pendência.
+                O setor concluiu o item — falta só confirmar aqui que o material chegou.
+                Vale para OP que já está em produção (liberada com pendência) e também para a que
+                ainda está na fila de kiting acima: sem esta confirmação, o Kit 100% não fecha.
               </div>
               {oplsPendenciaAlmox.map(o => (
                 <div key={o.id} style={{marginBottom:8}}>

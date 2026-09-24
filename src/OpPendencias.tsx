@@ -237,7 +237,7 @@ export async function indicePendencias() {
       .not('opl_id', 'is', null).in('setor_destino', SETORES_QUE_SEGURAM),
     supabase.from('demandas_avulsas').select('id,setor,titulo,status,vinculo_id,vinculos')
       .in('setor', SETORES_QUE_SEGURAM),
-    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,numero_pedido,descricao_material,status_compra')
+    supabase.from('pcp_pedidos_compra').select('id,vinculo_id,vinculo_tipo,numero_pedido,descricao_material,status_compra')
       .not('vinculo_id', 'is', null),
   ]);
 
@@ -253,10 +253,17 @@ export async function indicePendencias() {
     (Array.isArray(d.vinculos) ? d.vinculos : []).forEach(v => { if (v?.tipo === 'op' || !v?.tipo) add(v?.id, item); });
   });
 
-  (compras.data || []).forEach(c => add(c.vinculo_id, {
-    id: c.id, setor: 'Compras', titulo: c.descricao_material || c.numero_pedido || 'Pedido de compra',
-    aberto: !ENCERRADOS.includes(String(c.status_compra || '')), statusBruto: c.status_compra,
-  }));
+  (compras.data || []).forEach(c => {
+    // Reposição de estoque tem no `vinculo_id` o id do ITEM, não de uma OP
+    // (ver Estoque.tsx). Sem esta guarda ela entrava no índice pendurada num
+    // id que não é OP nenhuma — hoje só lixo, mas é o tipo de coisa que vira
+    // pendência fantasma quando alguém mudar o vínculo (24/09/2026).
+    if (c.vinculo_tipo === 'estoque') return;
+    add(c.vinculo_id, {
+      id: c.id, setor: 'Compras', titulo: c.descricao_material || c.numero_pedido || 'Pedido de compra',
+      aberto: !ENCERRADOS.includes(String(c.status_compra || '')), statusBruto: c.status_compra,
+    });
+  });
 
   return mapa;
 }
