@@ -7,6 +7,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icone from './Icone';
+import { combinaBusca } from './SearchUtils';
 import { mdiDotsHorizontal, mdiAlertCircleOutline, mdiInformationOutline, mdiCheckCircleOutline, mdiAlertOutline } from '@mdi/js';
 
 // ── Cabeçalho da tela: título, resumo em uma linha, ações à direita e abas ────
@@ -219,4 +220,146 @@ export function diasAtraso(data: string | null | undefined): number {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const n = Math.floor((hoje.getTime() - d.getTime()) / 86400000);
   return n > 0 ? n : 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SELECT COM BUSCA — para lista que não cabe num <select> comum
+//
+// Pedido do usuário em 24/09/2026, pensando no estoque: hoje são 10 itens sob
+// controle, amanhã podem ser os 4.436 do cadastro. Rolar uma lista desse
+// tamanho é inviável, então aqui se digita.
+//
+// A busca é a mesma do resto do sistema (SearchUtils.combinaBusca): sem acento
+// e por PALAVRAS, todas precisam bater mas a ordem não importa. Assim "Porca M8"
+// de código 118 aparece digitando "118 m8 porca", "porca 118" ou "m8 118".
+// ─────────────────────────────────────────────────────────────────────────────
+export type OpcaoBusca = {
+  valor: string;
+  rotulo: string;
+  /** o que a busca varre; sem isto, varre o rótulo */
+  busca?: any;
+  /** linha menor embaixo do rótulo (saldo, código, o que ajudar a escolher) */
+  detalhe?: string;
+};
+
+export function SelectBusca({
+  opcoes, valor, onChange, placeholder = 'Selecione...', vazio = '— nenhum —',
+  limite = 60, style, autoFocus = false,
+}: {
+  opcoes: OpcaoBusca[]; valor: string | null; onChange: (v: string) => void;
+  placeholder?: string; vazio?: string; limite?: number;
+  style?: React.CSSProperties; autoFocus?: boolean;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [termo, setTermo] = useState('');
+  const [marcado, setMarcado] = useState(0);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const caixaRef = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
+
+  const escolhida = opcoes.find(o => o.valor === valor) || null;
+  const filtradas = termo.trim()
+    ? opcoes.filter(o => combinaBusca(o.busca ?? [o.rotulo, o.detalhe], termo))
+    : opcoes;
+  const visiveis = filtradas.slice(0, limite);
+
+  // A lista vai em portal, como o MenuAcoes acima: dentro de modal com rolagem
+  // ela era cortada pela borda da área rolável e o resultado sumia da tela.
+  useLayoutEffect(() => {
+    if (!aberto || !caixaRef.current) return;
+    const b = caixaRef.current.getBoundingClientRect();
+    const alt = listaRef.current?.offsetHeight || 260;
+    let top = b.bottom + 2;
+    if (top + alt > window.innerHeight - 8) top = Math.max(8, b.top - alt - 2);
+    setPos({ top, left: b.left, width: b.width });
+  }, [aberto, termo]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (caixaRef.current?.contains(t) || listaRef.current?.contains(t)) return;
+      setAberto(false);
+    };
+    const rolar = (e: Event) => {
+      const t = e.target;
+      if (!(t instanceof Node) || !listaRef.current?.contains(t)) setAberto(false);
+    };
+    document.addEventListener('mousedown', fora);
+    window.addEventListener('scroll', rolar, true);
+    window.addEventListener('resize', rolar);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      window.removeEventListener('scroll', rolar, true);
+      window.removeEventListener('resize', rolar);
+    };
+  }, [aberto]);
+
+  useEffect(() => { setMarcado(0); }, [termo]);
+
+  const escolher = (o: OpcaoBusca | null) => {
+    onChange(o ? o.valor : '');
+    setTermo(''); setAberto(false);
+  };
+
+  const tecla = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setMarcado(m => Math.min(m + 1, visiveis.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setMarcado(m => Math.max(m - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (visiveis[marcado]) escolher(visiveis[marcado]); }
+    else if (e.key === 'Escape') { setAberto(false); setTermo(''); }
+  };
+
+  const campo: React.CSSProperties = {
+    width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
+    fontSize: 11, boxSizing: 'border-box', fontFamily: 'inherit', background: '#fff', ...style,
+  };
+
+  return (
+    <div ref={caixaRef} style={{ position: 'relative' }}>
+      {aberto ? (
+        <input autoFocus value={termo} onChange={e => setTermo(e.target.value)} onKeyDown={tecla}
+          placeholder="Digite código ou nome, em qualquer ordem" style={campo} />
+      ) : (
+        <button type="button" autoFocus={autoFocus} onClick={() => setAberto(true)}
+          style={{ ...campo, textAlign: 'left', cursor: 'pointer', color: escolhida ? '#0f172a' : '#94a3b8',
+            display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {escolhida ? escolhida.rotulo : placeholder}
+          </span>
+          <span style={{ color: '#94a3b8', fontSize: 9 }}>▾</span>
+        </button>
+      )}
+
+      {aberto && createPortal(
+        <div ref={listaRef} style={{ position: 'fixed', zIndex: 4000,
+          top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: pos?.width ?? 240,
+          background: '#fff', border: '1px solid #cbd5e1', borderRadius: 4, boxShadow: '0 6px 20px rgba(0,0,0,.18)',
+          maxHeight: 260, overflowY: 'auto' }}>
+          <div onMouseDown={e => { e.preventDefault(); escolher(null); }}
+            style={{ padding: '5px 8px', fontSize: 10.5, color: '#94a3b8', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+            {vazio}
+          </div>
+          {!visiveis.length && (
+            <div style={{ padding: '8px', fontSize: 10.5, color: '#94a3b8' }}>
+              Nada encontrado para “{termo}”.
+            </div>
+          )}
+          {visiveis.map((o, i) => (
+            <div key={o.valor} onMouseDown={e => { e.preventDefault(); escolher(o); }}
+              onMouseEnter={() => setMarcado(i)}
+              style={{ padding: '5px 8px', cursor: 'pointer', fontSize: 11,
+                background: i === marcado ? '#e0f2fe' : '#fff', borderBottom: '1px solid #f8fafc' }}>
+              <div style={{ fontWeight: o.valor === valor ? 800 : 500 }}>{o.rotulo}</div>
+              {o.detalhe && <div style={{ fontSize: 9.5, color: '#64748b' }}>{o.detalhe}</div>}
+            </div>
+          ))}
+          {filtradas.length > visiveis.length && (
+            <div style={{ padding: '5px 8px', fontSize: 9.5, color: '#94a3b8', background: '#f8fafc' }}>
+              Mostrando {visiveis.length} de {filtradas.length} — escreva mais para afinar a busca.
+            </div>
+          )}
+        </div>,
+        document.body)}
+    </div>
+  );
 }

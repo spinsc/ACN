@@ -25,6 +25,7 @@ import { ehAdminOuGerente } from './utils/permissoes';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
+import { SelectBusca } from './Interface';
 
 /** Requisição de reposição aberta = ainda não virou material na prateleira.
  *  'Concluído' era o nome antigo de 'Recebido' e foi unificado em 24/09/2026
@@ -427,15 +428,19 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
             return (
               <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 6 }}>
                 <div style={{ flex: 3 }}>
-                  <select style={inp} value={l.item?.id || ''}
-                    onChange={e => set(i, { item: disponiveis.find(d => d.id === e.target.value) || null })}>
-                    <option value="">— escolha o item —</option>
-                    {disponiveis.map(d => (
-                      <option key={d.id} value={d.id}>
-                        {d.codigo ? `${d.codigo} · ` : ''}{d.nome} (saldo {fmtQtd(d.estoque_atual)} {d.unidade || 'UN'})
-                      </option>
-                    ))}
-                  </select>
+                  {/* select com busca: hoje são poucos itens sob controle, mas o
+                      cadastro tem 4.436 e a lista vai crescer — rolar não serve,
+                      tem que dar para digitar (pedido de 24/09/2026) */}
+                  <SelectBusca
+                    valor={l.item?.id || ''}
+                    onChange={(v: string) => set(i, { item: disponiveis.find(d => d.id === v) || null })}
+                    placeholder="— escolha o item —" vazio="— nenhum item —"
+                    opcoes={disponiveis.map(d => ({
+                      valor: d.id,
+                      rotulo: `${d.codigo ? d.codigo + ' · ' : ''}${d.nome}`,
+                      detalhe: `saldo ${fmtQtd(d.estoque_atual)} ${d.unidade || 'UN'}`,
+                      busca: [d.codigo, d.nome],
+                    }))} />
                   {passaDoSaldo && (
                     <div style={{ fontSize: 9, color: '#b45309', marginTop: 2 }}>
                       Pedido maior que o saldo ({fmtQtd(saldo)}): o saldo vai ficar negativo.
