@@ -12,8 +12,13 @@ name: Deploy to GitHub Pages
 # O aviso de `upload-artifact@v4` não vinha deste arquivo: quem chamava era o
 # upload-pages-artifact@v3 por dentro. A v5 já chama a @v7.
 #
-# `ubuntu-24.04` fixo em vez de `ubuntu-latest`: em 19/10/2026 o `latest` vira
-# Ubuntu 26 sozinho, e a decisão de migrar é nossa, não do calendário.
+# Imagem fixa em vez de `ubuntu-latest`: em 19/10/2026 o `latest` vira Ubuntu
+# 26 sozinho, e a decisão de migrar é nossa, não do calendário. Já estamos no
+# 26 porque ele foi testado antes da data (24/09/2026) e o build passou — assim
+# a migração aconteceu num dia escolhido, com alguém olhando.
+#
+# Imagem fixada é aposentada em algum momento: quando o GitHub anunciar o fim
+# do 26, é só trocar esta linha nos dois jobs e publicar para testar.
 
 on:
   push:
@@ -30,7 +35,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -48,7 +53,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
