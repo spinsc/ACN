@@ -823,16 +823,20 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <ModalDossieOp op={opl} onClose={() => setVerDossie(false)} />
         </Suspense>
       )}
-      <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto' }}>
+      <div className="modal-box" style={{ maxWidth: 720, width: '95vw', maxHeight: '92vh', overflowY: 'auto', overflowX: 'hidden' }}>
 
         {/* Cabeçalho */}
         <div style={{ background: '#0f172a', color: '#fff', margin: '-14px -14px 0', padding: '12px 16px',
-          borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1 }}>
+          borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
             <div style={{ fontSize: 10, opacity: .65, fontWeight: 700, letterSpacing: .5, textTransform: 'uppercase' }}>
               {opl.faturamento_empresa || 'ACN'} · {opl.tipo_projeto || 'OP'}
             </div>
-            <div style={{ fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Muitos botões condicionais aqui (Alterar nº, Dossiê, Editar OP,
+                Editar lote, Resumo do lote) — sem quebra de linha eles forçavam
+                o cabeçalho a ficar mais largo que o modal, e o modal ganhava
+                barra de rolagem horizontal (achado em 24/09/2026). */}
+            <div style={{ fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', rowGap: 6 }}>
               OP {opl.opl}
               {podeTrocarNumero && (
                 <button onClick={trocarNumero}

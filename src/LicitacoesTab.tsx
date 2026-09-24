@@ -1975,15 +1975,19 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                   </button>
                 )}
 
+                {/* Era 5 botões lado a lado (quebrava em 2 linhas) — virou select
+                    pra ocupar uma linha só (pedido do usuário em 24/09/2026). */}
                 {s === 'Em Andamento' && isAnalista && (
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  <select value="" onChange={e => { if (e.target.value) setConfirmStatus(e.target.value); }}
+                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4,
+                      fontSize:10, fontWeight:700, color:'#374151', cursor:'pointer' }}>
+                    <option value="">Mudar status para...</option>
                     {['Vencida','Finalizada','Perdida','Descartada','Suspenso'].map(ns => (
-                      <button key={ns} onClick={() => setConfirmStatus(ns)}
-                        style={{ flex:'1 0 30%', background:STATUS_COR[ns], color:'#fff', border:'none', borderRadius:4, padding:'5px 4px', fontWeight:700, fontSize:9, cursor:'pointer' }}>
+                      <option key={ns} value={ns}>
                         {ns === 'Vencida' ? '🏆 Vencida' : ns === 'Finalizada' ? '🏁 Finalizada' : ns === 'Perdida' ? '😞 Perdida' : ns === 'Descartada' ? '🗑️ Descartada' : '⏸️ Suspenso'}
-                      </button>
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 )}
 
                 {statusAnterior() && (
@@ -2403,6 +2407,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
             <Selo key={m} familia={FAMILIA_MARCADOR[m] || 'erro'} ponto={false}>{m}</Selo>
           ))}
           {l.epp && <Selo familia="neutro" ponto={false}>EPP</Selo>}
+          {l.classificacao && <Selo familia="neutro" ponto={false}>{l.classificacao}</Selo>}
           {infoTemp(l.temperatura) && (
             <span title={`Temperatura: ${infoTemp(l.temperatura).label}`} style={{ lineHeight:1 }}>{infoTemp(l.temperatura).emoji}</span>
           )}
