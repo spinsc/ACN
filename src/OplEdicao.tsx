@@ -10,8 +10,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
-import { FLUXOS } from './FluxoEntrega';
+import { FLUXOS, soEnvio } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
+import { ORIGENS } from './OrigemVenda';
+import { ColaboradorSelect } from './ColaboradorSelect';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 
@@ -244,6 +246,254 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
             {salvando ? 'Aplicando...' : `Aplicar em ${ops.length - iguais} OP${ops.length - iguais === 1 ? '' : 's'}`}
           </button>
           <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDIÇÃO DA OP NO COMERCIAL — antes era feita dentro da própria linha da lista
+//
+// A linha virava formulário e abria uma faixa extra embaixo: os campos ficavam
+// espremidos e boa parte dos dados da OP não tinha onde ser corrigida. Pedido
+// do usuário em 24/09/2026: tirar da linha e trazer para um modal com tudo que
+// dá para ajustar. Decidido no mesmo dia:
+//   • quem edita continua sendo quem já editava na linha (sem trava nova);
+//   • o status/fase NÃO entra — continua mudando só pelos botões do fluxo;
+//     para corrigir fase existe o "✏️ Editar OP" (Admin/Gerente) acima;
+//   • os valores aparecem, mas somem para quem tem `ver_valores` desligado.
+//
+// Quem grava continua sendo a tela do CRM (salvarOplEdit): é lá que mora a
+// regra de desmembrar o lote quando a quantidade aumenta. Aqui é só o
+// formulário — por isso o componente é controlado (form + onCampo).
+// ─────────────────────────────────────────────────────────────────────────────
+type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool';
+type CampoCom = {
+  campo: string; rotulo: string; tipo: TipoCampoCom; grupo: string;
+  opcoes?: { valor: string; label: string }[];
+  dica?: string;
+  /** ocupa a linha inteira da grade */
+  cheio?: boolean;
+  /** só aparece para quem pode ver valores */
+  financeiro?: boolean;
+  /** só faz sentido quando a OP é envio (ou quando não é) */
+  soEnvio?: boolean; soVeiculo?: boolean;
+};
+
+const OPC = (lista: string[]) => lista.map(v => ({ valor: v, label: v || '—' }));
+
+export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
+  // ── Identificação ──
+  { grupo: 'Identificação', campo: 'cliente_nome', rotulo: 'Cliente', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'cliente_final', rotulo: 'Cliente final', tipo: 'texto', dica: 'quando quem recebe não é quem compra' },
+  { grupo: 'Identificação', campo: 'tipo_projeto', rotulo: 'Tipo de projeto', tipo: 'select' },
+  { grupo: 'Identificação', campo: 'faturamento_empresa', rotulo: 'Empresa', tipo: 'select', opcoes: OPC(['ACN', 'Detech']) },
+  { grupo: 'Identificação', campo: 'quantidade', rotulo: 'Quantidade', tipo: 'numero', dica: 'aumentar oferece desmembrar em unidades /02../NN' },
+  { grupo: 'Identificação', campo: 'origem_venda', rotulo: 'Origem da venda', tipo: 'select',
+    opcoes: [{ valor: '', label: '— informar —' }, ...ORIGENS.map(o => ({ valor: o.valor, label: `${o.emoji} ${o.label}` }))] },
+  { grupo: 'Identificação', campo: 'canal_venda', rotulo: 'Canal de venda', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'vendedor', rotulo: 'Vendedor', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'edital', rotulo: 'Edital', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'proposta', rotulo: 'Proposta', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'numero_nf', rotulo: 'NF-e', tipo: 'texto' },
+
+  // ── Veículo / envio ──
+  { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: '🚦 Fluxo de entrega', tipo: 'select',
+    opcoes: [{ valor: '', label: '— Fluxo de entrega —' }, ...FLUXOS.map(f => ({ valor: f.valor, label: f.label }))],
+    dica: 'define em qual fila a OP aparece na Produção' },
+  { grupo: 'Veículo / envio', campo: 'modelo', rotulo: 'Modelo', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'veiculo', rotulo: 'Equipamento / Veículo', tipo: 'texto', dica: 'Ex.: Rádio Motorola APX' },
+  { grupo: 'Veículo / envio', campo: 'chassi', rotulo: 'Chassi', tipo: 'texto', soVeiculo: true },
+  { grupo: 'Veículo / envio', campo: 'placa', rotulo: 'Placa', tipo: 'texto', soVeiculo: true },
+  { grupo: 'Veículo / envio', campo: 'local_instalacao', rotulo: 'Local de instalação', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de entrega', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF', tipo: 'select', opcoes: OPC(['', ...UFS]) },
+  { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de entrega', tipo: 'texto', dica: '00000-000' },
+  { grupo: 'Veículo / envio', campo: 'frete_responsavel', rotulo: 'Responsável pelo frete', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'envio_obs', rotulo: 'Observações do envio', tipo: 'textarea', cheio: true, soEnvio: true },
+
+  // ── Datas e prazos ──
+  { grupo: 'Datas e prazos', campo: 'data_entrada', rotulo: 'Data de entrada', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'data_chegada_veiculo', rotulo: 'Recebimento do veículo', tipo: 'data', soVeiculo: true },
+  { grupo: 'Datas e prazos', campo: 'data_prevista_entrega', rotulo: 'Previsão de entrega', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'prazo_entrega_comercial', rotulo: 'Prazo entrega comercial', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'prazo_entrega_producao', rotulo: 'Prazo entrega produção', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'data_aceite_cliente', rotulo: 'Aceite do cliente', tipo: 'data' },
+  { grupo: 'Datas e prazos', campo: 'prazo_garantia', rotulo: '🛡️ Prazo de garantia', tipo: 'texto', cheio: true,
+    dica: 'Ex.: 12 meses a partir da entrega' },
+
+  // ── Faturamento ──
+  { grupo: 'Faturamento', campo: 'cnpj_faturamento', rotulo: 'CNPJ / CPF de faturamento', tipo: 'texto', dica: 'pode diferir do cliente' },
+  { grupo: 'Faturamento', campo: 'razao_social_faturamento', rotulo: 'Razão social de faturamento', tipo: 'texto' },
+  { grupo: 'Faturamento', campo: 'centro_custo', rotulo: '🏷️ Centro de custo', tipo: 'centro' },
+  { grupo: 'Faturamento', campo: 'observacoes_faturamento', rotulo: 'Observações de faturamento', tipo: 'textarea', cheio: true },
+
+  // ── Valores ──
+  { grupo: 'Valores', campo: 'valor_total', rotulo: 'Valor total (R$)', tipo: 'moeda', financeiro: true },
+  { grupo: 'Valores', campo: 'valor_mao_de_obra', rotulo: 'Valor M.O. (R$)', tipo: 'moeda', financeiro: true },
+  { grupo: 'Valores', campo: 'valor_mao_de_obra_serralheria', rotulo: 'Valor M.O. serralheria (R$)', tipo: 'moeda', financeiro: true },
+
+  // ── Responsáveis ──
+  { grupo: 'Responsáveis', campo: 'responsavel_comercial', rotulo: 'Comercial', tipo: 'colaborador' },
+  { grupo: 'Responsáveis', campo: 'responsavel_engenharia', rotulo: 'Engenharia', tipo: 'colaborador' },
+  { grupo: 'Responsáveis', campo: 'responsavel_producao', rotulo: 'Produção', tipo: 'colaborador' },
+  { grupo: 'Responsáveis', campo: 'responsavel_qualidade', rotulo: 'Qualidade', tipo: 'colaborador' },
+  { grupo: 'Responsáveis', campo: 'responsavel_fiscal', rotulo: 'Fiscal', tipo: 'colaborador' },
+  { grupo: 'Responsáveis', campo: 'responsavel_almox', rotulo: 'Almoxarifado', tipo: 'colaborador' },
+
+  // ── Serviço de terceiro ──
+  { grupo: 'Serviço de terceiro', campo: 'servico_terceiro', rotulo: 'Precisa de serviço de terceiro', tipo: 'bool' },
+  { grupo: 'Serviço de terceiro', campo: 'obs_servico_terceiro', rotulo: 'Observações do serviço de terceiro', tipo: 'textarea', cheio: true },
+
+  // ── Textos ──
+  { grupo: 'Textos e observações', campo: 'resumo_servicos', rotulo: 'Resumo dos serviços', tipo: 'textarea', cheio: true },
+  { grupo: 'Textos e observações', campo: 'especificacoes', rotulo: 'Especificações', tipo: 'textarea', cheio: true },
+  { grupo: 'Textos e observações', campo: 'observacoes_comercial', rotulo: 'Observações comerciais', tipo: 'textarea', cheio: true },
+  { grupo: 'Textos e observações', campo: 'observacoes_atencao', rotulo: '⚠️ Observações de atenção', tipo: 'textarea', cheio: true },
+  { grupo: 'Textos e observações', campo: 'seriais_equipamentos', rotulo: 'Seriais dos equipamentos', tipo: 'textarea', cheio: true },
+];
+const GRUPOS_COM = [...new Set(CAMPOS_OPL_COMERCIAL.map(c => c.grupo))];
+
+/** Campo do formulário. Controlado: quem guarda o estado é a tela do CRM. */
+function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto }) {
+  const est = { width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
+    fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
+  const txt = valor == null ? '' : String(valor);
+
+  if (c.tipo === 'colaborador') {
+    return <ColaboradorSelect value={txt} onChange={(v: string) => onChange(v)} placeholder="Selecione..." />;
+  }
+  if (c.tipo === 'bool') {
+    return (
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#334155', cursor: 'pointer', padding: '5px 0' }}>
+        <input type="checkbox" checked={!!valor} onChange={e => onChange(e.target.checked)} style={{ cursor: 'pointer' }} />
+        {c.rotulo}
+      </label>
+    );
+  }
+  if (c.tipo === 'centro') {
+    return (
+      <select value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo}>
+        <option value="">— Não definido —</option>
+        {(centrosCusto || []).map((x: any) => <option key={x.codigo} value={x.codigo}>{x.codigo} — {x.nome}</option>)}
+        {txt && !(centrosCusto || []).some((x: any) => x.codigo === txt) && <option value={txt}>{txt}</option>}
+      </select>
+    );
+  }
+  if (c.tipo === 'select') {
+    // tipo de projeto é a única lista que vem da tela (cadastro do CRM)
+    const ops = c.campo === 'tipo_projeto'
+      ? [{ valor: '', label: '— Tipo de projeto —' }, ...(tiposProjeto || []).map((t: string) => ({ valor: t, label: t }))]
+      : (c.opcoes || []);
+    const conhecido = ops.some(o => o.valor === txt);
+    return (
+      <select value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo}>
+        {ops.map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}
+        {/* valor antigo que saiu da lista continua visível, para não sumir sozinho */}
+        {txt && !conhecido && <option value={txt}>{txt} (descontinuado)</option>}
+      </select>
+    );
+  }
+  if (c.tipo === 'textarea') {
+    return <textarea value={txt} onChange={e => onChange(e.target.value)} rows={3}
+      style={{ ...est, resize: 'vertical' }} placeholder={c.dica} aria-label={c.rotulo} />;
+  }
+  if (c.tipo === 'data') {
+    return <input type="date" value={txt.slice(0, 10)} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />;
+  }
+  if (c.tipo === 'numero') {
+    return <input type="number" min={1} value={txt} onChange={e => onChange(e.target.value)} style={est} aria-label={c.rotulo} />;
+  }
+  if (c.tipo === 'moeda') {
+    return <input type="number" step="0.01" min={0} inputMode="decimal" value={txt}
+      onChange={e => onChange(e.target.value)} style={est} placeholder="0,00" aria-label={c.rotulo} />;
+  }
+  return <input type="text" value={txt} onChange={e => onChange(e.target.value)} style={est}
+    placeholder={c.dica} aria-label={c.rotulo} />;
+}
+
+export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCusto = [], tiposProjeto = [],
+                                    salvando = false, onSalvar, onCancelar, onAlterarNumero = null }) {
+  const envio = soEnvio(form?.fluxo_entrega ?? opl?.fluxo_entrega);
+  // quem não vê valores não vê o grupo inteiro — mesmo tratamento da tela de
+  // detalhe da OP, para o valor de venda não vazar por uma tela nova
+  const podeVerValores = currentUser?.ver_valores !== false;
+  const visivel = (c: CampoCom) => {
+    if (c.financeiro && !podeVerValores) return false;
+    if (c.soEnvio && !envio) return false;
+    if (c.soVeiculo && envio) return false;
+    return true;
+  };
+  const mudou = (c: CampoCom) => {
+    const antes = opl?.[c.campo];
+    const agora = form?.[c.campo];
+    const norm = (v: any) => v == null ? '' : (c.tipo === 'data' ? String(v).slice(0, 10) : String(v));
+    return norm(antes) !== norm(agora);
+  };
+  const qtdAlterados = CAMPOS_OPL_COMERCIAL.filter(c => visivel(c) && mudou(c)).length;
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 2100 }}>
+      <div className="modal-box" style={{ maxWidth: 900, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          ✏️ Editar OP {opl?.opl}
+          {onAlterarNumero && (
+            <button type="button" onClick={onAlterarNumero}
+              title="Alterar o número desta OP (só administradores e gerentes)"
+              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4,
+                padding: '1px 7px', fontSize: 9, fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+              ✏️ Alterar nº
+            </button>
+          )}
+          <span style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>
+            {opl?.cliente_nome || '—'} · {opl?.status_geral || 'sem status'}
+          </span>
+        </div>
+        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+          A fase da OP não se muda por aqui: ela anda pelos botões do fluxo de cada setor.
+          {!podeVerValores && ' Os valores estão ocultos para o seu acesso.'}
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+          {GRUPOS_COM.map(g => {
+            const campos = CAMPOS_OPL_COMERCIAL.filter(c => c.grupo === g && visivel(c));
+            if (!campos.length) return null;
+            return (
+              <div key={g} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase',
+                  borderBottom: '1px solid #e2e8f0', marginBottom: 6, paddingBottom: 2 }}>{g}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
+                  {campos.map(c => (
+                    <div key={c.campo} style={{ gridColumn: (c.cheio || c.tipo === 'textarea') ? '1 / -1' : undefined }}>
+                      {c.tipo !== 'bool' && (
+                        <label style={{ display: 'block', fontSize: 9, fontWeight: 700, marginBottom: 2,
+                          color: mudou(c) ? '#b45309' : '#6b7280', textTransform: 'uppercase' }}>
+                          {c.rotulo}{mudou(c) ? ' • alterado' : ''}
+                        </label>
+                      )}
+                      <EntradaCom c={c} valor={form?.[c.campo]} centrosCusto={centrosCusto} tiposProjeto={tiposProjeto}
+                        onChange={(v: any) => onCampo(c.campo, v)} />
+                      {c.dica && c.tipo !== 'texto' && c.tipo !== 'textarea' && (
+                        <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>{c.dica}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: qtdAlterados ? '#b45309' : '#94a3b8', fontWeight: 700 }}>
+            {qtdAlterados ? `${qtdAlterados} campo${qtdAlterados > 1 ? 's' : ''} alterado${qtdAlterados > 1 ? 's' : ''}` : 'Nada alterado ainda'}
+          </span>
+          <div style={{ flex: 1 }} />
+          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onCancelar}>Cancelar</button>
+          <button className="acn-btn" style={{ background: '#16a34a', opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={onSalvar}>
+            {salvando ? 'Salvando...' : '💾 Salvar alterações'}
+          </button>
         </div>
       </div>
     </div>

@@ -14,7 +14,7 @@ import NovaOpOsModal from './NovaOpOsModal';
 import OplAnexosWidget from './OplAnexosWidget';
 import OplAcompModal from './OplAcompModal';
 import { OplDetalheModal, LinkOpl, dividirValorEmUnidades, VeiculoOuEnvio } from './AcnTabShared';
-import { ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
+import { ModalEditarOplLote, podeEditarOplCompleta, ModalOplComercial } from './OplEdicao';
 import { itensDaFormacao } from './OpItens';
 import { CotacoesCrmPanel } from './CotacoesTab';
 import { logChange, useUnreadChanges, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -32,7 +32,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
-import { FLUXOS, fluxoLabel, UFS, soEnvio } from './FluxoEntrega';
+import { fluxoLabel, soEnvio } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
@@ -941,6 +941,22 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     };
   }, [abrirIsDragging]);
 
+  /** Abre o modal de edição da OP com o formulário já preenchido. As datas vêm
+   *  do banco como timestamp e o <input type="date"> só aceita AAAA-MM-DD. */
+  const abrirEdicaoOpl = (o: any) => {
+    const soData = (v: any) => (v ? String(v).slice(0, 10) : '');
+    setOplFormEdit({
+      ...o,
+      data_entrada:             soData(o.data_entrada),
+      data_prevista_entrega:    soData(o.data_prevista_entrega),
+      data_chegada_veiculo:     soData(o.data_chegada_veiculo),
+      prazo_entrega_comercial:  soData(o.prazo_entrega_comercial),
+      prazo_entrega_producao:   soData(o.prazo_entrega_producao),
+      data_aceite_cliente:      soData(o.data_aceite_cliente),
+    });
+    setOplEditando(o);
+  };
+
   const salvarOplEdit = async () => {
     if (!oplEditando) return;
     setOplSalvando(true);
@@ -1061,28 +1077,78 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       }
     }
 
-    const oplPayload = {
-      cliente_nome:          oplFormEdit.cliente_nome || null,
-      data_entrada:          oplFormEdit.data_entrada || null,
-      tipo_projeto:          oplFormEdit.tipo_projeto || null,
-      veiculo:               oplFormEdit.veiculo || null,
-      fluxo_entrega:         oplFormEdit.fluxo_entrega || null,
-      destino_cidade:        oplFormEdit.destino_cidade || null,
-      destino_uf:            oplFormEdit.destino_uf || null,
-      destino_cep:           oplFormEdit.destino_cep || null,
-      chassi:                oplFormEdit.chassi || null,
-      placa:                 oplFormEdit.placa || null,
-      modelo:                oplFormEdit.modelo || null,
-      quantidade:            qtdNova,
-      data_prevista_entrega: oplFormEdit.data_prevista_entrega || null,
-      prazo_garantia:        oplFormEdit.prazo_garantia || null,
-      centro_custo:          oplFormEdit.centro_custo || null,
-      responsavel_comercial: oplFormEdit.responsavel_comercial || null,
-      observacoes_comercial: oplFormEdit.observacoes_comercial || null,
-      faturamento_empresa:   oplFormEdit.faturamento_empresa || 'ACN',
-      cnpj_faturamento:            oplFormEdit.cnpj_faturamento || null,
-      razao_social_faturamento:    oplFormEdit.razao_social_faturamento || null,
+    // Texto vazio vira null no banco; número vazio também (e não 0, que valeria
+    // como "custa zero"). O modal entrega tudo como texto.
+    const txt = (v: any) => (v == null || String(v).trim() === '' ? null : String(v).trim());
+    const num = (v: any) => {
+      const s = String(v ?? '').trim().replace(',', '.');
+      if (!s) return null;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
     };
+
+    const oplPayload: any = {
+      // identificação
+      cliente_nome:          txt(oplFormEdit.cliente_nome),
+      cliente_final:         txt(oplFormEdit.cliente_final),
+      tipo_projeto:          txt(oplFormEdit.tipo_projeto),
+      faturamento_empresa:   txt(oplFormEdit.faturamento_empresa) || 'ACN',
+      quantidade:            qtdNova,
+      origem_venda:          txt(oplFormEdit.origem_venda),
+      canal_venda:           txt(oplFormEdit.canal_venda),
+      vendedor:              txt(oplFormEdit.vendedor),
+      edital:                txt(oplFormEdit.edital),
+      proposta:              txt(oplFormEdit.proposta),
+      numero_nf:             txt(oplFormEdit.numero_nf),
+      // veículo / envio
+      fluxo_entrega:         txt(oplFormEdit.fluxo_entrega),
+      modelo:                txt(oplFormEdit.modelo),
+      veiculo:               txt(oplFormEdit.veiculo),
+      chassi:                txt(oplFormEdit.chassi),
+      placa:                 txt(oplFormEdit.placa),
+      local_instalacao:      txt(oplFormEdit.local_instalacao),
+      destino_cidade:        txt(oplFormEdit.destino_cidade),
+      destino_uf:            txt(oplFormEdit.destino_uf),
+      destino_cep:           txt(oplFormEdit.destino_cep),
+      frete_responsavel:     txt(oplFormEdit.frete_responsavel),
+      envio_obs:             txt(oplFormEdit.envio_obs),
+      // datas e prazos
+      data_entrada:            txt(oplFormEdit.data_entrada),
+      data_chegada_veiculo:    txt(oplFormEdit.data_chegada_veiculo),
+      data_prevista_entrega:   txt(oplFormEdit.data_prevista_entrega),
+      prazo_entrega_comercial: txt(oplFormEdit.prazo_entrega_comercial),
+      prazo_entrega_producao:  txt(oplFormEdit.prazo_entrega_producao),
+      data_aceite_cliente:     txt(oplFormEdit.data_aceite_cliente),
+      prazo_garantia:          txt(oplFormEdit.prazo_garantia),
+      // faturamento
+      cnpj_faturamento:         txt(oplFormEdit.cnpj_faturamento),
+      razao_social_faturamento: txt(oplFormEdit.razao_social_faturamento),
+      centro_custo:             txt(oplFormEdit.centro_custo),
+      observacoes_faturamento:  txt(oplFormEdit.observacoes_faturamento),
+      // responsáveis
+      responsavel_comercial:  txt(oplFormEdit.responsavel_comercial),
+      responsavel_engenharia: txt(oplFormEdit.responsavel_engenharia),
+      responsavel_producao:   txt(oplFormEdit.responsavel_producao),
+      responsavel_qualidade:  txt(oplFormEdit.responsavel_qualidade),
+      responsavel_fiscal:     txt(oplFormEdit.responsavel_fiscal),
+      responsavel_almox:      txt(oplFormEdit.responsavel_almox),
+      // serviço de terceiro e textos
+      servico_terceiro:       !!oplFormEdit.servico_terceiro,
+      obs_servico_terceiro:   txt(oplFormEdit.obs_servico_terceiro),
+      resumo_servicos:        txt(oplFormEdit.resumo_servicos),
+      especificacoes:         txt(oplFormEdit.especificacoes),
+      observacoes_comercial:  txt(oplFormEdit.observacoes_comercial),
+      observacoes_atencao:    txt(oplFormEdit.observacoes_atencao),
+      seriais_equipamentos:   txt(oplFormEdit.seriais_equipamentos),
+    };
+    // Valor só é gravado por quem enxerga valor: para quem tem `ver_valores`
+    // desligado o campo nem aparece no modal, e mandar o que ele não viu
+    // apagaria o valor de venda sem ninguém perceber.
+    if (currentUser?.ver_valores !== false) {
+      oplPayload.valor_total                   = num(oplFormEdit.valor_total);
+      oplPayload.valor_mao_de_obra             = num(oplFormEdit.valor_mao_de_obra);
+      oplPayload.valor_mao_de_obra_serralheria = num(oplFormEdit.valor_mao_de_obra_serralheria);
+    }
     const { error } = await supabase.from('oples').update({
       ...oplPayload, data_atualizacao: new Date().toISOString(),
     }).eq('id', oplEditando.id);
@@ -2904,22 +2970,14 @@ const SUB_STATUS_COR: Record<string,string> = {
                         }
                       }
 
-                      // Edicao acontece na propria linha (nao ha mais modal): a linha
-                      // em edicao troca as celulas por campos e ganha uma linha extra
-                      // logo abaixo com o resto (quantidade, centro de custo, dados de
-                      // faturamento, observacoes).
-                      const inpLinha: React.CSSProperties = {
-                        width:'100%', boxSizing:'border-box', padding:'3px 5px',
-                        border:'1px solid #cbd5e1', borderRadius:3, fontSize:10, fontFamily:'inherit',
-                      };
-                      const setEd = (k: string, v: any) => setOplFormEdit((f:any)=>({ ...f, [k]: v }));
-                      const campoLbl: React.CSSProperties = { fontSize:9, fontWeight:700, color:'#475569', marginBottom:2 };
-
+                      // A linha só mostra. Editar abre o modal com todos os campos
+                      // da OP (ver ModalOplComercial em OplEdicao.tsx) — antes a
+                      // própria linha virava formulário e abria uma faixa extra
+                      // embaixo, onde só cabia parte dos dados (24/09/2026).
                       const renderLinhaOpl = (o: any) => {
                         const atrasada = o.data_prevista_entrega && o.data_prevista_entrega < hoje;
                         const crmCard  = ops.find(op => op.id === o.crm_oportunidade_id);
                         const oplNaoLida = oplsNaoLidas.has(String(o.id));
-                        const emEdicao = oplEditando?.id === o.id;
                         const linha = (
                           <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9',
                             background: oplNaoLida ? '#fffdf0' : undefined,
@@ -2930,65 +2988,25 @@ const SUB_STATUS_COR: Record<string,string> = {
                             </td>
                             <td style={{ padding:'5px 8px', fontWeight:700, whiteSpace:'nowrap' }}>
                               <LinkOpl opl={o} currentUser={currentUser} />
-                              {emEdicao && podeAlterarNumeroOplPv(currentUser) && (
-                                <button type="button" title="Alterar o número desta OP (só administradores e gerentes)"
-                                  onClick={async () => {
-                                    const novo = await renomearOpl(o, currentUser);
-                                    if (!novo) return;
-                                    setOplEditando((ed: any) => ed ? { ...ed, opl: novo } : ed);
-                                    fetchOplsEmAberto();
-                                  }}
-                                  style={{ display:'block', marginTop:3, background:'#f1f5f9', border:'1px solid #cbd5e1', borderRadius:4,
-                                    padding:'1px 6px', fontSize:9, fontWeight:700, color:'#334155', cursor:'pointer' }}>
-                                  ✏️ Alterar nº
-                                </button>
-                              )}
                             </td>
                             <td style={{ padding:'5px 8px', maxWidth:120, wordBreak:'break-word' }}>
-                              {emEdicao
-                                ? <input style={inpLinha} value={oplFormEdit.cliente_nome||''} onChange={e=>setEd('cliente_nome', e.target.value)} placeholder="Cliente" />
-                                : (o.cliente_nome||'—')}
+                              {o.cliente_nome||'—'}
                             </td>
                             <td style={{ padding:'5px 8px', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', color:'#475569', fontSize:10 }}>
-                              {emEdicao ? (
-                                <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-                                  <select style={{ ...inpLinha, borderColor:'#0f766e' }} value={oplFormEdit.fluxo_entrega||''} onChange={e=>setEd('fluxo_entrega', e.target.value)}>
-                                    <option value="">— Fluxo de entrega —</option>
-                                    {FLUXOS.map(f => <option key={f.valor} value={f.valor}>{f.label}</option>)}
-                                  </select>
-                                  <select style={inpLinha} value={oplFormEdit.tipo_projeto||''} onChange={e=>setEd('tipo_projeto', e.target.value)}>
-                                    <option value="">— Tipo de projeto —</option>
-                                    {TIPOS_PROJETO_OPL.map(t => <option key={t} value={t}>{t}</option>)}
-                                    {oplFormEdit.tipo_projeto && !TIPOS_PROJETO_OPL.includes(oplFormEdit.tipo_projeto) && (
-                                      <option value={oplFormEdit.tipo_projeto}>{oplFormEdit.tipo_projeto} (descontinuado)</option>
-                                    )}
-                                  </select>
-                                  <input style={inpLinha} value={oplFormEdit.modelo||''} onChange={e=>setEd('modelo', e.target.value)} placeholder="Modelo" />
-                                  <input style={inpLinha} value={oplFormEdit.chassi||''} onChange={e=>setEd('chassi', e.target.value)} placeholder="Chassi" />
-                                  <input style={inpLinha} value={oplFormEdit.placa||''} onChange={e=>setEd('placa', e.target.value)} placeholder="Placa" />
-                                </div>
-                              ) : (<>
-                                <div style={{ fontSize:9, fontWeight:700,
-                                  color: o.fluxo_entrega ? '#0f766e' : '#b45309' }}>
-                                  🚦 {fluxoLabel(o.fluxo_entrega)}
-                                </div>
-                                <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
-                                <VeiculoOuEnvio o={o} />
-                              </>)}
+                              <div style={{ fontSize:9, fontWeight:700,
+                                color: o.fluxo_entrega ? '#0f766e' : '#b45309' }}>
+                                🚦 {fluxoLabel(o.fluxo_entrega)}
+                              </div>
+                              <div style={{ fontSize:9, color:'#94a3b8' }}>{o.tipo_projeto || '—'}</div>
+                              <VeiculoOuEnvio o={o} />
                               {!semDado(o.cnpj_faturamento) && <div style={{ color:'#7c3aed', fontWeight:700 }}>🏢 {o.cnpj_faturamento}</div>}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
-                              {emEdicao ? (
-                                <select style={inpLinha} value={oplFormEdit.faturamento_empresa||'ACN'} onChange={e=>setEd('faturamento_empresa', e.target.value)}>
-                                  <option>ACN</option><option>Detech</option>
-                                </select>
-                              ) : (
-                                <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
-                                  background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
-                                  color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
-                                  {o.faturamento_empresa||'ACN'}
-                                </span>
-                              )}
+                              <span style={{ fontSize:8, fontWeight:700, padding:'1px 5px', borderRadius:3,
+                                background: o.faturamento_empresa==='Detech' ? '#fef3c7' : '#ede9fe',
+                                color: o.faturamento_empresa==='Detech' ? '#92400e' : '#7c3aed' }}>
+                                {o.faturamento_empresa||'ACN'}
+                              </span>
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
                               <span style={{ fontSize:8, fontWeight:700, padding:'2px 6px', borderRadius:3, color:'white',
@@ -2997,23 +3015,15 @@ const SUB_STATUS_COR: Record<string,string> = {
                               </span>
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
-                              {emEdicao
-                                ? <input type="date" style={inpLinha} value={(oplFormEdit.data_entrada||'').slice(0,10)} onChange={e=>setEd('data_entrada', e.target.value)} />
-                                : (o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—')}
+                              {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap', fontWeight: atrasada ? 700 : 400,
                               color: atrasada ? '#dc2626' : '#64748b' }}>
-                              {emEdicao
-                                ? <input type="date" style={inpLinha} value={(oplFormEdit.data_prevista_entrega||'').slice(0,10)} onChange={e=>setEd('data_prevista_entrega', e.target.value)} />
-                                : <>
-                                    {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
-                                    {atrasada && ' ⚠️'}
-                                  </>}
+                              {o.data_prevista_entrega ? new Date(o.data_prevista_entrega+'T12:00').toLocaleDateString('pt-BR') : '—'}
+                              {atrasada && ' ⚠️'}
                             </td>
                             <td style={{ padding:'5px 8px', maxWidth:100, color:'#475569', wordBreak:'break-word' }}>
-                              {emEdicao
-                                ? <ColaboradorSelect value={oplFormEdit.responsavel_comercial||''} onChange={v=>setEd('responsavel_comercial', v)} placeholder="Selecione..." />
-                                : (o.responsavel_comercial||'—')}
+                              {o.responsavel_comercial||'—'}
                             </td>
                             <td style={{ padding:'5px 8px' }}>
                               {crmCard ? (
@@ -3043,24 +3053,11 @@ const SUB_STATUS_COR: Record<string,string> = {
                                     ✅ CONFIRMAR ENTREGA
                                   </button>
                                 )}
-                                {emEdicao ? (
-                                  <>
-                                    <button title="Salvar alterações" disabled={oplSalvando} onClick={salvarOplEdit}
-                                      style={{ fontSize:9, padding:'2px 7px', background:'#16a34a', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700, opacity: oplSalvando?.6:1 }}>
-                                      {oplSalvando ? '⏳' : '💾 Salvar'}
-                                    </button>
-                                    <button title="Cancelar edição" disabled={oplSalvando} onClick={() => setOplEditando(null)}
-                                      style={{ fontSize:9, padding:'2px 7px', background:'#f1f5f9', color:'#475569', border:'1px solid #cbd5e1', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                      ✕
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button title="Editar OPL nesta linha"
-                                    onClick={() => { setOplEditando(o); setOplFormEdit({ ...o, data_prevista_entrega: o.data_prevista_entrega?.slice(0,10)||'' }); }}
-                                    style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
-                                    ✏️ Editar
-                                  </button>
-                                )}
+                                <button title="Editar todos os dados desta OP"
+                                  onClick={() => abrirEdicaoOpl(o)}
+                                  style={{ fontSize:9, padding:'2px 7px', background:'#0891b2', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
+                                  ✏️ Editar
+                                </button>
                                 <button title="Acompanhamentos / Notas"
                                   onClick={() => setOplAcomp(o)}
                                   style={{ fontSize:9, padding:'2px 7px', background:'#0f766e', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
@@ -3081,64 +3078,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                             </td>
                           </tr>
                         );
-                        if (!emEdicao) return linha;
-                        return (
-                          <React.Fragment key={o.id}>
-                            {linha}
-                            <tr style={{ background:'#f0fdfa', borderBottom:'2px solid #99f6e4' }}>
-                              <td colSpan={11} style={{ padding:'8px 12px' }}>
-                                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:8 }}>
-                                  <div>
-                                    <div style={campoLbl}>{soEnvio(oplFormEdit.fluxo_entrega) ? 'Quantidade' : 'Qtd. Veículos'}</div>
-                                    <input type="number" min={1} style={inpLinha} value={oplFormEdit.quantidade||1} onChange={e=>setEd('quantidade', e.target.value)} />
-                                  </div>
-                                  <div style={{ gridColumn:'span 2' }}>
-                                    <div style={campoLbl}>🛡️ Prazo de Garantia</div>
-                                    <input style={inpLinha} maxLength={300} value={oplFormEdit.prazo_garantia||''} onChange={e=>setEd('prazo_garantia', e.target.value)} placeholder="Ex: 12 meses a partir da entrega" />
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>Equipamento / Veículo</div>
-                                    <input style={inpLinha} value={oplFormEdit.veiculo||''} onChange={e=>setEd('veiculo', e.target.value)} placeholder="Ex: Rádio Motorola APX" />
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>Cidade de Entrega</div>
-                                    <input style={inpLinha} value={oplFormEdit.destino_cidade||''} onChange={e=>setEd('destino_cidade', e.target.value)} placeholder="Destino do envio" />
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>UF</div>
-                                    <select style={inpLinha} value={oplFormEdit.destino_uf||''} onChange={e=>setEd('destino_uf', e.target.value)}>
-                                      <option value="">—</option>
-                                      {UFS.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>CEP de Entrega</div>
-                                    <input style={inpLinha} value={oplFormEdit.destino_cep||''} onChange={e=>setEd('destino_cep', e.target.value)} placeholder="00000-000" />
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>🏷️ Centro de Custo</div>
-                                    <select style={inpLinha} value={oplFormEdit.centro_custo||''} onChange={e=>setEd('centro_custo', e.target.value)}>
-                                      <option value="">— Não definido —</option>
-                                      {centrosCusto.map((c:any) => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nome}</option>)}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>CNPJ / CPF Faturamento</div>
-                                    <input style={inpLinha} value={oplFormEdit.cnpj_faturamento||''} onChange={e=>setEd('cnpj_faturamento', e.target.value)} placeholder="Pode diferir do cliente" />
-                                  </div>
-                                  <div>
-                                    <div style={campoLbl}>Razão Social Faturamento</div>
-                                    <input style={inpLinha} value={oplFormEdit.razao_social_faturamento||''} onChange={e=>setEd('razao_social_faturamento', e.target.value)} />
-                                  </div>
-                                  <div style={{ gridColumn:'1 / -1' }}>
-                                    <div style={campoLbl}>Observações</div>
-                                    <textarea rows={2} style={{ ...inpLinha, resize:'vertical' }} value={oplFormEdit.observacoes_comercial||''} onChange={e=>setEd('observacoes_comercial', e.target.value)} />
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          </React.Fragment>
-                        );
+                        return linha;
                       };
 
                       return itens.map((item) => {
@@ -4748,6 +4688,27 @@ const SUB_STATUS_COR: Record<string,string> = {
           </div>
         </div>
       </div>
+    )}
+
+    {/* ── Modal de edição da OP (substituiu a edição dentro da linha) ── */}
+    {oplEditando && (
+      <ModalOplComercial
+        opl={oplEditando}
+        form={oplFormEdit}
+        onCampo={(campo: string, valor: any) => setOplFormEdit((f: any) => ({ ...f, [campo]: valor }))}
+        currentUser={currentUser}
+        centrosCusto={centrosCusto}
+        tiposProjeto={TIPOS_PROJETO_OPL}
+        salvando={oplSalvando}
+        onSalvar={salvarOplEdit}
+        onCancelar={() => setOplEditando(null)}
+        onAlterarNumero={podeAlterarNumeroOplPv(currentUser) ? async () => {
+          const novo = await renomearOpl(oplEditando, currentUser);
+          if (!novo) return;
+          setOplEditando((ed: any) => ed ? { ...ed, opl: novo } : ed);
+          fetchOplsEmAberto();
+        } : null}
+      />
     )}
 
     {/* ── Modal Acompanhamentos/Notas OPL ── */}
