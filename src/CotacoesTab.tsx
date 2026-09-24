@@ -46,6 +46,19 @@ function calcItem(item, params) {
   return { custoUnitBrl, custoTotal, valorUnit, valorTotal, totalDifal, totalImposto, margem, lucroPct };
 }
 
+// ─── Visibilidade por setor (pedido do usuário em 24/09/2026) ─────────────────
+// setor da cotação: 'Comercial' | 'Licitações' | RESERVADO (só Admin/Gerente,
+// até alguém liberar pra um setor) | null (cotação de antes dessa regra —
+// vale pra todo mundo, igual sempre foi).
+export const RESERVADO = 'reservado';
+export const SETORES_COTACAO = ['Comercial', 'Licitações'];
+const SETOR_POR_PERFIL = { 'Gerente Comercial': 'Comercial', 'Gerente de Licitações': 'Licitações' };
+/** Setor "dono" de quem está logado, pra saber o que ele cria e o que ele vê.
+ *  null = perfil sem setor natural aqui (Admin, Gerente genérico...). */
+export function setorDoUsuario(perfil) {
+  return SETOR_POR_PERFIL[perfil] || (SETORES_COTACAO.includes(perfil) ? perfil : null);
+}
+
 const STATUS_CORES = {
   rascunho:          { bg:'#f1f5f9', color:'#475569', label:'Rascunho' },
   ativa:             { bg:'#dbeafe', color:'#1d4ed8', label:'Ativa' },
@@ -1192,6 +1205,9 @@ function ModalNovaCotacao({ currentUser, onClose, onSalvo }) {
       opl_numero:         opNumero.trim() || null,
       orgao_cliente:      nomeCliente.trim(),
       criado_por:         currentUser?.email,
+      // Quem tem setor (Comercial/Licitações) já cria pro seu setor; Admin/
+      // Gerente sem setor cria "reservada" até liberar pra alguém.
+      setor:              setorDoUsuario(currentUser?.perfil) || RESERVADO,
     }]);
 
     setSalvando(false);
@@ -1389,11 +1405,28 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
     // Vendedores só veem cotações ativas ou acima de rascunho
     if (isVendedor) {
       q = q.neq('status', 'rascunho');
+      // Visibilidade por setor (pedido do usuário em 24/09/2026): cada um só
+      // vê a cotação do seu setor + as sem setor definido (cotação antiga, de
+      // antes dessa regra — continua visível pra não sumir do dia pra noite).
+      // "Reservada" (setor === RESERVADO) só Admin/Gerente veem.
+      const meuSetor = setorDoUsuario(currentUser?.perfil);
+      q = meuSetor ? q.or(`setor.is.null,setor.eq.${meuSetor}`) : q.is('setor', null);
     }
     const { data } = await q;
     setCotacoes(data || []);
     setCarregando(false);
-  }, [isVendedor]);
+  }, [isVendedor, currentUser?.perfil]);
+
+  // Admin/Gerente decide quem vê a cotação: um setor, "reservada" (só
+  // Admin/Gerente) ou "legado" (sem setor — vale pra todo mundo, como sempre
+  // foi). Pedido do usuário em 24/09/2026.
+  const liberarSetor = async (cotacao, novoSetor) => {
+    const { error } = await supabase.from('cotacoes_precos').update({ setor: novoSetor }).eq('id', cotacao.id);
+    if (error) { alert('Não foi possível alterar o setor: ' + error.message); return; }
+    logChange({ module: 'cotacoes', entityType: 'cotacoes_precos', entityId: cotacao.id, changeType: 'UPDATE',
+      oldRow: { setor: cotacao.setor }, newRow: { setor: novoSetor }, user: currentUser });
+    setCotacoes(prev => prev.map(c => c.id === cotacao.id ? { ...c, setor: novoSetor } : c));
+  };
 
   const carregarPendentes = useCallback(async () => {
     if (!podeAprovar) return;
@@ -1538,6 +1571,7 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                   <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Número</th>
                   <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Nome</th>
                   <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Status</th>
+                  {isAdmin && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Setor</th>}
                   {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Tipo</th>}
                   {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>Empresa</th>}
                   {!simplificada && <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:600 }}>OP</th>}
@@ -1583,6 +1617,20 @@ export default function CotacoesTab({ currentUser, onAbrirCrmCard }) {
                         {!simplificada && c.criado_por && <div style={{ fontSize:8, color:'#9ca3af' }}>{c.criado_por}</div>}
                       </td>
                       <td style={{ padding:'7px 10px' }}><StatusBadge status={c.status} /></td>
+                      {isAdmin && (
+                        <td style={{ padding:'7px 10px' }} onClick={e => e.stopPropagation()}>
+                          <select value={c.setor || ''} onChange={e => liberarSetor(c, e.target.value || null)}
+                            title="Quem vê esta cotação"
+                            style={{ fontSize:9, fontWeight:700, padding:'3px 6px', borderRadius:4,
+                              border: c.setor === RESERVADO ? '1px solid #f59e0b' : '1px solid #d1d5db',
+                              background: c.setor === RESERVADO ? '#fffbeb' : '#fff',
+                              color: c.setor === RESERVADO ? '#b45309' : '#374151', cursor:'pointer' }}>
+                            <option value="">— sem setor (legado, todo mundo vê) —</option>
+                            <option value={RESERVADO}>🔒 Reservada (só Admin/Gerente)</option>
+                            {SETORES_COTACAO.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </td>
+                      )}
                       {!simplificada && <td style={{ padding:'7px 10px', color:'#475569' }}>{c.tipo || '—'}</td>}
                       {!simplificada && <td style={{ padding:'7px 10px', color:'#475569' }}>{c.empresa || '—'}</td>}
                       {!simplificada && <td style={{ padding:'7px 10px' }}>
