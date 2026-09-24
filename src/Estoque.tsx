@@ -26,8 +26,12 @@ import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
 
-/** Requisição de reposição aberta = ainda não virou material na prateleira. */
-const COMPRA_ENCERRADA = ['Recebido', 'Descartada'];
+/** Requisição de reposição aberta = ainda não virou material na prateleira.
+ *  'Recebido' e 'Concluído' são a MESMA coisa no banco, por uma divergência que
+ *  já existia: o quadro do Compras avança para 'Recebido', mas o modal de
+ *  recebimento grava 'Concluído' — e os dois estão em produção. Ignorar um
+ *  deles faria o item nunca mais pedir reposição depois da primeira compra. */
+const COMPRA_ENCERRADA = ['Recebido', 'Concluído', 'Descartada'];
 
 /** Quem conta é quem tem o material na mão: o Almoxarifado, mais a gerência. */
 export const podeGerirEstoque = (u: any) =>
@@ -78,6 +82,37 @@ export async function garantirRequisicaoReposicao({ item, quantidade, saldo, cur
   });
   if (r?.erro) return { erro: r.erro };
   return { criada: true, numero_pedido: r.numero_pedido, quantidade: qtd };
+}
+
+/**
+ * Credita o estoque quando a compra chega.
+ *
+ * Entra a quantidade REALMENTE recebida, não a pedida: a requisição automática
+ * pode ter pedido 100 e o Compras ter sido autorizado a comprar 50, ou ter
+ * comprado 200 por causa do lote do fornecedor. Quem manda é o que desceu do
+ * caminhão (regra do usuário em 24/09/2026).
+ *
+ * Só vale para requisição de reposição (vinculo_tipo 'estoque'), porque é ela
+ * que sabe a qual item pertence. Compra de OP ou geral não credita nada — a
+ * lista dela é texto livre e adivinhar o item seria pior que não creditar.
+ *
+ * Se mesmo com a entrada o saldo continuar no mínimo (comprou 50 dos 100 que
+ * faltavam), a própria movimentação abre uma requisição nova — que é o certo.
+ */
+export async function creditarCompraRecebida({ pedido, quantidade, currentUser }: any) {
+  if (pedido?.vinculo_tipo !== 'estoque' || !pedido?.vinculo_id) return { naoSeAplica: true };
+  const qtd = num(quantidade);
+  if (qtd <= 0) return { naoSeAplica: true, motivo: 'Sem quantidade recebida.' };
+
+  const r = await movimentarEstoque({
+    itemId: pedido.vinculo_id, tipo: 'entrada', quantidade: qtd,
+    motivo: MOTIVO.COMPRA_RECEBIDA,
+    observacoes: `Recebimento do pedido ${pedido.numero_pedido || pedido.numero_oc || '—'}`
+      + (num(pedido.quantidade) !== qtd ? ` — pedido de ${fmtQtd(pedido.quantidade)}, recebido ${fmtQtd(qtd)}.` : ''),
+    vinculo: { tipo: 'compra', id: pedido.id, descricao: pedido.numero_pedido || pedido.numero_oc || 'Pedido de compra' },
+    currentUser,
+  });
+  return r;
 }
 
 /**

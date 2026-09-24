@@ -7,6 +7,7 @@ import { notificarEvento } from './whatsappHelper';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
+import { creditarCompraRecebida, fmtQtd } from './Estoque';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -1407,6 +1408,25 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
       notificarEvento('logistica_divergencia_recebimento', `*Divergência no recebimento* — Pedido ${pedido.numero_pedido}\n${form.observacoes.trim()}\nPor: ${currentUser?.nome}`, 'Compras');
     }
 
+    // Compra de reposição de estoque: o material entra no saldo pela quantidade
+    // REALMENTE recebida (o pedido podia ser de 100 e ter chegado 50). Só com a
+    // NF conferida: com divergência o material pode não ser o que se pediu, e
+    // aí o certo é o Almoxarifado contar a prateleira (24/09/2026).
+    if (form.confere) {
+      const credito = await creditarCompraRecebida({
+        pedido, quantidade: numOrNull(form.quantidade_recebida), currentUser,
+      });
+      if (credito?.erro) {
+        alert('Recebimento registrado, mas não foi possível creditar o estoque: ' + credito.erro);
+      } else if (credito?.ok) {
+        const novo = `Estoque atualizado: entraram ${fmtQtd(numOrNull(form.quantidade_recebida))}, saldo agora ${fmtQtd(credito.saldo_depois)}.`;
+        const aindaFalta = credito.requisicao?.criada
+          ? `\n\nO saldo continua no mínimo, então uma nova reposição de ${fmtQtd(credito.requisicao.quantidade)} foi pedida ao Compras (${credito.requisicao.numero_pedido}).`
+          : '';
+        alert(novo + aindaFalta);
+      }
+    }
+
     setSalvando(false);
     onFeito?.(form.confere);
   };
@@ -1419,6 +1439,16 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
             {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}
           </div>
+          {/* reposição de estoque: a quantidade abaixo vira saldo na prateleira,
+              então vale avisar antes de digitar (ver Estoque.tsx) */}
+          {pedido.vinculo_tipo === 'estoque' && (
+            <div style={{ fontSize: 10, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0',
+              borderRadius: 6, padding: '7px 10px', marginBottom: 10 }}>
+              📦 <b>Reposição de estoque</b> — {pedido.vinculo_descricao || ''}. A quantidade recebida informada abaixo
+              entra no saldo do item. Se chegou menos do que foi pedido, informe o que realmente chegou:
+              o sistema pede o restante sozinho.
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label className="acn-label">Número da NF *</label>
