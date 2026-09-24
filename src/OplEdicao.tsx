@@ -10,10 +10,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
-import { FLUXOS, soEnvio } from './FluxoEntrega';
+import { FLUXOS, soEnvio, terminaEmEnvio } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { ORIGENS } from './OrigemVenda';
 import { ColaboradorSelect } from './ColaboradorSelect';
+import { TIPOS_SERVICO_TERCEIRO } from './NovaOpOsModal';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 
@@ -268,7 +269,7 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
 // regra de desmembrar o lote quando a quantidade aumenta. Aqui é só o
 // formulário — por isso o componente é controlado (form + onCampo).
 // ─────────────────────────────────────────────────────────────────────────────
-type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool';
+type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi';
 type CampoCom = {
   campo: string; rotulo: string; tipo: TipoCampoCom; grupo: string;
   opcoes?: { valor: string; label: string }[];
@@ -279,6 +280,8 @@ type CampoCom = {
   financeiro?: boolean;
   /** só faz sentido quando a OP é envio (ou quando não é) */
   soEnvio?: boolean; soVeiculo?: boolean;
+  /** só para OP que em algum momento sai daqui embalada (ver terminaEmEnvio) */
+  soFrete?: boolean;
 };
 
 const OPC = (lista: string[]) => lista.map(v => ({ valor: v, label: v || '—' }));
@@ -310,7 +313,14 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Veículo / envio', campo: 'destino_cidade', rotulo: 'Cidade de entrega', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'destino_uf', rotulo: 'UF', tipo: 'select', opcoes: OPC(['', ...UFS]) },
   { grupo: 'Veículo / envio', campo: 'destino_cep', rotulo: 'CEP de entrega', tipo: 'texto', dica: '00000-000' },
-  { grupo: 'Veículo / envio', campo: 'frete_responsavel', rotulo: 'Responsável pelo frete', tipo: 'texto' },
+  // CIF/FOB não é texto livre: o Almoxarifado compara com 'FOB' na hora de
+  // embalar para decidir se abre cotação de frete. Qualquer outra grafia faz
+  // a OP cair no caminho do CIF calada (ver AlmoxarifadoTab.tsx).
+  { grupo: 'Veículo / envio', campo: 'frete_responsavel', rotulo: '🚚 Frete (CIF/FOB)', tipo: 'select', soFrete: true,
+    opcoes: [{ valor: '', label: '— não informado —' },
+             { valor: 'CIF', label: 'CIF — a empresa paga o frete' },
+             { valor: 'FOB', label: 'FOB — o cliente paga o frete' }],
+    dica: 'FOB pula a cotação da Logística: ao embalar, a OP vai direto para a liberação comercial' },
   { grupo: 'Veículo / envio', campo: 'envio_obs', rotulo: 'Observações do envio', tipo: 'textarea', cheio: true, soEnvio: true },
 
   // ── Datas e prazos ──
@@ -343,8 +353,12 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Responsáveis', campo: 'responsavel_almox', rotulo: 'Almoxarifado', tipo: 'colaborador' },
 
   // ── Serviço de terceiro ──
-  { grupo: 'Serviço de terceiro', campo: 'servico_terceiro', rotulo: 'Precisa de serviço de terceiro', tipo: 'bool' },
-  { grupo: 'Serviço de terceiro', campo: 'obs_servico_terceiro', rotulo: 'Observações do serviço de terceiro', tipo: 'textarea', cheio: true },
+  // não se aplica a venda de envio (não há veículo para pelicular, blindar...),
+  // mesma regra da criação da OP em NovaOpOsModal.tsx
+  { grupo: 'Serviço de terceiro', campo: 'servico_terceiro', rotulo: 'Precisa de serviço de terceiro', tipo: 'bool', soVeiculo: true },
+  { grupo: 'Serviço de terceiro', campo: 'tipos_servico_terceiro', rotulo: 'Tipos de serviço', tipo: 'multi', cheio: true, soVeiculo: true,
+    opcoes: TIPOS_SERVICO_TERCEIRO.map(t => ({ valor: t, label: t })) },
+  { grupo: 'Serviço de terceiro', campo: 'obs_servico_terceiro', rotulo: 'Observações do serviço de terceiro', tipo: 'textarea', cheio: true, soVeiculo: true },
 
   // ── Textos ──
   { grupo: 'Textos e observações', campo: 'resumo_servicos', rotulo: 'Resumo dos serviços', tipo: 'textarea', cheio: true },
@@ -370,6 +384,25 @@ function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto }) {
         <input type="checkbox" checked={!!valor} onChange={e => onChange(e.target.checked)} style={{ cursor: 'pointer' }} />
         {c.rotulo}
       </label>
+    );
+  }
+  if (c.tipo === 'multi') {
+    // o banco guarda uma lista (jsonb); marcar e desmarcar monta a lista
+    const marcados: string[] = Array.isArray(valor) ? valor : [];
+    return (
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '3px 0' }}>
+        {(c.opcoes || []).map(o => {
+          const sel = marcados.includes(o.valor);
+          return (
+            <label key={o.valor} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11,
+              color: sel ? '#1d4ed8' : '#334155', fontWeight: sel ? 700 : 400, cursor: 'pointer' }}>
+              <input type="checkbox" checked={sel} style={{ cursor: 'pointer' }}
+                onChange={() => onChange(sel ? marcados.filter(x => x !== o.valor) : [...marcados, o.valor])} />
+              {o.label}
+            </label>
+          );
+        })}
+      </div>
     );
   }
   if (c.tipo === 'centro') {
@@ -419,10 +452,14 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
   // quem não vê valores não vê o grupo inteiro — mesmo tratamento da tela de
   // detalhe da OP, para o valor de venda não vazar por uma tela nova
   const podeVerValores = currentUser?.ver_valores !== false;
+  const saiEmbalado = terminaEmEnvio(form?.fluxo_entrega ?? opl?.fluxo_entrega);
   const visivel = (c: CampoCom) => {
     if (c.financeiro && !podeVerValores) return false;
     if (c.soEnvio && !envio) return false;
     if (c.soVeiculo && envio) return false;
+    // CIF/FOB só interessa a quem embala e despacha — inclui a serralheria
+    // com envio, que não é fila de "envio" mas termina saindo daqui
+    if (c.soFrete && !saiEmbalado) return false;
     return true;
   };
   const mudou = (c: CampoCom) => {

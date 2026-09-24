@@ -1135,6 +1135,14 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       // serviço de terceiro e textos
       servico_terceiro:       !!oplFormEdit.servico_terceiro,
       obs_servico_terceiro:   txt(oplFormEdit.obs_servico_terceiro),
+      // a lista é o que manda (os selos na tela de detalhe leem dela); o campo
+      // singular antigo continua espelhando o primeiro tipo, porque telas mais
+      // velhas ainda leem dele. Desmarcar "precisa de terceiro" limpa os dois,
+      // senão sobrava etiqueta de um serviço que já não existe (24/09/2026).
+      tipos_servico_terceiro: oplFormEdit.servico_terceiro && Array.isArray(oplFormEdit.tipos_servico_terceiro)
+        && oplFormEdit.tipos_servico_terceiro.length ? oplFormEdit.tipos_servico_terceiro : null,
+      tipo_servico_terceiro:  oplFormEdit.servico_terceiro && Array.isArray(oplFormEdit.tipos_servico_terceiro)
+        && oplFormEdit.tipos_servico_terceiro.length ? oplFormEdit.tipos_servico_terceiro[0] : null,
       resumo_servicos:        txt(oplFormEdit.resumo_servicos),
       especificacoes:         txt(oplFormEdit.especificacoes),
       observacoes_comercial:  txt(oplFormEdit.observacoes_comercial),

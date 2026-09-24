@@ -103,7 +103,10 @@ const TIPOS_OS = [
   'Outro',
 ];
 
-const TIPOS_SERVICO_TERCEIRO = ['Película', 'Blindagem', 'Plotagem', 'Pintura', 'Outro'];
+// exportada porque o modal de edição da OP (OplEdicao.tsx) oferece os mesmos
+// tipos: duas listas separadas sairiam do lugar na primeira vez que alguém
+// incluísse um serviço novo aqui e esquecesse do outro lado (24/09/2026)
+export const TIPOS_SERVICO_TERCEIRO = ['Película', 'Blindagem', 'Plotagem', 'Pintura', 'Outro'];
 
 const VAZIO = {
   tipo:          'OP',   // 'OP' | 'OS'
