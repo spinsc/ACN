@@ -1,5 +1,20 @@
 name: Deploy to GitHub Pages
 
+# Versões das actions revisadas em 24/09/2026. Duas coisas diferentes moram
+# aqui e é fácil confundir:
+#   • o `@vN` de cada action é o Node que o GitHub usa para EXECUTAR a action.
+#     As versões @v4/@v3 declaravam node20, que foi descontinuado — o runner já
+#     forçava elas para o Node 24 e avisava a cada deploy.
+#   • o `node-version` abaixo é o Node que COMPILA o site. Estava em 20
+#     enquanto a máquina de desenvolvimento roda a 24, ou seja, o que ia para o
+#     ar era compilado num Node diferente do que se testava. Agora são o mesmo.
+#
+# O aviso de `upload-artifact@v4` não vinha deste arquivo: quem chamava era o
+# upload-pages-artifact@v3 por dentro. A v5 já chama a @v7.
+#
+# `ubuntu-24.04` fixo em vez de `ubuntu-latest`: em 19/10/2026 o `latest` vira
+# Ubuntu 26 sozinho, e a decisão de migrar é nossa, não do calendário.
+
 on:
   push:
     branches: [main]
@@ -15,28 +30,28 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
       - run: npx vite build
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deployment
