@@ -7,6 +7,10 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > Este arquivo é o **contrato de trabalho**: vale para qualquer sessão, em qualquer
 > conta ou máquina. A arquitetura detalhada está em [CONTEXTO_PROJETO.md](CONTEXTO_PROJETO.md);
 > o que está em andamento, em [ESTADO_ATUAL_PROJETO.md](ESTADO_ATUAL_PROJETO.md).
+>
+> Projeto longo em curso: [PLANO_ESTOQUE_AUTOMATICO.md](PLANO_ESTOQUE_AUTOMATICO.md)
+> — estoque, reserva e automação da lista de material, em etapas. Retomado pelo
+> comando `/estoque-auto`, de qualquer máquina.
 
 ---
 
