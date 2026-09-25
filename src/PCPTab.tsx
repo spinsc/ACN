@@ -13,6 +13,7 @@ import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temF
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
 import { MenuAcoes } from './Interface';
+import { reservarParaOp } from './Estoque';
 
 
 // setores que recebem demanda avulsa (cada um tem o seu painel)
@@ -247,6 +248,11 @@ export default function PCPTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    // A partir daqui o material daquela OP tem dono: reserva o que estiver sob
+    // controle de estoque. Não mexe no saldo — mexe no disponível, para a
+    // próxima OP não contar com a mesma peça (regra do usuário em 25/09/2026).
+    const res = await reservarParaOp({ oplId: opl.id, currentUser });
+    if (res?.erro) alert('A OP foi liberada, mas a reserva de estoque falhou: ' + res.erro);
     notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
   };
@@ -318,12 +324,20 @@ export default function PCPTab({ currentUser }) {
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {
+      const falhasReserva: string[] = [];
       for (const opl of pendentes) {
         await supabase.from('oples').update({
           status_geral: 'Aguardando Almox',
           data_liberacao_pcp: agora,
           liberado_producao_por: currentUser?.nome,
         }).eq('id', opl.id);
+        // mesma reserva da liberação individual — o lote não pode ser um
+        // caminho por onde o material escapa sem dono
+        const res = await reservarParaOp({ oplId: opl.id, currentUser });
+        if (res?.erro) falhasReserva.push(`${opl.opl}: ${res.erro}`);
+      }
+      if (falhasReserva.length) {
+        alert(`As OPs foram liberadas, mas a reserva de estoque falhou em:\n${falhasReserva.join('\n')}`);
       }
       await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',

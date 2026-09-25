@@ -13,6 +13,7 @@ import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { notificarEvento, msg } from './whatsappHelper';
+import { liberarReservaDaOp } from './Estoque';
 
 export const DESTINOS_DEVOLUCAO = {
   almox: {
@@ -46,6 +47,11 @@ export async function devolverOp({ opl, destino, motivo, setorOrigem, currentUse
     usuario_nome: currentUser?.nome, data_hora: agora,
   }]);
   if (destino === 'engenharia') {
+    // A BOM vai ser revista: a lista de material daquela OP deixou de valer, e
+    // segurar estoque com base nela travaria peça para as outras OPs sem razão.
+    // Devolução ao Almoxarifado NÃO solta: ali a OP continua de pé, só o kit é
+    // que vai ser refeito (regra definida com o usuário em 25/09/2026).
+    await liberarReservaDaOp({ oplId: opl.id, motivo: `BOM devolvida para a Engenharia: ${motivo}`, currentUser });
     notificarEvento('pcp_devolve_engenharia', msg.oplDevolvida(opl.opl, 'Engenharia', motivo, currentUser?.nome));
   } else {
     notificarEvento('pcp_libera_almox', msg.oplDevolvida(opl.opl, 'Almoxarifado (refazer kit)', motivo, currentUser?.nome));

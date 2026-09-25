@@ -14,7 +14,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
-import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque } from './Estoque';
+import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -345,6 +345,17 @@ Embalar e enviar assim mesmo?`)) return;
     if (semSaldo.length) {
       alert(`Não dá para fechar o Kit 100%: ${semSaldo.length} item(ns) sob controle sem saldo no estoque.\n\n${textoFaltaEstoque(semSaldo)}\n\nConfira a prateleira — se o material estiver lá, faça uma contagem no painel de estoque. Se não estiver, use LIBERAR C/ PENDÊNCIA.`);
       return;
+    }
+
+    // Tem saldo para esta OP, mas levar o material deixa outra OP já liberada a
+    // descoberto. Não trava — quem chega primeiro leva —, só conta a verdade
+    // para o Almoxarifado decidir com a informação na mão.
+    const roubandoDeOutra = await reservaDeOutrasNoKit({ opl: modalSeriais, linhas: conferencia });
+    if (roubandoDeOutra.length) {
+      const segue = await confirmar(
+        `Atenção: este kit usa material que outra OP já tinha reservado.\n\n${textoReservaDeOutras(roubandoDeOutra)}\n\n`
+        + `Pode seguir — a outra OP vira falta e entra na fila de compra ou fabricação. Fechar o kit assim mesmo?`);
+      if (!segue) return;
     }
 
     const extra: any = { seriais_equipamentos: seriaisKitForm.trim() };

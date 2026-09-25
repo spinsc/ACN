@@ -239,6 +239,107 @@ export async function creditarCompraRecebida({ pedido, quantidade, currentUser }
   return r;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RESERVA — material da prateleira que já tem dono
+//
+// Reservar não tira nada do saldo: a peça continua lá e continua contada. O que
+// a reserva muda é o DISPONÍVEL — saldo menos o que está prometido a outras OPs.
+// Sem isso, duas OPs enxergam os mesmos 20 chicotes e as duas acham que têm
+// material; a segunda só descobre no kiting.
+//
+// A baixa de verdade continua no kiting, manual, feita pelo Almoxarifado. Lá a
+// reserva é CONSUMIDA junto com a saída — senão o material sairia duas vezes da
+// conta do disponível.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Quanto de cada item está reservado agora. Mapa item_id → quantidade. */
+export async function reservadoPorItem(itemIds?: string[]) {
+  let q = supabase.from('estoque_reservas').select('item_id,quantidade').eq('situacao', 'reservada');
+  if (itemIds?.length) q = q.in('item_id', itemIds);
+  const { data } = await q;
+  const mapa = new Map<string, number>();
+  (data || []).forEach((r: any) => mapa.set(r.item_id, (mapa.get(r.item_id) || 0) + num(r.quantidade)));
+  return mapa;
+}
+
+/** O que a OP reservou, por item. Serve para não descontar a OP dela mesma. */
+export async function reservaDaOp(oplId: string) {
+  const { data } = await supabase.from('estoque_reservas')
+    .select('id,item_id,quantidade').eq('opl_id', oplId).eq('situacao', 'reservada');
+  const mapa = new Map<string, number>();
+  (data || []).forEach((r: any) => mapa.set(r.item_id, (mapa.get(r.item_id) || 0) + num(r.quantidade)));
+  return mapa;
+}
+
+/** Linhas da BOM da OP que apontam para item sob controle. */
+async function linhasControladasDaOp(oplId: string) {
+  const { data: op } = await supabase.from('oples').select('id,opl,bom_itens').eq('id', oplId).maybeSingle();
+  const linhas = Array.isArray(op?.bom_itens) ? op.bom_itens : [];
+  const comItem = linhas.filter((l: any) => l?.item_id);
+  if (!comItem.length) return { op, linhas: [] };
+  const { data: itens } = await supabase.from('cadastro_itens')
+    .select('id,nome,controla_estoque').in('id', comItem.map((l: any) => l.item_id));
+  const controlados = new Set((itens || []).filter((i: any) => i.controla_estoque).map((i: any) => i.id));
+  // a mesma peça pode aparecer em mais de uma linha da BOM; soma antes de reservar
+  const somado = new Map<string, number>();
+  comItem.forEach((l: any) => {
+    if (!controlados.has(l.item_id)) return;
+    somado.set(l.item_id, (somado.get(l.item_id) || 0) + num(l.quantidade));
+  });
+  return { op, linhas: [...somado.entries()].map(([item_id, quantidade]) => ({ item_id, quantidade })) };
+}
+
+/**
+ * Reserva o material da OP. Chamado quando o PCP libera para o Almoxarifado —
+ * o momento escolhido pelo usuário em 25/09/2026, porque é aí que o material
+ * passa a ter dono e ainda dá tempo de comprar ou fabricar o que faltar.
+ *
+ * Idempotente: liberar a mesma OP de novo não reserva em dobro (há índice único
+ * no banco garantindo isso, mas a checagem aqui evita o erro feio na tela).
+ */
+export async function reservarParaOp({ oplId, currentUser }: any) {
+  const { op, linhas } = await linhasControladasDaOp(oplId);
+  if (!linhas.length) return { nada: true };
+
+  const jaTem = await reservaDaOp(oplId);
+  const novas = linhas.filter(l => !jaTem.has(l.item_id));
+  if (!novas.length) return { jaEstava: true, itens: jaTem.size };
+
+  const { error } = await supabase.from('estoque_reservas').insert(
+    novas.map(l => ({
+      item_id: l.item_id, opl_id: oplId, numero_opl: op?.opl || null,
+      quantidade: l.quantidade, situacao: 'reservada',
+      criado_por_nome: currentUser?.nome || currentUser?.email || '—',
+    })));
+  if (error) return { erro: error.message };
+  return { reservou: novas.length, itens: novas.length };
+}
+
+/** Consome a reserva da OP para um item — o material saiu de verdade no kiting. */
+async function consumirReserva({ oplId, itemId, currentUser }: any) {
+  await supabase.from('estoque_reservas').update({
+    situacao: 'consumida', encerrada_em: new Date().toISOString(),
+    encerrada_por: currentUser?.nome || '—', motivo_encerramento: 'Baixa no kiting',
+  }).eq('opl_id', oplId).eq('item_id', itemId).eq('situacao', 'reservada');
+}
+
+/**
+ * Solta o que a OP estava segurando. Usado quando a OP é cancelada ou quando a
+ * BOM volta para a Engenharia revisar — nos dois casos a lista de material
+ * daquela OP deixou de valer.
+ *
+ * Devolução ao Almoxarifado para refazer o kit NÃO solta: a OP continua de pé e
+ * o material continua prometido a ela.
+ */
+export async function liberarReservaDaOp({ oplId, motivo, currentUser }: any) {
+  const { data, error } = await supabase.from('estoque_reservas').update({
+    situacao: 'liberada', encerrada_em: new Date().toISOString(),
+    encerrada_por: currentUser?.nome || '—', motivo_encerramento: motivo || 'Reserva liberada',
+  }).eq('opl_id', oplId).eq('situacao', 'reservada').select('id');
+  if (error) return { erro: error.message };
+  return { liberadas: (data || []).length };
+}
+
 /**
  * Demandas de fabricação prontas, esperando o Almoxarifado conferir.
  *
@@ -379,6 +480,19 @@ export async function faltaDeEstoqueNoKit({ opl, linhas }: any) {
   if (!controlados.size) return [];
 
   const jaBaixado = await jaBaixadoNaOp(opl.id);
+  // A trava olha o SALDO FÍSICO, não o disponível. Na hora do kiting o que vale
+  // é o que dá para tirar da prateleira: se há 20 peças e esta OP quer 15, ela
+  // pode ser separada, mesmo que outra OP também esteja contando com elas —
+  // quem chega primeiro leva, e a outra vira falta a ser comprada ou fabricada.
+  //
+  // Travar pelo disponível (descontando a reserva alheia) prendia as DUAS OPs
+  // quando havia material para uma. Erro pego no teste da Etapa 3, em
+  // 25/09/2026, antes de subir.
+  //
+  // A reserva das outras entra só como AVISO, para o Almoxarifado saber que
+  // levar este material deixa outra OP a descoberto.
+  const reservadoTotal = await reservadoPorItem([...controlados.keys()]);
+  const reservadoDestaOp = await reservaDaOp(opl.id);
   const faltando: any[] = [];
   for (const l of comItem) {
     const item: any = controlados.get(l.item_id);
@@ -386,16 +500,54 @@ export async function faltaDeEstoqueNoKit({ opl, linhas }: any) {
     const precisa = num(l.separado) - (jaBaixado.get(l.item_id) || 0);
     const saldo = num(item.estoque_atual);
     if (precisa > saldo) {
+      const deOutras = Math.max(0, (reservadoTotal.get(l.item_id) || 0) - (reservadoDestaOp.get(l.item_id) || 0));
       faltando.push({ nome: item.nome, codigo: item.codigo, unidade: item.unidade,
-        precisa, saldo, falta: precisa - saldo });
+        precisa, saldo, reservadoOutras: deOutras, falta: precisa - saldo });
     }
   }
   return faltando;
 }
 
+/**
+ * Aviso (não trava): levar este material deixa outra OP a descoberto.
+ *
+ * Existe porque a trava passou a olhar só o saldo físico. Sem este aviso, o
+ * Almoxarifado separaria o kit sem saber que acabou de furar o material de
+ * outra OP já liberada.
+ */
+export async function reservaDeOutrasNoKit({ opl, linhas }: any) {
+  const comItem = (linhas || []).filter((l: any) => l?.item_id);
+  if (!comItem.length) return [];
+  const reservadoTotal = await reservadoPorItem(comItem.map((l: any) => l.item_id));
+  if (!reservadoTotal.size) return [];
+  const reservadoDestaOp = await reservaDaOp(opl.id);
+  const { data: itens } = await supabase.from('cadastro_itens')
+    .select('id,nome,unidade,estoque_atual,controla_estoque').in('id', comItem.map((l: any) => l.item_id));
+  const porId = new Map((itens || []).filter((i: any) => i.controla_estoque).map((i: any) => [i.id, i]));
+  const avisos: any[] = [];
+  for (const l of comItem) {
+    const item: any = porId.get(l.item_id);
+    if (!item) continue;
+    const deOutras = Math.max(0, (reservadoTotal.get(l.item_id) || 0) - (reservadoDestaOp.get(l.item_id) || 0));
+    if (!deOutras) continue;
+    const sobra = num(item.estoque_atual) - num(l.separado);
+    if (sobra < deOutras) {
+      avisos.push({ nome: item.nome, unidade: item.unidade, reservadoOutras: deOutras,
+        sobra: Math.max(0, sobra), descoberto: deOutras - Math.max(0, sobra) });
+    }
+  }
+  return avisos;
+}
+
+export const textoReservaDeOutras = (avisos: any[]) =>
+  (avisos || []).map(a => `• ${a.nome}: outra(s) OP(s) contam com ${fmtQtd(a.reservadoOutras)} ${a.unidade || 'UN'}, `
+    + `mas sobram ${fmtQtd(a.sobra)} — ficam ${fmtQtd(a.descoberto)} a descoberto`).join('\n');
+
 /** Texto do que falta, para a mensagem da trava. */
 export const textoFaltaEstoque = (faltando: any[]) =>
-  (faltando || []).map(f => `• ${f.codigo ? f.codigo + ' — ' : ''}${f.nome}: precisa de ${fmtQtd(f.precisa)}, tem ${fmtQtd(f.saldo)} ${f.unidade || 'UN'} (faltam ${fmtQtd(f.falta)})`).join('\n');
+  (faltando || []).map(f => `• ${f.codigo ? f.codigo + ' — ' : ''}${f.nome}: precisa de ${fmtQtd(f.precisa)}, `
+    + `tem ${fmtQtd(f.saldo)} ${f.unidade || 'UN'} (faltam ${fmtQtd(f.falta)})`
+    + (num(f.reservadoOutras) > 0 ? ` — e ${fmtQtd(f.reservadoOutras)} já está reservado para outra OP` : '')).join('\n');
 
 export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
   const resumo = { movimentados: [] as any[], ignorados: 0, semCadastro: 0, negativos: [] as any[], erros: [] as string[], requisicoes: [] as any[] };
@@ -421,6 +573,11 @@ export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
     resumo.movimentados.push({ nome: l.nome, delta, ...r });
     if (r?.negativo) resumo.negativos.push({ nome: l.nome, saldo: r.saldo_depois });
     if (r?.requisicao?.criada) resumo.requisicoes.push({ nome: l.nome, ...r.requisicao });
+
+    // O material saiu de verdade: a reserva cumpriu o papel dela e se encerra.
+    // Se ficasse de pé, o disponível descontaria a mesma peça duas vezes — uma
+    // pelo saldo que baixou, outra pela reserva que continuaria segurando.
+    if (delta > 0) await consumirReserva({ oplId: opl.id, itemId: l.item_id, currentUser });
   }
   return resumo;
 }
@@ -887,11 +1044,13 @@ export function PainelEstoque({ currentUser }: any) {
   const [formLimites, setFormLimites] = useState({ minimo: '', ideal: '' });
   const [movimentos, setMovimentos] = useState<any[]>([]);
   const [verExtrato, setVerExtrato] = useState(false);
+  const [reservas, setReservas] = useState<Map<string, number>>(new Map());
   const pode = podeGerirEstoque(currentUser);
 
   const recarregar = async () => {
     setCarregando(true);
     setItens(await carregarItensControlados());
+    setReservas(await reservadoPorItem());
     const { data } = await supabase.from('estoque_movimentos')
       .select('id,item_nome,tipo,quantidade,saldo_depois,motivo,retirado_por_nome,vinculo_descricao,criado_por_nome,criado_em')
       .order('criado_em', { ascending: false }).limit(15);
@@ -1068,7 +1227,7 @@ export function PainelEstoque({ currentUser }: any) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
             <thead>
               <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                {['Código', 'Item', 'Saldo', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
+                {['Código', 'Item', 'Saldo', 'Reservado', 'Disponível', 'Mínimo', 'Ideal', 'Situação', ''].map(h => (
                   <th key={h} style={{ padding: '4px 7px', fontSize: 9, fontWeight: 700, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
                 ))}
               </tr>
@@ -1081,6 +1240,15 @@ export function PainelEstoque({ currentUser }: any) {
                     <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>{i.codigo || '—'}</td>
                     <td style={{ padding: '4px 7px' }}>{i.nome}</td>
                     <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
+                    {/* saldo é o que está na prateleira; disponível é o que ainda
+                        não tem dono. A diferença é o que outra OP já levou no papel. */}
+                    <td style={{ padding: '4px 7px', color: num(reservas.get(i.id)) > 0 ? '#b45309' : '#cbd5e1', whiteSpace: 'nowrap' }}>
+                      {num(reservas.get(i.id)) > 0 ? fmtQtd(reservas.get(i.id)) : '—'}
+                    </td>
+                    <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap',
+                      color: num(i.estoque_atual) - num(reservas.get(i.id)) < 0 ? '#dc2626' : '#0f766e' }}>
+                      {fmtQtd(num(i.estoque_atual) - num(reservas.get(i.id)))}
+                    </td>
                     <td style={{ padding: '4px 7px', color: '#64748b' }}>{i.estoque_minimo == null ? '—' : fmtQtd(i.estoque_minimo)}</td>
                     <td style={{ padding: '4px 7px', color: '#64748b' }}>{i.estoque_ideal == null ? '—' : fmtQtd(i.estoque_ideal)}</td>
                     <td style={{ padding: '4px 7px' }}>

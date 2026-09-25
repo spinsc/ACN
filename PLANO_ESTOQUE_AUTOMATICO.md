@@ -179,7 +179,7 @@ ajustado por contagem.
 
 ---
 
-### ⬜ Etapa 3 — Reserva de estoque · **PRÓXIMA**
+### ✅ Etapa 3 — Reserva de estoque
 
 **O conceito que falta.** Hoje só existe saldo. Passa a existir **saldo
 disponível = saldo − reservado**.
@@ -197,15 +197,53 @@ disponível = saldo − reservado**.
 **Como fica gradual:** item sem controle não gera reserva; OP sem item
 controlado na lista se comporta como hoje.
 
-**Ponto de atenção:** esta etapa mexe no caminho do kiting, que está em uso
-diário. Precisa de teste de navegador com as gravações bloqueadas antes de subir.
+**Feito em:** 25/09/2026.
 
-**Feito em:** —
-**O que foi feito:** —
+**O que foi feito:**
+
+- Migração `estoque_reservas`: tabela com item, OP, quantidade e situação
+  (reservada / consumida / liberada), com **índice único** que impede reservar a
+  mesma OP e item duas vezes. Mais a view `vw_estoque_disponivel`, que entrega
+  saldo, reservado e disponível prontos.
+- `Estoque.tsx`: `reservadoPorItem`, `reservaDaOp`, `reservarParaOp`
+  (idempotente), `consumirReserva`, `liberarReservaDaOp`, `reservaDeOutrasNoKit`
+  e `textoReservaDeOutras`.
+- `PCPTab.tsx`: reserva ao liberar para o Almoxarifado, na liberação individual
+  **e** na de lote — o lote não pode ser a porta por onde o material escapa sem
+  dono.
+- `Estoque.tsx / baixarKitDaOp`: a baixa do kiting **consome** a reserva.
+- `DevolverOp.tsx`: devolução para a **Engenharia** solta a reserva (a BOM vai
+  ser revista). Devolução ao **Almoxarifado** não solta — a OP continua de pé.
+- Painel de estoque ganhou as colunas **Reservado** e **Disponível**.
+
+**Erro de desenho pego no teste, antes de subir:** a trava do Kit 100% estava
+comparando a necessidade com o *disponível*, descontando a reserva das outras
+OPs. Com 20 peças na prateleira e duas OPs querendo 15, **as duas ficavam
+travadas** — mesmo havendo material para uma. Na hora do kiting o que vale é o
+saldo físico: quem chega primeiro leva, e a outra vira falta. A trava voltou a
+olhar o saldo, e a reserva alheia virou **aviso** que não impede nada.
+
+**Testado** com cenário sintético: item com 20, duas OPs querendo 15 cada.
+
+| Passo | Resultado |
+|---|---|
+| PCP libera OP A | reserva 15 · disponível 5 |
+| PCP libera OP B | reserva 15 · disponível **−10** |
+| Almox fecha o kit de A | avisa "outra OP conta com 15, sobram 5 — ficam 10 a descoberto" |
+| Confirmado | saldo 20 → 5 · reserva de A **consumida** |
+| OP B devolvida à Engenharia | reserva **liberada**, com o motivo gravado |
+| Reserva em dobro | recusada pelo banco |
+
+Dado de teste apagado; banco conferido sem resíduo.
+
+**O que ficou de fora de propósito:** o **mínimo ainda olha o saldo físico**, não
+o disponível. Um item todo reservado aparece "ok" mesmo sem nada livre. É a
+Etapa 4 que fecha isso, junto com a falta virando pedido — e é lá que o
+disponível negativo (aquele −10) vira compra ou fabricação.
 
 ---
 
-### ⬜ Etapa 4 — A falta da OP vira pedido automático, considerando o lote
+### ⬜ Etapa 4 — A falta da OP vira pedido automático, considerando o lote · **PRÓXIMA**
 
 **O caso do usuário:** 20 chicotes em estoque, OP com lote de 30 carros. O
 sistema tem que ver que faltam 10 e pedir os 10 — não parar no ideal de 50.
