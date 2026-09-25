@@ -185,10 +185,74 @@ async function uploadCotacaoArquivo(file: File): Promise<{ url: string; nome: st
   return { url: pub.publicUrl, nome: file.name };
 }
 
+// ── Itens na impressão ───────────────────────────────────────────────────────
+// Pedido do usuário em 24/09/2026: a lista de itens precisa sair como LISTA,
+// para o papel poder ir ao fornecedor. Antes tudo caía num campo "Descrição"
+// só — título, descrição e as linhas de item coladas por quebra de linha — e a
+// "Quantidade" era a soma de tudo (7 numa compra de 7 itens diferentes), que
+// não quer dizer nada para quem vai cotar.
+
+/** Escapa o que vai para o HTML da impressão: nome de item tem aspas, < e &
+ *  (ex.: 'Cabo 3/8" <verde>') e sem isto a página sai quebrada. */
+const esc = (v: any) => String(v ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const itensDoPedido = (p: any) =>
+  Array.isArray(p?.itens) ? p.itens.filter((i: any) => String(i?.nome || '').trim()) : [];
+
+/** A descrição sem as linhas "N× item", que a tabela de itens já mostra —
+ *  senão o mesmo conteúdo aparece duas vezes na mesma folha. */
+function descricaoSemItens(p: any) {
+  const bruta = String(p?.descricao_material || '');
+  if (!itensDoPedido(p).length) return bruta;
+  return bruta.split('\n').filter(l => !/^\s*\d+(?:[.,]\d+)?\s*[×x]\s+/.test(l)).join('\n').trim();
+}
+
+/** Tabela de itens para a impressão. Devolve '' quando o pedido é antigo e não
+ *  tem a lista estruturada — aí a descrição em texto continua sendo tudo que há. */
+function blocoItensImpressao(p: any, moeda: (v: any) => string) {
+  const itens = itensDoPedido(p);
+  if (!itens.length) return '';
+  const temValor = itens.some((i: any) => Number(i?.valor_unitario) > 0);
+  const totalGeral = itens.reduce((s: number, i: any) =>
+    s + (Number(i?.valor_unitario) || 0) * (Number(i?.quantidade) || 0), 0);
+  const linhas = itens.map((i: any, n: number) => {
+    const qtd = Number(i?.quantidade) || 0;
+    const vu = Number(i?.valor_unitario) || 0;
+    return `<tr>
+      <td style="text-align:center;width:28px">${n + 1}</td>
+      <td><b>${esc(i.nome)}</b>${i.descricao ? `<div style="color:#475569;font-size:10px">${esc(i.descricao)}</div>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap">${qtd || '—'}</td>
+      ${temValor ? `<td style="text-align:right;white-space:nowrap">${vu ? moeda(vu) : '—'}</td>
+      <td style="text-align:right;white-space:nowrap">${vu ? moeda(vu * qtd) : '—'}</td>` : ''}
+    </tr>`;
+  }).join('');
+  return `
+    <h3 style="margin:22px 0 0;font-size:13px;color:#1a3a52">Itens solicitados (${itens.length})</h3>
+    <table class="itens">
+      <tr>
+        <th style="width:28px">#</th><th>Item</th><th style="text-align:right">Qtd</th>
+        ${temValor ? '<th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th>' : ''}
+      </tr>
+      ${linhas}
+      ${temValor ? `<tr><td colspan="4" style="text-align:right"><b>Total</b></td>
+        <td style="text-align:right"><b>${moeda(totalGeral)}</b></td></tr>` : ''}
+    </table>`;
+}
+
+/** Estilo da tabela de itens, junto do resto do CSS de impressão. */
+const CSS_ITENS = `
+  table.itens { width:100%; border-collapse:collapse; margin-top:8px; }
+  table.itens th { background:#1a3a52; color:#fff; padding:6px 8px; text-align:left; font-size:10px; }
+  table.itens td { padding:6px 8px; border-bottom:1px solid #e2e8f0; font-size:11px; vertical-align:top; }
+  table.itens tr:nth-child(even) td { background:#f8fafc; }`;
+
 function imprimirSolicitacao(p: any) {
   const fmt = (v: any) => v
     ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
-  const fmtDt = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  // data_prevista_recebimento é timestamptz: colar 'T00:00:00' num valor que já
+  // vem com hora dava "Invalid Date" no papel que vai ao fornecedor (24/09/2026)
+  const fmtDt = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   const html = `
     <html><head><title>Solicitação de Compra</title>
     <style>
@@ -200,22 +264,24 @@ function imprimirSolicitacao(p: any) {
       .badge { display:inline-block; padding:2px 8px; border-radius:4px; color:#fff; font-weight:bold; background:#16a34a; }
       .footer { margin-top:30px; font-size:10px; color:#6b7280; }
       @media print { button { display:none; } }
+      ${CSS_ITENS}
     </style></head>
     <body>
       <h2>Solicitação de Compra</h2>
       <table>
         <tr><th>Campo</th><th>Informação</th></tr>
-        <tr><td><b>Nº Pedido</b></td><td>${p.numero_pedido || '—'}</td></tr>
-        <tr><td><b>OP Referência</b></td><td>${p.opl || '—'}</td></tr>
-        <tr><td><b>Descrição</b></td><td>${p.descricao_material || '—'}</td></tr>
-        <tr><td><b>Quantidade</b></td><td>${p.quantidade || '—'}</td></tr>
-        <tr><td><b>Fornecedor</b></td><td>${p.fornecedor || '—'}</td></tr>
+        <tr><td><b>Nº Pedido</b></td><td>${esc(p.numero_pedido) || '—'}</td></tr>
+        <tr><td><b>OP Referência</b></td><td>${esc(p.opl) || '—'}</td></tr>
+        <tr><td><b>Descrição</b></td><td style="white-space:pre-wrap">${esc(descricaoSemItens(p)) || '—'}</td></tr>
+        ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade) || '—'}</td></tr>`}
+        <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
         <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
-        <tr><td><b>Status</b></td><td><span class="badge">${p.status_compra || '—'}</span></td></tr>
+        <tr><td><b>Status</b></td><td><span class="badge">${esc(p.status_compra) || '—'}</span></td></tr>
         <tr><td><b>Data da Solicitação</b></td><td>${p.data_criacao ? new Date(p.data_criacao).toLocaleDateString('pt-BR') : '—'}</td></tr>
-        ${p.observacoes_compra ? `<tr><td><b>Observações</b></td><td style="white-space:pre-wrap">${p.observacoes_compra}</td></tr>` : ''}
+        ${p.observacoes_compra ? `<tr><td><b>Observações</b></td><td style="white-space:pre-wrap">${esc(p.observacoes_compra)}</td></tr>` : ''}
       </table>
+      ${blocoItensImpressao(p, fmt)}
       <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
       <script>window.onload=()=>window.print();</script>
     </body></html>`;
@@ -227,7 +293,9 @@ export function imprimirOrdemCompra(p: any) {
   if (!p.numero_oc) return;
   const fmt = (v: any) => v
     ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
-  const fmtDt = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  // data_prevista_recebimento é timestamptz: colar 'T00:00:00' num valor que já
+  // vem com hora dava "Invalid Date" no papel que vai ao fornecedor (24/09/2026)
+  const fmtDt = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
   const html = `
     <html><head><title>Ordem de Compra ${p.numero_oc}</title>
     <style>
@@ -239,21 +307,23 @@ export function imprimirOrdemCompra(p: any) {
       .badge { display:inline-block; padding:2px 8px; border-radius:4px; color:#fff; font-weight:bold; background:#7c3aed; }
       .footer { margin-top:30px; font-size:10px; color:#6b7280; }
       @media print { button { display:none; } }
+      ${CSS_ITENS}
     </style></head>
     <body>
-      <h2>Ordem de Compra — <span class="badge">${p.numero_oc}</span></h2>
+      <h2>Ordem de Compra — <span class="badge">${esc(p.numero_oc)}</span></h2>
       <table>
         <tr><th>Campo</th><th>Informação</th></tr>
-        <tr><td><b>Nº Pedido</b></td><td>${p.numero_pedido || '—'}</td></tr>
-        <tr><td><b>OP Referência</b></td><td>${p.opl || '—'}</td></tr>
-        <tr><td><b>Descrição</b></td><td>${p.descricao_material || '—'}</td></tr>
-        <tr><td><b>Quantidade</b></td><td>${p.quantidade || '—'}</td></tr>
-        <tr><td><b>Fornecedor</b></td><td>${p.fornecedor || '—'}</td></tr>
+        <tr><td><b>Nº Pedido</b></td><td>${esc(p.numero_pedido) || '—'}</td></tr>
+        <tr><td><b>OP Referência</b></td><td>${esc(p.opl) || '—'}</td></tr>
+        <tr><td><b>Descrição</b></td><td style="white-space:pre-wrap">${esc(descricaoSemItens(p)) || '—'}</td></tr>
+        ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade) || '—'}</td></tr>`}
+        <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
-        <tr><td><b>Centro de Custo</b></td><td>${p.centro_custo || '—'}</td></tr>
+        <tr><td><b>Centro de Custo</b></td><td>${esc(p.centro_custo) || '—'}</td></tr>
         <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
-        <tr><td><b>Justificativa da Vencedora</b></td><td>${p.justificativa_vencedora || '—'}</td></tr>
+        <tr><td><b>Justificativa da Vencedora</b></td><td>${esc(p.justificativa_vencedora) || '—'}</td></tr>
       </table>
+      ${blocoItensImpressao(p, fmt)}
       <div class="footer">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
       <script>window.onload=()=>window.print();</script>
     </body></html>`;
