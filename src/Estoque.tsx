@@ -77,18 +77,26 @@ export const ehFabricacaoInterna = (item: any) =>
  * abaixo do mínimo podia ganhar uma demanda nova a cada varredura, porque a
  * demanda anterior não era enxergada por ninguém.
  */
-export async function reposicaoEmAberto(item: any) {
-  const { data: compras } = await supabase.from('pcp_pedidos_compra')
+export async function reposicaoEmAberto(item: any, op?: any) {
+  // A trava é POR TIPO. Um item pode ter, ao mesmo tempo, um pedido urgente da
+  // OP e um de reposição da prateleira — são dois pedidos legítimos, com
+  // prioridades diferentes. O que não pode é dois do mesmo tipo.
+  let qc = supabase.from('pcp_pedidos_compra')
     .select('id,numero_pedido,status_compra')
     .eq('vinculo_tipo', 'estoque').eq('vinculo_id', String(item.id))
     .not('status_compra', 'in', `(${COMPRA_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  qc = op?.opl ? qc.eq('opl', op.opl) : qc.is('opl', null);
+  const { data: compras } = await qc;
   if (compras?.length) {
     return { caminho: 'compra', referencia: compras[0].numero_pedido, status: compras[0].status_compra };
   }
-  const { data: fabricacoes } = await supabase.from('demandas_setoriais')
+
+  let qf = supabase.from('demandas_setoriais')
     .select('id,numero_demanda,status,setor_destino')
     .eq('item_id', String(item.id))
     .not('status', 'in', `(${FABRICACAO_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  qf = op?.id ? qf.eq('opl_id', op.id) : qf.is('opl_id', null);
+  const { data: fabricacoes } = await qf;
   if (fabricacoes?.length) {
     return { caminho: 'fabricacao', referencia: fabricacoes[0].numero_demanda || fabricacoes[0].setor_destino,
              status: fabricacoes[0].status };
@@ -103,17 +111,19 @@ export async function reposicaoEmAberto(item: any) {
  * de uma OP específica. Quando a Etapa 4 do plano chegar, a falta provocada por
  * uma OP vai nascer amarrada a ela.
  */
-async function abrirFabricacaoReposicao({ item, quantidade, saldo, currentUser }: any) {
+async function abrirFabricacaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, currentUser }: any) {
   const agora = new Date().toISOString();
-  const texto = `Reposição de estoque — ${item.nome}${item.codigo ? ` (${item.codigo})` : ''}`;
-  const porque = `Saldo chegou a ${fmtQtd(saldo)} ${item.unidade || 'UN'}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`
-    + (item.estoque_ideal != null ? ` Fabricar para repor até o ideal de ${fmtQtd(item.estoque_ideal)}.` : '');
+  const texto = `${op ? `FALTA PARA A OP ${op.opl}` : 'Reposição de estoque'} — ${item.nome}${item.codigo ? ` (${item.codigo})` : ''}`;
+  const porque = motivoDaReposicao({ item, saldo, reservado, disponivel, op });
   const { data, error } = await supabase.from('demandas_setoriais').insert([{
     setor_destino: item.setor_fabricante, setor_origem: 'Estoque (automático)',
-    tipo_solicitacao: 'reposicao_estoque', item_id: item.id,
+    tipo_solicitacao: op ? 'falta_op' : 'reposicao_estoque', item_id: item.id,
     descricao: `${texto}\n${porque}`, quantidade, unidade: item.unidade || 'un',
     status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
     data_abertura: agora,
+    // a OP que provocou a falta fica amarrada: quem vai fabricar precisa saber
+    // que tem carro esperando, e não é só reposição de prateleira
+    ...(op ? { opl_id: op.id, numero_opl: op.opl } : {}),
     logs_demanda: [{ texto: `${porque} Demanda aberta automaticamente pelo controle de estoque — ninguém digitou.`,
                      usuario: currentUser?.nome, hora: agora }],
   }]).select('id,numero_demanda').single();
@@ -122,8 +132,27 @@ async function abrirFabricacaoReposicao({ item, quantidade, saldo, currentUser }
            referencia: data?.numero_demanda || item.setor_fabricante, quantidade };
 }
 
-export async function garantirRequisicaoReposicao({ item, quantidade, saldo, currentUser }: any) {
-  const jaTem = await reposicaoEmAberto(item);
+/** Por que este pedido existe. Vai para a tela de quem vai atender. */
+function motivoDaReposicao({ item, saldo, reservado, disponivel, op }: any) {
+  const un = item.unidade || 'UN';
+  const partes: string[] = [];
+  if (num(reservado) > 0) {
+    // dizer só "saldo 20, mínimo 30" quando 15 já têm dono esconde o problema
+    partes.push(`Saldo de ${fmtQtd(saldo)} ${un}, mas ${fmtQtd(reservado)} já reservado para OPs — `
+      + `sobram ${fmtQtd(disponivel)}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`);
+  } else {
+    partes.push(`Saldo chegou a ${fmtQtd(saldo)} ${un}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`);
+  }
+  if (op?.opl) {
+    partes.push(`É o que falta para fazer a OP ${op.opl} — tem carro esperando, esta vem primeiro.`);
+  } else if (item.estoque_ideal != null) {
+    partes.push(`Repor a prateleira até o ideal de ${fmtQtd(item.estoque_ideal)}.`);
+  }
+  return partes.join(' ');
+}
+
+export async function garantirRequisicaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, currentUser }: any) {
+  const jaTem = await reposicaoEmAberto(item, op);
   if (jaTem) {
     return { jaExistia: true, caminho: jaTem.caminho, status: jaTem.status,
              referencia: jaTem.referencia, setor: item.setor_fabricante,
@@ -136,13 +165,12 @@ export async function garantirRequisicaoReposicao({ item, quantidade, saldo, cur
   // Sem isso, o Compras recebia requisição de fornecedor para uma peça que sai
   // da bancada aqui dentro (regra definida com o usuário em 25/09/2026).
   if (ehFabricacaoInterna(item)) {
-    return await abrirFabricacaoReposicao({ item, quantidade: qtd, saldo, currentUser });
+    return await abrirFabricacaoReposicao({ item, quantidade: qtd, saldo, reservado, disponivel, op, currentUser });
   }
 
   const r = await criarRequisicaoCompra({
     titulo: `Reposição de estoque — ${item.nome}`,
-    descricao: `Saldo chegou a ${fmtQtd(saldo)} ${item.unidade || 'UN'}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`
-      + (item.estoque_ideal != null ? ` Pedido para repor até o ideal de ${fmtQtd(item.estoque_ideal)}.` : ''),
+    descricao: motivoDaReposicao({ item, saldo, reservado, disponivel, op }),
     itens: [{ nome: item.nome, quantidade: qtd, descricao: item.codigo || '' }],
     observacoes: 'Requisição aberta automaticamente pelo controle de estoque — ninguém digitou.',
     vinculo: { tipo: 'estoque', id: item.id, descricao: `${item.codigo ? item.codigo + ' · ' : ''}${item.nome}` },
@@ -166,24 +194,66 @@ export async function garantirRequisicaoReposicao({ item, quantidade, saldo, cur
  *
  * Só abre o que falta: item que já tem compra ou fabricação a caminho é pulado.
  */
+/**
+ * Quanto pedir de um item, olhando o DISPONÍVEL — não o que está na prateleira.
+ *
+ * A diferença é o coração da Etapa 4. Um item com 20 na prateleira e 20 já
+ * prometidos a OPs tem disponível zero: está sem material, por mais que o saldo
+ * diga 20. Antes disso a conta usava o saldo físico e o item aparecia "ok".
+ *
+ * A quantidade NÃO é limitada pelo ideal. Um lote de 90 carros precisa dos 90,
+ * mesmo que o ideal de prateleira seja 30 — repor até o ideal é o piso, não o
+ * teto (regra do usuário em 25/09/2026).
+ */
+export function necessidadeDeReposicao({ saldo, reservado, minimo, ideal }: any) {
+  const disponivel = num(saldo) - num(reservado);
+  const min = num(minimo);
+  const alvo = num(ideal) > 0 ? num(ideal) : min;
+
+  // O que falta AGORA para dar conta do que já foi prometido às OPs. Esta é a
+  // parte urgente: tem carro esperando.
+  const faltaOp = disponivel < 0 ? Math.ceil(-disponivel) : 0;
+
+  // O que falta para a prateleira voltar ao ideal DEPOIS de atendidas as OPs.
+  // Parte de zero quando o disponível está negativo, porque as OPs vão levar
+  // tudo que existe.
+  const sobraria = Math.max(0, disponivel);
+  const reposicao = (min > 0 && sobraria <= min) ? Math.max(0, Math.ceil(alvo - sobraria)) : 0;
+
+  return { disponivel, faltaOp, reposicao, precisa: faltaOp > 0 || reposicao > 0 };
+}
+
 export async function varrerMinimos({ currentUser }: any) {
-  const itens = await carregarItensControlados();
-  const abaixo = itens.filter((i: any) => {
-    const min = num(i.estoque_minimo);
-    return min > 0 && num(i.estoque_atual) <= min;
-  });
+  // Lê a view, que já entrega saldo, reservado e disponível prontos.
+  const { data } = await supabase.from('vw_estoque_disponivel').select('*').order('nome');
+  const itens = data || [];
 
   const abertos: any[] = [], pulados: any[] = [], falhas: any[] = [];
-  for (const item of abaixo) {
-    // Repor até o ideal; sem ideal definido, pelo menos voltar ao mínimo.
-    const alvo = num(item.estoque_ideal) > 0 ? num(item.estoque_ideal) : num(item.estoque_minimo);
-    const falta = Math.max(1, Math.ceil(alvo - num(item.estoque_atual)));
-    const r = await garantirRequisicaoReposicao({ item, quantidade: falta, saldo: item.estoque_atual, currentUser });
+  let abaixo = 0;
+  for (const linha of itens) {
+    const n = necessidadeDeReposicao({
+      saldo: linha.estoque_atual, reservado: linha.reservado,
+      minimo: linha.estoque_minimo, ideal: linha.estoque_ideal,
+    });
+    if (!n.precisa) continue;
+    abaixo++;
+    // garantirRequisicaoReposicao precisa do cadastro para saber o caminho
+    const { data: item } = await supabase.from('cadastro_itens')
+      .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante')
+      .eq('id', linha.item_id).maybeSingle();
+    if (!item) continue;
+    // A varredura é da prateleira: ela cuida da reposição. A falta de uma OP
+    // específica nasce na hora em que a OP é liberada, amarrada àquela OP.
+    const quantidade = n.reposicao > 0 ? n.reposicao : n.faltaOp;
+    const r = await garantirRequisicaoReposicao({
+      item, quantidade, saldo: linha.estoque_atual,
+      reservado: linha.reservado, disponivel: n.disponivel, currentUser,
+    });
     if (r?.erro) falhas.push({ item, erro: r.erro });
     else if (r?.jaExistia) pulados.push({ item, ...r });
-    else abertos.push({ item, ...r });
+    else abertos.push({ item, ...r, quantidade });
   }
-  return { olhados: itens.length, abaixo: abaixo.length, abertos, pulados, falhas };
+  return { olhados: itens.length, abaixo, abertos, pulados, falhas };
 }
 
 /** Texto do resultado da varredura, para mostrar a quem clicou. */
@@ -312,7 +382,57 @@ export async function reservarParaOp({ oplId, currentUser }: any) {
       criado_por_nome: currentUser?.nome || currentUser?.email || '—',
     })));
   if (error) return { erro: error.message };
-  return { reservou: novas.length, itens: novas.length };
+
+  // Reservar pode ter deixado o disponível no vermelho: é aqui que a falta vira
+  // pedido, com o tempo ainda a favor. Este é o caso que o usuário descreveu —
+  // 20 chicotes em estoque e uma OP com lote de 30 carros: o sistema vê que
+  // faltam 10 e pede sozinho, sem esperar o kiting descobrir.
+  const pedidos = await pedirOQueFaltou({ itemIds: novas.map(l => l.item_id), op, currentUser });
+  return { reservou: novas.length, itens: novas.length, pedidos };
+}
+
+/**
+ * Abre o que falta, em DOIS pedidos separados quando for o caso.
+ *
+ * Decisão do usuário em 25/09/2026: faltando material para uma OP e para a
+ * prateleira, saem duas demandas — uma com o número exato para fazer o trabalho
+ * da OP, outra para repor o estoque. Assim o setor prioriza a da OP primeiro,
+ * que tem carro parado esperando, e faz a da prateleira depois.
+ *
+ * Um pedido só, somando tudo, obrigaria o setor a terminar os 40 antes de
+ * liberar os 10 de que a OP precisa.
+ */
+async function pedirOQueFaltou({ itemIds, op, currentUser }: any) {
+  if (!itemIds?.length) return [];
+  const { data: linhas } = await supabase.from('vw_estoque_disponivel')
+    .select('*').in('item_id', itemIds);
+  const abertos: any[] = [];
+  for (const linha of linhas || []) {
+    const n = necessidadeDeReposicao({
+      saldo: linha.estoque_atual, reservado: linha.reservado,
+      minimo: linha.estoque_minimo, ideal: linha.estoque_ideal,
+    });
+    if (!n.precisa) continue;
+    const { data: item } = await supabase.from('cadastro_itens')
+      .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante')
+      .eq('id', linha.item_id).maybeSingle();
+    if (!item) continue;
+
+    const comum = { item, saldo: linha.estoque_atual, reservado: linha.reservado,
+                    disponivel: n.disponivel, currentUser };
+
+    // 1) o que a OP precisa para andar — urgente, amarrada à OP
+    if (n.faltaOp > 0 && op) {
+      const r = await garantirRequisicaoReposicao({ ...comum, quantidade: n.faltaOp, op });
+      if (r?.criada) abertos.push({ nome: item.nome, quantidade: n.faltaOp, para: 'OP', ...r });
+    }
+    // 2) o que a prateleira precisa para voltar ao ideal — sem OP amarrada
+    if (n.reposicao > 0) {
+      const r = await garantirRequisicaoReposicao({ ...comum, quantidade: n.reposicao });
+      if (r?.criada) abertos.push({ nome: item.nome, quantidade: n.reposicao, para: 'estoque', ...r });
+    }
+  }
+  return abertos;
 }
 
 /** Consome a reserva da OP para um item — o material saiu de verdade no kiting. */
@@ -425,14 +545,32 @@ export async function movimentarEstoque({
   // A compra automática mora aqui dentro de propósito: assim toda saída que
   // fura o mínimo pede reposição, venha ela do kiting, do balcão ou de uma
   // contagem que revelou menos do que se pensava. Nenhuma tela pode esquecer.
-  if (r.ok && r.abaixo_do_minimo && num(r.sugestao_compra) > 0) {
+  //
+  // A conta de "precisa repor" é refeita aqui, no disponível, em vez de confiar
+  // no abaixo_do_minimo que o banco devolve — aquele olha só a prateleira e não
+  // sabe o que já foi prometido a OPs. Item com 20 no saldo e 20 reservados
+  // está sem material, e o banco diria que está tudo bem (Etapa 4).
+  if (r.ok) {
+    const reservado = (await reservadoPorItem([String(itemId)])).get(String(itemId)) || 0;
     const { data: item } = await supabase.from('cadastro_itens')
       .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante')
       .eq('id', itemId).maybeSingle();
     if (item) {
-      r.requisicao = await garantirRequisicaoReposicao({
-        item, quantidade: r.sugestao_compra, saldo: r.saldo_depois, currentUser,
+      const n = necessidadeDeReposicao({
+        saldo: r.saldo_depois, reservado,
+        minimo: item.estoque_minimo, ideal: item.estoque_ideal,
       });
+      r.reservado = reservado;
+      r.disponivel = n.disponivel;
+      // movimento é da prateleira: repõe o estoque. A falta de OP tem dono e
+      // nasce na liberação, não aqui.
+      const quantidade = n.reposicao > 0 ? n.reposicao : n.faltaOp;
+      if (quantidade > 0) {
+        r.requisicao = await garantirRequisicaoReposicao({
+          item, quantidade, saldo: r.saldo_depois,
+          reservado, disponivel: n.disponivel, currentUser,
+        });
+      }
     }
   }
   return r;
@@ -580,6 +718,26 @@ export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
     if (delta > 0) await consumirReserva({ oplId: opl.id, itemId: l.item_id, currentUser });
   }
   return resumo;
+}
+
+/** Aviso do que foi pedido sozinho ao liberar a OP. */
+export function textoPedidosDaReserva(pedidos: any[]) {
+  if (!pedidos?.length) return '';
+  const daOp = pedidos.filter(p => p.para === 'OP');
+  const doEstoque = pedidos.filter(p => p.para !== 'OP');
+  const linhas: string[] = ['Faltou material e os pedidos já foram abertos sozinhos:', ''];
+  if (daOp.length) {
+    linhas.push('PARA ESTA OP ANDAR (prioridade):');
+    daOp.forEach(p => linhas.push(`  • ${p.nome}: ${fmtQtd(p.quantidade)} → ${paraQuem(p)}`));
+    linhas.push('');
+  }
+  if (doEstoque.length) {
+    linhas.push('PARA REPOR A PRATELEIRA (depois):');
+    doEstoque.forEach(p => linhas.push(`  • ${p.nome}: ${fmtQtd(p.quantidade)} → ${paraQuem(p)}`));
+    linhas.push('');
+  }
+  linhas.push('São dois pedidos separados de propósito: o da OP pode ser atendido primeiro.');
+  return linhas.join('\n');
 }
 
 /** Para quem foi o pedido de reposição — o Compras ou a bancada de um setor. */

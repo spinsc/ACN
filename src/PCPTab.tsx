@@ -13,7 +13,7 @@ import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temF
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
 import { MenuAcoes } from './Interface';
-import { reservarParaOp } from './Estoque';
+import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
 
 
 // setores que recebem demanda avulsa (cada um tem o seu painel)
@@ -253,6 +253,7 @@ export default function PCPTab({ currentUser }) {
     // próxima OP não contar com a mesma peça (regra do usuário em 25/09/2026).
     const res = await reservarParaOp({ oplId: opl.id, currentUser });
     if (res?.erro) alert('A OP foi liberada, mas a reserva de estoque falhou: ' + res.erro);
+    else if (res?.pedidos?.length) alert(textoPedidosDaReserva(res.pedidos));
     notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
   };
@@ -324,7 +325,7 @@ export default function PCPTab({ currentUser }) {
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {
-      const falhasReserva: string[] = [];
+      const falhasReserva: string[] = [], pedidosDoLote: string[] = [];
       for (const opl of pendentes) {
         await supabase.from('oples').update({
           status_geral: 'Aguardando Almox',
@@ -335,6 +336,15 @@ export default function PCPTab({ currentUser }) {
         // caminho por onde o material escapa sem dono
         const res = await reservarParaOp({ oplId: opl.id, currentUser });
         if (res?.erro) falhasReserva.push(`${opl.opl}: ${res.erro}`);
+        (res?.pedidos || []).forEach(p => pedidosDoLote.push(`${opl.opl} — ${p.nome}: ${p.quantidade}`));
+      }
+      // num lote de 90 carros isso pode ser muita linha: resume em vez de
+      // despejar um alerta por OP
+      if (pedidosDoLote.length) {
+        alert(`Faltou material e ${pedidosDoLote.length} pedido(s) foram abertos sozinhos:\n\n`
+          + pedidosDoLote.slice(0, 15).join('\n')
+          + (pedidosDoLote.length > 15 ? `\n… e mais ${pedidosDoLote.length - 15}.` : '')
+          + `\n\nAcompanhe pelo Compras ou pelo setor que fabrica.`);
       }
       if (falhasReserva.length) {
         alert(`As OPs foram liberadas, mas a reserva de estoque falhou em:\n${falhasReserva.join('\n')}`);

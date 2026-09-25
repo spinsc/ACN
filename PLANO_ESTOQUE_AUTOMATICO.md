@@ -243,26 +243,65 @@ disponível negativo (aquele −10) vira compra ou fabricação.
 
 ---
 
-### ⬜ Etapa 4 — A falta da OP vira pedido automático, considerando o lote · **PRÓXIMA**
+### ✅ Etapa 4 — A falta da OP vira pedido automático, considerando o lote
 
 **O caso do usuário:** 20 chicotes em estoque, OP com lote de 30 carros. O
 sistema tem que ver que faltam 10 e pedir os 10 — não parar no ideal de 50.
 
-**O que muda:**
-1. Ao reservar, o que não couber no disponível vira **falta**.
-2. A falta abre pedido automático pelo caminho certo do item: compra, chicotes
-   ou serralheria.
-3. A quantidade pedida é **a maior entre** repor até o ideal e cobrir a falta da
-   OP. Um lote de 90 carros não pode ser limitado pelo ideal de 30.
-4. O pedido nasce amarrado à OP que o provocou, para o Almoxarifado saber por
-   que ele existe.
+**Feito em:** 25/09/2026.
 
-**Feito em:** —
-**O que foi feito:** —
+**A decisão que mudou o desenho:** perguntado se deveria pedir 40 (cobrir a
+falta e repor até o ideal num pedido só) ou 10 (só o que falta), o usuário
+escolheu um terceiro caminho, melhor que os dois: **saem DUAS demandas**. Uma
+com o número exato para a OP andar, outra para repor a prateleira. Assim o setor
+atende primeiro a da OP, que tem carro parado, e faz a da prateleira depois. Um
+pedido só, somando tudo, obrigaria o setor a terminar os 40 antes de liberar os
+10 de que a OP precisa.
+
+**O que foi feito:**
+
+- `necessidadeDeReposicao` passou a devolver **dois números**: `faltaOp` (o que
+  falta para atender o que já foi prometido) e `reposicao` (o que falta para a
+  prateleira voltar ao ideal, contando que as OPs vão levar tudo).
+- **Tudo passou a olhar o disponível, não a prateleira.** Antes a conta usava o
+  saldo físico, e um item com 20 no saldo e 20 reservados aparecia "ok". Vale
+  para a varredura, para a movimentação de estoque e para o gatilho da reserva.
+  O `abaixo_do_minimo` que o banco devolve deixou de ser usado: ele só enxerga a
+  prateleira.
+- `reservarParaOp` chama `pedirOQueFaltou`, que abre as duas demandas quando for
+  o caso — a da OP amarrada a ela (`tipo_solicitacao = 'falta_op'`,
+  `opl_id` preenchido) e a da prateleira solta (`reposicao_estoque`).
+- **A trava anti-duplicação passou a ser por tipo.** Antes bloqueava qualquer
+  segundo pedido do mesmo item, o que impediria a segunda demanda de nascer.
+  Agora um item pode ter um pedido de OP e um de prateleira ao mesmo tempo, mas
+  nunca dois do mesmo tipo.
+- `motivoDaReposicao` conta o porquê na tela de quem vai atender, incluindo
+  quanto está reservado — dizer só "saldo 20, mínimo 30" quando 15 já têm dono
+  esconde o problema.
+- PCP avisa ao liberar, separando "para esta OP andar (prioridade)" de "para
+  repor a prateleira (depois)". Na liberação em lote o aviso é resumido, senão
+  um lote de 90 carros viraria um alerta por OP.
+
+**Testado** com o cenário exato do usuário — item com 20, mínimo 5, ideal 30,
+OP de 30:
+
+| | |
+|---|---|
+| Disponível após reservar | **−10** |
+| Demanda 1 (`falta_op`) | **10**, amarrada à OP, "FALTA PARA A OP …" |
+| Demanda 2 (`reposicao_estoque`) | **30**, sem OP, "Reposição de estoque" |
+| Repetir | as duas travas bloqueiam, cada uma no seu tipo |
+
+Dado de teste apagado; banco conferido em 325 OPs, 4.437 itens, 140 demandas,
+zero reservas e zero resíduo.
+
+**O que ficou de fora:** a varredura manual ("Conferir mínimos") abre só a
+demanda de prateleira — a falta de uma OP específica nasce na liberação dela,
+que é quando se sabe de quem é a falta.
 
 ---
 
-### ⬜ Etapa 5 — Veículo pela FIPE na abertura da OPL
+### ⬜ Etapa 5 — Veículo pela FIPE na abertura da OPL · **PRÓXIMA**
 
 **O que muda:** na abertura da OPL, três campos em cascata — **marca**,
 **modelo**, **ano** — vindos da API da Tabela FIPE, cada um como `SelectBusca`
@@ -338,7 +377,7 @@ direito (Etapas 1 a 4) e que o setor esteja confortável com o controle.
 | 25/09/2026 | A maioria dos chicotes é de estoque. Só chicote de veículo ainda não adaptado precisa de desenvolvimento — e esse continua como demanda de texto livre. |
 | 25/09/2026 | O pedido de chicote/serralheria vindo da Engenharia ou do PCP era solução temporária. No futuro fica só para chicote que precisa ser desenvolvido. |
 | 25/09/2026 | Reserva ≠ baixa. A baixa continua no kiting, manual, feito pelo Almoxarifado. |
-| 25/09/2026 | A quantidade a pedir considera o lote da OP, não só o estoque ideal. |
+| 25/09/2026 | Faltando para OP e para a prateleira, saem DUAS demandas: a da OP (prioridade) e a de reposição. |
 | 25/09/2026 | Campos de veículo (marca/modelo/ano) vêm da FIPE e são selects com busca. |
 | 25/09/2026 | **A reserva nasce quando o PCP libera a OP para o Almoxarifado.** |
 | 25/09/2026 | A Etapa 2 foi feita antes da 1: mínimo calado era falha ativa. |
