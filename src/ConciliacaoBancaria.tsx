@@ -32,6 +32,26 @@ const numBr = (v: any) => {
 };
 const diasEntre = (a: string, b: string) => Math.abs((new Date(a.slice(0, 10)).getTime() - new Date(b.slice(0, 10)).getTime()) / 86400000);
 
+// Em que dia um registro do sistema entra, para casar com a linha do extrato.
+//
+// Corrigido em 25/09/2026: antes a conciliação cortava os 10 primeiros
+// caracteres de qualquer campo, o que devolve o dia de Londres. Uma NF emitida
+// às 22h daqui já é o dia seguinte lá, e o lançamento não casava com o extrato.
+//
+// Os campos são de duas naturezas e cada uma pede um tratamento:
+//   • só o dia (coluna date, ou data escolhida num calendário, que o sistema
+//     guarda à meia-noite de Londres) — vale o próprio dia, sem conversão;
+//   • instante de verdade (emissão da NF, criação do pedido) — vale o dia de
+//     quem está aqui.
+const diaDoRegistro = (v: any): string => {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  if (s.length <= 10) return s.slice(0, 10);
+  if (/T00:00:00(\.0+)?(Z|\+00:?00)$/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s.slice(0, 10) : diaISO(d);
+};
+
 // ── Leitura do arquivo ───────────────────────────────────────────────────────
 function lerOfx(texto: string) {
   const tag = (bloco: string, nome: string) => {
@@ -102,13 +122,13 @@ async function carregarCandidatos() {
     supabase.from('centro_custo_despesas').select('id,descricao,valor,data'),
   ]);
   return [
-    ...(ops.data || []).map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: String(o.data_emissao_nf || o.data_nf || '').slice(0, 10),
+    ...(ops.data || []).map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: diaDoRegistro(o.data_emissao_nf || o.data_nf),
       descricao: `OP ${o.opl} — ${o.cliente_nome || ''}${o.numero_nf ? ` · NF ${o.numero_nf}` : ''}` })),
-    ...(fats.data || []).map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: String(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em || '').slice(0, 10),
+    ...(fats.data || []).map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: diaDoRegistro(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em),
       descricao: `Faturamento ${f.numero_oc || f.numero_pedido || ''} — ${f.fornecedor || ''}${f.nf_fornecedor_numero ? ` · NF ${f.nf_fornecedor_numero}` : ''}` })),
-    ...(compras.data || []).map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: String(p.data_prevista_recebimento || p.data_criacao || '').slice(0, 10),
+    ...(compras.data || []).map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: diaDoRegistro(p.data_prevista_recebimento || p.data_criacao),
       descricao: `Compra ${p.numero_oc || p.numero_pedido || ''} — ${p.fornecedor || ''} (${p.status_compra || ''})` })),
-    ...(despesas.data || []).map((d: any) => ({ sentido: -1, tipo: 'despesa', id: String(d.id), valor: Number(d.valor), data: String(d.data || '').slice(0, 10),
+    ...(despesas.data || []).map((d: any) => ({ sentido: -1, tipo: 'despesa', id: String(d.id), valor: Number(d.valor), data: diaDoRegistro(d.data),
       descricao: `Despesa — ${d.descricao || ''}` })),
   ].filter(c => Number.isFinite(c.valor) && c.valor > 0);
 }

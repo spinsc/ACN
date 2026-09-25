@@ -245,7 +245,12 @@ export function ItensDemandaView({ itens, mostrarValor = false, onSalvarValores 
     setSalvando(false); setEditando(false);
   };
   return (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+    // flexShrink:0 não é enfeite. O overflow:hidden (que arredonda os cantos)
+    // faz o flexbox considerar que esta caixa pode encolher até zero, e o corpo
+    // do painel de demanda é um flex em coluna. Sem isso, com o painel cheio, a
+    // lista era espremida e só sobrava o cabeçalho — o serralheiro via
+    // "Itens (1)" sem saber qual peça fabricar (bug relatado em 25/09/2026).
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
       <div style={{ background: '#f8fafc', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0',
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ flex: 1 }}>📦 Itens ({itens.length}){mostrarValor && total != null ? ` · total ${brl(total)}` : ''}</span>
