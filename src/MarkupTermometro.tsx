@@ -15,23 +15,71 @@ import { supabase } from './supabaseClient';
 
 // Mesmo corte de 65% usado como markup mínimo em FormacaoPrecosTab.tsx
 // (MARKUP_MINIMO_CUSTO_PCT) — repetido aqui porque não é exportado de lá.
-export const MARKUP_BANDAS = [
-  { id: 'vermelho', min: -Infinity, max: 65,  cor: '#dc2626', bg: '#fef2f2', borda: '#fca5a5', label: 'Markup baixo' },
-  { id: 'laranja',  min: 65,        max: 80,  cor: '#c2410c', bg: '#fff7ed', borda: '#fdba74', label: 'Apertado' },
-  { id: 'amarelo',  min: 80,        max: 100, cor: '#a16207', bg: '#fefce8', borda: '#fde047', label: 'Bom' },
-  { id: 'verde',    min: 100,       max: 100.000001, cor: '#16a34a', bg: '#f0fdf4', borda: '#86efac', label: 'Na meta' },
-  { id: 'dourado',  min: 100.000001, max: Infinity,  cor: '#92400e', bg: '#fffbeb', borda: '#f59e0b', label: 'Overmarkup' },
-] as const;
+//
+// Cortes configuráveis por tipo de negócio (pedido do Rafael Nunes, dono da
+// empresa, em 23/09/2026): revenda tem markup normal mais baixo (~65%), venda
+// varia bastante, pós-vendas/manutenção deveria exigir markup sempre mais
+// alto. Os dois cortes de baixo (`min`/`bom`) são configuráveis por tipo em
+// Admin → Faixas de Markup (ver carregarBandasMarkupPorTipo); 100% (meta) e
+// acima (overmarkup) ficam fixos, porque isso é sobre a fórmula do preço, não
+// política comercial por tipo — ">100% já é dourado" foi confirmado com o
+// usuário antes disso existir.
+export type BandaMarkupConfig = { min: number; bom: number; ativa: boolean };
+export const BANDA_MARKUP_PADRAO: BandaMarkupConfig = { min: 65, bom: 80, ativa: true };
+
+// Tipos de negócio do CRM que podem ter régua própria — ver tipo_negocio em
+// crm_oportunidades e o seletor em CrmTab.tsx.
+export const TIPOS_NEGOCIO_CRM = ['Revenda', 'Venda', 'Pós-vendas'] as const;
+export const SLUG_TIPO_NEGOCIO: Record<string, string> = { 'Revenda': 'revenda', 'Venda': 'venda', 'Pós-vendas': 'pos_vendas' };
+
+function bandasDe(cfg: BandaMarkupConfig) {
+  return [
+    { id: 'vermelho', min: -Infinity,     max: cfg.min, cor: '#dc2626', bg: '#fef2f2', borda: '#fca5a5', label: 'Markup baixo' },
+    { id: 'laranja',  min: cfg.min,       max: cfg.bom, cor: '#c2410c', bg: '#fff7ed', borda: '#fdba74', label: 'Apertado' },
+    { id: 'amarelo',  min: cfg.bom,       max: 100,     cor: '#a16207', bg: '#fefce8', borda: '#fde047', label: 'Bom' },
+    { id: 'verde',    min: 100,           max: 100.000001, cor: '#16a34a', bg: '#f0fdf4', borda: '#86efac', label: 'Na meta' },
+    { id: 'dourado',  min: 100.000001,    max: Infinity,   cor: '#92400e', bg: '#fffbeb', borda: '#f59e0b', label: 'Overmarkup' },
+  ] as const;
+}
+
+// Mantido para quem já importava a régua fixa (RelatoriosTab.tsx — "Markup
+// por Vendedor" não tem noção de tipo de negócio ainda).
+export const MARKUP_BANDAS = bandasDe(BANDA_MARKUP_PADRAO);
 
 const BANDA_NEUTRA = { id: 'neutro', cor: '#64748b', bg: '#f1f5f9', borda: '#cbd5e1', label: 'Sem cotação' };
+// Tipo marcado como "sem régua fixa" no Admin (ex.: Venda, que varia demais
+// pra ter uma faixa única) — mostra o número sem cor de alerta.
+const BANDA_SEM_REGUA = { id: 'sem_regua', min: -Infinity, max: Infinity, cor: '#475569', bg: '#f1f5f9', borda: '#cbd5e1', label: 'Markup (sem régua fixa)' };
 
-export function corMarkup(pct: number | null | undefined) {
+export function corMarkup(pct: number | null | undefined, cfg: BandaMarkupConfig = BANDA_MARKUP_PADRAO) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return BANDA_NEUTRA;
+  if (cfg.ativa === false) return BANDA_SEM_REGUA;
   // ">100% já é dourado" (confirmado com o usuário) — só cai em "verde" quem
   // está exatamente em 100%; qualquer coisa acima já sinaliza overmarkup.
-  if (pct > 100) return MARKUP_BANDAS[4];
-  const banda = MARKUP_BANDAS.find(b => pct >= b.min && pct < b.max);
-  return banda || MARKUP_BANDAS[3]; // pct === 100 exatamente cai aqui (verde)
+  const bandas = bandasDe(cfg);
+  if (pct > 100) return bandas[4];
+  const banda = bandas.find(b => pct >= b.min && pct < b.max);
+  return banda || bandas[3]; // pct === 100 exatamente cai aqui (verde)
+}
+
+// Carrega os cortes configurados em Admin → Faixas de Markup
+// (configuracoes_sistema, chaves markup_regua_<tipo>_ativa/min/bom). Tipo sem
+// configuração cai no padrão (65/80, régua ativa) — mesmo comportamento de
+// sempre, até o Rafael mexer em algum tipo.
+export async function carregarBandasMarkupPorTipo(): Promise<Record<string, BandaMarkupConfig>> {
+  const chaves = Object.values(SLUG_TIPO_NEGOCIO).flatMap(s => [`markup_regua_${s}_ativa`, `markup_regua_${s}_min`, `markup_regua_${s}_bom`]);
+  const { data } = await supabase.from('configuracoes_sistema').select('chave,valor').in('chave', chaves);
+  const mapa: Record<string, string> = Object.fromEntries((data || []).map((r: any) => [r.chave, r.valor]));
+  const resultado: Record<string, BandaMarkupConfig> = {};
+  for (const [tipo, slug] of Object.entries(SLUG_TIPO_NEGOCIO)) {
+    const ativaStr = mapa[`markup_regua_${slug}_ativa`];
+    resultado[tipo] = {
+      ativa: ativaStr === undefined ? true : ativaStr !== 'false',
+      min: Number(mapa[`markup_regua_${slug}_min`]) || BANDA_MARKUP_PADRAO.min,
+      bom: Number(mapa[`markup_regua_${slug}_bom`]) || BANDA_MARKUP_PADRAO.bom,
+    };
+  }
+  return resultado;
 }
 
 // Média de markup_pct dos itens em modo CUSTO de uma cotação (itens em modo
@@ -137,8 +185,8 @@ export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Prom
 // pela faixa. Escala: 0%-130% mapeado pra 0%-100% de altura do tubo
 // (clampado nas pontas), pra dar pra distinguir visualmente um 60% "quase
 // vazio" de um 105% "quase cheio/dourado". ──
-export function Termometro({ pct, size = 14 }: { pct: number | null | undefined; size?: number }) {
-  const banda = corMarkup(pct);
+export function Termometro({ pct, size = 14, bandaCfg }: { pct: number | null | undefined; size?: number; bandaCfg?: BandaMarkupConfig }) {
+  const banda = corMarkup(pct, bandaCfg);
   const valor = pct === null || pct === undefined || Number.isNaN(pct) ? 0 : pct;
   const fracao = Math.max(0, Math.min(1, valor / 130));
   const W = 14, H = 30;
@@ -160,10 +208,10 @@ export function Termometro({ pct, size = 14 }: { pct: number | null | undefined;
 }
 
 // ── Badge pequeno pro card individual (Kanban CRM / LicitCard) ──
-export function MarkupBadge({ pct, min, max, discreto = false }:
-  { pct: number | null | undefined; min?: number; max?: number; discreto?: boolean }) {
+export function MarkupBadge({ pct, min, max, discreto = false, bandaCfg }:
+  { pct: number | null | undefined; min?: number; max?: number; discreto?: boolean; bandaCfg?: BandaMarkupConfig }) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return null;
-  const banda = corMarkup(pct);
+  const banda = corMarkup(pct, bandaCfg);
   // A faixa min–max só aparece quando os itens NÃO têm todos o mesmo markup:
   // é ela que revela o que o número ponderado esconde — um item a 30% junto de
   // um a 150%. Com todos iguais seria só ruído (pedido de 25/09/2026).
@@ -175,7 +223,7 @@ export function MarkupBadge({ pct, min, max, discreto = false }:
   if (discreto) return (
     <span title={titulo} className="acn-num"
       style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 500, color: banda.cor }}>
-      <Termometro pct={pct} size={13} />
+      <Termometro pct={pct} size={13} bandaCfg={bandaCfg} />
       {pct.toFixed(1)}%
       {temDispersao && <span style={{ fontSize: 9, opacity: .75, fontWeight: 400 }}>({faixaTxt})</span>}
     </span>
@@ -186,7 +234,7 @@ export function MarkupBadge({ pct, min, max, discreto = false }:
       fontSize: 9, fontWeight: 700, padding: '1px 5px 1px 3px', borderRadius: 3,
       background: banda.bg, color: banda.cor, border: `1px solid ${banda.borda}`,
     }}>
-      <Termometro pct={pct} size={13} />
+      <Termometro pct={pct} size={13} bandaCfg={bandaCfg} />
       {pct.toFixed(1)}%
       {temDispersao && <span style={{ opacity: .75, fontWeight: 400 }}>({faixaTxt})</span>}
     </span>

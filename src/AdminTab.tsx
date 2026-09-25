@@ -6,6 +6,7 @@ import Linkify from './Linkify';
 import { CentrosCustoManager } from './CentroCustoShared';
 import { confirmar } from './Feedback';
 import PainelFeriados from './FeriadosAdmin';
+import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
 
 
 const PERFIS = [
@@ -2925,6 +2926,7 @@ const ABAS_ADMIN = [
   { id:'contratos_padrao', label:'📄 Contratos Padrão' },
   { id:'email_cfg',      label:'📧 Config. Email' },
   { id:'cotacoes_cfg',   label:'📋 Config. Cotações' },
+  { id:'markup_cfg',     label:'📈 Faixas de Markup' },
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'feriados',       label:'📅 Feriados' },
@@ -3139,6 +3141,109 @@ function PainelCotacoesCfg() {
             </button>
             {msg && <span style={{ fontSize:10, color: msg.startsWith('✅') ? '#16a34a' : '#dc2626', fontWeight:700 }}>{msg}</span>}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAINEL FAIXAS DE MARKUP (por tipo de negócio do CRM)
+//
+// Pedido do Rafael Nunes (dono da empresa) em 23/09/2026: revenda tem markup
+// normal mais baixo (~65%), venda varia bastante, pós-vendas/manutenção
+// deveria exigir markup sempre mais alto — cada tipo com sua própria régua de
+// cor no termômetro (ver MarkupTermometro.tsx), configurável aqui em vez de
+// fixa no código, pra ele mesmo poder ajustar sem precisar pedir alteração.
+// ─────────────────────────────────────────────────────────────────────────────
+function PainelMarkupCfg() {
+  const [cfg,      setCfg]      = useState<Record<string, any>>({});
+  const [salvando, setSalvando] = useState(false);
+  const [msg,      setMsg]      = useState('');
+
+  useEffect(() => {
+    const chaves = Object.values(SLUG_TIPO_NEGOCIO).flatMap(s => [`markup_regua_${s}_ativa`, `markup_regua_${s}_min`, `markup_regua_${s}_bom`]);
+    supabase.from('configuracoes_sistema').select('chave,valor').in('chave', chaves)
+      .then(({ data }) => {
+        const mapa = Object.fromEntries((data || []).map(r => [r.chave, r.valor]));
+        const inicial: Record<string, any> = {};
+        for (const [tipo, slug] of Object.entries(SLUG_TIPO_NEGOCIO)) {
+          const ativaStr = mapa[`markup_regua_${slug}_ativa`];
+          inicial[tipo] = {
+            ativa: ativaStr === undefined ? true : ativaStr !== 'false',
+            min: mapa[`markup_regua_${slug}_min`] || String(BANDA_MARKUP_PADRAO.min),
+            bom: mapa[`markup_regua_${slug}_bom`] || String(BANDA_MARKUP_PADRAO.bom),
+          };
+        }
+        setCfg(inicial);
+      });
+  }, []);
+
+  const setCampo = (tipo: string, campo: string, valor: any) =>
+    setCfg(c => ({ ...c, [tipo]: { ...c[tipo], [campo]: valor } }));
+
+  const salvar = async () => {
+    setSalvando(true);
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const upserts = Object.entries(SLUG_TIPO_NEGOCIO).flatMap(([tipo, slug]) => {
+      const c = cfg[tipo] || {};
+      return [
+        { chave: `markup_regua_${slug}_ativa`, valor: c.ativa === false ? 'false' : 'true' },
+        { chave: `markup_regua_${slug}_min`,   valor: String(c.min ?? BANDA_MARKUP_PADRAO.min) },
+        { chave: `markup_regua_${slug}_bom`,   valor: String(c.bom ?? BANDA_MARKUP_PADRAO.bom) },
+      ].map(r => ({ ...r, descricao: `Régua de markup — ${tipo}`, atualizado_por: currentUser?.email, atualizado_em: new Date().toISOString() }));
+    });
+    const { error } = await supabase.from('configuracoes_sistema').upsert(upserts, { onConflict: 'chave' });
+    setSalvando(false);
+    setMsg(error ? '❌ Erro: ' + error.message : '✅ Faixas de markup salvas!');
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  return (
+    <div className="sec-card">
+      <div className="sec-header">📈 Faixas de Markup por Tipo de Negócio (CRM)</div>
+      <div className="sec-body">
+        <p style={{ fontSize:10, color:'#64748b', marginBottom:14 }}>
+          Cada tipo de negócio da oportunidade (Comercial → CRM) pode ter sua própria régua de alerta no
+          termômetro de markup. Abaixo de "mínimo aceitável" o markup acende vermelho; entre "mínimo" e "bom" fica
+          laranja (apertado); a partir de "bom" fica amarelo, até chegar em 100% (meta, verde) — acima disso é sempre
+          dourado (overmarkup), fixo pra todos os tipos. Sem "régua ativa", o markup aparece sem cor de alerta —
+          use isso para o tipo que "varia bastante" e não tem um número certo.
+        </p>
+        {TIPOS_NEGOCIO_CRM.map(tipo => {
+          const c = cfg[tipo] || { ativa: true, min: BANDA_MARKUP_PADRAO.min, bom: BANDA_MARKUP_PADRAO.bom };
+          return (
+            <div key={tipo} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', marginBottom:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                <strong style={{ fontSize:11, color:'#0f172a', minWidth:90 }}>{tipo}</strong>
+                <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:9, color:'#475569' }}>
+                  <input type="checkbox" checked={c.ativa !== false} onChange={e => setCampo(tipo, 'ativa', e.target.checked)} />
+                  Régua ativa (mostra cor de alerta)
+                </label>
+                {c.ativa !== false && (<>
+                  <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:9, color:'#475569' }}>
+                    Mínimo aceitável (%)
+                    <input type="number" min={0} max={100} step={1} value={c.min ?? BANDA_MARKUP_PADRAO.min}
+                      onChange={e => setCampo(tipo, 'min', e.target.value)}
+                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:10 }} />
+                  </label>
+                  <label style={{ display:'flex', alignItems:'center', gap:5, fontSize:9, color:'#475569' }}>
+                    Bom a partir de (%)
+                    <input type="number" min={0} max={100} step={1} value={c.bom ?? BANDA_MARKUP_PADRAO.bom}
+                      onChange={e => setCampo(tipo, 'bom', e.target.value)}
+                      style={{ width:60, border:'1px solid #d1d5db', borderRadius:4, padding:'4px 6px', fontSize:10 }} />
+                  </label>
+                </>)}
+              </div>
+            </div>
+          );
+        })}
+        <div style={{ display:'flex', gap:10, alignItems:'center', marginTop:14 }}>
+          <button onClick={salvar} disabled={salvando} className="acn-btn"
+            style={{ background:'#0f766e', fontSize:10, padding:'6px 20px' }}>
+            {salvando ? 'Salvando...' : '💾 Salvar Faixas de Markup'}
+          </button>
+          {msg && <span style={{ fontSize:10, color: msg.startsWith('✅') ? '#16a34a' : '#dc2626', fontWeight:700 }}>{msg}</span>}
         </div>
       </div>
     </div>
@@ -3400,6 +3505,7 @@ export default function AdminTab() {
       {abaAtiva === 'contratos_padrao' && <PainelContratosPadrao />}
       {abaAtiva === 'email_cfg' && <PainelEmailCfg />}
       {abaAtiva === 'cotacoes_cfg' && <PainelCotacoesCfg />}
+      {abaAtiva === 'markup_cfg' && <PainelMarkupCfg />}
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'feriados'     && <PainelFeriados />}

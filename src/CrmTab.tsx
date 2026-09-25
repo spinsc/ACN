@@ -26,7 +26,7 @@ import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { EscolherAnexos, enviarAnexosCompra } from './ComprasFluxo';
-import { carregarMarkupPorProcesso, MarkupBadge, MarkupBarraDistribuicao } from './MarkupTermometro';
+import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag } from './Interface';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
@@ -346,6 +346,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
   // { pct ponderado pelo custo, min, max } por processo — ver MarkupTermometro
   const [markupPorOp, setMarkupPorOp]       = useState<Record<string, any>>({});
+  // Cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados
+  // em Admin → Faixas de Markup — ver MarkupTermometro.carregarBandasMarkupPorTipo
+  const [bandasMarkup, setBandasMarkup]     = useState<Record<string, any>>({});
   const [salvandoCompra, setSalvandoCompra] = useState(false);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
@@ -362,6 +365,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [filtFunil, setFiltFunil]           = useState<'todos'|'licitacao'|'venda_direta'>('todos');
   const [filtResp, setFiltResp]             = useState('');
   const [filtTemp, setFiltTemp]             = useState<''|'frio'|'morno'|'quente'>('');
+  const [filtTipoNegocio, setFiltTipoNegocio] = useState('');
   // Filtro de mês dos cartões de pipeline (Em Negociação/Perdidas/Ganhas/
   // Aguardando Faturamento) — formato 'YYYY-MM', vazio = todos os meses.
   const [mesFiltroPipeline, setMesFiltroPipeline] = useState('');
@@ -446,6 +450,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setPedidosCompra(pcData || []);
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
     carregarMarkupPorProcesso('crm').then(setMarkupPorOp);
+    carregarBandasMarkupPorTipo().then(setBandasMarkup);
     if (!silent) setLoading(false);
   }, []);
 
@@ -525,6 +530,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const opsFiltradas   = opsFunil.filter(o => {
     if (filtResp && o.responsavel_nome !== filtResp) return false;
     if (filtTemp && o.temperatura !== filtTemp) return false;
+    if (filtTipoNegocio && o.tipo_negocio !== filtTipoNegocio) return false;
     return combinaBusca([o.titulo, o.orgao, o.numero_edital], busca);
   });
 
@@ -1841,6 +1847,25 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  // TIPO DE NEGÓCIO (Revenda/Venda/Pós-vendas) — pedido do Rafael Nunes (dono
+  // da empresa) em 23/09/2026, pra avaliar o markup com a régua certa por tipo
+  // (ver MarkupTermometro.tsx). Edição direta no select do card, sem modal —
+  // é só uma classificação, não precisa do fluxo de confirmação da temperatura.
+  // ─────────────────────────────────────────────────────────────────────────
+  const atualizarTipoNegocio = async (op: any, novoTipo: string | null) => {
+    setOps(prev => prev.map(o => o.id === op.id ? { ...o, tipo_negocio: novoTipo } : o)); // otimista
+    await supabase.from('crm_oportunidades').update({
+      tipo_negocio: novoTipo, atualizado_em: new Date().toISOString(),
+    }).eq('id', op.id);
+    if (novoTipo !== op.tipo_negocio) {
+      await supabase.from('crm_historico').insert({
+        oportunidade_id: op.id, tipo: 'observacao',
+        conteudo: `Tipo de negócio alterado para: ${novoTipo || '(não definido)'}`, usuario_nome: currentUser?.nome,
+      });
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   // MOTIVO PERDA
   // ─────────────────────────────────────────────────────────────────────────
   const confirmarPerda = async () => {
@@ -2013,6 +2038,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         <div className="acn-kmeta">
           <Tag>{isDetech ? 'DETECH' : 'ACN'}</Tag>
           {op.funil === 'licitacao' && <Tag>Licitação</Tag>}
+          {op.tipo_negocio && <Tag>{op.tipo_negocio}</Tag>}
           {op.temperatura && (
             <span title={`Temperatura: ${op.temperatura}`} style={{ lineHeight:1 }}>
               {op.temperatura === 'quente' ? '🔥' : op.temperatura === 'morno' ? '🌤️' : '🧊'}
@@ -2024,7 +2050,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           <span className="dir-auto" style={{ display:'flex', alignItems:'center', gap:2 }}>
             {markupPorOp[op.id] !== undefined && (
               <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
-                max={markupPorOp[op.id].max} discreto />
+                max={markupPorOp[op.id].max} discreto
+                bandaCfg={op.tipo_negocio ? bandasMarkup[op.tipo_negocio] : undefined} />
             )}
             <Botao pequeno variante="discreto" icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={toggleExpand}
               title={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-label={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-expanded={expandido} />
@@ -2089,6 +2116,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
                 onClick={e => { e.stopPropagation(); setModalEditarTemp(op); setTempEditSel(op.temperatura || ''); }} />
             </div>
           )}
+          <div className="acn-kmeta" onClick={e => e.stopPropagation()}>
+            <span style={{ fontSize:9, color:'#94a3b8' }}>Tipo:</span>
+            <select value={op.tipo_negocio || ''} onChange={e => atualizarTipoNegocio(op, e.target.value || null)}
+              title="Tipo de negócio — usado pra escolher a régua de markup certa"
+              style={{ fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:4, border:'1px solid #d1d5db', background:'#fff', cursor:'pointer' }}>
+              <option value="">— não definido —</option>
+              {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
           {op.prox_contato && (
             <div className="acn-kmeta" style={{ fontWeight:500,
               color: op.prox_contato === hoje ? 'var(--acn-warn)' : op.prox_contato < hoje ? 'var(--acn-bad)' : 'var(--acn-info)' }}>
@@ -2741,6 +2777,12 @@ const SUB_STATUS_COR: Record<string,string> = {
           {respUnicos.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
         {filtResp && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltResp('')} title="Limpar responsável" aria-label="Limpar responsável" />}
+        {/* Filtro por tipo de negócio (Revenda/Venda/Pós-vendas) */}
+        <select className="acn-input" value={filtTipoNegocio} onChange={e => setFiltTipoNegocio(e.target.value)} style={{ width:'auto', minWidth:140 }} aria-label="Tipo de negócio">
+          <option value="">Todos os tipos</option>
+          {TIPOS_NEGOCIO_CRM.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {filtTipoNegocio && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setFiltTipoNegocio('')} title="Limpar tipo" aria-label="Limpar tipo" />}
         {/* Filtro por temperatura do lead — mini gráfico de barras clicável */}
         {(() => {
           const contTemp: Record<string, number> = { frio:0, morno:0, quente:0 };

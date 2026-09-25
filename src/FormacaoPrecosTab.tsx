@@ -976,7 +976,10 @@ function ItemRow({ item, result, onSet, onFill, onExpand, onRemove, usarParamsGl
             value={item.modelo||''} onChange={e=>onSet('modelo',e.target.value)} />
         </div>
         <div style={{ width:56 }}>
-          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}>Qt</div>
+          <div style={{ fontSize:8, color:'#94a3b8', marginBottom:2 }}
+            title='Quantidade deste produto DENTRO DE 1 unidade do Item (ex.: 2 antenas por viatura). Para a quantidade de viaturas/unidades do Item inteiro, use o campo "Quantidade do Item", acima da lista.'>
+            Qt/un.
+          </div>
           <input type="number" className="acn-input" style={{ width:'100%', ...inp11r }}
             min={1} value={item.qt} onChange={e=>onSet('qt', e.target.value)} />
         </div>
@@ -1249,7 +1252,8 @@ function AbaPrecoFormados({ currentUser, isVendedor, onEditar, onClonar }) {
             <thead>
               <tr>
                 <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'left' }}>Produto / Descrição</th>
-                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'center' }}>Qt</th>
+                <th style={{ padding:'5px 8px', background:'#1e293b', color:'#fff', fontSize:9, textAlign:'center' }}
+                  title='Quantidade deste produto por unidade do Item — não confundir com "Quantidade do Item" (o lote inteiro)'>Qt/un.</th>
                 {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Unit.</th>}
                 {!isVendedor && <th style={{ padding:'5px 8px', background:'#065f46', color:'#fff', fontSize:9, textAlign:'right' }}>Custo Total</th>}
                 {!isVendedor && <th style={{ padding:'5px 8px', background:'#92400e', color:'#fff', fontSize:9, textAlign:'right' }}>DIFAL</th>}
@@ -2142,6 +2146,15 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const resultsDoGrupo = idxDoGrupo.map(i => results[i]);
   const subtotalGrupo  = somarResultados(resultsDoGrupo);
   const loteGrupo       = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);   // QUANTIDADE do item
+  // Aviso pedido pelo usuário em 25/09/2026: bug relatado onde "Unitário" saía
+  // igual a "Total" do Item — a causa era confundir os dois campos de
+  // quantidade (ver comentário na seção "QUANTIDADE DO ITEM" abaixo). Quando
+  // só há 1 produto no Item (sem subgrupo) e alguém colocou a quantidade do
+  // lote no "Qt/un." do produto em vez de aqui, "Quantidade do Item" fica
+  // esquecida em 1 — avisa em vez de corrigir sozinho (produto pode
+  // legitimamente ter 2+ unidades por Item).
+  const avisoQtdDuplicada = !temSubgrupos && itensDoGrupo.length === 1
+    && Number(loteGrupo) === 1 && Number(itensDoGrupo[0]?.qt) > 1;
   // todos os pares lote/item, na ordem em que aparecem (PDF, contagens)
   const paresLoteItem: { lote: string; grupo: string }[] = [];
   for (const it of itens) {
@@ -3494,28 +3507,46 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           )}
 
-          {/* ── QUANTIDADE DO ITEM (antes ficava no subtotal, abaixo da composição) ── */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:8, marginLeft:10 }}>
-            {temSubgrupos ? (
-              <span style={{ fontSize:10, color:'#0f766e' }}>
-                Quantidade de "{grupoAtivoValido}": <strong>{itemCalcAtivo?.qtd ?? 1}</strong> <span style={{ color:'#64748b' }}>(soma dos {subsDoItem.length} subgrupos)</span>
-              </span>
-            ) : (<>
-              <span style={{ fontSize:10, color:'#0f766e', fontWeight:700 }}>Quantidade de "{grupoAtivoValido}"</span>
-              <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
-                min={1} value={loteGrupo}
-                onChange={e => setParams(p => {
-                  const m = { ...(p.lote_por_grupo || {}) };
-                  if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
-                  m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
-                  return { ...p, lote_por_grupo: m };
-                })} />
-              <button type="button" onClick={dividirEmSubgrupos}
-                title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)"
-                style={{ fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:5, border:'1px solid #7c3aed', background:'#faf5ff', color:'#7c3aed', cursor:'pointer' }}>
-                🧩 Dividir em subgrupos
-              </button>
-            </>)}
+          {/* ── QUANTIDADE DO ITEM (antes ficava no subtotal, abaixo da composição) ──
+              Destacada com caixa própria (pedido do usuário em 25/09/2026): é
+              fácil confundir com o "Qt/un." de cada produto, lá embaixo na
+              lista — os dois têm nome parecido e esse aqui é o que multiplica
+              o "Total" do Item no resumo. */}
+          <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:6,
+            padding:'8px 10px', marginBottom:8, marginLeft:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+              {temSubgrupos ? (
+                <span style={{ fontSize:10, color:'#0f766e' }}>
+                  Quantidade de "{grupoAtivoValido}": <strong>{itemCalcAtivo?.qtd ?? 1}</strong> <span style={{ color:'#64748b' }}>(soma dos {subsDoItem.length} subgrupos)</span>
+                </span>
+              ) : (<>
+                <span style={{ fontSize:10, color:'#0f766e', fontWeight:700 }}>
+                  Quantidade de "{grupoAtivoValido}" <span style={{ fontWeight:400, color:'#0d9488' }}>(quantas unidades deste Item — ex.: 6 viaturas)</span>
+                </span>
+                <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
+                  min={1} value={loteGrupo}
+                  onChange={e => setParams(p => {
+                    const m = { ...(p.lote_por_grupo || {}) };
+                    if (loteAtivoValido === 'Lote 1') delete m[grupoAtivoValido];   // tira a chave antiga, se houver
+                    m[chaveItem(loteAtivoValido, grupoAtivoValido)] = parseInt(e.target.value) || 1;
+                    return { ...p, lote_por_grupo: m };
+                  })} />
+                <button type="button" onClick={dividirEmSubgrupos}
+                  title="Unidades deste item com composições diferentes (ex.: 3 com giroflex, 2 com giroflex + cela)"
+                  style={{ fontSize:9, fontWeight:700, padding:'3px 8px', borderRadius:5, border:'1px solid #7c3aed', background:'#faf5ff', color:'#7c3aed', cursor:'pointer' }}>
+                  🧩 Dividir em subgrupos
+                </button>
+              </>)}
+            </div>
+            {avisoQtdDuplicada && (
+              <div style={{ fontSize:9, color:'#92400e', background:'#fffbeb', border:'1px solid #fde68a',
+                borderRadius:4, padding:'4px 8px', marginTop:6 }}>
+                ⚠️ O produto "{itensDoGrupo[0]?.produto || itensDoGrupo[0]?.nome || 'deste item'}" tem Qt/un. = {itensDoGrupo[0]?.qt},
+                mas "Quantidade de {'"'}{grupoAtivoValido}{'"'}" está em 1. Se {itensDoGrupo[0]?.qt} é a quantidade de UNIDADES DO ITEM
+                (ex.: {itensDoGrupo[0]?.qt} viaturas) — e não {itensDoGrupo[0]?.qt} peças por viatura —, corrija aqui em cima e volte o Qt/un. do produto pra 1,
+                senão o Total sai igual ao Unitário.
+              </div>
+            )}
           </div>
 
           {/* ── LISTA DE ITENS (do Item do edital ativo) ── */}
