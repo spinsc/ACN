@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA } from './ComprasFluxo';
-import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao } from './CentroCustoShared';
+import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao,
+  ModalEditarLancamento, podeEditarLancamento } from './CentroCustoShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
@@ -27,7 +28,10 @@ function AbasFinanceiro({ aba, setAba }: any) {
 const fmtR = (v: number) =>
   `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const fmtDt = (d: string) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+// new Date('2026-09-25') é lido como meia-noite UTC, que no Brasil vira 21h do
+// dia ANTERIOR — todo lançamento aparecia um dia mais cedo do que foi gravado.
+// Fatiar e fixar meio-dia tira o fuso do caminho (corrigido em 24/09/2026).
+const fmtDt = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
 const STATUS_COR: Record<string, string> = {
   'Pendente':              '#f59e0b',
@@ -64,6 +68,7 @@ function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
 function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar }: any) {
   const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
   const [modalMedicao, setModalMedicao] = useState<any>(null); // contrato "Parcelado" selecionado
+  const [modalEditar, setModalEditar] = useState<any>(null);   // lançamento sendo corrigido
   // soma de medições por contrato — feito no cliente a partir da própria lista
   // (as medições já vêm junto em `compras`, mesmo centro_custo_id do contrato)
   const pagoPorContrato: Record<string, number> = {};
@@ -149,13 +154,24 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                       {fmtDt(p.data)}
                     </td>
                     <td style={{ padding: '5px 8px' }}>
-                      {p.parcelado && (
-                        <button onClick={() => setModalMedicao(p)}
-                          style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
-                            padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                          + Medição
-                        </button>
-                      )}
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        {p.parcelado && (
+                          <button onClick={() => setModalMedicao(p)}
+                            style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
+                              padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                            + Medição
+                          </button>
+                        )}
+                        {/* corrigir valor, descrição, data ou centro errado —
+                            só Admin e gerente, e tudo vai para a auditoria */}
+                        {podeEditarLancamento(currentUser) && (
+                          <button onClick={() => setModalEditar(p)} title="Editar ou excluir este lançamento"
+                            style={{ background:'#fff', color:'#334155', border:'1px solid #cbd5e1', borderRadius:4,
+                              padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                            ✏️ Editar
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -207,6 +223,14 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
         <ModalLancarMedicao contrato={modalMedicao} currentUser={currentUser}
           onClose={() => setModalMedicao(null)}
           onSaved={() => { setModalMedicao(null); onAtualizar?.(); onClose(); }} />
+      )}
+      {modalEditar && (
+        <ModalEditarLancamento lancamento={modalEditar} currentUser={currentUser}
+          jaPago={pagoPorContrato[modalEditar.id] || 0}
+          onClose={() => setModalEditar(null)}
+          // fecha a lista junto: o valor ou o centro podem ter mudado, e a
+          // lista aberta mostraria número velho até alguém reabrir
+          onSalvo={() => { setModalEditar(null); onAtualizar?.(); onClose(); }} />
       )}
     </div>
   );

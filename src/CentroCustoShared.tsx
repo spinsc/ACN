@@ -10,6 +10,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { ehAdminOuGerente } from './utils/permissoes';
+import { logChange } from './AuditSystem';
+import { confirmar } from './Feedback';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
   let q = supabase.from('centros_custo').select('*').order('codigo');
@@ -413,6 +416,149 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
             {salvando ? 'Salvando...' : '💾 Lançar Medição'}
           </button>
           <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDITAR / EXCLUIR UM LANÇAMENTO DO CENTRO DE CUSTO
+//
+// Pedido do usuário em 24/09/2026. Até aqui o lançamento era criado e nunca
+// mais tocado: erro de valor, descrição trocada ou centro errado ficavam na
+// conta para sempre, e o total do centro passava a mentir.
+//
+// Só Admin e gerentes, porque isto mexe em número que vira relatório e
+// conciliação. Toda alteração e toda exclusão vão para a auditoria com o valor
+// de antes e o de depois — o histórico é o que permite conferir depois.
+//
+// Trocar o centro de custo do lançamento é de propósito: "lancei no centro
+// errado" é o engano mais comum, e sem isso a correção seria apagar e lançar
+// de novo, perdendo quem lançou e quando.
+// ─────────────────────────────────────────────────────────────────────────────
+export const podeEditarLancamento = (u: any) => ehAdminOuGerente(u);
+
+const moeda = (v: any) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onClose, onSalvo }: any) {
+  const ehContrato = !!lancamento?.parcelado;
+  const ehMedicao = !!lancamento?.despesa_pai_id;
+  const [descricao, setDescricao] = useState(lancamento?.descricao || '');
+  const [valor, setValor] = useState(String(
+    (ehContrato ? lancamento?.valor_total_negociado : lancamento?.valor) ?? '').replace('.', ','));
+  const [data, setData] = useState(String(lancamento?.data || '').slice(0, 10));
+  const [centroId, setCentroId] = useState(lancamento?.centro_custo_id || '');
+  const [salvando, setSalvando] = useState(false);
+
+  const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
+  const v = num(valor);
+  const abaixoDoPago = ehContrato && Number.isFinite(v) && jaPago > 0 && v < jaPago;
+  const trocouCentro = centroId && centroId !== lancamento?.centro_custo_id;
+
+  const salvar = async () => {
+    if (!descricao.trim()) { alert('Informe a descrição.'); return; }
+    if (!Number.isFinite(v) || v < 0) { alert('Informe um valor válido.'); return; }
+    if (!data) { alert('Informe a data.'); return; }
+    if (!centroId) { alert('Escolha o centro de custo.'); return; }
+    // contrato com total abaixo do já pago: avisa, mas deixa seguir — renegociar
+    // para menos acontece (decidido com o usuário em 24/09/2026)
+    if (abaixoDoPago && !await confirmar(
+      `O total negociado (${moeda(v)}) ficou ABAIXO do que já foi pago (${moeda(jaPago)}).\n\n` +
+      `O contrato vai aparecer com mais de 100% pago. Se foi renegociação, tudo bem. Salvar assim?`)) return;
+
+    setSalvando(true);
+    const antes = {
+      descricao: lancamento.descricao, data: lancamento.data, centro_custo_id: lancamento.centro_custo_id,
+      valor: lancamento.valor, valor_total_negociado: lancamento.valor_total_negociado,
+    };
+    // no contrato o dinheiro mora em valor_total_negociado e `valor` fica 0 —
+    // é o que faz o contrato não inflar a soma do centro (ver ModalLancarDespesa)
+    const depois: any = { descricao: descricao.trim(), data, centro_custo_id: centroId };
+    if (ehContrato) depois.valor_total_negociado = v; else depois.valor = v;
+
+    const { error } = await supabase.from('centro_custo_despesas').update(depois).eq('id', lancamento.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível salvar: ' + error.message); return; }
+    logChange({ module: 'financeiro', entityType: 'centro_custo_despesas', entityId: lancamento.id,
+      changeType: 'UPDATE', oldRow: antes, newRow: depois, user: currentUser });
+    onSalvo?.();
+    onClose();
+  };
+
+  const excluir = async () => {
+    const quanto = ehContrato ? lancamento.valor_total_negociado : lancamento.valor;
+    const aviso = ehContrato && jaPago > 0
+      ? `\n\nATENÇÃO: este contrato tem ${moeda(jaPago)} em medições lançadas. Elas NÃO são apagadas e vão ficar sem contrato — confira a lista depois.`
+      : '';
+    if (!await confirmar(
+      `Excluir este lançamento?\n\n${lancamento.descricao}\n${moeda(quanto)} · ` +
+      `${String(lancamento.data).slice(0, 10).split('-').reverse().join('/')}\n\n` +
+      `O total do centro de custo muda na hora. Fica registrado na auditoria quem excluiu.${aviso}`)) return;
+    setSalvando(true);
+    const { error } = await supabase.from('centro_custo_despesas').delete().eq('id', lancamento.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+    logChange({ module: 'financeiro', entityType: 'centro_custo_despesas', entityId: lancamento.id,
+      changeType: 'DELETE', oldRow: lancamento, newRow: null, user: currentUser });
+    onSalvo?.();
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 2300 }}
+      onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 460 }}>
+        <div className="modal-title">
+          ✏️ Editar lançamento{ehContrato ? ' — contrato parcelado' : ehMedicao ? ' — medição' : ''}
+        </div>
+        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+          Lançado por {lancamento.criado_por_nome || '—'}
+          {lancamento.criado_em ? ` em ${new Date(lancamento.criado_em).toLocaleDateString('pt-BR')}` : ''}.
+          A alteração fica na auditoria com o valor de antes.
+        </div>
+
+        <label className="acn-label">Descrição *</label>
+        <input className="acn-input" style={{ width: '100%', marginBottom: 8 }} autoFocus
+          value={descricao} onChange={e => setDescricao(e.target.value)} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div>
+            <label className="acn-label">{ehContrato ? 'Valor total negociado (R$) *' : 'Valor (R$) *'}</label>
+            <input className="acn-input" style={{ width: '100%' }} inputMode="decimal"
+              value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+          </div>
+          <div>
+            <label className="acn-label">Data *</label>
+            <input type="date" className="acn-input" style={{ width: '100%' }}
+              value={data} onChange={e => setData(e.target.value)} />
+          </div>
+        </div>
+
+        {ehContrato && jaPago > 0 && (
+          <div style={{ fontSize: 10, color: abaixoDoPago ? '#b91c1c' : '#64748b', marginTop: 6 }}>
+            Já lançado em medições: <b>{moeda(jaPago)}</b>
+            {abaixoDoPago ? ' — o novo total fica abaixo disso, e o contrato vai passar de 100% pago.' : ''}
+          </div>
+        )}
+
+        <label className="acn-label" style={{ marginTop: 8 }}>Centro de custo *</label>
+        <CentroCustoSelect value={centroId} onChange={setCentroId} permitirNenhum={false} />
+        {trocouCentro && (
+          <div style={{ fontSize: 10, color: '#b45309', marginTop: 4 }}>
+            O valor sai do centro atual e entra no novo — os dois totais mudam.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <button className="acn-btn" style={{ background: '#dc2626' }} disabled={salvando} onClick={excluir}>
+            Excluir
+          </button>
+          <div style={{ flex: 1 }} />
+          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando} onClick={salvar}>
+            {salvando ? 'Salvando...' : 'Salvar'}
+          </button>
         </div>
       </div>
     </div>
