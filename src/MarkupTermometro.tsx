@@ -38,11 +38,55 @@ export function corMarkup(pct: number | null | undefined) {
 // TABELA usam markup_pct como campo de desconto, não entram na média).
 // Extraído de carregarMarkupPorProcesso pra ser reaproveitado também pelo
 // relatório "Markup por Vendedor" (RelatoriosTab.tsx), sem duplicar a conta.
-export function mediaMarkupItens(itens: any[] | null | undefined): number | null {
+/**
+ * Markup da cotação: PONDERADO PELO CUSTO, não média simples.
+ *
+ * Mudança pedida pelo dono da empresa em 25/09/2026. A média simples dava um
+ * voto igual a cada item, e isso mente quando há markup alto em item barato
+ * convivendo com markup baixo no item que pesa. Caso real (PE 55/2026
+ * Cabrália): frete de R$ 560 a 30% e rádio de R$ 190 a 150% davam "65%" na
+ * média simples, quando a proposta na verdade rende 47,7% — porque três
+ * quartos do dinheiro estão no item de 30%.
+ *
+ * Ponderar pelo custo é a MESMA conta que "custo vs venda", e sai da própria
+ * fórmula do preço (FormacaoCalculo.precoUnitario):
+ *     preço = custo × (1 + markup) ÷ (1 − DIFAL)
+ *   ⇒ Σ preço×(1−DIFAL) = Σ custo×(1+markup)
+ *   ⇒ markup = Σ(custo × markup) ÷ Σ custo
+ * Conferindo no exemplo: vende 1.875, custa 1.250 → 47,7%. Mesmo número.
+ *
+ * O peso é o custo TOTAL da linha (com IPI, ST e quantidade), que é a base
+ * sobre a qual o preço é formado. Item sem custo não pesa; se nenhum item tem
+ * custo, cai para a média simples, senão o número sumiria da tela.
+ *
+ * TABELA fica de fora como sempre: lá o markup_pct é desconto, não markup.
+ */
+export function markupPonderadoItens(itens: any[] | null | undefined): number | null {
   const itensCusto = (itens || []).filter((it: any) => it.tipo_calculo !== 'TABELA');
   if (!itensCusto.length) return null;
-  const soma = itensCusto.reduce((s: number, it: any) => s + (Number(it.markup_pct) || 0), 0);
-  return soma / itensCusto.length;
+
+  const custoDa = (it: any) =>
+    (Number(it.custo_unit) || 0)
+    * (1 + (Number(it.ipi_pct) || 0) / 100)
+    * (1 + (Number(it.st_pct) || 0) / 100)
+    * Math.max(Number(it.qt) || 1, 0);
+
+  const custoTotal = itensCusto.reduce((s: number, it: any) => s + custoDa(it), 0);
+  if (custoTotal <= 0) {
+    // cotação só com itens de custo zero (serviço ainda sem custo lançado):
+    // sem peso não há ponderação, então vale a média simples
+    return itensCusto.reduce((s: number, it: any) => s + (Number(it.markup_pct) || 0), 0) / itensCusto.length;
+  }
+  return itensCusto.reduce((s: number, it: any) => s + (Number(it.markup_pct) || 0) * custoDa(it), 0) / custoTotal;
+}
+
+/** Menor e maior markup entre os itens — mostra a dispersão que o número
+ *  ponderado esconde. É o que deixa visível "tem item a 30% aqui dentro". */
+export function faixaMarkupItens(itens: any[] | null | undefined): { min: number; max: number } | null {
+  const pcts = (itens || []).filter((it: any) => it.tipo_calculo !== 'TABELA')
+    .map((it: any) => Number(it.markup_pct) || 0);
+  if (!pcts.length) return null;
+  return { min: Math.min(...pcts), max: Math.max(...pcts) };
 }
 
 // Dada uma lista de cotações de um mesmo processo, escolhe a vencedora, ou a
@@ -53,7 +97,9 @@ export function cotacaoAlvo(cotacoes: any[]): any | null {
 }
 
 // ── Carrega o mapa processoId -> markup médio, para um tipo (crm|licitacao) ──
-export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Promise<Record<string, number>> {
+export type MarkupProcesso = { pct: number; min: number; max: number };
+
+export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Promise<Record<string, MarkupProcesso>> {
   const { data: vinc } = await supabase
     .from('cotacoes_precos_vinculos')
     .select('cotacao_id, processo_id')
@@ -75,12 +121,14 @@ export async function carregarMarkupPorProcesso(tipo: 'crm' | 'licitacao'): Prom
     (cotacoesPorProcesso[v.processo_id] ||= []).push(c);
   });
 
-  const resultado: Record<string, number> = {};
+  const resultado: Record<string, MarkupProcesso> = {};
   Object.entries(cotacoesPorProcesso).forEach(([processoId, cots]) => {
     const alvo = cotacaoAlvo(cots);
     if (!alvo) return;
-    const media = mediaMarkupItens(alvo.itens);
-    if (media !== null) resultado[processoId] = media;
+    const pct = markupPonderadoItens(alvo.itens);
+    if (pct === null) return;
+    const faixa = faixaMarkupItens(alvo.itens);
+    resultado[processoId] = { pct, min: faixa?.min ?? pct, max: faixa?.max ?? pct };
   });
   return resultado;
 }
@@ -112,25 +160,35 @@ export function Termometro({ pct, size = 14 }: { pct: number | null | undefined;
 }
 
 // ── Badge pequeno pro card individual (Kanban CRM / LicitCard) ──
-export function MarkupBadge({ pct, discreto = false }: { pct: number | null | undefined; discreto?: boolean }) {
+export function MarkupBadge({ pct, min, max, discreto = false }:
+  { pct: number | null | undefined; min?: number; max?: number; discreto?: boolean }) {
   if (pct === null || pct === undefined || Number.isNaN(pct)) return null;
   const banda = corMarkup(pct);
-  // discreto: só o termômetro e o número na cor da faixa (cartões do kanban)
+  // A faixa min–max só aparece quando os itens NÃO têm todos o mesmo markup:
+  // é ela que revela o que o número ponderado esconde — um item a 30% junto de
+  // um a 150%. Com todos iguais seria só ruído (pedido de 25/09/2026).
+  const temDispersao = min !== undefined && max !== undefined && Math.abs(max - min) >= 0.05;
+  const faixaTxt = temDispersao ? `${min!.toFixed(0)}% a ${max!.toFixed(0)}%` : '';
+  const titulo = `Markup da cotação: ${banda.label}. Ponderado pelo custo — cada item pesa o quanto custa.`
+    + (temDispersao ? `\nItens de ${faixaTxt} — vale olhar item a item.` : '');
+
   if (discreto) return (
-    <span title={`Markup médio da cotação: ${banda.label}`} className="acn-num"
+    <span title={titulo} className="acn-num"
       style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 500, color: banda.cor }}>
       <Termometro pct={pct} size={13} />
       {pct.toFixed(1)}%
+      {temDispersao && <span style={{ fontSize: 9, opacity: .75, fontWeight: 400 }}>({faixaTxt})</span>}
     </span>
   );
   return (
-    <span title={`Markup médio da cotação: ${banda.label}`} style={{
+    <span title={titulo} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,
       fontSize: 9, fontWeight: 700, padding: '1px 5px 1px 3px', borderRadius: 3,
       background: banda.bg, color: banda.cor, border: `1px solid ${banda.borda}`,
     }}>
       <Termometro pct={pct} size={13} />
       {pct.toFixed(1)}%
+      {temDispersao && <span style={{ opacity: .75, fontWeight: 400 }}>({faixaTxt})</span>}
     </span>
   );
 }

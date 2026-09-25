@@ -4,7 +4,7 @@ import { VeiculoOuEnvio } from './AcnTabShared';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { labelHierarquico } from './CentroCustoShared';
-import { MARKUP_BANDAS, corMarkup, mediaMarkupItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
+import { MARKUP_BANDAS, corMarkup, markupPonderadoItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
 import { RelDossieOp } from './OpDossie';
 
 
@@ -1012,7 +1012,7 @@ function RelCentroCusto() {
 // responsável no Comercial/CRM, operador/analista em Licitações — usando a
 // mesma regra de "cotação alvo" (vencedora, senão a de maior versão) e a
 // mesma média por item que já alimenta o termômetro nos cards
-// (mediaMarkupItens/cotacaoAlvo, MarkupTermometro.tsx — sem duplicar a conta).
+// (markupPonderadoItens/cotacaoAlvo, MarkupTermometro.tsx — sem duplicar a conta).
 function RelMarkupVendedor() {
   const hoje = new Date();
   const [mes, setMes]     = useState(`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`);
@@ -1052,7 +1052,7 @@ function RelMarkupVendedor() {
         const alvo = cotacaoAlvo(cots);
         if (!alvo) return;
         if (mes && (alvo.criado_em || '').slice(0, 7) !== mes) return;
-        const media = mediaMarkupItens(alvo.itens);
+        const media = markupPonderadoItens(alvo.itens);
         if (media === null) return;
         alvoPorProcesso[chave] = { tipo, processoId, media };
         (tipo === 'crm' ? processosCrm : processosLic).push(processoId);

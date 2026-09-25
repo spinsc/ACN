@@ -344,7 +344,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
   const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
-  const [markupPorOp, setMarkupPorOp]       = useState<Record<string, number>>({});
+  // { pct ponderado pelo custo, min, max } por processo — ver MarkupTermometro
+  const [markupPorOp, setMarkupPorOp]       = useState<Record<string, any>>({});
   const [salvandoCompra, setSalvandoCompra] = useState(false);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
@@ -2021,7 +2022,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
             <span className="acn-num">{fmtData(op.data_sessao)}{op.hora_sessao ? ` · ${String(op.hora_sessao).slice(0,5)}` : ''}</span>
           )}
           <span className="dir-auto" style={{ display:'flex', alignItems:'center', gap:2 }}>
-            {markupPorOp[op.id] !== undefined && <MarkupBadge pct={markupPorOp[op.id]} discreto />}
+            {markupPorOp[op.id] !== undefined && (
+              <MarkupBadge pct={markupPorOp[op.id].pct} min={markupPorOp[op.id].min}
+                max={markupPorOp[op.id].max} discreto />
+            )}
             <Botao pequeno variante="discreto" icone={expandido ? mdiChevronUp : mdiChevronDown} onClick={toggleExpand}
               title={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-label={expandido ? 'Esconder detalhes' : 'Mostrar detalhes'} aria-expanded={expandido} />
             <MenuAcoes itens={acoes} rotulo="Ações do cartão" />
@@ -2233,7 +2237,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
               {dist.filter(d => d.n > 0).map(d => <i key={d.rot} title={`${d.rot}: ${d.n}`} style={{ flex: d.n, background: d.cor }} />)}
             </div>
             <span className="sub">{dist.map(d => `${d.rot} ${d.n}`).join(' · ')}</span>
-            {podeVer && <MarkupBarraDistribuicao valores={opsAtivas.map(o => markupPorOp[o.id])} />}
+            {podeVer && <MarkupBarraDistribuicao valores={opsAtivas.map(o => markupPorOp[o.id]?.pct)} />}
           </div>
         </div>
         <div className="acn-kmeta" style={{ margin:'8px 2px 0', gap:8 }}>

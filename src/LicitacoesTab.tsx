@@ -2433,7 +2433,7 @@ function LicitCard({ l, onClick, unread = false, markup = undefined }) {
         </div>
       </div>
       <div className="acn-licit-acoes">
-        <MarkupBadge pct={markup} discreto />
+        <MarkupBadge pct={markup?.pct} min={markup?.min} max={markup?.max} discreto />
         <Botao pequeno variante="secundario" icone={mdiUpdate} onClick={e => { e.stopPropagation(); onClick(); }}>Atualizar</Botao>
       </div>
     </div>
@@ -2507,7 +2507,7 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {}
       </div>
 
       <MarkupBarraDistribuicao valores={
-        filtradas.filter(l => l.status === 'Em Andamento' || l.status === 'Aberta').map(l => markupPorLicit[l.id])
+        filtradas.filter(l => l.status === 'Em Andamento' || l.status === 'Aberta').map(l => markupPorLicit[l.id]?.pct)
       } />
 
       {/* Tabelas por grupo */}
@@ -2650,7 +2650,8 @@ function PipelineCardsLicitacoes({ licitacoes }: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpenConsumed }: any) {
   const [licitacoes, setLicitacoes] = useState<any[]>([]);
-  const [markupPorLicit, setMarkupPorLicit] = useState<Record<string, number>>({});
+  // { pct ponderado pelo custo, min, max } por licitação — ver MarkupTermometro
+  const [markupPorLicit, setMarkupPorLicit] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState<string>('Aberta');
   const [filtroTipo, setFiltroTipo] = useState<string>('Direta');
