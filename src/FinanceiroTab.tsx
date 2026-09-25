@@ -8,6 +8,7 @@ import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao,
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
+import { hojeISO } from './Interface';
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária e o kanban de tarefas
 function AbasFinanceiro({ aba, setAba }: any) {
@@ -279,7 +280,7 @@ function LinhaFaturamento({ f, onAtualizar, currentUser, naoLido, marcarLidoLoca
       nf_fornecedor_numero: nfNumero.trim(),
       nf_fornecedor_url: nfUrl,
       status_faturamento: 'pago',
-      data_pagamento: new Date().toISOString().split('T')[0],
+      data_pagamento: hojeISO(),
     };
     const { error } = await supabase.from('pcp_pedidos_faturamento').update(novoRow).eq('id', f.id);
     setSalvando(false);

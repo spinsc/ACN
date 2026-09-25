@@ -11,6 +11,7 @@ import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { confirmar } from './Feedback';
+import { hojeISO, diaISO } from './Interface';
 
 function fmtHHMMSS(horas) {
   const total = Math.max(0, Math.floor(horas * 3600));
@@ -135,9 +136,9 @@ function OfiQueueSection({ setor, cor, currentUser }) {
 function RelatoriosSetor({ setor, cor }) {
   const [filtroInicio, setFiltroInicio] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
+    return diaISO(d);
   });
-  const [filtroFim, setFiltroFim] = useState(new Date().toISOString().split('T')[0]);
+  const [filtroFim, setFiltroFim] = useState(hojeISO());
   const [dados, setDados]     = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [abaRelat, setAbaRelat]    = useState('resumo');

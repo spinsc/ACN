@@ -8,6 +8,7 @@ import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
 import { CamposEstoqueItem } from './Estoque';
+import { hojeISO } from './Interface';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const MOEDAS   = ['REAL', 'USD', 'EUR'];
@@ -552,7 +553,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
 
   // ── Import/Export ──────────────────────────────────────────────────────────
   const handleExportar = () => {
-    const nomeArquivo = `cadastro_itens_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const nomeArquivo = `cadastro_itens_${hojeISO()}.xlsx`;
     exportarItens(filtrados, nomeArquivo);
   };
 

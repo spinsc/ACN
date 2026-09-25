@@ -17,6 +17,7 @@ import { supabase } from './supabaseClient';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { diaISO } from './Interface';
 
 const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dataBr = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
@@ -279,7 +280,7 @@ export default function ConciliacaoBancaria({ currentUser }) {
   const carregar = useCallback(async () => {
     setCarregando(true);
     const ini = `${ano}-${mes}-01`;
-    const fim = new Date(Number(ano), Number(mes), 0).toISOString().slice(0, 10);
+    const fim = diaISO(new Date(Number(ano), Number(mes), 0));
     let q = supabase.from('conciliacao_lancamentos').select('*').gte('data', ini).lte('data', fim).order('data', { ascending: false });
     if (conta) q = q.eq('conta', conta);
     const [{ data }, { data: todasContas }, { data: conciliados }, cand] = await Promise.all([

@@ -1,16 +1,17 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import { hojeISO, diaISO } from './Interface';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function hojeStr() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return hojeISO(); // YYYY-MM-DD
 }
 
 function amanhaStr() {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  return diaISO(d);
 }
 
 function fmtHora(hora: string) {

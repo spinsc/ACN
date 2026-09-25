@@ -16,7 +16,7 @@ import { EnderecosEntrega, ContratoEntregas } from './LicitacaoEntregas';
 import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput';
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { CabecalhoTela, Botao, Chips, Selo } from './Interface';
+import { CabecalhoTela, Botao, Chips, Selo, diaISO } from './Interface';
 import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ function bucketPeriodo(dataStr: string, gran: string) {
     const dow = d.getDay() || 7; // 1=seg..7=dom
     const seg = new Date(d); seg.setDate(d.getDate() - dow + 1);
     const dom = new Date(seg); dom.setDate(seg.getDate() + 6);
-    return { key: seg.toISOString().slice(0, 10), label: `Semana de ${fmtDataCurta(seg)} a ${fmtDataCurta(dom)}` };
+    return { key: diaISO(seg), label: `Semana de ${fmtDataCurta(seg)} a ${fmtDataCurta(dom)}` };
   }
   if (gran === 'mes') {
     return { key: `${ano}-${String(mes + 1).padStart(2, '0')}`, label: `${MESES_NOMES[mes]}/${ano}` };

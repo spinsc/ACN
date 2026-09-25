@@ -17,11 +17,12 @@ import { quantidadesDosItens } from './FormacaoCalculo';
 import { UFS, soEnvio } from './FluxoEntrega';
 import NovaOpOsModal from './NovaOpOsModal';
 import { confirmar } from './Feedback';
+import { hojeISO } from './Interface';
 
 const n = (v) => Number(String(v ?? '').replace(',', '.')) || 0;
 const fmtQ = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const fmtD = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—');
-const hoje = () => new Date().toISOString().slice(0, 10);
+const hoje = () => hojeISO();
 const lbl = { display:'block', fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:2 } as const;
 const inp = { width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' } as const;
 const btn = (cor, cheio = true) => ({ fontSize:10, fontWeight:700, padding:'4px 10px', borderRadius:4, cursor:'pointer',

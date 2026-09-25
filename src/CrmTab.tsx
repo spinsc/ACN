@@ -27,7 +27,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
 import { EscolherAnexos, enviarAnexosCompra } from './ComprasFluxo';
 import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
-import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag } from './Interface';
+import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
@@ -521,7 +521,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const opsFunil       = ops.filter(o => o.funil === 'venda_direta');
   const respUnicos     = [...new Set(opsFunil.map(o => o.responsavel_nome).filter(Boolean))].sort();
   // Contatos agendados para hoje (qualquer funil)
-  const hoje           = new Date().toISOString().slice(0, 10);
+  const hoje           = hojeISO();
   const contatosHoje   = ops.filter(o =>
     o.prox_contato === hoje &&
     o.funil === 'venda_direta' &&
@@ -2302,7 +2302,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           const hdrBg    = perdido ? '#991b1b' : ganho ? '#166534' : desistiu ? '#92400e' : (est.cor || '#1e293b');
           const totalEst    = items.reduce((s, o) => s + (o.valor_registrado || 0), 0);
           const totalEstACN = items.reduce((s, o) => s + receitaEfetiva(o), 0);
-          const hoje2    = new Date().toISOString().slice(0, 10);
+          const hoje2    = hojeISO();
 
           return (
             <div key={est.id} className="sec-card" style={{ marginBottom:10 }}>
@@ -3008,7 +3008,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                       const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
                       const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
                       const semDado = (v) => !v || !String(v).trim();
-                      const hoje = new Date().toISOString().slice(0,10);
+                      const hoje = hojeISO();
 
                       const basesJaRenderizadas = new Set();
                       const itens: any[] = [];

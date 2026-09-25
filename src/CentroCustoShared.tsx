@@ -13,6 +13,7 @@ import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
 import { confirmar } from './Feedback';
+import { hojeISO } from './Interface';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
   let q = supabase.from('centros_custo').select('*').order('codigo');
@@ -295,7 +296,7 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
   const [parcelado, setParcelado] = useState(false);
   const [valor, setValor] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [data, setData] = useState(() => new Date().toISOString().slice(0,10));
+  const [data, setData] = useState(() => hojeISO());
   const [salvando, setSalvando] = useState(false);
 
   const salvar = async () => {
@@ -361,7 +362,7 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
   const [jaPago, setJaPago]   = useState<number | null>(null);
   const [valor, setValor]     = useState('');
   const [obs, setObs]         = useState('');
-  const [data, setData]       = useState(() => new Date().toISOString().slice(0,10));
+  const [data, setData]       = useState(() => hojeISO());
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {

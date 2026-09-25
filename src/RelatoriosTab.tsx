@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { labelHierarquico } from './CentroCustoShared';
 import { MARKUP_BANDAS, corMarkup, markupPonderadoItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
 import { RelDossieOp } from './OpDossie';
+import { hojeISO, diaISO } from './Interface';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -23,14 +24,14 @@ function fmtData(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'
 function fmtH(h) { return h != null ? Number(h).toFixed(1)+'h' : '—'; }
 function iniPeriodo() {
   const d = new Date(); d.setDate(d.getDate()-30);
-  return d.toISOString().split('T')[0];
+  return diaISO(d);
 }
 
 // ── Relatório por Área (demandas_setoriais) ──
 function RelAreaDemandas() {
   const [setor, setSetor] = useState('Chicotes');
   const [ini, setIni] = useState(iniPeriodo);
-  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [fim, setFim] = useState(hojeISO());
   const [dados, setDados] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
@@ -144,7 +145,7 @@ function RelAreaDemandas() {
 // ── Relatório de Produção por Responsável ──
 function RelProducao() {
   const [ini, setIni] = useState(iniPeriodo);
-  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [fim, setFim] = useState(hojeISO());
   const [ops, setOps] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [agrupar, setAgrupar] = useState(true);
@@ -276,7 +277,7 @@ function RelProducao() {
 // ── Relatório Geral de OPLs por Status ──
 function RelOplsGeral() {
   const [ini, setIni] = useState(iniPeriodo);
-  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [fim, setFim] = useState(hojeISO());
   const [ops, setOps] = useState([]);
   const [filtroStatus, setFiltroStatus] = useState('Todos');
   const [carregando, setCarregando] = useState(false);
@@ -391,7 +392,7 @@ function RelOplsGeral() {
 // ── Relatório: OPLs Finalizadas ──
 function RelOplsFinalizadas() {
   const [ini, setIni] = useState(iniPeriodo);
-  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [fim, setFim] = useState(hojeISO());
   const [ops, setOps] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
@@ -624,7 +625,7 @@ function RelOplsAtrasadas() {
 // ── Relatório: Recebimentos e Envios ──
 function RelRecebimentosEnvios() {
   const [ini, setIni] = useState(iniPeriodo);
-  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [fim, setFim] = useState(hojeISO());
   const [recebimentos, setRecebimentos] = useState([]);
   const [envios, setEnvios] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -727,7 +728,7 @@ function RelRecebimentosEnvios() {
 // ── Relatório: Demandas Avulsas ──
 function RelDemandasAvulsas() {
   const [ini, setIni] = useState(iniPeriodo);
-  const [fim, setFim] = useState(new Date().toISOString().split('T')[0]);
+  const [fim, setFim] = useState(hojeISO());
   const [dados, setDados] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
@@ -1443,7 +1444,7 @@ function RelOpsOssEmServico() {
     ws['!autofilter'] = { ref: ws['!ref'] };
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Em Serviço');
-    XLSX.writeFile(wb, `Relatorio_OPs_OSs_em_Servico_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Relatorio_OPs_OSs_em_Servico_${hojeISO()}.xlsx`);
   };
 
   const totalOps = linhas.filter(l => l.tipo === 'OP').length;

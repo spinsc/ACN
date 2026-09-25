@@ -14,6 +14,7 @@ import { ORIGENS, origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA, type GrupoLote } from './LoteMisto';
 import { ItensVendidosEditor } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
+import { hojeISO } from './Interface';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -156,7 +157,7 @@ const VAZIO = {
   cliente_nome:           '',
   _cliente_id:            null,
   responsavel:            '',
-  data_entrada:           new Date().toISOString().split('T')[0],
+  data_entrada:           hojeISO(),
 };
 
 interface Props {
@@ -268,7 +269,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
       const pvDoCard = String(crmCard.numero_pv || '').replace(/\D/g, '').slice(0, 4);
       if (pvDoCard) setF('pedido_venda', pvDoCard);
     } else {
-      setForm({ ...VAZIO, data_entrada: new Date().toISOString().split('T')[0], ...(pre || {}) });
+      setForm({ ...VAZIO, data_entrada: hojeISO(), ...(pre || {}) });
     }
     setSemPv(false); setPvAchados(null); setPvCard(null);
     setErro('');

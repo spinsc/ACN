@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { hojeISO, diaISO } from './Interface';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -404,7 +405,7 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
 // MODAL — LANÇAR HORAS
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalLancamento({ funcionarios, onClose, onSaved, lancEdit }) {
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
   const [form, setForm] = useState(lancEdit ? {
     funcionario_id: lancEdit.funcionario_id,
     data: lancEdit.data,
@@ -540,7 +541,7 @@ function ModalLancamento({ funcionarios, onClose, onSaved, lancEdit }) {
 // MODAL — AUTORIZAÇÃO DE SAÍDA/ENTRADA
 // ─────────────────────────────────────────────────────────────────────────────
 function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = hojeISO();
   const [form, setForm] = useState({ funcionario_id:'', tipo:'Saída Antecipada', data:hoje, hora_saida:'', hora_retorno:'', motivo:'', aprovado_por:'' });
   const [salvando, setSalvando] = useState(false);
   const set = (k:string,v:string) => setForm(f=>({...f,[k]:v}));
@@ -1800,7 +1801,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
     } else {
       const mesStr = String(mes).padStart(2,'0');
       inicio = `${ano}-${mesStr}-01`;
-      fim    = new Date(ano, mes, 0).toISOString().split('T')[0];
+      fim    = diaISO(new Date(ano, mes, 0));
     }
 
     // Faturada: comportamento de sempre (data_emissao_nf/data_faturamento

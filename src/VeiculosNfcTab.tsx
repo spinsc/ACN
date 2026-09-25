@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { combinaBusca, buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { perfilComPoderes } from './utils/permissoes';
-import { CabecalhoTela, Botao } from './Interface';
+import { CabecalhoTela, Botao, diaISO } from './Interface';
 import { mdiPlus } from '@mdi/js';
 
 const supabase = createClient(
@@ -379,7 +379,7 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
     if (!dataEntrega) return '';
     const d = new Date(dataEntrega);
     d.setMonth(d.getMonth() + Number(meses));
-    return d.toISOString().slice(0, 10);
+    return diaISO(d);
   };
 
   const buscarProdutos = async (q: string) => {

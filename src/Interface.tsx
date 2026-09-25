@@ -213,6 +213,23 @@ export function Tag({ children, title }: { children: React.ReactNode; title?: st
   return <span className="acn-tag" title={title}>{children}</span>;
 }
 
+// O dia de uma data em AAAA-MM-DD, no fuso de quem está usando o sistema.
+//
+// Corrigido com o usuário em 25/09/2026. O projeto inteiro montava o "hoje" a
+// partir do toISOString, que devolve o dia de Londres, e não o daqui.
+// Entre 21h e a meia-noite o Brasil ainda está no dia
+// anterior ao de lá, então tudo que fosse lançado à noite — recebimento de
+// compra, pagamento, entrada de OP — nascia com a data do dia seguinte.
+export function diaISO(d: Date): string {
+  const dois = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}`;
+}
+
+/** Hoje em AAAA-MM-DD, pelo relógio de quem está na tela. */
+export function hojeISO(): string {
+  return diaISO(new Date());
+}
+
 // Dias de atraso de uma data (AAAA-MM-DD) em relação a hoje; 0 quando no prazo
 export function diasAtraso(data: string | null | undefined): number {
   if (!data) return 0;

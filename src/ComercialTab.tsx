@@ -14,6 +14,7 @@ import AgendaWidget from './AgendaWidget';
 import { useUnread, UnreadBadge } from './useUnread';
 import Linkify from './Linkify';
 import { confirmar } from './Feedback';
+import { hojeISO } from './Interface';
 
 
 const TIPOS_PROJETO = [
@@ -38,7 +39,7 @@ const FORM_VAZIO = {
   opl:'', chassi:'', modelo:'', tipo_projeto:'Transformacao Veicular Ostensiva',
   tipo_op:'OPL', cliente_nome:'', responsavel_comercial:'',
   _cliente_id: null, _cliente_obj: null,
-  data_entrada: new Date().toISOString().split('T')[0],
+  data_entrada: hojeISO(),
   data_prevista_entrega:'', item_envio:false, liberado_divulgacao:false, observacoes_comercial:'',
   quantidade: 1,
   valor_total: '', valor_mao_de_obra: '', valor_mao_de_obra_serralheria: '',
@@ -77,7 +78,7 @@ function _UNUSED_CRMSection({ currentUser }) {
   // Relatorios
   const [abaRelat, setAbaRelat] = useState(null);
   const [filtroInicio, setFiltroInicio] = useState('');
-  const [filtroFim, setFiltroFim] = useState(new Date().toISOString().split('T')[0]);
+  const [filtroFim, setFiltroFim] = useState(hojeISO());
   const [relatData, setRelatData] = useState([]);
 
   useEffect(() => { fetchCRM(); }, []);

@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
+import { hojeISO } from './Interface';
 
 
 const TIPOS_SERVICO = [
@@ -369,7 +370,7 @@ export default function VistoriasPatio({ currentUser }) {
       if (col > 0) y += IMG_H + GAP;
     }
 
-    doc.save(`Vistoria_${v.veiculo_placa||'patio'}_${new Date().toISOString().slice(0,10)}.pdf`);
+    doc.save(`Vistoria_${v.veiculo_placa||'patio'}_${hojeISO()}.pdf`);
   };
 
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';

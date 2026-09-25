@@ -15,6 +15,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { OrigemVendaBadge } from './OrigemVenda';
 import { temSerralheria } from './FluxoEntrega';
+import { hojeISO, diaISO } from './Interface';
 
 const STATUS_PRODUCAO = ['Aguardando Inicio Producao', 'Em Producao', 'Retrabalho', 'Em Retrabalho'];
 const MAX_LINHAS  = 12;   // quantas cabem legíveis numa TV
@@ -27,8 +28,7 @@ const LISTAS = [
   { id: 'amanha',    titulo: 'VENCEM AMANHÃ',  cor: '#38bdf8', fundo: '#082f49' },
 ];
 
-const hojeISO   = () => new Date().toISOString().slice(0, 10);
-const amanhaISO = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+const amanhaISO = () => { const d = new Date(); d.setDate(d.getDate() + 1); return diaISO(d); };
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '—');
 const diasAtraso = (d) =>
   Math.round((new Date(hojeISO() + 'T12:00').getTime() - new Date(d + 'T12:00').getTime()) / 86400000);

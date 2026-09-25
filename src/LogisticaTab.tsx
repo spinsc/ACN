@@ -8,13 +8,14 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
 import { creditarCompraRecebida, fmtQtd } from './Estoque';
+import { hojeISO, diaISO } from './Interface';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
 const TIPOS_MERCADORIA = ['Equipamento','Pecas','Materiais','Documentos','Outros'];
 
 const FORM_VAZIO = {
-  tipo: 'Recebimento', data: new Date().toISOString().split('T')[0],
+  tipo: 'Recebimento', data: hojeISO(),
   remetente: '', destinatario: '', tipo_mercadoria: 'Equipamento',
   descricao: '', quantidade: '', peso: '', nf_referencia: '', veiculo_placa: '', observacoes: '',
   pedido_compra_id: '',
@@ -23,8 +24,8 @@ const FORM_VAZIO = {
 
 // ─── Relatório de Movimentação (IN/OUT) por Período e Tipo ───────────────────
 function RelatorioLogistica() {
-  const [de, setDe]     = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().split('T')[0]; });
-  const [ate, setAte]   = useState(() => new Date().toISOString().split('T')[0]);
+  const [de, setDe]     = useState(() => { const d = new Date(); d.setDate(d.getDate()-30); return diaISO(d); });
+  const [ate, setAte]   = useState(() => hojeISO());
   const [tipo, setTipo] = useState('Todos');
   const [dados, setDados] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -1318,7 +1319,7 @@ function FretesPanel({ currentUser }: any) {
 // numero_nf/data_recebimento_real/quantidade_recebida/tem_divergencia que já
 // existiam em pcp_pedidos_compra mas nunca eram gravados por nenhuma tela. ──
 const VAZIO_RECEBIMENTO = {
-  numero_nf: '', data_recebimento_real: new Date().toISOString().split('T')[0],
+  numero_nf: '', data_recebimento_real: hojeISO(),
   quantidade_recebida: '', confere: true, observacoes: '', seriais: '', volume: '',
 };
 
@@ -1390,7 +1391,7 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
       // Este ponto tinha ficado para trás na renomeação, e o pedido recebido
       // caía num status fora do quadro do Compras — corrigido em 24/09/2026.
       updatePedido.status_compra = 'Recebido';
-      updatePedido.data_conclusao = new Date().toISOString().split('T')[0];
+      updatePedido.data_conclusao = hojeISO();
     }
     const { error: errPedido } = await supabase.from('pcp_pedidos_compra').update(updatePedido).eq('id', pedido.id);
     if (errPedido) { alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra: ' + errPedido.message); setSalvando(false); return; }
@@ -1550,7 +1551,7 @@ function PainelRecebimento({ currentUser }: any) {
 
   const fmt = (v: any) => v != null ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v) : '—';
   const fmtDt = (d: any) => d ? new Date(d.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-  const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(new Date().toISOString().slice(0, 10));
+  const atrasado = (p: any) => p.data_prevista_recebimento && new Date(p.data_prevista_recebimento.slice(0, 10)) < new Date(hojeISO());
 
   return (
     <div className="sec-card">
@@ -1802,7 +1803,7 @@ export default function LogisticaTab({ currentUser }) {
         const agora = new Date().toISOString();
         const { error: errCompra } = await supabase.from('pcp_pedidos_compra')
           // 'Recebido' — ver a nota no modal de recebimento acima (24/09/2026)
-          .update({ status_compra: 'Recebido', data_conclusao: new Date().toISOString().split('T')[0] })
+          .update({ status_compra: 'Recebido', data_conclusao: hojeISO() })
           .eq('id', form.pedido_compra_id);
         const { error: errFat } = await supabase.from('pcp_pedidos_faturamento')
           .update({ recebimento_confirmado: true, recebimento_confirmado_em: agora, status_faturamento: 'liberado' })

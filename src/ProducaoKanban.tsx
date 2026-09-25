@@ -17,11 +17,10 @@ import KanbanColuna from './KanbanColuna';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
 import { temSerralheria } from './FluxoEntrega';
 import { OrigemVendaBadge } from './OrigemVenda';
-import { Botao, Selo, Tag } from './Interface';
+import { Botao, Selo, Tag, hojeISO, diaISO } from './Interface';
 import { mdiSwapVertical, mdiMessageTextOutline, mdiAccountGroupOutline, mdiPlay, mdiCheck, mdiTrayArrowDown, mdiChevronUp, mdiChevronDown } from '@mdi/js';
 
-const hojeISO = () => new Date().toISOString().slice(0, 10);
-const maisDias = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const maisDias = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return diaISO(d); };
 const fmt = (d) => (d ? d.split('-').reverse().join('/') : '—');
 const diasAtraso = (d) =>
   Math.round((new Date(hojeISO() + 'T12:00').getTime() - new Date(d + 'T12:00').getTime()) / 86400000);
