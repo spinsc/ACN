@@ -372,15 +372,30 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
   const [observacoes, setObservacoes] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [disponiveis, setDisponiveis] = useState<any[]>([]);
+  // Baixa de estoque não tem desfazer: o saldo muda e o extrato registra. Por
+  // isso o botão não grava direto — mostra a lista do que vai sair e pede
+  // confirmação (pedido do usuário em 24/09/2026). Dizer "não" volta para a
+  // lista do jeito que estava, para ajustar.
+  const [conferindo, setConferindo] = useState(false);
 
   useEffect(() => { carregarItensControlados().then(setDisponiveis); }, []);
 
   const set = (i: number, patch: any) => setLinhas(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l));
   const preenchidas = linhas.filter(l => l.item && num(l.quantidade) > 0);
 
-  const gravar = async () => {
+  /** Confere antes de gravar: valida o que é obrigatório e abre a revisão. */
+  const revisar = () => {
     if (!quemRetirou.trim()) { alert('Informe quem retirou o material.'); return; }
     if (!preenchidas.length) { alert('Informe ao menos um item e a quantidade.'); return; }
+    const repetidos = preenchidas.map(l => l.item.id).filter((id, i, a) => a.indexOf(id) !== i);
+    if (repetidos.length) {
+      const nomes = [...new Set(repetidos)].map(id => disponiveis.find(d => d.id === id)?.nome).join(', ');
+      if (!confirm(`O mesmo item aparece em mais de uma linha (${nomes}).\n\nAs quantidades vão somar. Seguir assim?`)) return;
+    }
+    setConferindo(true);
+  };
+
+  const gravar = async () => {
     setSalvando(true);
     const falhas: string[] = [];
     const negativos: string[] = [];
@@ -396,6 +411,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
       if (r?.requisicao?.criada) pedidos.push(`${l.item.nome}: ${fmtQtd(r.requisicao.quantidade)} (${r.requisicao.numero_pedido})`);
     }
     setSalvando(false);
+    setConferindo(false);
     if (falhas.length) { alert('Nem tudo foi registrado:\n' + falhas.join('\n')); return; }
     const avisos = [
       negativos.length ? `Ficou com saldo negativo em:\n${negativos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.` : '',
@@ -470,12 +486,89 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="acn-btn" style={{ background: '#0f766e', flex: 1, opacity: salvando ? .6 : 1 }}
-            disabled={salvando} onClick={gravar}>
-            {salvando ? 'Registrando...' : `Registrar retirada (${preenchidas.length} item${preenchidas.length === 1 ? '' : 's'})`}
+            disabled={salvando} onClick={revisar}>
+            {salvando ? 'Registrando...' : `Conferir e registrar (${preenchidas.length} item${preenchidas.length === 1 ? '' : 's'})`}
           </button>
           <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
         </div>
       </div>
+
+      {/* Conferência antes da baixa. Fica por cima do formulário, que continua
+          intacto atrás: dizer "não" é só fechar isto e voltar a ajustar. */}
+      {conferindo && (
+        <div className="modal-overlay" style={{ zIndex: 2200 }}>
+          <div className="modal-box" style={{ maxWidth: 560, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-title">Confirmar a baixa no estoque</div>
+            <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 10 }}>
+              Retirado por <b style={{ color: '#0f172a' }}>{quemRetirou.trim()}</b>
+              {observacoes.trim() ? <> · {observacoes.trim()}</> : null}
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+                    {['Item', 'Sai', 'Saldo hoje', 'Fica com'].map(h => (
+                      <th key={h} style={{ padding: '4px 7px', fontSize: 9, fontWeight: 700, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preenchidas.map((l, i) => {
+                    const saldo = num(l.item.estoque_atual);
+                    const sai = num(l.quantidade);
+                    const fica = saldo - sai;
+                    const minimo = l.item.estoque_minimo == null ? null : num(l.item.estoque_minimo);
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '4px 7px' }}>
+                          {l.item.codigo ? <b>{l.item.codigo}</b> : null} {l.item.nome}
+                        </td>
+                        <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          −{fmtQtd(sai)} {l.item.unidade || 'UN'}
+                        </td>
+                        <td style={{ padding: '4px 7px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtQtd(saldo)}</td>
+                        <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap',
+                          color: fica < 0 ? '#b91c1c' : (minimo != null && fica <= minimo) ? '#b45309' : '#15803d' }}>
+                          {fmtQtd(fica)}
+                          {fica < 0 ? ' · negativo' : (minimo != null && fica <= minimo) ? ' · no mínimo' : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {preenchidas.some(l => num(l.item.estoque_atual) - num(l.quantidade) < 0) && (
+                <div style={{ fontSize: 10, color: '#b91c1c', background: '#fee2e2', border: '1px solid #fecaca',
+                  borderRadius: 6, padding: '7px 10px', marginTop: 8 }}>
+                  Algum saldo vai ficar negativo. Isso é permitido — só quer dizer que a prateleira
+                  tinha mais do que o sistema achava. Vale fazer uma contagem depois.
+                </div>
+              )}
+              {preenchidas.some(l => { const m = l.item.estoque_minimo; return m != null && num(l.item.estoque_atual) - num(l.quantidade) <= num(m); }) && (
+                <div style={{ fontSize: 10, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a',
+                  borderRadius: 6, padding: '7px 10px', marginTop: 8 }}>
+                  Item chegando no mínimo: a reposição vai ser pedida ao Compras sozinha ao confirmar.
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontSize: 10, color: '#64748b', margin: '10px 0' }}>
+              Baixa não tem desfazer: o saldo muda e fica registrado no extrato. Se algo estiver errado,
+              volte e ajuste a lista.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="acn-btn" style={{ background: '#0f766e', flex: 1, opacity: salvando ? .6 : 1 }}
+                disabled={salvando} onClick={gravar}>
+                {salvando ? 'Registrando...' : 'Confirmar baixa'}
+              </button>
+              <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando}
+                onClick={() => setConferindo(false)}>Voltar e ajustar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
