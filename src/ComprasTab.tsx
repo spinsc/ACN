@@ -214,15 +214,25 @@ function blocoItensImpressao(p: any, moeda: (v: any) => string) {
   const itens = itensDoPedido(p);
   if (!itens.length) return '';
   const temValor = itens.some((i: any) => Number(i?.valor_unitario) > 0);
+  // o total acompanha a quantidade que vale (a comprada, quando existe),
+  // senão a soma não fecharia com as linhas logo acima dela
   const totalGeral = itens.reduce((s: number, i: any) =>
-    s + (Number(i?.valor_unitario) || 0) * (Number(i?.quantidade) || 0), 0);
+    s + (Number(i?.valor_unitario) || 0) * (Number(i?.quantidade_comprada ?? i?.quantidade) || 0), 0);
+  // Quando o Compras fechou quantidade diferente da pedida (caixa fechada,
+  // lote mínimo), quem vale para o fornecedor é a comprada — a pedida fica ao
+  // lado, em cinza, para a conferência não estranhar a diferença (25/09/2026).
+  const temComprada = itens.some((i: any) =>
+    i?.quantidade_comprada != null && Number(i.quantidade_comprada) !== Number(i.quantidade));
+  const qtdVale = (i: any) => Number(i?.quantidade_comprada ?? i?.quantidade) || 0;
   const linhas = itens.map((i: any, n: number) => {
-    const qtd = Number(i?.quantidade) || 0;
+    const qtd = qtdVale(i);
+    const pedida = Number(i?.quantidade) || 0;
     const vu = Number(i?.valor_unitario) || 0;
     return `<tr>
       <td style="text-align:center;width:28px">${n + 1}</td>
       <td><b>${esc(i.nome)}</b>${i.descricao ? `<div style="color:#475569;font-size:10px">${esc(i.descricao)}</div>` : ''}</td>
-      <td style="text-align:right;white-space:nowrap">${qtd || '—'}</td>
+      <td style="text-align:right;white-space:nowrap">${qtd || '—'}${
+        temComprada && pedida && pedida !== qtd ? `<div style="color:#94a3b8;font-size:9px">pedido ${pedida}</div>` : ''}</td>
       ${temValor ? `<td style="text-align:right;white-space:nowrap">${vu ? moeda(vu) : '—'}</td>
       <td style="text-align:right;white-space:nowrap">${vu ? moeda(vu * qtd) : '—'}</td>` : ''}
     </tr>`;
@@ -273,7 +283,7 @@ function imprimirSolicitacao(p: any) {
         <tr><td><b>Nº Pedido</b></td><td>${esc(p.numero_pedido) || '—'}</td></tr>
         <tr><td><b>OP Referência</b></td><td>${esc(p.opl) || '—'}</td></tr>
         <tr><td><b>Descrição</b></td><td style="white-space:pre-wrap">${esc(descricaoSemItens(p)) || '—'}</td></tr>
-        ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade) || '—'}</td></tr>`}
+        ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade_comprada ?? p.quantidade) || '—'}${p.quantidade_comprada != null && Number(p.quantidade_comprada) !== Number(p.quantidade) ? ` <span style="color:#94a3b8">(pedido ${esc(p.quantidade)})</span>` : ''}</td></tr>`}
         <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
         <tr><td><b>Previsão de Recebimento</b></td><td>${fmtDt(p.data_prevista_recebimento)}</td></tr>
@@ -316,7 +326,7 @@ export function imprimirOrdemCompra(p: any) {
         <tr><td><b>Nº Pedido</b></td><td>${esc(p.numero_pedido) || '—'}</td></tr>
         <tr><td><b>OP Referência</b></td><td>${esc(p.opl) || '—'}</td></tr>
         <tr><td><b>Descrição</b></td><td style="white-space:pre-wrap">${esc(descricaoSemItens(p)) || '—'}</td></tr>
-        ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade) || '—'}</td></tr>`}
+        ${itensDoPedido(p).length ? '' : `<tr><td><b>Quantidade</b></td><td>${esc(p.quantidade_comprada ?? p.quantidade) || '—'}${p.quantidade_comprada != null && Number(p.quantidade_comprada) !== Number(p.quantidade) ? ` <span style="color:#94a3b8">(pedido ${esc(p.quantidade)})</span>` : ''}</td></tr>`}
         <tr><td><b>Fornecedor</b></td><td>${esc(p.fornecedor) || '—'}</td></tr>
         <tr><td><b>Valor Total da Compra</b></td><td>${fmt(p.valor_compra)}</td></tr>
         <tr><td><b>Centro de Custo</b></td><td>${esc(p.centro_custo) || '—'}</td></tr>
@@ -1399,15 +1409,23 @@ export default function ComprasTab({ currentUser }) {
   // (status_compra='Comprado'), gera número de OC (trigger) e cria a demanda de
   // acompanhamento — antes disso, o pedido fica em 'Aprovado' esperando essa
   // confirmação, mesmo que quem aprovou também tenha alçada pra isso.
-  const confirmarCompra = async (pedido: any, prazo?: string) => {
+  const confirmarCompra = async (pedido: any, prazo?: string, qtdComprada?: number, itensComprados?: any[] | null) => {
     const upd: any = { status_compra: 'Comprado' };
     if (prazo) upd.data_prevista_recebimento = prazo;
+    // Quanto foi de fato comprado. `quantidade` fica intacta com o que foi
+    // PEDIDO: são fatos diferentes e o "pediu 9" é a régua para conferir
+    // depois se o mínimo do estoque está bem calibrado (25/09/2026).
+    if (qtdComprada != null && qtdComprada > 0) upd.quantidade_comprada = qtdComprada;
+    if (itensComprados) upd.itens = itensComprados;
     const { error } = await supabase.from('pcp_pedidos_compra').update(upd).eq('id', pedido.id);
     if (error) { alert('Erro ao confirmar compra: ' + error.message); return false; }
     logChange({ module: 'compras', entityType: 'pcp_pedidos_compra', entityId: pedido.id, changeType: 'UPDATE',
-      oldRow: { status_compra: 'Aprovado' }, newRow: upd, user: currentUser });
+      oldRow: { status_compra: 'Aprovado', quantidade_comprada: pedido.quantidade_comprada }, newRow: upd, user: currentUser });
+    const difQtd = qtdComprada != null && Number(pedido.quantidade) !== qtdComprada
+      ? `Pedido de ${pedido.quantidade}, comprado ${qtdComprada}.` : '';
     await registrarHistorico(pedido.id, { tipo: 'avanco', de: 'Aprovado', para: 'Comprado',
-      motivo: prazo ? `Prazo de entrega: ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : null }, currentUser);
+      motivo: [difQtd, prazo ? `Prazo de entrega: ${new Date(prazo + 'T12:00:00').toLocaleDateString('pt-BR')}` : '']
+        .filter(Boolean).join(' ') || null }, currentUser);
     await criarDemandaComprasFinalizada(pedido.id);
     await notificarCriadorPedido(pedido, `Compra confirmada — pedido ${pedido.numero_pedido}.`);
     setFiltro('');

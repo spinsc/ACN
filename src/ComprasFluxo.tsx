@@ -319,20 +319,84 @@ export function ModalIniciarCotacao({ pedido, currentUser, onClose, onFeito }: a
 }
 
 // ── Aprovado → Comprado: prazo de entrega obrigatório ────────────────────────
+// Quantidade comprada: nem tudo se compra por unidade. A requisição pede 9 e o
+// fornecedor só vende a caixa com 10 — não é divergência, é o normal. Até
+// 25/09/2026 o 10 só aparecia no recebimento, e a Ordem de Compra que vai para
+// o fornecedor continuava dizendo 9. Agora o comprador informa aqui o que de
+// fato fechou, e é isso que sai na OC e chega pré-preenchido no recebimento.
+//
+// Por item quando o pedido tem a lista estruturada: um total só seria ambíguo
+// numa compra de vários materiais, e a OC lista item a item.
 export function ModalConfirmarCompra({ pedido, onClose, onConfirmar }: any) {
   const [prazo, setPrazo] = useState(pedido.data_prevista_recebimento ? String(pedido.data_prevista_recebimento).slice(0, 10) : '');
   const [salvando, setSalvando] = useState(false);
+
+  const itensBase = Array.isArray(pedido?.itens) ? pedido.itens.filter((i: any) => String(i?.nome || '').trim()) : [];
+  const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  // começa igual ao pedido: o caso comum é comprar exatamente o que se pediu
+  const [qtds, setQtds] = useState<string[]>(() =>
+    itensBase.map((i: any) => String(i.quantidade_comprada ?? i.quantidade ?? '')));
+  const [qtdTotal, setQtdTotal] = useState(String(pedido.quantidade_comprada ?? pedido.quantidade ?? ''));
+
+  const totalComprado = itensBase.length ? qtds.reduce((s, q) => s + num(q), 0) : num(qtdTotal);
+  const totalPedido = itensBase.length
+    ? itensBase.reduce((s: number, i: any) => s + num(i.quantidade), 0)
+    : num(pedido.quantidade);
+  const mudou = Math.abs(totalComprado - totalPedido) > 0.0001;
+
   const salvar = async () => {
     if (!prazo) { alert('Informe o prazo de entrega combinado com o fornecedor.'); return; }
+    if (totalComprado <= 0) { alert('Informe a quantidade comprada.'); return; }
     setSalvando(true);
-    const ok = await onConfirmar(pedido, prazo);
+    // devolve a lista com o comprado por item, para a OC sair certa
+    const itensComprados = itensBase.length
+      ? itensBase.map((i: any, n: number) => ({ ...i, quantidade_comprada: num(qtds[n]) }))
+      : null;
+    const ok = await onConfirmar(pedido, prazo, totalComprado, itensComprados);
     setSalvando(false);
     if (ok !== false) onClose?.();
   };
+
+  const inp: React.CSSProperties = { width: '100%', padding: '5px 8px', border: '1px solid var(--acn-line)',
+    borderRadius: 4, fontSize: 12, boxSizing: 'border-box' };
+
   return (
     <Janela titulo="Confirmar compra" subtitulo="Gera a Ordem de Compra e envia para o acompanhamento de recebimento." onClose={onClose}>
       <ResumoPedido p={pedido} />
       <div style={{ fontSize: 12, marginBottom: 10 }}>Fornecedor: <strong>{pedido.fornecedor || '—'}</strong></div>
+
+      <Rotulo>Quantidade comprada *</Rotulo>
+      <div style={{ fontSize: 11, color: 'var(--acn-muted)', marginBottom: 6 }}>
+        O que você fechou com o fornecedor. Comprar a mais por caixa fechada ou lote mínimo é normal —
+        é este número que sai na Ordem de Compra e que vai entrar no estoque quando chegar.
+      </div>
+
+      {itensBase.length ? (
+        <div style={{ border: '1px solid var(--acn-line)', borderRadius: 6, overflow: 'hidden', marginBottom: 4 }}>
+          {itensBase.map((i: any, n: number) => (
+            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+              borderTop: n ? '1px solid var(--acn-line)' : 'none' }}>
+              <span style={{ flex: 1, fontSize: 12, minWidth: 0, wordBreak: 'break-word' }}>{i.nome}</span>
+              <span style={{ fontSize: 11, color: 'var(--acn-muted)', whiteSpace: 'nowrap' }}>
+                pedido {num(i.quantidade) || '—'}
+              </span>
+              <input type="number" min={0} step="any" style={{ ...inp, width: 90 }} value={qtds[n] ?? ''}
+                onChange={e => setQtds(v => v.map((x, j) => j === n ? e.target.value : x))} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <input type="number" min={0} step="any" style={inp} value={qtdTotal}
+          onChange={e => setQtdTotal(e.target.value)} />
+      )}
+
+      {mudou && (
+        <div style={{ fontSize: 11, color: 'var(--acn-atencao-ink, #b45309)', marginTop: 4, marginBottom: 4 }}>
+          Diferente do pedido: {totalPedido} pedido{totalPedido === 1 ? '' : 's'} · {totalComprado} comprado{totalComprado === 1 ? '' : 's'}.
+          Fica registrado no histórico do pedido.
+        </div>
+      )}
+
       <Rotulo>Prazo de entrega do pedido *</Rotulo>
       <input type="date" className="acn-input" style={{ width: '100%' }} value={prazo} onChange={e => setPrazo(e.target.value)} />
       <div style={{ fontSize: 11, color: 'var(--acn-muted)', marginTop: 4 }}>Se o recebimento não for registrado até esta data, Compras e Almoxarifado recebem um alerta.</div>

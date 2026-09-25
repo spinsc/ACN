@@ -1327,7 +1327,11 @@ const VAZIO_RECEBIMENTO = {
 // arrastar um card para "Concluído" no kanban de Compras — o mesmo registro
 // (manifesto + fechamento + liberação do faturamento) nos dois caminhos.
 export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: any) {
-  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO, quantidade_recebida: pedido?.quantidade != null ? String(pedido.quantidade) : '' });
+  // vem preenchido com o que o Compras COMPROU (caixa fechada, lote mínimo),
+  // não com o que a requisição pediu — é o que se espera ver chegar. Pedido
+  // antigo, sem quantidade_comprada, cai no pedido como antes (25/09/2026).
+  const esperado = pedido?.quantidade_comprada ?? pedido?.quantidade;
+  const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO, quantidade_recebida: esperado != null ? String(esperado) : '' });
   const [salvando, setSalvando] = useState(false);
 
   // Mesmo padrão de notificarCriadorPedido (ComprasTab.tsx) / notificarCriadorFrete
@@ -1441,6 +1445,9 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
           <div className="modal-title">📥 Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}</div>
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
             {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}
+            {pedido.quantidade_comprada != null && Number(pedido.quantidade_comprada) !== Number(pedido.quantidade) && (
+              <> · <b style={{ color: '#0f766e' }}>comprada: {pedido.quantidade_comprada}</b></>
+            )}
           </div>
           {/* reposição de estoque: a quantidade abaixo vira saldo na prateleira,
               então vale avisar antes de digitar (ver Estoque.tsx) */}
