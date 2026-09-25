@@ -62,16 +62,82 @@ export const fmtQtd = (v: any) => {
  * requisições do mesmo parafuso. Uma requisição aberta já significa "material
  * a caminho"; só depois de recebida (ou descartada) é que cabe pedir de novo.
  */
-export async function garantirRequisicaoReposicao({ item, quantidade, saldo, currentUser }: any) {
-  const { data: abertas } = await supabase.from('pcp_pedidos_compra')
+/** Demanda de fabricação ainda não entregue = peça a caminho. */
+const FABRICACAO_ENCERRADA = ['Concluido', 'Concluída', 'Cancelada'];
+
+/** O item é feito aqui dentro? Então quem repõe é o setor, não o Compras. */
+export const ehFabricacaoInterna = (item: any) =>
+  String(item?.origem_producao || '').trim() === 'interna' && !!String(item?.setor_fabricante || '').trim();
+
+/**
+ * Já existe reposição a caminho deste item? Olha os DOIS caminhos.
+ *
+ * Antes só olhava compra. Com a fabricação interna entrando no jogo, um chicote
+ * abaixo do mínimo podia ganhar uma demanda nova a cada varredura, porque a
+ * demanda anterior não era enxergada por ninguém.
+ */
+export async function reposicaoEmAberto(item: any) {
+  const { data: compras } = await supabase.from('pcp_pedidos_compra')
     .select('id,numero_pedido,status_compra')
     .eq('vinculo_tipo', 'estoque').eq('vinculo_id', String(item.id))
     .not('status_compra', 'in', `(${COMPRA_ENCERRADA.map(s => `"${s}"`).join(',')})`);
-  if (abertas?.length) {
-    return { jaExistia: true, numero_pedido: abertas[0].numero_pedido, status: abertas[0].status_compra };
+  if (compras?.length) {
+    return { caminho: 'compra', referencia: compras[0].numero_pedido, status: compras[0].status_compra };
+  }
+  const { data: fabricacoes } = await supabase.from('demandas_setoriais')
+    .select('id,numero_demanda,status,setor_destino')
+    .eq('item_id', String(item.id))
+    .not('status', 'in', `(${FABRICACAO_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  if (fabricacoes?.length) {
+    return { caminho: 'fabricacao', referencia: fabricacoes[0].numero_demanda || fabricacoes[0].setor_destino,
+             status: fabricacoes[0].status };
+  }
+  return null;
+}
+
+/**
+ * Abre a demanda de fabricação para o setor que faz a peça.
+ *
+ * Nasce sem OP amarrada de propósito: é reposição de prateleira, não material
+ * de uma OP específica. Quando a Etapa 4 do plano chegar, a falta provocada por
+ * uma OP vai nascer amarrada a ela.
+ */
+async function abrirFabricacaoReposicao({ item, quantidade, saldo, currentUser }: any) {
+  const agora = new Date().toISOString();
+  const texto = `Reposição de estoque — ${item.nome}${item.codigo ? ` (${item.codigo})` : ''}`;
+  const porque = `Saldo chegou a ${fmtQtd(saldo)} ${item.unidade || 'UN'}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`
+    + (item.estoque_ideal != null ? ` Fabricar para repor até o ideal de ${fmtQtd(item.estoque_ideal)}.` : '');
+  const { data, error } = await supabase.from('demandas_setoriais').insert([{
+    setor_destino: item.setor_fabricante, setor_origem: 'Estoque (automático)',
+    tipo_solicitacao: 'reposicao_estoque', item_id: item.id,
+    descricao: `${texto}\n${porque}`, quantidade, unidade: item.unidade || 'un',
+    status: 'Pendente', criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
+    data_abertura: agora,
+    logs_demanda: [{ texto: `${porque} Demanda aberta automaticamente pelo controle de estoque — ninguém digitou.`,
+                     usuario: currentUser?.nome, hora: agora }],
+  }]).select('id,numero_demanda').single();
+  if (error) return { erro: error.message };
+  return { criada: true, caminho: 'fabricacao', setor: item.setor_fabricante,
+           referencia: data?.numero_demanda || item.setor_fabricante, quantidade };
+}
+
+export async function garantirRequisicaoReposicao({ item, quantidade, saldo, currentUser }: any) {
+  const jaTem = await reposicaoEmAberto(item);
+  if (jaTem) {
+    return { jaExistia: true, caminho: jaTem.caminho, status: jaTem.status,
+             referencia: jaTem.referencia, setor: item.setor_fabricante,
+             numero_pedido: jaTem.referencia };
   }
 
   const qtd = Math.max(1, Math.ceil(num(quantidade)));
+
+  // Chicote que a gente mesmo faz não se compra: vira demanda para o setor.
+  // Sem isso, o Compras recebia requisição de fornecedor para uma peça que sai
+  // da bancada aqui dentro (regra definida com o usuário em 25/09/2026).
+  if (ehFabricacaoInterna(item)) {
+    return await abrirFabricacaoReposicao({ item, quantidade: qtd, saldo, currentUser });
+  }
+
   const r = await criarRequisicaoCompra({
     titulo: `Reposição de estoque — ${item.nome}`,
     descricao: `Saldo chegou a ${fmtQtd(saldo)} ${item.unidade || 'UN'}, no mínimo de ${fmtQtd(item.estoque_minimo)}.`
@@ -83,7 +149,62 @@ export async function garantirRequisicaoReposicao({ item, quantidade, saldo, cur
     currentUser,
   });
   if (r?.erro) return { erro: r.erro };
-  return { criada: true, numero_pedido: r.numero_pedido, quantidade: qtd };
+  return { criada: true, caminho: 'compra', numero_pedido: r.numero_pedido, quantidade: qtd };
+}
+
+/**
+ * Varredura de mínimos — olha TODOS os itens controlados, não só os que se
+ * moveram.
+ *
+ * Por que precisa existir: a reposição automática nasce dentro do movimento de
+ * estoque, então ela só enxerga o item no instante em que alguém tira ou põe
+ * material. Quem definiu um mínimo e nunca mais mexeu no item ficava calado
+ * para sempre. Em 25/09/2026, ao montar este plano, os 3 chicotes controlados
+ * estavam abaixo do mínimo (6/30, 11/30 e 14/30) e nenhum pedido existia —
+ * ninguém tinha sido avisado.
+ *
+ * Só abre o que falta: item que já tem compra ou fabricação a caminho é pulado.
+ */
+export async function varrerMinimos({ currentUser }: any) {
+  const itens = await carregarItensControlados();
+  const abaixo = itens.filter((i: any) => {
+    const min = num(i.estoque_minimo);
+    return min > 0 && num(i.estoque_atual) <= min;
+  });
+
+  const abertos: any[] = [], pulados: any[] = [], falhas: any[] = [];
+  for (const item of abaixo) {
+    // Repor até o ideal; sem ideal definido, pelo menos voltar ao mínimo.
+    const alvo = num(item.estoque_ideal) > 0 ? num(item.estoque_ideal) : num(item.estoque_minimo);
+    const falta = Math.max(1, Math.ceil(alvo - num(item.estoque_atual)));
+    const r = await garantirRequisicaoReposicao({ item, quantidade: falta, saldo: item.estoque_atual, currentUser });
+    if (r?.erro) falhas.push({ item, erro: r.erro });
+    else if (r?.jaExistia) pulados.push({ item, ...r });
+    else abertos.push({ item, ...r });
+  }
+  return { olhados: itens.length, abaixo: abaixo.length, abertos, pulados, falhas };
+}
+
+/** Texto do resultado da varredura, para mostrar a quem clicou. */
+export function textoDaVarredura(r: any) {
+  if (!r?.abaixo) return `Nenhum item abaixo do mínimo. ${r?.olhados || 0} item(ns) conferido(s).`;
+  const linhas: string[] = [`${r.abaixo} item(ns) abaixo do mínimo, de ${r.olhados} conferido(s).`, ''];
+  if (r.abertos.length) {
+    linhas.push(`Pedidos abertos agora (${r.abertos.length}):`);
+    r.abertos.forEach((a: any) => linhas.push(
+      `  • ${a.item.nome} — ${fmtQtd(a.quantidade)} ${a.item.unidade || 'UN'} por ${a.caminho === 'fabricacao' ? `fabricação (${a.setor})` : 'compra'}`));
+    linhas.push('');
+  }
+  if (r.pulados.length) {
+    linhas.push(`Já tinham reposição a caminho (${r.pulados.length}):`);
+    r.pulados.forEach((p: any) => linhas.push(`  • ${p.item.nome} — ${p.caminho === 'fabricacao' ? 'fabricação' : 'compra'} ${p.numero_pedido || ''} (${p.status})`));
+    linhas.push('');
+  }
+  if (r.falhas.length) {
+    linhas.push(`Não deu para abrir (${r.falhas.length}):`);
+    r.falhas.forEach((f: any) => linhas.push(`  • ${f.item.nome} — ${f.erro}`));
+  }
+  return linhas.join('\n');
 }
 
 /**
@@ -150,7 +271,8 @@ export async function movimentarEstoque({
   // contagem que revelou menos do que se pensava. Nenhuma tela pode esquecer.
   if (r.ok && r.abaixo_do_minimo && num(r.sugestao_compra) > 0) {
     const { data: item } = await supabase.from('cadastro_itens')
-      .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal').eq('id', itemId).maybeSingle();
+      .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante')
+      .eq('id', itemId).maybeSingle();
     if (item) {
       r.requisicao = await garantirRequisicaoReposicao({
         item, quantidade: r.sugestao_compra, saldo: r.saldo_depois, currentUser,
@@ -248,6 +370,14 @@ export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
   return resumo;
 }
 
+/** Para quem foi o pedido de reposição — o Compras ou a bancada de um setor. */
+export function paraQuem(req: any) {
+  if (!req) return '—';
+  return req.caminho === 'fabricacao'
+    ? `fabricação no setor de ${req.setor || 'origem'}${req.referencia ? ` (${req.referencia})` : ''}`
+    : `Compras${req.numero_pedido ? ` (${req.numero_pedido})` : ''}`;
+}
+
 /** Frase curta do que a baixa fez, para o aviso na tela. '' quando não houve nada. */
 export function textoDaBaixa(resumo: any) {
   if (!resumo) return '';
@@ -255,15 +385,17 @@ export function textoDaBaixa(resumo: any) {
   if (resumo.movimentados?.length) partes.push(`${resumo.movimentados.length} item(ns) deram baixa no estoque`);
   if (resumo.ignorados) partes.push(`${resumo.ignorados} sem controle (seguiram normal)`);
   if (resumo.negativos?.length) partes.push(`⚠️ saldo negativo em: ${resumo.negativos.map((n: any) => n.nome).join(', ')}`);
-  if (resumo.requisicoes?.length) partes.push(`reposição pedida ao Compras: ${resumo.requisicoes.map((r: any) => `${r.nome} (${r.numero_pedido})`).join(', ')}`);
+  if (resumo.requisicoes?.length) partes.push(`reposição pedida: ${resumo.requisicoes.map((r: any) => `${r.nome} → ${paraQuem(r)}`).join(', ')}`);
   if (resumo.erros?.length) partes.push(`erro em: ${resumo.erros.join(' · ')}`);
   return partes.join(' · ');
 }
 
-/** Carrega os itens que estão sob controle, com saldo e mínimo. */
+/** Carrega os itens que estão sob controle, com saldo e mínimo.
+ *  origem_producao e setor_fabricante vêm junto porque decidem por onde a
+ *  reposição sai: compra lá fora ou bancada aqui dentro. */
 export async function carregarItensControlados() {
   const { data } = await supabase.from('cadastro_itens')
-    .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,ativo')
+    .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,ativo,origem_producao,setor_fabricante')
     .eq('controla_estoque', true).order('nome');
   return data || [];
 }
@@ -408,7 +540,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
       });
       if (r?.erro) falhas.push(`${l.item.nome}: ${r.erro}`);
       else if (r?.negativo) negativos.push(`${l.item.nome} (saldo ${fmtQtd(r.saldo_depois)})`);
-      if (r?.requisicao?.criada) pedidos.push(`${l.item.nome}: ${fmtQtd(r.requisicao.quantidade)} (${r.requisicao.numero_pedido})`);
+      if (r?.requisicao?.criada) pedidos.push(`${l.item.nome}: ${fmtQtd(r.requisicao.quantidade)} → ${paraQuem(r.requisicao)}`);
     }
     setSalvando(false);
     setConferindo(false);
@@ -587,6 +719,7 @@ export function PainelEstoque({ currentUser }: any) {
   const [procurarNovo, setProcurarNovo] = useState('');
   const [achados, setAchados] = useState<any[]>([]);
   const [retirando, setRetirando] = useState(false);
+  const [varrendo, setVarrendo] = useState(false);
   const [definindo, setDefinindo] = useState<any>(null);   // item ajustando mínimo/ideal
   const [formLimites, setFormLimites] = useState({ minimo: '', ideal: '' });
   const [movimentos, setMovimentos] = useState<any[]>([]);
@@ -624,6 +757,24 @@ export function PainelEstoque({ currentUser }: any) {
     if (!await confirmar(`Colocar "${item.nome}" sob controle de estoque?\n\nEle começa com saldo zero — conte a prateleira logo em seguida, senão a primeira saída já vai acusar falta.`)) return;
     await supabase.from('cadastro_itens').update({ controla_estoque: true }).eq('id', item.id);
     setProcurarNovo(''); setAchados([]);
+    recarregar();
+  };
+
+  /** Conferência sob demanda dos mínimos.
+   *
+   *  A reposição automática mora dentro do movimento de estoque, então ela só
+   *  enxerga o item quando alguém tira ou põe material. Item parado abaixo do
+   *  mínimo ficava calado. Este botão passa os olhos em todos e abre o que
+   *  estiver faltando — pedido de compra ou demanda de fabricação, conforme o
+   *  item (pedido do usuário em 25/09/2026). */
+  const rodarVarredura = async () => {
+    if (!await confirmar(
+      'Conferir todos os itens sob controle e abrir a reposição do que estiver abaixo do mínimo?\n\n' +
+      'Item que já tem compra ou fabricação a caminho é pulado — nada é pedido em dobro.')) return;
+    setVarrendo(true);
+    const r = await varrerMinimos({ currentUser });
+    setVarrendo(false);
+    alert(textoDaVarredura(r));
     recarregar();
   };
 
@@ -674,9 +825,9 @@ export function PainelEstoque({ currentUser }: any) {
     if (r?.ignorado) { alert('Este item não está sob controle de estoque.'); return; }
     // contagem que revela menos do que se pensava também pede reposição
     if (r?.requisicao?.criada) {
-      alert(`Contagem gravada. O saldo ficou em ${fmtQtd(r.saldo_depois)}, no mínimo ou abaixo dele, então a reposição de ${fmtQtd(r.requisicao.quantidade)} foi pedida ao Compras sozinha (${r.requisicao.numero_pedido}).`);
+      alert(`Contagem gravada. O saldo ficou em ${fmtQtd(r.saldo_depois)}, no mínimo ou abaixo dele, então a reposição de ${fmtQtd(r.requisicao.quantidade)} foi pedida sozinha — ${paraQuem(r.requisicao)}.`);
     } else if (r?.requisicao?.jaExistia) {
-      alert(`Contagem gravada. O saldo está no mínimo, mas já existe uma reposição em aberto no Compras (${r.requisicao.numero_pedido}), então nenhum pedido novo foi criado.`);
+      alert(`Contagem gravada. O saldo está no mínimo, mas já existe reposição em aberto — ${paraQuem(r.requisicao)}. Nenhum pedido novo foi criado.`);
     }
     setContando(null); setValorContagem(''); setObsContagem('');
     recarregar();
@@ -694,6 +845,13 @@ export function PainelEstoque({ currentUser }: any) {
             <span style={{ fontSize: 9, fontWeight: 800, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10 }}>
               {abaixo.length} precisando de reposição
             </span>
+          )}
+          {pode && itens.length > 0 && (
+            <button onClick={e => { e.stopPropagation(); rodarVarredura(); }} disabled={varrendo}
+              title="Conferir todos os itens controlados e abrir o que estiver faltando"
+              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#b45309', color: '#fff', cursor: varrendo ? 'wait' : 'pointer' }}>
+              {varrendo ? 'Conferindo…' : '🔎 Conferir mínimos'}
+            </button>
           )}
           {pode && itens.length > 0 && (
             <button onClick={e => { e.stopPropagation(); setRetirando(true); }}

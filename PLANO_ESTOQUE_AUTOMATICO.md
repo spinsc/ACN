@@ -64,14 +64,22 @@ O que **já existe** e vamos aproveitar:
 | Veículo estruturado na OPL | **Não existe** |
 | Estrutura de produto por veículo | **Não existe** |
 
-Números reais de hoje:
+Números de 25/09/2026, **medidos duas vezes com uma hora de diferença**:
 
-- **7 itens** sob controle de estoque: 4 de consumo (discos) e **3 chicotes**.
-- **72 chicotes** cadastrados como fabricação interna do setor Chicotes — ou
-  seja, a base para ligar o controle já está cadastrada.
-- Os 3 chicotes controlados estão **abaixo do mínimo** (6/30, 11/30, 14/30) e
-  **ninguém foi avisado**, porque a reposição só dispara quando o item se
-  movimenta e eles nunca se movimentaram. Isso é tratado na Etapa 2.
+| | Primeira medição | Uma hora depois |
+|---|---|---|
+| Itens sob controle | 7 | **11** |
+| Destes, chicotes | 3 | **7** |
+| Abaixo do mínimo | 3 | **6** |
+
+- **72 chicotes** cadastrados como fabricação interna do setor Chicotes — a base
+  para ligar o controle já existe.
+- **Estes números andam.** O usuário está colocando itens sob controle enquanto
+  o trabalho acontece. Qualquer etapa deve **medir o banco de novo** antes de
+  decidir qualquer coisa — nunca confiar nos números escritos aqui.
+- Os chicotes controlados estavam **abaixo do mínimo sem ninguém ser avisado**,
+  porque a reposição só disparava quando o item se movimentava. Resolvido na
+  Etapa 2.
 
 ---
 
@@ -81,17 +89,22 @@ Estado: ⬜ não começou · 🟡 em andamento · ✅ concluída
 
 ---
 
-### ⬜ Etapa 1 — Fabricação interna dá entrada no estoque
+### ⬜ Etapa 1 — Fabricação interna dá entrada no estoque · **PRÓXIMA**
 
-**Por que primeiro:** é o menor pedaço que fecha um ciclo inteiro e destrava
-todo o resto. Sem entrada por fabricação, reservar chicote não adianta.
+**Ordem:** a Etapa 2 passou na frente, a pedido do usuário. Parte do trabalho já
+veio junto: a coluna `item_id` em `demandas_setoriais` **já existe**, e a
+demanda de reposição automática já nasce apontando para o item. Falta o resto.
+
+**Por que importa:** é o que fecha o ciclo. Sem entrada por fabricação, reservar
+chicote não adianta — e as demandas que a Etapa 2 abre não viram saldo.
 
 **Hoje:** o setor conclui a demanda, o Almoxarifado confirma o recebimento, e o
 estoque não é tocado. A demanda nem sabe a qual item se refere, nem quanto foi
 realmente produzido.
 
 **O que muda:**
-1. A demanda de fabricação passa a poder **apontar para um item do cadastro**
+1. ✔ *(já feito na Etapa 2)* A demanda aponta para um item do cadastro. Falta
+   deixar o **usuário escolher** esse item ao abrir uma demanda à mão
    (`SelectBusca`, opcional, filtrando por `origem_producao = 'interna'`).
 2. Ao concluir, o setor informa **quanto produziu de verdade** — como o Compras
    informa a quantidade comprada. Vem preenchido com o pedido.
@@ -110,24 +123,43 @@ recebimento; conferir saldo e extrato; apagar e conferir a contagem.
 
 ---
 
-### ⬜ Etapa 2 — Reposição enxerga quem fabrica aqui dentro
+### ✅ Etapa 2 — Reposição enxerga quem fabrica aqui dentro
 
-**Hoje:** item abaixo do mínimo sempre vira **pedido de compra**, mesmo sendo
-chicote que a gente mesmo faz. E só dispara quando o item se movimenta.
+**Feito em:** 25/09/2026 (escolhida como primeira etapa pelo usuário, na frente
+da Etapa 1, porque os mínimos calados eram uma falha ativa).
 
-**O que muda:**
-1. Item com `origem_producao = 'interna'` abre **demanda de fabricação** para o
-   `setor_fabricante`, não requisição de compra.
-2. **Varredura de mínimos:** uma verificação que olha todos os itens
-   controlados, não só os que se mexeram. Resolve os 3 chicotes hoje calados.
-3. A trava contra repetição passa a valer para os dois caminhos — demanda de
-   fabricação aberta também significa "material a caminho".
+**O que foi feito:**
 
-**Como fica gradual:** só afeta item controlado. Item externo continua gerando
-compra como hoje.
+- Migração `demanda_setorial_aponta_item_do_cadastro`: coluna `item_id` em
+  `demandas_setoriais`, opcional, com índice para a busca de "fabricação em
+  aberto deste item". Demanda de desenvolvimento continua sem item, texto livre.
+- `Estoque.tsx`:
+  - `ehFabricacaoInterna(item)` — decide o caminho pela dupla
+    `origem_producao` + `setor_fabricante`.
+  - `reposicaoEmAberto(item)` — a trava contra pedir duas vezes agora olha os
+    **dois** caminhos (compra e fabricação). Antes só olhava compra, e uma
+    demanda de fabricação aberta não era enxergada por ninguém.
+  - `abrirFabricacaoReposicao` — item interno abre demanda para o
+    `setor_fabricante` em vez de requisição de compra.
+  - `varrerMinimos` + `textoDaVarredura` — passa os olhos em **todos** os itens
+    controlados, não só nos que se moveram.
+  - `paraQuem(req)` — as mensagens de tela pararam de dizer "pedido ao Compras"
+    para tudo; agora dizem o caminho certo.
+  - `carregarItensControlados` passou a trazer `origem_producao` e
+    `setor_fabricante`.
+- Botão **🔎 Conferir mínimos** no painel de estoque do Almoxarifado.
 
-**Feito em:** —
-**O que foi feito:** —
+**Testado** no navegador com as gravações bloqueadas, lendo o corpo do que
+*seria* gravado: 11 itens conferidos, 6 abaixo do mínimo, 5 demandas de
+fabricação montadas para o setor Chicotes (com `item_id`, quantidade = ideal −
+saldo) e 1 disco **pulado** por já ter a compra PC-FU6DS9 em aberto. Conferido
+no banco depois: 132 demandas antes e depois, nenhuma com `item_id` — nada
+vazou para produção.
+
+**O que ficou de fora de propósito:** a demanda de fabricação ainda **não
+credita o estoque** quando a peça fica pronta. Isso é a Etapa 1, que virou a
+próxima. Até lá, a demanda aparece para o setor e o saldo continua sendo
+ajustado por contagem.
 
 ---
 
@@ -254,14 +286,17 @@ direito (Etapas 1 a 4) e que o setor esteja confortável com o controle.
 | 25/09/2026 | Reserva ≠ baixa. A baixa continua no kiting, manual, feito pelo Almoxarifado. |
 | 25/09/2026 | A quantidade a pedir considera o lote da OP, não só o estoque ideal. |
 | 25/09/2026 | Campos de veículo (marca/modelo/ano) vêm da FIPE e são selects com busca. |
+| 25/09/2026 | **A reserva nasce quando o PCP libera a OP para o Almoxarifado.** |
+| 25/09/2026 | A Etapa 2 foi feita antes da 1: mínimo calado era falha ativa. |
+| 25/09/2026 | Reposição de item interno é demanda para o setor, nunca compra. |
 
 ---
 
 ## Perguntas em aberto
 
-- **Etapa 3:** quando exatamente a reserva nasce — ao PCP liberar o kiting, ou
-  já na entrada da OP no Almoxarifado? O usuário descreveu "quando a OP vai para
-  o almox".
+- **Etapa 2 (para observar):** a varredura hoje é um botão que alguém aprecia.
+  Depois de algumas semanas de uso, decidir se vale rodar sozinha — e com que
+  frequência, sem encher o setor de demanda repetida.
 - **Etapa 4:** quando a falta é de fabricação interna, o pedido deve nascer já
   designado a alguém do setor ou entra na fila geral?
 - **Etapa 5:** confirmar qual API da FIPE usar e se há limite de uso.
