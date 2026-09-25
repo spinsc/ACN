@@ -15,6 +15,8 @@ import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, LETRA,
 import { ItensVendidosEditor } from './OpItens';
 import { itensPreenchidos } from './DemandaItens';
 import { hojeISO } from './Interface';
+import { SelectVeiculo } from './VeiculoCadastro';
+import { carregarVeiculos } from './Veiculos';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -125,6 +127,7 @@ const VAZIO = {
   chassi:                 '',
   placa:                  '',   // sempre ativo
   modelo:                 '',
+  veiculo_id:             '',
   quantidade:             1,
   veiculos:               [] as {chassi:string, placa:string, modelo:string}[], // para desmembramento
   valor_total:            '',
@@ -199,6 +202,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
   // Catálogo de modelos de reboque — cadastrável direto por aqui, fica salvo
   // pra reaproveitar em OPs futuras (tipo_projeto === 'Reboque').
+  // para preencher o texto livre de modelo quando um veículo é escolhido
+  const [veiculosCarregados, setVeiculosCarregados] = useState<any[]>([]);
+  useEffect(() => { carregarVeiculos().then(setVeiculosCarregados); }, []);
   const [modelosReboque, setModelosReboque]   = useState<{id:string,nome:string}[]>([]);
   const [novoModeloReboque, setNovoModeloReboque] = useState('');
   const [mostrandoNovoModelo, setMostrandoNovoModelo] = useState(false);
@@ -377,6 +383,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           chassi:                 ehVendaEnvio ? null : ((veiculo?.chassi || form.chassi) || null),
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
           modelo:                 ehVendaEnvio ? null : ((veiculo?.modelo || form.modelo) || null),
+          veiculo_id:             ehVendaEnvio ? null : (form.veiculo_id || null),
           quantidade:             semLote ? qty : 1,
           frete_responsavel:      precisaFrete ? (form.frete_responsavel || null) : null,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
@@ -860,8 +867,23 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       </select>
                     )
                   ) : (
-                    <input className="acn-input" style={{ width:'100%' }} placeholder="Opcional"
-                      value={form.modelo} onChange={e => setF('modelo', e.target.value)} />
+                    <>
+                      {/* Veículo do catálogo da casa. Opcional de propósito: OP
+                          antiga e OP sem veículo continuam funcionando com o
+                          texto livre abaixo, que nunca deixou de existir.
+                          É este vínculo que a estrutura de material vai usar. */}
+                      <SelectVeiculo valor={form.veiculo_id} currentUser={currentUser}
+                        onChange={(id) => {
+                          setF('veiculo_id', id);
+                          // preenche o texto livre junto, para relatório antigo
+                          // e busca continuarem enxergando o modelo
+                          const v = veiculosCarregados.find(x => x.id === id);
+                          if (v) setF('modelo', v.nome_exibicao);
+                        }} />
+                      <input className="acn-input" style={{ width:'100%', marginTop:6 }}
+                        placeholder="Modelo em texto livre (opcional)"
+                        value={form.modelo} onChange={e => setF('modelo', e.target.value)} />
+                    </>
                   )}
                 </div>
               </div>

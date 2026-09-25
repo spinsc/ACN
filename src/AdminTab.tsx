@@ -6,6 +6,7 @@ import Linkify from './Linkify';
 import { CentrosCustoManager } from './CentroCustoShared';
 import { confirmar } from './Feedback';
 import PainelFeriados from './FeriadosAdmin';
+import { PainelFipeSync } from './Veiculos';
 import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
 
 
@@ -2930,6 +2931,7 @@ const ABAS_ADMIN = [
   { id:'nfc_cfg',        label:'📱 Config. NFC' },
   { id:'notificacoes',   label:'🔔 Notificações WA' },
   { id:'feriados',       label:'📅 Feriados' },
+  { id:'veiculos',       label:'🚗 Veículos' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
   { id:'avisos',         label:'📢 Avisos' },
@@ -3509,6 +3511,9 @@ export default function AdminTab() {
       {abaAtiva === 'nfc_cfg'      && <PainelNfcCfg />}
       {abaAtiva === 'notificacoes' && <PainelNotificacoes />}
       {abaAtiva === 'feriados'     && <PainelFeriados />}
+      {/* AdminTab não recebe o usuário por props; os painéis daqui leem do
+          localStorage, como os outros desta tela já fazem. */}
+      {abaAtiva === 'veiculos'     && <PainelFipeSync currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}
       {abaAtiva === 'avisos'       && <PainelAvisos />}

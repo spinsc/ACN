@@ -1155,7 +1155,7 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
 
       {conferindo && (
         <div className="modal-overlay" onClick={() => !salvando && setConferindo(null)}>
-          <div className="modal-content" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-box" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
             <div className="modal-title">🔧 Dar entrada no estoque</div>
             <div style={{ fontSize: 11, color: '#334155', margin: '8px 0' }}>
               {String(conferindo.descricao || '').split('\n')[0]}

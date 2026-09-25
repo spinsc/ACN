@@ -301,29 +301,97 @@ que é quando se sabe de quem é a falta.
 
 ---
 
-### ⬜ Etapa 5 — Veículo pela FIPE na abertura da OPL · **PRÓXIMA**
+### ✅ Etapa 5 — Veículo pela FIPE na abertura da OPL
 
-**O que muda:** na abertura da OPL, três campos em cascata — **marca**,
-**modelo**, **ano** — vindos da API da Tabela FIPE, cada um como `SelectBusca`
-(digita e filtra, como os outros selects com busca do sistema).
+**Plano reescrito em 25/09/2026**, depois de medir a API e conversar com o
+usuário. O desenho original (a OPL falando direto com a FIPE) foi descartado.
 
-**Cuidados:**
-- A resposta da FIPE precisa ser **guardada no banco** (tabela de cache), senão
-  toda abertura de OPL depende de um serviço de fora estar no ar.
-- Se a API não responder, o campo continua aceitando texto livre. Abertura de OP
-  não pode depender de internet de terceiro.
-- A OPL guarda marca, modelo, ano **e o código FIPE**, que é o que amarra a
-  estrutura de produto depois.
+**O que a medição mostrou:**
 
-**A validar antes de começar:** qual API usar e se ela aguenta o uso. Confirmar
-que devolve marca → modelo → ano em cascata.
+- Vocês adaptam **carros, motos e caminhões** — e a FIPE tem catálogo separado
+  para cada um. O tipo precisa vir antes da marca.
+- O "modelo" da FIPE é **versão**, não modelo: o HB20S tem **48 entradas**
+  ("Impress 1.6 Flex 16V Aut.", "5 Anos 1.0 Flex 12V Mec."…). Fiat tem 585
+  entradas, GM 556, VW 549. As 12 maiores marcas de carro somam **3.940**;
+  os três catálogos juntos, cerca de **15 mil**.
+- Os **anos** só vêm numa chamada separada **por modelo**. Baixar tudo com anos
+  seria ~15 mil chamadas numa API pública gratuita.
+- Veículo real pode **não estar na FIPE**: a Tenere 700 não existe na lista da
+  Yamaha (só XT 600 Z, XTZ 250 e XTZ 750).
+- Hoje o campo `modelo` é texto livre: 281 das 325 OPs preenchidas, **91 valores
+  distintos**, com "CRETA" e "NEW CRETA" separados e pelo menos um que não é
+  modelo nenhum.
 
-**Feito em:** —
-**O que foi feito:** —
+**Decisões do usuário:**
+
+| Decisão | Escolha |
+|---|---|
+| Identidade do veículo | **marca + modelo + ano** — a versão da FIPE não entra |
+| Papel da FIPE | alimenta um **catálogo nosso**; a OPL nunca fala com a API |
+| Sincronização | **marcas e modelos** a cada 15 dias (~330 chamadas); **anos sob demanda**, na primeira vez que o modelo é usado |
+| Anteriores a 2010 | aparecem num "ver anos antigos" — já vêm na mesma chamada |
+| Veículo fora da FIPE | ação manual "baixar marca/modelo/ano específico", e cadastro à mão |
+| Nome do veículo | vem preenchido da FIPE mas **editável**: "Nivus Comfortline 1.0 200 TSI Flex Aut." vira "Nivus" |
+| Modelos em texto livre antigos | ficam como estão, intocados |
+| Faixa de anos | o veículo guarda **ano de** e **ano até**: "Nissan Sentra 2022 a 2024" é um cadastro só |
+
+**O que construir:**
+
+1. Tabelas do espelho da FIPE: `veiculos_fipe_marcas`, `veiculos_fipe_modelos`
+   (cheias pela sincronização) e `veiculos_fipe_anos` (preenchida sob demanda).
+2. Tabela `veiculos` — o catálogo da ACN: tipo, marca, modelo, **ano_de**,
+   **ano_ate**, nome de exibição editável e o código FIPE de origem.
+3. Ação de sincronização com "última atualização" na tela e aviso quando passar
+   de 15 dias.
+4. Modal de cadastro de veículo: tipo → marca → modelo (tudo do banco local,
+   com busca) → ano (busca na FIPE na primeira vez) → nome editável e faixa de
+   anos.
+5. Campo de veículo na OPL: um `SelectBusca` sobre o catálogo da ACN, com botão
+   de cadastrar na hora. O campo `modelo` antigo continua existindo ao lado.
+
+**Feito em:** 25/09/2026.
+
+**O que foi feito:**
+
+- Migração `catalogo_de_veiculos`: `veiculos_fipe_marcas`, `veiculos_fipe_modelos`,
+  `veiculos_fipe_anos` (o espelho), `veiculos` (o catálogo da casa, com
+  `ano_de`/`ano_ate`), `veiculos_fipe_sync` (quando a última atualização rodou) e
+  `oples.veiculo_id`, opcional.
+- `Veiculos.tsx`: `sincronizarFipe` (marcas e modelos dos três tipos, por
+  upsert — nada é apagado, para veículo já usado não sumir se a FIPE mudar),
+  `anosDoModelo` (busca na FIPE uma vez e guarda), `veiculoQueCobre` (resolve
+  marca+modelo+ano para o cadastro que cobre aquela faixa) e `PainelFipeSync`.
+- `VeiculoCadastro.tsx`: o modal de cadastro e o `SelectVeiculo` da OPL.
+- Aba **🚗 Veículos** na administração e campo de veículo na abertura da OP,
+  acima do texto livre, que continua existindo.
+
+**Testado** com a VW carregada de verdade (549 versões gravadas por upsert):
+marca → modelo → os anos vieram da FIPE na hora (2021 a 2027) → nome encurtado
+à mão de "Nivus Comfortline 1.0 200 TSI Flex Aut." para "Nivus" → salvo como
+**2022 a 2024**, com o código FIPE e a origem preservados. Espelho e veículo de
+teste apagados depois.
+
+**Dois defeitos encontrados no caminho:**
+
+1. **`.modal-content` não existe neste projeto** — a classe certa é `.modal-box`,
+   definida no bloco de estilo dentro de `DashboardTab.tsx`. Eu tinha inventado
+   a outra, e o modal saía **sem fundo**, transparente por cima da tela. Isso
+   atingia também o modal de "dar entrada no estoque" da **Etapa 1, que já
+   estava publicado**. Corrigido nos dois.
+2. A FIPE marca o zero-km como ano **32000** — "32000 Flex" aparecia na lista de
+   anos como se fosse defeito. Agora aparece como "0 km".
+
+**Ponto em aberto:** o projeto não tem backend nem tarefa agendada — é site
+estático mais Supabase. A sincronização é um **botão** na administração, com
+aviso de "catálogo desatualizado" passados 15 dias. Automatizar de verdade
+pediria uma Edge Function, que fica como melhoria depois.
+
+**Atenção na primeira vez:** o catálogo está **vazio**. Alguém precisa apertar
+"Atualizar da FIPE" uma vez — são ~330 consultas e alguns minutos.
 
 ---
 
-### ⬜ Etapa 6 — Estrutura de produto: veículo × item vendido
+### ⬜ Etapa 6 — Estrutura de produto: veículo × item vendido · **PRÓXIMA**
 
 **O coração da automação.** Para cada combinação de veículo e item vendido,
 qual é a lista de material da adaptação.
