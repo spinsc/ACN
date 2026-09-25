@@ -2858,8 +2858,13 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
       {/* PIPELINE — mesma faixa do Comercial/CRM */}
       <div style={{ flexShrink:0 }}>
-        {/* Pipeline segue os mesmos filtros dos cards (status, tipo, temperatura, análise, período) */}
-        <PipelineCardsLicitacoes licitacoes={lista} />
+        {/* Bug relatado pelo usuário em 25/09/2026: com o pipeline seguindo o
+            filtro de status da lista, ao filtrar "Aberta" só sobravam
+            licitações abertas no array — Ganhas/Perdidas/Aguardando
+            faturamento zeravam, porque status é o próprio eixo que o
+            pipeline mostra. Igual à visão de Relatório (RelatorioStatus,
+            abaixo), o pipeline agora sempre olha o total geral. */}
+        <PipelineCardsLicitacoes licitacoes={licitacoes} />
       </div>
 
       <div className="sec-card" style={{ marginBottom:0, overflow:'visible' }}>
