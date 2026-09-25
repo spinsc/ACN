@@ -11,6 +11,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
 import { Faixa, MenuAcoes } from './Interface';
 import { LinkOpl } from './AcnTabShared';
+import { ModalAnexosTarefa, contarAnexosDasTarefas } from './TarefaAnexos';
 import {
   ehGestorEngenharia, mesmaPessoa, normNome, nomesDoUsuario, carregarContextoHorario, extrasAprovadas, horasExtrasDaPessoa,
   textoPeriodo, CONTEXTO_VAZIO, PainelHorasExtras, ModalHoraExtra, type ContextoHorario,
@@ -257,7 +258,10 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
   const [editTitulo, setEditTitulo] = useState<string | null>(null);
   const [modalObs, setModalObs] = useState(false);
   const [modalOpl, setModalOpl] = useState(false);
+  const [modalAnexos, setModalAnexos] = useState(false);
   const temObs = !!String(tarefa.observacoes || '').trim();
+  // contagem vem da lista (uma consulta para todas as tarefas, não uma por linha)
+  const qtdAnexos = tarefa._anexos || 0;
   const salvarTitulo = async () => {
     const novo = (editTitulo || '').trim();
     if (!novo) { alert('A descrição da tarefa não pode ficar em branco.'); return; }
@@ -365,6 +369,9 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
               { rotulo: `📋 ${verLog ? 'Ocultar' : 'Ver'} pausas (${(tarefa.pausas || []).length})`, onClick: () => setVerLog(v => !v), oculto: !(tarefa.pausas || []).length },
               { rotulo: '✏️ Editar descrição', onClick: () => setEditTitulo(tarefa.titulo || ''), oculto: tarefa.status === 'concluida' },
               { rotulo: tarefa.numero_opl ? '🔗 Trocar OP vinculada' : '🔗 Vincular a uma OP', onClick: () => setModalOpl(true) },
+              // tarefa concluída também anexa: desenho e foto do resultado
+              // costumam aparecer depois que ela fecha (24/09/2026)
+              { rotulo: qtdAnexos ? `📎 Anexos (${qtdAnexos})` : '📎 Anexar arquivo', onClick: () => setModalAnexos(true) },
             ]} />
           </div>
         </td>
@@ -389,6 +396,11 @@ function LinhaTarefa({ tarefa, agora, onAtualizado, currentUser, ctx, onForaDoHo
       {modalObs && createPortal(
         <ModalObs tarefa={tarefa} onClose={() => setModalObs(false)}
           onSalvo={() => { setModalObs(false); onAtualizado(); }} />,
+        document.body,
+      )}
+      {modalAnexos && createPortal(
+        <ModalAnexosTarefa tarefa={tarefa} currentUser={currentUser}
+          onClose={() => setModalAnexos(false)} onMudou={onAtualizado} />,
         document.body,
       )}
       {modalPausar && createPortal(
@@ -943,7 +955,11 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
       supabase.from('engenharia_horas_tarefas').select('*').order('criado_em', { ascending: false }),
       carregarContextoHorario(),
     ]);
-    setTarefas(data || []);
+    // quantos anexos cada tarefa tem, numa consulta só para a lista inteira —
+    // uma por linha deixaria a tela lenta conforme as tarefas acumulam
+    const lista = data || [];
+    const contagem = await contarAnexosDasTarefas(lista.map((t: any) => t.id));
+    setTarefas(lista.map((t: any) => ({ ...t, _anexos: contagem.get(t.id) || 0 })));
     setCtx(contexto); setCtxPronto(true);
     if (!silencioso) setLoading(false);
   };
