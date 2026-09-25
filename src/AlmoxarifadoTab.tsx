@@ -14,7 +14,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
-import { PainelEstoque, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque } from './Estoque';
+import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -707,6 +707,11 @@ Embalar e enviar assim mesmo?`)) return;
           )}
         </div>
       </div>
+
+      {/* FABRICAÇÃO PRONTA — peça feita aqui dentro esperando a conferência que
+          faz o saldo subir. Vem antes do painel de estoque de propósito: é fila
+          de balcão, tem gente esperando do outro lado. */}
+      <PainelFabricacaoRecebimento currentUser={currentUser} onCreditou={() => fetchAll(true)} />
 
       {/* ESTOQUE SOB CONTROLE — a lista dos itens que já têm saldo contado, o
           mínimo definido e a contagem. Ver Estoque.tsx para a regra do opt-in. */}

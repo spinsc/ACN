@@ -89,37 +89,53 @@ Estado: ⬜ não começou · 🟡 em andamento · ✅ concluída
 
 ---
 
-### ⬜ Etapa 1 — Fabricação interna dá entrada no estoque · **PRÓXIMA**
+### ✅ Etapa 1 — Fabricação interna dá entrada no estoque
 
-**Ordem:** a Etapa 2 passou na frente, a pedido do usuário. Parte do trabalho já
-veio junto: a coluna `item_id` em `demandas_setoriais` **já existe**, e a
-demanda de reposição automática já nasce apontando para o item. Falta o resto.
+**Feito em:** 25/09/2026, logo depois da Etapa 2.
 
-**Por que importa:** é o que fecha o ciclo. Sem entrada por fabricação, reservar
-chicote não adianta — e as demandas que a Etapa 2 abre não viram saldo.
+**O que foi feito:**
 
-**Hoje:** o setor conclui a demanda, o Almoxarifado confirma o recebimento, e o
-estoque não é tocado. A demanda nem sabe a qual item se refere, nem quanto foi
-realmente produzido.
+- Migração `fabricacao_interna_credita_estoque`: em `demandas_setoriais`,
+  `quantidade_produzida`, `estoque_creditado_em` e `estoque_creditado_por`, mais
+  o índice da fila do Almoxarifado. A quantidade pedida **não** é sobrescrita —
+  pediram 10 e o setor fez 8 são dois fatos, mesma regra da quantidade comprada.
+- `Estoque.tsx`:
+  - motivo novo `MOTIVO.FABRICACAO_RECEBIDA` (a função do banco já aceitava
+    motivo livre, não precisou mexer nela);
+  - `fabricacoesAguardandoCredito()` — a fila: tem item, ficou pronta, ainda não
+    virou saldo;
+  - `creditarFabricacaoRecebida()` — credita o que **chegou**, não o que foi
+    pedido, e só marca a demanda depois de o saldo subir (se a movimentação
+    falhar, a demanda continua na fila em vez de sumir sem virar estoque);
+  - `PainelFabricacaoRecebimento` — painel no Almoxarifado, separado do painel
+    de pendência de OP porque aqui não há OP nenhuma amarrada.
+- `SetorDemandaTab.tsx`: ao concluir uma demanda **com item**, o setor informa
+  quanto produziu, pré-preenchido com o pedido. Sem item, nada muda.
+- `AcnTabShared.tsx`: mesma pergunta no `concluir` de lá, para as duas telas não
+  divergirem.
 
-**O que muda:**
-1. ✔ *(já feito na Etapa 2)* A demanda aponta para um item do cadastro. Falta
-   deixar o **usuário escolher** esse item ao abrir uma demanda à mão
-   (`SelectBusca`, opcional, filtrando por `origem_producao = 'interna'`).
-2. Ao concluir, o setor informa **quanto produziu de verdade** — como o Compras
-   informa a quantidade comprada. Vem preenchido com o pedido.
-3. Ao o Almoxarifado confirmar o recebimento, o estoque é creditado, com motivo
-   novo `fabricacao_recebida`, registrando OP, setor e demanda no extrato.
+**Testado** de ponta a ponta com item sintético (`ZZTESTE CHICOTE DE PROVA`,
+saldo 2, mínimo 5, ideal 12) e demanda de 10:
 
-**Como fica gradual:** demanda sem item vinculado segue idêntica a hoje — sem
-quantidade produzida e sem movimentar estoque.
+| Passo | Resultado |
+|---|---|
+| Setor conclui informando 8 | pedida 10 e produzida 8 guardadas; **saldo continua 2** |
+| Painel do Almoxarifado | "produziu 8 UN · pedido 10" |
+| Almox confirma 8 | saldo **2 → 10** |
+| Extrato | entrada 8, motivo `fabricacao_recebida`, "Fabricação do setor Chicotes — pedido de 10, recebido 8." |
 
-**Como testar:** demanda `ZZTESTE` de chicote apontando para um dos 3 chicotes
-controlados; concluir informando quantidade diferente da pedida; confirmar o
-recebimento; conferir saldo e extrato; apagar e conferir a contagem.
+Dado de teste apagado; banco conferido de volta em 132 demandas, 4.436 itens,
+26 movimentos, zero resíduo.
 
-**Feito em:** —
-**O que foi feito:** —
+**Armadilha encontrada no caminho:** existem **duas** telas que concluem demanda
+setorial — `SetorDemandaTab.tsx` (a que os setores usam) e `AcnTabShared.tsx`.
+Mexer só numa não tem efeito nenhum. Quem for mexer em conclusão de demanda
+precisa olhar as duas.
+
+**O que ficou de fora de propósito:** ao abrir uma demanda **à mão**, ainda não
+dá para escolher o item do cadastro — só a reposição automática amarra o item.
+Enquanto isso, quem quiser que uma fabricação vire saldo precisa deixar a
+varredura abrir a demanda. Entra na Etapa 4, junto com a falta vinda da OP.
 
 ---
 
@@ -163,7 +179,7 @@ ajustado por contagem.
 
 ---
 
-### ⬜ Etapa 3 — Reserva de estoque
+### ⬜ Etapa 3 — Reserva de estoque · **PRÓXIMA**
 
 **O conceito que falta.** Hoje só existe saldo. Passa a existir **saldo
 disponível = saldo − reservado**.
@@ -171,8 +187,8 @@ disponível = saldo − reservado**.
 **O que muda:**
 1. Tabela `estoque_reservas`: item, OP, quantidade, situação
    (reservada / consumida / liberada), quem e quando.
-2. Quando a OP é liberada para o Almoxarifado, o sistema reserva o que aquela OP
-   precisa dos itens controlados.
+2. **Quando o PCP libera a OP para o Almoxarifado** (decidido com o usuário em
+   25/09/2026), o sistema reserva o que aquela OP precisa dos itens controlados.
 3. O kiting **consome a reserva** em vez de dar baixa por cima dela — senão o
    material sairia duas vezes do saldo.
 4. Mínimo, ideal e a trava de falta passam a olhar o **disponível**.

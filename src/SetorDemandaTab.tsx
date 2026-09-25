@@ -10,7 +10,7 @@ import { notificarEvento } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
-import { confirmar } from './Feedback';
+import { confirmar, pedirTexto } from './Feedback';
 import { hojeISO, diaISO } from './Interface';
 
 function fmtHHMMSS(horas) {
@@ -466,12 +466,37 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
 
   // ── CONCLUIR (demanda regular) ────────────────────────────────────────────
   const concluir = async (d) => {
-    if (!await confirmar('Confirmar conclusão?')) return;
+    // Demanda que aponta para um item do cadastro vira saldo na prateleira, e
+    // para isso precisamos saber quanto saiu da bancada DE VERDADE: pediram 44
+    // e o setor pode ter feito 40 porque acabou o fio. É a mesma regra da
+    // quantidade comprada no Compras. Demanda de texto livre (chicote de
+    // desenvolvimento) não pergunta nada e segue como sempre foi.
+    // Regra definida com o usuário em 25/09/2026.
+    let produzida = null;
+    if (d?.item_id) {
+      const resposta = await pedirTexto(
+        `Quanto foi produzido de verdade?\n\nPedido: ${d.quantidade || 0} ${d.unidade || 'un'}. ` +
+        `Esta quantidade entra no estoque quando o Almoxarifado conferir o recebimento.`,
+        String(d.quantidade ?? ''));
+      if (resposta === null) return;
+      produzida = Number(String(resposta).replace(',', '.'));
+      if (!Number.isFinite(produzida) || produzida <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
+    } else if (!await confirmar('Confirmar conclusão?')) {
+      return;
+    }
     const agora = new Date().toISOString();
     const inicio = d.data_inicio ? new Date(d.data_inicio) : new Date(d.data_abertura||agora);
     const tempo  = Math.max(0, horasUteis(inicio, new Date()) - (d.tempo_pausado_horas||0));
-    const logs = [...(d.logs_demanda||[]), { texto:`Concluído. Tempo útil: ${tempo.toFixed(1)}h`, usuario:currentUser?.nome, hora:agora }];
-    await supabase.from('demandas_setoriais').update({ status:'Concluido', data_conclusao:agora, tempo_execucao_horas:tempo, logs_demanda:logs }).eq('id',d.id);
+    const logs = [...(d.logs_demanda||[]), { texto:`Concluído. Tempo útil: ${tempo.toFixed(1)}h`
+      + (produzida != null ? ` Produzido: ${produzida} ${d.unidade||'un'} (pedido: ${d.quantidade||0}).` : ''),
+      usuario:currentUser?.nome, hora:agora }];
+    const campos = { status:'Concluido', data_conclusao:agora, tempo_execucao_horas:tempo, logs_demanda:logs };
+    if (produzida != null) campos.quantidade_produzida = produzida;
+    await supabase.from('demandas_setoriais').update(campos).eq('id',d.id);
+    if (produzida != null) {
+      alert(`Demanda concluída com ${produzida} ${d.unidade||'un'}. `
+        + `O estoque sobe quando o Almoxarifado conferir o recebimento.`);
+    }
 
     // SAC execução: atualiza OS
     if (d.sac_os_id && d.sac_fase === 'execucao') {

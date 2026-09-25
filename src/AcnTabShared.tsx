@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import { confirmar } from './Feedback';
+import { confirmar, pedirTexto } from './Feedback';
 import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 
 // O dossiê importa OplProgressBar deste arquivo; para não fechar um ciclo de
@@ -1391,16 +1391,42 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
   };
 
   const concluir = async (d: any) => {
-    if (!await confirmar(`Concluir a demanda${d?.numero_opl ? ` da OPL ${d.numero_opl}` : ''}? Ela sai da lista de pendentes.`)) return;
+    // Demanda que aponta para um item do cadastro vira saldo na prateleira, e
+    // para isso precisamos saber quanto saiu da bancada de verdade — pediram 44
+    // e o setor pode ter feito 40 porque acabou o fio. Demanda de texto livre
+    // (desenvolvimento) não pergunta nada e segue como sempre foi.
+    // Regra definida com o usuário em 25/09/2026.
+    let produzida: number | null = null;
+    if (d?.item_id) {
+      const resposta = await pedirTexto(
+        `Quanto foi produzido de verdade?\n\nPedido: ${d.quantidade || 0} ${d.unidade || 'un'}. ` +
+        `Esta quantidade entra no estoque quando o Almoxarifado conferir.`,
+        String(d.quantidade ?? ''));
+      if (resposta === null) return;
+      produzida = Number(String(resposta).replace(',', '.'));
+      if (!Number.isFinite(produzida) || produzida <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
+    } else if (!await confirmar(`Concluir a demanda${d?.numero_opl ? ` da OPL ${d.numero_opl}` : ''}? Ela sai da lista de pendentes.`)) {
+      return;
+    }
     const agora = new Date().toISOString();
     const seg = d.data_inicio ? bhElapsed(d.data_inicio, d.segundos_pausados || 0, null) : 0;
     const tempo = seg / 3600;
     const logs = d.logs_demanda || [];
-    logs.push({ texto: `Concluido. Tempo util: ${fmtHMS(seg)}`, usuario: currentUser?.nome, hora: agora });
-    await supabase.from('demandas_setoriais').update({
+    logs.push({
+      texto: `Concluido. Tempo util: ${fmtHMS(seg)}`
+        + (produzida != null ? ` Produzido: ${produzida} ${d.unidade || 'un'} (pedido: ${d.quantidade || 0}).` : ''),
+      usuario: currentUser?.nome, hora: agora,
+    });
+    const campos: any = {
       status: 'Concluido', data_conclusao: agora,
       tempo_execucao_horas: tempo, logs_demanda: logs,
-    }).eq('id', d.id);
+    };
+    if (produzida != null) campos.quantidade_produzida = produzida;
+    await supabase.from('demandas_setoriais').update(campos).eq('id', d.id);
+    if (produzida != null) {
+      alert(`Demanda concluída com ${produzida} ${d.unidade || 'un'}. ` +
+        `O estoque sobe quando o Almoxarifado conferir o recebimento.`);
+    }
     fetchDemandas();
   };
 

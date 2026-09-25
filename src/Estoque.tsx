@@ -45,6 +45,7 @@ export const MOTIVO = {
   KITING: 'kiting',
   RETIRADA: 'retirada',
   COMPRA_RECEBIDA: 'compra_recebida',
+  FABRICACAO_RECEBIDA: 'fabricacao_recebida',
   AJUSTE: 'ajuste',
 };
 
@@ -235,6 +236,60 @@ export async function creditarCompraRecebida({ pedido, quantidade, currentUser }
     vinculo: { tipo: 'compra', id: pedido.id, descricao: pedido.numero_pedido || pedido.numero_oc || 'Pedido de compra' },
     currentUser,
   });
+  return r;
+}
+
+/**
+ * Demandas de fabricação prontas, esperando o Almoxarifado conferir.
+ *
+ * É a fila do balcão: a peça já foi feita, o setor disse quanto produziu, e o
+ * saldo só sobe quando alguém do Almoxarifado confirma que ela chegou de fato.
+ * Conferir com o olho antes de creditar é o que impede o estoque de virar
+ * ficção — foi assim que fizemos com a compra recebida.
+ */
+export async function fabricacoesAguardandoCredito() {
+  const { data } = await supabase.from('demandas_setoriais')
+    .select('id,numero_demanda,descricao,setor_destino,quantidade,quantidade_produzida,unidade,data_conclusao,item_id,numero_opl')
+    .not('item_id', 'is', null)
+    .is('estoque_creditado_em', null)
+    .in('status', ['Concluido', 'Concluída'])
+    .order('data_conclusao', { ascending: true });
+  return data || [];
+}
+
+/**
+ * Credita o estoque quando a peça fabricada aqui dentro chega ao Almoxarifado.
+ *
+ * Entra a quantidade REALMENTE produzida, não a pedida — mesma regra da compra:
+ * a reposição pode ter pedido 44 e o setor ter feito 40 porque acabou o fio.
+ *
+ * Se mesmo com a entrada o saldo continuar no mínimo, a própria movimentação
+ * abre a próxima reposição, que é o certo.
+ */
+export async function creditarFabricacaoRecebida({ demanda, quantidade, currentUser }: any) {
+  if (!demanda?.item_id) return { naoSeAplica: true, motivo: 'Demanda sem item do cadastro.' };
+  const qtd = num(quantidade);
+  if (qtd <= 0) return { naoSeAplica: true, motivo: 'Sem quantidade recebida.' };
+
+  const r = await movimentarEstoque({
+    itemId: demanda.item_id, tipo: 'entrada', quantidade: qtd,
+    motivo: MOTIVO.FABRICACAO_RECEBIDA,
+    observacoes: `Fabricação do setor ${demanda.setor_destino || '—'}`
+      + (demanda.numero_demanda ? ` (${demanda.numero_demanda})` : '')
+      + (num(demanda.quantidade) !== qtd ? ` — pedido de ${fmtQtd(demanda.quantidade)}, recebido ${fmtQtd(qtd)}.` : '.'),
+    vinculo: { tipo: 'fabricacao', id: demanda.id, descricao: demanda.numero_demanda || `Demanda ${demanda.setor_destino}` },
+    currentUser,
+  });
+  if (r?.erro || r?.ignorado) return r;
+
+  // Marca depois de creditar: se a movimentação falhar, a demanda continua na
+  // fila e alguém tenta de novo. O contrário deixaria peça fora do saldo.
+  const { error } = await supabase.from('demandas_setoriais').update({
+    estoque_creditado_em: new Date().toISOString(),
+    estoque_creditado_por: currentUser?.nome || currentUser?.email || '—',
+    quantidade_produzida: qtd,
+  }).eq('id', demanda.id);
+  if (error) return { ...r, avisoMarcacao: error.message };
   return r;
 }
 
@@ -708,6 +763,114 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DO ALMOXARIFADO — os itens sob controle e a contagem
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Fila do Almoxarifado: peça fabricada aqui dentro, pronta, esperando a
+ * conferência que faz o saldo subir.
+ *
+ * Fica separado do painel de pendência de OP de propósito. Aquele trata de
+ * material de uma OP específica, que vai direto para o kit; este trata de
+ * reposição de prateleira, que não tem OP nenhuma amarrada.
+ */
+export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
+  const [fila, setFila] = useState<any[]>([]);
+  const [conferindo, setConferindo] = useState<any>(null);
+  const [qtd, setQtd] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const pode = podeGerirEstoque(currentUser);
+
+  const recarregar = async () => setFila(await fabricacoesAguardandoCredito());
+  useEffect(() => { recarregar(); }, []);
+
+  const abrir = (d: any) => {
+    setQtd(String(d.quantidade_produzida ?? d.quantidade ?? ''));
+    setConferindo(d);
+  };
+
+  const confirmar_ = async () => {
+    const n = num(qtd);
+    if (n <= 0) { alert('Informe quanto chegou de verdade.'); return; }
+    setSalvando(true);
+    const r = await creditarFabricacaoRecebida({ demanda: conferindo, quantidade: n, currentUser });
+    setSalvando(false);
+    if (r?.erro) { alert('Não foi possível creditar: ' + r.erro); return; }
+    if (r?.ignorado) { alert('Este item não está mais sob controle de estoque. Nada foi movimentado.'); return; }
+    let msg = `Estoque atualizado: entraram ${fmtQtd(n)}, saldo agora ${fmtQtd(r.saldo_depois)}.`;
+    if (r?.requisicao?.criada) msg += `\n\nMesmo assim o saldo seguiu no mínimo, então já pedi mais — ${paraQuem(r.requisicao)}.`;
+    if (r?.avisoMarcacao) msg += `\n\n⚠️ O saldo subiu, mas a demanda não saiu da fila: ${r.avisoMarcacao}`;
+    alert(msg);
+    setConferindo(null);
+    recarregar();
+    onCreditou?.();
+  };
+
+  if (!pode || !fila.length) return null;
+
+  return (
+    <div className="sec-card">
+      <div className="sec-hdr" style={{ background: '#eff6ff', borderBottom: '2px solid #2563eb' }}>
+        <span style={{ color: '#1d4ed8' }}>🔧 Fabricação pronta para conferir ({fila.length})</span>
+      </div>
+      <div className="sec-body">
+        <div style={{ fontSize: 10, color: '#1e40af', marginBottom: 8 }}>
+          O setor terminou e informou quanto produziu. Confira na prateleira e confirme —
+          é a confirmação que faz o saldo subir, não a conclusão do setor.
+        </div>
+        {fila.map(d => (
+          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '1px solid #f1f5f9' }}>
+            <span style={{ flex: 1, fontSize: 11 }}>
+              {String(d.descricao || '').split('\n')[0]}
+              <span style={{ color: '#64748b', fontSize: 9, marginLeft: 6 }}>
+                {d.setor_destino}{d.numero_demanda ? ` · ${d.numero_demanda}` : ''}
+                {d.numero_opl ? ` · OPL ${d.numero_opl}` : ''}
+              </span>
+            </span>
+            <span style={{ fontSize: 10, color: '#334155', whiteSpace: 'nowrap' }}>
+              produziu <b>{fmtQtd(d.quantidade_produzida ?? d.quantidade)}</b> {d.unidade || 'un'}
+              {d.quantidade_produzida != null && num(d.quantidade_produzida) !== num(d.quantidade) && (
+                <span style={{ color: '#94a3b8' }}> · pedido {fmtQtd(d.quantidade)}</span>
+              )}
+            </span>
+            <button onClick={() => abrir(d)}
+              style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: 'none', borderRadius: 4, background: '#2563eb', color: '#fff', cursor: 'pointer' }}>
+              Conferir e dar entrada
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {conferindo && (
+        <div className="modal-overlay" onClick={() => !salvando && setConferindo(null)}>
+          <div className="modal-content" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-title">🔧 Dar entrada no estoque</div>
+            <div style={{ fontSize: 11, color: '#334155', margin: '8px 0' }}>
+              {String(conferindo.descricao || '').split('\n')[0]}
+            </div>
+            <label style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 2 }}>
+              QUANTO CHEGOU DE VERDADE
+            </label>
+            <input inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} autoFocus
+              style={{ width: '100%', padding: '6px 8px', border: '1px solid #93c5fd', borderRadius: 4, fontSize: 12, boxSizing: 'border-box' }} />
+            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 4 }}>
+              O setor informou {fmtQtd(conferindo.quantidade_produzida ?? conferindo.quantidade)} {conferindo.unidade || 'un'}.
+              Se chegou menos, corrija aqui — vale o que está na prateleira.
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button onClick={confirmar_} disabled={salvando}
+                style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+                {salvando ? '...' : '✓ Dar entrada'}
+              </button>
+              <button onClick={() => setConferindo(null)} disabled={salvando}
+                style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', fontSize: 11, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PainelEstoque({ currentUser }: any) {
   const [itens, setItens] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(false);
