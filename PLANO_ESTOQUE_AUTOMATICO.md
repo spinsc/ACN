@@ -401,9 +401,21 @@ recebem o mesmo veículo**: o `makePayload` usa `form.veiculo_id`, enquanto
 chassi, placa e modelo já vêm por unidade. Isso mata o **lote customizado** que
 o usuário descreveu — um PV com vários carros diferentes.
 
-**O que fazer:** a lista de unidades da abertura (hoje `{chassi, placa, modelo}`)
-ganha `veiculo_id`, e cada OP irmã grava o seu. Na tela, cada unidade escolhe o
-seu veículo, com o veículo do cabeçalho servindo de padrão.
+**Detalhado pelo usuário em 26/09/2026**, e virou mais que a correção:
+
+1. **Os itens vendidos passam a ser a PRIMEIRA coisa a preencher** ao gerar uma
+   OP. Não é preferência de tela: são eles que decidem quais perguntas o carro
+   vai receber. Sem isso, a Etapa 7 não teria onde se encaixar.
+2. Preenchido o primeiro carro, aparecem **dois botões**:
+   - **Lote igual** — informa só a quantidade e o sistema gera as OPs iguais.
+   - **Lote customizável** — abre os campos do próximo carro: marca, modelo,
+     ano e, mais adiante, as perguntas daquele carro conforme os itens vendidos.
+3. Cada unidade grava o **seu** `veiculo_id`. A lista de unidades (hoje
+   `{chassi, placa, modelo}`) ganha o veículo, com o do cabeçalho como padrão.
+
+**O que fica para a Etapa 7:** as perguntas por carro ("tem hack? qual altura?
+tem câmera no para-brisa?") entram nesta mesma tela quando a árvore existir. A
+tela nasce preparada para recebê-las — é por isso que ela vem antes.
 
 **Feito em:** —
 **O que foi feito:** —
@@ -430,8 +442,15 @@ seu veículo, com o veículo do cabeçalho servindo de padrão.
 1. Tabelas da árvore: pergunta, opção e item de material, com a opção apontando
    para o próximo nó (outra pergunta) ou para materiais.
 2. Tela de configuração por par (veículo, item vendido).
-3. **Resposta automática por regra:** opção marcada como "vale sozinha quando o
-   item X também foi vendido" — o caso do parachoque.
+3. **Regras por combinação de itens** (detalhado pelo usuário em 26/09/2026).
+   Não é só "o item X também foi vendido": o sistema precisa olhar **combinações**
+   e a regra pode fazer três coisas diferentes com o material —
+   - **trocar** um suporte por outro,
+   - **excluir** suportes que deixaram de ser necessários,
+   - **acrescentar** algo específico daquela combinação.
+
+   O parachoque é um caso disso: vendido frontal e traseiro junto com slimled,
+   **exclui** o suporte. A regra responde sozinha, sem perguntar.
 4. **Botão "aplicar nesta OP"**: responde as perguntas na hora e **preenche a
    `bom_itens`**. É o que faz esta etapa valer sozinha, sem esperar a 7 — o PCP
    já usa no dia seguinte, à mão, e a 7 só automatiza o disparo.
@@ -482,7 +501,11 @@ Alvo: **qualquer Creta com os itens de sempre anda sozinha pela esteira.**
 marcando até fechar 100%.
 
 - Item sob controle **só marca como separado se houver saldo**.
-- Marcar **dá a baixa** — a baixa deixa de acontecer em bloco no fim do kiting.
+- **Marcar e desmarcar não move estoque.** A baixa acontece quando a separação é
+  **salva** (decidido com o usuário em 26/09/2026). O raciocínio dele: o material
+  já está reservado para aquela OP de qualquer jeito — e se não estiver, é porque
+  está esperando uma demanda. Então não há corrida por material durante a
+  conferência, e marcar errado não exige estorno.
 
 **Substitui, não soma:** hoje `baixarKitDaOp` baixa tudo de uma vez ao fechar o
 Kit 100%, e é lá que a **reserva é consumida** (Etapa 3). Ao passar para baixa
@@ -559,11 +582,11 @@ para o resultado não ficar remendado.
 - **Etapa 5:** confirmar qual API da FIPE usar e se há limite de uso.
 - **Etapa 6 (resolvido em 26/09/2026):** as perguntas formam uma ÁRVORE por par
   (veículo × item vendido) — resposta leva a outra pergunta ou a itens de material.
-- **Etapa 7:** o "lote customizado" (um PV com vários carros diferentes e itens
-  diferentes por carro) precisa de tela nova na abertura, ou as OPs irmãs que já
-  existem, cada uma com seu `veiculo_id` e seus itens vendidos, já dão conta?
-- **Etapa 8:** ao marcar um item como separado e dar baixa, o que acontece se a
-  pessoa desmarcar? Estorna o estoque ou exige uma contagem?
+- **Etapa 7 (resolvido em 26/09/2026):** o lote customizado ganha tela própria na
+  Etapa 5.1 — dois botões, "lote igual" e "lote customizável", com os itens
+  vendidos preenchidos primeiro.
+- **Etapa 8 (resolvido em 26/09/2026):** marcar e desmarcar não movem estoque; a
+  baixa só acontece ao salvar a separação. Sem estorno, sem contagem.
 
 ---
 
@@ -577,3 +600,7 @@ para o resultado não ficar remendado.
 | Quem responde as perguntas | Comercial ou Licitações, junto com a venda |
 | Quem preenche estrutura que falta | PCP, depois de a Engenharia decidir se precisa de desenvolvimento |
 | Baixa no Almoxarifado | passa a ser **por item**, ao marcar no checklist de separação |
+| Itens vendidos | são a **primeira coisa** a preencher ao gerar a OP — eles decidem as perguntas |
+| Lote | dois botões: **igual** (só a quantidade) ou **customizável** (carro a carro) |
+| Regras de combinação | podem **trocar**, **excluir** ou **acrescentar** material |
+| Baixa na separação | acontece ao **salvar**, não ao marcar; marcar e desmarcar são livres |
