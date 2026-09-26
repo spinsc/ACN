@@ -500,6 +500,35 @@ fecha o que a automação não fechou.
    `bom_itens`**. É o que faz esta etapa valer sozinha, sem esperar a 7 — o PCP
    já usa no dia seguinte, à mão, e a 7 só automatiza o disparo.
 
+**Estado em 26/09/2026: o cadastro e o motor estão prontos e testados; o botão
+"aplicar nesta OP" (item 4) ficou de fora e abre a Etapa 7.**
+
+**O que foi feito:**
+
+- Migração `arvore_de_configuracao_veiculo_item`: `config_estruturas` (o par
+  veículo × item), `config_perguntas` (com `opcao_pai_id`, que é o que permite
+  uma resposta levar a outra pergunta), `config_opcoes` (com
+  `auto_quando_itens`, a regra por combinação), `config_materiais` (com
+  `acao` adicionar/remover) e `op_configuracao_respostas`, que a Etapa 7 vai
+  preencher.
+- `ConfigEstrutura.ts` — o motor: `carregarArvore`, `perguntasPendentes` (só
+  mostra a pergunta cujo pai já foi respondido), `respostasAutomaticas` (resolve
+  as regras de combinação sem perguntar), `materialDaConfiguracao` (monta a
+  lista; **adiciona tudo antes de remover**, senão a regra do parachoque falharia
+  em silêncio) e `juntarMateriais`.
+- `ConfigEstruturaTela.tsx` — a tela, na aba **🧩 Estruturas** da administração.
+
+**Testado** com o cenário que o usuário descreveu, montado inteiro:
+
+| Situação | Material gerado |
+|---|---|
+| Sem hack de teto | cabo + **suporte universal** |
+| Com hack **alto** | cabo + **suporte hack alto** |
+| Venda com parachoque frontal **e** traseiro | **só o cabo** — o suporte saiu sozinho, sem perguntar |
+
+E o aninhamento: "Hack alto ou baixo?" só entra na fila depois de alguém
+responder "Tem". Dado de teste apagado, banco conferido zerado.
+
 **Por que escreve em `bom_itens` e não numa tabela nova:** a `bom_itens` já é a
 lista de material da OP, e é dela que leem a conferência do kiting, a reserva
 (Etapa 3), a trava de falta e a baixa. Criar uma lista paralela obrigaria a
