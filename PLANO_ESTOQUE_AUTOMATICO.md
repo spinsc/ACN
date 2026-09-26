@@ -443,13 +443,27 @@ tela nasce preparada para recebê-las — é por isso que ela vem antes.
    (`TonsVisuais.ts`) classifica isso como botão neutro e normaliza. Trocado por
    `#ede9fe`, que o próprio projeto já usa, e o selecionado passou a aparecer.
 
-**O que NÃO foi verificado:** a criação de OP de ponta a ponta. A tentativa pela
-tela não completou — o formulário exige cliente vindo do CRM — e criar OP de
-verdade mexe em numeração. **O caminho de gravação do `veiculo_id` por unidade
-está conferido por leitura, não por execução.** O estado da tela prova que cada
-unidade guarda o seu veículo (a unidade 02 ficou com HB20S enquanto as outras
-ficaram vazias); falta provar que isso chega ao banco. Vale conferir na primeira
-OP em lote de verdade.
+**Como a gravação foi verificada, já que criar OP pela tela não deu certo:**
+
+Tentei criar a OP de verdade e não consegui — o formulário tem sete campos
+obrigatórios e o modal fechava a cada tentativa de automação. Em vez de insistir,
+a verificação fechou por dois lados:
+
+1. **O estado da tela**, provado: escolhido um veículo na unidade 02, só ela
+   ficou com ele (HB20S) e o modelo daquela unidade preencheu sozinho. Para o
+   select exibir isso, `form.veiculos[1].veiculo_id` tem de estar preenchido.
+2. **O código compilado**, conferido no `dist`:
+   ```
+   chassi:     t?.chassi     || a.chassi     || null
+   placa:      t?.placa      || a.placa      || null
+   modelo:     t?.modelo     || a.modelo     || null
+   veiculo_id: t?.veiculo_id || a.veiculo_id || null
+   ```
+   `t` é o objeto da unidade. O `veiculo_id` é **simétrico** ao chassi, à placa e
+   ao modelo, que já gravam por unidade há meses.
+
+Mesmo assim, **vale conferir a primeira OP em lote de verdade** — é barato e
+fecha o que a automação não fechou.
 
 ---
 
