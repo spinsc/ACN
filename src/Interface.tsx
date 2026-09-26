@@ -288,7 +288,13 @@ export function SelectBusca({
     const alt = listaRef.current?.offsetHeight || 260;
     let top = b.bottom + 2;
     if (top + alt > window.innerHeight - 8) top = Math.max(8, b.top - alt - 2);
-    setPos({ top, left: b.left, width: b.width });
+    // A lista acompanha a largura do campo, mas nunca fica estreita demais para
+    // ser lida: num campo apertado (uma coluna de grade, por exemplo) o nome do
+    // item ficava cortado em duas letras e a busca, inutilizável.
+    // Corrigido em 26/09/2026, ao colocar o select de veículo por unidade do lote.
+    const largura = Math.min(Math.max(b.width, 260), window.innerWidth - 16);
+    const left = Math.max(8, Math.min(b.left, window.innerWidth - largura - 8));
+    setPos({ top, left, width: largura });
   }, [aberto, termo]);
 
   useEffect(() => {

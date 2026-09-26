@@ -314,7 +314,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     if (k === 'quantidade') {
       const qty = Math.max(1, parseInt(v) || 1);
       const prev = f.veiculos || [];
-      const veiculos = Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'', modelo:'' });
+      const veiculos = Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'', modelo:'', veiculo_id:'' });
       next.veiculos = veiculos;
     }
     return next;
@@ -370,7 +370,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
 
         const parseMoedaOuNull = (v: any) => v ? parseFloat(String(v).replace(/\./g,'').replace(',','.')) : null;
 
-        const makePayload = (oplNum: string, veiculo?: {chassi:string, placa:string}, valores?: {total: number|null, mo: number|null, moSerr: number|null}) => ({
+        const makePayload = (oplNum: string, veiculo?: {chassi:string, placa:string, modelo?:string, veiculo_id?:string}, valores?: {total: number|null, mo: number|null, moSerr: number|null}) => ({
           opl:                    oplNum,
           tipo_op:                'OPL',
           faturamento_empresa:    form.empresa,
@@ -383,7 +383,7 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           chassi:                 ehVendaEnvio ? null : ((veiculo?.chassi || form.chassi) || null),
           placa:                  ehVendaEnvio ? null : ((veiculo?.placa  || form.placa)  || null),
           modelo:                 ehVendaEnvio ? null : ((veiculo?.modelo || form.modelo) || null),
-          veiculo_id:             ehVendaEnvio ? null : (form.veiculo_id || null),
+          veiculo_id:             ehVendaEnvio ? null : ((veiculo?.veiculo_id || form.veiculo_id) || null),
           quantidade:             semLote ? qty : 1,
           frete_responsavel:      precisaFrete ? (form.frete_responsavel || null) : null,
           valor_total:            valores ? valores.total : parseMoedaOuNull(form.valor_total),
@@ -581,6 +581,23 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           {/* Campos OP */}
           {isOP && (
             <>
+              {/* ITENS VENDIDOS VÊM PRIMEIRO — pedido do usuário em 26/09/2026.
+                  Não é gosto de tela: são os itens que decidem quais perguntas
+                  cada carro vai receber (a árvore de configuração). Preenchê-los
+                  depois do veículo obrigaria a voltar e refazer. No lote misto a
+                  lista de cada grupo continua sendo editada lá embaixo. */}
+              {!loteEhMisto && (
+                <div style={{ marginBottom: 12, background:'#f8fafc', border:'1px solid #e2e8f0',
+                  borderRadius:7, padding:'8px 10px' }}>
+                  <div style={{ fontSize:9, fontWeight:800, color:'#334155', marginBottom:5 }}>
+                    1 · O QUE FOI VENDIDO
+                  </div>
+                  <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
+                    crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null}
+                    unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
+                </div>
+              )}
+
               {/* Número OP: Pedido de Venda → PPPP.YYMMM */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                 <div>
@@ -783,6 +800,26 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       }} />
                     Adaptações e/ou itens diferentes entre os veículos (lote misto)
                   </label>
+                  {/* O usuário pediu a escolha como dois botões, em 26/09/2026:
+                      é a primeira decisão do lote e estava escondida num
+                      checkbox de uma linha. A caixa acima continua e manda no
+                      estado — os botões só a tornam visível. */}
+                  <div style={{ display:'flex', gap:6, margin:'6px 0 4px' }}>
+                    {[{ misto:false, rotulo:'Lote igual', ajuda:'Todos os carros iguais — informe só a quantidade' },
+                      { misto:true,  rotulo:'Lote customizável', ajuda:'Carro a carro: veículo e itens podem variar' }].map(op => (
+                      <button key={op.rotulo} type="button" title={op.ajuda}
+                        onClick={() => {
+                          setLoteMisto(op.misto);
+                          if (op.misto) setGrupos(grupoInicial(Number(form.quantidade) || 1, form.resumo_servicos || '', form.itens_vendidos || []));
+                        }}
+                        style={{ flex:1, padding:'6px 0', fontSize:10, fontWeight:700, borderRadius:5, cursor:'pointer',
+                          border:`1px solid ${loteMisto === op.misto ? '#7c3aed' : '#cbd5e1'}`,
+                          background: loteMisto === op.misto ? '#ede9fe' : '#fff',
+                          color: loteMisto === op.misto ? '#6b21a8' : '#64748b' }}>
+                        {op.rotulo}
+                      </button>
+                    ))}
+                  </div>
                   {loteMisto && (
                     <div style={{ marginBottom:10 }}>
                       <GruposLoteMisto quantidade={Number(form.quantidade) || 1} grupos={grupos} onChange={setGrupos}
@@ -794,12 +831,34 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   )}
                   {/* Modelo também por unidade — carro pode variar mesmo sem lote misto
                       (ex.: mesmo serviço em modelos diferentes). Chassi/placa já eram por unidade. */}
+                  {/* Na grade abaixo, o minmax dá piso à coluna do veículo e deixa
+                      as outras encolherem: sem o piso ela sumia, sem o minmax(0,…)
+                      nas outras o nome do veículo empurrava a Placa para fora. */}
                   {(form.veiculos || []).map((v, i) => (
-                    <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr 1fr', gap:6, marginBottom:6, alignItems:'center' }}>
+                    <div key={i} style={{ display:'grid', gap:6, marginBottom:6, alignItems:'center',
+                      gridTemplateColumns:'auto minmax(132px, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' }}>
                       <span style={{ fontSize:10, fontWeight:800, color:'#7c3aed', width: loteMisto ? 44 : 28 }}>
                         {String(i+1).padStart(2,'0')}
                         {loteMisto && (() => { const u = unidadesDosGrupos(grupos)[i]; return u ? <span style={{ marginLeft:3, fontSize:8, background:'#ede9fe', borderRadius:3, padding:'0 3px' }}>{LETRA(u.grupo)}</span> : null; })()}
                       </span>
+                      {/* Veículo POR UNIDADE — sem isto, um lote com carros
+                          diferentes gravaria o mesmo veículo em todas as OPs
+                          irmãs, e a estrutura de material sairia errada em
+                          todas menos uma (corrigido em 26/09/2026). */}
+                      {/* minWidth:0 é o que impede a coluna de esticar: numa
+                          grade o filho não encolhe abaixo do conteúdo por
+                          padrão, e o nome do veículo empurrava a Placa para
+                          fora da tela. */}
+                      <SelectVeiculo compacto style={{ minWidth: 0 }}
+                        valor={v.veiculo_id || ''} currentUser={currentUser}
+                        recarregarEm={form.veiculo_id}
+                        onChange={(id) => {
+                          const veiculos = [...(form.veiculos||[])];
+                          const vc = veiculosCarregados.find(x => x.id === id);
+                          veiculos[i] = { ...veiculos[i], veiculo_id: id,
+                                          modelo: vc ? vc.nome_exibicao : veiculos[i]?.modelo };
+                          setF('veiculos', veiculos);
+                        }} />
                       <input className="acn-input" placeholder="Modelo" value={v.modelo || ''}
                         onChange={e => {
                           const veiculos = [...(form.veiculos||[])];
@@ -964,16 +1023,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
             </>
           )}
 
-          {/* Itens vendidos — obrigatório na OP. No lote misto cada grupo tem os
-              seus (editados lá em cima, em Dados por Veículo); fora disso é uma
-              lista só, valendo para a OP inteira (ou todas as unidades do lote). */}
-          {isOP && !loteEhMisto && (
-            <div style={{ marginBottom: 10 }}>
-              <ItensVendidosEditor itens={form.itens_vendidos || []} onChange={v => setF('itens_vendidos', v)}
-                crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null}
-                unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
-            </div>
-          )}
+          {/* Os itens vendidos subiram para o topo do formulário em 26/09/2026
+              — eles decidem as perguntas de configuração de cada carro. No lote
+              misto continuam por grupo, editados em Dados por Veículo. */}
 
           {/* Resumo dos Serviços — OP (no lote misto, cada unidade usa o do seu grupo) */}
           {isOP && loteEhMisto && (

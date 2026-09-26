@@ -391,7 +391,7 @@ pediria uma Edge Function, que fica como melhoria depois.
 
 ---
 
-### ⬜ Etapa 5.1 — Correção: o lote precisa de um veículo por unidade · **PRIMEIRO**
+### ✅ Etapa 5.1 — Correção: o lote precisa de um veículo por unidade
 
 **Falha encontrada na revisão de 26/09/2026**, ao conferir o plano contra o
 fluxo detalhado pelo usuário.
@@ -417,12 +417,43 @@ o usuário descreveu — um PV com vários carros diferentes.
 tem câmera no para-brisa?") entram nesta mesma tela quando a árvore existir. A
 tela nasce preparada para recebê-las — é por isso que ela vem antes.
 
-**Feito em:** —
-**O que foi feito:** —
+**Feito em:** 26/09/2026.
+
+**O que foi feito:**
+
+- `NovaOpOsModal.tsx`: itens vendidos subiram para o topo do formulário, como
+  bloco "1 · O QUE FOI VENDIDO"; dois botões **Lote igual / Lote customizável**
+  acima da lista de unidades; **select de veículo em cada unidade**, que ao ser
+  escolhido preenche o modelo em texto livre daquela unidade; `makePayload`
+  passou a gravar `veiculo?.veiculo_id || form.veiculo_id`.
+- `VeiculoCadastro.tsx`: `SelectVeiculo` ganhou `compacto` (esconde o "+ Novo",
+  para não repetir 30 botões iguais numa lista de unidades) e `recarregarEm`.
+- `Interface.tsx`: a lista do `SelectBusca` ganhou **largura mínima de 260px**.
+  Num campo estreito o nome aparecia cortado em duas letras e a busca ficava
+  inutilizável — apareceu justamente na coluna de veículo por unidade.
+
+**Três defeitos de layout corrigidos no caminho**, todos achados na tela:
+
+1. Dropdown estreito demais (acima).
+2. O nome do veículo esticava a coluna e **empurrava a Placa para fora**. A
+   grade virou `minmax(132px, 1.4fr)` para a coluna do veículo e `minmax(0, 1fr)`
+   nas outras — sem o piso a coluna sumia; sem o `minmax(0,…)` ela transbordava.
+3. Os dois botões do lote saíam **sem destaque nenhum**: o roxo `#f5f3ff` que eu
+   usei tem luminosidade acima de 97,5%, e o sistema de tons do projeto
+   (`TonsVisuais.ts`) classifica isso como botão neutro e normaliza. Trocado por
+   `#ede9fe`, que o próprio projeto já usa, e o selecionado passou a aparecer.
+
+**O que NÃO foi verificado:** a criação de OP de ponta a ponta. A tentativa pela
+tela não completou — o formulário exige cliente vindo do CRM — e criar OP de
+verdade mexe em numeração. **O caminho de gravação do `veiculo_id` por unidade
+está conferido por leitura, não por execução.** O estado da tela prova que cada
+unidade guarda o seu veículo (a unidade 02 ficou com HB20S enquanto as outras
+ficaram vazias); falta provar que isso chega ao banco. Vale conferir na primeira
+OP em lote de verdade.
 
 ---
 
-### ⬜ Etapa 6 — A árvore de configuração: veículo × item vendido
+### ⬜ Etapa 6 — A árvore de configuração: veículo × item vendido · **PRÓXIMA**
 
 **O coração da automação.** Detalhado pelo usuário em 26/09/2026.
 

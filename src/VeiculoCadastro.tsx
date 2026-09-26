@@ -213,30 +213,40 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
   );
 }
 
-/** Campo de veículo da OPL: escolhe do catálogo da casa, ou cadastra na hora. */
-export function SelectVeiculo({ valor, onChange, currentUser, style }) {
+/** Campo de veículo da OPL: escolhe do catálogo da casa, ou cadastra na hora.
+ *
+ *  `compacto` esconde o "+ Novo" — serve para a linha de cada unidade do lote,
+ *  onde 30 botões iguais só atrapalhariam. Nessas telas o cadastro fica no
+ *  campo do cabeçalho, que é um só.
+ *
+ *  `recarregarEm` muda para forçar a releitura do catálogo: unidade cadastrada
+ *  pelo cabeçalho precisa aparecer nos selects de baixo sem recarregar a tela. */
+export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = false,
+                               recarregarEm, placeholder }) {
   const [veiculos, setVeiculos] = useState([]);
   const [cadastrando, setCadastrando] = useState(false);
 
   const recarregar = async () => setVeiculos(await carregarVeiculos());
-  useEffect(() => { recarregar(); }, []);
+  useEffect(() => { recarregar(); }, [recarregarEm]);
 
   return (
     <>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', ...(style || {}) }}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <SelectBusca
             opcoes={veiculos.map(v => ({ valor: v.id, rotulo: textoVeiculo(v),
               busca: [v.marca, v.modelo, v.nome_exibicao, v.ano_de, v.ano_ate] }))}
             valor={valor || ''} onChange={onChange}
-            placeholder="Procure o veículo (marca, modelo ou ano)" />
+            placeholder={placeholder || (compacto ? 'Veículo' : 'Procure o veículo (marca, modelo ou ano)')} />
         </div>
-        <button type="button" onClick={() => setCadastrando(true)}
-          title="Cadastrar um veículo que ainda não está na lista"
-          style={{ fontSize: 9, fontWeight: 700, padding: '5px 9px', border: '1px solid #2563eb',
-            borderRadius: 4, background: '#fff', color: '#1d4ed8', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          + Novo
-        </button>
+        {!compacto && (
+          <button type="button" onClick={() => setCadastrando(true)}
+            title="Cadastrar um veículo que ainda não está na lista"
+            style={{ fontSize: 9, fontWeight: 700, padding: '5px 9px', border: '1px solid #2563eb',
+              borderRadius: 4, background: '#fff', color: '#1d4ed8', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            + Novo
+          </button>
+        )}
       </div>
       {cadastrando && (
         <ModalCadastrarVeiculo currentUser={currentUser}
