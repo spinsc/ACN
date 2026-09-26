@@ -391,40 +391,97 @@ pediria uma Edge Function, que fica como melhoria depois.
 
 ---
 
-### ⬜ Etapa 6 — Estrutura de produto: veículo × item vendido · **PRÓXIMA**
+### ⬜ Etapa 6 — A árvore de configuração: veículo × item vendido · **PRÓXIMA**
 
-**O coração da automação.** Para cada combinação de veículo e item vendido,
-qual é a lista de material da adaptação.
+**O coração da automação.** Detalhado pelo usuário em 26/09/2026, e é bem maior
+do que o plano original supunha.
 
-**O que muda:**
-1. Tela de configuração: escolhe veículo (da Etapa 5) e item vendido, e monta a
-   lista de material — incluindo qual chicote entra.
-2. **Perguntas de configuração:** a estrutura pode ter perguntas que mudam a
-   lista ("tem hack de teto?", "quantos slimled na frente?"). A resposta entra
-   no cálculo da quantidade.
-3. Item vendido sem estrutura para aquele veículo: o sistema **avisa e pede para
-   configurar**, sem travar. Configurou uma vez, vale para sempre.
+**O que o usuário descreveu, nas situações dele:**
+
+- Um mesmo veículo tem **variações**: uma Nivus pode ter hack de teto ou não; se
+  tiver, pode ser **alto ou baixo**. Ou seja, a resposta de uma pergunta leva a
+  **outra pergunta** — é uma árvore, não uma lista de perguntas soltas.
+- **Slimled:** se são 4, precisa saber quantos na frente e quantos atrás, porque
+  isso muda **o tipo de chicote**.
+- **Parachoque de impulsão:** se o carro tem frontal e traseiro, **não precisa de
+  suporte**. E isso não deve ser perguntado: o sistema já vendeu o parachoque,
+  então ele mesmo conclui. É uma **resposta automática** vinda de outro item da
+  venda.
+- **Suporte** tem modelo universal e modelos específicos por carro, que acabam
+  servindo em vários carros — são muitos itens.
+- **Cada tipo de sirene tem o seu suporte.**
+
+**O modelo de dados que isso pede:** para cada par (veículo, item vendido), uma
+**árvore de decisão**. Cada nó é uma pergunta com opções; cada opção leva a
+**outra pergunta** ou a **um conjunto de itens de material**. Algumas opções são
+respondidas sozinhas por regra, olhando os outros itens da venda.
+
+**O que construir:**
+1. Tabelas da árvore: pergunta, opção e item de material, com a opção apontando
+   para o próximo nó.
+2. Tela de configuração: escolhe veículo e item vendido e monta a árvore.
+3. **Resposta automática por regra:** a opção pode ser marcada como "vale sozinha
+   quando o item X também foi vendido" — o caso do parachoque.
+4. Par sem árvore configurada: o sistema **avisa e pede para configurar**, sem
+   travar nada.
 
 **Feito em:** —
 **O que foi feito:** —
 
 ---
 
-### ⬜ Etapa 7 — Explosão automática da lista da OP
+### ⬜ Etapa 7 — Responder as perguntas e explodir a lista
 
-**O que muda:** ao registrar os itens vendidos da OP, o sistema explode as
-estruturas e monta sozinho a lista de material — que então alimenta a reserva
-(Etapa 3) e o pedido automático (Etapa 4). O PCP revisa em vez de digitar.
+**Onde as perguntas são respondidas, no fluxo do usuário:**
 
-**Como fica gradual:** o que tem estrutura vem preenchido; o que não tem
-continua sendo listado à mão, lado a lado, na mesma tela.
+1. **Comercial ou Licitações** informa os itens vendidos e qual o carro. Um único
+   PV pode virar um **lote customizado**: vários carros diferentes, com itens
+   diferentes para cada carro.
+2. O vendedor responde as perguntas sobre os carros.
+3. Na **abertura da OPL**, o carro e o ano são escolhidos com precisão (Etapa 5).
+4. A lista vem da formação de preço ou é preenchida à mão, e cada carro é
+   configurado com o que foi vendido para ele e as variações que tiver.
+5. **Engenharia** olha a venda e decide se precisa desenvolver algo para aquele
+   veículo e aqueles itens.
+6. **PCP** preenche a estrutura quando aquele carro naquela configuração ainda
+   não tiver sido feito.
+
+O objetivo: chegar no ponto em que **qualquer Creta que entre com os itens de
+sempre já está configurada e anda sozinha pela esteira.**
+
+**O que construir:**
+- Percorrer a árvore de cada item vendido, perguntar o que falta, e montar a
+  lista de material.
+- **Kit vendido explode antes:** venda ou licitação de KIT é composta pelos
+  mesmos itens individuais; muda só que o preço é formado para o kit. O sistema
+  abre o kit nos itens dele e segue o mesmo fluxo.
+- A lista resultante alimenta a reserva (Etapa 3) e a falta (Etapa 4).
+
+**Como fica gradual:** o que tem árvore vem preenchido; o que não tem continua
+sendo listado à mão, lado a lado, na mesma tela.
 
 **Feito em:** —
 **O que foi feito:** —
 
 ---
 
-### ⬜ Etapa 8 — Estrutura do chicote (o micro)
+### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa
+
+**O que muda:** a lista de estrutura vira um **checklist** no Almoxarifado, que
+vai sendo marcado até fechar 100%.
+
+- Item sob controle **só pode ser marcado como separado se houver saldo**.
+- Marcar como separado **dá a baixa no estoque** — a baixa deixa de ser um evento
+  no fim do kiting e passa a acompanhar a separação, item por item.
+
+Substitui a baixa em bloco que existe hoje em `baixarKitDaOp`.
+
+**Feito em:** —
+**O que foi feito:** —
+
+---
+
+### ⬜ Etapa 9 — Estrutura do chicote (o micro)
 
 **O que muda:** o chicote ganha sua própria estrutura — metros de fio por cor,
 conexões, terminais. Mandar fabricar dá baixa nesses materiais e dispara a
@@ -437,7 +494,6 @@ direito (Etapas 1 a 4) e que o setor esteja confortável com o controle.
 **O que foi feito:** —
 
 ---
-
 ## Decisões tomadas
 
 | Data | Decisão |
@@ -461,5 +517,23 @@ direito (Etapas 1 a 4) e que o setor esteja confortável com o controle.
 - **Etapa 4:** quando a falta é de fabricação interna, o pedido deve nascer já
   designado a alguém do setor ou entra na fila geral?
 - **Etapa 5:** confirmar qual API da FIPE usar e se há limite de uso.
-- **Etapa 6:** as perguntas de configuração valem por veículo, por item vendido,
-  ou pela combinação dos dois?
+- **Etapa 6 (resolvido em 26/09/2026):** as perguntas formam uma ÁRVORE por par
+  (veículo × item vendido) — resposta leva a outra pergunta ou a itens de material.
+- **Etapa 7:** o "lote customizado" (um PV com vários carros diferentes e itens
+  diferentes por carro) precisa de tela nova na abertura, ou as OPs irmãs que já
+  existem, cada uma com seu `veiculo_id` e seus itens vendidos, já dão conta?
+- **Etapa 8:** ao marcar um item como separado e dar baixa, o que acontece se a
+  pessoa desmarcar? Estorna o estoque ou exige uma contagem?
+
+---
+
+## Decisões de 26/09/2026 (detalhamento do fluxo)
+
+| Decisão | |
+|---|---|
+| Perguntas de configuração | formam uma **árvore**: a resposta leva a outra pergunta ou a itens de material |
+| Parachoque de impulsão | resposta **automática** — se foi vendido frontal e traseiro, não precisa de suporte |
+| Kit vendido | explode nos itens individuais e segue o mesmo fluxo; o kit só muda como o preço é formado |
+| Quem responde as perguntas | Comercial ou Licitações, junto com a venda |
+| Quem preenche estrutura que falta | PCP, depois de a Engenharia decidir se precisa de desenvolvimento |
+| Baixa no Almoxarifado | passa a ser **por item**, ao marcar no checklist de separação |
