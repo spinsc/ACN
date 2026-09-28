@@ -623,3 +623,104 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onC
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDITAR UM PEDIDO DE COMPRA A PARTIR DO CENTRO DE CUSTO (28/09/2026)
+//
+// A lista de compras de um centro mistura duas coisas: os lançamentos do
+// próprio centro (despesa avulsa, contrato, medição) e os PEDIDOS DE COMPRA que
+// foram alocados naquele centro. Os primeiros já tinham botão de editar; os
+// pedidos não tinham ação nenhuma, e é justamente neles que o erro aparece —
+// pedido lançado no centro errado, ou com valor diferente do que foi pago.
+//
+// Aqui se corrige o que é da conta do Financeiro: o centro, o valor, a
+// descrição e a data. Fornecedor, cotação, aprovação e Ordem de Compra
+// continuam sendo do módulo de Compras, porque lá eles têm fluxo e histórico
+// próprios — duplicar isso aqui criaria duas verdades.
+// ─────────────────────────────────────────────────────────────────────────────
+export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo }: any) {
+  const [descricao, setDescricao] = useState(pedido?.descricao_material || '');
+  const [valor, setValor] = useState(String(pedido?.valor_compra ?? '').replace('.', ','));
+  const [data, setData] = useState(String(pedido?.data_solicitacao || '').slice(0, 10));
+  const [centroId, setCentroId] = useState(pedido?.centro_custo_id || '');
+  const [salvando, setSalvando] = useState(false);
+
+  const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
+  const v = num(valor);
+  const trocouCentro = (centroId || null) !== (pedido?.centro_custo_id || null);
+
+  const salvar = async () => {
+    if (!descricao.trim()) { alert('Informe a descrição do material.'); return; }
+    if (valor !== '' && (!Number.isFinite(v) || v < 0)) { alert('Informe um valor válido.'); return; }
+    setSalvando(true);
+    const antes = {
+      descricao_material: pedido.descricao_material, valor_compra: pedido.valor_compra,
+      data_solicitacao: pedido.data_solicitacao, centro_custo_id: pedido.centro_custo_id,
+    };
+    const depois: any = {
+      descricao_material: descricao.trim(),
+      valor_compra: valor === '' ? null : v,
+      centro_custo_id: centroId || null,
+    };
+    if (data) depois.data_solicitacao = data;
+    const { error } = await supabase.from('pcp_pedidos_compra').update(depois).eq('id', pedido.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível salvar: ' + error.message); return; }
+    logChange({ module: 'financeiro', entityType: 'pcp_pedidos_compra', entityId: pedido.id,
+      changeType: 'UPDATE', oldRow: antes, newRow: depois, user: currentUser });
+    onSalvo?.();
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 2300 }}
+      onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 520 }}>
+        <div className="modal-title">🛒 Editar pedido de compra — {pedido.numero_pedido || '—'}</div>
+        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
+          Fornecedor {pedido.fornecedor || '—'} · status {pedido.status_compra || '—'}
+          {pedido.numero_oc ? ` · OC ${pedido.numero_oc}` : ''}.
+          A alteração fica na auditoria com o valor de antes.
+        </div>
+
+        <label className="acn-label">Descrição do material *</label>
+        <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', marginBottom: 8, boxSizing: 'border-box' }}
+          value={descricao} onChange={e => setDescricao(e.target.value)} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div>
+            <label className="acn-label">Valor da compra (R$)</label>
+            <input className="acn-input" style={{ width: '100%' }} inputMode="decimal"
+              value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+          </div>
+          <div>
+            <label className="acn-label">Data</label>
+            <input type="date" className="acn-input" style={{ width: '100%' }}
+              value={data} onChange={e => setData(e.target.value)} />
+          </div>
+        </div>
+
+        <label className="acn-label" style={{ marginTop: 8 }}>Centro de custo</label>
+        <CentroCustoSelect value={centroId} onChange={setCentroId} permitirNenhum={true} />
+        {trocouCentro && (
+          <div style={{ fontSize: 10, color: '#b45309', marginTop: 4 }}>
+            O valor sai do centro atual e entra no novo — os dois totais mudam.
+          </div>
+        )}
+
+        <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 10, background: '#f8fafc',
+          border: '1px solid #e2e8f0', borderRadius: 5, padding: '6px 8px' }}>
+          Fornecedor, cotação, aprovação e Ordem de Compra são alterados no módulo de Compras,
+          onde cada um tem o seu fluxo e o seu histórico.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando} onClick={salvar}>
+            {salvando ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

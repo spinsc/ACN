@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA } from './ComprasFluxo';
 import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao,
-  ModalEditarLancamento, podeEditarLancamento } from './CentroCustoShared';
+  ModalEditarLancamento, ModalEditarPedidoCompra, podeEditarLancamento } from './CentroCustoShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
@@ -71,13 +71,14 @@ function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
 /** Duas linhas e reticências: o texto inteiro fica no rótulo do mouse. */
 const celaTexto: React.CSSProperties = {
   display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-  overflow: 'hidden', maxWidth: 320, lineHeight: 1.35,
+  overflow: 'hidden', maxWidth: 250, lineHeight: 1.35,
 };
 
 function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar }: any) {
   const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
   const [modalMedicao, setModalMedicao] = useState<any>(null); // contrato "Parcelado" selecionado
   const [modalEditar, setModalEditar] = useState<any>(null);   // lançamento sendo corrigido
+  const [modalPedido, setModalPedido] = useState<any>(null);   // pedido de compra sendo corrigido
   // soma de medições por contrato — feito no cliente a partir da própria lista
   // (as medições já vêm junto em `compras`, mesmo centro_custo_id do contrato)
   const pagoPorContrato: Record<string, number> = {};
@@ -224,16 +225,36 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
                       {fmtDt(p.data_criacao)}
                     </td>
-                    <td />
+                    {/* O pedido de compra também precisa de ação: é nele que
+                        aparece o erro de centro errado ou valor diferente do
+                        pago, e até 28/09/2026 esta célula ficava vazia. */}
+                    <td style={{ padding: '5px 8px' }}>
+                      {podeEditarLancamento(currentUser) && (
+                        <button onClick={() => setModalPedido(p)} title="Corrigir centro, valor, descrição ou data"
+                          style={{ background:'#fff', color:'#334155', border:'1px solid #cbd5e1', borderRadius:4,
+                            padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                          ✏️ Editar
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
+              {/* TOTAL LEGÍVEL (28/09/2026)
+                  A faixa era azul-escura com a cor do texto vinda do `tr`. Só
+                  que `.acn-main table td` fixa a cor do td em cinza-escuro, e
+                  o td ganha do tr — texto escuro sobre fundo escuro. O valor
+                  só aparecia ao passar o mouse, quando o fundo da linha muda.
+                  Agora é faixa clara com texto escuro, e a cor vai em cada td. */}
               <tfoot>
-                <tr style={{ background: '#1e293b', color: '#fff' }}>
-                  <td colSpan={5} style={{ padding: '6px 8px', fontWeight: 700, fontSize: 11, textAlign: 'right' }}>TOTAL</td>
-                  <td style={{ padding: '6px 8px', fontWeight: 800, fontSize: 13, textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
-                  <td />
-                  <td />
+                <tr style={{ background: '#f1f5f9' }}>
+                  <td colSpan={5} style={{ padding: '8px', fontWeight: 700, fontSize: 11, textAlign: 'right',
+                    color: '#475569', borderTop: '2px solid #cbd5e1' }}>TOTAL</td>
+                  <td style={{ padding: '8px', fontWeight: 800, fontSize: 14, textAlign: 'right',
+                    color: '#0f172a', borderTop: '2px solid #cbd5e1',
+                    fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
+                  <td style={{ borderTop: '2px solid #cbd5e1' }} />
+                  <td style={{ borderTop: '2px solid #cbd5e1' }} />
                 </tr>
               </tfoot>
             </table>
@@ -252,6 +273,11 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
           // fecha a lista junto: o valor ou o centro podem ter mudado, e a
           // lista aberta mostraria número velho até alguém reabrir
           onSalvo={() => { setModalEditar(null); onAtualizar?.(); onClose(); }} />
+      )}
+      {modalPedido && (
+        <ModalEditarPedidoCompra pedido={modalPedido} currentUser={currentUser}
+          onClose={() => setModalPedido(null)}
+          onSalvo={() => { setModalPedido(null); onAtualizar?.(); onClose(); }} />
       )}
     </div>
   );
