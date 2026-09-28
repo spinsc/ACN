@@ -690,6 +690,59 @@ ficando completo sozinho, um carro de cada vez.
 **O que foi feito:** —
 
 ---
+### ⬜ Etapa 7.2 — O formulário da OPL fica adaptativo
+
+**Detalhado pelo usuário em 28/09/2026.** Mexe na mesma tela da 7.1 — vale
+fazer junto para não reabrir o arquivo duas vezes —, mas pode subir sozinha.
+
+#### Nem todo tipo de venda precisa saber o veículo
+
+- **Adaptação** (na matriz ou externa): o veículo é **obrigatório** — é ele que
+  está sendo adaptado.
+- **Envio**: às vezes precisa saber o carro **só para escolher o suporte** que
+  vai na caixa; às vezes é só o item e o cliente se vira para instalar, e aí o
+  veículo **não faz falta nenhuma**.
+
+Como isso varia por fluxo e pode mudar com o tempo, **quem decide é a
+Administração**, não o código: para cada tipo de venda, o veículo fica
+**oculto**, **opcional** ou **obrigatório**.
+
+Os cinco fluxos de hoje, como ponto de partida a confirmar com o usuário:
+
+| Fluxo | Sugestão |
+|---|---|
+| Adaptação na matriz | obrigatório |
+| Adaptação externa | obrigatório |
+| Fabricação serralheria com envio | opcional |
+| Envio para adaptação de terceiro | opcional |
+| Envio de material | opcional |
+
+#### O campo de modelo em texto livre some quando o veículo aparece
+
+Na Etapa 5.1 eu pus **os dois** na mesma linha: o select de veículo e o campo de
+modelo em texto livre. É redundante e confunde. A regra certa:
+
+> **Ou o select de veículo, ou o texto livre — nunca os dois.**
+
+Fluxo com veículo ligado mostra o select (com o "+ Novo" para cadastrar na
+hora). Fluxo com veículo oculto mostra o texto livre, opcional, como sempre foi.
+
+#### O princípio maior
+
+O formulário passa a se **adaptar de cima para baixo**: conforme os campos vão
+sendo preenchidos, os seguintes aparecem, somem ou mudam de obrigatoriedade. O
+vendedor não deve ver campo que não se aplica à venda que está fazendo.
+
+**O que fazer:**
+1. Tabela de configuração por fluxo, com o modo do veículo.
+2. Tela na Administração para definir isso.
+3. `NovaOpOsModal` lê a configuração e mostra, esconde ou exige o veículo.
+4. O texto livre de modelo só aparece quando o veículo está oculto.
+
+**Feito em:** —
+**O que foi feito:** —
+
+---
 ### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai
@@ -815,3 +868,6 @@ para o resultado não ficar remendado.
 | Perguntas | ficam no **item**, não no par veículo × item |
 | Material de cada resposta | fica no **veículo × item × resposta** |
 | Lote customizável | o **primeiro carro serve de padrão** para os seguintes |
+| Veículo por tipo de venda | quem decide é a **Administração**: oculto, opcional ou obrigatório por fluxo |
+| Select de veículo × texto livre | **nunca os dois juntos** — um ou outro, conforme o fluxo |
+| Formulário da OPL | **adaptativo de cima para baixo**: campo que não se aplica não aparece |
