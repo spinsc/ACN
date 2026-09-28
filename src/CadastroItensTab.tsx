@@ -30,6 +30,8 @@ const ITEM_VAZIO = {
   // só passa a dar baixa, conferir mínimo e travar liberação quando alguém do
   // Almoxarifado ligar o checkbox — decidido com o usuário em 24/09/2026.
   controla_estoque: false, estoque_atual: 0, estoque_minimo: null, estoque_ideal: null,
+  tem_inacabado: false, estoque_inacabado: 0, inacabado_minimo: null, inacabado_ideal: null,
+  servico_acabamento: '', servico_bruto: '',
 };
 
 /** Setores que fabricam item aqui dentro (mesma lista das demandas) */
@@ -238,6 +240,16 @@ function ItemModal({
         ? Number(form.estoque_minimo) : null,
       estoque_ideal:  form.controla_estoque && form.estoque_ideal !== '' && form.estoque_ideal != null
         ? Number(form.estoque_ideal) : null,
+      // dois estados: peça pronta e peça só cortada e dobrada (28/09/2026).
+      // `estoque_inacabado` fica de fora pelo mesmo motivo do saldo: quem mexe
+      // nele é o movimento, não o cadastro.
+      tem_inacabado: !!form.controla_estoque && !!form.tem_inacabado,
+      inacabado_minimo: form.controla_estoque && form.tem_inacabado && form.inacabado_minimo !== '' && form.inacabado_minimo != null
+        ? Number(form.inacabado_minimo) : null,
+      inacabado_ideal: form.controla_estoque && form.tem_inacabado && form.inacabado_ideal !== '' && form.inacabado_ideal != null
+        ? Number(form.inacabado_ideal) : null,
+      servico_acabamento: form.tem_inacabado ? (String(form.servico_acabamento || '').trim() || null) : null,
+      servico_bruto:      form.tem_inacabado ? (String(form.servico_bruto || '').trim() || null) : null,
       ativo:         form.ativo !== false,
       criado_por:    form.criado_por || currentUser?.email || '',
     };

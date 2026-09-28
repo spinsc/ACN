@@ -151,6 +151,125 @@ function motivoDaReposicao({ item, saldo, reservado, disponivel, op }: any) {
   return partes.join(' ');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ITEM COM DOIS ESTOQUES — ACABADO E INACABADO (28/09/2026)
+//
+// O caso do suporte, na descrição do usuário: o acabado já foi cortado,
+// dobrado e pintado, e é o que a produção usa. O inacabado só foi cortado e
+// dobrado — falta a pintura.
+//
+// Os dois estoques existem porque os dois serviços têm economias diferentes: a
+// pintura só compensa em grande quantidade, e o corte se aproveita quando já se
+// está cortando outra coisa. Por isso a fábrica guarda peça bruta de propósito.
+//
+// A cadeia é: corte e dobra → peça inacabada → pintura → peça acabada.
+// Cada ponta tem o seu mínimo, e cada mínimo dispara o serviço que o alimenta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Item guardado em dois estados. */
+export const temDoisEstados = (item: any) => !!item?.tem_inacabado;
+
+const SERVICOS = {
+  acabamento: { vinculo: 'estoque_acabamento', rotulo: 'acabamento',
+                campo: 'servico_acabamento', padrao: 'Pintura' },
+  bruto:      { vinculo: 'estoque_bruto', rotulo: 'corte e dobra',
+                campo: 'servico_bruto', padrao: 'Corte e dobra' },
+};
+
+/** Requisição deste serviço já aberta para este item? Evita pedir duas vezes. */
+async function servicoEmAberto(item: any, servico: 'acabamento' | 'bruto') {
+  const { data } = await supabase.from('pcp_pedidos_compra')
+    .select('id,numero_pedido,status_compra')
+    .eq('vinculo_tipo', SERVICOS[servico].vinculo).eq('vinculo_id', String(item.id))
+    .not('status_compra', 'in', `(${COMPRA_ENCERRADA.map(s => `"${s}"`).join(',')})`);
+  return data?.length ? { referencia: data[0].numero_pedido, status: data[0].status_compra } : null;
+}
+
+/**
+ * Abre a requisição de um dos dois serviços, para o Compras.
+ *
+ * Vai como requisição comum do quadro, sem responsável fixo — decidido com o
+ * usuário em 28/09/2026. O texto do serviço vem do cadastro do item e é o que
+ * o comprador lê para cotar, no mesmo espírito do tipo de pintura da
+ * Serralheria.
+ */
+export async function pedirServicoDoItem({ item, servico, quantidade, motivo, currentUser }: any) {
+  const s = SERVICOS[servico];
+  const jaTem = await servicoEmAberto(item, servico);
+  if (jaTem) return { jaExistia: true, servico, ...jaTem };
+
+  const qtd = Math.max(1, Math.ceil(num(quantidade)));
+  const oQue = String(item[s.campo] || '').trim() || s.padrao;
+  const r = await criarRequisicaoCompra({
+    titulo: `${oQue} — ${item.nome}`,
+    descricao: motivo,
+    itens: [{ nome: `${item.nome} — ${oQue}`, quantidade: qtd, descricao: item.codigo || '' }],
+    observacoes: 'Requisição aberta automaticamente pelo controle de estoque — ninguém digitou. '
+      + (servico === 'acabamento'
+        ? 'A peça bruta já está aqui e sai do estoque inacabado quando o serviço voltar.'
+        : 'É peça bruta: quando voltar, entra no estoque inacabado, ainda sem acabamento.'),
+    vinculo: { tipo: s.vinculo, id: item.id, descricao: `${item.codigo ? item.codigo + ' · ' : ''}${item.nome}` },
+    origemSetor: 'Estoque (automático)',
+    currentUser,
+  });
+  if (r?.erro) return { erro: r.erro, servico };
+  return { criada: true, servico, caminho: 'compra', numero_pedido: r.numero_pedido, quantidade: qtd, oQue };
+}
+
+/**
+ * Confere os dois mínimos e abre o que precisar.
+ *
+ * Acabado no mínimo: pinta o que houver de inacabado. Se o inacabado não cobrir
+ * a falta, sai TAMBÉM o pedido de corte e dobra do que falta — as duas de uma
+ * vez, decidido com o usuário em 28/09/2026. Esperar a peça bruta chegar para
+ * só então pedir a pintura somaria os dois prazos em fila.
+ *
+ * Inacabado no mínimo: pede corte e dobra para repor a peça bruta.
+ */
+export async function conferirDoisEstados({ item, reservado = 0, currentUser }: any) {
+  if (!temDoisEstados(item)) return [];
+  const pedidos: any[] = [];
+  const un = item.unidade || 'UN';
+  const acabado = num(item.estoque_atual) - num(reservado);
+  const inacabado = num(item.estoque_inacabado);
+
+  // 1) falta peça pronta para usar
+  if (item.estoque_minimo != null && acabado <= num(item.estoque_minimo)) {
+    const alvo = item.estoque_ideal != null ? num(item.estoque_ideal) : num(item.estoque_minimo);
+    const precisa = Math.max(0, alvo - acabado);
+    const podePintar = Math.min(precisa, inacabado);
+    const semPecaBruta = precisa - podePintar;
+    if (podePintar > 0) {
+      pedidos.push(await pedirServicoDoItem({
+        item, servico: 'acabamento', quantidade: podePintar, currentUser,
+        motivo: `Pronto para uso em ${fmtQtd(acabado)} ${un}, no mínimo de ${fmtQtd(item.estoque_minimo)}. `
+          + `Há ${fmtQtd(inacabado)} ${un} de peça bruta parada — ${fmtQtd(podePintar)} vão para o acabamento.`,
+      }));
+    }
+    if (semPecaBruta > 0) {
+      pedidos.push(await pedirServicoDoItem({
+        item, servico: 'bruto', quantidade: semPecaBruta, currentUser,
+        motivo: `Faltam ${fmtQtd(precisa)} ${un} para repor a prateleira e só há ${fmtQtd(inacabado)} de peça bruta. `
+          + `Estes ${fmtQtd(semPecaBruta)} precisam ser cortados e dobrados antes de ir para o acabamento.`,
+      }));
+    }
+  }
+
+  // 2) falta peça bruta na prateleira — independente do acabado
+  if (item.inacabado_minimo != null && inacabado <= num(item.inacabado_minimo)) {
+    const alvo = item.inacabado_ideal != null ? num(item.inacabado_ideal) : num(item.inacabado_minimo);
+    const precisa = Math.max(0, alvo - inacabado);
+    if (precisa > 0) {
+      pedidos.push(await pedirServicoDoItem({
+        item, servico: 'bruto', quantidade: precisa, currentUser,
+        motivo: `Peça bruta em ${fmtQtd(inacabado)} ${un}, no mínimo de ${fmtQtd(item.inacabado_minimo)}. `
+          + `Repor até ${fmtQtd(alvo)} — o corte se aproveita quando já se está cortando outra coisa.`,
+      }));
+    }
+  }
+  return pedidos.filter(p => p?.criada || p?.erro);
+}
+
 export async function garantirRequisicaoReposicao({ item, quantidade, saldo, reservado, disponivel, op, currentUser }: any) {
   const jaTem = await reposicaoEmAberto(item, op);
   if (jaTem) {
@@ -294,19 +413,41 @@ export function textoDaVarredura(r: any) {
  * faltavam), a própria movimentação abre uma requisição nova — que é o certo.
  */
 export async function creditarCompraRecebida({ pedido, quantidade, currentUser }: any) {
-  if (pedido?.vinculo_tipo !== 'estoque' || !pedido?.vinculo_id) return { naoSeAplica: true };
+  const tipoVinc = pedido?.vinculo_tipo;
+  const ehEstoque = ['estoque', 'estoque_bruto', 'estoque_acabamento'].includes(String(tipoVinc));
+  if (!ehEstoque || !pedido?.vinculo_id) return { naoSeAplica: true };
   const qtd = num(quantidade);
   if (qtd <= 0) return { naoSeAplica: true, motivo: 'Sem quantidade recebida.' };
 
-  const r = await movimentarEstoque({
-    itemId: pedido.vinculo_id, tipo: 'entrada', quantidade: qtd,
+  const base = {
     motivo: MOTIVO.COMPRA_RECEBIDA,
     observacoes: `Recebimento do pedido ${pedido.numero_pedido || pedido.numero_oc || '—'}`
       + (num(pedido.quantidade) !== qtd ? ` — pedido de ${fmtQtd(pedido.quantidade)}, recebido ${fmtQtd(qtd)}.` : ''),
     vinculo: { tipo: 'compra', id: pedido.id, descricao: pedido.numero_pedido || pedido.numero_oc || 'Pedido de compra' },
     currentUser,
-  });
-  return r;
+  };
+
+  // CORTE E DOBRA: a peça bruta chega e entra no estoque inacabado. Ainda não
+  // serve para a produção — falta o acabamento.
+  if (tipoVinc === 'estoque_bruto') {
+    return await movimentarEstoque({ itemId: pedido.vinculo_id, tipo: 'entrada', quantidade: qtd,
+      estado: 'inacabado', ...base });
+  }
+
+  // ACABAMENTO: a peça é a MESMA, só mudou de estado. Sai do inacabado e entra
+  // no acabado — se só entrasse, a peça existiria duas vezes no estoque.
+  if (tipoVinc === 'estoque_acabamento') {
+    const saida = await movimentarEstoque({ itemId: pedido.vinculo_id, tipo: 'saida', quantidade: qtd,
+      estado: 'inacabado', ...base,
+      observacoes: base.observacoes + ' Peça bruta que foi para o acabamento.' });
+    if (saida?.erro) return saida;
+    const entrada = await movimentarEstoque({ itemId: pedido.vinculo_id, tipo: 'entrada', quantidade: qtd,
+      estado: 'acabado', ...base,
+      observacoes: base.observacoes + ' Voltou pronta para uso.' });
+    return { ...entrada, inacabado_depois: saida?.saldo_depois };
+  }
+
+  return await movimentarEstoque({ itemId: pedido.vinculo_id, tipo: 'entrada', quantidade: qtd, ...base });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -576,6 +717,7 @@ export async function creditarFabricacaoRecebida({ demanda, quantidade, currentU
 export async function movimentarEstoque({
   itemId, tipo, quantidade, motivo = null, observacoes = null,
   vinculo = null, retiradoPor = null, currentUser = null,
+  estado = 'acabado',
 }: any) {
   if (!itemId) return { ignorado: true, motivo: 'Sem item cadastrado.' };
   const { data, error } = await supabase.rpc('estoque_movimentar', {
@@ -590,6 +732,7 @@ export async function movimentarEstoque({
     p_retirado_por_nome: retiradoPor || null,
     p_criado_por: currentUser?.email || null,
     p_criado_por_nome: currentUser?.nome || null,
+    p_estado: estado || 'acabado',
   });
   if (error) return { erro: error.message };
   const r = data || { erro: 'Resposta vazia do banco.' };
@@ -605,9 +748,17 @@ export async function movimentarEstoque({
   if (r.ok) {
     const reservado = (await reservadoPorItem([String(itemId)])).get(String(itemId)) || 0;
     const { data: item } = await supabase.from('cadastro_itens')
-      .select('id,codigo,nome,unidade,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante')
+      .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,origem_producao,setor_fabricante,'
+        + 'tem_inacabado,estoque_inacabado,inacabado_minimo,inacabado_ideal,servico_acabamento,servico_bruto')
       .eq('id', itemId).maybeSingle();
-    if (item) {
+    // Item de dois estados tem regra própria: o que repõe a prateleira não é
+    // uma compra, é um dos dois serviços da cadeia (corte e dobra → pintura).
+    // Pedir a peça a um fornecedor aqui seria comprar o que a fábrica manda fazer.
+    if (item && temDoisEstados(item)) {
+      r.reservado = reservado;
+      r.disponivel = num(item.estoque_atual) - reservado;
+      r.servicos = await conferirDoisEstados({ item, reservado, currentUser });
+    } else if (item) {
       const n = necessidadeDeReposicao({
         saldo: r.saldo_depois, reservado,
         minimo: item.estoque_minimo, ideal: item.estoque_ideal,
@@ -844,7 +995,8 @@ export function textoDaBaixa(resumo: any) {
  *  reposição sai: compra lá fora ou bancada aqui dentro. */
 export async function carregarItensControlados() {
   const { data } = await supabase.from('cadastro_itens')
-    .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,ativo,origem_producao,setor_fabricante')
+    .select('id,codigo,nome,unidade,estoque_atual,estoque_minimo,estoque_ideal,ativo,origem_producao,setor_fabricante,'
+      + 'tem_inacabado,estoque_inacabado,inacabado_minimo,inacabado_ideal,servico_acabamento,servico_bruto')
     .eq('controla_estoque', true).order('nome');
   return data || [];
 }
@@ -878,6 +1030,7 @@ export function SeloEstoque({ item, compacto = false }: any) {
 export function CamposEstoqueItem({ form, set, currentUser }: any) {
   const pode = podeGerirEstoque(currentUser);
   const ligado = !!form.controla_estoque;
+  const dois = !!form.tem_inacabado;
   const inp = { width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
     fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
   const lbl = { fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 };
@@ -931,6 +1084,69 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
         && num(form.estoque_ideal) > 0 && num(form.estoque_ideal) <= num(form.estoque_minimo) && (
         <div style={{ fontSize: 9, color: '#b91c1c', marginTop: 6, fontWeight: 700 }}>
           ⚠️ O ideal precisa ser maior que o mínimo, senão a compra automática pede zero.
+        </div>
+      )}
+
+      {/* DOIS ESTADOS — o caso do suporte (28/09/2026).
+          A peça é a mesma; o que muda é se ela já passou pelo acabamento. */}
+      {ligado && (
+        <div style={{ marginTop: 10, borderTop: '1px solid #d1fae5', paddingTop: 9 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: pode ? 'pointer' : 'not-allowed',
+            fontSize: 11, fontWeight: 700, color: dois ? '#9a3412' : '#334155', opacity: pode ? 1 : .6 }}>
+            <input type="checkbox" checked={dois} disabled={!pode}
+              onChange={e => set('tem_inacabado', e.target.checked)} />
+            🔧 Esta peça é guardada em dois estados (pronta e sem acabamento)
+          </label>
+          <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+            {dois
+              ? 'A produção usa só a pronta. A bruta espera na prateleira porque o acabamento só compensa em quantidade.'
+              : 'É o caso do suporte: cortado e dobrado de um lado, já pintado do outro. Ligue só se a fábrica guardar os dois.'}
+          </div>
+
+          {dois && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 9 }}>
+                <div>
+                  <div style={lbl}>Saldo sem acabamento</div>
+                  <div style={{ ...inp, background: '#f1f5f9', color: '#475569', fontWeight: 700 }}>
+                    {fmtQtd(form.estoque_inacabado)} {form.unidade || 'UN'}
+                  </div>
+                  <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>muda quando o serviço volta</div>
+                </div>
+                <div>
+                  <div style={lbl}>Mínimo sem acabamento</div>
+                  <input type="number" min={0} step="any" style={inp} value={form.inacabado_minimo ?? ''}
+                    disabled={!pode} onChange={e => set('inacabado_minimo', e.target.value)} placeholder="ex.: 20" />
+                  <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>aqui pede corte e dobra</div>
+                </div>
+                <div>
+                  <div style={lbl}>Ideal sem acabamento</div>
+                  <input type="number" min={0} step="any" style={inp} value={form.inacabado_ideal ?? ''}
+                    disabled={!pode} onChange={e => set('inacabado_ideal', e.target.value)} placeholder="ex.: 100" />
+                  <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>até onde repor de peça bruta</div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 9 }}>
+                <div style={lbl}>O que falta para ficar pronta — o comprador lê isto para cotar</div>
+                <input style={inp} value={form.servico_acabamento || ''} disabled={!pode}
+                  onChange={e => set('servico_acabamento', e.target.value)}
+                  placeholder="ex.: pintura eletrostática preta" />
+              </div>
+              <div style={{ marginTop: 7 }}>
+                <div style={lbl}>Como a peça bruta nasce</div>
+                <input style={inp} value={form.servico_bruto || ''} disabled={!pode}
+                  onChange={e => set('servico_bruto', e.target.value)}
+                  placeholder="ex.: corte a laser e dobra, chapa 3mm" />
+              </div>
+              <div style={{ fontSize: 9, color: '#9a3412', marginTop: 7, background: '#fff7ed',
+                border: '1px solid #fed7aa', borderRadius: 4, padding: '6px 8px' }}>
+                Pronta no mínimo → pede o acabamento da peça bruta que houver.
+                Se não houver bruta suficiente, sai junto o pedido de corte e dobra do que falta.
+                Bruta no mínimo → pede corte e dobra. As duas vão para o Compras.
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -1551,7 +1767,19 @@ export function PainelEstoque({ currentUser }: any) {
                 return (
                   <tr key={i.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '4px 7px', fontWeight: 700, whiteSpace: 'nowrap' }}>{i.codigo || '—'}</td>
-                    <td style={{ padding: '4px 7px' }}>{i.nome}</td>
+                    <td style={{ padding: '4px 7px' }}>
+                      {i.nome}
+                      {/* peça guardada em dois estados: a bruta espera o
+                          acabamento e não serve para a produção ainda */}
+                      {i.tem_inacabado && (
+                        <div style={{ fontSize: 8.5, color: '#9a3412', marginTop: 1 }}>
+                          🔧 {fmtQtd(i.estoque_inacabado)} sem acabamento
+                          {i.inacabado_minimo != null && ` (mín. ${fmtQtd(i.inacabado_minimo)})`}
+                          {num(i.inacabado_minimo) > 0 && num(i.estoque_inacabado) <= num(i.inacabado_minimo)
+                            && <b> · no mínimo</b>}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '4px 7px', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmtQtd(i.estoque_atual)} {i.unidade || 'UN'}</td>
                     {/* saldo é o que está na prateleira; disponível é o que ainda
                         não tem dono. A diferença é o que outra OP já levou no papel. */}
