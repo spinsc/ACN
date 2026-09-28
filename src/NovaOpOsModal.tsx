@@ -17,6 +17,7 @@ import { itensPreenchidos } from './DemandaItens';
 import { hojeISO } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
+import { modoDoVeiculo } from './ConfigEstrutura';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -177,6 +178,15 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // Entrega some e tudo que depende do fluxo usa este valor.
   const ehVendaEnvio = form.tipo_projeto === TIPO_VENDA_ENVIO;
   const fluxoEf = fluxoEfetivo(form.tipo_projeto, form.fluxo_entrega);
+
+  // O formulário se adapta ao tipo de venda: adaptação precisa do veículo, envio
+  // nem sempre. Quem decide é a Administração (Etapa 7.2, 28/09/2026).
+  // 'oculto' = só o modelo em texto livre; nos outros, só o select de veículo —
+  // os dois juntos são a mesma informação pedida duas vezes.
+  const [modoVeiculo, setModoVeiculo] = useState('opcional');
+  useEffect(() => { modoDoVeiculo(fluxoEf).then(setModoVeiculo); }, [fluxoEf]);
+  const mostraVeiculo = modoVeiculo !== 'oculto';
+  const veiculoObrigatorio = modoVeiculo === 'obrigatorio';
   // Quem paga o frete importa em TODA OP que sai daqui embalada, não só na
   // "Venda para Envio": envio para adaptação de terceiro e fabricação de
   // serralheria com envio também param na embalagem e também precisam saber
@@ -333,6 +343,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
     // Adaptação por omissão — que é justamente o problema que isto resolve.
     if (form.tipo === 'OP' && !fluxoEf) { setErro('Selecione o Fluxo de Entrega.'); return; }
     if (form.tipo === 'OP' && !form.origem_venda) { setErro('Informe a origem da venda: Licitação ou Venda direta.'); return; }
+    // Veículo obrigatório é por tipo de venda, configurado na Administração:
+    // adaptação precisa saber qual carro; envio de material nem sempre.
+    if (form.tipo === 'OP' && veiculoObrigatorio) {
+      const faltaNoCabecalho = !form.veiculo_id;
+      const unidades = (form.veiculos || []).slice(0, Math.max(1, parseInt(String(form.quantidade)) || 1));
+      const faltaEmAlguma = unidades.some(u => !(u?.veiculo_id || form.veiculo_id));
+      if (faltaNoCabecalho && faltaEmAlguma) {
+        setErro('Este tipo de venda exige o veículo. Escolha o veículo do catálogo (ou cadastre no "+ Novo").');
+        return;
+      }
+      if (faltaEmAlguma) { setErro('Há unidade do lote sem veículo. Escolha o veículo de cada carro.'); return; }
+    }
     if (precisaFrete && !form.frete_responsavel) { setErro('Informe quem paga o frete: CIF (empresa) ou FOB (cliente).'); return; }
     // Lote misto: cada grupo tem seus próprios itens (validado em validarGrupos,
     // mais abaixo) — a lista única daqui não vale nesse caso.
@@ -849,16 +871,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                           grade o filho não encolhe abaixo do conteúdo por
                           padrão, e o nome do veículo empurrava a Placa para
                           fora da tela. */}
-                      <SelectVeiculo compacto style={{ minWidth: 0 }}
-                        valor={v.veiculo_id || ''} currentUser={currentUser}
-                        recarregarEm={form.veiculo_id}
-                        onChange={(id) => {
-                          const veiculos = [...(form.veiculos||[])];
-                          const vc = veiculosCarregados.find(x => x.id === id);
-                          veiculos[i] = { ...veiculos[i], veiculo_id: id,
-                                          modelo: vc ? vc.nome_exibicao : veiculos[i]?.modelo };
-                          setF('veiculos', veiculos);
-                        }} />
+                      {mostraVeiculo ? (
+                        <SelectVeiculo compacto style={{ minWidth: 0 }}
+                          valor={v.veiculo_id || ''} currentUser={currentUser}
+                          recarregarEm={form.veiculo_id}
+                          onChange={(id) => {
+                            const veiculos = [...(form.veiculos||[])];
+                            const vc = veiculosCarregados.find(x => x.id === id);
+                            veiculos[i] = { ...veiculos[i], veiculo_id: id,
+                                            modelo: vc ? vc.nome_exibicao : veiculos[i]?.modelo };
+                            setF('veiculos', veiculos);
+                          }} />
+                      ) : <span />}
                       <input className="acn-input" placeholder="Modelo" value={v.modelo || ''}
                         onChange={e => {
                           const veiculos = [...(form.veiculos||[])];
@@ -926,23 +950,27 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                       </select>
                     )
                   ) : (
-                    <>
-                      {/* Veículo do catálogo da casa. Opcional de propósito: OP
-                          antiga e OP sem veículo continuam funcionando com o
-                          texto livre abaixo, que nunca deixou de existir.
-                          É este vínculo que a estrutura de material vai usar. */}
+                    /* Um OU outro, nunca os dois: são a mesma informação, e dois
+                       campos pedindo o mesmo confundem quem preenche (corrigido
+                       com o usuário em 28/09/2026). Quem manda é a configuração
+                       por tipo de venda, na Administração. */
+                    mostraVeiculo ? (
                       <SelectVeiculo valor={form.veiculo_id} currentUser={currentUser}
+                        placeholder={veiculoObrigatorio
+                          ? 'Escolha o veículo (obrigatório nesta venda)'
+                          : 'Procure o veículo (marca, modelo ou ano)'}
                         onChange={(id) => {
                           setF('veiculo_id', id);
-                          // preenche o texto livre junto, para relatório antigo
-                          // e busca continuarem enxergando o modelo
+                          // o texto livre acompanha, para relatório antigo e
+                          // busca continuarem enxergando o modelo
                           const v = veiculosCarregados.find(x => x.id === id);
                           if (v) setF('modelo', v.nome_exibicao);
                         }} />
-                      <input className="acn-input" style={{ width:'100%', marginTop:6 }}
-                        placeholder="Modelo em texto livre (opcional)"
+                    ) : (
+                      <input className="acn-input" style={{ width:'100%' }}
+                        placeholder="Modelo (opcional)"
                         value={form.modelo} onChange={e => setF('modelo', e.target.value)} />
-                    </>
+                    )
                   )}
                 </div>
               </div>

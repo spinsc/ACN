@@ -8,6 +8,7 @@ import { confirmar } from './Feedback';
 import PainelFeriados from './FeriadosAdmin';
 import { PainelFipeSync } from './Veiculos';
 import ConfigEstruturaTela from './ConfigEstruturaTela';
+import FluxoConfigTela from './FluxoConfigTela';
 import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
 
 
@@ -2934,6 +2935,7 @@ const ABAS_ADMIN = [
   { id:'feriados',       label:'📅 Feriados' },
   { id:'veiculos',       label:'🚗 Veículos' },
   { id:'estruturas',     label:'🧩 Estruturas' },
+  { id:'fluxo_cfg',      label:'🚦 Venda × Veículo' },
   { id:'checklist',      label:'Checklist CQ' },
   { id:'kpis',           label:'Metas KPI' },
   { id:'avisos',         label:'📢 Avisos' },
@@ -3517,6 +3519,7 @@ export default function AdminTab() {
           localStorage, como os outros desta tela já fazem. */}
       {abaAtiva === 'veiculos'     && <PainelFipeSync currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
       {abaAtiva === 'estruturas'   && <ConfigEstruturaTela currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
+      {abaAtiva === 'fluxo_cfg'    && <FluxoConfigTela currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}
       {abaAtiva === 'kpis'         && <PainelKPI />}
       {abaAtiva === 'avisos'       && <PainelAvisos />}

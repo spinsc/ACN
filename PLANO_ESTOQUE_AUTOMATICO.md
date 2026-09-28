@@ -604,7 +604,7 @@ de uso real mostrando o que se repete.
 
 ---
 
-### ⬜ Etapa 7.1 — Reestruturação: pergunta no item, material no veículo, conjunto elétrico como interruptor · **PRÓXIMA**
+### ✅ Etapa 7.1 — Reestruturação: pergunta no item, material no veículo, conjunto elétrico como interruptor
 
 **Alinhamento de 28/09/2026.** Comparando o construído com o que o usuário
 descreveu, apareceram três divergências — e uma peça do processo que eu não
@@ -686,11 +686,37 @@ ficando completo sozinho, um carro de cada vez.
 6. Na Engenharia, painel de **conferência** com o aviso destacado dos itens sem
    estrutura para aquele veículo.
 
-**Feito em:** —
-**O que foi feito:** —
+**Feito em:** 28/09/2026.
+
+**O que foi feito:**
+
+- Migração `pergunta_no_item_material_no_veiculo`: as `config_*` saíram e
+  entraram `item_perguntas`, `item_pergunta_opcoes` e `veiculo_item_materiais`,
+  mais `cadastro_itens.eh_conjunto_instalacao` — o interruptor.
+- `ConfigEstrutura.ts` reescrito: `perguntasDoItem`, `materiaisDoVeiculo`,
+  `itensSemEstrutura` (a pergunta "este item já foi adaptado neste carro?" é
+  literalmente "existe linha aqui?"), `itensConjunto` e `vendaTemConjunto`.
+- `ConfigEstruturaTela.tsx` em duas partes: pergunta no item, material no carro.
+- `AplicarEstrutura.tsx` virou `PainelConferenciaEstrutura`, dentro do modal de
+  liberar BOM — não é mais um botão que abre modal.
+
+**Testado** com duas OPs no mesmo carro e a mesma barra vendida:
+
+| OP | O que tinha | O que o painel disse |
+|---|---|---|
+| **com** Conjunto Elétrico | barra + conjunto + item novo | material calculado (**4 cabos**), aviso de **1 pergunta sem resposta** e **⚠ 1 item nunca adaptado neste carro**, com onde cadastrar |
+| **sem** Conjunto Elétrico | só a barra | *"Sem Conjunto de Instalação nesta venda — é o caso de quem usa suporte e chicote de terceiros"*, e nada é montado |
+
+O interruptor funciona: mesmo carro, mesma venda de barra, comportamento
+oposto conforme o conjunto estar ou não na lista.
+
+**O que ficou de fora:** os itens 4 e 5 — as perguntas ainda **não** foram para
+a abertura da OPL, e a OP ainda não nasce com a `bom_itens` montada. O painel da
+Engenharia já lê as respostas que estiverem gravadas, então quando elas passarem
+a ser dadas na venda tudo se encaixa sem mexer nele. Fica para a **Etapa 7.3**.
 
 ---
-### ⬜ Etapa 7.2 — O formulário da OPL fica adaptativo
+### ✅ Etapa 7.2 — O formulário da OPL fica adaptativo
 
 **Detalhado pelo usuário em 28/09/2026.** Mexe na mesma tela da 7.1 — vale
 fazer junto para não reabrir o arquivo duas vezes —, mas pode subir sozinha.
@@ -739,11 +765,42 @@ vendedor não deve ver campo que não se aplica à venda que está fazendo.
 3. `NovaOpOsModal` lê a configuração e mostra, esconde ou exige o veículo.
 4. O texto livre de modelo só aparece quando o veículo está oculto.
 
+**Feito em:** 28/09/2026.
+
+**O que foi feito:** tabela `fluxo_config`, tela **🚦 Venda × Veículo** na
+administração e o `NovaOpOsModal` lendo o modo. O select de veículo e o texto
+livre viraram excludentes, no cabeçalho e em cada unidade do lote. Validação
+nova: fluxo obrigatório não deixa abrir OP sem veículo, e num lote cobra o de
+cada carro.
+
+**Testado** na tela: adaptação na matriz (obrigatório) mostra o select e some
+com o texto livre; envio de material posto como "não pergunta" esconde os dois;
+posto como obrigatório mostra o select — ou seja, a configuração manda mesmo
+num fluxo de envio, que era a dúvida. A configuração foi **restaurada** ao
+estado original depois do teste.
+
+---
+
+### ⬜ Etapa 7.3 — As perguntas vão para a abertura da OPL
+
+Ficou de fora da 7.1 por tamanho. É o que falta para o vendedor responder na
+venda, como ele deve.
+
+1. Mostrar as perguntas dos itens vendidos na abertura da OPL, **por carro** —
+   no lote customizável cada unidade responde as suas, com o **primeiro carro
+   servindo de padrão** para os seguintes.
+2. Gravar as respostas depois do insert (na criação a OP ainda não tem `id`).
+3. Montar a `bom_itens` ali, para a OP já nascer com o material — **só quando o
+   Conjunto Elétrico estiver na venda**.
+
+O painel da Engenharia **já lê** as respostas gravadas, então quando elas
+passarem a vir da venda tudo se encaixa sem mexer nele.
+
 **Feito em:** —
 **O que foi feito:** —
 
 ---
-### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
+### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item · **PRÓXIMA**
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai
 marcando até fechar 100%.

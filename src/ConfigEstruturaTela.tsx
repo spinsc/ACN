@@ -1,290 +1,185 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────────────────────
-// TELA DA ESTRUTURA DE CONFIGURAÇÃO — veículo × item vendido
+// TELA DA ESTRUTURA DE INSTALAÇÃO
 //
-// Onde se ensina ao sistema o que a adaptação consome. A regra e o cálculo
-// moram em ConfigEstrutura.ts; aqui é só tela.
+// Duas coisas diferentes, e é por isso que a tela tem duas partes:
 //
-// As perguntas aparecem numa lista com recuo, não numa árvore desenhada: com
-// dois ou três níveis a árvore visual custa mais para ler do que o recuo, e o
-// que importa é ver de qual resposta cada pergunta pendura.
+//   PERGUNTAS DO ITEM     "tem hack de teto?" é pergunta da barra sinalizadora
+//                         e vale em qualquer carro. Cadastra uma vez.
+//
+//   MATERIAL NO VEÍCULO   o que cada resposta consome MUDA de carro para carro.
+//                         É aqui que se diz qual suporte o Nivus usa.
+//
+// Reescrita em 28/09/2026: a primeira versão misturava as duas, obrigando a
+// redigitar a mesma pergunta em cada carro.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { SelectBusca } from './Interface';
-import { combinaBusca } from './SearchUtils';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { carregarArvorePorId, estruturasDoVeiculo } from './ConfigEstrutura';
+import { perguntasDoItem, materiaisDoVeiculo } from './ConfigEstrutura';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 const campo = { padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
                 fontSize: 11, boxSizing: 'border-box', width: '100%' };
 const rotulo = { fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 3 };
 
-/** Busca itens do cadastro por nome ou código, para os selects desta tela. */
 function useItens() {
   const [itens, setItens] = useState([]);
   useEffect(() => {
-    supabase.from('cadastro_itens').select('id,codigo,nome,unidade,controla_estoque')
+    supabase.from('cadastro_itens').select('id,codigo,nome,unidade,controla_estoque,eh_conjunto_instalacao')
       .eq('ativo', true).order('nome').limit(5000)
       .then(({ data }) => setItens(data || []));
   }, []);
   return itens;
 }
-
 const opcoesDeItem = (itens) => itens.map(i => ({
   valor: i.id, rotulo: `${i.codigo ? i.codigo + ' — ' : ''}${i.nome}`, busca: [i.codigo, i.nome],
 }));
 
 export default function ConfigEstruturaTela({ currentUser }) {
+  const [itemId, setItemId] = useState('');
   const [veiculoId, setVeiculoId] = useState('');
-  const [estruturas, setEstruturas] = useState([]);
-  const [abertaId, setAbertaId] = useState('');
-  const [arvore, setArvore] = useState(null);
-  const [carregando, setCarregando] = useState(false);
-  const [novoItemId, setNovoItemId] = useState('');
+  const [perguntas, setPerguntas] = useState([]);
+  const [materiais, setMateriais] = useState([]);
   const itens = useItens();
   const pode = ehAdminOuGerente(currentUser) || String(currentUser?.perfil || '').trim() === 'PCP';
+  const item = itens.find(i => i.id === itemId);
 
-  const recarregarLista = async (vid) => {
-    if (!vid) { setEstruturas([]); return; }
-    setEstruturas(await estruturasDoVeiculo(vid));
-  };
-  useEffect(() => { recarregarLista(veiculoId); setAbertaId(''); setArvore(null); }, [veiculoId]);
-
-  const abrir = async (id) => {
-    setAbertaId(id); setCarregando(true);
-    setArvore(await carregarArvorePorId(id));
-    setCarregando(false);
-  };
-  const recarregarArvore = async () => { if (abertaId) setArvore(await carregarArvorePorId(abertaId)); };
-
-  const criarEstrutura = async () => {
-    if (!veiculoId || !novoItemId) { alert('Escolha o veículo e o item vendido.'); return; }
-    const { data, error } = await supabase.from('config_estruturas').insert([{
-      veiculo_id: veiculoId, item_id: novoItemId,
-      criado_por_nome: currentUser?.nome || currentUser?.email || '—',
-    }]).select('id').single();
-    if (error) {
-      alert(/duplicate|unique/i.test(error.message)
-        ? 'Este item já tem configuração para este veículo — abra a que existe.'
-        : 'Não foi possível criar: ' + error.message);
-      return;
-    }
-    setNovoItemId('');
-    await recarregarLista(veiculoId);
-    abrir(data.id);
-  };
-
-  const apagarEstrutura = async (e) => {
-    if (!await confirmar(`Apagar a configuração de "${e.cadastro_itens?.nome}" para este veículo?\n\n`
-      + 'As perguntas e o material dela somem junto. OPs que já usaram a configuração não mudam.')) return;
-    await supabase.from('config_estruturas').delete().eq('id', e.id);
-    if (abertaId === e.id) { setAbertaId(''); setArvore(null); }
-    recarregarLista(veiculoId);
-  };
+  const recPerguntas = async () => setPerguntas(itemId ? await perguntasDoItem(itemId) : []);
+  const recMateriais = async () =>
+    setMateriais(veiculoId && itemId ? await materiaisDoVeiculo(veiculoId, [itemId]) : []);
+  useEffect(() => { recPerguntas(); recMateriais(); }, [itemId]);
+  useEffect(() => { recMateriais(); }, [veiculoId]);
 
   return (
     <div className="sec-card" style={{ marginTop: 12 }}>
       <div className="sec-hdr" style={{ background: '#eef2ff', borderBottom: '2px solid #4f46e5' }}>
-        <span style={{ color: '#4338ca' }}>🧩 Estrutura de configuração — o que cada item consome em cada carro</span>
+        <span style={{ color: '#4338ca' }}>🧩 Estrutura de instalação</span>
       </div>
       <div className="sec-body">
         <div style={{ fontSize: 10, color: '#3730a3', marginBottom: 8 }}>
-          Configure uma vez por par <b>veículo × item vendido</b>. Vale para sempre: a próxima OP
-          daquele carro com aquele item já sai com a lista de material montada.
+          A <b>pergunta</b> fica no item e vale em qualquer carro. O <b>material</b> que cada resposta
+          consome fica no carro. Assim "tem hack de teto?" é cadastrada uma vez só, e cada veículo
+          diz qual suporte usa.
         </div>
 
-        <label style={rotulo}>VEÍCULO</label>
-        <SelectVeiculo valor={veiculoId} onChange={setVeiculoId} currentUser={currentUser} />
+        <label style={rotulo}>ITEM VENDIDO</label>
+        <SelectBusca opcoes={opcoesDeItem(itens)} valor={itemId} onChange={setItemId}
+          placeholder="Procure o item (nome ou código)" />
 
-        {veiculoId && (
+        {item && (
           <>
-            <div style={{ margin: '12px 0 6px', fontSize: 10, fontWeight: 800, color: '#334155' }}>
-              ITENS JÁ CONFIGURADOS ({estruturas.length})
+            <MarcaConjunto item={item} pode={pode} />
+            <PerguntasDoItem itemId={itemId} perguntas={perguntas} itens={itens}
+              pode={pode} currentUser={currentUser} aoMudar={recPerguntas} />
+
+            <div style={{ marginTop: 14, paddingTop: 10, borderTop: '2px solid #e0e7ff' }}>
+              <label style={rotulo}>MATERIAL DESTE ITEM EM QUAL CARRO</label>
+              <SelectVeiculo valor={veiculoId} onChange={setVeiculoId} currentUser={currentUser} />
+              {veiculoId && (
+                <MaterialNoVeiculo veiculoId={veiculoId} itemId={itemId} materiais={materiais}
+                  perguntas={perguntas} itens={itens} pode={pode} currentUser={currentUser}
+                  aoMudar={recMateriais} />
+              )}
             </div>
-            {!estruturas.length && (
-              <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 6 }}>
-                Nenhum ainda. Escolha um item vendido abaixo para começar.
-              </div>
-            )}
-            {estruturas.map(e => (
-              <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0',
-                borderTop: '1px solid #f1f5f9' }}>
-                <span style={{ flex: 1, fontSize: 11, fontWeight: abertaId === e.id ? 800 : 400 }}>
-                  {e.cadastro_itens?.codigo ? <b>{e.cadastro_itens.codigo} — </b> : null}
-                  {e.cadastro_itens?.nome}
-                </span>
-                <button onClick={() => abrir(e.id)}
-                  style={{ fontSize: 9, fontWeight: 700, padding: '2px 9px', border: '1px solid #4f46e5',
-                    borderRadius: 4, background: abertaId === e.id ? '#e0e7ff' : '#fff', color: '#4338ca', cursor: 'pointer' }}>
-                  {abertaId === e.id ? 'aberta' : 'abrir'}
-                </button>
-                {pode && (
-                  <button onClick={() => apagarEstrutura(e)}
-                    style={{ fontSize: 9, padding: '2px 7px', border: '1px solid #fecaca', borderRadius: 4,
-                      background: '#fff', color: '#b91c1c', cursor: 'pointer' }}>apagar</button>
-                )}
-              </div>
-            ))}
-
-            {pode && (
-              <div style={{ marginTop: 10, background: '#f8fafc', border: '1px solid #e2e8f0',
-                borderRadius: 6, padding: '8px 10px' }}>
-                <label style={rotulo}>＋ CONFIGURAR UM ITEM VENDIDO NESTE VEÍCULO</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SelectBusca opcoes={opcoesDeItem(itens)} valor={novoItemId} onChange={setNovoItemId}
-                      placeholder="Procure o item vendido (nome ou código)" />
-                  </div>
-                  <button onClick={criarEstrutura}
-                    style={{ fontSize: 9, fontWeight: 700, padding: '5px 12px', border: 'none', borderRadius: 4,
-                      background: '#4f46e5', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    Configurar
-                  </button>
-                </div>
-              </div>
-            )}
           </>
-        )}
-
-        {carregando && <div style={{ fontSize: 10, color: '#4338ca', marginTop: 10 }}>Carregando…</div>}
-        {arvore && !carregando && (
-          <EditorArvore arvore={arvore} itens={itens} pode={pode} currentUser={currentUser}
-            aoMudar={recarregarArvore} />
         )}
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+/** O interruptor: marcar o item que representa o material de instalação. */
+function MarcaConjunto({ item, pode }) {
+  const [marcado, setMarcado] = useState(!!item.eh_conjunto_instalacao);
+  useEffect(() => { setMarcado(!!item.eh_conjunto_instalacao); }, [item.id]);
+  const trocar = async (v) => {
+    setMarcado(v);
+    await supabase.from('cadastro_itens').update({ eh_conjunto_instalacao: v }).eq('id', item.id);
+  };
+  return (
+    <div style={{ marginTop: 8, background: marcado ? '#fffbeb' : '#f8fafc',
+      border: `1px solid ${marcado ? '#fcd34d' : '#e2e8f0'}`, borderRadius: 6, padding: '7px 10px' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10.5, cursor: pode ? 'pointer' : 'default' }}>
+        <input type="checkbox" checked={marcado} disabled={!pode}
+          onChange={e => trocar(e.target.checked)} style={{ accentColor: '#d97706' }} />
+        <span><b>Este item é o Conjunto de Instalação</b></span>
+      </label>
+      <div style={{ fontSize: 9, color: '#78350f', marginTop: 3 }}>
+        É o item que representa suportes, chicotes, parafusos e afins na nota e no PV. A presença
+        dele na venda é o que <b>liga</b> a montagem automática do material. Venda sem conjunto —
+        cliente que usa peça de terceiro — não monta nada.
+      </div>
+    </div>
+  );
+}
 
-function EditorArvore({ arvore, itens, pode, currentUser, aoMudar }) {
-  const [novoMaterial, setNovoMaterial] = useState({ item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
-  const estruturaId = arvore.estrutura.id;
-
-  const perguntaPorOpcao = new Map();
-  arvore.perguntas.forEach(p => { if (p.opcao_pai_id) perguntaPorOpcao.set(p.opcao_pai_id, p); });
-
+function PerguntasDoItem({ itemId, perguntas, itens, pode, currentUser, aoMudar }) {
   const nivelDe = (p, visto = 0) => {
     if (!p.opcao_pai_id || visto > 8) return 0;
-    const pai = arvore.perguntas.find(x => (x.opcoes || []).some(o => o.id === p.opcao_pai_id));
+    const pai = perguntas.find(x => (x.opcoes || []).some(o => o.id === p.opcao_pai_id));
     return pai ? nivelDe(pai, visto + 1) + 1 : 0;
   };
+  const temFilha = (opcaoId) => perguntas.some(p => p.opcao_pai_id === opcaoId);
 
   const addPergunta = async (opcaoPaiId = null) => {
     const texto = await pedirTexto(opcaoPaiId
       ? 'Pergunta que só aparece depois desta resposta:'
-      : 'Qual pergunta o sistema deve fazer?\n\nEx.: "Tem hack de teto?"', '');
+      : 'Qual pergunta o vendedor deve responder sobre o carro?\n\nEx.: "Tem hack de teto?"', '');
     if (!texto?.trim()) return;
-    const { error } = await supabase.from('config_perguntas').insert([{
-      estrutura_id: estruturaId, opcao_pai_id: opcaoPaiId,
-      texto: texto.trim(), ordem: arvore.perguntas.length,
+    const { error } = await supabase.from('item_perguntas').insert([{
+      item_id: itemId, opcao_pai_id: opcaoPaiId, texto: texto.trim(), ordem: perguntas.length,
+      criado_por_nome: currentUser?.nome || '—',
     }]);
-    if (error) { alert('Não foi possível criar a pergunta: ' + error.message); return; }
+    if (error) { alert('Não foi possível criar: ' + error.message); return; }
     aoMudar();
   };
-
-  const addOpcao = async (perguntaId, qtdAtual) => {
-    const rot = await pedirTexto('Resposta possível:\n\nEx.: "Sim, hack alto"', '');
+  const addOpcao = async (perguntaId, qtd) => {
+    const rot = await pedirTexto('Resposta possível:\n\nEx.: "Tem, hack alto"', '');
     if (!rot?.trim()) return;
-    const { error } = await supabase.from('config_opcoes')
-      .insert([{ pergunta_id: perguntaId, rotulo: rot.trim(), ordem: qtdAtual }]);
-    if (error) { alert('Não foi possível criar a resposta: ' + error.message); return; }
+    await supabase.from('item_pergunta_opcoes').insert([{ pergunta_id: perguntaId, rotulo: rot.trim(), ordem: qtd }]);
     aoMudar();
   };
-
   const apagar = async (tabela, id, oque) => {
     if (!await confirmar(`Apagar ${oque}?`)) return;
     await supabase.from(tabela).delete().eq('id', id);
     aoMudar();
   };
-
-  const addMaterial = async () => {
-    if (!novoMaterial.item_id) { alert('Escolha o item de material.'); return; }
-    const { error } = await supabase.from('config_materiais').insert([{
-      estrutura_id: estruturaId,
-      opcao_id: novoMaterial.opcao_id || null,
-      item_id: novoMaterial.item_id,
-      quantidade: Number(String(novoMaterial.quantidade).replace(',', '.')) || 1,
-      acao: novoMaterial.acao,
-      ordem: arvore.materiais.length,
-    }]);
-    if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
-    setNovoMaterial({ item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
-    aoMudar();
-  };
-
   const definirRegra = async (opcao) => {
-    const atual = (opcao.auto_quando_itens || []).length;
     const txt = await pedirTexto(
       'Esta resposta vale sozinha quando QUAIS itens estiverem na venda?\n\n'
-      + 'Informe os códigos separados por vírgula. Vazio apaga a regra.\n'
-      + 'Ex.: parachoque frontal e traseiro → o suporte deixa de ser necessário.',
-      '');
+      + 'Códigos separados por vírgula. Vazio apaga a regra.\n'
+      + 'Caso real: parachoque de impulsão + slimled — os slimled prendem direto no parachoque,\n'
+      + 'então o suporte deles sai da lista e ninguém precisa ser perguntado.', '');
     if (txt === null) return;
     const codigos = String(txt).split(',').map(s => s.trim()).filter(Boolean);
     let ids = [];
     if (codigos.length) {
       const { data } = await supabase.from('cadastro_itens').select('id,codigo').in('codigo', codigos);
       ids = (data || []).map(d => d.id);
-      const achados = (data || []).map(d => String(d.codigo));
-      const faltando = codigos.filter(c => !achados.includes(c));
-      if (faltando.length) { alert('Código não encontrado no cadastro: ' + faltando.join(', ')); return; }
+      const faltando = codigos.filter(c => !(data || []).some(d => String(d.codigo) === c));
+      if (faltando.length) { alert('Código não encontrado: ' + faltando.join(', ')); return; }
     }
-    await supabase.from('config_opcoes')
+    await supabase.from('item_pergunta_opcoes')
       .update({ auto_quando_itens: ids.length ? ids : null }).eq('id', opcao.id);
-    alert(ids.length
-      ? `Regra gravada: esta resposta vale sozinha quando os ${ids.length} item(ns) estiverem na venda.`
-      : (atual ? 'Regra apagada — a pergunta volta a ser feita.' : 'Nenhuma regra definida.'));
     aoMudar();
   };
 
-  const materiaisDe = (opcaoId) => arvore.materiais.filter(m => (m.opcao_id || null) === (opcaoId || null));
-
-  const LinhaMaterial = ({ m }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, padding: '2px 0' }}>
-      <span style={{ fontWeight: 800, color: m.acao === 'remover' ? '#b91c1c' : '#0f766e', minWidth: 58 }}>
-        {m.acao === 'remover' ? '− tira' : '+ usa'} {m.quantidade}
-      </span>
-      <span style={{ flex: 1 }}>
-        {m.cadastro_itens?.codigo ? <b>{m.cadastro_itens.codigo} — </b> : null}
-        {m.cadastro_itens?.nome || '(item)'}
-        {m.cadastro_itens?.controla_estoque && (
-          <span style={{ fontSize: 8, background: '#dcfce7', color: '#15803d', borderRadius: 3,
-            padding: '0 4px', marginLeft: 5, fontWeight: 800 }}>estoque</span>
-        )}
-      </span>
-      {pode && (
-        <button onClick={() => apagar('config_materiais', m.id, 'esta linha de material')}
-          style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>
-      )}
-    </div>
-  );
-
   return (
-    <div style={{ marginTop: 12, border: '1px solid #c7d2fe', borderRadius: 7, padding: 10, background: '#fafaff' }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', marginBottom: 6 }}>
-        MATERIAL FIXO — entra sempre, independente das respostas
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', marginBottom: 5 }}>
+        PERGUNTAS DESTE ITEM ({perguntas.length}) — valem em qualquer carro
       </div>
-      {materiaisDe(null).length === 0 && (
-        <div style={{ fontSize: 10, color: '#94a3b8' }}>Nenhum material fixo ainda.</div>
-      )}
-      {materiaisDe(null).map(m => <LinhaMaterial key={m.id} m={m} />)}
-
-      <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', margin: '12px 0 6px' }}>
-        PERGUNTAS ({arvore.perguntas.length})
-      </div>
-      {arvore.perguntas.length === 0 && (
+      {!perguntas.length && (
         <div style={{ fontSize: 10, color: '#94a3b8' }}>
-          Nenhuma. Se a adaptação não varia neste carro, o material fixo acima já basta.
+          Nenhuma. Se a instalação deste item não varia conforme o carro, não precisa de pergunta.
         </div>
       )}
-      {arvore.perguntas.map(p => (
+      {perguntas.map(p => (
         <div key={p.id} style={{ marginLeft: nivelDe(p) * 16, borderLeft: p.opcao_pai_id ? '2px solid #e0e7ff' : 'none',
-          paddingLeft: p.opcao_pai_id ? 8 : 0, marginBottom: 8 }}>
+          paddingLeft: p.opcao_pai_id ? 8 : 0, marginBottom: 7 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, fontWeight: 700, flex: 1 }}>❓ {p.texto}</span>
             {pode && (
@@ -292,86 +187,150 @@ function EditorArvore({ arvore, itens, pode, currentUser, aoMudar }) {
                 <button onClick={() => addOpcao(p.id, (p.opcoes || []).length)}
                   style={{ fontSize: 9, padding: '1px 7px', border: '1px solid #4f46e5', borderRadius: 4,
                     background: '#fff', color: '#4338ca', cursor: 'pointer' }}>+ resposta</button>
-                <button onClick={() => apagar('config_perguntas', p.id, `a pergunta "${p.texto}"`)}
+                <button onClick={() => apagar('item_perguntas', p.id, `a pergunta "${p.texto}"`)}
                   style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>
               </>
             )}
           </div>
-          {(p.opcoes || []).length === 0 && (
-            <div style={{ fontSize: 9.5, color: '#f59e0b', marginLeft: 14 }}>
-              ⚠ sem respostas — esta pergunta não faz nada ainda
-            </div>
+          {!(p.opcoes || []).length && (
+            <div style={{ fontSize: 9.5, color: '#f59e0b', marginLeft: 14 }}>⚠ sem respostas — não faz nada ainda</div>
           )}
           {(p.opcoes || []).map(o => (
-            <div key={o.id} style={{ marginLeft: 14, marginTop: 3, paddingLeft: 8, borderLeft: '2px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 10.5, flex: 1 }}>
-                  ▸ {o.rotulo}
-                  {(o.auto_quando_itens || []).length > 0 && (
-                    <span style={{ fontSize: 8, background: '#fef3c7', color: '#b45309', borderRadius: 3,
-                      padding: '0 4px', marginLeft: 5, fontWeight: 800 }}>
-                      automática ({o.auto_quando_itens.length} itens)
-                    </span>
-                  )}
-                </span>
-                {pode && (
-                  <>
-                    <button onClick={() => definirRegra(o)}
-                      style={{ fontSize: 8.5, padding: '1px 6px', border: '1px solid #fcd34d', borderRadius: 4,
-                        background: '#fff', color: '#b45309', cursor: 'pointer' }}>regra</button>
-                    {!perguntaPorOpcao.get(o.id) && (
-                      <button onClick={() => addPergunta(o.id)}
-                        style={{ fontSize: 8.5, padding: '1px 6px', border: '1px solid #c7d2fe', borderRadius: 4,
-                          background: '#fff', color: '#4338ca', cursor: 'pointer' }}>+ pergunta</button>
-                    )}
-                    <button onClick={() => apagar('config_opcoes', o.id, `a resposta "${o.rotulo}"`)}
-                      style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>
-                  </>
+            <div key={o.id} style={{ marginLeft: 14, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10.5, flex: 1 }}>
+                ▸ {o.rotulo}
+                {(o.auto_quando_itens || []).length > 0 && (
+                  <span style={{ fontSize: 8, background: '#fef3c7', color: '#b45309', borderRadius: 3,
+                    padding: '0 4px', marginLeft: 5, fontWeight: 800 }}>
+                    automática ({o.auto_quando_itens.length})
+                  </span>
                 )}
-              </div>
-              {materiaisDe(o.id).map(m => (
-                <div key={m.id} style={{ marginLeft: 10 }}><LinhaMaterial m={m} /></div>
-              ))}
+              </span>
+              {pode && (
+                <>
+                  <button onClick={() => definirRegra(o)}
+                    style={{ fontSize: 8.5, padding: '1px 6px', border: '1px solid #fcd34d', borderRadius: 4,
+                      background: '#fff', color: '#b45309', cursor: 'pointer' }}>regra</button>
+                  {!temFilha(o.id) && (
+                    <button onClick={() => addPergunta(o.id)}
+                      style={{ fontSize: 8.5, padding: '1px 6px', border: '1px solid #c7d2fe', borderRadius: 4,
+                        background: '#fff', color: '#4338ca', cursor: 'pointer' }}>+ pergunta</button>
+                  )}
+                  <button onClick={() => apagar('item_pergunta_opcoes', o.id, `a resposta "${o.rotulo}"`)}
+                    style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>
+                </>
+              )}
             </div>
           ))}
         </div>
       ))}
-
       {pode && (
         <button onClick={() => addPergunta(null)}
           style={{ fontSize: 9, fontWeight: 700, padding: '3px 10px', border: '1px solid #4f46e5',
-            borderRadius: 4, background: '#fff', color: '#4338ca', cursor: 'pointer', marginTop: 4 }}>
+            borderRadius: 4, background: '#fff', color: '#4338ca', cursor: 'pointer', marginTop: 3 }}>
           + pergunta
         </button>
       )}
+    </div>
+  );
+}
+
+function MaterialNoVeiculo({ veiculoId, itemId, materiais, perguntas, itens, pode, currentUser, aoMudar }) {
+  const [novo, setNovo] = useState({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
+
+  const add = async () => {
+    if (!novo.material_item_id) { alert('Escolha o material.'); return; }
+    const { error } = await supabase.from('veiculo_item_materiais').insert([{
+      veiculo_id: veiculoId, item_id: itemId,
+      opcao_id: novo.opcao_id || null,
+      material_item_id: novo.material_item_id,
+      quantidade: Number(String(novo.quantidade).replace(',', '.')) || 1,
+      acao: novo.acao, ordem: materiais.length,
+      criado_por_nome: currentUser?.nome || '—',
+    }]);
+    if (error) { alert('Não foi possível adicionar: ' + error.message); return; }
+    setNovo({ material_item_id: '', quantidade: '1', acao: 'adicionar', opcao_id: '' });
+    aoMudar();
+  };
+  const apagar = async (id) => {
+    if (!await confirmar('Apagar esta linha de material?')) return;
+    await supabase.from('veiculo_item_materiais').delete().eq('id', id);
+    aoMudar();
+  };
+  const rotuloDaOpcao = (opcaoId) => {
+    for (const p of perguntas) {
+      const o = (p.opcoes || []).find(x => x.id === opcaoId);
+      if (o) return `${p.texto} → ${o.rotulo}`;
+    }
+    return 'resposta apagada';
+  };
+
+  const fixos = materiais.filter(m => !m.opcao_id);
+  const porResposta = materiais.filter(m => m.opcao_id);
+
+  const Linha = ({ m }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, padding: '2px 0' }}>
+      <span style={{ fontWeight: 800, color: m.acao === 'remover' ? '#b91c1c' : '#0f766e', minWidth: 60 }}>
+        {m.acao === 'remover' ? '− tira' : '+ usa'} {m.quantidade}
+      </span>
+      <span style={{ flex: 1 }}>
+        {m.material?.codigo ? <b>{m.material.codigo} — </b> : null}{m.material?.nome || '(item)'}
+        {m.material?.controla_estoque && (
+          <span style={{ fontSize: 8, background: '#dcfce7', color: '#15803d', borderRadius: 3,
+            padding: '0 4px', marginLeft: 5, fontWeight: 800 }}>estoque</span>
+        )}
+      </span>
+      {pode && <button onClick={() => apagar(m.id)}
+        style={{ fontSize: 9, border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer' }}>✕</button>}
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 10, border: '1px solid #c7d2fe', borderRadius: 7, padding: 10, background: '#fafaff' }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', marginBottom: 4 }}>
+        SEMPRE, NESTE CARRO ({fixos.length})
+      </div>
+      {!fixos.length && <div style={{ fontSize: 10, color: '#94a3b8' }}>Nenhum material fixo.</div>}
+      {fixos.map(m => <Linha key={m.id} m={m} />)}
+
+      {porResposta.length > 0 && (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#3730a3', margin: '10px 0 4px' }}>
+            CONFORME A RESPOSTA ({porResposta.length})
+          </div>
+          {porResposta.map(m => (
+            <div key={m.id}>
+              <div style={{ fontSize: 9, color: '#6366f1', marginTop: 3 }}>{rotuloDaOpcao(m.opcao_id)}</div>
+              <div style={{ marginLeft: 10 }}><Linha m={m} /></div>
+            </div>
+          ))}
+        </>
+      )}
 
       {pode && (
-        <div style={{ marginTop: 12, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px' }}>
-          <label style={rotulo}>＋ ADICIONAR MATERIAL</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 70px 110px minmax(0,1.4fr) auto', gap: 6, alignItems: 'center' }}>
-            <SelectBusca opcoes={opcoesDeItem(itens)} valor={novoMaterial.item_id}
-              onChange={v => setNovoMaterial(f => ({ ...f, item_id: v }))} placeholder="Item de material" />
-            <input style={campo} inputMode="decimal" value={novoMaterial.quantidade}
-              onChange={e => setNovoMaterial(f => ({ ...f, quantidade: e.target.value }))} placeholder="Qtd" />
-            <select style={campo} value={novoMaterial.acao}
-              onChange={e => setNovoMaterial(f => ({ ...f, acao: e.target.value }))}>
+        <div style={{ marginTop: 10, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px' }}>
+          <label style={rotulo}>＋ MATERIAL QUE ESTE ITEM CONSOME NESTE CARRO</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 70px 110px minmax(0,1.6fr) auto', gap: 6, alignItems: 'center' }}>
+            <SelectBusca opcoes={opcoesDeItem(itens)} valor={novo.material_item_id}
+              onChange={v => setNovo(f => ({ ...f, material_item_id: v }))} placeholder="Material" />
+            <input style={campo} inputMode="decimal" value={novo.quantidade}
+              onChange={e => setNovo(f => ({ ...f, quantidade: e.target.value }))} placeholder="Qtd" />
+            <select style={campo} value={novo.acao} onChange={e => setNovo(f => ({ ...f, acao: e.target.value }))}>
               <option value="adicionar">usa</option>
               <option value="remover">tira da lista</option>
             </select>
-            <select style={campo} value={novoMaterial.opcao_id}
-              onChange={e => setNovoMaterial(f => ({ ...f, opcao_id: e.target.value }))}>
-              <option value="">sempre (material fixo)</option>
-              {arvore.perguntas.flatMap(p => (p.opcoes || []).map(o => (
+            <select style={campo} value={novo.opcao_id} onChange={e => setNovo(f => ({ ...f, opcao_id: e.target.value }))}>
+              <option value="">sempre, neste carro</option>
+              {perguntas.flatMap(p => (p.opcoes || []).map(o => (
                 <option key={o.id} value={o.id}>{p.texto} → {o.rotulo}</option>
               )))}
             </select>
-            <button onClick={addMaterial}
+            <button onClick={add}
               style={{ fontSize: 9, fontWeight: 700, padding: '5px 12px', border: 'none', borderRadius: 4,
                 background: '#4f46e5', color: '#fff', cursor: 'pointer' }}>Adicionar</button>
           </div>
           <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
-            "tira da lista" serve para a regra que <b>desfaz</b>: parachoque de impulsão frontal e traseiro
-            dispensa o suporte. Deixe a quantidade em 0 para tirar o item inteiro.
+            "tira da lista" é para a regra que <b>desfaz</b>. Quantidade 0 tira o item inteiro.
           </div>
         </div>
       )}

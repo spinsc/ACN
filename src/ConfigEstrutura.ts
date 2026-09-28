@@ -1,99 +1,93 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ESTRUTURA DE CONFIGURAÇÃO — veículo × item vendido
+// ESTRUTURA DE INSTALAÇÃO — pergunta no item, material no veículo
 //
-// Responde à pergunta: "o que a fábrica precisa separar para instalar ESTE item
-// NESTE carro?". A resposta nem sempre é uma lista fixa — depende de variações
-// do carro, e é por isso que existem perguntas.
+// Reescrito em 28/09/2026 depois do alinhamento com o usuário. A primeira
+// versão amarrava a pergunta ao par (veículo × item), e estava errado:
 //
-// A árvore, nas palavras do usuário (26/09/2026):
-//   "uma Nivus pode ter hack de teto ou não; se tiver, pode ser alto ou baixo"
-// Ou seja: responder uma pergunta pode levar a OUTRA pergunta. Lista plana não
-// daria conta — daí `opcao_pai_id` ligando pergunta a uma resposta anterior.
+//   "tem hack de teto?" é pergunta DA BARRA SINALIZADORA e vale em qualquer
+//   carro. O que muda de carro para carro é o MATERIAL que cada resposta
+//   consome.
 //
-// E há o que NÃO se pergunta: "se tem parachoque de impulsão frontal e traseiro,
-// não precisa de suporte". O sistema já sabe pelos itens vendidos. Isso é a
-// opção com `auto_quando_itens`, combinada com material de ação 'remover'.
+// Com o modelo antigo a mesma pergunta teria de ser redigitada em cada carro
+// onde a barra fosse vendida — e o histórico já tem 91 modelos distintos.
 //
-// Só cálculo e leitura; a tela mora em ConfigEstruturaTela.tsx.
+// O INTERRUPTOR
+//
+// Nada disto roda se o Conjunto Elétrico não estiver na venda. Ele é um item
+// vendido à parte (aparece na nota e no PV porque licitação exige tudo
+// especificado) e representa o material de instalação: suportes, chicotes,
+// parafusos, porcas, arruelas, EVAs, colas. O vendedor só o seleciona quando
+// vai precisar — cliente que traz suporte e chicote de terceiros não leva
+// conjunto, e aí a estrutura não é aplicada.
+//
+// Só regra e leitura; as telas moram em ConfigEstruturaTela.tsx e
+// AplicarEstrutura.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabaseClient';
 
 const num = (v: any) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
-export type Arvore = {
-  estrutura: any;
-  perguntas: any[];      // com .opcoes dentro
-  materiais: any[];
-};
+// ── Perguntas (no item) ──────────────────────────────────────────────────────
 
-/** Carrega a árvore inteira de um par veículo × item. Null se não existir. */
-export async function carregarArvore(veiculoId: string, itemId: string): Promise<Arvore | null> {
-  const { data: estrutura } = await supabase.from('config_estruturas')
-    .select('*').eq('veiculo_id', veiculoId).eq('item_id', itemId).eq('ativo', true).maybeSingle();
-  if (!estrutura) return null;
-  return await carregarArvorePorId(estrutura.id, estrutura);
-}
-
-export async function carregarArvorePorId(estruturaId: string, estrutura?: any): Promise<Arvore> {
-  const [{ data: est }, { data: perguntas }, { data: materiais }] = await Promise.all([
-    estrutura ? Promise.resolve({ data: estrutura })
-              : supabase.from('config_estruturas').select('*').eq('id', estruturaId).maybeSingle(),
-    supabase.from('config_perguntas').select('*').eq('estrutura_id', estruturaId).order('ordem'),
-    supabase.from('config_materiais')
-      .select('*, cadastro_itens(id,codigo,nome,unidade,controla_estoque)')
-      .eq('estrutura_id', estruturaId).order('ordem'),
-  ]);
-  const ids = (perguntas || []).map((p: any) => p.id);
-  const { data: opcoes } = ids.length
-    ? await supabase.from('config_opcoes').select('*').in('pergunta_id', ids).order('ordem')
-    : { data: [] as any[] };
+/** Perguntas de um item, com as respostas possíveis dentro. */
+export async function perguntasDoItem(itemId: string) {
+  const { data: perguntas } = await supabase.from('item_perguntas')
+    .select('*').eq('item_id', itemId).order('ordem');
+  if (!perguntas?.length) return [];
+  const { data: opcoes } = await supabase.from('item_pergunta_opcoes')
+    .select('*').in('pergunta_id', perguntas.map(p => p.id)).order('ordem');
   const porPergunta = new Map<string, any[]>();
   (opcoes || []).forEach((o: any) => {
     if (!porPergunta.has(o.pergunta_id)) porPergunta.set(o.pergunta_id, []);
     porPergunta.get(o.pergunta_id)!.push(o);
   });
-  return {
-    estrutura: est,
-    perguntas: (perguntas || []).map((p: any) => ({ ...p, opcoes: porPergunta.get(p.id) || [] })),
-    materiais: materiais || [],
-  };
+  return perguntas.map((p: any) => ({ ...p, opcoes: porPergunta.get(p.id) || [] }));
 }
 
-/** Todas as estruturas já configuradas de um veículo, para a tela listar. */
-export async function estruturasDoVeiculo(veiculoId: string) {
-  const { data } = await supabase.from('config_estruturas')
-    .select('*, cadastro_itens(id,codigo,nome)')
-    .eq('veiculo_id', veiculoId).eq('ativo', true);
-  return data || [];
+/** Perguntas de vários itens de uma vez, para a tela da OPL. */
+export async function perguntasDeVariosItens(itemIds: string[]) {
+  const ids = [...new Set((itemIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return [];
+  const { data: perguntas } = await supabase.from('item_perguntas')
+    .select('*, cadastro_itens(id,nome,codigo)').in('item_id', ids).order('ordem');
+  if (!perguntas?.length) return [];
+  const { data: opcoes } = await supabase.from('item_pergunta_opcoes')
+    .select('*').in('pergunta_id', perguntas.map((p: any) => p.id)).order('ordem');
+  const porPergunta = new Map<string, any[]>();
+  (opcoes || []).forEach((o: any) => {
+    if (!porPergunta.has(o.pergunta_id)) porPergunta.set(o.pergunta_id, []);
+    porPergunta.get(o.pergunta_id)!.push(o);
+  });
+  return perguntas.map((p: any) => ({ ...p, opcoes: porPergunta.get(p.id) || [] }));
 }
 
 /**
- * Quais perguntas precisam ser feitas, dado o que já foi respondido.
+ * Quais perguntas cabe fazer agora.
  *
- * Só entra na lista a pergunta cujo "pai" já foi respondido com a opção que
- * leva a ela — é isso que faz "qual altura do hack?" só aparecer depois de
- * alguém dizer que tem hack.
+ * Só entra a pergunta cujo "pai" já foi respondido com a resposta que leva a
+ * ela — é o que faz "hack alto ou baixo?" só aparecer depois de alguém dizer
+ * que o carro tem hack.
  */
-export function perguntasPendentes(arvore: Arvore, respostas: Record<string, string>) {
+export function perguntasPendentes(perguntas: any[], respostas: Record<string, string>) {
   const escolhidas = new Set(Object.values(respostas || {}));
-  return (arvore.perguntas || []).filter(p => {
-    if (respostas?.[p.id]) return false;                       // já respondida
-    if (!p.opcao_pai_id) return true;                          // primeiro nível
-    return escolhidas.has(p.opcao_pai_id);                     // o pai abriu esta
+  return (perguntas || []).filter(p => {
+    if (respostas?.[p.id]) return false;
+    if (!p.opcao_pai_id) return true;
+    return escolhidas.has(p.opcao_pai_id);
   });
 }
 
 /**
- * Responde sozinho o que der, olhando os itens vendidos.
+ * O que a venda já responde sozinha.
  *
- * "Se tem parachoque de impulsão frontal e traseiro, não precisa de suporte" —
- * o usuário não quer que isso seja perguntado, porque a venda já diz.
- * A opção vale quando TODOS os itens da combinação estão na venda.
+ * Caso real do usuário: vendeu parachoque de impulsão e slimled juntos? Os
+ * slimled prendem direto no parachoque, então o suporte deles sai — e ninguém
+ * precisa ser perguntado.
  */
-export function respostasAutomaticas(arvore: Arvore, itensVendidosIds: string[]) {
+export function respostasAutomaticas(perguntas: any[], itensVendidosIds: string[]) {
   const vendidos = new Set((itensVendidosIds || []).filter(Boolean).map(String));
   const auto: Record<string, string> = {};
-  for (const p of arvore.perguntas || []) {
+  for (const p of perguntas || []) {
     for (const o of p.opcoes || []) {
       const combo = (o.auto_quando_itens || []).map(String).filter(Boolean);
       if (!combo.length) continue;
@@ -103,55 +97,87 @@ export function respostasAutomaticas(arvore: Arvore, itensVendidosIds: string[])
   return auto;
 }
 
+// ── Material (no veículo) ────────────────────────────────────────────────────
+
+/** Material que os itens vendidos consomem naquele veículo. */
+export async function materiaisDoVeiculo(veiculoId: string, itemIds: string[]) {
+  const ids = [...new Set((itemIds || []).filter(Boolean).map(String))];
+  if (!veiculoId || !ids.length) return [];
+  const { data } = await supabase.from('veiculo_item_materiais')
+    .select('*, material:cadastro_itens!material_item_id(id,codigo,nome,unidade,controla_estoque)')
+    .eq('veiculo_id', veiculoId).in('item_id', ids).order('ordem');
+  return data || [];
+}
+
+/** Quais destes itens ainda NÃO foram adaptados neste carro. */
+export async function itensSemEstrutura(veiculoId: string, itemIds: string[]) {
+  const ids = [...new Set((itemIds || []).filter(Boolean).map(String))];
+  if (!veiculoId || !ids.length) return ids;
+  const { data } = await supabase.from('veiculo_item_materiais')
+    .select('item_id').eq('veiculo_id', veiculoId).in('item_id', ids);
+  const comEstrutura = new Set((data || []).map((d: any) => String(d.item_id)));
+  return ids.filter(id => !comEstrutura.has(id));
+}
+
 /**
  * Monta a lista de material a partir das respostas.
  *
- * Ordem importa: primeiro tudo que ADICIONA, depois o que REMOVE. Senão um
- * "remover suporte" declarado antes do "adicionar suporte" não teria efeito —
- * e a regra do parachoque, que é justamente uma remoção, falharia em silêncio.
+ * Ordem importa: ADICIONA tudo antes de REMOVER qualquer coisa. Se as remoções
+ * rodassem na ordem de cadastro, um "tira o suporte" declarado antes do "usa o
+ * suporte" não teria efeito, e a regra do parachoque falharia em silêncio — o
+ * pior tipo de falha para quem separa material.
  */
-export function materialDaConfiguracao(arvore: Arvore, respostas: Record<string, string>, multiplicador = 1) {
+export function montarMaterial(materiais: any[], respostas: Record<string, string>, qtdPorItem: Record<string, number> = {}) {
   const escolhidas = new Set(Object.values(respostas || {}).filter(Boolean));
   const vale = (m: any) => !m.opcao_id || escolhidas.has(m.opcao_id);
-  const linhas = (arvore.materiais || []).filter(vale);
+  const linhas = (materiais || []).filter(vale);
+  const mult = (m: any) => num(qtdPorItem?.[m.item_id]) || 1;
 
   const soma = new Map<string, any>();
   for (const m of linhas.filter(x => x.acao !== 'remover')) {
-    const it = m.cadastro_itens || {};
-    const atual = soma.get(m.item_id);
-    const qtd = num(m.quantidade) * (multiplicador || 1);
-    if (atual) atual.quantidade += qtd;
-    else soma.set(m.item_id, {
-      item_id: m.item_id, nome: it.nome || '(item)', codigo: it.codigo || '',
-      unidade: it.unidade || 'UN', quantidade: qtd, nao_cadastrado: false,
+    const it = m.material || {};
+    const q = num(m.quantidade) * mult(m);
+    const atual = soma.get(m.material_item_id);
+    if (atual) atual.quantidade += q;
+    else soma.set(m.material_item_id, {
+      item_id: m.material_item_id, nome: it.nome || '(item)', codigo: it.codigo || '',
+      unidade: it.unidade || 'UN', quantidade: q, nao_cadastrado: false,
     });
   }
   for (const m of linhas.filter(x => x.acao === 'remover')) {
-    const atual = soma.get(m.item_id);
+    const atual = soma.get(m.material_item_id);
     if (!atual) continue;
-    const qtd = num(m.quantidade) * (multiplicador || 1);
-    // quantidade 0 no cadastro = "tira tudo"; com número, tira só aquilo
-    if (!num(m.quantidade) || atual.quantidade <= qtd) soma.delete(m.item_id);
-    else atual.quantidade -= qtd;
+    const q = num(m.quantidade) * mult(m);
+    if (!num(m.quantidade) || atual.quantidade <= q) soma.delete(m.material_item_id);
+    else atual.quantidade -= q;
   }
   return [...soma.values()];
 }
 
-/** Junta o material de várias estruturas (vários itens vendidos) numa lista só. */
-export function juntarMateriais(listas: any[][]) {
-  const soma = new Map<string, any>();
-  for (const lista of listas || []) {
-    for (const l of lista || []) {
-      const atual = soma.get(l.item_id);
-      if (atual) atual.quantidade += num(l.quantidade);
-      else soma.set(l.item_id, { ...l, quantidade: num(l.quantidade) });
-    }
-  }
-  return [...soma.values()];
+// ── O interruptor ────────────────────────────────────────────────────────────
+
+/** Itens marcados como "conjunto de instalação" no cadastro. */
+export async function itensConjunto() {
+  const { data } = await supabase.from('cadastro_itens')
+    .select('id,codigo,nome').eq('eh_conjunto_instalacao', true).eq('ativo', true);
+  return data || [];
 }
 
-/** Texto curto do que a configuração produziu, para o aviso na tela. */
-export function textoDoMaterial(linhas: any[]) {
-  if (!linhas?.length) return 'Nenhum material — a configuração não gerou linhas.';
-  return linhas.map(l => `• ${l.codigo ? l.codigo + ' — ' : ''}${l.nome}: ${l.quantidade} ${l.unidade || 'UN'}`).join('\n');
+/**
+ * A venda leva conjunto de instalação?
+ *
+ * Só se levar é que a estrutura do veículo entra. Sem conjunto, o cliente está
+ * usando suporte e chicote de terceiros — e o sistema não tem o que montar.
+ */
+export function vendaTemConjunto(vendidos: any[], idsConjunto: string[]) {
+  const conj = new Set((idsConjunto || []).map(String));
+  return (vendidos || []).some(v => v?.item_id && conj.has(String(v.item_id)));
+}
+
+/** Como a OPL quer o veículo naquele tipo de venda. */
+export async function modoDoVeiculo(fluxo: string) {
+  if (!fluxo) return 'opcional';
+  const { data } = await supabase.from('fluxo_config')
+    .select('veiculo_modo').eq('fluxo', fluxo).maybeSingle();
+  return data?.veiculo_modo || 'opcional';
 }
