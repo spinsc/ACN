@@ -99,38 +99,55 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   // logo à esquerda dele. Evita usar um offset fixo de window.innerWidth,
   // que ficava sobrepondo esses botões conforme o conteúdo do header varia
   // (nome do usuário, badge de análise visível ou não, etc.).
-  const POS_MINIMIZADO = () => {
-    // Cabeçalho novo: o pin fica no espaço livre à esquerda da busca
-    // (antes, à esquerda dos botões da direita — agora a busca está colada neles).
-    const buscaEl = document.querySelector('.acn-busca');
-    const rb = buscaEl?.getBoundingClientRect();
-    if (rb && rb.width > 0) return { x: Math.max(rb.left - 56, 16), y: 5 };
-    const rightEl = document.querySelector('.acn-right');
-    if (rightEl) {
-      const r = rightEl.getBoundingClientRect();
-      return { x: Math.max(r.left - 56, 16), y: 5 };
-    }
-    return { x: Math.max(window.innerWidth - 400, 16), y: 4 };
-  };
-  // Expandido: mesmo x do minimizado, mas desce abaixo do header pra não cobri-lo.
-  const POS_EXPANDIDO = () => ({ x: POS_MINIMIZADO().x, y: 72 });
+  // O PIN FLUTUA NO CANTO, ACIMA DO CHAT (28/09/2026)
+  //
+  // Antes ele morava no header, encostado à esquerda do campo de busca. Ali
+  // disputava espaço com a busca e com os ícones da direita, e a posição
+  // mudava conforme o conteúdo do cabeçalho — nome do usuário mais longo,
+  // selo de análise aparecendo. Fora que aviso não é ferramenta de cabeçalho:
+  // é recado, e recado fica onde o resto dos recados está.
+  //
+  // Agora ele nasce empilhado sobre o botão do chat, no canto de baixo à
+  // direita, alinhado com ele. Continua arrastável para quem quiser tirar da
+  // frente.
+  const PIN = 46;          // diâmetro do pin
+  const CHAT = 52;         // diâmetro do botão do chat (ChatWidget)
+  const MARGEM = 18;       // mesma margem que o chat usa
+  const ENTRE = 10;        // respiro entre os dois botões
+
+  const POS_MINIMIZADO = () => ({
+    // centralizado sobre o botão do chat, que é um pouco maior
+    x: Math.max(8, window.innerWidth - MARGEM - CHAT + (CHAT - PIN) / 2),
+    y: Math.max(8, window.innerHeight - MARGEM - CHAT - ENTRE - PIN),
+  });
+
+  // Expandido: sobe a partir do canto, para o painel abrir perto de onde foi
+  // clicado. A altura só se conhece depois de desenhar, então nasce numa
+  // posição razoável e o efeito abaixo ajusta a altura real.
+  const POS_EXPANDIDO = () => ({
+    x: Math.max(8, window.innerWidth - 320 - MARGEM),
+    y: Math.max(72, window.innerHeight - MARGEM - CHAT - ENTRE - 360),
+  });
 
   // posição inicial — já nasce na âncora do estado minimizado (padrão atual)
   useEffect(() => {
     setPos(POS_MINIMIZADO());
-    // o cabeçalho termina de montar (busca, contadores) um instante depois — reposiciona
-    const t = setTimeout(() => { if (minimizadoRef.current) setPos(POS_MINIMIZADO()); }, 800);
     const aoRedimensionar = () => { if (minimizadoRef.current) setPos(POS_MINIMIZADO()); };
     window.addEventListener('resize', aoRedimensionar);
-    // trocar de aba muda o caminho da tela e a largura da busca sem redimensionar a janela
-    let obs: ResizeObserver | null = null;
-    const t2 = setTimeout(() => {
-      if (typeof ResizeObserver === 'undefined') return;
-      obs = new ResizeObserver(aoRedimensionar);
-      document.querySelectorAll('.acn-busca, .acn-aba-selo').forEach(el => obs!.observe(el));
-    }, 300);
-    return () => { clearTimeout(t); clearTimeout(t2); obs?.disconnect(); window.removeEventListener('resize', aoRedimensionar); };
+    return () => window.removeEventListener('resize', aoRedimensionar);
   }, []);
+
+  // Abriu o painel: encosta a base dele logo acima do chat, agora que dá para
+  // medir a altura de verdade. Sem isto, painel curto ficava boiando e painel
+  // comprido passava por cima do botão.
+  const caixaRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (minimizado || !caixaRef.current || dragMoved.current) return;
+    const h = caixaRef.current.getBoundingClientRect().height;
+    if (!h) return;
+    const y = Math.max(72, window.innerHeight - MARGEM - CHAT - ENTRE - h);
+    setPos(p => (p && Math.abs(p.y - y) < 2 ? p : { x: POS_EXPANDIDO().x, y }));
+  }, [minimizado, avisos.length, mostraForm]);
 
   // ── drag ──────────────────────────────────────────────────────────────────
   const onHeaderMouseDown = useCallback((e: React.MouseEvent) => {
@@ -229,7 +246,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
 
         ) : (
           /* ── EXPANDIDO ── */
-          <div style={{ width: 320, borderRadius: 10, overflow: 'hidden', boxShadow: '0 6px 30px rgba(0,0,0,.28)' }}>
+          <div ref={caixaRef} style={{ width: 320, borderRadius: 10, overflow: 'hidden', boxShadow: '0 6px 30px rgba(0,0,0,.28)' }}>
 
             {/* cabeçalho draggável */}
             <div
