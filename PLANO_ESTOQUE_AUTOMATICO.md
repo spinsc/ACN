@@ -840,6 +840,62 @@ Dado de teste apagado (4 itens `ZZT-`, 1 veículo, 1 pergunta, 2 materiais) e
 contagem conferida zerada nas quatro tabelas.
 
 ---
+
+### ✅ Etapa 7.4 — O Conjunto Elétrico sai da lista e entra o conteúdo dele
+
+Correção de dois erros da 7.3, apontados pelo usuário em 28/09/2026 ao conferir
+o modelo. Estiveram no ar por cerca de uma hora.
+
+**O que estava errado**
+
+1. **A OP nascia só com o material de instalação.** Os produtos vendidos ficavam
+   de fora — a barra sinalizadora, que é o que de fato vai ser instalado, sumia
+   da lista que o Almoxarifado separa. Como a lista já nascia preenchida, a
+   Engenharia não disparava mais a sugestão automática e ninguém percebia a
+   falta.
+2. **O Conjunto Elétrico virava linha para separar.** Ele é a caixa, não a peça:
+   não existe "conjunto elétrico" na prateleira. O Almoxarifado receberia uma
+   linha impossível de separar, e o motor de estoque poderia abrir requisição de
+   compra dele.
+
+**O desenho correto, na palavra do usuário**
+
+> lista de material = itens vendidos (menos o Conjunto Elétrico) + o material
+> calculado, que **é** o conteúdo do Conjunto Elétrico
+
+O Conjunto continua na venda, na nota e no PV — licitação exige tudo
+especificado. Quem perde a linha é só o Almoxarifado, que separa peça de
+verdade. Cada linha calculada sai marcada **"do CONJUNTO ELÉTRICO"**, no mesmo
+padrão que o sistema já usa para produto com estrutura ("do BARRA
+SINALIZADORA").
+
+**Onde a correção NÃO alcança (de propósito)**
+
+Se o Conjunto está na venda mas aquele veículo ainda não tem material
+configurado, nada é escrito e a Engenharia sugere a lista como sempre fez — e aí
+o Conjunto ainda aparece como linha, para o engenheiro abrir na mão. É o caminho
+antigo, intacto: quem não foi configurado continua funcionando manual.
+
+**Teste — executado de verdade desta vez**
+
+Pelo padrão do projeto: dev server com as gravações bloqueadas, lendo o corpo do
+que *seria* gravado. A função de gravação foi chamada direto pelo módulo, o que
+contorna o formulário de 7 campos que travou o teste da 7.3.
+
+| Cenário | Lista montada |
+|---|---|
+| Conjunto na venda, 3 carros, "tem hack" | BARRA ×3 · SUPORTE ALTO ×6 · CABO ×12 |
+| Conjunto na venda, 1 carro, "não tem hack" | BARRA ×1 · SUPORTE **BAIXO** ×2 · CABO ×4 |
+| **Sem** Conjunto (suporte de terceiro) | nada gravado |
+| Conjunto na venda, pergunta sem resposta | BARRA ×1 · CABO ×4 (o suporte não entra) |
+
+O Conjunto Elétrico **não aparece** em nenhuma das listas, e a resposta troca o
+suporte de verdade. A quantidade multiplica pelo número de carros.
+
+Dado de teste apagado (5 itens `ZZT-`, 1 veículo, 1 pergunta, 2 opções, 3
+materiais) e contagem conferida zerada em sete tabelas.
+
+---
 ### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item · **PRÓXIMA**
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai

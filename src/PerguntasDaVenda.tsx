@@ -21,6 +21,7 @@ import {
   materiaisDoVeiculo, montarMaterial,
 } from './ConfigEstrutura';
 import { supabase } from './supabaseClient';
+import { sugerirBom } from './OpItens';
 
 export function PerguntasDaVenda({ itensVendidos, veiculoId, unidades = 1, loteMisto = false,
                                    respostas, onChange }) {
@@ -199,12 +200,31 @@ export async function gravarConfiguracaoDaOp({ opl, respostas, currentUser }) {
     const qtdPorItem = {};
     vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = Number(v.quantidade) || 1; });
     const linhas = montarMaterial(materiais, todas, qtdPorItem);
+    // nada calculado: a lista continua nascendo vazia e a Engenharia sugere na
+    // hora de liberar, exatamente como sempre foi
     if (!linhas.length) return;
 
-    // junta com o que já veio do vendido, somando item repetido
-    const atuais = Array.isArray(opl.bom_itens) ? opl.bom_itens : [];
+    // A LISTA COMPLETA (corrigido em 28/09/2026)
+    //
+    // O Conjunto Elétrico NÃO vira linha para separar: ele é a caixa, não a
+    // peça — não existe "conjunto elétrico" na prateleira. Ele sai da lista e
+    // entra no lugar dele o material que representa: o suporte que a resposta
+    // escolheu, os parafusos, o chicote. Na nota e no PV ele continua, porque
+    // licitação exige tudo especificado; quem perde a linha é só o
+    // Almoxarifado, que separa peça de verdade.
+    //
+    // E os produtos vendidos voltam para a lista: a barra sinalizadora também
+    // é separada. Sem isso a OP nascia só com o material de instalação e o
+    // produto principal sumia da separação.
+    const ehConj = (id) => conj.some(c => String(c.id) === String(id));
+    const naVenda = conj.find(c => vendidos.some(v => String(v.item_id) === String(c.id)));
+    const base = await sugerirBom(vendidos.filter(v => !ehConj(v.item_id)));
+    const conteudo = linhas.map(l => ({
+      ...l, descricao: l.descricao || `do ${naVenda?.nome || 'CONJUNTO ELÉTRICO'}`,
+    }));
+
     const mapa = new Map();
-    [...atuais, ...linhas].forEach(l => {
+    [...base, ...conteudo].forEach(l => {
       const chave = l.item_id || `txt:${l.nome}`;
       const ja = mapa.get(chave);
       if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
