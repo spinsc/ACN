@@ -17,7 +17,7 @@ import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar } from './Feedback';
 import { OrigemVendaBadge } from './OrigemVenda';
 import { fluxoLabel } from './FluxoEntrega';
-import { BomEditor, bomPreenchida, sugerirBom } from './OpItens';
+import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
 import { MenuAcoes } from './Interface';
 
@@ -849,6 +849,21 @@ export default function EngenhariaTab({ currentUser }) {
                   });
                 return [...mapa.values()];
               })} />
+            {/* Carro parecido já adaptado antes tem a lista pronta — redigitar
+                item por item é onde nasce a diferença entre duas OPs que
+                deviam ser iguais (28/09/2026). */}
+            <CopiarBomDeOutraOp oplAtual={modalBom} onCopiar={(linhas, modo) => setBomLinhas(atuais => {
+              if (modo === 'substituir') return linhas;
+              const mapa = new Map();
+              [...(atuais || []).filter(l => l?.item_id || String(l?.nome || '').trim()), ...linhas]
+                .forEach(l => {
+                  const chave = l.item_id || `txt:${l.nome}`;
+                  const ja = mapa.get(chave);
+                  if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
+                  else mapa.set(chave, { ...l });
+                });
+              return [...mapa.values()];
+            })} />
             <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
             <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom}
               pinturaSlot={<PinturaCampos valor={pinturaBom} onChange={v => setPinturaBom(p => ({ ...p, ...v }))} />} />

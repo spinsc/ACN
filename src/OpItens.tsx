@@ -15,6 +15,7 @@
 import React, { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { BuscaCadastro, ItensDemandaEditor, itemVazio, itensPreenchidos, estruturaParaDemanda } from './DemandaItens';
+import { SelectBusca } from './Interface';
 
 const num = (v: any) => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -127,6 +128,125 @@ export async function sugerirBom(vendidos: any[]) {
     }
   }
   return [...porItem.values()];
+}
+
+/**
+ * COPIAR A LISTA DE MATERIAL DE OUTRA OP (28/09/2026)
+ *
+ * Pedido da Engenharia. Carro parecido já adaptado antes tem a lista pronta, e
+ * redigitar item por item é trabalho jogado fora — além de ser onde nasce a
+ * diferença entre duas OPs que deviam ser iguais.
+ *
+ * A armadilha é a quantidade: a OP de origem pode ser de um lote de 3 carros e
+ * esta de um só. Copiar cru traria o triplo de material. Por isso, quando as
+ * quantidades diferem, o painel ajusta na proporção e diz que está ajustando —
+ * com como desligar, para o caso de a lista de origem já ser por unidade.
+ */
+export function CopiarBomDeOutraOp({ oplAtual, onCopiar }: any) {
+  const [aberto, setAberto] = useState(false);
+  const [ops, setOps] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [escolhidaId, setEscolhidaId] = useState('');
+  const [ajustar, setAjustar] = useState(true);
+
+  const abrir = async () => {
+    setAberto(true);
+    if (ops.length) return;
+    setCarregando(true);
+    const { data } = await supabase.from('oples')
+      .select('id,opl,cliente_nome,modelo,quantidade,bom_itens,data_liberacao_bom')
+      .not('bom_itens', 'is', null)
+      .order('data_liberacao_bom', { ascending: false, nullsFirst: false })
+      .limit(300);
+    setOps((data || [])
+      .filter((o: any) => Array.isArray(o.bom_itens) && o.bom_itens.length && o.id !== oplAtual?.id));
+    setCarregando(false);
+  };
+
+  const origem = ops.find(o => o.id === escolhidaId);
+  const qtdOrigem = Math.max(1, Number(origem?.quantidade) || 1);
+  const qtdAtual  = Math.max(1, Number(oplAtual?.quantidade) || 1);
+  const precisaAjuste = qtdOrigem !== qtdAtual;
+  const fator = precisaAjuste && ajustar ? qtdAtual / qtdOrigem : 1;
+
+  const linhasCopiadas = () => (origem?.bom_itens || []).map((l: any) => ({
+    ...l,
+    quantidade: Math.round(num(l.quantidade) * fator * 1000) / 1000,
+    descricao: [l.descricao, `copiado da OP ${origem.opl}`].filter(Boolean).join(' · '),
+  }));
+
+  if (!aberto) {
+    return (
+      <button type="button" onClick={abrir}
+        style={{ fontSize: 10, fontWeight: 700, padding: '4px 11px', borderRadius: 5, cursor: 'pointer',
+          border: '1px dashed #94a3b8', background: '#fff', color: '#475569', marginBottom: 8 }}>
+        📋 Copiar a lista de outra OP
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ border: '1.5px solid #c7d2fe', background: '#eef2ff', borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <div style={{ ...lbl, color: '#3730a3', fontSize: 10, flex: 1 }}>📋 Copiar a lista de material de outra OP</div>
+        <button type="button" onClick={() => { setAberto(false); setEscolhidaId(''); }}
+          style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14 }}>✕</button>
+      </div>
+
+      {carregando ? (
+        <div style={{ fontSize: 10, color: '#4338ca' }}>Procurando OPs com lista pronta…</div>
+      ) : !ops.length ? (
+        <div style={{ fontSize: 10, color: '#64748b' }}>
+          Nenhuma outra OP tem lista de material montada ainda.
+        </div>
+      ) : (
+        <>
+          <SelectBusca valor={escolhidaId} onChange={setEscolhidaId}
+            placeholder="— procure a OP pelo número, cliente ou veículo —" vazio="— nenhuma —"
+            opcoes={ops.map(o => ({
+              valor: o.id,
+              rotulo: `OP ${o.opl}`,
+              detalhe: [o.cliente_nome, o.modelo, `${o.bom_itens.length} itens`,
+                        (Number(o.quantidade) || 1) > 1 ? `lote de ${o.quantidade}` : ''].filter(Boolean).join(' · '),
+              busca: [o.opl, o.cliente_nome, o.modelo],
+            }))} />
+
+          {origem && (
+            <div style={{ marginTop: 8 }}>
+              {precisaAjuste && (
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer',
+                  fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid #fcd34d',
+                  borderRadius: 5, padding: '6px 8px', marginBottom: 7 }}>
+                  <input type="checkbox" checked={ajustar} onChange={e => setAjustar(e.target.checked)} style={{ marginTop: 1 }} />
+                  <span>
+                    A OP {origem.opl} é de <b>{qtdOrigem} unidade(s)</b> e esta é de <b>{qtdAtual}</b>.
+                    Ajustar as quantidades na proporção. Desmarque se a lista de origem já for por unidade.
+                  </span>
+                </label>
+              )}
+              <div style={{ fontSize: 9.5, color: '#475569', marginBottom: 7 }}>
+                {origem.bom_itens.length} item(ns):{' '}
+                {origem.bom_itens.slice(0, 4).map((l: any) => `${fmtQ(num(l.quantidade) * fator)}× ${l.nome}`).join(' · ')}
+                {origem.bom_itens.length > 4 ? ` … e mais ${origem.bom_itens.length - 4}` : ''}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" onClick={() => { onCopiar(linhasCopiadas(), 'somar'); setAberto(false); }}
+                  style={{ fontSize: 10, fontWeight: 700, padding: '5px 12px', borderRadius: 5, cursor: 'pointer',
+                    border: 'none', background: '#4338ca', color: '#fff' }}>
+                  Somar à lista atual
+                </button>
+                <button type="button" onClick={() => { onCopiar(linhasCopiadas(), 'substituir'); setAberto(false); }}
+                  style={{ fontSize: 10, fontWeight: 700, padding: '5px 12px', borderRadius: 5, cursor: 'pointer',
+                    border: '1px solid #cbd5e1', background: '#fff', color: '#475569' }}>
+                  Substituir a lista
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; onChange: (v: any[]) => void; vendidos?: any[] }) {
