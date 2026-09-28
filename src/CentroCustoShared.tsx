@@ -443,14 +443,27 @@ export const podeEditarLancamento = (u: any) => ehAdminOuGerente(u);
 const moeda = (v: any) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onClose, onSalvo }: any) {
-  const ehContrato = !!lancamento?.parcelado;
+  const eraContrato = !!lancamento?.parcelado;
   const ehMedicao = !!lancamento?.despesa_pai_id;
   const [descricao, setDescricao] = useState(lancamento?.descricao || '');
   const [valor, setValor] = useState(String(
-    (ehContrato ? lancamento?.valor_total_negociado : lancamento?.valor) ?? '').replace('.', ','));
+    (eraContrato ? lancamento?.valor_total_negociado : lancamento?.valor) ?? '').replace('.', ','));
   const [data, setData] = useState(String(lancamento?.data || '').slice(0, 10));
   const [centroId, setCentroId] = useState(lancamento?.centro_custo_id || '');
   const [salvando, setSalvando] = useState(false);
+  /**
+   * À VISTA ↔ PARCELADO TAMBÉM NA EDIÇÃO (28/09/2026)
+   *
+   * A tela de lançar oferece a escolha; a de editar não oferecia. Quem lançava
+   * uma despesa à vista e depois descobria que o fornecedor ia parcelar tinha
+   * de excluir e lançar de novo — perdendo a data original e o registro de
+   * quem lançou.
+   *
+   * Medição não muda de forma: ela é o pagamento de um contrato, não um
+   * lançamento independente.
+   */
+  const [ehContrato, setEhContrato] = useState(eraContrato);
+  const trocouForma = ehContrato !== eraContrato;
 
   const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
   const v = num(valor);
@@ -468,15 +481,33 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onC
       `O total negociado (${moeda(v)}) ficou ABAIXO do que já foi pago (${moeda(jaPago)}).\n\n` +
       `O contrato vai aparecer com mais de 100% pago. Se foi renegociação, tudo bem. Salvar assim?`)) return;
 
+    // virar contrato em despesa à vista com medições lançadas deixaria os
+    // pagamentos sem contrato e o total do centro contaria o dinheiro duas
+    // vezes — uma na despesa, outra em cada medição
+    if (trocouForma && eraContrato && jaPago > 0) {
+      alert(`Este contrato já tem ${moeda(jaPago)} em medições lançadas.\n\n`
+        + `Para voltar a ser à vista, apague as medições primeiro — senão elas ficam sem contrato `
+        + `e o centro de custo conta o mesmo dinheiro duas vezes.`);
+      return;
+    }
+    if (trocouForma && !await confirmar(ehContrato
+      ? `Transformar esta despesa à vista em CONTRATO PARCELADO?\n\n`
+        + `${moeda(v)} passa a ser o total negociado, e os pagamentos entram depois como medições. `
+        + `Até a primeira medição, o centro de custo vai mostrar este contrato com 0% pago.`
+      : `Transformar este contrato em despesa À VISTA?\n\n`
+        + `${moeda(v)} passa a contar direto no total do centro de custo.`)) return;
+
     setSalvando(true);
     const antes = {
       descricao: lancamento.descricao, data: lancamento.data, centro_custo_id: lancamento.centro_custo_id,
       valor: lancamento.valor, valor_total_negociado: lancamento.valor_total_negociado,
+      parcelado: lancamento.parcelado,
     };
     // no contrato o dinheiro mora em valor_total_negociado e `valor` fica 0 —
     // é o que faz o contrato não inflar a soma do centro (ver ModalLancarDespesa)
     const depois: any = { descricao: descricao.trim(), data, centro_custo_id: centroId };
-    if (ehContrato) depois.valor_total_negociado = v; else depois.valor = v;
+    if (ehContrato) { depois.parcelado = true;  depois.valor_total_negociado = v; depois.valor = 0; }
+    else            { depois.parcelado = false; depois.valor = v; depois.valor_total_negociado = null; }
 
     const { error } = await supabase.from('centro_custo_despesas').update(depois).eq('id', lancamento.id);
     setSalvando(false);
@@ -511,13 +542,40 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onC
       onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
       <div className="modal-box" style={{ maxWidth: 460 }}>
         <div className="modal-title">
-          ✏️ Editar lançamento{ehContrato ? ' — contrato parcelado' : ehMedicao ? ' — medição' : ''}
+          ✏️ Editar lançamento{eraContrato ? ' — contrato parcelado' : ehMedicao ? ' — medição' : ''}
         </div>
         <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
           Lançado por {lancamento.criado_por_nome || '—'}
           {lancamento.criado_em ? ` em ${new Date(lancamento.criado_em).toLocaleDateString('pt-BR')}` : ''}.
           A alteração fica na auditoria com o valor de antes.
         </div>
+
+        {/* Medição é o pagamento de um contrato, não um lançamento que possa
+            mudar de forma — por isso a escolha não aparece para ela. */}
+        {!ehMedicao && (
+          <>
+            <label className="acn-label">Forma</label>
+            <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+              {([[false, 'À Vista'], [true, 'Parcelado']] as const).map(([v, label]) => (
+                <button key={label} type="button" onClick={() => setEhContrato(v)}
+                  style={{ flex: 1, padding: '6px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+                    border: `1.5px solid ${ehContrato === v ? '#0f766e' : '#d1d5db'}`,
+                    background: ehContrato === v ? '#ccfbf1' : '#fff',
+                    color: ehContrato === v ? '#0f766e' : '#6b7280' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {trocouForma && (
+              <div style={{ fontSize: 10, color: '#b45309', background: '#fffbeb',
+                border: '1px solid #fcd34d', borderRadius: 5, padding: '6px 8px', marginBottom: 10 }}>
+                {ehContrato
+                  ? 'Vira contrato: o valor passa a ser o total negociado e os pagamentos entram depois como medições.'
+                  : 'Vira despesa à vista: o valor passa a contar direto no total do centro de custo.'}
+              </div>
+            )}
+          </>
+        )}
 
         <label className="acn-label">Descrição *</label>
         <input className="acn-input" style={{ width: '100%', marginBottom: 8 }} autoFocus

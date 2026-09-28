@@ -68,6 +68,12 @@ function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
 }
 
 // ─── Modal: compras de um centro de custo ─────────────────────────────────────
+/** Duas linhas e reticências: o texto inteiro fica no rótulo do mouse. */
+const celaTexto: React.CSSProperties = {
+  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+  overflow: 'hidden', maxWidth: 320, lineHeight: 1.35,
+};
+
 function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar }: any) {
   const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
   const [modalMedicao, setModalMedicao] = useState<any>(null); // contrato "Parcelado" selecionado
@@ -84,7 +90,9 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2100,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: '#fff', borderRadius: 10, width: 700, maxWidth: '96vw',
+      {/* 1180, não 700: são 8 colunas e em 700 a tabela rolava na horizontal
+          (28/09/2026). */}
+      <div style={{ background: '#fff', borderRadius: 10, width: 1180, maxWidth: '96vw',
         maxHeight: '88vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 16px 48px rgba(0,0,0,.28)' }}>
         <div style={{ background: '#1e3a5f', color: '#fff', padding: '12px 16px',
@@ -113,9 +121,17 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                 {compras.map((p: any, i: number) => p.despesaAvulsa ? (
                   <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>—</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>
-                      {p.despesa_pai_id ? <span style={{ color:'#94a3b8' }}>↳ medição — </span> : null}
-                      {p.descricao || 'Despesa avulsa'}
+                    {/* A DESCRIÇÃO NÃO PODE ESTICAR A LINHA (28/09/2026)
+                        Uma despesa com texto longo quebrava uma palavra por
+                        linha, a linha ficava mais alta que o modal inteiro e o
+                        cabeçalho parecia travado no topo. Agora mostra duas
+                        linhas e o resto vem no rótulo, passando o mouse. */}
+                    <td style={{ padding: '5px 8px', fontSize: 10 }}
+                        title={[p.despesa_pai_id ? 'Medição —' : '', p.descricao || 'Despesa avulsa'].filter(Boolean).join(' ')}>
+                      <div style={celaTexto}>
+                        {p.despesa_pai_id ? <span style={{ color:'#94a3b8' }}>↳ medição — </span> : null}
+                        {p.descricao || 'Despesa avulsa'}
+                      </div>
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.criado_por_nome || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
@@ -180,7 +196,9 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                 ) : (
                   <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>{p.numero_pedido || '—'}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 200, wordBreak: 'break-word' }}>{p.descricao_material || '—'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10 }} title={p.descricao_material || ''}>
+                      <div style={celaTexto}>{p.descricao_material || '—'}</div>
+                    </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.fornecedor || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
                       <span style={{ background: (STATUS_COR[p.status_compra]||'#6b7280') + '22',
