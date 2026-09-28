@@ -14,7 +14,7 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar } from './Feedback';
-import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras } from './Estoque';
+import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -53,8 +53,12 @@ export default function AlmoxarifadoTab({ currentUser }) {
   // Conferência do kit contra a BOM da Engenharia (quando a OP tem BOM)
   const [conferencia, setConferencia] = useState<any[]>([]);
   // em lote não há conferência linha a linha: registra a BOM como separada inteira
+  // (`completo`, porque desde 28/09/2026 o checklist unitário começa vazio)
   const conferenciaLote = (o) => (o?.bom_itens || []).length
-    ? { kit_conferencia: registroConferencia(conferenciaInicial({ bom_itens: o.bom_itens }), currentUser, true) } : {};
+    ? { kit_conferencia: registroConferencia(conferenciaInicial({ bom_itens: o.bom_itens }, { completo: true }), currentUser, true) } : {};
+  // saldo de cada item da lista, para o checklist saber o que dá para marcar
+  const [saldosKit, setSaldosKit] = useState({});
+  const [salvandoSeparacao, setSalvandoSeparacao] = useState(false);
   const [modalDevolver, setModalDevolver] = useState(null);
   // Solicitação de reposição de estoque (nova) — pedido de compra/fabricação
   // interna que precisa de liberação do PCP antes de cair no setor certo.
@@ -185,9 +189,12 @@ export default function AlmoxarifadoTab({ currentUser }) {
     });
   };
 
-  const abrirModalEmbalagem = (opl) => {
+  const abrirModalEmbalagem = async (opl) => {
     // se o kit já foi conferido (kiting em lote), não pede de novo
-    setConferencia(opl.kit_conferencia ? [] : conferenciaInicial(opl));
+    const linhas = opl.kit_conferencia ? [] : conferenciaInicial(opl);
+    setConferencia(linhas);
+    setSaldosKit({});
+    if (linhas.length) saldosDoKit({ opl, linhas }).then(setSaldosKit);
     setEmbForm({
       itens: linhasSeriaisIniciais(opl),
       seriais: opl.seriais_equipamentos || '',
@@ -318,10 +325,13 @@ Embalar e enviar assim mesmo?`)) return;
     fetchAll();
   };
 
-  const abrirModalSeriais = (opl, pendenciaSanada=false) => {
-    setConferencia(conferenciaInicial(opl));
+  const abrirModalSeriais = async (opl, pendenciaSanada=false) => {
+    const linhas = conferenciaInicial(opl);
+    setConferencia(linhas);
+    setSaldosKit({});
     setSeriaisKitForm(opl.seriais_equipamentos || '');
     setModalSeriais({ ...opl, _pendenciaSanada: pendenciaSanada });
+    setSaldosKit(await saldosDoKit({ opl, linhas }));
   };
 
   const confirmarKitOkComSeriais = async () => {
@@ -390,6 +400,47 @@ Embalar e enviar assim mesmo?`)) return;
     }
     setModalSeriais(null); setSeriaisKitForm('');
     fetchAll();
+  };
+
+  /**
+   * Salva a separação pela metade (Etapa 8 — 28/09/2026).
+   *
+   * O Almoxarifado separa o que tem hoje, salva, e continua amanhã de onde
+   * parou. O que foi marcado sai da prateleira agora — e a reserva é consumida
+   * só na medida do que saiu, senão o disponível mentiria para mais.
+   *
+   * A OP não muda de status: continua esperando o kit fechar. Por isso aqui
+   * não se cobra observação de diferença — item ainda não separado não é
+   * divergência, é trabalho pela metade. A cobrança fica no fechamento.
+   */
+  const salvarSeparacaoParcial = async () => {
+    const opl = modalSeriais;
+    if (!conferencia.some(l => Number(l.separado) > 0)) {
+      alert('Marque ao menos um item para salvar a separação.'); return;
+    }
+    setSalvandoSeparacao(true);
+    try {
+      const baixa = await baixarKitDaOp({ opl, linhas: conferencia, currentUser });
+      const recado = textoDaBaixa(baixa);
+      const prontas = conferencia.filter(l => Number(l.separado) >= Number(l.planejado)).length;
+      await supabase.from('oples').update({
+        kit_conferencia: registroConferencia(conferencia, currentUser),
+        responsavel_almox: currentUser?.nome,
+      }).eq('id', opl.id);
+      await supabase.from('logs_movimentacao_opl').insert([{
+        opl_id: opl.id, numero_opl: opl.opl, setor: 'Almoxarifado',
+        evento: `Separação salva: ${prontas} de ${conferencia.length} item(ns)${recado ? ' — ' + recado : ''}`,
+        status_anterior: opl.status_geral, status_novo: opl.status_geral,
+        usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+      }]);
+      if (baixa.negativos.length) {
+        alert(`Separação salva, mas o estoque ficou negativo em:\n${baixa.negativos.map(n => `• ${n.nome} (saldo ${n.saldo})`).join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
+      } else {
+        alert(`Separação salva: ${prontas} de ${conferencia.length} item(ns).${recado ? '\n\n' + recado : ''}\n\nA OP continua no Almoxarifado, esperando o resto.`);
+      }
+      setModalSeriais(null); setSeriaisKitForm('');
+      fetchAll();
+    } finally { setSalvandoSeparacao(false); }
   };
 
   const faltaMaterial = async () => {
@@ -955,7 +1006,7 @@ Embalar e enviar assim mesmo?`)) return;
               </div>
             </div>
 
-            <ConferenciaKit linhas={conferencia} onChange={setConferencia} />
+            <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
             <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Observações</div>
             <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:14 }}
               value={embForm.observacoes||''} onChange={e=>setEmbForm(f=>({...f, observacoes:e.target.value}))} />
@@ -981,7 +1032,7 @@ Embalar e enviar assim mesmo?`)) return;
             <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>
               Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
             </div>
-            <ConferenciaKit linhas={conferencia} onChange={setConferencia} />
+            <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
             <ChecklistPendencias op={modalSeriais} vinculos={pendenciasDe(modalSeriais).map(p => ({ ...p, grupo: 'demanda' }))}
               modo="almox" currentUser={currentUser}
               onMudou={(novo) => setModalSeriais(m => ({ ...m, pendencias_kit: novo }))} />
@@ -993,6 +1044,14 @@ Embalar e enviar assim mesmo?`)) return;
               <button className="acn-btn" style={{background: divergencias(conferencia).length ? '#f97316' : '#22c55e',flex:1}} onClick={confirmarKitOkComSeriais}>
                 {divergencias(conferencia).length ? 'CONFIRMAR KIT COM PENDÊNCIA' : 'CONFIRMAR KITING 100%'}
               </button>
+              {/* separar o que tem hoje e continuar amanhã: a OP fica onde está */}
+              {conferencia.length > 0 && (
+                <button className="acn-btn" style={{background:'#0284c7'}} disabled={salvandoSeparacao}
+                  title="Dá baixa no que já foi marcado e guarda o resto para depois. A OP continua no Almoxarifado."
+                  onClick={salvarSeparacaoParcial}>
+                  {salvandoSeparacao ? 'Salvando...' : '💾 SALVAR SEPARAÇÃO'}
+                </button>
+              )}
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalSeriais(null);setSeriaisKitForm('');}}>Cancelar</button>
             </div>
           </div>

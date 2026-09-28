@@ -200,11 +200,29 @@ export function BomEditor({ linhas, onChange, vendidos = [] }: { linhas: any[]; 
 }
 
 // ── 3. CONFERÊNCIA DO KITING ─────────────────────────────────────────────────
-export const conferenciaInicial = (opl: any) => {
+/**
+ * Estado inicial do checklist de separação.
+ *
+ * Começa VAZIO: quem marca é o Almoxarifado, conforme coloca a peça na caixa
+ * (decidido com o usuário em 28/09/2026). Antes vinha tudo preenchido com a
+ * quantidade da BOM e "separado" passava no automático — a conferência dizia
+ * que alguém tinha olhado sem que ninguém tivesse olhado.
+ *
+ * Separação salva pela metade volta de onde parou.
+ *
+ * `completo` é para o kiting em lote, onde não há conferência linha a linha e a
+ * BOM inteira é registrada como separada de uma vez.
+ */
+export const conferenciaInicial = (opl: any, { completo = false }: any = {}) => {
   const anteriores = opl?.kit_conferencia?.linhas || [];
-  return (opl?.bom_itens || []).map((b: any, i: number) => ({
-    ...b, planejado: num(b.quantidade), separado: anteriores[i] && anteriores[i].nome === b.nome ? anteriores[i].separado : num(b.quantidade), obs: anteriores[i]?.nome === b.nome ? anteriores[i].obs || '' : '',
-  }));
+  return (opl?.bom_itens || []).map((b: any, i: number) => {
+    const ant = anteriores[i]?.nome === b.nome ? anteriores[i] : null;
+    return {
+      ...b, planejado: num(b.quantidade),
+      separado: ant ? num(ant.separado) : (completo ? num(b.quantidade) : 0),
+      obs: ant?.obs || '',
+    };
+  });
 };
 export const divergencias = (linhas: any[]) => (linhas || []).filter(l => num(l.separado) !== num(l.planejado));
 /** Texto curto das diferenças (vai para a observação do kit) */
@@ -223,17 +241,56 @@ export const registroConferencia = (linhas: any[], currentUser: any, emLote = fa
   em_lote: emLote,
 });
 
-export function ConferenciaKit({ linhas, onChange }: { linhas: any[]; onChange: (v: any[]) => void }) {
+/**
+ * O que ainda precisa sair da prateleira para esta linha — e se dá para tirar.
+ *
+ * Numa separação salva pela metade o saldo já caiu do que saiu antes, então o
+ * que falta tirar é o planejado menos o que esta OP já baixou.
+ */
+export const situacaoDaLinha = (l: any, saldos: any = {}) => {
+  const s = saldos?.[l?.item_id] || null;
+  const aTirar = num(l.planejado) - num(s?.jaBaixado || 0);
+  const semSaldo = !!s?.controla && aTirar > 0 && num(s.saldo) < aTirar;
+  return { ...(s || {}), aTirar, semSaldo, temSaldoInfo: !!s };
+};
+
+/**
+ * CHECKLIST DE SEPARAÇÃO (Etapa 8 — 28/09/2026)
+ *
+ * A lista de material virou checklist: o Almoxarifado marca item a item
+ * conforme coloca na caixa. Marcar e desmarcar NÃO movem estoque — a baixa
+ * acontece quando a separação é salva. O raciocínio do usuário: o material já
+ * está reservado para aquela OP de qualquer jeito, então não há corrida por
+ * peça durante a conferência e marcar errado não exige estorno.
+ *
+ * Item sob controle sem saldo não marca. A saída continua sendo separar o que
+ * tem, salvar, e fechar o kit quando o resto chegar.
+ */
+export function ConferenciaKit({ linhas, onChange, saldos = {} }: { linhas: any[]; onChange: (v: any[]) => void; saldos?: any }) {
   if (!linhas?.length) return null;
   const set = (i: number, patch: any) => onChange(linhas.map((l, j) => j === i ? { ...l, ...patch } : l));
   const div = divergencias(linhas).length;
+  const prontas = linhas.filter(l => num(l.separado) >= num(l.planejado) && num(l.planejado) > 0).length;
+  const tudo = prontas === linhas.length;
+  const marcarTudo = (ligar: boolean) => onChange(linhas.map(l => {
+    if (!ligar) return { ...l, separado: 0 };
+    return situacaoDaLinha(l, saldos).semSaldo ? l : { ...l, separado: num(l.planejado) };
+  }));
   return (
-    <div style={{ border: `1.5px solid ${div ? '#fdba74' : '#bbf7d0'}`, background: div ? '#fffbf5' : '#f7fdf9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-      <div style={{ ...lbl, color: div ? '#c2410c' : '#15803d', fontSize: 10, marginBottom: 6 }}>
-        ✅ Conferência com a BOM {div ? `— ${div} diferença(s): o kit sai com pendência` : '— tudo batendo'}
+    <div style={{ border: `1.5px solid ${tudo ? '#bbf7d0' : '#fdba74'}`, background: tudo ? '#f7fdf9' : '#fffbf5', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <div style={{ ...lbl, color: tudo ? '#15803d' : '#c2410c', fontSize: 10 }}>
+          📦 Separação — {prontas} de {linhas.length} {tudo ? 'itens separados' : 'itens separados, faltam ' + (linhas.length - prontas)}
+        </div>
+        <button type="button" onClick={() => marcarTudo(!tudo)}
+          style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
+            border: '1px solid #cbd5e1', background: '#fff', color: '#475569' }}>
+          {tudo ? 'desmarcar tudo' : 'marcar tudo que tem saldo'}
+        </button>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead><tr style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>
+          <th style={{ width: 22 }}></th>
           <th style={{ textAlign: 'left', padding: '2px 4px' }}>Item</th>
           <th style={{ textAlign: 'right', padding: '2px 4px' }}>BOM</th>
           <th style={{ textAlign: 'right', padding: '2px 4px' }}>Separado</th>
@@ -242,11 +299,25 @@ export function ConferenciaKit({ linhas, onChange }: { linhas: any[]; onChange: 
         <tbody>
           {linhas.map((l, i) => {
             const difere = num(l.separado) !== num(l.planejado);
+            const marcado = num(l.separado) > 0;
+            const st = situacaoDaLinha(l, saldos);
+            const travado = st.semSaldo && !marcado;
             return (
-              <tr key={i} style={{ borderTop: '1px solid #f1f5f9', background: difere ? '#fff7ed' : undefined }}>
+              <tr key={i} style={{ borderTop: '1px solid #f1f5f9', background: travado ? '#fef2f2' : difere ? '#fff7ed' : undefined }}>
+                <td style={{ padding: '3px 4px', textAlign: 'center' }}>
+                  <input type="checkbox" checked={!difere && marcado} disabled={travado}
+                    aria-label={`Separar ${l.nome}`}
+                    title={travado ? 'Sem saldo no estoque para separar este item' : ''}
+                    onChange={e => set(i, { separado: e.target.checked ? num(l.planejado) : 0 })}
+                    style={{ cursor: travado ? 'not-allowed' : 'pointer', width: 15, height: 15 }} />
+                </td>
                 <td style={{ padding: '3px 4px' }}>
                   {l.nome}{l.codigo && <span style={{ color: '#94a3b8', fontSize: 9, marginLeft: 4 }}>{l.codigo}</span>}
                   {!l.item_id && <span style={{ color: '#b45309', fontSize: 9, marginLeft: 4 }}>não cadastrado</span>}
+                  {l.descricao && <span style={{ color: '#94a3b8', fontSize: 9, marginLeft: 4 }}>{l.descricao}</span>}
+                  {st.semSaldo && <div style={{ color: '#b91c1c', fontSize: 9 }}>
+                    sem saldo: precisa de {fmtQ(st.aTirar)} e tem {fmtQ(st.saldo)} {st.unidade || l.unidade}
+                  </div>}
                 </td>
                 <td style={{ padding: '3px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtQ(l.planejado)} {l.unidade}</td>
                 <td style={{ padding: '3px 4px', textAlign: 'right' }}>
@@ -264,6 +335,9 @@ export function ConferenciaKit({ linhas, onChange }: { linhas: any[]; onChange: 
           })}
         </tbody>
       </table>
+      <div style={{ fontSize: 9, color: '#6b7280', marginTop: 5 }}>
+        Marcar e desmarcar não mexem no estoque. A baixa acontece quando você salva a separação.
+      </div>
     </div>
   );
 }

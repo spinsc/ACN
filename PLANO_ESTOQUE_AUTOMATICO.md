@@ -896,7 +896,7 @@ Dado de teste apagado (5 itens `ZZT-`, 1 veículo, 1 pergunta, 2 opções, 3
 materiais) e contagem conferida zerada em sete tabelas.
 
 ---
-### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item · **PRÓXIMA**
+### ✅ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai
 marcando até fechar 100%.
@@ -914,12 +914,76 @@ por item, o consumo da reserva vai junto, item a item. Se isso for esquecido, o
 disponível passa a mentir — é a emenda mais provável deste plano, e está
 anotada aqui para não acontecer.
 
-**Feito em:** —
-**O que foi feito:** —
+**Feito em:** 28/09/2026
+**O que foi feito:**
+
+**Duas decisões tomadas com o usuário antes de escrever código (28/09/2026):**
+o checklist começa **vazio** — quem marca é o Almoxarifado, conforme coloca a
+peça na caixa; e **dá para salvar pela metade** — separa o que tem hoje, salva,
+continua amanhã.
+
+**O checklist.** A lista de material virou checklist com caixa de marcar por
+item, contador de progresso ("2 de 3 itens separados, falta 1") e um "marcar
+tudo que tem saldo". A quantidade continua editável para quem precisar separar
+parcial. Item sob controle **sem saldo não marca**: a caixa fica travada e a
+linha explica por quê ("sem saldo: precisa de 3 e tem 1 UN"). Quando o material
+chega, a trava solta sozinha.
+
+Marcar e desmarcar **não mexem no estoque** — a baixa acontece no salvar. O
+raciocínio do usuário (26/09/2026): o material já está reservado para aquela OP
+de qualquer jeito, então não há corrida por peça durante a conferência e marcar
+errado não exige estorno.
+
+**Salvar pela metade.** Botão novo no kiting: dá baixa no que está marcado,
+guarda o progresso e **deixa a OP onde está**, esperando o resto. Não cobra
+observação de diferença — item ainda não separado não é divergência, é trabalho
+pela metade; a cobrança continua no fechamento do kit.
+
+**A emenda que o plano previu — e que era real.** `baixarKitDaOp` já baixava
+item a item e por diferença, mas `consumirReserva` encerrava a reserva do item
+**inteira**, sem olhar quantidade. Com a baixa acontecendo uma vez só, batia. Com
+salvamento parcial, baixar 2 de 6 encerraria a reserva dos 6: o saldo cairia 2 e
+o reservado cairia 6. O disponível passaria a mentir **para mais** — quatro
+peças que não existem livres.
+
+Agora a reserva registra **quanto** já saiu (coluna `quantidade_consumida`) e só
+vira "consumida" quando alcança a quantidade. O `vw_estoque_disponivel` conta o
+que ainda não saiu. E a volta também foi fechada: se a conferência diminui, o
+material volta para a prateleira **e para a reserva**.
+
+**Teste — executado com gravação real em dado sintético**
+
+Item com 10 em estoque, OP pedindo 6:
+
+| Passo | Saldo | Reservado | **Disponível** |
+|---|---|---|---|
+| antes de tudo | 10 | 0 | 10 |
+| PCP liberou: reserva de 6 | 10 | 6 | **4** |
+| separou 2 de 6 e salvou | 8 | 4 | **4** |
+| separou os 6 e fechou | 4 | 0 | **4** |
+| corrigiu para 4: 2 voltaram | 6 | 2 | **4** |
+
+O disponível **não se move** — é o invariante da etapa. Com o código antigo, no
+terceiro passo ele saltaria para 8.
+
+Na tela, conferido com o componente montado de verdade: começa com tudo
+desmarcado e "0 de 3"; marcar e desmarcar mexem no contador; o item sem saldo
+fica travado com a explicação; o "marcar tudo que tem saldo" pula o travado; e
+quando o saldo sobe, a trava solta.
+
+Dado de teste apagado (1 item, 1 OP, 1 reserva, 3 movimentos) e contagem
+conferida zerada.
+
+**O que ficou de fora — e precisa de decisão sua**
+
+O **kiting em lote** registra a conferência como separada inteira mas **nunca
+deu baixa no estoque** — nem antes desta etapa. OP fechada em lote não move
+saldo. Não mexi nisso porque não estava no combinado e mudar faria várias OPs
+baixarem de uma vez. Vale resolver antes da Etapa 9.
 
 ---
 
-### ⬜ Etapa 9 — Estrutura do chicote (o micro)
+### ⬜ Etapa 9 — Estrutura do chicote (o micro) · **PRÓXIMA**
 
 **O que muda:** o chicote ganha sua própria estrutura — metros de fio por cor,
 conexões, terminais. Mandar fabricar dá baixa nesses materiais e dispara a

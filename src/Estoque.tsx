@@ -435,12 +435,64 @@ async function pedirOQueFaltou({ itemIds, op, currentUser }: any) {
   return abertos;
 }
 
-/** Consome a reserva da OP para um item — o material saiu de verdade no kiting. */
-async function consumirReserva({ oplId, itemId, currentUser }: any) {
-  await supabase.from('estoque_reservas').update({
-    situacao: 'consumida', encerrada_em: new Date().toISOString(),
-    encerrada_por: currentUser?.nome || '—', motivo_encerramento: 'Baixa no kiting',
-  }).eq('opl_id', oplId).eq('item_id', itemId).eq('situacao', 'reservada');
+/**
+ * Consome a reserva da OP NA MEDIDA do que saiu da prateleira.
+ *
+ * Até 28/09/2026 encerrava a reserva inteira do item, porque a baixa acontecia
+ * uma vez só ao fechar o Kit 100%. Agora que o Almoxarifado pode salvar a
+ * separação pela metade, encerrar tudo faria o disponível mentir para mais:
+ * saldo caindo 2, reservado caindo 6. O que ainda não saiu continua prometido.
+ */
+async function consumirReserva({ oplId, itemId, quantidade, currentUser }: any) {
+  let resta = num(quantidade);
+  if (resta <= 0) return;
+  const { data } = await supabase.from('estoque_reservas')
+    .select('id,quantidade,quantidade_consumida')
+    .eq('opl_id', oplId).eq('item_id', itemId).eq('situacao', 'reservada')
+    .order('criado_em');
+  for (const r of data || []) {
+    if (resta <= 0) break;
+    const aberto = num(r.quantidade) - num(r.quantidade_consumida);
+    if (aberto <= 0) continue;
+    const leva = Math.min(aberto, resta);
+    const consumida = num(r.quantidade_consumida) + leva;
+    // margem de centésimo: quantidade é numérica e item por metro não fecha exato
+    const fechou = consumida >= num(r.quantidade) - 0.0001;
+    await supabase.from('estoque_reservas').update({
+      quantidade_consumida: consumida,
+      ...(fechou ? {
+        situacao: 'consumida', encerrada_em: new Date().toISOString(),
+        encerrada_por: currentUser?.nome || '—', motivo_encerramento: 'Baixa no kiting',
+      } : {}),
+    }).eq('id', r.id);
+    resta -= leva;
+  }
+}
+
+/**
+ * Devolve para a reserva o que voltou para a prateleira.
+ *
+ * Acontece quando a conferência diminui: o Almoxarifado tinha marcado 6,
+ * corrige para 4, e 2 peças voltam. Sem isto a reserva ficaria consumida por
+ * material que está de volta na prateleira, e a OP perderia a fila dele.
+ */
+async function devolverReserva({ oplId, itemId, quantidade }: any) {
+  let resta = num(quantidade);
+  if (resta <= 0) return;
+  const { data } = await supabase.from('estoque_reservas')
+    .select('id,quantidade,quantidade_consumida')
+    .eq('opl_id', oplId).eq('item_id', itemId).in('situacao', ['reservada', 'consumida'])
+    .gt('quantidade_consumida', 0)
+    .order('criado_em', { ascending: false });   // desfaz a partir da mais recente
+  for (const r of data || []) {
+    if (resta <= 0) break;
+    const volta = Math.min(num(r.quantidade_consumida), resta);
+    await supabase.from('estoque_reservas').update({
+      quantidade_consumida: num(r.quantidade_consumida) - volta,
+      situacao: 'reservada', encerrada_em: null, encerrada_por: null, motivo_encerramento: null,
+    }).eq('id', r.id);
+    resta -= volta;
+  }
 }
 
 /**
@@ -602,6 +654,30 @@ async function jaBaixadoNaOp(oplId: string) {
 }
 
 /**
+ * Saldo de cada item da lista, para o checklist do Almoxarifado saber o que dá
+ * para marcar como separado (Etapa 8, 28/09/2026).
+ *
+ * Vem o saldo FÍSICO, não o disponível — pelo mesmo motivo da trava do Kit
+ * 100%: na prateleira vale quem chega primeiro. E vem o que esta OP já baixou,
+ * porque numa separação salva pela metade o que falta tirar é a diferença.
+ */
+export async function saldosDoKit({ opl, linhas }: any) {
+  const ids = [...new Set((linhas || []).map((l: any) => l?.item_id).filter(Boolean))];
+  if (!ids.length) return {};
+  const { data: itens } = await supabase.from('cadastro_itens')
+    .select('id,estoque_atual,controla_estoque,unidade').in('id', ids);
+  const jaBaixado = await jaBaixadoNaOp(opl.id);
+  const mapa: any = {};
+  (itens || []).forEach((i: any) => {
+    mapa[i.id] = {
+      controla: !!i.controla_estoque, saldo: num(i.estoque_atual),
+      jaBaixado: jaBaixado.get(i.id) || 0, unidade: i.unidade || 'UN',
+    };
+  });
+  return mapa;
+}
+
+/**
  * Itens controlados que não têm saldo para o que o kit ainda precisa tirar.
  *
  * Olha a DIFERENÇA, pelo mesmo motivo da baixa: conferir de novo um kit já
@@ -712,10 +788,13 @@ export async function baixarKitDaOp({ opl, linhas, currentUser }: any) {
     if (r?.negativo) resumo.negativos.push({ nome: l.nome, saldo: r.saldo_depois });
     if (r?.requisicao?.criada) resumo.requisicoes.push({ nome: l.nome, ...r.requisicao });
 
-    // O material saiu de verdade: a reserva cumpriu o papel dela e se encerra.
-    // Se ficasse de pé, o disponível descontaria a mesma peça duas vezes — uma
-    // pelo saldo que baixou, outra pela reserva que continuaria segurando.
-    if (delta > 0) await consumirReserva({ oplId: opl.id, itemId: l.item_id, currentUser });
+    // O material saiu de verdade: a reserva cumpriu o papel dela, na medida em
+    // que cumpriu. Se ficasse de pé, o disponível descontaria a mesma peça duas
+    // vezes — uma pelo saldo que baixou, outra pela reserva que continuaria
+    // segurando. E se fosse encerrada inteira numa baixa parcial, mentiria para
+    // o outro lado (ver consumirReserva).
+    if (delta > 0) await consumirReserva({ oplId: opl.id, itemId: l.item_id, quantidade: delta, currentUser });
+    else await devolverReserva({ oplId: opl.id, itemId: l.item_id, quantidade: -delta });
   }
   return resumo;
 }
