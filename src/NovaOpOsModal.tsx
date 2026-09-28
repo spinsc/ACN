@@ -18,6 +18,7 @@ import { hojeISO } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
 import { modoDoVeiculo } from './ConfigEstrutura';
+import { PerguntasDaVenda, respostasDaUnidade, gravarConfiguracaoDaOp } from './PerguntasDaVenda';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
 function UploadAnexosInline({ oplId, oplNumero, currentUser }) {
@@ -214,6 +215,8 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
   // pra reaproveitar em OPs futuras (tipo_projeto === 'Reboque').
   // para preencher o texto livre de modelo quando um veículo é escolhido
   const [veiculosCarregados, setVeiculosCarregados] = useState<any[]>([]);
+  // respostas sobre o carro, por unidade do lote — o índice 0 é o padrão
+  const [respostasCarro, setRespostasCarro] = useState<any>({});
   useEffect(() => { carregarVeiculos().then(setVeiculosCarregados); }, []);
   const [modelosReboque, setModelosReboque]   = useState<{id:string,nome:string}[]>([]);
   const [novoModeloReboque, setNovoModeloReboque] = useState('');
@@ -454,6 +457,12 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
               .insert([payload])
               .select().single();
             if (error) throw error;
+            // a OP só existe agora, então é aqui que as respostas e o material
+            // são gravados — no formulário ainda não havia id
+            await gravarConfiguracaoDaOp({
+              opl: data, respostas: respostasDaUnidade(respostasCarro, i),
+              currentUser,
+            });
             if (i === 0) firstData = data;
           }
           onSaved?.(firstData, 'op');
@@ -463,6 +472,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
         } else {
           const { data, error } = await supabase.from('oples').insert([makePayload(baseOpl)]).select().single();
           if (error) throw error;
+          await gravarConfiguracaoDaOp({
+            opl: data, respostas: respostasDaUnidade(respostasCarro, 0), currentUser,
+          });
           onSaved?.(data, 'op');
           setSavedOp(data);
           return; // vai para o passo 2 (documentos) em vez de fechar
@@ -618,6 +630,18 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                     crmId={oportunidadeVinculada?.id || null} licitacaoId={form.licitacao_id || null}
                     unidades={Number(form.quantidade) > 1 && !soEnvio(fluxoEf) ? Number(form.quantidade) : 1} />
                 </div>
+              )}
+
+              {/* As perguntas sobre o carro vêm dos itens vendidos e são
+                  respondidas aqui, pelo vendedor — ele é quem está com o
+                  cliente. Só aparecem quando a venda leva Conjunto de
+                  Instalação (regra de 28/09/2026). */}
+              {!loteEhMisto && (
+                <PerguntasDaVenda itensVendidos={form.itens_vendidos || []}
+                  veiculoId={form.veiculo_id}
+                  unidades={Number(form.quantidade) || 1}
+                  loteMisto={loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf)}
+                  respostas={respostasCarro} onChange={setRespostasCarro} />
               )}
 
               {/* Número OP: Pedido de Venda → PPPP.YYMMM */}

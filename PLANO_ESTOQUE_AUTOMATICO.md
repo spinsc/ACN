@@ -781,7 +781,7 @@ estado original depois do teste.
 
 ---
 
-### ⬜ Etapa 7.3 — As perguntas vão para a abertura da OPL
+### ✅ Etapa 7.3 — As perguntas vão para a abertura da OPL
 
 Ficou de fora da 7.1 por tamanho. É o que falta para o vendedor responder na
 venda, como ele deve.
@@ -796,8 +796,48 @@ venda, como ele deve.
 O painel da Engenharia **já lê** as respostas gravadas, então quando elas
 passarem a vir da venda tudo se encaixa sem mexer nele.
 
-**Feito em:** —
-**O que foi feito:** —
+**Feito em:** 28/09/2026
+**O que foi feito:**
+
+O bloco **"🚗 Sobre o carro — o que muda a instalação"** entrou no formulário da
+OPL, logo abaixo dos itens vendidos. Quem responde é o vendedor, que é quem está
+com o cliente.
+
+- **O Conjunto Elétrico é o interruptor.** Sem ele na venda o bloco nem aparece:
+  é o caso de quem traz suporte e chicote de terceiros, e aí não há material de
+  instalação a montar.
+- **A pergunta vem do item vendido** e aparece etiquetada com ele — "Tem hack de
+  teto? *(BARRA SINALIZADORA)*" — para o vendedor saber por que está sendo
+  perguntado.
+- **O que a própria venda responde, o sistema já responde** e marca como
+  "o sistema já sabia"; o vendedor só mexe no que sobra.
+- **No lote, o primeiro carro é o padrão.** Os seguintes mostram "igual ao 01"
+  com um "responder diferente" ao lado. Num lote de 30 isso é a diferença entre
+  responder 2 perguntas e responder 60.
+- A gravação roda **depois do insert**, porque durante o preenchimento a OP
+  ainda não tem `id`. Grava as respostas em `op_configuracao_respostas` e soma o
+  material calculado na `bom_itens`, juntando com o que já veio do vendido.
+- **Falha no cálculo não derruba a venda.** Se algo der errado a OP nasce mesmo
+  assim, só sem o material montado — a Engenharia ainda confere a BOM antes de
+  liberar. Travar a venda por causa do cálculo seria pior que a OP nascer sem ele.
+
+**Teste — o que foi conferido e o que não foi**
+
+Conferido na tela: o bloco só aparece depois que o Conjunto Elétrico entra na
+venda; a pergunta vem etiquetada com o item de origem; responder mostra
+"✓ Tem hack de teto? **Tem**" com o "trocar" ao lado; e a Etapa 7.2 continua de
+pé (veículo obrigatório pede o carro, o modelo em texto livre some, o aviso
+limpa quando o carro é escolhido).
+
+**Não consegui completar a criação de uma OP pela tela** — são 7 campos
+obrigatórios com estado em cascata e o modal fecha no meio. Os dois pontos de
+gravação foram conferidos **por leitura do pacote compilado**, não por execução:
+o caminho do lote chamando com o índice da unidade e o da OP única chamando com
+o índice 0. É a mesma limitação que ficou registrada na Etapa 5.1 — vale
+confirmar com a primeira OP real que nascer com Conjunto Elétrico.
+
+Dado de teste apagado (4 itens `ZZT-`, 1 veículo, 1 pergunta, 2 materiais) e
+contagem conferida zerada nas quatro tabelas.
 
 ---
 ### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item · **PRÓXIMA**
