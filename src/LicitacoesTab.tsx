@@ -2602,10 +2602,17 @@ function RelatorioStatus({ licitacoes, loading, onOpenLicit, markupPorLicit = {}
 // Filtro de mês usa `atualizado_em` (data em que entrou no status atual;
 // também é tocado por edições sem troca de status).
 // ─────────────────────────────────────────────────────────────────────────────
-function PipelineCardsLicitacoes({ licitacoes }: any) {
+function PipelineCardsLicitacoes({ licitacoes, total = null }: any) {
   const [mesFiltro, setMesFiltro] = useState('');
+  // quando os filtros da lista recortam o pipeline, diz em cima de quantas
+  // licitações ele está contando — senão o número muda e ninguém sabe por quê
+  const recortado = total != null && licitacoes.length !== total;
   const noMes = (l: any) => !mesFiltro || (l.atualizado_em || '').slice(0,7) === mesFiltro;
-  const valorDe = (l: any) => Number(l.valor_proposta) || Number(l.valor_estimado) || 0;
+  // `valor_proposta` nunca existiu na tabela — o código lia um campo fantasma e
+  // caía no estimado por acidente. O valor do pipeline é o ESTIMADO, e é isso
+  // que o rodapé diz (28/09/2026). Valor de proposta fechada mora na formação
+  // de preços e ainda não tem caminho de volta para cá.
+  const valorDe = (l: any) => Number(l.valor_estimado) || 0;
 
   const emNegociacao = licitacoes.filter((l:any) => ['Aberta','Em Andamento'].includes(l.status) && noMes(l));
   const perdidas     = licitacoes.filter((l:any) => l.status === 'Perdida' && noMes(l));
@@ -2640,6 +2647,10 @@ function PipelineCardsLicitacoes({ licitacoes }: any) {
         <input id="licit-mes-pipeline" type="month" className="acn-input" value={mesFiltro} onChange={e => setMesFiltro(e.target.value)}
           style={{ width:'auto', height:28 }} />
         {mesFiltro && <Botao pequeno variante="discreto" icone={mdiClose} onClick={() => setMesFiltro('')}>Limpar</Botao>}
+        <span style={{ fontSize: 10, color: '#64748b' }}>
+          valores pelo <b>estimado</b>
+          {recortado && <> · contando <b>{licitacoes.length}</b> de {total} licitações, pelos filtros da lista</>}
+        </span>
       </div>
     </div>
   );
@@ -2781,8 +2792,20 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
     ? recentesLicit.map(r => licitacoes.find(l => l.id === r.registro_id)).filter(Boolean)
     : null;
 
-  const lista = listaRecentes || licitacoes
-    .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
+  /**
+   * A BASE DO PIPELINE — todos os filtros MENOS o de status (28/09/2026)
+   *
+   * Em 25/09 o pipeline foi congelado no total geral para corrigir um bug: ele
+   * seguia o filtro de status e, ao filtrar "Aberta", os cartões de Ganhas,
+   * Perdidas e Aguardando faturamento zeravam — status é o próprio eixo que o
+   * pipeline mostra. A correção resolveu o zero mas tirou o pipeline do ar:
+   * filtrar por tipo, temperatura ou período não mexia mais nele.
+   *
+   * Agora ele acompanha tudo que não seja status. Filtrar "Dispensa" mostra o
+   * pipeline das dispensas; escolher um período mostra o pipeline do período;
+   * e os quatro cartões continuam de pé em qualquer um dos casos.
+   */
+  const baseSemStatus = licitacoes
     .filter(l => filtroTipo === 'todos' || l.classificacao === filtroTipo)
     .filter(l => !filtroTemp || l.temperatura === filtroTemp)
     .filter(l => filtroAnaliseSetor === 'todas' || (analisesPendentesPorLicit[l.id]||[]).includes(filtroAnaliseSetor))
@@ -2793,7 +2816,10 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
       if (filtroPeriodoDe && disp < new Date(filtroPeriodoDe)) return false;
       if (filtroPeriodoAte && disp > new Date(filtroPeriodoAte + 'T23:59:59')) return false;
       return true;
-    })
+    });
+
+  const lista = listaRecentes || baseSemStatus
+    .filter(l => filtroStatus === 'todas' || l.status === filtroStatus)
     .filter(l => {
       // "Últimas Alterações" filtra, além de ordenar — só processos alterados
       // desde o login anterior ao atual. Sem login anterior registrado (1º
@@ -2858,13 +2884,9 @@ export default function LicitacoesTab({ currentUser, autoOpenLicitId, onAutoOpen
 
       {/* PIPELINE — mesma faixa do Comercial/CRM */}
       <div style={{ flexShrink:0 }}>
-        {/* Bug relatado pelo usuário em 25/09/2026: com o pipeline seguindo o
-            filtro de status da lista, ao filtrar "Aberta" só sobravam
-            licitações abertas no array — Ganhas/Perdidas/Aguardando
-            faturamento zeravam, porque status é o próprio eixo que o
-            pipeline mostra. Igual à visão de Relatório (RelatorioStatus,
-            abaixo), o pipeline agora sempre olha o total geral. */}
-        <PipelineCardsLicitacoes licitacoes={licitacoes} />
+        {/* Segue tipo, temperatura, setor de análise e período — só não segue
+            o status, que é o eixo dos próprios cartões (ver baseSemStatus). */}
+        <PipelineCardsLicitacoes licitacoes={baseSemStatus} total={licitacoes.length} />
       </div>
 
       <div className="sec-card" style={{ marginBottom:0, overflow:'visible' }}>
