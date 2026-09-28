@@ -604,54 +604,92 @@ de uso real mostrando o que se repete.
 
 ---
 
-### ⬜ Etapa 7.1 — Correção: as perguntas pertencem à venda, não à Engenharia · **PRÓXIMA**
+### ⬜ Etapa 7.1 — Reestruturação: pergunta no item, material no veículo, conjunto elétrico como interruptor · **PRÓXIMA**
 
-**Divergência encontrada no alinhamento de 28/09/2026**, comparando o que foi
-construído com o que o usuário tinha descrito.
+**Alinhamento de 28/09/2026.** Comparando o construído com o que o usuário
+descreveu, apareceram três divergências — e uma peça do processo que eu não
+conhecia e que muda o desenho todo.
 
-**O que eu fiz:** pus as perguntas ("tem hack? alto ou baixo?") no modal de
-liberar BOM da **Engenharia**.
+---
 
-**O que o usuário tinha dito, e repetiu agora:** quem responde é o **vendedor**,
-na abertura da OPL, porque é ele que está com o cliente e sabe se o carro tem
-hack, se tem câmera no para-brisa. A Engenharia não tem como saber.
+#### 1. A peça que faltava: o CONJUNTO ELÉTRICO
 
-**O CONJUNTO ELÉTRICO — o exemplo que explica o modelo.** O vendedor vende
-"conjunto elétrico" como um item. O que esse conjunto contém **muda de carro
-para carro, de modelo para modelo, às vezes de ano para ano**. Ele é o coringa:
-é exatamente o item cuja estrutura de instalação precisa ser configurada por
-veículo. Entender isso é entender para que serve a Etapa 6.
+É um **item de catálogo vendido à parte**. Existe porque em licitação tudo
+precisa ser especificado: ele aparece na nota, no PV, compõe o preço final. E
+representa o material de instalação — **suportes, chicotes, parafusos, porcas,
+arruelas, EVAs, colas** — para a nota não virar uma lista micro de parafuso.
 
-**Para que serve a BOM da Engenharia, então:** para **conferência**, não para
-montagem. Ela mostra a lista completa — o que foi vendido mais o que é usado
-para instalar — e a Engenharia confere. Se o modelo e o ano daquele carro já
-têm tudo cadastrado e a adaptação já foi feita ao menos uma vez, está tudo lá.
+**O vendedor só seleciona esse item quando vai precisar.** Se o cliente usa
+suporte e chicote de terceiros, ele não seleciona — e aí **a estrutura cadastrada
+não é usada**.
 
-**E a parte que falta hoje:** se **algum item vendido nunca foi adaptado naquele
-carro**, a BOM da Engenharia tem de **sinalizar isso**, para que a estrutura de
-instalação daquele item naquele modelo e ano seja cadastrada. Hoje o sistema só
-diz "sem configuração" dentro do modal do botão; precisa ser um aviso de
-verdade, na cara de quem confere.
+> **É o interruptor.** A presença do Conjunto Elétrico na venda é o que liga a
+> explosão da estrutura. Sem ele, o sistema não monta material de instalação.
+
+Ao gerar a OPL, o conjunto é **preenchido** com os itens de instalação dos
+outros itens vendidos, conforme o que já está cadastrado para aquele modelo e
+ano.
+
+---
+
+#### 2. As perguntas pertencem ao ITEM, não ao par
+
+> "barra sinalizadora, é nela que fica perguntas do hack — todo produto deve ter
+> opção de registrar perguntas"
+
+"Tem hack de teto?" é pergunta **da barra sinalizadora**, e vale em qualquer
+carro. O que muda de carro para carro é **o material que cada resposta consome**.
+
+A Etapa 6 amarrou a pergunta ao par (veículo × item). Consequência: seria
+preciso redigitar "tem hack?" em cada carro onde a barra é vendida. Errado.
+
+| | Onde fica |
+|---|---|
+| Pergunta e respostas possíveis | no **item** |
+| Material que cada resposta consome | no **veículo × item × resposta** |
+| Regra por combinação de itens | na **resposta** |
+
+---
+
+#### 3. Quem responde é o vendedor
+
+Na **abertura da OPL**, não na Engenharia — é ele que está com o cliente e sabe
+se o carro tem hack, se tem câmera no para-brisa. No lote customizável, o
+**primeiro carro serve de padrão** para os seguintes, e o vendedor só muda o que
+for diferente.
+
+---
+
+#### 4. A BOM da Engenharia é conferência
+
+Mostra a lista completa — o vendido mais o que instala — e a Engenharia confere.
+
+**E sinaliza o que falta.** Numa lista de 5 itens, se 4 já foram adaptados
+naquele carro e 1 não: o conjunto recebe o que os 4 trazem, e **só o item novo é
+cobrado** — a Engenharia cadastra a composição dele para aquele modelo e ano.
+Cadastrou, passa a ser automático dali em diante. É assim que o sistema vai
+ficando completo sozinho, um carro de cada vez.
+
+---
 
 **O que fazer:**
-1. Mover as perguntas para a **abertura da OPL**, por carro — no lote
-   customizável, cada unidade responde as suas (a tela da Etapa 5.1 já nasceu
-   preparada para recebê-las).
-2. Guardar as respostas por unidade assim que as OPs são criadas, e **montar a
-   `bom_itens` ali**, para a OP já nascer com o material.
-3. Na BOM da Engenharia, trocar o botão por um **painel de conferência**: o que
-   veio da configuração, e o **aviso destacado** dos itens vendidos que ainda não
-   têm estrutura para aquele veículo.
 
-**Detalhe de implementação:** na criação a OP ainda não tem `id`, então as
-respostas ficam no formulário e são gravadas depois do insert, uma vez por
-unidade.
+1. Tabelas novas: `item_perguntas` e `item_pergunta_opcoes` (a pergunta no item,
+   com aninhamento e a regra por combinação) e `veiculo_item_materiais` (o
+   material por veículo × item × resposta).
+2. Marcar no cadastro qual item **é** o conjunto de instalação.
+3. As tabelas `config_*` da Etapa 6 saem — **não há dado a migrar**, estavam
+   zeradas em 28/09/2026.
+4. Perguntas na **abertura da OPL**, por carro, com o primeiro servindo de padrão.
+5. A OP nasce com a `bom_itens` montada — **só se o Conjunto Elétrico estiver na
+   venda**.
+6. Na Engenharia, painel de **conferência** com o aviso destacado dos itens sem
+   estrutura para aquele veículo.
 
 **Feito em:** —
 **O que foi feito:** —
 
 ---
-
 ### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai
@@ -772,3 +810,8 @@ para o resultado não ficar remendado.
 | Conjunto elétrico | é o **coringa**: muda de carro, modelo e às vezes ano. É o caso que a estrutura por veículo existe para resolver |
 | BOM da Engenharia | é **conferência**, não montagem |
 | Item nunca adaptado naquele carro | a BOM tem de **sinalizar**, para a estrutura ser cadastrada |
+| Conjunto Elétrico | é **item de catálogo vendido à parte** — aparece na nota e no PV, e representa suportes, chicotes, parafusos, porcas, arruelas, EVAs e colas |
+| A presença dele na venda | é o **interruptor** da explosão: sem ele (peças de terceiros), a estrutura não é usada |
+| Perguntas | ficam no **item**, não no par veículo × item |
+| Material de cada resposta | fica no **veículo × item × resposta** |
+| Lote customizável | o **primeiro carro serve de padrão** para os seguintes |
