@@ -467,7 +467,7 @@ fecha o que a automação não fechou.
 
 ---
 
-### ⬜ Etapa 6 — A árvore de configuração: veículo × item vendido · **PRÓXIMA**
+### ✅ Etapa 6 — A árvore de configuração: veículo × item vendido
 
 **O coração da automação.** Detalhado pelo usuário em 26/09/2026.
 
@@ -500,8 +500,8 @@ fecha o que a automação não fechou.
    `bom_itens`**. É o que faz esta etapa valer sozinha, sem esperar a 7 — o PCP
    já usa no dia seguinte, à mão, e a 7 só automatiza o disparo.
 
-**Estado em 26/09/2026: o cadastro e o motor estão prontos e testados; o botão
-"aplicar nesta OP" (item 4) ficou de fora e abre a Etapa 7.**
+**Estado em 28/09/2026: completa. O cadastro e o motor entraram em 26/09; o botão
+"aplicar nesta OP" entrou na Etapa 7, no modal de liberar BOM da Engenharia.**
 
 **O que foi feito:**
 
@@ -539,7 +539,7 @@ remendar as quatro. A árvore alimenta a lista que já existe.
 
 ---
 
-### ⬜ Etapa 7 — Responder na venda e explodir sozinho
+### ✅ Etapa 7 — Responder e explodir na BOM
 
 **Onde as perguntas são respondidas, no fluxo do usuário:**
 
@@ -564,12 +564,47 @@ Alvo: **qualquer Creta com os itens de sempre anda sozinha pela esteira.**
   de compra — que é o motivo de tudo isto existir.
 - Lembrar as respostas anteriores do mesmo veículo como sugestão.
 
-**Feito em:** —
-**O que foi feito:** —
+**Feito em:** 28/09/2026.
+
+**Uma descoberta que encurtou a etapa:** a **explosão de kit já existia**. O
+`sugerirBom` (OpItens.tsx) abre o kit nos itens individuais desde antes, quando
+o item vendido tem `produto_id`. Venda de kit e venda avulsa já caíam na mesma
+lista — não havia nada a construir aí.
+
+**O que foi feito:**
+
+- `AplicarEstrutura.tsx`: `arvoresDaOp` (acha a configuração de cada item
+  vendido para aquele veículo), `previsaoDeFalta` (compara com o disponível sem
+  reservar nada) e `ModalAplicarEstrutura`.
+- Botão **"🧩 Usar a configuração do veículo"** dentro do modal de liberar BOM
+  da Engenharia. A BOM continua sendo revisada e liberada por lá, como sempre —
+  o botão só preenche.
+- Ao aplicar, as respostas ficam gravadas em `op_configuracao_respostas`, com
+  quem respondeu e se foi automática.
+- A junção com a BOM **soma quantidade de item repetido** em vez de duplicar a
+  linha.
+
+**Testado** de ponta a ponta com OP de 2 barras numa Nivus:
+
+| Passo | Resultado |
+|---|---|
+| Abrir o modal | já mostra **4 cabos** (2 por barra × 2 barras), o material fixo |
+| Responder "Tem hack" | a segunda pergunta **aparece sozinha** |
+| Responder "Alto" | soma **6 suportes** (3 × 2) |
+| Previsão | "precisa de 6, disponível 2 — **faltam 4**", com o aviso de que nada foi reservado |
+| Jogar na BOM | as 3 linhas entraram, somadas à barra que já estava |
+| Respostas | gravadas com autor e horário |
+
+Dado de teste apagado; banco conferido zerado.
+
+**O que ficou de fora:** a explosão **automática** na venda (hoje é o botão, a
+pedido de um humano) e lembrar as respostas do carro anterior como sugestão.
+Nenhuma das duas trava o uso — e ambas ficam melhores depois de algumas semanas
+de uso real mostrando o que se repete.
 
 ---
 
-### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
+### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item · **PRÓXIMA**
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai
 marcando até fechar 100%.

@@ -18,6 +18,7 @@ import { confirmar } from './Feedback';
 import { OrigemVendaBadge } from './OrigemVenda';
 import { fluxoLabel } from './FluxoEntrega';
 import { BomEditor, bomPreenchida, sugerirBom } from './OpItens';
+import { ModalAplicarEstrutura } from './AplicarEstrutura';
 import { MenuAcoes } from './Interface';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -124,6 +125,8 @@ export default function EngenhariaTab({ currentUser }) {
   const { naoLidoSet: oplsNaoLidas } = useUnreadMap('oples', opls.map((o: any) => o.id), currentUser);
   const [loading, setLoading] = useState(false);
   const [modalBom, setModalBom] = useState(null);
+  // configuração do veículo aplicada na BOM (Etapa 7)
+  const [modalConfig, setModalConfig] = useState(null);
   // chicotes/serralheria indicados na liberação da BOM (viram demandas dos setores)
   const [fabBom, setFabBom] = useState<any>(fabricacaoVazia());
   const [pinturaBom, setPinturaBom] = useState({ pintura: false, pintura_tipo: '' });
@@ -811,6 +814,27 @@ export default function EngenhariaTab({ currentUser }) {
       )}
 
       {/* MODAL BOM */}
+      {/* Junta o material da configuração com o que já está na BOM, somando
+          quantidade de item repetido em vez de duplicar a linha. */}
+      {modalConfig && (
+        <ModalAplicarEstrutura opl={modalConfig} currentUser={currentUser}
+          onFechar={() => setModalConfig(null)}
+          onAplicar={(linhas) => {
+            setBomLinhas(atuais => {
+              const mapa = new Map();
+              [...(atuais || []).filter(l => l?.item_id || String(l?.nome || '').trim()), ...linhas]
+                .forEach(l => {
+                  const chave = l.item_id || `txt:${l.nome}`;
+                  const ja = mapa.get(chave);
+                  if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
+                  else mapa.set(chave, { ...l });
+                });
+              return [...mapa.values()];
+            });
+            setModalConfig(null);
+          }} />
+      )}
+
       {modalBom && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:820,width:'96vw',maxHeight:'92vh',overflowY:'auto'}}>
@@ -833,6 +857,21 @@ export default function EngenhariaTab({ currentUser }) {
                 {modalBom.itens_vendidos.map((v: any) => `${Number(v.quantidade).toLocaleString('pt-BR')}× ${v.nome}`).join(' · ')}
               </div>
             )}
+            {/* A configuração do veículo (Etapa 6) entra aqui: o botão monta o
+                material da instalação e joga na BOM, que continua sendo revisada
+                e liberada pela Engenharia como sempre foi. */}
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+              <button type="button" onClick={() => setModalConfig(modalBom)}
+                style={{ fontSize:10, fontWeight:700, padding:'4px 11px', border:'1px solid #4f46e5',
+                  borderRadius:4, background:'#eef2ff', color:'#4338ca', cursor:'pointer' }}>
+                🧩 Usar a configuração do veículo
+              </button>
+              <span style={{ fontSize:9, color:'#64748b' }}>
+                {modalBom.veiculo_id
+                  ? 'Monta o material da adaptação a partir do que já foi configurado para este carro.'
+                  : 'Esta OP não tem veículo do catálogo — escolha um para usar a configuração.'}
+              </span>
+            </div>
             <BomEditor linhas={bomLinhas} onChange={setBomLinhas} vendidos={modalBom.itens_vendidos || []} />
             <FabricacaoInternaEditor valor={fabBom} onChange={setFabBom}
               pinturaSlot={<PinturaCampos valor={pinturaBom} onChange={v => setPinturaBom(p => ({ ...p, ...v }))} />} />
