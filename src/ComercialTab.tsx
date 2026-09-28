@@ -637,6 +637,24 @@ export default function ComercialTab({ currentUser }) {
     return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
   }, []);
 
+  /**
+   * Abre a OP para editar com o que está GRAVADO, não com o que a lista trazia.
+   *
+   * A lista é carregada de 30 em 30 segundos; entre uma carga e outra a OP pode
+   * ter mudado. Editar a partir da linha velha mostrava valor desatualizado e
+   * podia devolvê-lo ao banco (28/09/2026).
+   */
+  const abrirEdicao = async (o) => {
+    const { data } = await supabase.from('oples').select('*').eq('id', o.id).maybeSingle();
+    const linha = data || o;
+    setFormData({ ...FORM_VAZIO, ...linha,
+      data_entrada: (linha.data_entrada || '').slice(0, 10),
+      data_prevista_entrega: (linha.data_prevista_entrega || '').slice(0, 10) });
+    setEditId(linha.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const salvarOPL = async () => {
     if (!formData.opl || !formData.modelo) { alert('Preencha numero da OP e Modelo!'); return; }
     const isManutencao = (formData.tipo_projeto||'').toLowerCase().includes('manutencao') || (formData.tipo_projeto||'').toLowerCase().includes('manutenção');
@@ -650,7 +668,28 @@ export default function ComercialTab({ currentUser }) {
     const formSanitizado = { ...formLimpo };
     CAMPOS_DATA.forEach(k => { if (formSanitizado[k] === '') formSanitizado[k] = null; });
     CAMPOS_NUM.forEach(k  => { if (formSanitizado[k] === '' || formSanitizado[k] === undefined) formSanitizado[k] = null; });
-    const payload = { ...formSanitizado, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome, status_geral: statusInicial };
+    // SÓ OS CAMPOS DESTE FORMULÁRIO (corrigido em 28/09/2026)
+    //
+    // O botão Editar carrega a linha inteira da OP no formulário, e o salvar
+    // devolvia todas as ~209 colunas. Duas consequências ruins:
+    //
+    //  • desfazia o trabalho dos outros — se a Engenharia liberasse a BOM ou o
+    //    Almoxarifado fechasse o kit enquanto o formulário estava aberto,
+    //    salvar devolvia os valores velhos por cima;
+    //  • reescrevia `criado_por_nome` com o nome de quem editou, apagando quem
+    //    de fato abriu a OP.
+    //
+    // Agora vai só o que esta tela realmente edita. O resto da OP fica como
+    // está, com o setor dono de cada campo.
+    const CAMPOS_DO_FORM = Object.keys(FORM_VAZIO).filter(k => !k.startsWith('_'));
+    const payload: any = {};
+    CAMPOS_DO_FORM.forEach(k => { if (formSanitizado[k] !== undefined) payload[k] = formSanitizado[k]; });
+    // criador e status inicial são de quem cria; editar não mexe em nenhum dos dois
+    if (!editId) {
+      payload.criado_por = currentUser?.email;
+      payload.criado_por_nome = currentUser?.nome;
+      payload.status_geral = statusInicial;
+    }
     if (editId) {
       // Buscar dados anteriores para log
       const { data: anterior } = await supabase.from('oples').select('opl,status_geral,cliente_nome,modelo,chassi,data_prevista_entrega,quantidade').eq('id', editId).single();
@@ -1137,7 +1176,7 @@ export default function ComercialTab({ currentUser }) {
               <td>{fmtDt(o.data_prevista_entrega)}</td>
               <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="acn-btn" style={{background:'#f59e0b'}} onClick={()=>liberarFaturamento(o)}>🟡 LIBERAR FISCAL</button>
-                <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);window.scrollTo({top:0,behavior:'smooth'});}}>✏️ Editar</button>
+                <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{abrirEdicao(o);}}>✏️ Editar</button>
                 <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬</button>
               </div></td></tr>
@@ -1165,7 +1204,7 @@ export default function ComercialTab({ currentUser }) {
               </td>
               <td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>ENTREGUE</button>
-                <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});setEditId(o.id);setShowForm(true);window.scrollTo({top:0,behavior:'smooth'});}}>✏️ Editar</button>
+                <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{abrirEdicao(o);}}>✏️ Editar</button>
                 <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>{ setModalVer(o); marcarOplLido(String(o.id)); }}>👁 {isOplUnread(o) ? '🔴 ' : ''}Ver</button>
                 <button className="acn-btn" style={{background:'#6366f1',fontSize:9}} onClick={()=>setModalAcomp(o)}>💬</button>
               </div></td></tr>
@@ -1304,10 +1343,7 @@ export default function ComercialTab({ currentUser }) {
                         </td>
                         <td style={{position:'sticky',right:0,background: o.status_geral==='Devolvida Comercial' ? '#fff5f5' : 'white',zIndex:1}}>
                           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                            <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>{
-                              setFormData({...FORM_VAZIO,...o,data_entrada:(o.data_entrada||'').slice(0,10),data_prevista_entrega:(o.data_prevista_entrega||'').slice(0,10)});
-                              setEditId(o.id); setShowForm(true); window.scrollTo({top:0,behavior:'smooth'});
-                            }}>✏️ EDITAR</button>
+                            <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>abrirEdicao(o)}>✏️ EDITAR</button>
                             {o.status_geral === 'Devolvida Comercial' && (
                               <button className="acn-btn" style={{background:'#7c3aed',fontSize:10}} onClick={()=>enviarParaEngenharia(o)}>
                                 ↩ ENGENHARIA

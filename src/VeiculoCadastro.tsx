@@ -17,6 +17,31 @@ import { TIPOS_VEICULO, anosDoModelo, carregarVeiculos, textoVeiculo } from './V
 
 const ANO_CORTE = 2010;   // de 2010 pra frente aparece direto; antes, sob pedido
 
+/**
+ * UM MODELO POR CHASSI, NÃO POR MOTOR (28/09/2026)
+ *
+ * A FIPE lista versão de motor: 43 Saveiros, 37 Peugeot 206, 14 Jettas. Quem
+ * abre a OP não acha o carro no meio disso — e para adaptar acessório a
+ * cilindrada não muda nada. O que muda é o chassi e onde a peça é presa.
+ *
+ * O agrupamento vem pronto do banco (`nome_simplificado`), calculado pela
+ * função `fipe_modelo_simplificado`. Aqui é só juntar as versões num item só
+ * da lista, guardando as originais para quem quiser os anos exatos.
+ *
+ * O representante é a primeira versão do grupo: é dela que saem os anos
+ * oferecidos. Como o ano continua digitável, isso é conveniência, não regra.
+ */
+export function agruparModelos(linhas) {
+  const grupos = new Map();
+  for (const m of linhas || []) {
+    const chave = m.nome_simplificado || m.nome;
+    const ja = grupos.get(chave);
+    if (ja) { ja.versoes.push(m); continue; }
+    grupos.set(chave, { ...m, nome: chave, nome_fipe: m.nome, versoes: [m] });
+  }
+  return [...grupos.values()].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+}
+
 const campo = { width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1',
                 borderRadius: 4, fontSize: 11, boxSizing: 'border-box' };
 const rotulo = { fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 2 };
@@ -48,8 +73,8 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
     if (!marcaId) { setModelos([]); setModeloId(''); return; }
     (async () => {
       const { data } = await supabase.from('veiculos_fipe_modelos')
-        .select('id,nome,codigo_fipe,marca_id').eq('marca_id', marcaId).order('nome');
-      setModelos(data || []);
+        .select('id,nome,nome_simplificado,codigo_fipe,marca_id').eq('marca_id', marcaId).order('nome');
+      setModelos(agruparModelos(data || []));
       setModeloId(''); setAnos([]);
       const m = marcas.find(x => x.id === marcaId);
       setForm(f => ({ ...f, marca: m?.nome || '' }));
@@ -60,8 +85,8 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
     setModeloId(id);
     const modelo = modelos.find(m => m.id === id);
     if (!modelo) return;
-    // nome vem preenchido mas editável: "Nivus Comfortline 1.0 200 TSI Flex Aut."
-    // vira "Nivus" na mão de quem cadastra (decisão do usuário em 25/09/2026)
+    // o nome que fica na OP é o simplificado ("Saveiro CD"), não a versão de
+    // motor da FIPE. Continua editável na mão de quem cadastra.
     setForm(f => ({ ...f, nome: modelo.nome }));
     setBuscandoAnos(true); setErroAnos('');
     const r = await anosDoModelo(modelo, tipo);
@@ -70,6 +95,8 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
     setAnos(r.anos || []);
   };
 
+  const modeloEscolhido = modelos.find(m => m.id === modeloId);
+  const totalVersoesFipe = modelos.reduce((s, m) => s + (m.versoes?.length || 1), 0);
   const anosVisiveis = anos.filter(a => verAntigos || !a.ano || a.ano >= ANO_CORTE);
   const temAntigos = anos.some(a => a.ano && a.ano < ANO_CORTE);
 
@@ -121,9 +148,19 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
 
             {marcaId && (
               <>
-                <label style={rotulo}>MODELO — {modelos.length} versões na FIPE</label>
+                <label style={rotulo}>
+                  MODELO — {modelos.length} modelo(s)
+                  {totalVersoesFipe > modelos.length && `, de ${totalVersoesFipe} versões da FIPE`}
+                </label>
                 <SelectBusca opcoes={modelos.map(m => ({ valor: m.id, rotulo: m.nome }))}
                   valor={modeloId} onChange={escolherModelo} placeholder="Procure o modelo" />
+                {modeloEscolhido?.versoes?.length > 1 && (
+                  <div style={{ fontSize: 9, color: '#6b7280', marginTop: 3 }}>
+                    Junta {modeloEscolhido.versoes.length} versões de motor da FIPE — o que muda entre elas
+                    não muda onde o acessório é preso. Os anos abaixo vêm de “{modeloEscolhido.nome_fipe}”;
+                    se o carro for de outro ano, digite nos campos.
+                  </div>
+                )}
                 <div style={{ height: 8 }} />
               </>
             )}

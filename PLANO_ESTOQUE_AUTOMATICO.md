@@ -974,12 +974,21 @@ quando o saldo sobe, a trava solta.
 Dado de teste apagado (1 item, 1 OP, 1 reserva, 3 movimentos) e contagem
 conferida zerada.
 
-**O que ficou de fora — e precisa de decisão sua**
+**O kiting em lote — resolvido no mesmo dia**
 
-O **kiting em lote** registra a conferência como separada inteira mas **nunca
-deu baixa no estoque** — nem antes desta etapa. OP fechada em lote não move
-saldo. Não mexi nisso porque não estava no combinado e mudar faria várias OPs
-baixarem de uma vez. Vale resolver antes da Etapa 9.
+O lote registrava a conferência como separada inteira mas **nunca deu baixa no
+estoque**: OP fechada em lote saía com o material na mão e o saldo intacto. O
+unitário sempre baixou; o lote não.
+
+Corrigido em 28/09/2026, com a regra que o usuário pediu: vale **só para OP que
+ainda não passou pelo Almoxarifado** — o `status_almox` já preenchido é a marca
+de quem já passou, e o que foi fechado antes fica como está, sem correção
+retroativa. Como `baixarKitDaOp` trabalha por diferença, OP que volta para
+refazer o kit também não conta o material duas vezes.
+
+Conferido com gravação real: OP nova baixou 3 de um saldo de 20 (ficou 17); OP
+já passada pelo almox foi ignorada, saldo intacto; repetir a mesma OP não
+movimentou nada.
 
 ---
 

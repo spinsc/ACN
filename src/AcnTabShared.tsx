@@ -638,8 +638,27 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
   const [loading, setLoading] = useState(false);
   const [liberando, setLiberando] = useState(false);
   const [comprasVinculadas, setComprasVinculadas] = useState<any[]>([]);
-  // Sincroniza se prop mudar
-  useEffect(() => { setOpl(oplProp); }, [oplProp?.id]);
+  /**
+   * A OP é lida do banco toda vez que o modal abre (28/09/2026).
+   *
+   * A lista que abre este modal foi carregada uma vez e não sabe do que foi
+   * gravado depois — nem por outro setor, nem pela própria pessoa num acesso
+   * anterior. Como o modal desmonta ao fechar, reabrir remontava com a linha
+   * velha da lista e mostrava o valor antigo.
+   *
+   * Foi exatamente o que aconteceu na OP 1668: a origem da venda foi salva
+   * três vezes seguidas porque, a cada reabertura, a tela dizia "não
+   * informada". Estava gravado no banco todas as vezes; quem estava usando é
+   * que não tinha como saber.
+   *
+   * A prop continua servindo para o primeiro desenho, sem piscar a tela.
+   */
+  const recarregarOpl = async () => {
+    if (!oplProp?.id) return;
+    const { data } = await supabase.from('oples').select('*').eq('id', oplProp.id).maybeSingle();
+    if (data) setOpl(data);
+  };
+  useEffect(() => { setOpl(oplProp); recarregarOpl(); }, [oplProp?.id]);
 
   // Pedidos de compra ligados a esta OP — por vínculo direto (oportunidade_id,
   // quando a compra nasceu com vínculo real) ou por número da OP em texto
@@ -686,8 +705,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: usuario?.nome || null, usuario_email: usuario?.email || null, data_hora: new Date().toISOString(),
     }]);
-    setOpl((o: any) => ({ ...o, itens_vendidos: itens }));
     setEditandoVendido(null);
+    await recarregarOpl();      // mostra o que ficou gravado, não o que eu achei que gravei
     recarregarLogs();
   };
   const [editando, setEditando] = useState(false);
@@ -724,7 +743,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       usuario_nome: usuario?.nome || usuario?.email || '—', usuario_email: usuario?.email || null,
       data_hora: new Date().toISOString(),
     }]);
-    setOpl((o: any) => ({ ...o, origem_venda: nova }));
+    await recarregarOpl();
+    recarregarLogs();
   };
   const trocarNumero = async () => {
     const novo = await renomearOpl(opl, usuario);

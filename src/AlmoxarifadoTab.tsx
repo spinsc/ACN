@@ -56,6 +56,26 @@ export default function AlmoxarifadoTab({ currentUser }) {
   // (`completo`, porque desde 28/09/2026 o checklist unitário começa vazio)
   const conferenciaLote = (o) => (o?.bom_itens || []).length
     ? { kit_conferencia: registroConferencia(conferenciaInicial({ bom_itens: o.bom_itens }, { completo: true }), currentUser, true) } : {};
+
+  /**
+   * O kiting em lote também dá baixa no estoque (28/09/2026).
+   *
+   * Até aqui o lote registrava a conferência como separada inteira mas NUNCA
+   * movimentava estoque: OP fechada em lote saía com o material na mão e o
+   * saldo intacto. O unitário sempre baixou; o lote não.
+   *
+   * Vale só para OP que ainda NÃO passou pelo Almoxarifado, como o usuário
+   * pediu: o que já foi fechado antes fica como está, sem correção retroativa.
+   * O `status_almox` já preenchido é a marca de quem já passou. E mesmo que
+   * uma OP volte para refazer o kit, `baixarKitDaOp` trabalha por diferença e
+   * não conta o material duas vezes.
+   */
+  const baixarNoLote = async (o) => {
+    if (o?.status_almox) return null;                       // já passou pelo almox: ignora
+    const linhas = conferenciaInicial({ bom_itens: o?.bom_itens || [] }, { completo: true });
+    if (!linhas.length) return null;
+    return await baixarKitDaOp({ opl: o, linhas, currentUser });
+  };
   // saldo de cada item da lista, para o checklist saber o que dá para marcar
   const [saldosKit, setSaldosKit] = useState({});
   const [salvandoSeparacao, setSalvandoSeparacao] = useState(false);
@@ -484,8 +504,15 @@ Embalar e enviar assim mesmo?`)) return;
     const { irmaos } = modalSeriaisLote;
     setAplicandoSeriaisLote(true);
     try {
+      const avisos = [];
       for (let i = 0; i < linhas.length && i < irmaos.length; i++) {
-        await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', '', { seriais_equipamentos: linhas[i], ...conferenciaLote(irmaos[i]) });
+        const baixa = await baixarNoLote(irmaos[i]);
+        if (baixa?.negativos?.length) avisos.push(`${irmaos[i].opl}: ${baixa.negativos.map(n => n.nome).join(', ')}`);
+        await setAlmox(irmaos[i], 'Kit OK', 'Kit OK - Aguardando PCP', textoDaBaixa(baixa),
+          { seriais_equipamentos: linhas[i], ...conferenciaLote(irmaos[i]) });
+      }
+      if (avisos.length) {
+        alert(`Kit fechado em lote, mas o estoque ficou negativo em:\n${avisos.join('\n')}\n\nVale conferir a prateleira e fazer uma contagem.`);
       }
       notificarEvento('kit_ok', msg.kitOk(modalSeriaisLote.base, currentUser?.nome) + ` (${Math.min(linhas.length, irmaos.length)} unidades em lote)`);
     } finally {
@@ -503,7 +530,9 @@ Embalar e enviar assim mesmo?`)) return;
     try {
       for (const o of ops) {
         const itens = porOp[String(o.id)] || [];
-        await setAlmox(o, 'Kit OK', STATUS_EMBALAGEM, `Kit 100% em lote (${ops.length} unidades de ${base})`, {
+        const baixa = await baixarNoLote(o);
+        await setAlmox(o, 'Kit OK', STATUS_EMBALAGEM,
+          [`Kit 100% em lote (${ops.length} unidades de ${base})`, textoDaBaixa(baixa)].filter(Boolean).join(' · '), {
           seriais_itens: itens,
           seriais_equipamentos: itens.map(x => `${x.produto}: ${x.serial}`).join('\n'),
           ...conferenciaLote(o),
