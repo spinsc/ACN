@@ -21,6 +21,7 @@ import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
 import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './OplEdicao';
 import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
+import { FotosVeiculoVer } from './FotosVeiculo';
 import { itensPreenchidos } from './DemandaItens';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
@@ -1113,6 +1114,16 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           </div>
         ) : (
           <>
+            {/* Como o carro chegou — tirado na abertura da OP. É o que resolve
+                discussão de avaria no fim do serviço (28/09/2026). */}
+            {(opl.fotos_veiculo || []).length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 4 }}>
+                  📷 Como o carro chegou ({opl.fotos_veiculo.length})
+                </div>
+                <FotosVeiculoVer fotos={opl.fotos_veiculo} tamanho={72} />
+              </div>
+            )}
             <QuadroItensOp opl={opl} />
             {!(opl.itens_vendidos || []).length && !(opl.bom_itens || []).length && (
               <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Sem itens vendidos nem BOM registrados.</div>

@@ -20,7 +20,7 @@ const CATEGORIAS_DEFAULT = [
 
 const ITEM_VAZIO = {
   codigo: '', nome: '', descricao: '', unidade: 'UN', categoria: '',
-  ncm: '', marca: '', fornecedor: '', moeda: 'REAL', custo_unit: 0,
+  ncm: '', marca: '', fornecedor: '', moeda: 'REAL', custo_unit: 0, compra_multiplo: 1, custo_embalagem: null,
   ipi_pct: 0, st_pct: 0, difal_pct: 0, imposto_pct: 16,   // DIFAL começa zerado (depende do destino da venda)
   markup_pct: 30, custo_fixo_pct: 3, ativo: true,
   // Fabricação interna: é o que faz o PCP abrir a demanda do setor sozinho ao
@@ -223,7 +223,13 @@ function ItemModal({
       marca:         form.marca?.trim() || '',
       fornecedor:    form.fornecedor?.trim() || '',
       moeda:         form.moeda || 'REAL',
-      custo_unit:    Number(form.custo_unit) || 0,
+      // `custo_unit` continua sendo o custo de UMA unidade — é o que toda a
+      // conta de preço usa. Quando o item vem em embalagem, ele é derivado.
+      compra_multiplo: Math.max(1, Number(form.compra_multiplo) || 1),
+      custo_embalagem: Number(form.compra_multiplo) > 1 ? (Number(form.custo_embalagem) || 0) : null,
+      custo_unit:    Number(form.compra_multiplo) > 1
+        ? (Number(form.custo_embalagem) || 0) / Math.max(1, Number(form.compra_multiplo) || 1)
+        : (Number(form.custo_unit) || 0),
       ipi_pct:       Number(form.ipi_pct) || 0,
       st_pct:        Number(form.st_pct) || 0,
       difal_pct:     Number(form.difal_pct) || 0,
@@ -261,7 +267,12 @@ function ItemModal({
   // (FormacaoCalculo.precoUnitario): markup sobre o custo e DIFAL no
   // denominador. Aqui é só uma estimativa: quem manda no preço de cada venda
   // é a formação, onde markup, custo e DIFAL são livres por proposta.
-  const custoCImp  = custoComImpostos(form.custo_unit, form.ipi_pct, form.st_pct);
+  // comprado em embalagem: o custo que vale para o preço é o da unidade
+  const emEmbalagem = Number(form.compra_multiplo) > 1;
+  const custoPorUnidade = emEmbalagem
+    ? (Number(form.custo_embalagem) || 0) / Math.max(1, Number(form.compra_multiplo) || 1)
+    : Number(form.custo_unit) || 0;
+  const custoCImp  = custoComImpostos(custoPorUnidade, form.ipi_pct, form.st_pct);
   const precoFinal = precoUnitario(custoCImp, form.markup_pct, form.difal_pct);
 
   return (
@@ -367,9 +378,54 @@ function ItemModal({
             <Field label={`Custo Unitário (${moedaSimbolo(form.moeda)})`} flex={1.2}>
               <input style={inp} type="number" min={0} step="0.01"
                 value={form.custo_unit} onChange={e => set('custo_unit', e.target.value)}
-                placeholder="0,00" />
+                placeholder="0,00" disabled={emEmbalagem}
+                title={emEmbalagem ? 'Calculado a partir do custo da embalagem' : ''} />
             </Field>
           </Row>
+
+          {/* COMPRADO EM EMBALAGEM, VENDIDO POR UNIDADE (28/09/2026)
+              O caso do rádio: o fornecedor vende o par, a nota vem com o preço
+              do par, mas a fábrica vende a unidade. Quem digitava o preço do
+              par no custo unitário fazia a formação calcular o preço de venda
+              em cima do dobro do custo. */}
+          <div style={{ border: '1px solid ' + (emEmbalagem ? '#fcd34d' : '#e2e8f0'),
+            background: emEmbalagem ? '#fffbeb' : '#f8fafc', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+              fontSize: 11, fontWeight: 700, color: emEmbalagem ? '#92400e' : '#334155' }}>
+              <input type="checkbox" checked={emEmbalagem}
+                onChange={e => {
+                  const liga = e.target.checked;
+                  // desligando, o custo por unidade que já vale continua valendo
+                  set('compra_multiplo', liga ? 2 : 1);
+                  if (!liga) set('custo_embalagem', null);
+                  else if (!form.custo_embalagem) set('custo_embalagem', Number(form.custo_unit) * 2 || '');
+                }} />
+              📦 Este item é comprado em embalagem com mais de uma unidade
+            </label>
+            <div style={{ fontSize: 9, color: '#64748b', marginTop: 4 }}>
+              {emEmbalagem
+                ? 'O custo unitário passa a ser calculado: é o custo da embalagem dividido pelas unidades que vêm nela. É esse valor que a Formação de Preços usa.'
+                : 'É o caso do rádio, que o fornecedor vende em par. Ligue e informe o preço da embalagem como vem na nota.'}
+            </div>
+            {emEmbalagem && (
+              <Row>
+                <Field label="Unidades por embalagem" flex={1}>
+                  <input style={inp} type="number" min={1} step="1" value={form.compra_multiplo ?? 2}
+                    onChange={e => set('compra_multiplo', Math.max(1, parseInt(e.target.value, 10) || 1))} />
+                </Field>
+                <Field label={`Custo da embalagem (${moedaSimbolo(form.moeda)})`} flex={1.2}>
+                  <input style={inp} type="number" min={0} step="0.01" value={form.custo_embalagem ?? ''}
+                    onChange={e => set('custo_embalagem', e.target.value)} placeholder="como vem na nota" />
+                </Field>
+                <Field label="Custo por unidade" flex={1.2}>
+                  <div style={{ ...inp, background: '#fff7ed', color: '#92400e', fontWeight: 800,
+                    display: 'flex', alignItems: 'center' }}>
+                    {moedaSimbolo(form.moeda)} {custoPorUnidade.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+                </Field>
+              </Row>
+            )}
+          </div>
 
           <Section title="📦 Estoque" />
           <CamposEstoqueItem form={form} set={set} currentUser={currentUser} />

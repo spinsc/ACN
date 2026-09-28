@@ -711,7 +711,7 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
       setBuscando(true);
       const [{ data: itens }, { data: produtos }] = await Promise.all([
         buscarPorPalavras(supabase.from('cadastro_itens')
-          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
+          .select('id,codigo,nome,marca,fornecedor,unidade,moeda,custo_unit,ipi_pct,st_pct,tipo_calculo,markup_pct,difal_pct,imposto_pct,custo_fixo_pct,compra_multiplo,custo_embalagem')
           .eq('ativo', true), ['nome_norm', 'codigo_norm'], termo).limit(8),
         buscarPorPalavras(supabase.from('cadastro_produtos')
           .select('id,codigo,nome,categoria,unidade,preco_venda,markup_pct,difal_pct,imposto_pct,custo_fixo_pct')
@@ -830,6 +830,13 @@ function ProdutoAutocomplete({ value, onFill, onExpand, params }) {
                       R$ {Number(it.custo_unit||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
                     </div>
                     <div style={{ fontSize:8, color:'#9ca3af' }}>{it.moeda} · {it.unidade}</div>
+                    {/* comprado em par/trio: o custo acima já é o da UNIDADE,
+                        e vale dizer isso para ninguém achar que está errado */}
+                    {Number(it.compra_multiplo) > 1 && (
+                      <div style={{ fontSize:8, color:'#b45309', fontWeight:700 }}>
+                        por unidade · vem {it.compra_multiplo} por embalagem
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

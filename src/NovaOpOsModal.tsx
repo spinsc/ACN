@@ -18,6 +18,7 @@ import { hojeISO } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
 import { carregarVeiculos } from './Veiculos';
 import { modoDoVeiculo } from './ConfigEstrutura';
+import FotosVeiculo from './FotosVeiculo';
 import { PerguntasDaVenda, respostasDaUnidade, gravarConfiguracaoDaOp } from './PerguntasDaVenda';
 
 // ─── Upload inline de anexos (pós-criação da OP) ─────────────────────────────
@@ -150,6 +151,7 @@ const VAZIO = {
   resumo_servicos:        '',
   // O que foi vendido (obrigatório na OP): informa a Engenharia. No lote, por unidade.
   itens_vendidos:         [] as any[],
+  fotos_veiculo:          [] as any[],   // como o carro chegou
   licitacao_id:           null as string | null,   // vem do prefill da Licitação (formação ligada a ela)
 
   // ── Campos OS ────────────────────────────────────────────────────────────
@@ -433,6 +435,9 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
           obs_servico_terceiro:   (!ehVendaEnvio && form.servico_terceiro && form.tipos_servico_terceiro.includes('Outro')) ? (form.obs_servico_terceiro || null) : null,
           resumo_servicos:        form.resumo_servicos || null,
           itens_vendidos:         itensPreenchidos(form.itens_vendidos || []),
+          // as fotos valem para toda unidade do lote: é o mesmo lote de carros
+          // que chegou, fotografado na entrada
+          fotos_veiculo:          ehVendaEnvio ? [] : (form.fotos_veiculo || []),
         });
 
         let firstData: any;
@@ -642,6 +647,13 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                   unidades={Number(form.quantidade) || 1}
                   loteMisto={loteMisto && Number(form.quantidade) > 1 && !soEnvio(fluxoEf)}
                   respostas={respostasCarro} onChange={setRespostasCarro} />
+              )}
+
+              {/* Fotos de como o carro chegou. Só faz sentido quando há carro:
+                  venda de envio não tem veículo aqui (28/09/2026). */}
+              {!ehVendaEnvio && (
+                <FotosVeiculo valor={form.fotos_veiculo} currentUser={currentUser}
+                  onChange={v => setF('fotos_veiculo', v)} />
               )}
 
               {/* Número OP: Pedido de Venda → PPPP.YYMMM */}
