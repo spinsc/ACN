@@ -13,7 +13,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { normalizarBusca } from './SearchUtils';
 import { SelectBusca } from './Interface';
-import { TIPOS_VEICULO, anosDoModelo, carregarVeiculos, textoVeiculo } from './Veiculos';
+import { TIPOS_VEICULO, anosDoModelo, anosDoGrupo, carregarVeiculos, textoVeiculo } from './Veiculos';
 
 const ANO_CORTE = 2010;   // de 2010 pra frente aparece direto; antes, sob pedido
 
@@ -57,6 +57,8 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
   const [erroAnos, setErroAnos] = useState('');
   const [verAntigos, setVerAntigos] = useState(false);
   const [manual, setManual] = useState(false);
+  const [versaoFipeId, setVersaoFipeId] = useState('');
+  const [progresso, setProgresso] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({ marca: '', nome: '', ano_de: '', ano_ate: '', observacoes: '' });
 
@@ -83,16 +85,28 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
 
   const escolherModelo = async (id) => {
     setModeloId(id);
+    setVersaoFipeId('');
     const modelo = modelos.find(m => m.id === id);
     if (!modelo) return;
     // o nome que fica na OP é o simplificado ("Saveiro CD"), não a versão de
     // motor da FIPE. Continua editável na mão de quem cadastra.
     setForm(f => ({ ...f, nome: modelo.nome }));
-    setBuscandoAnos(true); setErroAnos('');
-    const r = await anosDoModelo(modelo, tipo);
-    setBuscandoAnos(false);
+    setBuscandoAnos(true); setErroAnos(''); setAnos([]); setProgresso(null);
+    // os anos são a união de TODAS as versões do grupo — buscar só a primeira
+    // mostrava anos velhos e parecia FIPE desatualizada (ver anosDoGrupo)
+    const r = await anosDoGrupo(modelo, tipo, (p) => { setAnos(p.anos); setProgresso(p); });
+    setBuscandoAnos(false); setProgresso(null);
     if (r.erro) setErroAnos(r.erro);
     setAnos(r.anos || []);
+  };
+
+  /** Quem precisa do nome exato da FIPE escolhe a versão aqui. */
+  const escolherVersaoFipe = async (versaoId) => {
+    setVersaoFipeId(versaoId);
+    const g = modelos.find(m => m.id === modeloId);
+    const v = g?.versoes?.find(x => x.id === versaoId);
+    if (!v) { if (g) setForm(f => ({ ...f, nome: g.nome })); return; }
+    setForm(f => ({ ...f, nome: v.nome.trim() }));
   };
 
   const modeloEscolhido = modelos.find(m => m.id === modeloId);
@@ -107,13 +121,17 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
     const de = form.ano_de === '' ? null : parseInt(form.ano_de, 10);
     const ate = form.ano_ate === '' ? null : parseInt(form.ano_ate, 10);
     if (de && ate && ate < de) { alert('O ano final não pode ser menor que o inicial.'); return; }
+    const anoEscolhido = anos.find(a => String(a.ano) === String(de));
     setSalvando(true);
     const { data, error } = await supabase.from('veiculos').insert([{
       tipo, marca, modelo: nome, nome_exibicao: nome,
       nome_norm: normalizarBusca(marca + ' ' + nome),
       ano_de: de, ano_ate: ate,
-      fipe_modelo_id: manual ? null : (modeloId || null),
-      fipe_codigo: manual ? null : (anos.find(a => String(a.ano) === String(de))?.codigo_fipe || null),
+      // o modelo gravado é o da VERSÃO a que o ano escolhido pertence — não o
+      // representante do grupo, que é escolhido por ordem alfabética e pode ser
+      // de uma geração completamente diferente (28/09/2026)
+      fipe_modelo_id: manual ? null : (versaoFipeId || anoEscolhido?.modelo_id || modeloId || null),
+      fipe_codigo: manual ? null : (anoEscolhido?.codigo_fipe || null),
       observacoes: String(form.observacoes || '').trim() || null,
       criado_por_nome: currentUser?.nome || currentUser?.email || '—',
     }]).select('*').single();
@@ -157,15 +175,35 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
                 {modeloEscolhido?.versoes?.length > 1 && (
                   <div style={{ fontSize: 9, color: '#6b7280', marginTop: 3 }}>
                     Junta {modeloEscolhido.versoes.length} versões de motor da FIPE — o que muda entre elas
-                    não muda onde o acessório é preso. Os anos abaixo vêm de “{modeloEscolhido.nome_fipe}”;
-                    se o carro for de outro ano, digite nos campos.
+                    não muda onde o acessório é preso. Os anos abaixo são de todas elas.
                   </div>
+                )}
+                {/* Licitação e nota às vezes pedem o nome exato como está na
+                    FIPE. Fica escondido até alguém precisar. */}
+                {modeloEscolhido?.versoes?.length > 1 && (
+                  <details style={{ marginTop: 4 }}>
+                    <summary style={{ fontSize: 9, color: '#2563eb', cursor: 'pointer' }}>
+                      Preciso do nome exato da FIPE
+                    </summary>
+                    <select className="acn-input" style={{ width: '100%', marginTop: 4, fontSize: 10 }}
+                      value={versaoFipeId} onChange={e => escolherVersaoFipe(e.target.value)}>
+                      <option value="">— usar “{modeloEscolhido.nome}” —</option>
+                      {modeloEscolhido.versoes.map(v => (
+                        <option key={v.id} value={v.id}>{v.nome.trim()}</option>
+                      ))}
+                    </select>
+                  </details>
                 )}
                 <div style={{ height: 8 }} />
               </>
             )}
 
-            {buscandoAnos && <div style={{ fontSize: 10, color: '#1d4ed8' }}>Buscando os anos na FIPE…</div>}
+            {buscandoAnos && (
+              <div style={{ fontSize: 10, color: '#1d4ed8' }}>
+                Buscando os anos na FIPE
+                {progresso ? ` — ${progresso.feitas} de ${progresso.total} versões. Os anos vão aparecendo abaixo.` : '…'}
+              </div>
+            )}
             {erroAnos && <div style={{ fontSize: 10, color: '#b91c1c' }}>{erroAnos}</div>}
 
             {anosVisiveis.length > 0 && (

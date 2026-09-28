@@ -154,6 +154,50 @@ export async function anosDoModelo(modelo, tipo) {
   }
 }
 
+/**
+ * ANOS DE UM MODELO AGRUPADO — a união de todas as versões (28/09/2026)
+ *
+ * Correção de um erro meu. Ao juntar as versões de motor da FIPE num modelo só,
+ * a tela passou a buscar os anos de UMA variação, a primeira em ordem
+ * alfabética. No Saveiro isso caiu em "Saveiro 1.6 Mi/ 1.6 Mi Total Flex 8V",
+ * cujos anos param em 2015 — enquanto o Robust atual tem 2026 e 2027.
+ *
+ * A Tatiana não conseguiu abrir a OP de um Saveiro 2026/2027 por causa disso, e
+ * a conclusão natural foi "a FIPE está desatualizada". A FIPE está em dia.
+ *
+ * Agora os anos são a união de todas as versões do grupo, e cada ano guarda de
+ * qual versão veio — é esse o modelo que fica gravado no veículo, não o
+ * representante. Cada versão é consultada uma vez e fica guardada no banco, então
+ * a segunda abertura é instantânea.
+ */
+export async function anosDoGrupo(grupo, tipo, aoAndar = null) {
+  const versoes = grupo?.versoes?.length ? grupo.versoes : [grupo];
+  const porAno = new Map();
+  const erros = [];
+  const ordenar = () => [...porAno.values()].sort((a, b) => (b.ano || 99999) - (a.ano || 99999));
+
+  // Em blocos, e entregando o que já chegou a cada bloco: o Gol tem 99 versões
+  // e esperar todas em silêncio pareceria travado. Assim o ano aparece na tela
+  // enquanto o resto ainda está sendo buscado, e quem achou o seu já clica.
+  const BLOCO = 10;
+  for (let i = 0; i < versoes.length; i += BLOCO) {
+    const bloco = versoes.slice(i, i + BLOCO);
+    const res = await Promise.all(bloco.map(v => anosDoModelo(v, tipo).then(r => ({ v, r }))));
+    for (const { v, r } of res) {
+      if (r.erro) { erros.push(r.erro); continue; }
+      for (const a of r.anos || []) {
+        // o mesmo ano em duas versões: fica a primeira, e é indiferente —
+        // as duas descrevem o mesmo carro para efeito de adaptação
+        const chave = a.ano != null ? `ano:${a.ano}` : `nome:${a.nome}`;
+        if (!porAno.has(chave)) porAno.set(chave, { ...a, modelo_id: v.id, modelo_nome: v.nome });
+      }
+    }
+    aoAndar?.({ anos: ordenar(), feitas: Math.min(i + BLOCO, versoes.length), total: versoes.length });
+  }
+  const anos = ordenar();
+  return { anos, erro: anos.length ? '' : (erros[0] || ''), versoes: versoes.length };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Leitura do catálogo da casa
 // ─────────────────────────────────────────────────────────────────────────────
