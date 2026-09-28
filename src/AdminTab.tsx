@@ -197,7 +197,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -219,6 +219,7 @@ function PainelUsuarios() {
       pode_autorizar_rh: editForm.pode_autorizar_rh,
       pode_enviar_avisos: editForm.pode_enviar_avisos,
       pode_aprovar_compra: !!editForm.pode_aprovar_compra,
+      ve_todas_tarefas_financeiro: !!editForm.ve_todas_tarefas_financeiro,
       permissoes_crm: editForm.permissoes_crm,
       permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
@@ -473,6 +474,21 @@ function PainelUsuarios() {
                 </label>
                 <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
                   Vale para os dois caminhos: alçada por valor e aprovação do departamento.
+                </div>
+              </div>
+              {/* Tarefas do Financeiro — quem vê o quadro inteiro. Por pessoa,
+                  não por perfil: quem coordena o setor muda, e trocar isso não
+                  pode exigir uma publicação nova (28/09/2026). */}
+              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
+                  <input type="checkbox"
+                    checked={editForm.ve_todas_tarefas_financeiro||false}
+                    onChange={e=>setEditForm(f=>({...f,ve_todas_tarefas_financeiro:e.target.checked}))}
+                    style={{accentColor:'#0f766e'}} />
+                  <span>📋 Vê todas as tarefas do Financeiro</span>
+                </label>
+                <div style={{fontSize:9,color:'#64748b',marginLeft:22}}>
+                  Desmarcado, a pessoa vê só as tarefas de que é responsável.
                 </div>
               </div>
               {/* Licitações — exclusão de anexos */}
