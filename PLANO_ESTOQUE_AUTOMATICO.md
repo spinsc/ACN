@@ -604,7 +604,55 @@ de uso real mostrando o que se repete.
 
 ---
 
-### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item · **PRÓXIMA**
+### ⬜ Etapa 7.1 — Correção: as perguntas pertencem à venda, não à Engenharia · **PRÓXIMA**
+
+**Divergência encontrada no alinhamento de 28/09/2026**, comparando o que foi
+construído com o que o usuário tinha descrito.
+
+**O que eu fiz:** pus as perguntas ("tem hack? alto ou baixo?") no modal de
+liberar BOM da **Engenharia**.
+
+**O que o usuário tinha dito, e repetiu agora:** quem responde é o **vendedor**,
+na abertura da OPL, porque é ele que está com o cliente e sabe se o carro tem
+hack, se tem câmera no para-brisa. A Engenharia não tem como saber.
+
+**O CONJUNTO ELÉTRICO — o exemplo que explica o modelo.** O vendedor vende
+"conjunto elétrico" como um item. O que esse conjunto contém **muda de carro
+para carro, de modelo para modelo, às vezes de ano para ano**. Ele é o coringa:
+é exatamente o item cuja estrutura de instalação precisa ser configurada por
+veículo. Entender isso é entender para que serve a Etapa 6.
+
+**Para que serve a BOM da Engenharia, então:** para **conferência**, não para
+montagem. Ela mostra a lista completa — o que foi vendido mais o que é usado
+para instalar — e a Engenharia confere. Se o modelo e o ano daquele carro já
+têm tudo cadastrado e a adaptação já foi feita ao menos uma vez, está tudo lá.
+
+**E a parte que falta hoje:** se **algum item vendido nunca foi adaptado naquele
+carro**, a BOM da Engenharia tem de **sinalizar isso**, para que a estrutura de
+instalação daquele item naquele modelo e ano seja cadastrada. Hoje o sistema só
+diz "sem configuração" dentro do modal do botão; precisa ser um aviso de
+verdade, na cara de quem confere.
+
+**O que fazer:**
+1. Mover as perguntas para a **abertura da OPL**, por carro — no lote
+   customizável, cada unidade responde as suas (a tela da Etapa 5.1 já nasceu
+   preparada para recebê-las).
+2. Guardar as respostas por unidade assim que as OPs são criadas, e **montar a
+   `bom_itens` ali**, para a OP já nascer com o material.
+3. Na BOM da Engenharia, trocar o botão por um **painel de conferência**: o que
+   veio da configuração, e o **aviso destacado** dos itens vendidos que ainda não
+   têm estrutura para aquele veículo.
+
+**Detalhe de implementação:** na criação a OP ainda não tem `id`, então as
+respostas ficam no formulário e são gravadas depois do insert, uma vez por
+unidade.
+
+**Feito em:** —
+**O que foi feito:** —
+
+---
+
+### ⬜ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai
 marcando até fechar 100%.
@@ -713,3 +761,14 @@ para o resultado não ficar remendado.
 | Lote | dois botões: **igual** (só a quantidade) ou **customizável** (carro a carro) |
 | Regras de combinação | podem **trocar**, **excluir** ou **acrescentar** material |
 | Baixa na separação | acontece ao **salvar**, não ao marcar; marcar e desmarcar são livres |
+
+---
+
+## Decisões de 28/09/2026 (alinhamento)
+
+| Decisão | |
+|---|---|
+| Quem responde as perguntas | o **vendedor**, na abertura da OPL — ele é quem sabe do carro |
+| Conjunto elétrico | é o **coringa**: muda de carro, modelo e às vezes ano. É o caso que a estrutura por veículo existe para resolver |
+| BOM da Engenharia | é **conferência**, não montagem |
+| Item nunca adaptado naquele carro | a BOM tem de **sinalizar**, para a estrutura ser cadastrada |
