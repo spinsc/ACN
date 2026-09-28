@@ -406,7 +406,7 @@ export function ClienteBuscaModal({
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:680, width:'96vw', maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
+      <div className="modal-box" style={{ maxWidth: 980, width:'96vw', maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
         <div className="modal-title">
           🔍 Buscar {tipoFilter === 'PJ' ? 'Empresa (PJ)' : tipoFilter === 'PF' ? 'Pessoa Física (PF)' : 'Cliente'}
         </div>
@@ -617,7 +617,7 @@ export function ClienteSalvarModal({ formData, clienteId, onClose }: SalvarProps
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:500 }}>
+      <div className="modal-box" style={{ maxWidth: 980 }}>
         {modo === 'novo' ? (
           <>
             <div className="modal-title">💾 Salvar Cliente no Cadastro?</div>

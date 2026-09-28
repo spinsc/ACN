@@ -434,7 +434,7 @@ function CalendarioManutencao({ currentUser }) {
       {/* MODAL AGENDAR */}
       {modalAgendar && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalAgendar(null);}}>
-          <div className="modal-box" style={{maxWidth:420}}>
+          <div className="modal-box" style={{maxWidth: 980}}>
             <div className="modal-title">📅 Agendar Manutenção</div>
             <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,padding:'8px 12px',marginBottom:14,fontSize:11}}>
               <strong>{modalAgendar.opl}</strong> · {modalAgendar.chassi||'—'} · {modalAgendar.cliente_nome||'—'}
@@ -1261,7 +1261,7 @@ function PainelSacVeicular({ currentUser }) {
       {/* MODAL: Conferência de Itens (Em Execução — Remota) */}
       {modalItensExecucao && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">📋 Conferência de Itens — {modalItensExecucao.numero_os}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:6}}>Cliente: {modalItensExecucao.cliente_nome}</div>
             <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
@@ -1938,7 +1938,7 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 640, maxHeight: '85vh', overflowY: 'auto' }}>
+      <div className="modal-box" style={{ maxWidth: 980, maxHeight: '85vh', overflowY: 'auto' }}>
         <div className="modal-title">📥 Importar Técnicos/Equipes — {base === 'Seleção' ? '☑️ Seleção' : `🔗 ${base}`}</div>
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
           {irmaos.length} unidade(s) {base === 'Seleção' ? 'selecionada(s)' : 'neste lote'}. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) — cada linha:

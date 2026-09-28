@@ -115,7 +115,7 @@ function OfiQueueSection({ setor, cor, currentUser }) {
       )}
       {modalVerOfi && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget) setModalVerOfi(null);}}>
-          <div className="modal-box" style={{ maxWidth:440 }}>
+          <div className="modal-box" style={{ maxWidth: 980 }}>
             <div className="modal-title">{modalVerOfi.numero_ofi} — {modalVerOfi.setor_destino}</div>
             <div style={{ fontSize:12, marginBottom:8 }}>{modalVerOfi.descricao} · {modalVerOfi.quantidade}</div>
             {modalVerOfi.vinculo_descricao && (

@@ -269,7 +269,11 @@ body.dark .acn-footer-setor strong { color:#7fd8cc !important; }
 
 /* ── MODAL ── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.modal-box { background:white; border-radius:8px; padding:20px; max-width:500px; width:94%; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,.25); }
+/* Largura padrão do modal: 760, não 500 (28/09/2026). Modal existe para não
+   tirar a tela de trás do caminho, não para espremer o conteúdo — com 500 a
+   tabela de dentro rolava na horizontal e a leitura virava sofrimento. Modal
+   com tabela leva 980 na própria chamada. */
+.modal-box { background:white; border-radius:8px; padding:20px; max-width:760px; width:94%; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,.25); }
 .modal-title { font-size:13px; font-weight:700; color:#0f172a; margin:0 0 14px; }
 
 /* ── FORMS ── */

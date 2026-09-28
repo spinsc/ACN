@@ -1101,7 +1101,7 @@ Embalar e enviar assim mesmo?`)) return;
 
       {modalSeriaisLote && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget && !aplicandoSeriaisLote) setModalSeriaisLote(null);}}>
-          <div className="modal-box" style={{maxWidth:560,width:'95vw'}}>
+          <div className="modal-box" style={{maxWidth: 980,width:'95vw'}}>
             <div className="modal-title">📥 Importar Seriais em Lote — 🔗 {modalSeriaisLote.base}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               {modalSeriaisLote.irmaos.length} unidade(s) sem kit ainda. Cole do Excel (Ctrl+C na planilha, Ctrl+V aqui) —

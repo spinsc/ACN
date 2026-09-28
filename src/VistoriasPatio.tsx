@@ -97,7 +97,7 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
 
   return (
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)fechar();}}>
-      <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+      <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-title">Vistoria — {v.veiculo_placa}</div>
         <table style={{fontSize:11,marginBottom:10,width:'100%'}}>
           <tbody>

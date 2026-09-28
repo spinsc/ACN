@@ -60,7 +60,7 @@ export function ModalKitingLoteEnvio({ base, ops, onClose, onConfirmar }: {
   let ultimaOp = '';
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 720, width: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="modal-box" style={{ maxWidth: 980, width: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-title">📦 Kiting 100% em lote — {base}</div>
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
           Venda para Envio: informe o serial ACN de cada produto de cada unidade. Pode colar do Excel (produto e serial em colunas,

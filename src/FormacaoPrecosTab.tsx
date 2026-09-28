@@ -3700,7 +3700,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
 
           {modalHistorico && (
             <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setModalHistorico(false); }}>
-              <div className="modal-box" style={{ maxWidth:640, maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
+              <div className="modal-box" style={{ maxWidth: 980, maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
                 <div className="modal-title">📜 Histórico — {nomeCotacao}</div>
                 {carregandoHistorico ? (
                   <div style={{ padding:20, textAlign:'center', color:'#94a3b8' }}>Carregando...</div>

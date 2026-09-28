@@ -2360,7 +2360,7 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* Modal: Itens da Cotação */}
       {modalItens && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:680,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">📋 Itens da Cotação — {modalItens.numero_os}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalItens.cliente_nome}</div>
             {/* Tabela de itens */}
@@ -2440,7 +2440,7 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* MODAL: Enviar para Fiscal — captura nº de série dos itens instalados */}
       {modalEnviarFiscal && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:760,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">📤 Enviar para Fiscal — {modalEnviarFiscal.numero_os}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalEnviarFiscal.cliente_nome}</div>
             <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
@@ -2479,7 +2479,7 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* Modal: Ver / Editar Orçamento da Produção (Presencial) */}
       {modalOrcProd && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setModalOrcProd(null);setOrcProdItens([]);}}}>
-          <div className="modal-box" style={{maxWidth:700,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">
               {orcProdModo==='ver' ? '👁 Orçamento da Produção' : '✏️ Editar Orçamento'} — {modalOrcProd.numero_os}
             </div>
@@ -2695,7 +2695,7 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ════════ MODAL PDF ════════ */}
       {modalPrint && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:700,width:'95vw',maxHeight:'92vh',overflowY:'auto'}}>
+          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'92vh',overflowY:'auto'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
               <div className="modal-title" style={{margin:0}}>🖨️ {modalPrint.numero_os}</div>
               <div style={{display:'flex',gap:8}}>

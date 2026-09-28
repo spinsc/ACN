@@ -49,7 +49,9 @@ function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2000,
       display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => { if (e.target === e.currentTarget) { onAtualizar(); onClose(); } }}>
-      <div style={{ background: '#fff', borderRadius: 10, width: 560, maxWidth: '95vw',
+      {/* 1080, não 560: a lista de centros tem código, nome, hierarquia e ações
+          na mesma linha, e em 560 tudo se amassava (28/09/2026). */}
+      <div style={{ background: '#fff', borderRadius: 10, width: 1080, maxWidth: '95vw',
         maxHeight: '85vh', display: 'flex', flexDirection: 'column',
         boxShadow: '0 16px 48px rgba(0,0,0,.28)' }}>
         <div style={{ background: '#0f766e', color: '#fff', padding: '12px 16px',

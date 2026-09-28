@@ -1442,7 +1442,7 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
 
   return (
       <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
-        <div className="modal-box" style={{ maxWidth: 520 }}>
+        <div className="modal-box" style={{ maxWidth: 980 }}>
           <div className="modal-title">📥 Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}</div>
           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
             {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}

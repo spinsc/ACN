@@ -1369,7 +1369,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
           intacto atrás: dizer "não" é só fechar isto e voltar a ajustar. */}
       {conferindo && (
         <div className="modal-overlay" style={{ zIndex: 2200 }}>
-          <div className="modal-box" style={{ maxWidth: 560, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal-box" style={{ maxWidth: 980, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-title">Confirmar a baixa no estoque</div>
             <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 10 }}>
               Retirado por <b style={{ color: '#0f172a' }}>{quemRetirou.trim()}</b>

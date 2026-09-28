@@ -154,7 +154,7 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
 
       {open && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: 600, width: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
+          <div className="modal-box" style={{ maxWidth: 980, width: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
             <div className="modal-title">Pendências — OPL {opl}</div>
             {loading ? (
               <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Carregando...</div>

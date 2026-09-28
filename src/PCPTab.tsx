@@ -662,7 +662,7 @@ export default function PCPTab({ currentUser }) {
 
       {modalKiting && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:560}}>
+          <div className="modal-box" style={{maxWidth: 980}}>
             <div className="modal-title">
               Liberar kiting — {modalKiting.grupo ? `${modalKiting.grupo.base} (${modalKiting.ops.length} OPs)` : modalKiting.ops[0].opl}
             </div>
