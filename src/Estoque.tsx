@@ -953,6 +953,46 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
   const [observacoes, setObservacoes] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [disponiveis, setDisponiveis] = useState<any[]>([]);
+  // PARA ONDE FOI O MATERIAL (28/09/2026)
+  //
+  // Saber quem levou não diz para que serviu. Sem isso, o material que sai
+  // pelo balcão some da conta: não aparece no custo da OP nem no do setor, e
+  // no fim do mês ninguém sabe explicar o consumo. Amarrar a retirada a uma OP
+  // ou a um centro de custo é o que fecha essa conta.
+  //
+  // Continua opcional: material de uso geral (fita, pano, parafuso avulso)
+  // sai sem destino, como sempre saiu.
+  const [destino, setDestino] = useState<'nenhum' | 'op' | 'centro'>('nenhum');
+  const [opls, setOpls] = useState<any[]>([]);
+  const [centros, setCentros] = useState<any[]>([]);
+  const [oplId, setOplId] = useState('');
+  const [centroId, setCentroId] = useState('');
+
+  useEffect(() => {
+    if (destino === 'op' && !opls.length) {
+      supabase.from('oples').select('id,opl,cliente_nome,status_geral')
+        .not('status_geral', 'in', '("Faturado","Cancelado")')
+        .order('opl', { ascending: false }).limit(400)
+        .then(({ data }) => setOpls(data || []));
+    }
+    if (destino === 'centro' && !centros.length) {
+      supabase.from('centros_custo').select('id,codigo,nome').eq('ativo', true).order('nome')
+        .then(({ data }) => setCentros(data || []));
+    }
+  }, [destino]);
+
+  /** O vínculo que vai junto com cada linha da retirada. */
+  const vinculoDaRetirada = () => {
+    if (destino === 'op') {
+      const o = opls.find(x => x.id === oplId);
+      return o ? { tipo: 'op', id: o.id, descricao: `OP ${o.opl}` } : null;
+    }
+    if (destino === 'centro') {
+      const c = centros.find(x => x.id === centroId);
+      return c ? { tipo: 'centro_custo', id: c.id, descricao: `${c.codigo ? c.codigo + ' · ' : ''}${c.nome}` } : null;
+    }
+    return null;
+  };
   // Baixa de estoque não tem desfazer: o saldo muda e o extrato registra. Por
   // isso o botão não grava direto — mostra a lista do que vai sair e pede
   // confirmação (pedido do usuário em 24/09/2026). Dizer "não" volta para a
@@ -968,6 +1008,8 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
   const revisar = () => {
     if (!quemRetirou.trim()) { alert('Informe quem retirou o material.'); return; }
     if (!preenchidas.length) { alert('Informe ao menos um item e a quantidade.'); return; }
+    if (destino === 'op' && !oplId) { alert('Escolha a OP para onde o material foi.'); return; }
+    if (destino === 'centro' && !centroId) { alert('Escolha o centro de custo.'); return; }
     const repetidos = preenchidas.map(l => l.item.id).filter((id, i, a) => a.indexOf(id) !== i);
     if (repetidos.length) {
       const nomes = [...new Set(repetidos)].map(id => disponiveis.find(d => d.id === id)?.nome).join(', ');
@@ -981,11 +1023,12 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
     const falhas: string[] = [];
     const negativos: string[] = [];
     const pedidos: string[] = [];
+    const vinculo = vinculoDaRetirada();
     for (const l of preenchidas) {
       const r = await movimentarEstoque({
         itemId: l.item.id, tipo: 'saida', quantidade: l.quantidade,
         motivo: MOTIVO.RETIRADA, observacoes: observacoes.trim() || null,
-        retiradoPor: quemRetirou.trim(), currentUser,
+        vinculo, retiradoPor: quemRetirou.trim(), currentUser,
       });
       if (r?.erro) falhas.push(`${l.item.nome}: ${r.erro}`);
       else if (r?.negativo) negativos.push(`${l.item.nome} (saldo ${fmtQtd(r.saldo_depois)})`);
@@ -1017,6 +1060,38 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
         <label className="acn-label">Quem retirou *</label>
         <input className="acn-input" style={{ width: '100%', marginBottom: 10 }} value={quemRetirou} autoFocus
           onChange={e => setQuemRetirou(e.target.value)} placeholder="Nome de quem levou o material" />
+
+        <label className="acn-label">Para onde foi</label>
+        <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
+          {[{ v: 'nenhum', r: 'Uso geral' }, { v: 'op', r: 'Uma OP' }, { v: 'centro', r: 'Centro de custo' }].map(o => (
+            <button key={o.v} type="button" onClick={() => setDestino(o.v as any)}
+              style={{ fontSize: 10, fontWeight: 700, padding: '4px 11px', borderRadius: 4, cursor: 'pointer',
+                border: '1px solid ' + (destino === o.v ? '#0f766e' : '#cbd5e1'),
+                background: destino === o.v ? '#ccfbf1' : '#fff',
+                color: destino === o.v ? '#115e59' : '#64748b' }}>
+              {o.r}
+            </button>
+          ))}
+        </div>
+        {destino === 'op' && (
+          <div style={{ marginBottom: 10 }}>
+            <SelectBusca valor={oplId} onChange={setOplId} placeholder="— procure a OP —" vazio="— nenhuma OP —"
+              opcoes={opls.map(o => ({ valor: o.id, rotulo: `OP ${o.opl}`,
+                detalhe: o.cliente_nome || '', busca: [o.opl, o.cliente_nome] }))} />
+          </div>
+        )}
+        {destino === 'centro' && (
+          <div style={{ marginBottom: 10 }}>
+            <SelectBusca valor={centroId} onChange={setCentroId} placeholder="— procure o centro de custo —" vazio="— nenhum —"
+              opcoes={centros.map(c => ({ valor: c.id, rotulo: `${c.codigo ? c.codigo + ' · ' : ''}${c.nome}`,
+                busca: [c.codigo, c.nome] }))} />
+          </div>
+        )}
+        {destino === 'nenhum' && (
+          <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 10 }}>
+            Sem destino o material sai do saldo mas não entra no custo de nenhuma OP nem de nenhum setor.
+          </div>
+        )}
 
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {linhas.map((l, i) => {
@@ -1082,6 +1157,7 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
             <div className="modal-title">Confirmar a baixa no estoque</div>
             <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 10 }}>
               Retirado por <b style={{ color: '#0f172a' }}>{quemRetirou.trim()}</b>
+              {vinculoDaRetirada() ? <> · para <b style={{ color: '#0f172a' }}>{vinculoDaRetirada()?.descricao}</b></> : <> · uso geral</>}
               {observacoes.trim() ? <> · {observacoes.trim()}</> : null}
             </div>
 
@@ -1541,7 +1617,10 @@ export function PainelEstoque({ currentUser }: any) {
                           saldo {fmtQtd(m.saldo_depois)}
                         </td>
                         <td style={{ padding: '3px 6px', color: '#64748b' }}>
-                          {m.motivo === MOTIVO.RETIRADA && m.retirado_por_nome ? `retirada — ${m.retirado_por_nome}`
+                          {/* o destino da retirada entra no extrato: é ele que
+                              diz para qual OP ou setor o material foi */}
+                          {m.motivo === MOTIVO.RETIRADA && m.retirado_por_nome
+                            ? `retirada — ${m.retirado_por_nome}${m.vinculo_descricao ? ` → ${m.vinculo_descricao}` : ''}`
                             : m.motivo === MOTIVO.KITING ? `kiting — ${m.vinculo_descricao || ''}`
                             : m.motivo === MOTIVO.CONTAGEM ? `contagem — ${m.criado_por_nome || ''}`
                             : m.motivo || ''}

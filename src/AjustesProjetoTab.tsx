@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { NovaDemandaModal } from './DemandaAvulsaPanel';
+import { escopoDeDemandas } from './utils/permissoes';
 
 // Ajustes registrados ANTES desta unificação vivem em demandas_setoriais
 // com descricao prefixada [AJUSTE] — a tabela abaixo ("Ajustes em Aberto" /
@@ -27,6 +28,52 @@ export default function AjustesProjetoTab({ currentUser }) {
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
   const [tick, setTick] = useState(0);
+
+  // ── MINHAS DEMANDAS (28/09/2026) ───────────────────────────────────────────
+  // Quem abria uma demanda aqui não tinha como acompanhá-la: ela caía na tela
+  // do setor de destino e sumia da vista de quem pediu. Agora esta tela mostra
+  // o que a pessoa abriu — e, para gerente e Admin, também o que a equipe abriu.
+  const [minhas, setMinhas] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [filtroUsuario, setFiltroUsuario] = useState('');   // '' = todos do meu alcance
+  const [verConcluidas, setVerConcluidas] = useState(false);
+  const escopo = escopoDeDemandas(currentUser);
+
+  /** De quem esta pessoa pode ver demandas. null = de todo mundo. */
+  const emailsVisiveis = () => {
+    if (escopo.modo === 'todas') return null;
+    if (escopo.modo === 'setor') {
+      const doSetor = usuarios.filter(u => escopo.perfis.includes(String(u.perfil || '').trim()));
+      return [...new Set([currentUser?.email, ...doSetor.map(u => u.email)].filter(Boolean))];
+    }
+    return [currentUser?.email].filter(Boolean);
+  };
+
+  const carregarMinhas = async () => {
+    let q = supabase.from('demandas_avulsas')
+      .select('id,titulo,setor,status,prioridade,prazo,criado_em,criado_por,criado_por_nome,responsavel_nome,vinculo_descricao')
+      .order('criado_em', { ascending: false }).limit(300);
+    const alcance = emailsVisiveis();
+    if (filtroUsuario) q = q.eq('criado_por', filtroUsuario);
+    else if (alcance) q = q.in('criado_por', alcance.length ? alcance : ['—sem—']);
+    const { data } = await q;
+    setMinhas(data || []);
+  };
+
+  useEffect(() => {
+    if (escopo.modo === 'proprias') { setUsuarios([]); return; }
+    supabase.from('auth_usuarios').select('email,nome,perfil').eq('ativo', true).order('nome')
+      .then(({ data }) => setUsuarios(data || []));
+  }, [currentUser?.email]);
+
+  useEffect(() => { carregarMinhas(); }, [filtroUsuario, usuarios.length, currentUser?.email]);
+
+  // no filtro, um Admin vê todo mundo; o gerente, só a equipe dele
+  const usuariosDoFiltro = escopo.modo === 'todas' ? usuarios
+    : usuarios.filter(u => escopo.perfis?.includes(String(u.perfil || '').trim()) || u.email === currentUser?.email);
+
+  const minhasVisiveis = minhas.filter(d => verConcluidas
+    || !/conclu|cancel/i.test(String(d.status || '')));
 
   useEffect(() => { fetchAll(); }, []);
   useEffect(() => {
@@ -68,6 +115,14 @@ export default function AjustesProjetoTab({ currentUser }) {
     return `${hh}:${mm}:${ss}`;
   };
 
+  const corDoStatus = (s) => {
+    const t = String(s || '').toLowerCase();
+    if (/conclu/.test(t)) return '#16a34a';
+    if (/cancel/.test(t)) return '#94a3b8';
+    if (/andamento|execu/.test(t)) return '#2563eb';
+    return '#f59e0b';
+  };
+
   const corPrioridade = (logs) => {
     const txt = (logs?.[0]?.texto || '').toLowerCase();
     if (txt.includes('prioridade: alta')) return '#ef4444';
@@ -105,8 +160,62 @@ export default function AjustesProjetoTab({ currentUser }) {
 
       {modalNova && (
         <NovaDemandaModal currentUser={currentUser} setoresDestino={SETORES_DESTINO}
-          onClose={() => setModalNova(false)} onSaved={() => setModalNova(false)} />
+          onClose={() => setModalNova(false)}
+          onSaved={() => { setModalNova(false); carregarMinhas(); }} />
       )}
+
+      {/* ACOMPANHAMENTO — o que eu pedi, e para onde foi */}
+      <div className="sec-card">
+        <div className="sec-hdr">
+          <span>
+            {escopo.modo === 'todas' ? 'Demandas abertas por todos' :
+             escopo.modo === 'setor' ? 'Demandas do meu setor' : 'Demandas que eu abri'}
+            {' '}({minhasVisiveis.length})
+          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {usuariosDoFiltro.length > 1 && (
+              <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}
+                aria-label="Filtrar por quem abriu"
+                style={{ fontSize: 10, padding: '3px 6px', border: '1px solid #cbd5e1', borderRadius: 4 }}>
+                <option value="">Quem abriu: todos</option>
+                {usuariosDoFiltro.map(u => <option key={u.email} value={u.email}>{u.nome}</option>)}
+              </select>
+            )}
+            <button className="acn-btn" style={{ background: verConcluidas ? '#0f766e' : '#94a3b8', fontSize: 10 }}
+              onClick={() => setVerConcluidas(v => !v)}>
+              {verConcluidas ? 'Escondendo nada' : 'Ver concluídas'}
+            </button>
+          </div>
+        </div>
+        <div className="sec-body" style={{ overflowX: 'auto' }}>
+          {minhasVisiveis.length === 0 ? (
+            <div className="acn-empty">
+              {filtroUsuario ? 'Esta pessoa não tem demandas em aberto.' : 'Nenhuma demanda em aberto.'}
+            </div>
+          ) : (
+            <table>
+              <thead><tr>
+                <th>Aberta em</th><th>Quem abriu</th><th>Demanda</th><th>Setor</th>
+                <th>Vínculo</th><th>Responsável</th><th>Prazo</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                {minhasVisiveis.map(d => (
+                  <tr key={d.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{fmtDt(d.criado_em)}</td>
+                    <td>{d.criado_por_nome || '—'}</td>
+                    <td style={{ maxWidth: 220, wordBreak: 'break-word' }}>{d.titulo || '—'}</td>
+                    <td>{d.setor || '—'}</td>
+                    <td style={{ fontSize: 9, color: '#64748b' }}>{d.vinculo_descricao || '—'}</td>
+                    <td>{d.responsavel_nome || '—'}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{d.prazo ? fmtDt(d.prazo) : '—'}</td>
+                    <td><span className="acn-badge" style={{ background: corDoStatus(d.status) }}>{d.status || '—'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
 
       {/* AJUSTES ABERTOS — histórico do sistema antigo, registrado antes desta unificação */}
       <div className="sec-card">

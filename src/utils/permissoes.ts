@@ -105,3 +105,41 @@ export function adicionarCriador(dados: any, usuarioAtual: any): any {
     data_criacao: new Date().toISOString(),
   };
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// QUEM ENXERGA QUAIS DEMANDAS (28/09/2026)
+//
+// Regra combinada com o usuário:
+//   colaborador → só as demandas que ele mesmo abriu;
+//   gerente     → as dele e as dos colaboradores do seu setor;
+//   Admin       → todas.
+//
+// `auth_usuarios` não tem coluna de setor: o que existe é o PERFIL. Por isso o
+// setor do gerente é este mapa, e não uma consulta. Está aqui à vista de
+// propósito — quando a fábrica mudar de organograma, corrige-se esta lista e
+// nada mais.
+// ─────────────────────────────────────────────────────────────────────────────
+const EQUIPE_DO_GERENTE: Record<string, string[]> = {
+  'gerente comercial':      ['Gerente Comercial', 'Comercial', 'CRM'],
+  'gerente de licitacoes':  ['Gerente de Licitações', 'Licitações'],
+  'gerente producao':       ['Gerente Produção', 'Producao', 'Produção', 'PCP', 'Almoxarifado',
+                             'Serralheria', 'Chicote', 'Chicotes', 'Laboratório', 'Laboratorio',
+                             'Engenharia', 'Qualidade'],
+  'gerente administrativo': ['Gerente administrativo', 'RH', 'Compras', 'Financeiro', 'Fiscal',
+                             'Logistica', 'Logística', 'Marketing'],
+};
+
+/**
+ * Até onde a vista deste usuário alcança nas demandas.
+ *   { modo: 'todas' }                    → Admin
+ *   { modo: 'setor', perfis: [...] }     → gerente: o setor dele
+ *   { modo: 'proprias' }                 → todo o resto
+ */
+export function escopoDeDemandas(usuarioAtual: any): { modo: 'todas' | 'setor' | 'proprias'; perfis?: string[] } {
+  const perfil = String(usuarioAtual?.perfil || '').trim();
+  if (perfil === 'Admin') return { modo: 'todas' };
+  const equipe = EQUIPE_DO_GERENTE[semAcento(perfil)];
+  if (equipe) return { modo: 'setor', perfis: equipe };
+  // gerente de um setor que ainda não está no mapa continua vendo o próprio
+  // trabalho — melhor faltar gente na lista do que abrir demais sem querer
+  return { modo: 'proprias' };
+}
