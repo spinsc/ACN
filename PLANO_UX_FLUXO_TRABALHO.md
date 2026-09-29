@@ -1503,6 +1503,65 @@ recebidos e a tela diz "entraram 10, saldo agora 11"; o mesmo no registro à mã
 usa a mesma janela, agora corrigida. Um pedido de reposição recebido **antes** desta correção por qualquer um dos dois caminhos e **sem** entrada no estoque
 seria o único caso pendente; hoje não há outro.
 
+### ✅ Etapa 7.4 — Um só Conjunto Elétrico, código automático nos itens novos e a estrutura automática no lote das 39 Renegade
+
+**Feito em:** 29/09/2026, **por pedido do usuário**: "agora só terá sempre 1 Conjunto Elétrico, o 1687; qualquer outro não deve ser ativo. Não vou mais
+importar produtos do outro sistema: a partir de agora é criado direto aqui, com um novo código gerado pelo nosso sistema." E: "configurar e começar a testar o
+fluxo do BOM automático, usando as 39 Renegade 4x4 para as configurações de instalação dos itens vendidos, vínculo carro × item × Conjunto Elétrico".
+
+**Regra no banco** (migrações `catalogo_codigo_automatico_e_conjunto_eletrico_unico` e `catalogo_regras_validar_antes_de_gerar_codigo`; no banco, e não só na tela,
+para valer também na importação e em qualquer outro caminho de gravação):
+
+- **Código automático:** item novo sem código ganha o **próximo número da sequência**, que **continua a numeração do ERP** (maior código real 4409 → o primeiro item
+  novo é o **4410**). O **999999** ("ITEM GENERICO") é reservado e fica fora da conta. Código informado à mão continua sendo respeitado (planilha antiga, item que já
+  existe). A busca sem acento (`codigo_norm`) sai certa.
+- **Conjunto Elétrico único:** item cujo nome é "CONJUNTO ELÉTRICO…" (ou "COPIA DE CONJUNTO ELÉTRICO…") **com outro código que não o 1687 não pode ficar ativo**, e **só o
+  1687 pode ser o gatilho** (`eh_conjunto_instalacao`). O nome que só **cita** o conjunto ("SUPORTE DO CONJUNTO ELÉTRICO…") não é afetado. Os inativos continuam aceitos.
+- **O 1687 fica protegido:** não pode ser desativado, desmarcado, mudar de código nem ser excluído.
+- **Testado no banco** com um bloco que **sempre desfaz tudo** (nada persiste): outro "CONJUNTO ELETRICO PV …" ativo é recusado (também com acento, com "COPIA DE" e com o mesmo
+  nome do 1687 sob outro código); o mesmo nome **inativo** é aceito; marcar outro item como gatilho, desativar/desmarcar/renomear/excluir o 1687 são recusados; editar a descrição do
+  1687 é aceito; dois itens sem código saem com códigos seguidos, código em branco vira código gerado, código manual é mantido; **recusa não gasta número** (corrigi a ordem
+  depois de o teste mostrar que gastava). A sequência foi devolvida ao ponto certo (**próximo = 4410**), e conferi que não sobrou item de teste.
+
+**Telas:**
+
+- **Cadastro de itens:** em item **novo** o campo do código fica bloqueado ("Gerado ao salvar") e vai vazio; ao salvar, a tela avisa **"Item cadastrado com o código 4410"**. As gravações
+  do cadastro (salvar, ativar/desativar, excluir) **passaram a mostrar o erro do banco** — antes o resultado nem era lido: uma recusa passava calada e a janela fechava como se tivesse
+  salvo. Item que já existe mantém o código editável, como era.
+- **Administração → Estruturas:** a caixa "Este item é o Conjunto Elétrico" **saiu** (a marca não se escolhe mais). O 1687 mostra 🔒 "único do sistema" e **não oferece perguntas nem
+  material** (ele é o recipiente); os outros itens seguem como sempre.
+- **Importação de planilha:** continua existindo (nada foi removido); o "Conjunto Elétrico PV …" novo entra inativo, e o banco recusaria se entrasse ativo.
+
+**BOM automático no lote** (`EngenhariaTab.tsx`, `AplicarEstrutura.tsx`):
+
+- **Furo achado ao preparar o teste:** a janela **"LIBERAR BOM EM LOTE" não tinha o painel da estrutura automática**; só a liberação individual tinha. Um lote como o das 39 Renegade não
+  usaria o material calculado. Agora o painel aparece no lote, calculado sobre a **primeira OP marcada**, com aviso destacado quando as marcadas **não têm o mesmo veículo e os mesmos itens**
+  (a mesma BOM vai para todas).
+- **Serviço e item genérico não são cobrados** como "nunca adaptados neste carro": itens da categoria `GENERICO` (película, instalação do kit, garantia estendida, plotagem, licença…) nunca
+  consomem material. Sem isso, 3 dos 12 itens das Renegade apareceriam para sempre como pendência.
+- **"✓ Jogar na BOM" segue o desenho da Etapa 7.4 do estoque:** tira a linha do Conjunto Elétrico da lista de separação (é a caixa, não a peça) e marca o material como **"do CONJUNTO ELETRICO"**.
+  OPs criadas antes do fluxo automático partiam da sugestão antiga, que ainda trazia a linha do 1687.
+
+**As 39 Renegade hoje** (leitura direta): OPs **1673.2609/01 a /39**, todas **Em Espera Engenharia**, cliente PRUSSIANA AUTOMOVEIS, veículo **"Renegade 4x4" 2015–em diante**, sem chassi nem placa, **cada uma vende
+13 itens, incluindo o 1687** (gatilho ligado). **Nada está configurado ainda:** 0 perguntas, 0 respostas, 0 linhas de material em todo o sistema. Os **9 itens físicos** a configurar para esse carro: 225 INTERLED2
+VERMELHO, 226 INTERLED2 AZUL, 222 INTERLED8 VERMELHO E AZUL, 244 SLIMLED4 G2 VERMELHO (×2), 245 SLIMLED4 G2 AZUL (×2), 1177 AMPLIFICADOR CONTROLADOR S100W, 1287 SIRENE D100S, 1356 MODULO INTERFACE PARA ENGATE DE REBOQUE e
+2894 ENGATE PARA REBOQUE REMOVIVEL JEEP RENEGADE. Como configurar: **Administração → Estruturas** → escolher o item → escolher **Renegade 4x4** → "＋ Material" (material, quantidade por unidade vendida, "sempre, neste carro"). Depois,
+em **Engenharia → LIBERAR BOM EM LOTE** do 1673.2609, o painel calcula o material (multiplicado pela quantidade vendida), a Engenharia confere, "✓ Jogar na BOM" e libera para as 39.
+
+**Testado** (navegador, gravações bloqueadas, corpo do que seria gravado conferido; **nada gravado**): `teste_14` **18/18** com as 39 Renegade reais — sem estrutura o painel cobra os 9 itens físicos e **não** cobra serviços
+nem o 1687; com uma estrutura **simulada só na leitura** a conta multiplica pela quantidade vendida (2 e 7 no exemplo), "Jogar na BOM" leva o material sem a linha do 1687 e marcado "do CONJUNTO ELETRICO", e "LIBERAR BOM PARA 39 OPs"
+grava a mesma BOM nas **39** OPs, uma por uma; `teste_15` **12/12** (item novo com código bloqueado, código vazio no envio, recusa do banco visível com a janela aberta, aviso do código dado, Estruturas com o 1687 fixo).
+Regressão das telas alteradas: Engenharia 13/13, importação de itens 9/9, formulários da 7.2 9/9, recebimento 14/14. **Dois testes antigos foram atualizados de propósito** (`teste_54` e `teste_55`): esperavam a caixa "Este item é o Conjunto
+Elétrico", que saiu; agora conferem o 1687 travado e, para o item 4108 (depois do milésimo do catálogo), que ele é encontrado e mostra perguntas/material sem a marca — 21/21 e 5/5.
+
+**O que ficou de fora / a decidir:**
+
+- **Responder as perguntas de uma OP que já existe não tem tela.** As respostas só são gravadas **na abertura da OP** (vendedor). Para as 39 Renegade, que nasceram antes, qualquer **pergunta** cadastrada ("tem hack?") ficaria sem resposta
+  (o painel só avisa). Para o teste, vale começar por **material fixo** ("sempre, neste carro"), que não precisa de resposta. Se forem usar perguntas nas 39, falta uma forma de responder em lote.
+- **Os serviços continuam na BOM sugerida** (película, instalação do kit, garantia estendida): só deixaram de ser cobrados na estrutura. Tirá-los da lista de separação do Almoxarifado é decisão do usuário.
+- **41 itens ativos continuam sem código** (os criados à mão): dar código a eles fica **depois de o usuário decidir a planilha de auditoria**, para não codificar quem vai ser unificado.
+- A liberação **individual** ("LIBERAR BOM" de uma OP só) recebeu a mesma mudança do "Jogar na BOM", mas **não foi exercitada** no navegador (as OPs do lote estão "Em Espera" e o botão individual só aparece depois de iniciar).
+
 ### ⬜ Etapa 8 — Aba "pendente da minha aprovação" em Compras
 Hoje só existe menção/e-mail. Uma aba/filtro dedicado pra quem tem
 `pode_aprovar_compra=true` ver de cara o que está esperando por ele.
@@ -1544,8 +1603,9 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
 - **Unificação de itens (7.2) — marcar a planilha:** o usuário escreve SIM/NÃO nas abas `Decidir` (48) e `Sem candidato` (21) de
   `auditoria_unificacao_de_itens.xlsx`; aplicar com `unificar_item(…, 'planilha')`, com nova liberação de gravação.
-- **Conjunto Elétrico (7.2):** os "CONJUNTO ELETRICO PV …" **novos** que o ERP trouxer **entram inativos** na importação: já está no
-  código e no ar; é regra nova e **o usuário ainda não confirmou** (o 1687 como principal já foi confirmado).
+- **Perguntas nas OPs que já existem (7.4):** as respostas ("tem hack?") só são gravadas na abertura da OP. Se o usuário for usar perguntas nas 39 Renegade
+  (ou em qualquer OP antiga), falta uma forma de **responder em lote**. Material fixo ("sempre, neste carro") não precisa de resposta.
+- **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -1578,7 +1638,10 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Etapa 7.2 (pedido do usuário, fora de ordem)**: itens repetidos são **unificados sem apagar** (o repetido fica inativo, com nota e registro em `itens_unificacoes`); preferência **sempre pelo item com código**; o que for duvidoso vai para a **planilha de auditoria** e o usuário decide. O **Conjunto Elétrico é um item só** (gatilho). Custo do repetido **não** é copiado para o principal. |
 | 29/09/2026 | **Unificação gravada com autorização do usuário no chat** ("liberar a gravação da unificação dos itens"): 441 itens, só o que não deixava dúvida; o resto só depois de o usuário marcar a planilha, **com nova liberação a cada gravação em massa**. |
 | 29/09/2026 | **Confirmado pelo usuário no chat ("SIM E SIM")**: o principal do Conjunto Elétrico é o item **1687**; as parcelas do centro de custo são **número combinado + "pagas x de N"**, **sem cronograma** (uma linha por parcela com vencimento só se ele pedir depois). |
-| 29/09/2026 | **Ainda sem confirmação do usuário (7.2):** o "Conjunto Elétrico PV …" novo vindo do ERP **entra inativo** na importação (já no ar). |
+| 29/09/2026 | O "Conjunto Elétrico PV …" novo vindo do ERP entra inativo na importação (7.2): a pergunta perdeu o sentido — o usuário disse que **não vai mais importar** do ERP e a regra passou a valer no banco (7.4). |
+| 29/09/2026 | **Só existe UM Conjunto Elétrico, o 1687 (7.4, decisão do usuário):** qualquer outro "Conjunto Elétrico" fica inativo e o banco recusa ativá-lo; só o 1687 é o gatilho e ele é protegido (não desativa, não muda de código, não exclui). |
+| 29/09/2026 | **Itens deixam de vir do ERP (7.4, decisão do usuário):** item novo é criado no sistema e o **código é gerado pelo sistema**, continuando a numeração (4410 em diante; o 999999 é reservado). |
+| 29/09/2026 | **Jogar na BOM** (estrutura automática) tira o Conjunto Elétrico da lista de separação e marca o material como "do CONJUNTO ELETRICO"; serviço/`GENERICO` nunca é cobrado como "nunca adaptado". |
 | 29/09/2026 | **Recebimento de reposição (7.3):** entra no estoque a quantidade **realmente recebida**, e a janela **abre com a quantidade COMPRADA** (a pessoa corrige se chegou outra). Pedido de reposição recebido sem entrada no estoque é falha visível, nunca silêncio. Para PC-FU6DS9 o usuário decidiu creditar **10 (a comprada)**. |
 | 29/09/2026 | Formulário de edição **abre com o que está salvo e só grava o que mudou**; valor em dinheiro entra no campo **já em formato brasileiro**, porque o "salvar" trata o ponto como milhar (`fmtValorEdit`). |
 | 29/09/2026 | Clique que **nasce dentro de uma janela e termina no fundo** (arrastar o mouse ao selecionar texto) **não fecha a janela**; vale para todas de uma vez (`ProtecaoDeFundo.ts`). Clique de verdade no fundo continua fechando. |

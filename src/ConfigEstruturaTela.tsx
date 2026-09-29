@@ -72,18 +72,23 @@ export default function ConfigEstruturaTela({ currentUser }) {
         {item && (
           <>
             <MarcaConjunto item={item} pode={pode} />
-            <PerguntasDoItem itemId={itemId} perguntas={perguntas} itens={itens}
-              pode={pode} currentUser={currentUser} aoMudar={recPerguntas} />
+            {/* o Conjunto Elétrico é o recipiente: ele não tem pergunta nem material próprios (29/09/2026) */}
+            {String(item.codigo) !== '1687' && (
+              <>
+                <PerguntasDoItem itemId={itemId} perguntas={perguntas} itens={itens}
+                  pode={pode} currentUser={currentUser} aoMudar={recPerguntas} />
 
-            <div style={{ marginTop: 14, paddingTop: 10, borderTop: '2px solid #e0e7ff' }}>
-              <label style={rotulo}>MATERIAL DESTE ITEM EM QUAL CARRO</label>
-              <SelectVeiculo valor={veiculoId} onChange={setVeiculoId} currentUser={currentUser} />
-              {veiculoId && (
-                <MaterialNoVeiculo veiculoId={veiculoId} itemId={itemId} materiais={materiais}
-                  perguntas={perguntas} itens={itens} pode={pode} currentUser={currentUser}
-                  aoMudar={recMateriais} />
-              )}
-            </div>
+                <div style={{ marginTop: 14, paddingTop: 10, borderTop: '2px solid #e0e7ff' }}>
+                  <label style={rotulo}>MATERIAL DESTE ITEM EM QUAL CARRO</label>
+                  <SelectVeiculo valor={veiculoId} onChange={setVeiculoId} currentUser={currentUser} />
+                  {veiculoId && (
+                    <MaterialNoVeiculo veiculoId={veiculoId} itemId={itemId} materiais={materiais}
+                      perguntas={perguntas} itens={itens} pode={pode} currentUser={currentUser}
+                      aoMudar={recMateriais} />
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -92,25 +97,17 @@ export default function ConfigEstruturaTela({ currentUser }) {
 }
 
 /** O interruptor: marcar o item que representa o material de instalação. */
-function MarcaConjunto({ item, pode }) {
-  const [marcado, setMarcado] = useState(!!item.eh_conjunto_instalacao);
-  useEffect(() => { setMarcado(!!item.eh_conjunto_instalacao); }, [item.id]);
-  const trocar = async (v) => {
-    setMarcado(v);
-    await supabase.from('cadastro_itens').update({ eh_conjunto_instalacao: v }).eq('id', item.id);
-  };
+function MarcaConjunto({ item }) {
+  // Decisão do usuário em 29/09/2026: existe UM Conjunto Elétrico só, o item 1687, e ele já é o gatilho — a marca não se
+  // escolhe mais aqui (o banco recusa qualquer outro). A tela só explica, e só no próprio 1687.
+  if (String(item?.codigo) !== '1687') return null;
   return (
-    <div style={{ marginTop: 8, background: marcado ? '#fffbeb' : '#f8fafc',
-      border: `1px solid ${marcado ? '#fcd34d' : '#e2e8f0'}`, borderRadius: 6, padding: '7px 10px' }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10.5, cursor: pode ? 'pointer' : 'default' }}>
-        <input type="checkbox" checked={marcado} disabled={!pode}
-          onChange={e => trocar(e.target.checked)} style={{ accentColor: '#d97706' }} />
-        <span><b>Este item é o Conjunto Elétrico</b></span>
-      </label>
+    <div style={{ marginTop: 8, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '7px 10px' }}>
+      <div style={{ fontSize: 10.5 }}>🔒 <b>Este é o Conjunto Elétrico</b> — o único do sistema (código 1687)</div>
       <div style={{ fontSize: 9, color: '#78350f', marginTop: 3 }}>
-        É o item que representa suportes, chicotes, parafusos e afins na nota e no PV. A presença
-        dele na venda é o que <b>liga</b> a montagem automática do material. Venda sem conjunto —
-        cliente que usa peça de terceiro — não monta nada.
+        Representa suportes, chicotes, parafusos e afins na nota e no PV. A presença dele na venda é o que <b>liga</b> a
+        montagem automática do material de cada item. Venda sem ele — cliente que usa peça de terceiro — não monta nada.
+        O material fica cadastrado nos <b>outros itens vendidos</b>, carro a carro; este item não tem estrutura própria.
       </div>
     </div>
   );

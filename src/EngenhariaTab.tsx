@@ -868,9 +868,9 @@ export default function EngenhariaTab({ currentUser }) {
                 calculado, avisa o que vai faltar e — o mais importante — cobra
                 o cadastro dos itens que nunca foram adaptados neste carro. */}
             <PainelConferenciaEstrutura opl={modalBom} currentUser={currentUser}
-              onUsar={(linhas) => setBomLinhas(atuais => {
+              onUsar={(linhas, idsConj = []) => setBomLinhas(atuais => {
                 const mapa = new Map();
-                [...(atuais || []).filter(l => l?.item_id || String(l?.nome || '').trim()), ...linhas]
+                [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
                   .forEach(l => {
                     const chave = l.item_id || `txt:${l.nome}`;
                     const ja = mapa.get(chave);
@@ -958,6 +958,39 @@ export default function EngenhariaTab({ currentUser }) {
                 </label>
               ))}
             </div>
+            {/* Estrutura automática também no lote (29/09/2026): o painel só existia na liberação individual, então um lote
+                como o das 39 Renegade não usava o material calculado. A referência é a primeira OP marcada; se as marcadas
+                não têm o mesmo veículo e os mesmos itens vendidos, avisa — a mesma BOM vai para todas. */}
+            {(() => {
+              const marcadas = modalBomLote.irmaos.filter(o => selecionadosLote[o.id]);
+              const ref = marcadas.find(o => (o.itens_vendidos || []).length);
+              if (!ref) return null;
+              const chave = (o) => `${o.veiculo_id || ''}|${(o.itens_vendidos || []).map(v => `${v.item_id}x${Number(v.quantidade) || 1}`).sort().join(',')}`;
+              const iguais = marcadas.every(o => chave(o) === chave(ref));
+              return (
+                <>
+                  {!iguais && (
+                    <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'7px 10px',marginBottom:6,fontSize:10.5,color:'#92400e'}}>
+                      ⚠ As OPs marcadas <b>não têm o mesmo veículo e os mesmos itens vendidos</b>. O material calculado abaixo é o da <b>{ref.opl}</b>,
+                      e a mesma BOM vai para todas — desmarque as diferentes e libere-as à parte.
+                    </div>
+                  )}
+                  <div style={{fontSize:9.5,color:'#64748b',marginBottom:3}}>Estrutura calculada com base na OP <b>{ref.opl}</b>.</div>
+                  <PainelConferenciaEstrutura opl={ref} currentUser={currentUser}
+                    onUsar={(linhas, idsConj = []) => setBomLote(atuais => {
+                      const mapa = new Map();
+                      [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]
+                        .forEach(l => {
+                          const c = l.item_id || `txt:${l.nome}`;
+                          const ja = mapa.get(c);
+                          if (ja) ja.quantidade = Number(ja.quantidade || 0) + Number(l.quantidade || 0);
+                          else mapa.set(c, { ...l });
+                        });
+                      return [...mapa.values()];
+                    })} />
+                </>
+              );
+            })()}
             <BomEditor linhas={bomLote} onChange={setBomLote}
               vendidos={(modalBomLote.irmaos.find(o => (o.itens_vendidos || []).length) || {}).itens_vendidos || []} />
             <div style={{fontSize:10,color:'#64748b',marginTop:-6,marginBottom:10}}>A mesma BOM (por unidade) vai para todas as OPs selecionadas; ajuste uma unidade diferente depois, no detalhe dela.</div>

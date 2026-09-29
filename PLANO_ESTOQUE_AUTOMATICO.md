@@ -896,6 +896,20 @@ Dado de teste apagado (5 itens `ZZT-`, 1 veículo, 1 pergunta, 2 opções, 3
 materiais) e contagem conferida zerada em sete tabelas.
 
 ---
+### ✅ Etapa 7.5 — Um só Conjunto Elétrico e a estrutura automática no lote (teste com as 39 Renegade)
+
+**Feito em 29/09/2026, por pedido do usuário.** Detalhe completo na **Etapa 7.4 do `PLANO_UX_FLUXO_TRABALHO.md`**; aqui o que muda para este projeto:
+
+- **O Conjunto Elétrico é um item só, o 1687**, o único gatilho (`eh_conjunto_instalacao`). Os outros 436 "CONJUNTO ELETRICO PV …" foram **unificados nele** (inativos, nada apagado) e o banco **recusa**
+  outro Conjunto Elétrico ativo ou outra marca de gatilho; o 1687 não pode ser desativado, mudar de código nem ser excluído. A caixa "Este item é o Conjunto Elétrico" saiu de Administração → Estruturas.
+- **Itens novos ganham código do sistema** (4410 em diante) — o usuário não vai mais importar do ERP.
+- **A janela "LIBERAR BOM EM LOTE" da Engenharia agora tem o painel da estrutura** (antes só a liberação individual tinha), calculado sobre a primeira OP marcada, com aviso se as marcadas diferem em veículo/itens.
+  **Serviço/`GENERICO` não é cobrado** como "nunca adaptado" e **"Jogar na BOM" tira a linha do Conjunto Elétrico** da lista de separação (é a caixa, não a peça) e marca o material "do CONJUNTO ELETRICO".
+- **Teste com as 39 Renegade 4x4** (OPs 1673.2609/01–39, veículo "Renegade 4x4" 2015+, cada uma vende 13 itens incluindo o 1687): fluxo verificado de ponta a ponta com estrutura **simulada só na leitura**
+  (18/18): o painel cobra os 9 itens físicos, calcula o material multiplicado pela quantidade vendida e libera a mesma BOM para as 39. **Falta cadastrar a estrutura de verdade** (0 linhas de material e 0 perguntas hoje) em
+  Administração → Estruturas: 225, 226, 222, 244, 245, 1177, 1287, 1356 e 2894 × Renegade 4x4.
+- **Ponto aberto:** **não há tela para responder perguntas de uma OP que já existe** (as respostas só nascem na abertura da OP). Para as 39, começar por material fixo; pergunta nas 39 exige resposta em lote.
+
 ### ✅ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
 
 **O que muda:** a lista de material vira um **checklist** que o Almoxarifado vai

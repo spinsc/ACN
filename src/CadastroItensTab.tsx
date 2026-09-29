@@ -324,7 +324,12 @@ function ItemModal({
           <Section title="📦 Identificação" />
           <Row>
             <Field label="CODITEM" flex={0.5}>
-              <input style={inp} value={form.codigo} onChange={e => set('codigo', e.target.value)} placeholder="Ex: ELT-001" />
+              {/* Decisão do usuário em 29/09/2026: os itens deixam de vir do ERP e passam a ser criados aqui, com o
+                  código gerado pelo sistema (o banco dá o próximo número ao gravar). Por isso não se digita código
+                  em item novo; item que já existe mantém o dele. */}
+              {isEdit
+                ? <input style={inp} value={form.codigo} onChange={e => set('codigo', e.target.value)} placeholder="Ex: ELT-001" />
+                : <input style={{ ...inp, background: '#f1f5f9', color: '#64748b' }} value="" disabled placeholder="Gerado ao salvar" title="O sistema dá o próximo código ao salvar o item" />}
             </Field>
             <Field label="Nome / Produto *" flex={2}>
               <input style={{ ...inp, borderColor: !form.nome ? '#f87171' : '#d1d5db' }}
@@ -606,28 +611,38 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   const visiveis = filtrados.slice(pagina * POR_PAG, (pagina + 1) * POR_PAG);
 
   // ── CRUD ────────────────────────────────────────────────────────────────────
+  // O banco recusa com mensagem clara o que fere as regras do catálogo (um Conjunto Elétrico só, o 1687; ver a migração
+  // catalogo_codigo_automatico_e_conjunto_eletrico_unico). Antes o resultado da gravação nem era lido: a recusa passava
+  // calada e a janela fechava como se tivesse salvo.
   const salvarItem = async (data: any) => {
+    let error: any = null;
+    let codigoNovo = '';
     if (data.id) {
       const { id, ...payload } = data;
-      await supabase.from('cadastro_itens').update(payload).eq('id', id);
+      ({ error } = await supabase.from('cadastro_itens').update(payload).eq('id', id));
     } else {
-      await supabase.from('cadastro_itens').insert([{ ...data, criado_por: currentUser?.email }]);
+      const r = await supabase.from('cadastro_itens').insert([{ ...data, criado_por: currentUser?.email }]).select('codigo').maybeSingle();
+      error = r.error; codigoNovo = r.data?.codigo || '';
     }
+    if (error) { alert('Não foi possível salvar o item: ' + error.message); return; }
+    if (codigoNovo) alert(`Item cadastrado com o código ${codigoNovo}.`);
     setModal(null);
     await carregar();
   };
 
   const toggleAtivo = async (item: any) => {
-    await supabase.from('cadastro_itens').update({ ativo: !item.ativo }).eq('id', item.id);
+    const { error } = await supabase.from('cadastro_itens').update({ ativo: !item.ativo }).eq('id', item.id);
+    if (error) { alert('Não foi possível alterar o item: ' + error.message); return; }
     setItens(prev => prev.map(i => i.id === item.id ? { ...i, ativo: !i.ativo } : i));
   };
 
   const excluirItem = async (id: string) => {
     if (!await confirmar('Excluir este item permanentemente?')) return;
     setDeletando(id);
-    await supabase.from('cadastro_itens').delete().eq('id', id);
-    setItens(prev => prev.filter(i => i.id !== id));
+    const { error } = await supabase.from('cadastro_itens').delete().eq('id', id);
     setDeletando(null);
+    if (error) { alert('Não foi possível excluir o item: ' + error.message); return; }
+    setItens(prev => prev.filter(i => i.id !== id));
   };
 
   // ── Import/Export ──────────────────────────────────────────────────────────

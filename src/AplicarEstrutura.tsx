@@ -58,8 +58,14 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
         setEstado({ carregando: false, temConjunto, semVeiculo: !opl?.veiculo_id, conj });
         return;
       }
-      // o próprio conjunto não tem estrutura: ele é o recipiente
-      const idsParaEstrutura = idsVendidos.filter(id => !conj.some(c => c.id === id));
+      // o próprio conjunto não tem estrutura: ele é o recipiente. Serviço e item genérico (categoria GENERICO: película,
+      // instalação do kit, garantia estendida, plotagem…) também nunca consomem material de instalação: sem esta exceção
+      // eles apareceriam para sempre como "nunca adaptados neste carro" (visto nas OPs do lote 1673.2609, 29/09/2026)
+      const { data: cats } = idsVendidos.length
+        ? await supabase.from('cadastro_itens').select('id,categoria').in('id', idsVendidos)
+        : { data: [] };
+      const genericos = new Set((cats || []).filter(c => String(c.categoria || '').trim().toUpperCase() === 'GENERICO').map(c => String(c.id)));
+      const idsParaEstrutura = idsVendidos.filter(id => !conj.some(c => c.id === id) && !genericos.has(String(id)));
       const [perguntas, materiais, semEstrutura] = await Promise.all([
         perguntasDeVariosItens(idsParaEstrutura),
         materiaisDoVeiculo(opl.veiculo_id, idsParaEstrutura),
@@ -142,7 +148,13 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => onUsar?.(e.linhas)}
+          {/* Jogar na BOM segue o desenho da Etapa 7.4 do plano do estoque: o Conjunto Elétrico é a caixa, não a peça —
+              sai da lista de separação e entra o conteúdo dele, marcado "do CONJUNTO ELETRICO". Quem recebe as linhas
+              também recebe os ids do conjunto para tirar a linha dele da BOM (as OPs criadas antes do fluxo automático
+              partiam da sugestão antiga, que ainda traz o 1687). */}
+          <button type="button" onClick={() => onUsar?.(
+              e.linhas.map(l => ({ ...l, descricao: l.descricao || `do ${e.conj?.[0]?.nome || 'CONJUNTO ELETRICO'}` })),
+              (e.conj || []).map(c => String(c.id)))}
             style={{ marginTop: 6, fontSize: 9.5, fontWeight: 700, padding: '3px 11px', border: 'none',
               borderRadius: 4, background: '#16a34a', color: '#fff', cursor: 'pointer' }}>
             ✓ Jogar na BOM
