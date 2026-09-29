@@ -1669,7 +1669,7 @@ function ResumoFormacaoModal({ estrutura, isVendedor, titulo, categoria, versao,
       <div>${escHtmlF(titulo)}${categoria ? ' · ' + escHtmlF(categoria) : ''}${versao ? ' · v' + versao : ''} · ${new Date().toLocaleDateString('pt-BR')}</div>
       <table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${corpo}</tbody></table>
       <p style="margin-top:10px">${extras.join(' &nbsp;·&nbsp; ')}</p>
-      <p style="color:#64748b;font-size:9px">Quantidades de produto por 1 unidade do item. Unitário do lote = soma dos unitários dos itens; unitário de item com subgrupos = médio (total ÷ quantidade).</p>
+      <p style="color:#64748b;font-size:9px">Unitário de item sem subgrupo = total dos produtos ÷ o número do "Dividir por". Unitário do lote = soma dos unitários dos itens; unitário de item com subgrupos = médio (total ÷ quantidade).</p>
       </body></html>`);
     w.document.close();
     setTimeout(() => w.print(), 300);
@@ -2152,16 +2152,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
   const itensDoGrupo  = idxDoGrupo.map(i => itens[i]);
   const resultsDoGrupo = idxDoGrupo.map(i => results[i]);
   const subtotalGrupo  = somarResultados(resultsDoGrupo);
-  const loteGrupo       = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);   // QUANTIDADE do item
-  // Aviso pedido pelo usuário em 25/09/2026: bug relatado onde "Unitário" saía
-  // igual a "Total" do Item — a causa era confundir os dois campos de
-  // quantidade (ver comentário na seção "QUANTIDADE DO ITEM" abaixo). Quando
-  // só há 1 produto no Item (sem subgrupo) e alguém colocou a quantidade do
-  // lote no "Qt/un." do produto em vez de aqui, "Quantidade do Item" fica
-  // esquecida em 1 — avisa em vez de corrigir sozinho (produto pode
-  // legitimamente ter 2+ unidades por Item).
-  const avisoQtdDuplicada = !temSubgrupos && itensDoGrupo.length === 1
-    && Number(loteGrupo) === 1 && Number(itensDoGrupo[0]?.qt) > 1;
+  const loteGrupo       = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);   // DIVISOR do item (ver FormacaoCalculo.ts)
   // todos os pares lote/item, na ordem em que aparecem (PDF, contagens)
   const paresLoteItem: { lote: string; grupo: string }[] = [];
   for (const it of itens) {
@@ -2244,9 +2235,10 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     const nome = await pedirTexto(`Nome do 1º subgrupo de "${grupoAtivoValido}".\nOs produtos que já estão no item vão para ele.`, 'A');
     if (!nome || !nome.trim()) return;
     const n = nome.trim();
-    const qtdAtual = qtdDoItem(params, loteAtivoValido, grupoAtivoValido);
+    // o número do item agora divide e o do subgrupo multiplica (28/09/2026):
+    // copiar um para o outro inverteria a conta, então o subgrupo começa em 1
     setItens(p => p.map(x => doItemAtivo(x) ? { ...x, subgrupo_nome: n } : x));
-    setQtdSub(n, qtdAtual);
+    setQtdSub(n, 1);
     setSubgrupoAtivo(n);
   };
   const novoSubgrupo = async (copiarDe: string | null) => {
@@ -2286,12 +2278,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
     const k = chaveSub(loteAtivoValido, grupoAtivoValido, sub);
     if (subsDoItem.length === 1) {
       // último subgrupo: o item volta a ser simples, com os mesmos produtos e quantidade
-      if (!await confirmar(`Desfazer os subgrupos de "${grupoAtivoValido}"? Os produtos continuam no item, com quantidade ${qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub)}.`)) return;
-      const q = qtdDoSubgrupo(params, loteAtivoValido, grupoAtivoValido, sub);
+      if (!await confirmar(`Desfazer os subgrupos de "${grupoAtivoValido}"? Os produtos continuam no item, e o "Dividir por" volta para 1.`)) return;
       setItens(p => p.map(x => doItemAtivo(x) ? { ...x, subgrupo_nome: null } : x));
       setParams(p => {
         const qs = { ...(p.qtd_subgrupo || {}) }; delete qs[k];
-        return { ...p, qtd_subgrupo: qs, lote_por_grupo: { ...(p.lote_por_grupo || {}), [chaveItem(loteAtivoValido, grupoAtivoValido)]: q } };
+        return { ...p, qtd_subgrupo: qs, lote_por_grupo: { ...(p.lote_por_grupo || {}), [chaveItem(loteAtivoValido, grupoAtivoValido)]: 1 } };
       });
       setSubgrupoAtivo(null);
       return;
@@ -3514,11 +3505,11 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
             </div>
           )}
 
-          {/* ── QUANTIDADE DO ITEM (antes ficava no subtotal, abaixo da composição) ──
-              Destacada com caixa própria (pedido do usuário em 25/09/2026): é
-              fácil confundir com o "Qt/un." de cada produto, lá embaixo na
-              lista — os dois têm nome parecido e esse aqui é o que multiplica
-              o "Total" do Item no resumo. */}
+          {/* ── DIVISOR DO ITEM ──
+              Até 28/09/2026 era a quantidade do Item e multiplicava. O dono da
+              empresa pediu que ele DIVIDA: item comprado em par (custo do par)
+              e vendido por unidade — o unitário do resumo é o total dos
+              produtos dividido por este número. Ver FormacaoCalculo.ts. */}
           <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:6,
             padding:'8px 10px', marginBottom:8, marginLeft:10 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
@@ -3528,7 +3519,7 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 </span>
               ) : (<>
                 <span style={{ fontSize:10, color:'#0f766e', fontWeight:700 }}>
-                  Quantidade de "{grupoAtivoValido}" <span style={{ fontWeight:400, color:'#0d9488' }}>(quantas unidades deste Item — ex.: 6 viaturas)</span>
+                  Dividir "{grupoAtivoValido}" por <span style={{ fontWeight:400, color:'#0d9488' }}>(ex.: comprado em par e vendido por unidade → 2)</span>
                 </span>
                 <input type="number" className="acn-input" style={{ width:60, fontSize:10, textAlign:'right' }}
                   min={1} value={loteGrupo}
@@ -3545,13 +3536,9 @@ export default function FormacaoPrecosTab({ currentUser, vinculo, embutido, rotu
                 </button>
               </>)}
             </div>
-            {avisoQtdDuplicada && (
-              <div style={{ fontSize:9, color:'#92400e', background:'#fffbeb', border:'1px solid #fde68a',
-                borderRadius:4, padding:'4px 8px', marginTop:6 }}>
-                ⚠️ O produto "{itensDoGrupo[0]?.produto || itensDoGrupo[0]?.nome || 'deste item'}" tem Qt/un. = {itensDoGrupo[0]?.qt},
-                mas "Quantidade de {'"'}{grupoAtivoValido}{'"'}" está em 1. Se {itensDoGrupo[0]?.qt} é a quantidade de UNIDADES DO ITEM
-                (ex.: {itensDoGrupo[0]?.qt} viaturas) — e não {itensDoGrupo[0]?.qt} peças por viatura —, corrija aqui em cima e volte o Qt/un. do produto pra 1,
-                senão o Total sai igual ao Unitário.
+            {!temSubgrupos && itemCalcAtivo && (
+              <div style={{ fontSize:10, color:'#0f766e', marginTop:6 }}>
+                Total {fmtR(itemCalcAtivo.total.totVendas)} ÷ {itemCalcAtivo.qtd} = <strong>unitário {fmtR(itemCalcAtivo.unit.totVendas)}</strong>
               </div>
             )}
           </div>

@@ -2,11 +2,14 @@
 // ESTRUTURA E TOTAIS DA FORMAÇÃO DE PREÇOS — Lote › Item › (Subgrupo) › Produtos
 //
 // Regras decididas com o usuário em 13/09/2026:
-//  • A quantidade de cada PRODUTO é para 1 UNIDADE do item (ex.: 1 rádio por
-//    viatura). Total do item = soma dos produtos × quantidade do item;
-//    unitário do item = soma dos produtos. (Antes a tela fazia as duas contas
-//    ao mesmo tempo — dividia e multiplicava. Nenhuma formação salva tinha
-//    quantidade de item > 1, então nenhum valor salvo mudou.)
+//  • Item SEM subgrupo — regra trocada em 28/09/2026, a pedido do dono da
+//    empresa: o número informado no item DIVIDE, não multiplica mais.
+//    Total do item = soma dos produtos; unitário do item = total ÷ o número.
+//    É o caso do item comprado em par e vendido por unidade: o custo do par
+//    entra inteiro e o unitário sai pela metade. Até aqui o número era "6
+//    viaturas" e multiplicava — as 5 formações salvas que usavam isso (entre
+//    elas a finalizada PE 258.2026 Floripa, com 28) mudaram de valor, e o
+//    usuário decidiu trocar em todas sabendo disso.
 //  • Item com SUBGRUPOS (ex.: Nivus 6 un.: 3 com conjunto A, 2 com A + cela,
 //    1 só cela): cada subgrupo tem a sua quantidade e os seus produtos;
 //    quantidade do item = soma dos subgrupos; total = soma dos subgrupos;
@@ -103,9 +106,9 @@ export function estruturaFormacao(componentes: any[], params: any, calc: (it: an
 
       let item: ItemCalc;
       if (nomesSub.length === 0) {
-        const unit = somarResultados(indices.map(i => results[i]));
+        const total = somarResultados(indices.map(i => results[i]));
         const qtd = qtdDoItem(params, l, g);
-        item = { lote: l, nome: g, qtd, indices, subgrupos: [], unit, total: escalar(unit, qtd) };
+        item = { lote: l, nome: g, qtd, indices, subgrupos: [], unit: escalar(total, 1 / qtd), total };
       } else {
         // componente sem subgrupo num item que tem subgrupos (não deveria
         // acontecer pela tela) entra como um subgrupo próprio, para não sumir da conta
