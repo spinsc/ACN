@@ -165,7 +165,7 @@ export function useUnreadChanges(entityType, entityId, currentUser) {
 // ─────────────────────────────────────────────────────────────────────────────
 // useUnreadMap — versão em lote de useUnreadChanges, pra listas/quadros
 // (Kanban, tabelas) onde N cards precisam saber se têm pendência sem fazer N
-// consultas — 2 consultas no total, independente de quantos itens existem.
+// consultas — 1 chamada ao banco, independente de quantos itens existem.
 // Retorna um Set<entityId> com os registros que têm alteração não vista pelo
 // usuário atual. Assina Realtime uma única vez (não um canal por card).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,6 +178,20 @@ export function useUnreadMap(entityType, entityIds, currentUser) {
     (async () => {
       if (!entityType || !currentUser?.id || !idsKey) { setNaoLidoSet(new Set()); return; }
       const ids = idsKey.split(',');
+      // A conta é feita NO BANCO (Etapa 5.6 do PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026).
+      // Antes o navegador lia todas as linhas de audit_log das entidades da lista e decidia
+      // aqui — mas o servidor devolve no máximo 1.000 linhas, e a auditoria já tinha 2.762 de
+      // licitações e 1.582 de OPs: o corte escondia 33% dos "não vistos" nas licitações e
+      // 25% nas OPs, para quase todos os usuários. A função devolve só os ids, na mesma regra.
+      const { data: naoLidos, error: erroFuncao } = await supabase.rpc('entidades_com_alteracao_nao_vista',
+        { p_tipo: entityType, p_ids: ids, p_user: currentUser.id });
+      if (!erroFuncao && Array.isArray(naoLidos)) {
+        if (!cancelado) setNaoLidoSet(new Set(naoLidos.map(String)));
+        return;
+      }
+      // Reserva: se a função falhar, cai no caminho antigo (que pode cortar em 1.000, mas
+      // é melhor que perder todos os destaques). O erro fica no console, sem silêncio.
+      console.error('Destaque de não lido: a função do banco falhou, usando o caminho antigo:', erroFuncao?.message);
       const { data: watermarks } = await supabase.from('entity_views').select('entity_id,last_seen_at')
         .eq('user_id', currentUser.id).eq('entity_type', entityType).in('entity_id', ids);
       const watermarkMap = new Map((watermarks || []).map(w => [w.entity_id, w.last_seen_at]));

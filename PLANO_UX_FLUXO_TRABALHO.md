@@ -168,9 +168,9 @@ parece funcionar e não alcança o que precisa. **Corrigir** com paginação
 (`.range`, como já faz `CadastroItensTab.tsx`) ou com busca no servidor — ver
 5.5. **✅ Resolvido na 5.5 (29/09/2026)**, por paginação.
 
-**A9 — O mapa de "alteração não lida" pode cortar em 1.000 linhas.** *(Observado em
-29/09/2026, ao procurar outras leituras com o mesmo corte do A8; **não reproduzido
-em tela**.)* `AuditSystem.tsx:184` (`useUnreadMap`) busca em `audit_log` todas as
+**A9 — O mapa de "alteração não lida" cortava em 1.000 linhas.** *(Observado em
+29/09/2026, ao procurar outras leituras com o mesmo corte do A8. **Reproduzido com
+dados reais e resolvido na 5.6.**)* `AuditSystem.tsx:184` (`useUnreadMap`) busca em `audit_log` todas as
 mudanças das entidades de uma lista (`.in('entity_id', ids)`, da mais nova para a
 mais velha) **sem paginar**, e o servidor devolve no máximo 1.000. Hoje a
 `audit_log` tem **2.762 linhas de licitações** (92 licitações) e **1.582 de OPs**
@@ -852,13 +852,60 @@ linhas. Hoje são **20** itens — longe do corte —, então não precisa de co
 agora; vale lembrar se o controle de estoque for ligado em massa. As demais leituras
 de `cadastro_itens` são buscas com `limit` pequeno (6 a 200) ou por `id`/código.
 
-#### ⬜ 5.6 — Mapa de "não lido" sem o corte de 1.000 (A9)
+#### ✅ 5.6 — Mapa de "não lido" sem o corte de 1.000 (A9)
 
-Primeiro **reproduzir**: com um usuário que tenha alterações não vistas só em
-entidades antigas de licitações ou OPs, ver se o destaque falha. Se falhar, corrigir
-pedindo só a **última alteração de cada entidade** (uma função no banco, em vez de
-trazer todas as linhas) ou paginando com `.range` e desempate por `id`, como na 5.5.
-Só leitura; nenhum dado é alterado.
+**Feito em:** 29/09/2026. **Nenhum dado foi alterado.** Uma migração **aditiva** no
+banco (uma função de leitura), autorizada pelo usuário na conversa.
+
+**Reprodução (dados reais, só leitura):** para cada usuário que já abriu alguma
+entidade, comparei as alterações não vistas **de verdade** com as que a consulta
+cortada em 1.000 enxergava:
+
+| Tipo | Não vistas (certo) | Escondidas pelo corte | Usuários afetados |
+|---|---|---|---|
+| Licitações | 898 | **298 (33%)** | **12 de 12** |
+| OPs | 2.457 | **605 (25%)** | **11 de 12** |
+| Oportunidades do CRM | 588 | 0 | 0 |
+
+**O que foi feito:**
+
+- **Migração `funcao_entidades_com_alteracao_nao_vista`:** função
+  `entidades_com_alteracao_nao_vista(p_tipo, p_ids, p_user)`, só leitura
+  (`STABLE`, `SECURITY INVOKER`). Faz no banco a conta que o navegador fazia:
+  a entidade é "não lida" quando a alteração mais nova **de outra pessoa** é
+  posterior à última vez que este usuário a abriu (`entity_views.last_seen_at`) ou
+  quando ele nunca a abriu. Alteração sem autor não conta, igual ao `.neq` de antes.
+  Para desfazer: `DROP FUNCTION public.entidades_com_alteracao_nao_vista(text, text[], uuid);`.
+- **`AuditSystem.tsx` (`useUnreadMap`)** passou a chamar a função: **1 chamada** com os
+  ids da lista e devolve só os ids não lidos (o comentário do hook já prometia "N cards
+  sem fazer N consultas"; o corte quebrava isso). Se a função falhar, o **caminho
+  antigo continua como reserva** e o erro vai para o console, sem silêncio.
+
+**Prova de equivalência (no banco, antes de mexer no código):** para todos os
+usuários e os 3 tipos, o resultado da função é **idêntico** à regra completa escrita
+de outro jeito — **588 / 898 / 2.457, com 0 faltando e 0 sobrando** —, enquanto a
+consulta cortada dava 588 / **600** / **1.852**.
+
+**Testado no navegador** (gravações bloqueadas; a única chamada liberada é a função
+de leitura), **9 de 9**:
+
+- **OPs em aberto:** a tela chama a função com as 329 OPs e ela devolve **218**
+  (o código antigo mostraria 154); a tabela mostra linhas destacadas (63 visíveis).
+- **Licitações:** devolve **90** (o código antigo: 61). Eram 92 auditadas, mas 2
+  licitações já não existem na tabela — a expectativa inicial do teste (92) estava
+  errada, não a função.
+- **Reserva:** com a função derrubada, o erro aparece no console e o destaque
+  continua funcionando (39 linhas) pelo caminho antigo.
+- **Regressões:** CRM 16/16, reenvio 20/20, status 13/13, banner/Marketing/
+  Financeiro/PCP 13/13, "OP/Conjunto" 21/21, Engenharia 13/13.
+
+**Efeito que as pessoas vão notar:** aparecem destaques de "não lido" que estavam
+escondidos — em especial nas licitações e OPs mais antigas. Para quem nunca abriu uma
+entidade, ela conta como "não lida" desde que alguém tenha alterado (regra de
+sempre); por isso o número inicial pode parecer alto.
+
+**O que ficou de fora:** o destaque de **campo** dentro de uma entidade
+(`useUnreadChanges`) lê a auditoria de **uma** entidade só, então não tem o problema.
 
 ### ⬜ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 Um componente (provavelmente estendendo `OplDetalheModal`/`OpVinculos.ts`,
@@ -929,4 +976,5 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Sigla nas telas: "OP"**, não "OPL"; nomes internos não mudam — decisão do usuário. |
 | 29/09/2026 | `Sanado` é valor legítimo de `serralheria_status` (4º passo da liberação parcial, gravado pelo PCP), fora do menu da Produção. |
 | 29/09/2026 | Migração de dado de status só depois de a publicação do código estar no ar, e só com autorização; histórico (`logs_movimentacao_opl`, `audit_log`, `lixeira`) nunca é reescrito. |
+| 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |
