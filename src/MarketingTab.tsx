@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { LinkOpl, VeiculoOuEnvio } from './AcnTabShared';
+import { aguardaLiberacaoComercial } from './FluxoEntrega';
 import Linkify from './Linkify';
 import { logChange, useFieldHighlight, useUnreadMap, useMarkAsRead } from './AuditSystem';
 
@@ -23,17 +24,17 @@ function PipelineStatus({ opl }) {
     {
       label: 'Engenharia',
       ok: !!(opl.status_bom === 'BOM Liberado' || opl.status_bom === 'Envio Direto - Sem Producao' ||
-             s.includes('PCP') || s.includes('Almox') || s.includes('Producao') || s.includes('CQ') || s.includes('Faturado')),
+             s.includes('PCP') || s.includes('Almox') || s.includes('Producao') || s.includes('CQ') || s.includes('Faturado') || aguardaLiberacaoComercial(s)),
       atual: s.includes('Analise Engenharia') || s.includes('Espera PCP') && !opl.status_bom,
     },
     {
       label: 'PCP/Almox',
-      ok: !!(opl.status_almox === 'Kit OK' || s.includes('Inicio Producao') || s.includes('Em Producao') || s.includes('CQ') || s.includes('Faturado')),
+      ok: !!(opl.status_almox === 'Kit OK' || s.includes('Inicio Producao') || s.includes('Em Producao') || s.includes('CQ') || s.includes('Faturado') || aguardaLiberacaoComercial(s)),
       atual: (s.includes('Espera PCP') || s.includes('Almox')) && opl.status_almox !== 'Kit OK',
     },
     {
       label: 'Producao',
-      ok: !!(s.includes('Aguardando CQ') || s.includes('Aprovado CQ') || s.includes('Faturado') || s.includes('Retrabalho')),
+      ok: !!(s.includes('Aguardando CQ') || s.includes('Aprovado CQ') || s.includes('Faturado') || s.includes('Retrabalho') || aguardaLiberacaoComercial(s)),
       atual: s.includes('Em Producao') || s.includes('Inicio Producao'),
     },
     {
@@ -155,7 +156,7 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
 
   const corStatus = (s) => {
     if (!s) return '#94a3b8';
-    if (s.includes('Faturado') || s.includes('Aprovado CQ')) return '#22c55e';
+    if (s.includes('Faturado') || s.includes('Aprovado CQ') || aguardaLiberacaoComercial(s)) return '#22c55e';
     if (s.includes('Producao') || s.includes('CQ')) return '#3b82f6';
     if (s.includes('PCP') || s.includes('Almox')) return '#f59e0b';
     return '#94a3b8';
@@ -284,7 +285,7 @@ export default function MarketingTab({ currentUser }) {
 
   const oplsFiltradas = filtroStatus === 'Todos' ? opls
     : filtroStatus === 'Em Producao' ? opls.filter(o => (o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('CQ'))
-    : filtroStatus === 'Concluidas' ? opls.filter(o => (o.status_geral||'').includes('Faturado') || (o.status_geral||'').includes('Aprovado CQ'))
+    : filtroStatus === 'Concluidas' ? opls.filter(o => (o.status_geral||'').includes('Faturado') || (o.status_geral||'').includes('Aprovado CQ') || aguardaLiberacaoComercial(o.status_geral))
     : opls.filter(o => !((o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('Faturado')));
 
   const pedidosPendentes = pedidos.filter(p => p.status === 'Pendente').length;

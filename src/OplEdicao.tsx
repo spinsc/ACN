@@ -10,7 +10,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
-import { FLUXOS, soEnvio, terminaEmEnvio } from './FluxoEntrega';
+import { FLUXOS, soEnvio, terminaEmEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { ORIGENS } from './OrigemVenda';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -24,7 +24,7 @@ export const STATUS_OPL = [
   'Em Espera PCP', 'Devolvida PCP', 'Aguardando Almox', 'Kit OK - Aguardando PCP',
   'Aguardando Inicio Producao', 'Aguardando Agendamento Manutenção', 'Manutenção Agendada', 'Em Producao',
   'Retrabalho', 'Aguardando CQ', 'Aguardando Embalagem', 'Aguardando Cotacao Frete',
-  'Aprovado CQ - Aguardando Liberacao Comercial', 'Aguarda Emissao NF', 'Faturado',
+  STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, 'Aguarda Emissao NF', 'Faturado',
   'Faturado e Disponivel para Entrega', 'Cancelado',
 ];
 const STATUS_ALMOX = ['', 'Kit OK', 'Falta de Material', 'Liberado com Pendencia'];

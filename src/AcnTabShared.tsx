@@ -15,7 +15,7 @@ import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
-import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio } from './FluxoEntrega';
+import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, STATUS_LIBERACAO_COMERCIAL_TODOS, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
@@ -51,7 +51,7 @@ const OPL_PIPELINE: { match: string[]; pct: number; label: string; retrabalho?: 
   // Fluxos que terminam em envio: produzido -> embalar -> frete.
   { match: ['Aguardando Embalagem'], pct: 80, label: 'Embalagem — Almoxarifado' },
   { match: ['Aguardando Cotacao Frete'], pct: 85, label: 'Cotação de Frete — Logística' },
-  { match: ['Aprovado CQ - Aguardando Liberacao Comercial', 'Aguardando Liberacao Comercial'], pct: 90, label: 'Aguardando Liberação Comercial' },
+  { match: STATUS_LIBERACAO_COMERCIAL_TODOS, pct: 90, label: 'Aguardando Liberação Comercial' },
   { match: ['Aguarda Emissao NF'], pct: 95, label: 'Fiscal — Emissão de NF' },
   { match: ['Faturado', 'Faturado e Disponivel para Entrega'], pct: 100, label: 'Faturado' },
 ];
@@ -935,13 +935,13 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
         {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
 
         {/* ── Botão LIBERAR PARA FISCAL (aparece automaticamente quando aguardando) ── */}
-        {(opl.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||
-          opl.status_geral === 'Aguardando Liberacao Comercial') && (
+        {aguardaLiberacaoComercial(opl.status_geral) && (
           <div style={{ margin: '12px 0 0', padding: '12px 16px', background: '#f0fdf4',
             border: '2px solid #22c55e', borderRadius: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d' }}>✅ APROVADO PELO CQ — AGUARDANDO LIBERAÇÃO COMERCIAL</div>
+                {/* "Aprovado pelo CQ" só quando passou pelo CQ: OP de envio não passa (Etapa 5.1, 29/09/2026) */}
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d' }}>✅ {opl.resultado_cq === 'Aprovado' ? 'APROVADO PELO CQ — ' : ''}AGUARDANDO LIBERAÇÃO COMERCIAL</div>
                 <div style={{ fontSize: 10, color: '#166534', marginTop: 2 }}>
                   Esta OP está pronta. Libere para o Fiscal emitir a Nota Fiscal.
                 </div>

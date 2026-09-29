@@ -5,7 +5,7 @@ import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
-import { statusAposCqAprovado } from './FluxoEntrega';
+import { statusAposCqAprovado, aguardaLiberacaoComercial } from './FluxoEntrega';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -152,7 +152,7 @@ export default function QualidadeTab({ currentUser }) {
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
         evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}` +
-          (statusNovo !== 'Aprovado CQ - Aguardando Liberacao Comercial' ? ' — segue para embalagem e cotação de frete.' : ''),
+          (!aguardaLiberacaoComercial(statusNovo) ? ' — segue para embalagem e cotação de frete.' : ''),
         status_anterior: 'Aguardando CQ', status_novo: statusNovo,
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);

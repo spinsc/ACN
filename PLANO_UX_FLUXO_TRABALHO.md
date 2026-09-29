@@ -178,15 +178,31 @@ cascas vazias de uma refatoração anterior.
   Comercial` — duas strings diferentes tratadas como sinônimas via `||` em
   pelo menos 3 lugares. Frágil: uma tela nova que esqueça de checar as duas
   perde OPs silenciosamente.
+  *Medido na Etapa 5 (29/09/2026): 188 OPs no nome longo e 2 no curto; 9
+  arquivos usam o texto (não "3 lugares"); Relatórios e Marketing só
+  reconheciam o longo, então as 2 OPs de envio sumiam de "Finalizadas". Os dois
+  nomes não eram por acaso: o longo nasce no caminho do CQ, o curto nos caminhos
+  de envio, que não passam por CQ.*
 - `serralheria_status`: o PCP usa um 4º valor (`'Sanado'`) que não existe no
   enum oficial `SERRALHERIA_STATUS`.
+  *Medido na Etapa 5: não é sinônimo. É o 4º passo real da liberação parcial de
+  BOM (Pendente → Concluído → **Sanado**), e o 1 registro do banco veio desse
+  caminho. Faltava só constar do vocabulário (5.2).*
 - `'Concluído'` ainda é chave morta no dicionário de cores do
   `FinanceiroTab.tsx` (a etapa de Compras virou "Recebido" em 22/09) — e o
   Kanban de Tarefas do Financeiro usa **a mesma palavra "Concluído"** para
   um conceito diferente (tarefa administrativa), na mesma aba.
-- "Conjunto Elétrico" (código/comentário) vs "Conjunto de Instalação"
-  (tela/banco) — mesmo conceito.
+  *Medido na Etapa 5: a chave morta tinha um efeito visível — o dicionário não
+  tinha `'Recebido'`, e as compras recebidas apareciam em cinza. Era uma cópia
+  do `COR_ETAPA_COMPRA` oficial (5.2).*
+- "Conjunto Elétrico" vs "Conjunto de Instalação" — mesmo conceito.
+  *Correção da Etapa 5 (o levantamento inicial tinha isto invertido): o
+  catálogo real tem 438 itens chamados "CONJUNTO ELETRICO PV …" e o plano do
+  estoque também diz "Elétrico"; as **telas** dizem "Instalação"
+  (`AplicarEstrutura.tsx`, `ConfigEstruturaTela.tsx`); a **coluna** do banco é
+  `eh_conjunto_instalacao`.*
 - "OP" vs "OPL" — duas siglas pra mesma entidade, dependendo da tela.
+  *Medido na Etapa 5: 893 ocorrências de "OP" e 218 de "OPL" no código.*
 - *(Já em andamento em sessão separada, iniciada pelo usuário: a mesma
   família de bug com o status `'Concluida'` de demandas setoriais que nunca
   cai na fila de crédito de estoque — task já rodando, não duplicar aqui.)*
@@ -539,11 +555,142 @@ nasceram sem fluxo de entrega e 179 sem itens vendidos. Alinhar isso **muda
 comportamento** (exigir ou avisar no ganho do card) e depende da sua regra;
 não mexi. Fica como candidato a etapa própria.
 
-### ⬜ Etapa 5 — Um glossário só de nomenclatura (C)
-Levantar cada par de nomes sinônimos (listados no achado C), decidir um
-nome oficial por conceito, migrar os dados existentes relatando quantas
-linhas mudaram, e só então apertar o código pra parar de aceitar as duas
-grafias.
+### 🟡 Etapa 5 — Um glossário só de nomenclatura (C)
+
+Levantamento feito em 29/09/2026 e dividido em sub-etapas, cada uma
+publicável sozinha. **Glossário decidido com o usuário na conversa:**
+
+| Conceito | Nome oficial | Onde está |
+|---|---|---|
+| Etapa "OP pronta, esperando o Comercial liberar para o Fiscal" (`oples.status_geral`) | **`Aguardando Liberacao Comercial`** (o curto) | 5.1a ✅ código · 5.1b ⬜ migração dos dados · 5.1c ⬜ apertar |
+| 4º passo da liberação parcial de BOM (`oples.serralheria_status`) | **`Sanado`**, no vocabulário da serralheria e fora do menu da Produção | 5.2 ✅ |
+| Última etapa da compra | **`Recebido`** (nunca "Concluído" nas compras) | 5.2 ✅ |
+| Item que liga a montagem automática do material | **Conjunto Elétrico** (nome do catálogo). A coluna `eh_conjunto_instalacao` **não muda**: é nome interno | 5.3 ⬜ |
+| Sigla da ordem de produção nas telas | **OP**. Nomes internos (`opl`, `numero_opl`, tabela `oples`) e o que as pessoas digitaram **não mudam** | 5.4 ⬜ |
+
+#### ✅ 5.1a — Status "aguardando liberação comercial": um nome oficial, os dois reconhecidos
+
+**Feito em:** 29/09/2026 (código; **nenhum dado foi alterado**).
+
+**O que foi feito:**
+
+- **Regra central em `FluxoEntrega.ts`:** `STATUS_AGUARDANDO_LIBERACAO_COMERCIAL`
+  (o oficial), `STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO`,
+  `STATUS_LIBERACAO_COMERCIAL_TODOS` e `aguardaLiberacaoComercial()`, com o
+  porquê documentado. Ninguém mais compara com o texto solto.
+- **Quem grava passou a gravar o oficial:** o CQ ao aprovar
+  (`statusAposCqAprovado`, usado por `QualidadeTab`), o Almoxarifado no FOB e a
+  Logística ao entregar o frete (as duas já gravavam o curto; agora pela
+  constante).
+- **Quem lê passou a reconhecer os dois:** `AcnTabShared` (barra de progresso,
+  botão "Liberar para o Fiscal" do detalhe), `CrmTab` (cor, botão "Liberar
+  Fiscal" e o lote), `OplEdicao` (a lista de status que o Admin pode escolher
+  agora oferece o oficial), `QualidadeTab` (texto do histórico), **`RelatoriosTab`
+  (7 listas e a cor — antes só o longo)** e **`MarketingTab` (5 pontos — antes
+  só o longo)**.
+- **Banner do detalhe da OP:** "APROVADO PELO CQ — AGUARDANDO LIBERAÇÃO COMERCIAL"
+  agora só diz "aprovado pelo CQ" quando `resultado_cq = 'Aprovado'` (as 188 OPs
+  do nome longo têm; as 2 de envio, que não passam por CQ, não têm). Antes o
+  banner afirmava CQ para OP que nunca passou por ele.
+- **Correção visível já nesta etapa:** as 2 OPs de envio (`A1671.2609` e
+  `A1664.2609`) passam a aparecer nos relatórios "Finalizadas" e "OPLs Geral >
+  Finalizadas".
+
+**Por que o nome antigo continua reconhecido:** (1) os históricos guardam o
+nome como foi escrito na época e história não se reescreve; (2) uma aba antiga
+aberta no navegador pode gravá-lo depois da publicação.
+
+**Testado** com Puppeteer e **todas as gravações bloqueadas**; dados reais em
+leitura (188 no nome longo, 2 no curto). **26 de 26**, mais as regressões das
+etapas anteriores (CRM 16/16, reenvio 20/20, Engenharia 13/13, "Lançar OS"):
+
+| Cenário | Resultado |
+|---|---|
+| Regra central: reconhece os dois nomes e só eles; CQ aprovado passa a gravar o oficial; serralheria com envio continua indo para a embalagem | ✓ |
+| Relatórios "Finalizadas": a consulta pede os dois nomes e as 2 OPs de envio aparecem, junto das do CQ | ✓ |
+| Relatórios "OPLs Geral > Finalizadas": idem | ✓ |
+| CRM "OPLs em aberto": botão "Liberar Fiscal" nas 2 OPs de envio (2/2) e nas do CQ (51/51) | ✓ |
+| Detalhe da OP: OP de envio sem "aprovado pelo CQ"; OP do CQ com | ✓ |
+| Marketing (linhas simuladas na tela): pipeline completo para os dois nomes; filtro "Concluidas" mostra os dois | ✓ |
+
+**Efeito a ter em mente na migração (5.1b):** no Marketing, o filtro "Em
+Producao" reconhece por pedaço de texto ("contém CQ"). Depois da migração, as
+OPs migradas deixam de casar ali (o nome curto não tem "CQ") e ficam só em
+"Concluidas" — o que é o correto, mas é uma mudança que as pessoas vão notar.
+
+#### ⬜ 5.1b — Migrar os dados do status (depende de publicar a 5.1a e de autorização)
+
+Só depois de a 5.1a estar no ar (senão os Relatórios da versão antiga perderiam
+as OPs migradas). É **uma** atualização em `oples.status_geral`, por
+`apply_migration`: `Aprovado CQ - Aguardando Liberacao Comercial` →
+`Aguardando Liberacao Comercial`, hoje **188 OPs** (conferir a contagem na hora,
+relatar antes e depois). Verificado antes de propor:
+
+- **Sem dependência no banco:** nenhuma regra, função, visão ou política cita o
+  texto; os dois gatilhos de `oples` são inofensivos para uma troca de status
+  (`trg_atualizar_lead_time` só age quando `data_entrega` é preenchida;
+  `trg_sync_norm` recalcula colunas de busca).
+- **Funções de borda:** `whatsapp-webhook` e `smart-task` não leem status de OP.
+- **Histórico não se toca:** `logs_movimentacao_opl` (236 linhas em
+  `status_novo`, 46 em `status_anterior`), `audit_log` (121 em `new_value`, 2 em
+  `old_value`) e `lixeira` (1) guardam o nome de época.
+- **Para desfazer, se preciso:** as 2 OPs que já eram do nome curto antes da
+  migração são `A1671.2609` e `A1664.2609`; todas as demais eram do longo.
+
+#### ⬜ 5.1c — Apertar o código
+
+Tirar o nome antigo de `STATUS_LIBERACAO_COMERCIAL_TODOS` (uma linha em
+`FluxoEntrega.ts`) **só depois** de conferir no banco que nenhuma OP voltou a
+ter o nome antigo desde a migração (`select count(*) … where status_geral =
+'Aprovado CQ - Aguardando Liberacao Comercial'` deve dar zero, por alguns
+dias). Esse é o passo "aperta o código" do princípio 4.
+
+#### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
+
+**Feito em:** 29/09/2026 (código; **nenhum dado foi alterado**).
+
+- **`Sanado`** (`serralheria_status`): documentado em `FluxoEntrega.ts` como
+  `SERRALHERIA_SANADO`, com o mapa das **duas trilhas** que dividem a coluna:
+  Produção (Pendente → Em Execucao → Concluido) e Liberação parcial de BOM
+  (Pendente → Concluido → **Sanado**, este último pelo PCP). Ficou **fora** de
+  `SERRALHERIA_STATUS` de propósito: essa lista alimenta o menu da Produção, e a
+  Produção não sana pendência. O `PCPTab` passou a usar a constante.
+- **Financeiro** (`FinanceiroTab.tsx`): apagada a cópia própria de cores
+  (`STATUS_COR`, que tinha a chave morta `'Concluído'` e **não tinha
+  `'Recebido'`**) e passou a usar `COR_ETAPA_COMPRA`, de `ComprasFluxo`. As
+  compras recebidas (20 hoje) deixam de aparecer em cinza. O cartão e a coluna
+  "Concluídas" viraram **"Recebidas"** (e as variáveis também). O "Concluído" do
+  Kanban de Tarefas fica: é outro conceito (`financeiro_tarefas.etapa`) e agora
+  não se confunde com o das compras.
+- **Testado** (13 de 13 junto com o banner e o Marketing): PCP com uma OP
+  simulada de serralheria concluída — sanar grava exatamente
+  `{"serralheria_status":"Sanado"}` (só esse campo) e o histórico; Financeiro
+  mostra "Recebidas" e o selo de "Recebido" em verde.
+- **Não mexi (fora do escopo, outra sessão):** `Estoque.tsx` ainda tolera
+  `'Concluído'` nas compras (`COMPRA_ENCERRADA`) e `'Concluida'` nas fabricações;
+  é a frente de `'Concluida'` que o plano cita no achado C como rodando à parte.
+  No banco de compras não sobrou nenhum `'Concluído'`, então a tolerância pode
+  ser apertada lá.
+- **Observação:** a mesma coluna `serralheria_status` é usada em duas trilhas com
+  os mesmos valores `Pendente` e `Concluido`. Hoje não colidem, mas uma OP que
+  passe pelas duas mistura os significados.
+
+#### ⬜ 5.3 — "Conjunto Elétrico" nas telas
+
+Trocar "Conjunto de Instalação" por **Conjunto Elétrico** nos textos de tela
+(`AplicarEstrutura.tsx`, `ConfigEstruturaTela.tsx`) e nos comentários
+(`ConfigEstrutura.ts`, `PerguntasDaVenda.tsx`). A coluna `eh_conjunto_instalacao`
+fica, com um comentário dizendo que é o "Conjunto Elétrico". Só texto; nada de
+dado.
+
+#### ⬜ 5.4 — "OP" no lugar de "OPL" nas telas
+
+Cerca de 218 ocorrências de "OPL" em texto visível (rótulos, títulos, mensagens,
+textos de notificação). Trocar só o que a pessoa lê, com o diff revisado; não
+tocar em identificadores (`opl`, `numero_opl`, `OPL_PIPELINE`), na tabela
+`oples`, nem no que as pessoas digitaram (títulos de card como "OPL D 777.2609 …").
+Os textos que o sistema grava em histórico (`logs_movimentacao_opl.evento`) passam
+a sair com "OP" daqui para a frente; o que já foi gravado fica.
 
 ### ⬜ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 Um componente (provavelmente estendendo `OplDetalheModal`/`OpVinculos.ts`,
@@ -609,3 +756,8 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **OP devolvida ao Comercial volta para quem devolveu** (Engenharia → `Em Espera Engenharia`; Fiscal → `Aguarda Emissao NF`), não sempre para a Engenharia — decisão do usuário. |
 | 29/09/2026 | Reenvio de OP devolvida é **um por um**, feito pelo Comercial depois de corrigir; sem lote e sem correção em massa das paradas. |
 | 29/09/2026 | **Formulário simplificado de OP do CRM removido**: toda OP manual nasce pelo `NovaOpOsModal`; a janela "Lançar OS" serve só para OS — decisão do usuário. |
+| 29/09/2026 | **Nome oficial da etapa "aguardando liberação comercial": `Aguardando Liberacao Comercial`** (o curto; o "Aprovado CQ" fica em `resultado_cq`). O longo continua reconhecido na transição e nos históricos — decisão do usuário. |
+| 29/09/2026 | **Item que liga a montagem automática: "Conjunto Elétrico"** (nome do catálogo); a coluna `eh_conjunto_instalacao` não muda — decisão do usuário. |
+| 29/09/2026 | **Sigla nas telas: "OP"**, não "OPL"; nomes internos não mudam — decisão do usuário. |
+| 29/09/2026 | `Sanado` é valor legítimo de `serralheria_status` (4º passo da liberação parcial, gravado pelo PCP), fora do menu da Produção. |
+| 29/09/2026 | Migração de dado de status só depois de a publicação do código estar no ar, e só com autorização; histórico (`logs_movimentacao_opl`, `audit_log`, `lixeira`) nunca é reescrito. |

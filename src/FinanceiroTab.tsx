@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
-import { ETAPAS_COMPRA } from './ComprasFluxo';
+import { ETAPAS_COMPRA, COR_ETAPA_COMPRA } from './ComprasFluxo';
 import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao,
   ModalEditarLancamento, ModalEditarPedidoCompra, podeEditarLancamento } from './CentroCustoShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
@@ -34,14 +34,11 @@ const fmtR = (v: number) =>
 // Fatiar e fixar meio-dia tira o fuso do caminho (corrigido em 24/09/2026).
 const fmtDt = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
-const STATUS_COR: Record<string, string> = {
-  'Pendente':              '#f59e0b',
-  'Em Andamento':          '#3b82f6',
-  'Aguardando Aprovação':  '#ea580c',
-  'Aprovado':              '#0ea5e9',
-  'Comprado':              '#7c3aed',
-  'Concluído':             '#22c55e',
-};
+// As cores das etapas da compra vêm de ComprasFluxo (COR_ETAPA_COMPRA), a mesma
+// da tela de Compras. Aqui havia uma cópia própria que ficou com a chave
+// 'Concluído' — nome antigo, trocado por 'Recebido' em 22/09/2026 — e sem a cor
+// de 'Recebido': as compras recebidas apareciam em cinza (corrigido em
+// 29/09/2026, Etapa 5.2 do PLANO_UX_FLUXO_TRABALHO.md).
 
 // ─── Modal CRUD de Centros de Custo ──────────────────────────────────────────
 function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
@@ -202,8 +199,8 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.fornecedor || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
-                      <span style={{ background: (STATUS_COR[p.status_compra]||'#6b7280') + '22',
-                        color: STATUS_COR[p.status_compra] || '#6b7280',
+                      <span style={{ background: (COR_ETAPA_COMPRA[p.status_compra]||'#6b7280') + '22',
+                        color: COR_ETAPA_COMPRA[p.status_compra] || '#6b7280',
                         padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
                         {p.status_compra || '—'}
                       </span>
@@ -516,7 +513,10 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   // 'Recebido' é o nome da última etapa da compra desde 22/09/2026 (era
   // 'Concluído'). Este contador tinha ficado com o nome antigo e por isso
   // mostrava zero enquanto havia compras recebidas (corrigido em 24/09/2026).
-  const totalConcluidas = comprasFiltradas.filter(p => p.status_compra === 'Recebido').length;
+  // O rótulo na tela também passou a dizer "Recebidas" (29/09/2026): "Concluídas"
+  // era o mesmo conceito com o nome antigo, e ainda se confundia com o
+  // "Concluído" das tarefas do Kanban desta mesma aba, que é outra coisa.
+  const totalRecebidas = comprasFiltradas.filter(p => p.status_compra === 'Recebido').length;
   const totalPendentes  = comprasFiltradas.filter(p => p.status_compra === 'Pendente').length;
   const totalSemCentro  = comprasFiltradas.filter(p => !p.centro_custo).length;
 
@@ -613,7 +613,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
             {[
               { label: 'Total Gasto', value: fmtR(totalGasto), sub: 'no período filtrado', cor: '#0f766e', bg: '#f0fdf4', border: '#86efac', icon: '💰' },
               { label: 'Centros Ativos', value: String(centros.filter(c => c.ativo).length), sub: 'centros de custo', cor: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '🏷️' },
-              { label: 'Concluídas', value: String(totalConcluidas), sub: 'compras concluídas', cor: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '✅' },
+              { label: 'Recebidas', value: String(totalRecebidas), sub: 'compras recebidas', cor: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '✅' },
               { label: 'Pendentes', value: String(totalPendentes), sub: 'aguardando', cor: '#b45309', bg: '#fef9c3', border: '#fde68a', icon: '⏳' },
               { label: 'Sem Centro', value: String(totalSemCentro), sub: 'sem alocação', cor: '#dc2626', bg: '#fef2f2', border: '#fca5a5', icon: '⚠️' },
             ].map(k => (
@@ -684,7 +684,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
-                      {['Centro de Custo', 'Qtd. Compras', 'Total Gasto', 'Concluídas', 'Pendentes', 'Ver'].map(h => (
+                      {['Centro de Custo', 'Qtd. Compras', 'Total Gasto', 'Recebidas', 'Pendentes', 'Ver'].map(h => (
                         <th key={h} style={{ padding: '7px 10px', fontSize: 9, fontWeight: 700,
                           textAlign: h === 'Total Gasto' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
@@ -692,7 +692,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                   </thead>
                   <tbody>
                     {listacentros.map((c, i) => {
-                      const concl = c.compras.filter(p => p.status_compra === 'Recebido').length;
+                      const recebidas = c.compras.filter(p => p.status_compra === 'Recebido').length;
                       const pend  = c.compras.filter(p => p.status_compra === 'Pendente').length;
                       const semCC = c.key === '(Sem Centro)';
                       return (
@@ -720,10 +720,10 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                             {fmtR(c.total)}
                           </td>
                           <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                            {concl > 0 && (
+                            {recebidas > 0 && (
                               <span style={{ background: '#dcfce7', color: '#15803d',
                                 padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                                {concl}
+                                {recebidas}
                               </span>
                             )}
                           </td>

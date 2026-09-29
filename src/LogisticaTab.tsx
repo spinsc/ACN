@@ -9,6 +9,7 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
 import { creditarCompraRecebida, fmtQtd } from './Estoque';
 import { hojeISO, diaISO } from './Interface';
+import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
 const TIPOS_MANIFESTO = ['Recebimento','Envio','Transferencia'];
@@ -742,7 +743,7 @@ function FretesPanel({ currentUser }: any) {
           criado_em: new Date().toISOString(),
         });
         if (opl?.status_geral === 'Aguardando Cotacao Frete') {
-          const statusNovo = 'Aguardando Liberacao Comercial';
+          const statusNovo = STATUS_AGUARDANDO_LIBERACAO_COMERCIAL;
           await supabase.from('oples').update({ status_geral: statusNovo }).eq('id', opl.id);
           logChange({ module: 'logistica', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
             oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: statusNovo }, user: currentUser });

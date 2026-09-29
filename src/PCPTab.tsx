@@ -2,7 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
-import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM } from './FluxoEntrega';
+import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
 import { indicePendencias, ChecklistPendencias, travaConclusaoProducao } from './OpPendencias';
 import { PinturaCampos } from './PinturaSerralheria';
 import { notificarEvento, msg } from './whatsappHelper';
@@ -125,7 +125,8 @@ export default function PCPTab({ currentUser }) {
   const sanarPendenciaSerralheria = async (opl) => {
     setSanandoSerralheria(opl.id);
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({ serralheria_status: 'Sanado' }).eq('id', opl.id);
+    // 'Sanado' é o passo final da liberação parcial de BOM (ver SERRALHERIA_SANADO em FluxoEntrega.ts)
+    await supabase.from('oples').update({ serralheria_status: SERRALHERIA_SANADO }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
       evento: `PCP sanou a pendência de Serralheria (serviço concluído e conferido).`,

@@ -32,7 +32,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
-import { fluxoLabel, soEnvio } from './FluxoEntrega';
+import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO, STATUS_LIBERACAO_COMERCIAL_TODOS, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
@@ -2847,8 +2847,8 @@ const SUB_STATUS_COR: Record<string,string> = {
           'Em Espera PCP':                               '#0891b2',
           'Em Analise PCP':                              '#0891b2',
           'Em Producao':                                 '#d97706',
-          'Aprovado CQ - Aguardando Liberacao Comercial':'#16a34a',
-          'Aguardando Liberacao Comercial':              '#16a34a',
+          [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO]:'#16a34a',
+          [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL]:       '#16a34a',
           'Aguarda Emissao NF':                          '#0ea5e9',
           'Faturado e Disponivel para Entrega':          '#0284c7',
           'Aguardando Agendamento Manutenção':           '#ea580c',
@@ -2926,9 +2926,9 @@ const SUB_STATUS_COR: Record<string,string> = {
         };
 
         // Libera para o Fiscal todas as selecionadas de uma vez — mesma
-        // regra do botão individual (só as que estão Aprovado CQ/Aguardando
-        // Liberação Comercial; ignora as demais).
-        const LIBERAVEIS_FISCAL = ['Aprovado CQ - Aguardando Liberacao Comercial', 'Aguardando Liberacao Comercial'];
+        // regra do botão individual (só as que aguardam a liberação comercial;
+        // ignora as demais).
+        const LIBERAVEIS_FISCAL = STATUS_LIBERACAO_COMERCIAL_TODOS;
         const liberarFiscalEmLote = async () => {
           const alvos = oplsEmAberto.filter((o: any) => oplsSelecionadas.has(o.id) && LIBERAVEIS_FISCAL.includes(o.status_geral));
           if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está pronta para liberação ao Fiscal.'); return; }
@@ -3138,9 +3138,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap' }}>
                               <div style={{ display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
-                                {/* Botão de liberação para Fiscal — aparece somente quando Aprovado CQ */}
-                                {(o.status_geral === 'Aprovado CQ - Aguardando Liberacao Comercial' ||
-                                  o.status_geral === 'Aguardando Liberacao Comercial') && (
+                                {/* Botão de liberação para Fiscal — aparece somente quando a OP aguarda a liberação comercial */}
+                                {aguardaLiberacaoComercial(o.status_geral) && (
                                   <button
                                     onClick={() => liberarFiscalCrm(o)}
                                     style={{ fontSize:9, padding:'3px 9px', background:'#f59e0b', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>

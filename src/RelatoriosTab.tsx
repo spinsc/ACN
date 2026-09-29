@@ -7,6 +7,7 @@ import { labelHierarquico } from './CentroCustoShared';
 import { MARKUP_BANDAS, corMarkup, markupPonderadoItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
 import { RelDossieOp } from './OpDossie';
 import { hojeISO, diaISO } from './Interface';
+import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO, STATUS_LIBERACAO_COMERCIAL_TODOS } from './FluxoEntrega';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
@@ -15,7 +16,7 @@ const STATUS_CORES = {
   Pendente:'#f59e0b','Em Andamento':'#3b82f6',Concluido:'#22c55e',
   'Em Espera PCP':'#f59e0b','Em Analise Engenharia':'#6366f1',
   'Aguardando Inicio Producao':'#3b82f6','Em Producao':'#0891b2',
-  'Aguardando CQ':'#8b5cf6','Aprovado CQ - Aguardando Liberacao Comercial':'#16a34a',
+  'Aguardando CQ':'#8b5cf6',[STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO]:'#16a34a',[STATUS_AGUARDANDO_LIBERACAO_COMERCIAL]:'#16a34a',
   'Faturado e Disponivel para Entrega':'#059669','Faturado':'#374151',
 };
 
@@ -175,7 +176,7 @@ function RelProducao() {
 
   const agora = new Date();
   const emProd = ops.filter(o=>o.status_geral==='Em Producao').length;
-  const conc   = ops.filter(o=>['Aguardando CQ','Aprovado CQ - Aguardando Liberacao Comercial','Faturado e Disponivel para Entrega','Faturado'].includes(o.status_geral)).length;
+  const conc   = ops.filter(o=>['Aguardando CQ',...STATUS_LIBERACAO_COMERCIAL_TODOS,'Faturado e Disponivel para Entrega','Faturado'].includes(o.status_geral)).length;
   const tempos = ops.map(o=>o.tempo_producao_horas).filter(v=>v>0);
   const tMedio = tempos.length ? tempos.reduce((a,b)=>a+b,0)/tempos.length : null;
 
@@ -211,7 +212,7 @@ function RelProducao() {
         Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([resp,itens])=>{
           const t = itens.map(i=>i.tempo_producao_horas).filter(v=>v>0);
           const med = t.length ? t.reduce((a,b)=>a+b,0)/t.length : null;
-          const conc2 = itens.filter(i=>['Aguardando CQ','Aprovado CQ - Aguardando Liberacao Comercial','Faturado e Disponivel para Entrega','Faturado'].includes(i.status_geral)).length;
+          const conc2 = itens.filter(i=>['Aguardando CQ',...STATUS_LIBERACAO_COMERCIAL_TODOS,'Faturado e Disponivel para Entrega','Faturado'].includes(i.status_geral)).length;
           return (
             <div key={resp} className="sec-card">
               <div className="sec-hdr" style={{background:'#1e293b',color:'white'}}>
@@ -285,7 +286,7 @@ function RelOplsGeral() {
   const GRUPOS = {
     'Em Andamento': ['Em Espera PCP','Em Analise Engenharia','Aguardando Almox','Kit OK - Pronto para Producao','Aguardando Inicio Producao','Em Producao','Aguardando CQ'],
     'Paradas': ['Devolvida para Engenharia','Devolvida Comercial','Retrabalho'],
-    'Finalizadas': ['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'],
+    'Finalizadas': [...STATUS_LIBERACAO_COMERCIAL_TODOS,'Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'],
   };
 
   const buscar = async () => {
@@ -396,7 +397,7 @@ function RelOplsFinalizadas() {
   const [ops, setOps] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
-  const STATUS_FINAL = ['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'];
+  const STATUS_FINAL = [...STATUS_LIBERACAO_COMERCIAL_TODOS,'Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'];
 
   const buscar = async () => {
     setCarregando(true);
@@ -475,7 +476,7 @@ function RelOplsPorSetor() {
     'PCP/Almox':      ['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP','Devolvida PCP'],
     'Produção':       ['Aguardando Inicio Producao','Em Producao','Retrabalho'],
     'Qualidade':      ['Aguardando CQ'],
-    'Comercial/Fiscal':['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Devolvida Comercial'],
+    'Comercial/Fiscal':[...STATUS_LIBERACAO_COMERCIAL_TODOS,'Aguarda Emissao NF','Faturado e Disponivel para Entrega','Devolvida Comercial'],
     'Manutenção':     ['Aguardando Agendamento Manutenção','Manutenção Agendada'],
   };
 
@@ -574,7 +575,7 @@ function RelOplsAtrasadas() {
     'PCP/Almox':['Em Espera PCP','Aguardando Almox','Kit OK - Aguardando PCP'],
     'Produção':['Aguardando Inicio Producao','Em Producao','Retrabalho'],
     'Qualidade':['Aguardando CQ'],
-    'Comercial':['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Devolvida Comercial'],
+    'Comercial':[...STATUS_LIBERACAO_COMERCIAL_TODOS,'Aguarda Emissao NF','Devolvida Comercial'],
   };
   const porSetor = (o) => Object.entries(SETORES_STATUS).find(([,ss])=>ss.includes(o.status_geral))?.[0] || 'Outros';
   const diasAtraso = (o) => Math.floor((agora.getTime()-new Date(o.data_prevista_entrega).getTime())/86400000);
@@ -1346,7 +1347,7 @@ function RelComissoes() {
 
 // ── MAIN ──
 // ── Relatório: OPs e OSs em Serviço (planilha) ──
-const OP_STATUS_FINALIZADOS = ['Aprovado CQ - Aguardando Liberacao Comercial','Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'];
+const OP_STATUS_FINALIZADOS = [...STATUS_LIBERACAO_COMERCIAL_TODOS,'Aguarda Emissao NF','Faturado e Disponivel para Entrega','Faturado'];
 const OS_STATUS_FINALIZADOS = ['Entregue','Cancelada'];
 
 function obsResumoOpl(o) {

@@ -88,6 +88,37 @@ export const STATUS_EMBALAGEM = 'Aguardando Embalagem';
 /** Embalagem feita, pedido de frete aberto, Logística cotando. */
 export const STATUS_COTACAO_FRETE = 'Aguardando Cotacao Frete';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ETAPA "AGUARDANDO LIBERAÇÃO COMERCIAL" — UM NOME SÓ
+//
+// Glossário decidido com o usuário em 29/09/2026 (Etapa 5.1 do
+// PLANO_UX_FLUXO_TRABALHO.md). A mesma etapa — a OP pronta, esperando o
+// Comercial liberá-la para o Fiscal — tinha DOIS nomes:
+//   • 'Aprovado CQ - Aguardando Liberacao Comercial': escrito ao aprovar no CQ;
+//   • 'Aguardando Liberacao Comercial': escrito nos caminhos de envio (embalagem
+//     FOB e frete entregue), que NÃO passam por CQ — para eles "Aprovado CQ"
+//     seria falso.
+// O nome oficial é o curto. O fato de a OP ter passado pelo CQ continua
+// registrado em `resultado_cq = 'Aprovado'`, que é onde deve ficar.
+//
+// Por que isto importa: cinco pontos do sistema reconheciam os dois nomes, mas
+// os Relatórios e o Marketing só o longo — OP com o nome curto sumia de
+// "Finalizadas". Por isso ninguém compara com o texto solto: use
+// aguardaLiberacaoComercial() ou STATUS_LIBERACAO_COMERCIAL_TODOS.
+//
+// O nome antigo continua RECONHECIDO de propósito, por dois motivos: (1) os
+// históricos (logs_movimentacao_opl, audit_log) o guardam como foi escrito na
+// época e não se reescreve história; (2) uma aba antiga ainda aberta no
+// navegador pode gravá-lo depois de uma publicação. Só se tira o nome antigo da
+// lista abaixo depois de conferir no banco que nenhuma OP voltou a tê-lo.
+export const STATUS_AGUARDANDO_LIBERACAO_COMERCIAL = 'Aguardando Liberacao Comercial';
+export const STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO = 'Aprovado CQ - Aguardando Liberacao Comercial';
+export const STATUS_LIBERACAO_COMERCIAL_TODOS: string[] = [
+  STATUS_AGUARDANDO_LIBERACAO_COMERCIAL,
+  STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO,
+];
+export const aguardaLiberacaoComercial = (s: any): boolean => STATUS_LIBERACAO_COMERCIAL_TODOS.includes(s);
+
 /** Termina com a mercadoria saindo daqui — ou seja, em algum momento precisa
  *  de embalagem e frete. Só as duas adaptações ficam de fora. */
 export function terminaEmEnvio(v: string | null | undefined): boolean {
@@ -114,7 +145,7 @@ export function filaDaOp(o: any): DestinoFila {
 /** Depois do CQ aprovado: fluxo que termina em envio vai para a embalagem
  *  (que abre a cotação de frete) em vez de esperar liberação comercial. */
 export function statusAposCqAprovado(o: any): string {
-  return serralheriaSegueParaAdaptacao(o) ? STATUS_EMBALAGEM : 'Aprovado CQ - Aguardando Liberacao Comercial';
+  return serralheriaSegueParaAdaptacao(o) ? STATUS_EMBALAGEM : STATUS_AGUARDANDO_LIBERACAO_COMERCIAL;
 }
 
 /** Tipo de Projeto que JÁ define a rota: kit vendido para envio. Com ele o
@@ -143,7 +174,19 @@ export const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS',
 // serralheria por qualquer um dos três sinais abaixo.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// A coluna oples.serralheria_status serve a DUAS trilhas — vale saber qual é qual
+// (levantado na Etapa 5.2 do PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026):
+//   • Produção ("fabricação serralheria com envio"):
+//       Pendente → Em Execucao → Concluido        (os três abaixo; ProducaoTab.setSerralheria)
+//   • Liberação parcial de BOM (Engenharia → Serralheria → PCP):
+//       Pendente (Engenharia libera) → Concluido (a Serralheria conclui a demanda,
+//       SetorDemandaTab) → SANADO (o PCP confere e dá por resolvido, PCPTab).
 export const SERRALHERIA_STATUS = ['Pendente', 'Em Execucao', 'Concluido'] as const;
+/** 4º valor da coluna, e não um nome alternativo: é o passo final da liberação
+ *  parcial. NÃO entra em SERRALHERIA_STATUS de propósito — aquela lista alimenta o
+ *  menu da Produção, e a Produção não sana pendência: quem sana é o PCP. Uma OP
+ *  'Sanado' sai da lista do PCP, que só mostra Pendente e Concluido. */
+export const SERRALHERIA_SANADO = 'Sanado';
 
 export function temSerralheria(o: any): boolean {
   if (!o) return false;
