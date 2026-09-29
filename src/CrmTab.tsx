@@ -264,6 +264,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [recentesCrm, setRecentesCrm] = useState<any[]>([]);
   const [recentesCrmLoading, setRecentesCrmLoading] = useState(false);
   const [oplsEmAberto, setOplsEmAberto] = useState<any[]>([]);
+  // Quem devolveu cada OP parada em "Devolvida Comercial", e quando (id da OP ->
+  // linha do log). É daí que sai o destino do reenvio — ver reenviarDevolvida.
+  const [devolucoesOpl, setDevolucoesOpl] = useState<Record<string, any>>({});
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
   const [filtStatusOpl, setFiltStatusOpl] = useState('');
@@ -1296,10 +1299,25 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao')
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
-    setOplsEmAberto(data || []);
+    const lista = data || [];
+    setOplsEmAberto(lista);
+    // Para as OPs devolvidas ao Comercial, busca no log quem devolveu e quando
+    // (a coluna obs_devolucao guarda só o motivo). Uma consulta para todas.
+    const devolvidas = lista.filter((o: any) => o.status_geral === 'Devolvida Comercial').map((o: any) => o.id);
+    if (devolvidas.length) {
+      const { data: logs } = await supabase.from('logs_movimentacao_opl')
+        .select('opl_id,setor,usuario_nome,data_hora')
+        .in('opl_id', devolvidas).eq('status_novo', 'Devolvida Comercial')
+        .order('data_hora', { ascending: false });
+      const porOpl: Record<string, any> = {};
+      (logs || []).forEach((l: any) => { if (!porOpl[l.opl_id]) porOpl[l.opl_id] = l; }); // a mais recente
+      setDevolucoesOpl(porOpl);
+    } else {
+      setDevolucoesOpl({});
+    }
     setOplsLoading(false);
   };
 
@@ -2944,6 +2962,59 @@ const SUB_STATUS_COR: Record<string,string> = {
           fetchOplsEmAberto();
         };
 
+        // REENVIAR OP DEVOLVIDA AO COMERCIAL (Etapa 3.1 do PLANO_UX_FLUXO_TRABALHO.md)
+        //
+        // O botão "reenviar" só existia no antigo ComercialTab (fora do menu desde
+        // 23/07/2026, na unificação Comercial+CRM; apagado em 29/09/2026). Desde
+        // então nenhuma tela viva
+        // devolvia a OP para quem a devolveu: em 29/09/2026 havia 10 paradas em
+        // "Devolvida Comercial", 4 delas devolvidas pela Engenharia em 17 e 18/09.
+        //
+        // Regra definida com o usuário em 29/09/2026: a OP volta para QUEM
+        // DEVOLVEU — Engenharia -> "Em Espera Engenharia"; Fiscal -> "Aguarda
+        // Emissao NF". O botão antigo mandava sempre para a Engenharia, o que
+        // faria uma OP pronta, devolvida pelo Fiscal, refazer a análise de
+        // engenharia. Sem registro de quem devolveu (status mexido à mão em
+        // OplEdicao), vai para a Engenharia, como o botão antigo.
+        const destinoDaDevolucao = (o: any) => {
+          const dev = devolucoesOpl[o.id];
+          const fiscal = dev?.setor === 'Fiscal';
+          return {
+            setor: fiscal ? 'Fiscal' : 'Engenharia',
+            para: fiscal ? 'o Fiscal' : 'a Engenharia',
+            status: fiscal ? 'Aguarda Emissao NF' : 'Em Espera Engenharia',
+            registrado: !!dev,
+          };
+        };
+        const reenviarDevolvida = async (o: any) => {
+          const d = destinoDaDevolucao(o);
+          const motivo = String(o.obs_devolucao || '').trim() || '—';
+          if (!await confirmar(`Reenviar a OP ${o.opl} para ${d.para}?\n\nMotivo apontado: ${motivo}\n\nConfirme só depois de corrigir o que foi apontado.${d.registrado ? '' : '\n\nNão há registro de quem devolveu esta OP; ela vai para a Engenharia.'}`)) return;
+          const agora = new Date().toISOString();
+          const novo: any = { status_geral: d.status };
+          // Voltando ao Fiscal, o relógio dele recomeça — mesmo que o "Liberar
+          // Fiscal" faz —, senão o tempo da correção do Comercial entra na conta do Fiscal.
+          if (d.setor === 'Fiscal') novo.data_liberacao_comercial = agora;
+          // O .eq('status_geral', ...) vai junto: se outra pessoa já moveu a OP, não sobrescreve.
+          const { data: mudou, error } = await supabase.from('oples').update(novo)
+            .eq('id', o.id).eq('status_geral', 'Devolvida Comercial').select('id');
+          if (error) { alert('Erro ao reenviar: ' + error.message); return; }
+          if (!mudou?.length) { alert('Esta OP já mudou de status. A lista foi atualizada.'); fetchOplsEmAberto(); return; }
+          await supabase.from('logs_movimentacao_opl').insert([{
+            opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
+            evento: `OP reenviada para ${d.para} após correção do Comercial.`,
+            status_anterior: 'Devolvida Comercial', status_novo: d.status,
+            usuario_nome: currentUser?.nome || null, data_hora: agora,
+          }]);
+          logChange({ module: 'comercial', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
+            oldRow: { status_geral: o.status_geral }, newRow: novo, user: currentUser });
+          // Só a Engenharia tem evento de aviso para "OP enviada"; o "Liberar
+          // Fiscal" desta tela também não avisa, então o Fiscal segue igual.
+          if (d.setor === 'Engenharia') notificarEvento('op_enviada_engenharia', msg.oplEnviada(o.opl, 'Engenharia', currentUser?.nome));
+          mostrarAviso(`OP ${o.opl} reenviada para ${d.para}.`, 'ok');
+          fetchOplsEmAberto();
+        };
+
         // Libera para o Fiscal todas as selecionadas de uma vez — mesma
         // regra do botão individual (só as que estão Aprovado CQ/Aguardando
         // Liberação Comercial; ignora as demais).
@@ -3121,6 +3192,18 @@ const SUB_STATUS_COR: Record<string,string> = {
                                 background: STATUS_COR[o.status_geral] || '#64748b' }}>
                                 {o.status_geral||'—'}
                               </span>
+                              {o.status_geral === 'Devolvida Comercial' && (() => {
+                                const dev = devolucoesOpl[o.id];
+                                const motivo = String(o.obs_devolucao || '').trim();
+                                return (
+                                  <div title={motivo || undefined} style={{ marginTop:3, maxWidth:210, whiteSpace:'normal', fontSize:9, lineHeight:1.35, color:'#991b1b' }}>
+                                    ↩ {dev?.setor || 'Setor não registrado'}
+                                    {dev?.usuario_nome ? ` · ${dev.usuario_nome}` : ''}
+                                    {dev?.data_hora ? ` · ${new Date(dev.data_hora).toLocaleDateString('pt-BR')}` : ''}
+                                    {motivo && <div style={{ color:'#475569' }}>{motivo}</div>}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
                               {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
@@ -3154,6 +3237,17 @@ const SUB_STATUS_COR: Record<string,string> = {
                                     🟡 LIBERAR FISCAL
                                   </button>
                                 )}
+                                {o.status_geral === 'Devolvida Comercial' && (() => {
+                                  const d = destinoDaDevolucao(o);
+                                  return (
+                                    <button
+                                      onClick={() => reenviarDevolvida(o)}
+                                      title={`Corrija o que foi apontado e reenvie para ${d.para}`}
+                                      style={{ fontSize:9, padding:'3px 9px', background: d.setor === 'Fiscal' ? '#0ea5e9' : '#7c3aed', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:800, whiteSpace:'nowrap' }}>
+                                      ↩ REENVIAR P/ {d.setor === 'Fiscal' ? 'FISCAL' : 'ENGENHARIA'}
+                                    </button>
+                                  );
+                                })()}
                                 {o.status_geral === 'Faturado e Disponivel para Entrega' && (
                                   <button
                                     onClick={() => { setModalEntregaLote([o]); setNomeRecebeuLote(''); }}

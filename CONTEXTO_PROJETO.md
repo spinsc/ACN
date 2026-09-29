@@ -51,7 +51,6 @@ src/
 ├── AdminTab.tsx             — painel Admin: usuários, config, plataformas licitação
 ├── CrmTab.tsx               — CRM: Kanban licitações + vendas diretas, relatórios
 ├── LicitacoesTab.tsx        — aba Licitações
-├── ComercialTab.tsx         — aba Comercial
 ├── FormacaoPrecosTab.tsx    — formação de preços ACN/DETECH, plataformas, permissões por perfil
 ├── EngenhariaTab.tsx        — aba Engenharia + OPLs
 ├── PCPTab.tsx               — PCP: planejamento e controle de produção
@@ -114,7 +113,7 @@ Os perfis existentes no `auth_usuarios.perfil`:
 - **Compras** — ComprasTab
 - **RH** — RHTab
 - **SAC** — SacTab
-- **Comercial** — ComercialTab + CrmTab
+- **Comercial** — CrmTab (o antigo ComercialTab foi apagado em 29/09/2026)
 - **Licitações** — LicitacoesTab + CrmTab
 - **CRM** — CrmTab
 - **Marketing** — MarketingTab

@@ -230,7 +230,7 @@ const [produtoIdLocal] = useState<string>(() => produto?.id || crypto.randomUUID
 Padrão do projeto: `ALTER TABLE nova_tabela DISABLE ROW LEVEL SECURITY;` — sempre incluir ao criar tabelas.
 
 ### 7.10 AgendaWidget vs contatosHoje no CrmTab — dois sistemas distintos
-- **AgendaWidget** (`src/AgendaWidget.tsx`): widget de compromissos por setor, usa tabela `agenda_compromissos`, já filtrado por `usuario_email` do currentUser. Usado em: LicitacoesTab, EngenhariaTab, SacTab, ComercialTab.
+- **AgendaWidget** (`src/AgendaWidget.tsx`): widget de compromissos por setor, usa tabela `agenda_compromissos`, já filtrado por `usuario_email` do currentUser. Usado em: LicitacoesTab, EngenhariaTab, SacTab (e no antigo ComercialTab, apagado em 29/09/2026).
 - **contatosHoje** em `CrmTab.tsx`: alerta de contatos agendados para hoje extraído do campo `prox_contato` de `crm_oportunidades`. Filtrado por `funil='venda_direta'` e `responsavel_nome === currentUser?.nome`. **NÃO usa AgendaWidget.**
 - Os dois sistemas são independentes. CrmTab NÃO tem AgendaWidget.
 
@@ -280,10 +280,9 @@ git push
 :: GitHub Actions processa em ~2 min → live em spinsc.github.io/ACN/
 ```
 
-### 7.15 ComercialTab.tsx vs CrmTab.tsx
+### 7.15 ComercialTab.tsx (apagado) e CrmTab.tsx
 - `CrmTab.tsx` é o tab "Comercial/CRM" no sidebar (id: 'crm')
-- `ComercialTab.tsx` existe mas **não está roteado no DashboardTab** — arquivo legado/paralelo
-- `AgendaWidget` em `ComercialTab.tsx` usa `setor="comercial"` — funciona, mas o tab não aparece no sidebar
+- `ComercialTab.tsx` estava fora do menu desde 23/07/2026 e foi **apagado em 29/09/2026** (Etapa 3.1 do `PLANO_UX_FLUXO_TRABALHO.md`). O que só ele fazia — reenviar OP devolvida ao Comercial — agora está na aba "OPLs em aberto" do CRM.
 
 ### 7.16 SQLs desta sessão ainda não rodados
 Antes de qualquer deploy, rodar no Supabase SQL Editor (na ordem):

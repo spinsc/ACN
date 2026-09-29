@@ -26,7 +26,6 @@ git add src/ProducaoTab.tsx
 git add src/DemandaAvulsaPanel.tsx
 git add src/DashboardTab.tsx
 git add src/AcnTabShared.tsx
-git add src/ComercialTab.tsx
 git add src/CrmTab.tsx
 git add src/LicitacoesTab.tsx
 git add src/ContactosSection.tsx
@@ -69,7 +68,6 @@ git add src/OplAcompModal.tsx
 git add src/AcnTabShared.tsx
 git add src/ProducaoTab.tsx
 git add src/SacTab.tsx
-git add src/ComercialTab.tsx
 git add src/ChatWidget.tsx
 git add src/ProducaoTab.tsx
 git add src/AcnTabShared.tsx
@@ -84,7 +82,6 @@ git add ACN_Sinal_Verde_Treinamento.pptx
 git add src/WhatsAppConexoesWidget.tsx
 git add src/OplAnexosWidget.tsx
 git add src/LicitacoesTab.tsx
-git add src/ComercialTab.tsx
 git add src/CrmTab.tsx
 git add supabase/functions/whatsapp-admin/index.ts
 git add supabase/functions/whatsapp-webhook/index.ts
@@ -122,7 +119,6 @@ git add src/SerralheriaTab.tsx
 git add src/ProducaoTab.tsx
 git add src/SetorDemandaTab.tsx
 git add src/MarketingTab.tsx
-git add src/ComercialTab.tsx
 git add src/ChatWidget.tsx
 :: feat: OplDetalheModal completo + serviço de terceiro na OP + tipos SAC dinâmicos
 git add src/AcnTabShared.tsx
@@ -137,7 +133,6 @@ git add src/SacTab.tsx
 git add sql/resumo_servicos.sql
 :: fix: telecom em TODAS_ABAS + fluxo comercial corrigido
 git add src/AdminTab.tsx
-git add src/ComercialTab.tsx
 git add sql/fluxo_comercial.sql
 :: feat: multi-servico-terceiro; documentos na OP desde registro; resumo_servicos CRM
 git add src/NovaOpOsModal.tsx
@@ -165,7 +160,6 @@ git add src/CrmTab.tsx
 :: fix: FormacaoPrecosTab edicao por linha preservando usar-globais + botao copiar globais
 :: feat: LinkOpl como link clicavel em TODAS as abas (ProducaoTab, Serralheria, Chicotes, Marketing, CrmTab, ComercialTab)
 :: feat: LinkOpl aceita string (busca no banco) alem do objeto completo
-git add src/ComercialTab.tsx
 git add src/MencoesInboxPanel.tsx
 git add src/FormacaoPrecosTab.tsx
 git add src/AcnTabShared.tsx
@@ -303,7 +297,6 @@ git add src/NovaOpOsModal.tsx
 git add src/AgendaWidget.tsx
 git add src/useUnread.tsx
 git add src/EngenhariaTab.tsx
-git add src/ComercialTab.tsx
 git add src/SacTab.tsx
 git add src/CotacoesTab.tsx
 git add src/FinanceiroTab.tsx

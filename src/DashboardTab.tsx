@@ -2,7 +2,6 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
-import ComercialTab from './ComercialTab';
 import EngenhariaTab from './EngenhariaTab';
 import AjustesProjetoTab from './AjustesProjetoTab';
 import PCPTab from './PCPTab';

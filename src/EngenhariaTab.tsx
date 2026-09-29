@@ -352,7 +352,7 @@ export default function EngenhariaTab({ currentUser }) {
   };
 
   // Número base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
-  // A unidade "01" fica sem sufixo (não renomeada, ver ComercialTab/CrmTab),
+  // A unidade "01" fica sem sufixo (não renomeada, ver CrmTab/NovaOpOsModal),
   // então o próprio número original também serve de base do grupo.
   const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
   const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };

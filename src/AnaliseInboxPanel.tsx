@@ -30,7 +30,7 @@ const fmtDT = (v: string) => {
 // usadas no switch de DashboardTab.tsx). 'Orcamento' não tem aba própria —
 // quem abre este painel já passou pelo gate de recebe_alerta_analise, então
 // fica sempre disponível pra quem o vê. 'Comercial' não tem tab própria
-// roteada hoje (ComercialTab.tsx não está no menu) — mapeado pra 'crm', o
+// (a antiga ComercialTab.tsx foi apagada em 29/09/2026) — mapeado pra 'crm', o
 // time que mais lida com esse tipo de pedido na prática.
 const SETOR_ABA: Record<string, string | null> = {
   Comercial:   'crm',
