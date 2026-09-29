@@ -931,7 +931,7 @@ sempre); por isso o número inicial pode parecer alto.
 ### 🟡 Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 
 Feita em fatias, na ordem escolhida pelo usuário: **6.1** faixa no detalhe da OP e no
-Dossiê ✅ · **6.2** coluna na lista "OPs em aberto" ⬜ · **6.3** selo no card do CRM ⬜.
+Dossiê ✅ · **6.2** coluna na lista "OPs em aberto" ✅ · **6.3** selo no card do CRM ⬜.
 
 **Levantamento (29/09/2026, dados reais):**
 
@@ -939,12 +939,16 @@ Dossiê ✅ · **6.2** coluna na lista "OPs em aberto" ⬜ · **6.3** selo no ca
 - **A trilha "PV → OP" só existe para 18% das OPs:** das 331, **59 têm card do CRM** e
   **nenhuma** tem pedido de licitação ligado; **272 (82%) nascem sem origem ligada**.
   Por isso o painel é **centrado na OP**, não no card.
-- **"Desde quando" nem sempre existe:** das 329 OPs em aberto, só **139** têm um evento
-  no histórico que levou a OP à etapa de hoje; **190 não têm**. Nelas a data vem do
-  último marco registrado na própria OP (CQ, liberação…), e a tela avisa que é
-  aproximada. Média de 17,6 dias na etapa (nas que têm evento), máxima de 71.
+- **"Desde quando" quase sempre existe:** das 329 OPs em aberto, **325** têm um evento no
+  histórico que levou a OP à etapa de hoje; **4 não têm** (as quatro em "Em Espera
+  Engenharia"). Nelas a data vem do último marco registrado na própria OP, e a tela avisa
+  que é aproximada. Média de 20,4 dias na etapa, máxima de 71.
+  *(Correção feita na 6.2, em 29/09/2026: este levantamento dizia "139 têm, 190 não têm".
+  Estava errado — foi medido comparando o nome antigo da liberação comercial com `===`, e
+  as 188 OPs migradas guardam o evento com esse nome antigo. Com a comparação certa, por
+  `mesmaEtapa()`, são 325 × 4. O código da faixa já estava certo; só o número escrito aqui.)*
 - **A fila escondida que o painel revela:** das 329 OPs em aberto, **190 (58%) estão em
-  "Aguardando Liberação Comercial"**: 8 há até 7 dias, 110 entre 8 e 30 dias e **70 há
+  "Aguardando Liberação Comercial"**: 10 há até 7 dias, 110 entre 8 e 30 dias e **70 há
   mais de 30 dias** (a maior há 61), 32 delas com card do CRM. Pode ser fila real ou OPs
   já entregues que ninguém avançou no sistema; **não mexi em nenhuma** (regra 4).
 
@@ -1004,15 +1008,72 @@ para tempo de trabalho, não para fila parada de semanas).
 "quanto a OP já gastou" e a "aba pendente da minha aprovação" (3º e 4º itens do achado D)
 seguem para a Etapa 8 e uma etapa própria.
 
-#### ⬜ 6.2 — Coluna "Onde está / desde" na lista "OPs em aberto"
+#### ✅ 6.2 — Coluna "Onde está / desde" na lista "OPs em aberto"
 
-Uma coluna para as 329 OPs em aberto, ordenável por "parada há mais tempo", com o setor, a
-etapa e os dias. **Cuidado técnico:** o histórico tem 2.428 linhas e o servidor devolve no
-máximo 1.000 por leitura (achado A8/A9), então **não dá para ler o histórico da lista no
-navegador**: precisa de uma função de leitura no banco (mesmo desenho da 5.6) que devolva
-"desde quando" por OP, com o marco como reserva. Decidir com o usuário quais "pendências"
-contam na lista (a faixa usa demandas, compras e ajustes em aberto; a lista poderia usar só
-`indicePendencias()`, que é mais barata).
+**Feito em:** 29/09/2026. **Nenhum dado foi alterado**; uma função de leitura foi criada no
+banco (com autorização do usuário).
+
+- **A coluna** vem logo depois de "Status": `📍 setor` (com a etapa na dica), `⏱ há N dias ·
+  dd/mm` e `⚠ N pend.` quando há pendência. Sem cor de alerta por tempo (decisão da 6.1).
+  A data aproximada (último marco, para quem não tem o evento) leva "≈" e uma dica dizendo
+  qual marco. Na linha do **lote**, aparece "a mais parada: há N dias" (a maior entre as
+  unidades).
+- **Ordem nova "Parada há mais tempo"**, ao lado do filtro de status: a OP que entrou na
+  etapa de hoje há mais dias vem primeiro, sem data vai para o fim, e cada lote fica junto,
+  na posição da sua unidade mais parada. A ordem de antes (entrada, mais nova primeiro)
+  continua sendo a inicial e volta ao escolher de novo.
+- **Função no banco `desde_quando_na_etapa(p_ids uuid[])`** (migração
+  `funcao_desde_quando_na_etapa`, só leitura, aditiva; desfazer com `DROP FUNCTION
+  public.desde_quando_na_etapa(uuid[])`). Devolve, para cada OP, a data do último evento do
+  histórico que a levou ao status de hoje, com a **mesma regra** de `desdeQuandoNaEtapa`
+  (anotação com o mesmo status não conta; os dois nomes da liberação comercial são a mesma
+  etapa). Foi para o banco porque o histórico tem 2.428 linhas e o servidor corta em 1.000
+  por leitura (achado A8/A9) — mesmo desenho da 5.6. A tela chama a função **uma vez**, com
+  as 329 OPs. Se ela falhar, a lista continua e mostra só as datas aproximadas (o erro vai
+  para o console).
+- **Pendências na lista** (decisão do usuário): só as que **seguram a OP** — demanda de
+  Serralheria, Chicotes ou Compras e pedido de compra que ainda não fechou as três etapas —,
+  pelo `indicePendencias()` que a Produção e o Almoxarifado já usam (3 leituras para a lista
+  toda). **A faixa do detalhe conta mais tipos** (ajustes, engenharia), então os números
+  podem diferir; o detalhe é o completo.
+- **`EtapasOp.ts`** ganhou `desdeQuandoEmLote()` (chama a função), `desdeQuandoDaLista()`
+  (evento, senão marco) e `COLUNAS_MARCOS_OP` (as colunas que a lista precisa trazer).
+  `OndeEstaAgora.tsx` ganhou `OndeEstaCelula`. A 6.3 reaproveita `desdeQuandoEmLote()`.
+
+**Provado no banco antes de ligar a tela:** a função e uma consulta escrita à parte
+(ordenando o histórico do mais novo para o mais velho) deram a **mesma data em 325 de 325
+OPs**, 0 divergentes; e por status, todas têm evento (43 "Aguardando Início Produção", 28
+"Kit OK", 24 "Aguarda Emissão NF"…), menos as 4 "Em Espera Engenharia".
+
+**Testado** (30 verificações; navegador automatizado com **gravações bloqueadas**, só a
+função de leitura liberada):
+
+- **A coluna contra uma conta feita à parte:** o teste lê o histórico inteiro direto do
+  banco (paginado), refaz a regra em JavaScript e compara com o que a tela mostra para
+  **cada uma das 329 OPs**: dias, data e "≈" — **329 de 329 iguais**, 325 por evento e 4
+  aproximadas. As quatro OPs de referência da faixa (A1671.2609 "28/09", A1656.2609 "25/09"
+  — a migrada —, 1625.2609 "17/09", 0756.2609 "18/09") mostram a mesma data na lista e no
+  detalhe.
+- **Pendências:** as 34 OPs que a lista marca com "⚠" e o número de cada uma (1525.2609/01
+  = 3, 1525.2609/02 = 2, as 27 unidades da 1583.2608 = 2 cada…) batem com uma consulta
+  independente no banco.
+- **Ordem:** 71, 71, 71, 71, 64, 61… até 1, 1, 1, 1; o maior está no topo; nenhum lote se
+  separa; as mesmas 329 OPs continuam na lista; voltar à ordem de entrada restaura a lista
+  exatamente como estava.
+- **Lotes:** as 21 linhas de lote mostram "a mais parada" e o número é o maior das unidades.
+- **Falha simulada:** com a função do banco fora do ar a aba abre, mostra as 329 OPs, todas
+  com "≈" (marco) e o erro no console.
+- **Regressões:** CRM 16/16, reenvio 20/20, status 13/13, faixa do detalhe 21/21 e botão de
+  pendências 4/4, "não lido" 9/9. Nenhuma gravação foi tentada em nenhum teste.
+
+**O que ficou de fora:** o **selo do card** (6.3). Os números de pendência da lista e da
+faixa podem diferir, como dito acima.
+
+**Observado no caminho e não mexido (regra 4):** a OP **1516.2608** tem o prazo de entrega
+gravado como **62026-10-20** (ano com cinco dígitos, erro de digitação) e a lista mostra
+"Invalid Date" nessa célula; e 4 números de OP têm espaço sobrando nas pontas (" A
+1453.2607 - ESL AUTO CENTER", " A 1470.2607 - PREMIUM AUTOMOTIVE", " D 710.2607 - COMANDO
+MILITAR DO SUL", "OPL A1436.2707 "). Corrigir é decisão do usuário.
 
 #### ⬜ 6.3 — Selo no card do CRM
 
@@ -1082,6 +1143,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | `Sanado` é valor legítimo de `serralheria_status` (4º passo da liberação parcial, gravado pelo PCP), fora do menu da Produção. |
 | 29/09/2026 | Migração de dado de status só depois de a publicação do código estar no ar, e só com autorização; histórico (`logs_movimentacao_opl`, `audit_log`, `lixeira`) nunca é reescrito. |
 | 29/09/2026 | **Etapa 6 ("onde está agora")**: aparece nos **três lugares** (detalhe da OP e Dossiê, coluna da lista "OPs em aberto", selo do card do CRM), em fatias 6.1 → 6.2 → 6.3; conteúdo = etapa, setor, desde quando e pendências, mais frete e NF quando existem; o "há quantos dias" é **só o número, sem cor de alerta** — decisão do usuário. |
+| 29/09/2026 | **Coluna da lista "OPs em aberto" (6.2)**: mostra as pendências que **seguram a OP** (o índice que a Produção e o Almoxarifado já usam), não todas as da faixa; e o "desde quando" vem de uma **função de leitura no banco** (`desde_quando_na_etapa`), criada com autorização do usuário — decisões do usuário. |
 | 29/09/2026 | Os nomes das etapas da OP, o setor de cada uma e a regra do "desde quando" moram em **`EtapasOp.ts`** (fonte única da barra de progresso e da faixa). Quem lê histórico compara etapas por `mesmaEtapa()`, nunca por `===`, porque o histórico guarda o nome antigo da liberação comercial. |
 | 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |

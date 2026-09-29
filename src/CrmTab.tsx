@@ -38,6 +38,9 @@ import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
 import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
+import { OndeEstaCelula } from './OndeEstaAgora';
+import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias } from './EtapasOp';
+import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -270,6 +273,12 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [oplsLoading, setOplsLoading]   = useState(false);
   const [oplsFiltro, setOplsFiltro]     = useState<'todos'|'crm'|'sem_crm'>('todos');
   const [filtStatusOpl, setFiltStatusOpl] = useState('');
+  // "Onde está / desde quando" de cada OP em aberto (Etapa 6.2 do PLANO_UX_FLUXO_TRABALHO.md,
+  // 29/09/2026): id da OP -> desde quando; e as pendências de fabricação/compra que ainda
+  // seguram cada uma. A ordem "parada há mais tempo" usa o primeiro.
+  const [desdeOpls, setDesdeOpls] = useState<Record<string, any>>({});
+  const [pendenciasOpls, setPendenciasOpls] = useState<Record<string, any[]>>({});
+  const [oplsOrdem, setOplsOrdem] = useState<'entrada'|'parada'>('entrada');
   // OPs desmembradas (mesmo numero base, sufixo /01../NN) agrupadas numa
   // linha de lote — mesmo padrao de EngenhariaTab.tsx / AlmoxarifadoTab.tsx.
   const [lotesExpandidosOpls, setLotesExpandidosOpls] = useState<Record<string,boolean>>({});
@@ -1299,11 +1308,28 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao')
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,' + COLUNAS_MARCOS_OP)
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     const lista = data || [];
     setOplsEmAberto(lista);
+    // Onde está / desde quando (Etapa 6.2). O histórico tem mais de 1.000 linhas e o servidor
+    // corta em 1.000 por leitura, então a data do evento vem de uma função do banco; onde ela
+    // não achou evento, vale o último marco da própria OP (marcado como aproximado).
+    // A tela só aparece depois disto (oplsLoading), então a coluna nunca surge pela metade.
+    const [desdeEvento, indice] = await Promise.all([
+      desdeQuandoEmLote(lista.map((o: any) => o.id)),
+      indicePendencias().catch((e: any) => { console.error('Pendências da lista de OPs:', e); return new Map(); }),
+    ]);
+    const desdeDe: Record<string, any> = {};
+    const pendDe: Record<string, any[]> = {};
+    lista.forEach((o: any) => {
+      desdeDe[o.id] = desdeQuandoDaLista(o, desdeEvento.get(String(o.id)));
+      const seguram = travaConclusaoProducao(indice.get(String(o.id)), o);
+      if (seguram.length) pendDe[o.id] = seguram;
+    });
+    setDesdeOpls(desdeDe);
+    setPendenciasOpls(pendDe);
     // Para as OPs devolvidas ao Comercial, busca no log quem devolveu e quando
     // (a coluna obs_devolucao guarda só o motivo). Uma consulta para todas.
     const devolvidas = lista.filter((o: any) => o.status_geral === 'Devolvida Comercial').map((o: any) => o.id);
@@ -2991,6 +3017,16 @@ const SUB_STATUS_COR: Record<string,string> = {
           if (filtResp && o.responsavel_comercial !== filtResp) return false;
           if (filtStatusOpl && o.status_geral !== filtStatusOpl) return false;
           return combinaBusca([o.opl, o.cliente_nome, o.modelo], busca);
+        }).sort((a, b) => {
+          // "Parada há mais tempo": a data mais antiga primeiro; sem data vai para o fim. Na ordem
+          // normal devolve 0 e o sort estável mantém a ordem da consulta (entrada, mais nova antes).
+          if (oplsOrdem !== 'parada') return 0;
+          const ta = desdeOpls[a.id] ? new Date(desdeOpls[a.id].data).getTime() : NaN;
+          const tb = desdeOpls[b.id] ? new Date(desdeOpls[b.id].data).getTime() : NaN;
+          if (isNaN(ta) && isNaN(tb)) return 0;
+          if (isNaN(ta)) return 1;
+          if (isNaN(tb)) return -1;
+          return ta - tb;
         });
         return (
           <div style={{ padding:'8px 4px' }}>
@@ -3015,6 +3051,13 @@ const SUB_STATUS_COR: Record<string,string> = {
                   ✕
                 </button>
               )}
+              <select value={oplsOrdem} onChange={e => setOplsOrdem(e.target.value as any)}
+                title="Parada há mais tempo: a OP que entrou na etapa de hoje há mais dias vem primeiro; o lote fica junto, na posição da unidade mais parada"
+                style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', fontWeight:700,
+                  background: oplsOrdem === 'parada' ? '#0f766e' : '#f8fafc', color: oplsOrdem === 'parada' ? 'white' : '#64748b' }}>
+                <option value="entrada">Ordem: entrada (mais recentes)</option>
+                <option value="parada">Ordem: parada há mais tempo</option>
+              </select>
               <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
                 {oplsFiltradas.length} OP{oplsFiltradas.length !== 1 ? 's' : ''}
               </span>
@@ -3033,7 +3076,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                   <thead>
                     <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
                       <th style={{ padding:'5px 8px', borderBottom:'2px solid #e2e8f0' }}></th>
-                      {['OP','Cliente','Tipo/Veículo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
+                      {['OP','Cliente','Tipo/Veículo','Empresa','Status','Onde está / desde','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
                         <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -3114,6 +3157,9 @@ const SUB_STATUS_COR: Record<string,string> = {
                                   </div>
                                 );
                               })()}
+                            </td>
+                            <td style={{ padding:'5px 8px', verticalAlign:'top' }}>
+                              <OndeEstaCelula op={o} desde={desdeOpls[o.id] || null} pendencias={pendenciasOpls[o.id] || []} />
                             </td>
                             <td style={{ padding:'5px 8px', whiteSpace:'nowrap', color:'#64748b' }}>
                               {o.data_entrada ? new Date(o.data_entrada+'T12:00').toLocaleDateString('pt-BR') : '—'}
@@ -3201,6 +3247,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                         const qtdSemPlaca  = irmaos.filter(o => semDado(o.placa)).length;
                         const qtdSemModelo = irmaos.filter(o => semDado(o.modelo)).length;
                         const todasLoteSelecionadas = irmaos.every((o:any) => oplsSelecionadas.has(o.id));
+                        const maisParada = irmaos.map((o:any) => desdeOpls[o.id]).filter(Boolean)
+                          .sort((a:any, b:any) => new Date(a.data).getTime() - new Date(b.data).getTime())[0];
                         return (
                           <React.Fragment key={base}>
                             <tr style={{ background:'#f5f3ff', borderLeft:'4px solid #7c3aed', borderBottom:'1px solid #f1f5f9' }}>
@@ -3237,7 +3285,14 @@ const SUB_STATUS_COR: Record<string,string> = {
                                   {rep.faturamento_empresa||'ACN'}
                                 </span>
                               </td>
-                              <td colSpan={4} style={{ padding:'5px 8px', fontSize:9, color:'#7c6f9c' }}>Ver unidades para detalhes individuais</td>
+                              <td colSpan={5} style={{ padding:'5px 8px', fontSize:9, color:'#7c6f9c' }}>
+                                Ver unidades para detalhes individuais
+                                {maisParada && (
+                                  <div style={{ color:'#475569', whiteSpace:'nowrap' }} title="A unidade deste lote que está há mais tempo na etapa em que se encontra">
+                                    ⏱ a mais parada: {maisParada.fonte === 'marco' ? '≈ ' : ''}{textoDias(diasDesde(maisParada.data))}
+                                  </div>
+                                )}
+                              </td>
                               <td style={{ padding:'5px 8px' }}>
                                 <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                                   <button onClick={()=>setLotesExpandidosOpls(s=>({...s,[base]:!expandido}))}

@@ -84,6 +84,40 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
   );
 }
 
+/** A versão de uma linha de tabela (coluna "Onde está" da lista de OPs em aberto, Etapa 6.2):
+ *  setor, há quantos dias e quantas pendências seguram a OP. Sem cor de alerta por tempo —
+ *  decisão do usuário em 29/09/2026. `pendencias` são só as de fabricação/compra que ainda
+ *  não fecharam as três etapas (índice de OpPendencias); o Dossiê conta mais tipos. */
+export function OndeEstaCelula({ op, desde = null, pendencias = [] }) {
+  if (!op) return null;
+  const et = etapaDaOp(op.status_geral);
+  const dias = desde ? diasDesde(desde.data) : null;
+  const aprox = desde?.fonte === 'marco';
+  const cor = et.retrabalho ? '#b45309' : '#1d4ed8';
+  return (
+    <div style={{ fontSize: 10, lineHeight: 1.35, minWidth: 96 }}>
+      <div style={{ fontWeight: 700, color: cor, whiteSpace: 'nowrap' }} title={et.estado}>📍 {et.setor || et.label}</div>
+      {desde ? (
+        <div style={{ color: '#475569', whiteSpace: 'nowrap' }}
+          title={aprox
+            ? `Data aproximada: é a do último marco registrado (${desde.marco}). Esta OP não tem o registro de quando entrou nesta etapa.`
+            : 'Data em que a OP entrou nesta etapa.'}>
+          ⏱ {aprox ? '≈ ' : ''}{textoDias(dias)}
+          <span style={{ color: '#94a3b8' }}> · {textoData(desde.data)}</span>
+        </div>
+      ) : (
+        <div style={{ color: '#94a3b8', whiteSpace: 'nowrap' }} title="Nenhuma data registrada para esta OP.">⏱ sem registro</div>
+      )}
+      {pendencias.length > 0 && (
+        <div style={{ color: '#b45309', fontWeight: 700, whiteSpace: 'nowrap' }}
+          title={pendencias.map(p => `${p.setor || 'Setor'}: ${p.titulo}`).join('\n')}>
+          ⚠ {pendencias.length} pend.
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Versão que busca os próprios dados: para o detalhe da OP, que pode receber uma linha
  *  parcial de uma lista (sem as datas dos marcos) — por isso relê a OP inteira. */
 export function OndeEstaAgoraAuto({ op, onAbrirDossie = null }) {
