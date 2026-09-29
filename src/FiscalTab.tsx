@@ -77,7 +77,7 @@ export default function FiscalTab({ currentUser }) {
     if (!nf) { alert('Informe o numero da NF-e!'); return; }
     const itens = opls.filter(o => selecionados.has(o.id) && o.status_geral === 'Aguarda Emissao NF');
     if (itens.length === 0) return;
-    if (!await confirmar(`Faturar ${itens.length} OPL(s) com a NF-e ${nf}?`)) return;
+    if (!await confirmar(`Faturar ${itens.length} OP(s) com a NF-e ${nf}?`)) return;
     setFaturandoLote(true);
     const agora = new Date().toISOString();
     const obsCombinado = itens.length > 1
@@ -132,7 +132,7 @@ export default function FiscalTab({ currentUser }) {
   const faturar = async (opl) => {
     const nf = nfs[opl.id];
     if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
-    if (!await confirmar(`Confirmar o faturamento da OPL ${opl.opl} com a NF-e ${nf.trim()}?`)) return;
+    if (!await confirmar(`Confirmar o faturamento da OP ${opl.opl} com a NF-e ${nf.trim()}?`)) return;
     setFaturandoId(opl.id);
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
@@ -200,7 +200,7 @@ export default function FiscalTab({ currentUser }) {
       oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
-      evento: `OPL devolvida para Comercial. Inconsistência: ${obsDevolver.trim()}`,
+      evento: `OP devolvida para Comercial. Inconsistência: ${obsDevolver.trim()}`,
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -258,19 +258,19 @@ export default function FiscalTab({ currentUser }) {
         <div style={{flex:'1 1 220px',minWidth:200,background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:'12px 16px'}}>
           <div style={{fontSize:10,fontWeight:700,color:'#92400e',textTransform:'uppercase',letterSpacing:'.3px',marginBottom:4}}>📤 Notas Pendentes</div>
           <div style={{fontSize:26,fontWeight:800,color:'#b45309'}}>{totalPendentes}</div>
-          <div style={{fontSize:10,color:'#92400e'}}>{aguardando.length} OPL{aguardando.length!==1?'s':''} · {osAguardando.length} OS</div>
+          <div style={{fontSize:10,color:'#92400e'}}>{aguardando.length} OP{aguardando.length!==1?'s':''} · {osAguardando.length} OS</div>
         </div>
         <div style={{flex:'1 1 220px',minWidth:200,background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:8,padding:'12px 16px'}}>
           <div style={{fontSize:10,fontWeight:700,color:'#166534',textTransform:'uppercase',letterSpacing:'.3px',marginBottom:4}}>✅ Notas Emitidas</div>
           <div style={{fontSize:26,fontWeight:800,color:'#15803d'}}>{totalEmitidas}</div>
-          <div style={{fontSize:10,color:'#166534'}}>{faturados.length} OPL{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</div>
+          <div style={{fontSize:10,color:'#166534'}}>{faturados.length} OP{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</div>
         </div>
       </div>
 
       {/* AGUARDANDO EMISSAO */}
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
-          <span style={{color:'#92400e'}}>OPLs Aguardando Emissao de NF-e ({filtrarOpls(aguardando, busca).length})</span>
+          <span style={{color:'#92400e'}}>OPs Aguardando Emissao de NF-e ({filtrarOpls(aguardando, busca).length})</span>
         </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
 
@@ -291,11 +291,11 @@ export default function FiscalTab({ currentUser }) {
 
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : aguardando.length === 0 ? (
-            <div className="acn-empty">Nenhuma OPL aguardando emissao de NF-e.</div>
+            <div className="acn-empty">Nenhuma OP aguardando emissao de NF-e.</div>
           ) : (
             <table>
               <thead><tr>
-                <th></th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
+                <th></th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
                 <th>Seriais / Nº Equipamentos</th><th>Numero NF-e</th><th>Acao</th>
               </tr></thead>
               <tbody>
@@ -362,7 +362,7 @@ export default function FiscalTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr>
-                <th>OPL</th><th>Veículo</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th><th>Acao</th>
+                <th>OP</th><th>Veículo</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {faturados.map(o => (

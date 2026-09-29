@@ -169,7 +169,7 @@ export default function PCPTab({ currentUser }) {
       oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguardando Inicio Producao' }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-      evento: `OPL liberada para Producao por ${currentUser?.nome}`,
+      evento: `OP liberada para Producao por ${currentUser?.nome}`,
       status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -195,7 +195,7 @@ export default function PCPTab({ currentUser }) {
       oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: STATUS_EMBALAGEM }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-      evento: `OPL de envio liberada para embalagem no Almoxarifado por ${currentUser?.nome}`,
+      evento: `OP de envio liberada para embalagem no Almoxarifado por ${currentUser?.nome}`,
       status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -217,7 +217,7 @@ export default function PCPTab({ currentUser }) {
       }
       await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-        evento: `OPL de envio liberada para embalagem em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
+        evento: `OP de envio liberada para embalagem em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
         status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
@@ -382,7 +382,7 @@ export default function PCPTab({ currentUser }) {
       }
       await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-        evento: `OPL liberada para Producao em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
+        evento: `OP liberada para Producao em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
         status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
@@ -451,15 +451,15 @@ export default function PCPTab({ currentUser }) {
           problema — em dia cheio de pendência era preciso rolar a tela para
           chegar no que se faz o dia inteiro. Os alertas seguem logo abaixo. */}
       <div className="sec-card">
-        <div className="sec-hdr"><span>Triagem de OPLs — PCP ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr"><span>Triagem de OPs — PCP ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OPL em triagem PCP.</div>
+            <div className="acn-empty">Nenhuma OP em triagem PCP.</div>
           ) : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
+                <th>Data</th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
                 <th>Kit Almox</th><th>Pendencia/Falta</th><th>Status</th><th>Prev. Entrega</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -623,7 +623,7 @@ export default function PCPTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr>
-                <th>OPL</th><th>Veículo</th><th>Tipo Projeto</th><th>Situacao</th>
+                <th>OP</th><th>Veículo</th><th>Tipo Projeto</th><th>Situacao</th>
                 <th>Detalhamento da Pendencia / Falta</th><th>Resp. Almox</th><th>Data Apontamento</th><th>Acao</th>
               </tr></thead>
               <tbody>
@@ -721,7 +721,7 @@ export default function PCPTab({ currentUser }) {
             <div className="sec-body" style={{overflowX:'auto'}}>
               <table>
                 <thead><tr>
-                  <th>OPL</th><th>Veículo</th><th>Cliente</th><th>Status Geral</th><th>Serralheria</th><th>Ação</th>
+                  <th>OP</th><th>Veículo</th><th>Cliente</th><th>Status Geral</th><th>Serralheria</th><th>Ação</th>
                 </tr></thead>
                 <tbody>
                   {oplsSerralheria.map(o => (
@@ -802,7 +802,7 @@ export default function PCPTab({ currentUser }) {
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL</th><th>Cliente</th><th>Tipo</th><th>Kit Almox</th><th>Pendencia</th><th>Prev. Entrega</th><th>Acoes</th>
+                <th>Data</th><th>OP</th><th>Cliente</th><th>Tipo</th><th>Kit Almox</th><th>Pendencia</th><th>Prev. Entrega</th><th>Acoes</th>
               </tr></thead>
               <tbody>
                 {opls.filter(isEnvioDireto).map(o => (

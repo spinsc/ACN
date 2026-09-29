@@ -285,7 +285,7 @@ export function ModalHoraExtra({ currentUser, pessoaNome, tarefa, acao, onClose,
           <div>
             <label className="acn-label">Motivo *</label>
             <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical' }} value={motivo}
-              onChange={e => setMotivo(e.target.value)} placeholder="Ex.: terminar o projeto da OPL 1630 para liberar a produção amanhã" />
+              onChange={e => setMotivo(e.target.value)} placeholder="Ex.: terminar o projeto da OP 1630 para liberar a produção amanhã" />
           </div>
           <div className="acn-fraco" style={{ fontSize: 12 }}>
             {direto

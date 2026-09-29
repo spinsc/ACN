@@ -174,7 +174,7 @@ function RelatoriosSetor({ setor, cor }) {
     return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
   })();
 
-  const porOpl  = dados.reduce((acc,d)=>{ const k=d.numero_opl||'Sem OPL'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
+  const porOpl  = dados.reduce((acc,d)=>{ const k=d.numero_opl||'Sem OP'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
   const porResp = dados.reduce((acc,d)=>{ const k=d.responsavel_nome||'Nao iniciada'; if(!acc[k]) acc[k]=[]; acc[k].push(d); return acc; }, {});
   const corS    = (s) => ({Pendente:'#f59e0b','Em Andamento':'#3b82f6',Concluido:'#22c55e'})[s]||'#94a3b8';
 
@@ -193,7 +193,7 @@ function RelatoriosSetor({ setor, cor }) {
             <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
           </div>
           <div style={{display:'flex',alignItems:'flex-end',gap:4,flexWrap:'wrap',marginLeft:'auto'}}>
-            {[{id:'resumo',label:'Resumo'},{id:'lista',label:'Lista'},{id:'atrasados',label:'Atrasados'},{id:'por_opl',label:'Por OPL'},{id:'por_resp',label:'Por Responsável'}].map(a=>(
+            {[{id:'resumo',label:'Resumo'},{id:'lista',label:'Lista'},{id:'atrasados',label:'Atrasados'},{id:'por_opl',label:'Por OP'},{id:'por_resp',label:'Por Responsável'}].map(a=>(
               <button key={a.id} className="acn-btn" style={{background:abaRelat===a.id?'#1e293b':'#94a3b8',fontSize:10,padding:'4px 10px'}} onClick={()=>setAbaRelat(a.id)}>{a.label}</button>
             ))}
           </div>
@@ -222,7 +222,7 @@ function RelatoriosSetor({ setor, cor }) {
         {carregando ? <div className="acn-empty">Carregando...</div> : (
           abaRelat==='lista' ? (
             dados.length===0 ? <div className="acn-empty">Nenhuma demanda no período.</div> : (
-              <table><thead><tr><th>Data</th><th>OPL</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Início</th><th>Conclusão</th><th>Tempo Útil</th></tr></thead>
+              <table><thead><tr><th>Data</th><th>OP</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Início</th><th>Conclusão</th><th>Tempo Útil</th></tr></thead>
               <tbody>{dados.map(d=>(
                 <tr key={d.id}>
                   <td>{fmtDt(d.data_abertura)}</td><td>{d.numero_opl||'—'}</td>
@@ -235,7 +235,7 @@ function RelatoriosSetor({ setor, cor }) {
             )
           ) : abaRelat==='atrasados' ? (
             atrasados.length===0 ? <div className="acn-empty" style={{color:'#22c55e'}}>Nenhuma atrasada.</div> : (
-              <table><thead><tr><th>Data</th><th>OPL</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Aberta há (h)</th></tr></thead>
+              <table><thead><tr><th>Data</th><th>OP</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Aberta há (h)</th></tr></thead>
               <tbody>{atrasados.map(d=>(
                 <tr key={d.id} style={{background:'#fff5f5'}}>
                   <td style={{color:'#dc2626',fontWeight:600}}>{fmtDt(d.data_abertura)}</td>
@@ -251,7 +251,7 @@ function RelatoriosSetor({ setor, cor }) {
             Object.entries(porOpl).map(([opl,itens])=>(
               <div key={opl} style={{marginBottom:12}}>
                 <div style={{fontWeight:700,fontSize:11,background:'#f1f5f9',padding:'4px 10px',borderRadius:4,marginBottom:4,display:'flex',justifyContent:'space-between'}}>
-                  <span>OPL: {opl}</span>
+                  <span>OP: {opl}</span>
                   <span style={{color:'#64748b'}}>{itens.length} dem. | <span style={{color:'#22c55e'}}>{itens.filter(i=>i.status==='Concluido').length} conc.</span></span>
                 </div>
                 <table><thead><tr><th>Descrição</th><th>Status</th><th>Responsável</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
@@ -275,7 +275,7 @@ function RelatoriosSetor({ setor, cor }) {
                     <span>{resp}</span>
                     <span style={{color:'#64748b',fontSize:10}}>{itens.length} total | <span style={{color:'#22c55e'}}>{conc.length} conc.</span>{media?<span style={{color:'#2563eb'}}> | média: {fmtH(media)}</span>:''}</span>
                   </div>
-                  <table><thead><tr><th>OPL</th><th>Descrição</th><th>Status</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
+                  <table><thead><tr><th>OP</th><th>Descrição</th><th>Status</th><th>Abertura</th><th>Tempo Útil</th></tr></thead>
                   <tbody>{itens.map(d=>(
                     <tr key={d.id}>
                       <td>{d.numero_opl||'—'}</td>
@@ -518,7 +518,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
           status_anterior: opl.status_geral, status_novo: opl.status_geral,
           usuario_nome: currentUser?.nome, data_hora: agora,
         }]);
-        notificarEvento('serralheria_conclui_parcial', `*Serralheria concluiu* — OPL ${opl.opl}\nPor: ${currentUser?.nome}`, 'PCP');
+        notificarEvento('serralheria_conclui_parcial', `*Serralheria concluiu* — OP ${opl.opl}\nPor: ${currentUser?.nome}`, 'PCP');
       }
     }
 
@@ -549,7 +549,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
       <h2>Demanda — ${setor}</h2>
       <table class="info">
         <tr><th>Data de Abertura</th><td>${fmtDtBR(d.data_abertura)}</td></tr>
-        <tr><th>OPL / Referência</th><td>${d.numero_opl||'—'}</td></tr>
+        <tr><th>OP / Referência</th><td>${d.numero_opl||'—'}</td></tr>
         <tr><th>Setor</th><td>${d.setor_destino||setor}</td></tr>
         <tr><th>Responsável</th><td>${d.responsavel_nome||'—'}</td></tr>
         <tr><th>Descrição</th><td>${descExibida}</td></tr>
@@ -869,7 +869,7 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
           ) : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL Ref.</th><th>Descrição</th><th>Status</th>
+                <th>Data</th><th>OP Ref.</th><th>Descrição</th><th>Status</th>
                 <th>Responsável</th><th>Timer (h úteis)</th><th>KPI</th><th>Ações</th>
               </tr></thead>
               <tbody>

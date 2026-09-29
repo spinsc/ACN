@@ -114,7 +114,7 @@ function RelAreaDemandas() {
            dados.length===0 ? <div className="acn-empty">Nenhuma demanda no período.</div> : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL</th><th>Descrição</th><th>Status</th>
+                <th>Data</th><th>OP</th><th>Descrição</th><th>Status</th>
                 <th>Responsável</th><th>Abertura</th><th>Conclusão</th><th>Tempo</th>
               </tr></thead>
               <tbody>
@@ -224,7 +224,7 @@ function RelProducao() {
               </div>
               <div className="sec-body" style={{overflowX:'auto'}}>
                 <table>
-                  <thead><tr><th>OPL</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Técnicos</th><th>Início Prod.</th><th>Fim Prod.</th><th>Tempo</th></tr></thead>
+                  <thead><tr><th>OP</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Técnicos</th><th>Início Prod.</th><th>Fim Prod.</th><th>Tempo</th></tr></thead>
                   <tbody>
                     {itens.map(o=>(
                       <tr key={o.id}>
@@ -250,7 +250,7 @@ function RelProducao() {
         <div className="sec-card">
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
-              <thead><tr><th>OPL</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Executor</th><th>Técnicos</th><th>Início Prod.</th><th>Tempo</th></tr></thead>
+              <thead><tr><th>OP</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Executor</th><th>Técnicos</th><th>Início Prod.</th><th>Tempo</th></tr></thead>
               <tbody>
                 {ops.map(o=>(
                   <tr key={o.id}>
@@ -323,7 +323,7 @@ function RelOplsGeral() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr">Relatório Geral de OPLs</div>
+        <div className="sec-hdr">Relatório Geral de OPs</div>
         <div className="sec-body">
           <div className="form-row" style={{alignItems:'flex-end'}}>
             <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
@@ -354,13 +354,13 @@ function RelOplsGeral() {
         </div>
       </div>
       <div className="sec-card">
-        <div className="sec-hdr">{lista.length} OPLs — {filtroStatus}</div>
+        <div className="sec-hdr">{lista.length} OPs — {filtroStatus}</div>
         <div className="sec-body" style={{overflowX:'auto'}}>
           {carregando ? <div className="acn-empty">Carregando...</div> :
-           lista.length===0 ? <div className="acn-empty">Nenhuma OPL no filtro.</div> : (
+           lista.length===0 ? <div className="acn-empty">Nenhuma OP no filtro.</div> : (
             <table>
               <thead><tr>
-                <th>Data Entrada</th><th>OPL</th><th>Veículo</th><th>Tipo Projeto</th>
+                <th>Data Entrada</th><th>OP</th><th>Veículo</th><th>Tipo Projeto</th>
                 <th>Status</th><th>Prev. Entrega</th><th>Engenharia</th><th>Produção</th>
               </tr></thead>
               <tbody>
@@ -418,7 +418,7 @@ function RelOplsFinalizadas() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr">OPLs Finalizadas por Período</div>
+        <div className="sec-hdr">OPs Finalizadas por Período</div>
         <div className="sec-body">
           <div className="form-row" style={{alignItems:'flex-end'}}>
             <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
@@ -437,9 +437,9 @@ function RelOplsFinalizadas() {
       </div>
       <div className="sec-card">
         <div className="sec-body" style={{overflowX:'auto'}}>
-          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OPL finalizada no período.</div>:(
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OP finalizada no período.</div>:(
             <table><thead><tr>
-              <th>OPL</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th>
+              <th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th>
               <th>Entrada</th><th>Prev. Entrega</th><th>Data Entrega</th><th>Responsável Prod.</th>
             </tr></thead><tbody>
               {ops.map(o=>(
@@ -498,7 +498,7 @@ function RelOplsPorSetor() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr">OPLs em Andamento — Distribuição por Setor</div>
+        <div className="sec-hdr">OPs em Andamento — Distribuição por Setor</div>
         <div className="sec-body">
           <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
             {['Todos',...Object.keys(SETORES_STATUS)].map(s=>(
@@ -523,10 +523,10 @@ function RelOplsPorSetor() {
         </div>
       </div>
       <div className="sec-card">
-        <div className="sec-hdr">{lista.length} OPLs — {setor}</div>
+        <div className="sec-hdr">{lista.length} OPs — {setor}</div>
         <div className="sec-body" style={{overflowX:'auto'}}>
-          {carregando?<div className="acn-empty">Carregando...</div>:lista.length===0?<div className="acn-empty">Nenhuma OPL.</div>:(
-            <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
+          {carregando?<div className="acn-empty">Carregando...</div>:lista.length===0?<div className="acn-empty">Nenhuma OP.</div>:(
+            <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
             <tbody>{lista.map(o=>{
               const atras = o.data_prevista_entrega && new Date(o.data_prevista_entrega)<agora;
               return <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
@@ -584,7 +584,7 @@ function RelOplsAtrasadas() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fef2f2'}}>
-          <span style={{color:'#dc2626'}}>⚠️ OPLs Atrasadas ({ops.length})</span>
+          <span style={{color:'#dc2626'}}>⚠️ OPs Atrasadas ({ops.length})</span>
           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>window.print()}>🖨️</button>
         </div>
         <div className="sec-body">
@@ -601,8 +601,8 @@ function RelOplsAtrasadas() {
       </div>
       <div className="sec-card">
         <div className="sec-body" style={{overflowX:'auto'}}>
-          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OPL atrasada!</div>:(
-            <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OP atrasada!</div>:(
+            <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
             <tbody>{ops.map(o=>(
               <tr key={o.id} style={{background:'#fef2f2'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
@@ -705,7 +705,7 @@ function RelRecebimentosEnvios() {
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             {carregando?<div className="acn-empty">Carregando...</div>:envios.length===0?<div className="acn-empty">Nenhum envio no período.</div>:(
-              <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
+              <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
               <tbody>{envios.map(o=>(
                 <tr key={o.id}>
                   <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
@@ -755,7 +755,7 @@ function RelDemandasAvulsas() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr">Demandas Avulsas (sem OPL vinculada)</div>
+        <div className="sec-hdr">Demandas Avulsas (sem OP vinculada)</div>
         <div className="sec-body">
           <div className="form-row" style={{alignItems:'flex-end'}}>
             <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
@@ -820,7 +820,7 @@ function RelOplsParadas() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr" style={{background:'#fff7ed'}}>
-          <span style={{color:'#c2410c'}}>🚧 OPLs Paradas / Devolvidas ({ops.length})</span>
+          <span style={{color:'#c2410c'}}>🚧 OPs Paradas / Devolvidas ({ops.length})</span>
           <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>window.print()}>🖨️</button>
         </div>
         <div className="sec-body">
@@ -837,8 +837,8 @@ function RelOplsParadas() {
       </div>
       <div className="sec-card">
         <div className="sec-body" style={{overflowX:'auto'}}>
-          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OPL parada!</div>:(
-            <table><thead><tr><th>OPL</th><th>Veículo</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OP parada!</div>:(
+            <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
             <tbody>{ops.sort((a,b)=>diasParada(b)-diasParada(a)).map(o=>(
               <tr key={o.id} style={{background:'#fff7ed'}}>
                 <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
@@ -1536,7 +1536,7 @@ export default function RelatoriosTab({ currentUser }) {
   const [aba, setAba] = useState('opls');
   const ABAS = [
     {id:'servico',    label:'Em Serviço'},
-    {id:'opls',       label:'OPLs Geral'},
+    {id:'opls',       label:'OPs Geral'},
     {id:'finalizadas',label:'Finalizadas'},
     {id:'porsetor',   label:'Por Setor'},
     {id:'atrasadas',  label:'Atrasadas'},

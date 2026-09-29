@@ -1041,7 +1041,7 @@ function PainelLogs() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>Log de Movimentacoes de OPLs ({logs.length})</span>
+          <span>Log de Movimentacoes de OPs ({logs.length})</span>
           <button className="acn-btn" style={{background:'#475569'}} onClick={fetchLogs}>Atualizar</button>
         </div>
         <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
@@ -1052,7 +1052,7 @@ function PainelLogs() {
                 {SETORES_LOG.map(s=><option key={s}>{s}</option>)}
               </select>
             </div>
-            <div className="form-group"><label className="acn-label">Filtrar por OPL</label>
+            <div className="form-group"><label className="acn-label">Filtrar por OP</label>
               <input className="acn-input" style={{width:'100%'}} placeholder="ex: 1324" value={filtroOpl} onChange={e=>setFiltroOpl(e.target.value)} />
             </div>
             <div style={{display:'flex',alignItems:'flex-end'}}>
@@ -1065,7 +1065,7 @@ function PainelLogs() {
             <div className="acn-empty">Nenhum log encontrado.</div>
           ) : (
             <table>
-              <thead><tr><th>Data/Hora</th><th>OPL</th><th>Setor</th><th>Evento</th><th>Status Anterior</th><th>Status Novo</th><th>Usuario</th></tr></thead>
+              <thead><tr><th>Data/Hora</th><th>OP</th><th>Setor</th><th>Evento</th><th>Status Anterior</th><th>Status Novo</th><th>Usuario</th></tr></thead>
               <tbody>
                 {logs.map(l => (
                   <tr key={l.id}>
@@ -1242,7 +1242,7 @@ function PainelKPI() {
 
 // ---- PAINEL DADOS / LIMPEZA ----
 const TABELAS_CONFIG = [
-  { id:'oples',                 label:'OPLs',                    desc:'Ordens de Produção',                      cor:'#2563eb' },
+  { id:'oples',                 label:'OPs',                    desc:'Ordens de Produção',                      cor:'#2563eb' },
   { id:'sac_ordens_servico',    label:'SAC — OS',                desc:'Ordens de Serviço SAC',                   cor:'#0f766e' },
   { id:'demandas_setoriais',    label:'Demandas Setoriais',       desc:'Demandas e Ajustes',                      cor:'#f59e0b' },
   { id:'demandas_avulsas',      label:'Demandas Avulsas',         desc:'Engenharia — tarefas livres',             cor:'#7c3aed' },
@@ -1269,7 +1269,7 @@ const TABELAS_CONFIG = [
   { id:'pcp_pedidos_serralheria',  label:'Serralheria — Pedidos',    desc:'Pedidos internos de serralheria',         cor:'#65a30d' },
   // ── Outros ───────────────────────────────────────────────────────────────
   { id:'clientes',              label:'Cadastro Clientes',         desc:'Base unificada de clientes PF/PJ',        cor:'#0f766e' },
-  { id:'logs_movimentacao_opl', label:'Logs de OPL',              desc:'Histórico de movimentações',              cor:'#475569' },
+  { id:'logs_movimentacao_opl', label:'Logs de OP',              desc:'Histórico de movimentações',              cor:'#475569' },
   { id:'cq_auditorias',         label:'Auditorias CQ',            desc:'Registros de qualidade',                  cor:'#dc2626' },
   { id:'vistorias_patio',       label:'Vistorias de Pátio',       desc:'Vistorias de veículos no pátio',          cor:'#334155' },
   { id:'vouchers_servico',      label:'Vouchers de Serviço',      desc:'Vouchers autorizados (terceiros)',        cor:'#9333ea' },
@@ -1279,7 +1279,7 @@ const TABELAS_CONFIG = [
   { id:'agendamentos_manutencao',label:'Agend. Manutenção',       desc:'Agenda de manutenção veicular',           cor:'#0369a1' },
   { id:'chamados_suporte',      label:'Chamados de Suporte',      desc:'Chamados abertos pelos usuários',         cor:'#57534e' },
   { id:'mencoes',               label:'Menções (@)',              desc:'Notificações de menção entre usuários',   cor:'#525252' },
-  { id:'op_acompanhamentos',    label:'Acompanhamentos de OPL',   desc:'Comentários/andamento nas OPLs',          cor:'#71717a' },
+  { id:'op_acompanhamentos',    label:'Acompanhamentos de OP',   desc:'Comentários/andamento nas OPs',          cor:'#71717a' },
   { id:'licitacao_documentos',  label:'Licitações — Documentos',  desc:'Notas e documentos anexados a licitações',cor:'#312e81' },
   { id:'veiculos_nfc',          label:'Dossiê NFC — Veículos',    desc:'Veículos cadastrados no dossiê NFC',      cor:'#166534' },
 ];
@@ -1398,7 +1398,7 @@ function PainelDados() {
 
   const getResumo = (r) => {
     if (tabelaAtiva === 'oples')
-      return `OPL ${r.opl || r.numero_opl || r.id} — ${r.cliente_nome || r.cliente || '?'} — ${r.status_geral || '?'}`;
+      return `OP ${r.opl || r.numero_opl || r.id} — ${r.cliente_nome || r.cliente || '?'} — ${r.status_geral || '?'}`;
     if (tabelaAtiva === 'demandas_setoriais')
       return `[${r.setor_destino}] ${r.descricao?.substring(0,60) || '?'} — ${r.status}`;
     if (tabelaAtiva === 'demandas_avulsas')
@@ -1424,9 +1424,9 @@ function PainelDados() {
     if (tabelaAtiva === 'clientes')
       return `[${r.tipo || '?'}] ${r.nome || '?'} — ${r.documento || '?'} — ${r.cidade || '?'}${r.estado ? '/' + r.estado : ''}`;
     if (tabelaAtiva === 'logs_movimentacao_opl')
-      return `OPL ${r.numero_opl} → ${r.setor}: ${r.evento?.substring(0,50)}`;
+      return `OP ${r.numero_opl} → ${r.setor}: ${r.evento?.substring(0,50)}`;
     if (tabelaAtiva === 'cq_auditorias')
-      return `OPL ${r.numero_opl} — ${r.resultado} — ${r.auditor_nome}`;
+      return `OP ${r.numero_opl} — ${r.resultado} — ${r.auditor_nome}`;
     if (tabelaAtiva === 'sac_ordens_servico')
       return `OS ${r.numero_os || r.id} — ${r.cliente_nome || '?'} — ${r.status || '?'} — ${r.tipo_servico || '?'}`;
     if (tabelaAtiva === 'rh_autorizacoes')
@@ -1444,9 +1444,9 @@ function PainelDados() {
     if (tabelaAtiva === 'pcp_cotacoes_fretes')
       return `Cotação Frete — ${r.transportadora_nome || '?'} — R$ ${r.valor ? Number(r.valor).toLocaleString('pt-BR') : '—'}`;
     if (tabelaAtiva === 'pcp_pedidos_chicotes')
-      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_chicote?.substring(0,50) || '?'} — OPL ${r.opl || '?'} — ${r.status_chicote || '?'}`;
+      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_chicote?.substring(0,50) || '?'} — OP ${r.opl || '?'} — ${r.status_chicote || '?'}`;
     if (tabelaAtiva === 'pcp_pedidos_serralheria')
-      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_trabalho?.substring(0,50) || '?'} — OPL ${r.opl || '?'} — ${r.status_serralheria || '?'}`;
+      return `Pedido ${r.numero_pedido || r.id} — ${r.descricao_trabalho?.substring(0,50) || '?'} — OP ${r.opl || '?'} — ${r.status_serralheria || '?'}`;
     if (tabelaAtiva === 'vistorias_patio')
       return `Chassi ${r.chassi || '?'} — ${r.status || '?'} — por ${r.criado_por_nome || '?'}`;
     if (tabelaAtiva === 'vouchers_servico')
@@ -1458,7 +1458,7 @@ function PainelDados() {
     if (tabelaAtiva === 'agenda_compromissos')
       return `${r.titulo?.substring(0,60) || '?'} — ${r.usuario_nome || '?'}`;
     if (tabelaAtiva === 'agendamentos_manutencao')
-      return `OPL ${r.numero_opl || '?'} — ${r.cliente_nome || '?'} — ${r.data_agendamento || '?'} (${r.periodo || '?'})`;
+      return `OP ${r.numero_opl || '?'} — ${r.cliente_nome || '?'} — ${r.data_agendamento || '?'} (${r.periodo || '?'})`;
     if (tabelaAtiva === 'chamados_suporte')
       return `${r.placa || r.chassi || '?'} — ${r.orgao_cliente || '?'} — ${r.descricao_defeito?.substring(0,50) || '?'} — ${r.status || '?'}`;
     if (tabelaAtiva === 'mencoes')
@@ -1749,9 +1749,9 @@ function PainelNotificacoes() {
 
 // ---- LIXEIRA ----
 const LABEL_TABELA = {
-  oples:'OPLs', sac_ordens_servico:'SAC — OS', demandas_setoriais:'Demandas Setoriais',
+  oples:'OPs', sac_ordens_servico:'SAC — OS', demandas_setoriais:'Demandas Setoriais',
   demandas_avulsas:'Demandas Avulsas', logistica_manifestos:'Logística In/Out',
-  rh_autorizacoes:'Autorizações RH', logs_movimentacao_opl:'Logs de OPL',
+  rh_autorizacoes:'Autorizações RH', logs_movimentacao_opl:'Logs de OP',
   cq_auditorias:'Auditorias CQ',
   // CRM / Licitações
   licitacoes:'Licitações',
@@ -1818,7 +1818,7 @@ function PainelLixeira() {
   const getResumoLixeira = (item) => {
     const d = item.dados || {};
     switch (item.tabela) {
-      case 'oples': return `OPL ${d.opl || '?'} — ${d.cliente_nome || '?'} — ${d.status_geral || '?'}`;
+      case 'oples': return `OP ${d.opl || '?'} — ${d.cliente_nome || '?'} — ${d.status_geral || '?'}`;
       case 'sac_ordens_servico': return `OS ${d.numero_os || '?'} — ${d.cliente_nome || '?'} — ${d.status || '?'}`;
       case 'demandas_setoriais': return `[${d.setor_destino || '?'}] ${(d.descricao || '').substring(0,60)}`;
       case 'demandas_avulsas': return `${(d.titulo || '?').substring(0,60)} — ${d.status || '?'}`;
@@ -1836,8 +1836,8 @@ function PainelLixeira() {
       // legado
       case 'crm_clientes': return `${d.nome_empresa || d.nome || '?'} — ${d.contato_nome || '?'}`;
       case 'crm_historico_contatos': return `${d.nome_empresa || '?'} — ${d.tipo_contato || '?'}: ${(d.descricao || '').substring(0,50)}`;
-      case 'logs_movimentacao_opl': return `OPL ${d.numero_opl || '?'} → ${d.setor || '?'}: ${(d.evento || '').substring(0,50)}`;
-      case 'cq_auditorias': return `OPL ${d.numero_opl || '?'} — ${d.resultado || '?'} — ${d.auditor_nome || '?'}`;
+      case 'logs_movimentacao_opl': return `OP ${d.numero_opl || '?'} → ${d.setor || '?'}: ${(d.evento || '').substring(0,50)}`;
+      case 'cq_auditorias': return `OP ${d.numero_opl || '?'} — ${d.resultado || '?'} — ${d.auditor_nome || '?'}`;
       default: return item.registro_id;
     }
   };

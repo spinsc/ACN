@@ -8,7 +8,7 @@
 //
 // As perguntas vêm dos ITENS VENDIDOS: "tem hack?" é pergunta da barra
 // sinalizadora e vale em qualquer carro. Só aparecem quando a venda leva o
-// Conjunto de Instalação — sem ele não há material de instalação a montar.
+// Conjunto Elétrico — sem ele não há material de instalação a montar.
 //
 // No lote, o PRIMEIRO CARRO SERVE DE PADRÃO: os seguintes herdam as respostas e
 // o vendedor só mexe no que for diferente. Num lote de 30 isso é a diferença

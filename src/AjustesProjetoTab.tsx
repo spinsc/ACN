@@ -226,7 +226,7 @@ export default function AjustesProjetoTab({ currentUser }) {
           ) : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL Ref.</th><th>Requerente</th><th>Descricao</th>
+                <th>Data</th><th>OP Ref.</th><th>Requerente</th><th>Descricao</th>
                 <th>Setor</th><th>Prioridade</th><th>Status</th><th>Responsavel</th><th>Tempo</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -285,7 +285,7 @@ export default function AjustesProjetoTab({ currentUser }) {
           <div className="sec-body" style={{ overflowX: 'auto' }}>
           <table>
             <thead><tr>
-              <th>Data</th><th>OPL Ref.</th><th>Requerente</th><th>Descricao</th>
+              <th>Data</th><th>OP Ref.</th><th>Requerente</th><th>Descricao</th>
               <th>Setor</th><th>Responsavel</th><th>Conclusao</th><th>Tempo</th>
             </tr></thead>
             <tbody>

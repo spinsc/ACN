@@ -115,38 +115,38 @@ export async function notificarPessoa(evento: string, numero: string | null | un
 // ─── Templates de mensagem ────────────────────────────────────────────────────
 export const msg = {
   oplEnviada: (opl: string, para: string, usuario: string) =>
-    `*OPL ${opl}* enviada para *${para}*.\nPor: ${usuario}`,
+    `*OP ${opl}* enviada para *${para}*.\nPor: ${usuario}`,
 
   oplDevolvida: (opl: string, para: string, motivo: string, usuario: string) =>
-    `*OPL ${opl}* devolvida para *${para}*.\nMotivo: ${motivo || '—'}\nPor: ${usuario}`,
+    `*OP ${opl}* devolvida para *${para}*.\nMotivo: ${motivo || '—'}\nPor: ${usuario}`,
 
   kitOk: (opl: string, usuario: string) =>
-    `*Kit completo* — OPL ${opl} aguardando liberação PCP.\nAlmox: ${usuario}`,
+    `*Kit completo* — OP ${opl} aguardando liberação PCP.\nAlmox: ${usuario}`,
 
   kitPendencia: (opl: string, obs: string, usuario: string) =>
-    `*Kit com pendência* — OPL ${opl}.\nObs: ${obs || '—'}\nAlmox: ${usuario}`,
+    `*Kit com pendência* — OP ${opl}.\nObs: ${obs || '—'}\nAlmox: ${usuario}`,
 
   kitFaltaMaterial: (opl: string, obs: string, usuario: string) =>
-    `*FALTA DE MATERIAL* — OPL ${opl} bloqueada.\nItens: ${obs || '—'}\nAlmox: ${usuario}`,
+    `*FALTA DE MATERIAL* — OP ${opl} bloqueada.\nItens: ${obs || '—'}\nAlmox: ${usuario}`,
 
   producaoFinalizada: (opl: string, usuario: string) =>
-    `*Produção finalizada* — OPL ${opl} aguardando CQ.\nPor: ${usuario}`,
+    `*Produção finalizada* — OP ${opl} aguardando CQ.\nPor: ${usuario}`,
 
   cqAprovado: (opl: string, auditor: string) =>
-    `*CQ APROVADO* — OPL ${opl}.\nAuditor: ${auditor}`,
+    `*CQ APROVADO* — OP ${opl}.\nAuditor: ${auditor}`,
 
   cqReprovado: (opl: string, motivo: string, auditor: string) =>
-    `*CQ REPROVADO* — OPL ${opl}.\nMotivo: ${motivo}\nAuditor: ${auditor}`,
+    `*CQ REPROVADO* — OP ${opl}.\nMotivo: ${motivo}\nAuditor: ${auditor}`,
 
   nfEmitida: (opl: string, nf: string, usuario: string) =>
-    `*NF Emitida* — OPL ${opl}. NF: ${nf || '—'}.\nFiscal: ${usuario}`,
+    `*NF Emitida* — OP ${opl}. NF: ${nf || '—'}.\nFiscal: ${usuario}`,
 
   entregue: (opl: string, cliente: string, recebeu: string) =>
-    `*Entregue* — OPL ${opl}.\nCliente: ${cliente}\nRecebeu: ${recebeu}`,
+    `*Entregue* — OP ${opl}.\nCliente: ${cliente}\nRecebeu: ${recebeu}`,
 
   demandaCriada: (setor: string, opl: string, desc: string, usuario: string) =>
-    `Nova demanda para *${setor}*${opl ? ` | OPL ${opl}` : ''}.\n${desc}\nAbertura: ${usuario}`,
+    `Nova demanda para *${setor}*${opl ? ` | OP ${opl}` : ''}.\n${desc}\nAbertura: ${usuario}`,
 
   atrasoEntrega: (opl: string, cliente: string, data: string) =>
-    `*ATRASO* — OPL ${opl} | ${cliente}.\nEntrega prevista: ${data} já passou!`,
+    `*ATRASO* — OP ${opl} | ${cliente}.\nEntrega prevista: ${data} já passou!`,
 };

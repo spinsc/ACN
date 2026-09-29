@@ -108,7 +108,7 @@ function OplAutocomplete({ oplNumero, oplId, onChange }) {
           value={busca}
           onChange={e => pesquisar(e.target.value)}
           onFocus={() => busca.length >= 2 && resultados.length > 0 && setAberto(true)}
-          placeholder="Ex: OPL-2024-0042 ou Polícia Civil..."
+          placeholder="Ex: OP-2024-0042 ou Polícia Civil..."
           style={{ width:'100%', border:'1px solid #d1d5db', borderRadius:5,
             padding:'6px 28px 6px 8px', fontSize:10, boxSizing:'border-box', outline:'none' }} />
         {busca && (
@@ -743,7 +743,7 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
               { label:'Garantia', val: <GarantiaBadge dataFim={veiculo.data_fim_garantia} /> },
               { label:'Entrega',  val: fmtData(veiculo.data_entrega) },
               { label:'Fim Garantia', val: fmtData(veiculo.data_fim_garantia) },
-              { label:'OPL',      val: veiculo.opl_numero || '—' },
+              { label:'OP',      val: veiculo.opl_numero || '—' },
               { label:'PIN Restrita', val: veiculo.pin_acesso || '123456', mono: true },
               { label:'Chamados abertos', val: chamados.filter(c=>c.status==='Aberto').length },
             ].map(({ label, val, mono }) => (
@@ -1107,7 +1107,7 @@ export default function VeiculosNfcTab({ currentUser }) {
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8,
         padding:'10px 12px', marginBottom:12, display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
         <input value={busca} onChange={e => setBusca(e.target.value)}
-          placeholder="Buscar por chassi, placa, modelo, órgão, OPL..."
+          placeholder="Buscar por chassi, placa, modelo, órgão, OP..."
           style={{ flex:'1 1 260px', border:'1px solid #d1d5db', borderRadius:5,
             padding:'6px 10px', fontSize:10, outline:'none' }} />
         <select value={filtroGar} onChange={e => setFiltroGar(e.target.value)}
@@ -1145,7 +1145,7 @@ export default function VeiculosNfcTab({ currentUser }) {
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
               <thead>
                 <tr style={{ background:'#14532d', color:'#bbf7d0' }}>
-                  {['Chassi / Placa','Modelo','Órgão','OPL','Entrega','Garantia','Ação'].map(h => (
+                  {['Chassi / Placa','Modelo','Órgão','OP','Entrega','Garantia','Ação'].map(h => (
                     <th key={h} style={{ padding:'8px 10px', textAlign:'left', fontWeight:600,
                       whiteSpace:'nowrap' }}>{h}</th>
                   ))}

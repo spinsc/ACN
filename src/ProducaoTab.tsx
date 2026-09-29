@@ -284,7 +284,7 @@ function CalendarioManutencao({ currentUser }) {
     td{padding:6px 8px;border-bottom:1px solid #e2e8f0;font-size:10px}.footer{margin-top:20px;font-size:9px;color:#9ca3af}
     @media print{button{display:none}}</style></head>
     <body><h2>Agendamentos de Manutenção</h2>
-    <table><thead><tr><th>Data</th><th>Período</th><th>OPL</th><th>Chassi</th><th>Cliente</th><th>Modelo</th><th>Obs.</th><th>Agendado por</th></tr></thead>
+    <table><thead><tr><th>Data</th><th>Período</th><th>OP</th><th>Chassi</th><th>Cliente</th><th>Modelo</th><th>Obs.</th><th>Agendado por</th></tr></thead>
     <tbody>${rows}</tbody></table>
     <div class="footer">Impresso em ${new Date().toLocaleString('pt-BR')}</div>
     <script>window.onload=()=>window.print();</script></body></html>`;
@@ -300,7 +300,7 @@ function CalendarioManutencao({ currentUser }) {
       {aguardandoNovos.length > 0 && (
         <div style={{background:'#fff7ed',border:'2px solid #f97316',borderRadius:8,padding:14,marginBottom:12}}>
           <div style={{fontWeight:700,fontSize:12,color:'#c2410c',marginBottom:10}}>
-            🔔 {aguardandoNovos.length} OPL(s) de Manutenção aguardando agendamento
+            🔔 {aguardandoNovos.length} OP(s) de Manutenção aguardando agendamento
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {aguardandoNovos.map(o=>(
@@ -384,11 +384,11 @@ function CalendarioManutencao({ currentUser }) {
               })}
             </div>
             <div style={{display:'flex',gap:12,marginTop:8,fontSize:9,color:'#6b7280',flexWrap:'wrap'}}>
-              <span><span style={{background:'#dbeafe',padding:'1px 6px',borderRadius:3,color:'#1e40af'}}>📦 OPL Manhã</span></span>
-              <span><span style={{background:'#fed7aa',padding:'1px 6px',borderRadius:3,color:'#9a3412'}}>📦 OPL Tarde</span></span>
+              <span><span style={{background:'#dbeafe',padding:'1px 6px',borderRadius:3,color:'#1e40af'}}>📦 OP Manhã</span></span>
+              <span><span style={{background:'#fed7aa',padding:'1px 6px',borderRadius:3,color:'#9a3412'}}>📦 OP Tarde</span></span>
               <span><span style={{background:'#d1fae5',padding:'1px 6px',borderRadius:3,color:'#065f46'}}>🔧 SAC Manhã</span></span>
               <span><span style={{background:'#fef3c7',padding:'1px 6px',borderRadius:3,color:'#92400e'}}>🔧 SAC Tarde</span></span>
-              <span style={{marginLeft:'auto'}}>Clique no agendamento OPL para cancelar</span>
+              <span style={{marginLeft:'auto'}}>Clique no agendamento OP para cancelar</span>
             </div>
           </div>
         ) : (
@@ -399,7 +399,7 @@ function CalendarioManutencao({ currentUser }) {
                 <thead><tr style={{background:'#f1f5f9'}}>
                   <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Data</th>
                   <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Período</th>
-                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>OPL</th>
+                  <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>OP</th>
                   <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Chassi</th>
                   <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Cliente</th>
                   <th style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>Obs.</th>
@@ -1961,7 +1961,7 @@ function ModalImportarTecnicosEquipe({ base, irmaos, equipes, colaboradoresList,
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>OPL destino</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left' }}>OP destino</th>
                       <th style={{ padding: '5px 8px', textAlign: 'left' }}>Responsável</th>
                       <th style={{ padding: '5px 8px', textAlign: 'left' }}>Modo</th>
                     </tr>
@@ -2384,7 +2384,7 @@ export default function ProducaoTab({ currentUser }) {
   };
 
   const concluirRetrabalho = async (opl) => {
-    if (!await confirmar(`Concluir o retrabalho da OPL ${opl?.opl || ''}? Ela volta para o CQ.`)) return;
+    if (!await confirmar(`Concluir o retrabalho da OP ${opl?.opl || ''}? Ela volta para o CQ.`)) return;
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_retrabalho ? new Date(opl.data_inicio_retrabalho) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
@@ -2618,7 +2618,7 @@ export default function ProducaoTab({ currentUser }) {
       <div className="sec-card">
         <div className="acn-filtros">
           <input className="acn-input" style={{ width:210 }} value={filtroBusca} onChange={e=>setFiltroBusca(e.target.value)}
-            placeholder="OPL, chassi ou cliente" aria-label="Buscar (OPL, chassi, cliente)" />
+            placeholder="OP, chassi ou cliente" aria-label="Buscar (OP, chassi, cliente)" />
           <select className="acn-input" style={{ width:170 }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)} aria-label="Status">
             <option value="Todos">Status: Todos</option>
             <option value="Aguardando Inicio Producao">Aguardando Início Produção</option>
@@ -2668,7 +2668,7 @@ export default function ProducaoTab({ currentUser }) {
 
         <div className="sec-body" style={{ overflowX:'auto', padding:0, display: visao === 'tabela' ? undefined : 'none' }}>
           {loading ? <div className="acn-empty">Carregando...</div> : oplsFiltradas.length === 0 ? (
-            <div className="acn-empty">{opls.length === 0 ? 'Nenhuma OPL em produção no momento.' : 'Nenhuma OPL encontrada para os filtros aplicados.'}</div>
+            <div className="acn-empty">{opls.length === 0 ? 'Nenhuma OP em produção no momento.' : 'Nenhuma OP encontrada para os filtros aplicados.'}</div>
           ) : (
             <table className="acn-tabela">
               <thead><tr>
@@ -2761,7 +2761,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalIniciar && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">Iniciar produção — OPL {modalIniciar.opl}</div>
+            <div className="modal-title">Iniciar produção — OP {modalIniciar.opl}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               Tipo: {modalIniciar.tipo_projeto} | Chassi: {modalIniciar.chassi || '—'}
             </div>
@@ -2842,7 +2842,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalEditResp && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">Editar responsável — OPL {modalEditResp.opl}</div>
+            <div className="modal-title">Editar responsável — OP {modalEditResp.opl}</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
               Atual: <strong>{modalEditResp.responsavel_producao || '—'}</strong>
               {modalEditResp.tecnico_producao_2_nome && <> + <strong>{modalEditResp.tecnico_producao_2_nome}</strong></>}
@@ -2911,7 +2911,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalGerenciarEquipe && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">Equipe — OPL {modalGerenciarEquipe.opl}</div>
+            <div className="modal-title">Equipe — OP {modalGerenciarEquipe.opl}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
               Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
               do valor de mão de obra desta OP, além do que os responsáveis já recebem.
@@ -3003,7 +3003,7 @@ export default function ProducaoTab({ currentUser }) {
       {modalDevolver && (
         <div className="modal-overlay">
           <div className="modal-box">
-            <div className="modal-title">Devolver para PCP — OPL {modalDevolver.opl}</div>
+            <div className="modal-title">Devolver para PCP — OP {modalDevolver.opl}</div>
             <label className="acn-label">Motivo / Problema *</label>
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />

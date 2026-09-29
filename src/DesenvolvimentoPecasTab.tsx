@@ -241,7 +241,7 @@ function DemandaDevCard({ demanda, onAtualizado, currentUser }: any) {
     <div className="sec-card">
       <div className="sec-hdr" style={{ background: finalizada ? '#166534' : '#1e293b' }}>
         <span>
-          {demanda.numero_opl ? <>OPL {demanda.numero_opl} — </> : ''}{demanda.titulo}
+          {demanda.numero_opl ? <>OP {demanda.numero_opl} — </> : ''}{demanda.titulo}
           {demanda.origem === 'automatico' && (
             <span style={{ marginLeft: 6, fontSize: 8, background: '#7c3aed', padding: '1px 6px', borderRadius: 8 }}>AUTO</span>
           )}
@@ -423,7 +423,7 @@ export default function DesenvolvimentoPecasTab({ currentUser, buscaInicial }: {
               {f === 'todas' ? 'Todas' : f === 'andamento' ? 'Em Andamento' : 'Concluídas'}
             </button>
           ))}
-          <input placeholder="🔍 Buscar por título, OPL ou cliente..." value={busca} onChange={e => setBusca(e.target.value)}
+          <input placeholder="🔍 Buscar por título, OP ou cliente..." value={busca} onChange={e => setBusca(e.target.value)}
             style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
         </div>
       </div>

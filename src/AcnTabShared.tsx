@@ -144,7 +144,7 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
     <>
       <button
         onClick={abrir}
-        title="Ver pendências desta OPL"
+        title="Ver pendências desta OP"
         style={{
           fontSize: 10, padding: '2px 7px', border: '1px solid #e2e8f0',
           borderRadius: 3, cursor: 'pointer', background: '#f1f5f9',
@@ -156,12 +156,12 @@ export function BotaoPendencias({ opl, opl_id }: { opl: string; opl_id?: any }) 
       {open && (
         <div className="modal-overlay">
           <div className="modal-box" style={{ maxWidth: 980, width: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div className="modal-title">Pendências — OPL {opl}</div>
+            <div className="modal-title">Pendências — OP {opl}</div>
             {loading ? (
               <div style={{ textAlign: 'center', color: '#94a3b8', padding: 20 }}>Carregando...</div>
             ) : pendencias.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#22c55e', padding: 20, fontWeight: 700 }}>
-                ✓ Nenhuma pendência aberta para esta OPL.
+                ✓ Nenhuma pendência aberta para esta OP.
               </div>
             ) : (
               <>
@@ -280,7 +280,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
   return (
     <div style={{ marginTop: 10 }}>
       <div className="opl-mov-hdr" onClick={() => setOpen(o => !o)}>
-        <span>📋 Histórico de Movimentações OPL</span>
+        <span>📋 Histórico de Movimentações OP</span>
         <span>{open ? '▲' : '▼'}</span>
       </div>
 
@@ -346,7 +346,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                   <thead><tr style={{ background:'#1e293b' }}>
                     <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Data/Hora</th>
-                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OPL</th>
+                    <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OP</th>
                     <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Setor</th>
                     <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Evento</th>
                     <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Operador</th>
@@ -384,7 +384,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
             <div style={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                 <thead><tr style={{ background:'#1e293b' }}>
-                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OPL</th>
+                  <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>OP</th>
                   <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Cliente</th>
                   <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Tipo</th>
                   <th style={{ padding:'6px 8px', color:'#cbd5e1', textAlign:'left', fontWeight:600, fontSize:9 }}>Status</th>
@@ -393,7 +393,7 @@ export function OplMovimentadas({ setor }: { setor: string }) {
                 </tr></thead>
                 <tbody>
                   {opls.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign:'center', padding:16, color:'#94a3b8', fontSize:11 }}>Nenhuma OPL em processo.</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign:'center', padding:16, color:'#94a3b8', fontSize:11 }}>Nenhuma OP em processo.</td></tr>
                   ) : opls.map((o, i) => {
                     const ultimoLog = logs.find(l => l.opl_id === o.id);
                     return (
@@ -777,7 +777,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     if (error) { alert('Erro ao liberar: ' + error.message); setLiberando(false); return; }
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Comercial',
-      evento: 'OPL liberada para emissão de NF pelo Fiscal.',
+      evento: 'OP liberada para emissão de NF pelo Fiscal.',
       status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
       usuario_nome: currentUser?.nome || null, data_hora: agora,
     }]);
@@ -786,7 +786,7 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     // Atualiza status local sem fechar o modal
     setOpl((o: any) => ({ ...o, status_geral: 'Aguarda Emissao NF' }));
     setLogs(prev => [{
-      id: 'tmp', setor: 'Comercial', evento: 'OPL liberada para emissão de NF pelo Fiscal.',
+      id: 'tmp', setor: 'Comercial', evento: 'OP liberada para emissão de NF pelo Fiscal.',
       status_anterior: opl.status_geral, status_novo: 'Aguarda Emissao NF',
       usuario_nome: currentUser?.nome || '—', data_hora: agora,
     }, ...prev]);
@@ -1265,7 +1265,7 @@ export function LinkOpl({ opl, currentUser, color, discreto = false }: { opl: an
           // número curto não quebra ("OPL A" / "997.2607"); número com nome junto pode quebrar
           whiteSpace: String(numero || '').length <= 22 ? 'nowrap' : undefined,
         }}
-        title="Abrir detalhes da OPL"
+        title="Abrir detalhes da OP"
       >
         {loading ? '...' : numero}
       </span>
@@ -1291,7 +1291,7 @@ export function BuscaOplInput({ busca, setBusca }: { busca: string; setBusca: (v
       <input
         value={busca}
         onChange={e => setBusca(e.target.value)}
-        placeholder="Buscar por OPL, chassi, cliente ou projeto..."
+        placeholder="Buscar por OP, chassi, cliente ou projeto..."
         style={{ flex: 1, border: 'none', outline: 'none', fontSize: 11, background: 'transparent', color: '#1e293b' }}
       />
       {busca && (
@@ -1436,7 +1436,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
       if (resposta === null) return;
       produzida = Number(String(resposta).replace(',', '.'));
       if (!Number.isFinite(produzida) || produzida <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
-    } else if (!await confirmar(`Concluir a demanda${d?.numero_opl ? ` da OPL ${d.numero_opl}` : ''}? Ela sai da lista de pendentes.`)) {
+    } else if (!await confirmar(`Concluir a demanda${d?.numero_opl ? ` da OP ${d.numero_opl}` : ''}? Ela sai da lista de pendentes.`)) {
       return;
     }
     const agora = new Date().toISOString();
@@ -1499,7 +1499,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
       <div className="sec-body" style={{ overflowX: 'auto' }}>
         <table>
           <thead><tr>
-            <th>Data</th><th>OPL</th><th>Descricao</th><th>Status</th>
+            <th>Data</th><th>OP</th><th>Descricao</th><th>Status</th>
             <th>Responsavel</th><th>Tempo Útil</th><th>Acoes</th>
           </tr></thead>
           <tbody>
@@ -1643,7 +1643,7 @@ export function DemandasSetorWidget({ setor, cor, currentUser }: { setor: string
                 {[
                   ['Descrição', desc],
                   ['Status', d.status + (emAndamento && pausado ? ' (Pausado)' : '')],
-                  ['OPL', d.numero_opl || '—'],
+                  ['OP', d.numero_opl || '—'],
                   ['Setor', d.setor_destino || '—'],
                   ['Responsável', d.responsavel_nome || 'Não iniciado'],
                   ['Tempo útil', emAndamento && d.data_inicio ? fmtHMS(seg) : d.tempo_execucao_horas ? `${Number(d.tempo_execucao_horas).toFixed(2)}h` : '—'],

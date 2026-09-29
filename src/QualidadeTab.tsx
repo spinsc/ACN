@@ -225,15 +225,15 @@ export default function QualidadeTab({ currentUser }) {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr"><span>Controle de Qualidade — OPLs para Auditoria ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr"><span>Controle de Qualidade — OPs para Auditoria ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OPL aguardando auditoria de qualidade.</div>
+            <div className="acn-empty">Nenhuma OP aguardando auditoria de qualidade.</div>
           ) : (
             <table>
               <thead><tr>
-                <th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Producao por</th><th>Tempo Producao</th><th>Acao</th>
+                <th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Producao por</th><th>Tempo Producao</th><th>Acao</th>
               </tr></thead>
               <tbody>
                 {filtrarOpls(opls, busca).map(o => (
@@ -302,7 +302,7 @@ export default function QualidadeTab({ currentUser }) {
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
             <div className="modal-title">
-              Auditoria CQ — {modalAudit._tipo === 'os' ? `OS ${modalAudit.numero_os}` : `OPL ${modalAudit.opl}`}
+              Auditoria CQ — {modalAudit._tipo === 'os' ? `OS ${modalAudit.numero_os}` : `OP ${modalAudit.opl}`}
             </div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
               {modalAudit._tipo === 'os'

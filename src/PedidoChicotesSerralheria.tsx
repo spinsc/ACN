@@ -100,7 +100,7 @@ export default function PedidoChicotesSerralheria({ currentUser, onClose }) {
             <div style={styles.formRow}>
               <input
                 type="text"
-                placeholder="OPL *"
+                placeholder="OP *"
                 value={formData.opl}
                 onChange={(e) => setFormData({ ...formData, opl: e.target.value })}
                 style={styles.input}
@@ -163,7 +163,7 @@ export default function PedidoChicotesSerralheria({ currentUser, onClose }) {
             <thead>
               <tr style={styles.tableHeader}>
                 <th>Número</th>
-                <th>OPL</th>
+                <th>OP</th>
                 <th>Descrição</th>
                 <th>Qtd</th>
                 <th>Previsão</th>
@@ -324,7 +324,7 @@ export function PedidoSerralheriaList({ pedidos, loading, onRefresh, currentUser
             <div style={styles.formRow}>
               <input
                 type="text"
-                placeholder="OPL *"
+                placeholder="OP *"
                 value={formData.opl}
                 onChange={(e) => setFormData({ ...formData, opl: e.target.value })}
                 style={styles.input}
@@ -394,7 +394,7 @@ export function PedidoSerralheriaList({ pedidos, loading, onRefresh, currentUser
             <thead>
               <tr style={styles.tableHeader}>
                 <th>Número</th>
-                <th>OPL</th>
+                <th>OP</th>
                 <th>Trabalho</th>
                 <th>Qtd</th>
                 <th>Peso</th>

@@ -1074,7 +1074,7 @@ export default function HorasTarefasTab({ currentUser, abaInicial }: { currentUs
                   {f === 'todas' ? 'Todas' : STATUS_LABEL[f]}
                 </button>
               ))}
-              <input placeholder="🔍 Buscar por título, OPL ou responsável..." value={busca} onChange={e => setBusca(e.target.value)}
+              <input placeholder="🔍 Buscar por título, OP ou responsável..." value={busca} onChange={e => setBusca(e.target.value)}
                 style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10, minWidth: 220 }} />
               <span className="acn-fraco" style={{ fontSize: 12, flexBasis: '100%' }}>
                 O tempo conta {HORARIO_CONTAGEM_TEXTO}. Às 19:45 a tarefa pausa sozinha; fora do horário, só com hora extra.

@@ -1707,7 +1707,7 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
               {String(d.descricao || '').split('\n')[0]}
               <span style={{ color: '#64748b', fontSize: 9, marginLeft: 6 }}>
                 {d.setor_destino}{d.numero_demanda ? ` · ${d.numero_demanda}` : ''}
-                {d.numero_opl ? ` · OPL ${d.numero_opl}` : ''}
+                {d.numero_opl ? ` · OP ${d.numero_opl}` : ''}
               </span>
             </span>
             <span style={{ fontSize: 10, color: '#334155', whiteSpace: 'nowrap' }}>

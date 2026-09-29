@@ -2714,7 +2714,7 @@ const SUB_STATUS_COR: Record<string,string> = {
               { id:'agenda',    rotulo:'Agenda', icone: mdiCalendarMonthOutline },
               { id:'recentes',  rotulo:'Últimas visualizadas', icone: mdiHistory },
               { id:'relatorio', rotulo:'Relatório', icone: mdiChartBar },
-              { id:'opls',      rotulo:'OPLs em aberto', icone: mdiWrenchOutline },
+              { id:'opls',      rotulo:'OPs em aberto', icone: mdiWrenchOutline },
               ...(podeVerFaturamentos ? [{ id:'faturamentos', rotulo:'Faturamentos', icone: mdiCashMultiple }] : []),
               { id:'contatos',  rotulo:'Contatos', icone: mdiCardAccountDetailsOutline },
             ]}
@@ -2865,7 +2865,7 @@ const SUB_STATUS_COR: Record<string,string> = {
           if (error) { alert('Erro: ' + error.message); return; }
           await supabase.from('logs_movimentacao_opl').insert([{
             opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
-            evento: 'OPL liberada para emissão de NF pelo Fiscal.',
+            evento: 'OP liberada para emissão de NF pelo Fiscal.',
             status_anterior: o.status_geral, status_novo: 'Aguarda Emissao NF',
             usuario_nome: currentUser?.nome || null, data_hora: agora,
           }]);
@@ -2939,7 +2939,7 @@ const SUB_STATUS_COR: Record<string,string> = {
             await supabase.from('oples').update({ status_geral: 'Aguarda Emissao NF', data_liberacao_comercial: agora }).eq('id', o.id);
             await supabase.from('logs_movimentacao_opl').insert([{
               opl_id: o.id, numero_opl: o.opl, setor: 'Comercial',
-              evento: 'OPL liberada para emissão de NF pelo Fiscal (ação em lote).',
+              evento: 'OP liberada para emissão de NF pelo Fiscal (ação em lote).',
               status_anterior: o.status_geral, status_novo: 'Aguarda Emissao NF',
               usuario_nome: currentUser?.nome || null, data_hora: agora,
             }]);
@@ -3016,7 +3016,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                 </button>
               )}
               <span style={{ fontSize:9, color:'#94a3b8', marginLeft:'auto' }}>
-                {oplsFiltradas.length} OPL{oplsFiltradas.length !== 1 ? 's' : ''}
+                {oplsFiltradas.length} OP{oplsFiltradas.length !== 1 ? 's' : ''}
               </span>
               <button onClick={fetchOplsEmAberto} style={{ fontSize:9, padding:'3px 8px', borderRadius:4, border:'1px solid #e2e8f0', cursor:'pointer', background:'#f8fafc', color:'#64748b' }}>
                 🔄
@@ -3026,14 +3026,14 @@ const SUB_STATUS_COR: Record<string,string> = {
             {oplsLoading ? (
               <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Carregando...</div>
             ) : oplsFiltradas.length === 0 ? (
-              <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Nenhuma OPL em aberto.</div>
+              <div style={{ textAlign:'center', color:'#94a3b8', padding:20, fontSize:11 }}>Nenhuma OP em aberto.</div>
             ) : (
               <div style={{ overflowX:'auto' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
                   <thead>
                     <tr style={{ background:'#f1f5f9', textAlign:'left' }}>
                       <th style={{ padding:'5px 8px', borderBottom:'2px solid #e2e8f0' }}></th>
-                      {['OPL','Cliente','Tipo/Veículo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
+                      {['OP','Cliente','Tipo/Veículo','Empresa','Status','Entrada','Prazo','Responsável','CRM','Ações'].map(h => (
                         <th key={h} style={{ padding:'5px 8px', fontWeight:700, color:'#475569', fontSize:9, borderBottom:'2px solid #e2e8f0', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -3071,7 +3071,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                           <tr key={o.id} style={{ borderBottom:'1px solid #f1f5f9',
                             background: oplNaoLida ? '#fffdf0' : undefined,
                             borderLeft: oplNaoLida ? '3px solid #eab308' : '3px solid transparent' }}
-                            title={oplNaoLida ? 'Esta OPL tem alteração(ões) que você ainda não visualizou' : undefined}>
+                            title={oplNaoLida ? 'Esta OP tem alteração(ões) que você ainda não visualizou' : undefined}>
                             <td style={{ padding:'5px 8px', textAlign:'center' }}>
                               <input type="checkbox" checked={oplsSelecionadas.has(o.id)} onChange={()=>toggleOplSelecionada(o.id)} style={{ cursor:'pointer' }} />
                             </td>
@@ -3177,7 +3177,7 @@ const SUB_STATUS_COR: Record<string,string> = {
                                 <button title="Solicitar Compra pra esta OP"
                                   onClick={() => {
                                     setModalCompras({ id: o.crm_oportunidade_id || null,
-                                      titulo: `OPL ${o.opl} — ${o.cliente_nome || o.modelo || ''}`,
+                                      titulo: `OP ${o.opl} — ${o.cliente_nome || o.modelo || ''}`,
                                       orgao: null, _oplText: o.opl });
                                     setFormCompras({ ...VAZIO_COMPRA });
                                   }}
@@ -4730,7 +4730,7 @@ const SUB_STATUS_COR: Record<string,string> = {
     {oplAcomp && (
       <OplAcompModal
         referenciaId={oplAcomp.id}
-        referenciaDesc={`OPL ${oplAcomp.opl} — ${oplAcomp.cliente_nome||''}`}
+        referenciaDesc={`OP ${oplAcomp.opl} — ${oplAcomp.cliente_nome||''}`}
         referenciaType="opl"
         setor="Comercial/CRM"
         currentUser={currentUser}

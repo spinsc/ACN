@@ -150,6 +150,24 @@ confirmada a venda"), e **só 1 reenvio registrado em toda a história** (20/07,
 três dias antes de o arquivo sair do menu). É o mesmo tipo de degrau quebrado
 da A2: o sistema devolve, mas ninguém consegue devolver de volta.
 
+**A8 — Duas telas só enxergam os primeiros 1.000 itens do catálogo.** *(Achado
+na Etapa 5.3, em 29/09/2026, ao testar o marcador "Conjunto Elétrico" no Admin.)*
+`ConfigEstruturaTela.tsx:32` (Admin > Estruturas) e `Estoque.tsx:1235` (a
+"estrutura do chicote", Etapa 9 do estoque) leem `cadastro_itens` com
+`.limit(5000)`, mas **o servidor devolve no máximo 1.000 linhas**: medido em
+29/09/2026, pedir 5.000 devolve 1.000. O catálogo tem **4.429 itens ativos**;
+só os primeiros 1.000 em ordem alfabética aparecem no seletor (77% do catálogo
+fica de fora). Consequências medidas: (1) em Admin > Estruturas **nenhum item
+"CONJUNTO ELETRICO" pode ser escolhido** — há 432 ativos e **1.049 itens vêm
+antes deles** no alfabeto — e hoje **0 itens estão marcados** como o
+interruptor da montagem automática (`eh_conjunto_instalacao`), ou seja, a
+montagem automática do estoque (Etapa 7) está desligada por esse caminho;
+(2) na estrutura do chicote, o material (fio, conexão, terminal…) só pode ser
+escolhido entre os itens do início do alfabeto. Não é polimento: é uma tela que
+parece funcionar e não alcança o que precisa. **Corrigir** com paginação
+(`.range`, como já faz `CadastroItensTab.tsx`) ou com busca no servidor — ver
+5.5.
+
 ### B. Código morto / caminhos órfãos (achado em 3 pontos independentes)
 
 **B1 — `src/ComercialTab.tsx`**: tela inteira (1.450 linhas, medido em
@@ -565,8 +583,8 @@ publicável sozinha. **Glossário decidido com o usuário na conversa:**
 | Etapa "OP pronta, esperando o Comercial liberar para o Fiscal" (`oples.status_geral`) | **`Aguardando Liberacao Comercial`** (o curto) | 5.1a ✅ código · 5.1b ⬜ migração dos dados · 5.1c ⬜ apertar |
 | 4º passo da liberação parcial de BOM (`oples.serralheria_status`) | **`Sanado`**, no vocabulário da serralheria e fora do menu da Produção | 5.2 ✅ |
 | Última etapa da compra | **`Recebido`** (nunca "Concluído" nas compras) | 5.2 ✅ |
-| Item que liga a montagem automática do material | **Conjunto Elétrico** (nome do catálogo). A coluna `eh_conjunto_instalacao` **não muda**: é nome interno | 5.3 ⬜ |
-| Sigla da ordem de produção nas telas | **OP**. Nomes internos (`opl`, `numero_opl`, tabela `oples`) e o que as pessoas digitaram **não mudam** | 5.4 ⬜ |
+| Item que liga a montagem automática do material | **Conjunto Elétrico** (nome do catálogo). A coluna `eh_conjunto_instalacao` **não muda**: é nome interno | 5.3 ✅ |
+| Sigla da ordem de produção nas telas | **OP**. Nomes internos (`opl`, `numero_opl`, tabela `oples`), o dado `tipo_op` (OPL = ACN, OPD = Detech) e o que as pessoas digitaram **não mudam** | 5.4 ✅ |
 
 #### ✅ 5.1a — Status "aguardando liberação comercial": um nome oficial, os dois reconhecidos
 
@@ -675,22 +693,78 @@ dias). Esse é o passo "aperta o código" do princípio 4.
   os mesmos valores `Pendente` e `Concluido`. Hoje não colidem, mas uma OP que
   passe pelas duas mistura os significados.
 
-#### ⬜ 5.3 — "Conjunto Elétrico" nas telas
+#### ✅ 5.3 — "Conjunto Elétrico" nas telas
 
-Trocar "Conjunto de Instalação" por **Conjunto Elétrico** nos textos de tela
-(`AplicarEstrutura.tsx`, `ConfigEstruturaTela.tsx`) e nos comentários
-(`ConfigEstrutura.ts`, `PerguntasDaVenda.tsx`). A coluna `eh_conjunto_instalacao`
-fica, com um comentário dizendo que é o "Conjunto Elétrico". Só texto; nada de
-dado.
+**Feito em:** 29/09/2026 (só texto; **nenhum dado foi alterado**).
 
-#### ⬜ 5.4 — "OP" no lugar de "OPL" nas telas
+- "Conjunto de Instalação" virou **Conjunto Elétrico** nas duas mensagens de
+  `AplicarEstrutura.tsx` ("Sem Conjunto Elétrico nesta venda…" e "Esta venda leva
+  Conjunto Elétrico, mas a OP não tem veículo do catálogo"), no marcador de
+  `ConfigEstruturaTela.tsx` ("Este item é o Conjunto Elétrico") e nos comentários
+  de `ConfigEstrutura.ts` e `PerguntasDaVenda.tsx`.
+- A coluna `eh_conjunto_instalacao` **não mudou**; um comentário em
+  `itensConjunto()` diz que é o "Conjunto Elétrico" e por quê o nome da coluna
+  ficou (renomear coluna não vale o risco para um nome que ninguém vê).
+- O título "Estrutura de instalação" da aba do Admin **fica**: é outro conceito
+  (a estrutura de material por veículo), não o item Conjunto.
+- **Testado:** o aviso "Sem Conjunto Elétrico nesta venda" aparece no modal de
+  liberar BOM de uma OP real, sem nenhum resto de "Instalação"; o marcador do
+  Admin aparece com o nome novo (selecionando um item que o seletor enxerga — ver
+  A8 e 5.5).
 
-Cerca de 218 ocorrências de "OPL" em texto visível (rótulos, títulos, mensagens,
-textos de notificação). Trocar só o que a pessoa lê, com o diff revisado; não
-tocar em identificadores (`opl`, `numero_opl`, `OPL_PIPELINE`), na tabela
-`oples`, nem no que as pessoas digitaram (títulos de card como "OPL D 777.2609 …").
-Os textos que o sistema grava em histórico (`logs_movimentacao_opl.evento`) passam
-a sair com "OP" daqui para a frente; o que já foi gravado fica.
+#### ✅ 5.4 — "OP" no lugar de "OPL" nas telas
+
+**Feito em:** 29/09/2026 (só texto; **nenhum dado foi alterado**).
+
+**O que foi feito:** **154 ocorrências em 151 linhas de 20 arquivos**, trocadas
+por arquivo e linha a partir de uma lista revisada (nenhuma troca cega): rótulos
+de tabela, títulos de tela e de janela, abas (**"OPs em aberto"** no CRM e
+**"OPs Geral"** nos Relatórios), contadores com plural ("329 OPs"), mensagens de
+confirmação, placeholders, rótulos do Admin, os modelos de notificação por
+WhatsApp (`whatsappHelper.ts`) e os textos que o sistema grava no histórico da OP
+daqui em diante ("OP liberada para emissão de NF pelo Fiscal.").
+
+**O que NÃO mudou, de propósito (11 linhas):**
+
+- **`tipo_op: 'OPL'`** (`NovaOpOsModal.tsx`): é **dado**, não sigla — na tabela,
+  `OPL` = OP da ACN (324 OPs) e `OPD` = OP da Detech (7). Descoberto ao classificar:
+  "OPL" não era sempre um sinônimo de "OP".
+- **O tipo de documento "OPL" de Vistorias** (3 registros; o texto da opção *é* o
+  valor gravado) e o rótulo "Nº OPL / OPD / PV" que lista esses tipos; e o
+  placeholder "Numero da OPL ou OPD…" do Marketing — o par OPL/OPD (ACN/Detech).
+- A regex de siglas em `Interface.tsx`, e comentários.
+- **O que as pessoas digitaram** (títulos de card como "OPL D 777.2609 - IBICARE…",
+  motivos de devolução): é dado e fica como está.
+- **O histórico já gravado** (`logs_movimentacao_opl.evento`) continua com "OPL".
+
+**Verificado antes de trocar:** nenhum código decidia nada pelo texto "OPL"
+(nenhuma comparação, regex ou `includes` nas linhas trocadas; nenhum código
+compara o texto de `evento`). Um defeito da própria troca foi pego na revisão do
+diff: `'OP / OPL'` virou `'OP / OP'` e foi corrigido para `'OP'`.
+
+**Testado** (21 verificações com gravações bloqueadas): varredura de rótulos,
+cabeçalhos, botões, dicas e placeholders de 11 telas + as 5 abas dos Relatórios +
+a aba "OPs em aberto" do CRM: **nenhum "OPL" restante** (a varredura ignora dado
+de linha e de cartão, que é digitado por pessoas). Regressões das etapas
+anteriores: CRM 16/16, reenvio 20/20, status 13/13, banner/Marketing/Financeiro/PCP
+13/13, Engenharia 13/13, licitação e "Lançar OS".
+
+**Efeitos que as pessoas vão notar:** a aba do CRM passa a se chamar "OPs em
+aberto" (os trechos deste plano que dizem "OPLs em aberto" descrevem o nome de
+antes); as mensagens de WhatsApp saem com "OP"; no histórico de uma OP, os eventos
+antigos dizem "OPL" e os novos "OP". Uma linha de `Estoque.tsx` (1710, texto de
+tela) foi tocada — é o único ponto que não é do fluxo.
+
+#### ⬜ 5.5 — Corrigir o corte de 1.000 itens nas duas telas de item (A8)
+
+Bug funcional achado na 5.3, **fora do escopo da nomenclatura**. Carregar todos os
+itens ativos com paginação (`.range`, 4.429 itens) — ou trocar o seletor por busca
+no servidor — em `ConfigEstruturaTela.tsx:32` e `Estoque.tsx:1235`. Depois de
+corrigido, **conferir com o usuário** se os itens "CONJUNTO ELETRICO" devem ser
+marcados como o interruptor (`eh_conjunto_instalacao`): hoje nenhum está, e marcar
+liga a montagem automática do material nas OPs novas — decisão do estoque, não desta
+correção. Como `Estoque.tsx` é da frente do estoque, combinar com a sessão que
+estiver nele.
 
 ### ⬜ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 Um componente (provavelmente estendendo `OplDetalheModal`/`OpVinculos.ts`,
@@ -761,3 +835,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Sigla nas telas: "OP"**, não "OPL"; nomes internos não mudam — decisão do usuário. |
 | 29/09/2026 | `Sanado` é valor legítimo de `serralheria_status` (4º passo da liberação parcial, gravado pelo PCP), fora do menu da Produção. |
 | 29/09/2026 | Migração de dado de status só depois de a publicação do código estar no ar, e só com autorização; histórico (`logs_movimentacao_opl`, `audit_log`, `lixeira`) nunca é reescrito. |
+| 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |

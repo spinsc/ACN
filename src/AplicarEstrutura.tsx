@@ -95,7 +95,7 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
   if (!e.temConjunto) {
     return (
       <Caixa cor="#f8fafc" borda="#e2e8f0" texto="#475569">
-        <b>Sem Conjunto de Instalação nesta venda.</b> O material de instalação não é montado —
+        <b>Sem Conjunto Elétrico nesta venda.</b> O material de instalação não é montado —
         é o caso de quem usa suporte e chicote de terceiros. A BOM segue preenchida à mão.
       </Caixa>
     );
@@ -103,7 +103,7 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
   if (e.semVeiculo) {
     return (
       <Caixa cor="#fffbeb" borda="#fcd34d" texto="#92400e">
-        Esta venda leva Conjunto de Instalação, mas a OP <b>não tem veículo do catálogo</b>.
+        Esta venda leva Conjunto Elétrico, mas a OP <b>não tem veículo do catálogo</b>.
         Sem saber o carro não dá para montar o material — escolha o veículo na OP.
       </Caixa>
     );

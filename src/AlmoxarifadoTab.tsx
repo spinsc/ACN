@@ -612,15 +612,15 @@ Embalar e enviar assim mesmo?`)) return;
       )}
 
       <div className="sec-card">
-        <div className="sec-hdr"><span>Kiting — OPLs Aguardando Conferencia ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr"><span>Kiting — OPs Aguardando Conferencia ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OPL aguardando Almoxarifado.</div>
+            <div className="acn-empty">Nenhuma OP aguardando Almoxarifado.</div>
           ) : (
             <table>
               <thead><tr>
-                <th>Data</th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
+                <th>Data</th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>BOM</th>
                 <th>Status Kit</th><th>Obs. Almox</th><th>Responsavel</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -862,7 +862,7 @@ Embalar e enviar assim mesmo?`)) return;
       {modalFalta && (
         <div className="modal-overlay">
           <div className="modal-box">
-            <div className="modal-title">Apontar Falta de Material — OPL {modalFalta.opl}</div>
+            <div className="modal-title">Apontar Falta de Material — OP {modalFalta.opl}</div>
             <label className="acn-label">Descreva o(s) material(is) em falta *</label>
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="ex: Cabo de 70mm2 — 5m; Conector X — 2 unidades"
@@ -879,7 +879,7 @@ Embalar e enviar assim mesmo?`)) return;
       {modalPend && (
         <div className="modal-overlay">
           <div className="modal-box">
-            <div className="modal-title">Liberar com Pendencia — OPL {modalPend.opl}</div>
+            <div className="modal-title">Liberar com Pendencia — OP {modalPend.opl}</div>
             <label className="acn-label">Descreva a pendencia existente *</label>
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="ex: Aguardando apenas parafuso M10, demais itens completos"
@@ -1063,7 +1063,7 @@ Embalar e enviar assim mesmo?`)) return;
       {modalSeriais && (
         <div className="modal-overlay">
           <div className="modal-box" style={{maxWidth:640,width:'96vw'}}>
-            <div className="modal-title">🔢 Kiting — OPL {modalSeriais.opl}</div>
+            <div className="modal-title">🔢 Kiting — OP {modalSeriais.opl}</div>
             <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>
               Informe o(s) número(s) de série dos equipamentos deste kit antes de liberar para o PCP. O produto já sai do Almoxarifado com o serial aplicado.
             </div>
@@ -1118,7 +1118,7 @@ Embalar e enviar assim mesmo?`)) return;
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
                 <thead><tr style={{background:'#f8fafc'}}>
                   <th style={{padding:'4px 8px',textAlign:'left'}}>#</th>
-                  <th style={{padding:'4px 8px',textAlign:'left'}}>OPL</th>
+                  <th style={{padding:'4px 8px',textAlign:'left'}}>OP</th>
                   <th style={{padding:'4px 8px',textAlign:'left'}}>Serial(is) a aplicar</th>
                 </tr></thead>
                 <tbody>

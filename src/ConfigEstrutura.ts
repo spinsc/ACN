@@ -156,7 +156,12 @@ export function montarMaterial(materiais: any[], respostas: Record<string, strin
 
 // ── O interruptor ────────────────────────────────────────────────────────────
 
-/** Itens marcados como "conjunto de instalação" no cadastro. */
+/** Itens marcados como "Conjunto Elétrico" no cadastro.
+ *  Nome oficial decidido com o usuário em 29/09/2026 (Etapa 5.3 do
+ *  PLANO_UX_FLUXO_TRABALHO.md): é o que o catálogo e as notas já chamam — são
+ *  centenas de itens "CONJUNTO ELETRICO PV …". A coluna do banco continua
+ *  `eh_conjunto_instalacao`: é o mesmo conceito, e renomear coluna não vale o
+ *  risco para um nome que ninguém vê. */
 export async function itensConjunto() {
   const { data } = await supabase.from('cadastro_itens')
     .select('id,codigo,nome').eq('eh_conjunto_instalacao', true).eq('ativo', true);
@@ -164,7 +169,7 @@ export async function itensConjunto() {
 }
 
 /**
- * A venda leva conjunto de instalação?
+ * A venda leva Conjunto Elétrico?
  *
  * Só se levar é que a estrutura do veículo entra. Sem conjunto, o cliente está
  * usando suporte e chicote de terceiros — e o sistema não tem o que montar.

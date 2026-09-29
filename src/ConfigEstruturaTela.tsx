@@ -105,7 +105,7 @@ function MarcaConjunto({ item, pode }) {
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10.5, cursor: pode ? 'pointer' : 'default' }}>
         <input type="checkbox" checked={marcado} disabled={!pode}
           onChange={e => trocar(e.target.checked)} style={{ accentColor: '#d97706' }} />
-        <span><b>Este item é o Conjunto de Instalação</b></span>
+        <span><b>Este item é o Conjunto Elétrico</b></span>
       </label>
       <div style={{ fontSize: 9, color: '#78350f', marginTop: 3 }}>
         É o item que representa suportes, chicotes, parafusos e afins na nota e no PV. A presença

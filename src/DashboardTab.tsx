@@ -1112,7 +1112,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       if (chk(r.codigo))    return { campo: 'Código',    valor: r.codigo };
       if (chk(r.categoria)) return { campo: 'Categoria', valor: r.categoria };
     } else if (r._tipo === 'engenharia') {
-      if (chk(r.numero_opl))   return { campo: 'OPL',      valor: r.numero_opl };
+      if (chk(r.numero_opl))   return { campo: 'OP',      valor: r.numero_opl };
       if (chk(r.cliente_nome)) return { campo: 'Cliente',  valor: r.cliente_nome };
       if (chk(r.descricao))    return { campo: 'Descrição', valor: r.descricao };
     }
@@ -1202,7 +1202,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
 
   const TIPO_META: Record<string, { icon: string; cor: string; label: string }> = {
     crm:        { icon:'🤝', cor:'#7c3aed', label:'Processo CRM' },
-    opl:        { icon:'🏭', cor:'#0891b2', label:'OP / OPL' },
+    opl:        { icon:'🏭', cor:'#0891b2', label:'OP' },
     os:         { icon:'🔧', cor:'#0f766e', label:'OS' },
     licitacao:  { icon:'🏛️', cor:'#1d4ed8', label:'Licitação' },
     item:       { icon:'📦', cor:'#b45309', label:'Item do Catálogo' },

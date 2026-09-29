@@ -346,7 +346,7 @@ export default function EngenhariaTab({ currentUser }) {
       status_anterior: opl.status_geral, status_novo: opl.status_geral,
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('engenharia_libera_serralheria', `*Liberação parcial p/ Serralheria* — OPL ${opl.opl}\n${obsSerralheria.trim()}\nPor: ${currentUser?.nome}`, 'Serralheria');
+    notificarEvento('engenharia_libera_serralheria', `*Liberação parcial p/ Serralheria* — OP ${opl.opl}\n${obsSerralheria.trim()}\nPor: ${currentUser?.nome}`, 'Serralheria');
     setEnviandoSerralheria(false);
     setModalSerralheria(null); setObsSerralheria(''); fetchAll();
   };
@@ -451,7 +451,7 @@ export default function EngenhariaTab({ currentUser }) {
     }).eq('id', opl.id);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
-      evento: `OPL devolvida para Comercial. Motivo: ${obsDevolver}`,
+      evento: `OP devolvida para Comercial. Motivo: ${obsDevolver}`,
       status_anterior: opl.status_geral, status_novo: 'Devolvida Comercial',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
@@ -496,7 +496,7 @@ export default function EngenhariaTab({ currentUser }) {
       {/* OPLs em Espera ou Devolvidas */}
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>OPLs Aguardando Engenharia ({filtrarOpls(opls, busca).length})</span>
+          <span>OPs Aguardando Engenharia ({filtrarOpls(opls, busca).length})</span>
           {opls.filter(isEnvioDireto).length > 0 && (
             <span style={{fontSize:10,background:'#fef3c7',color:'#92400e',padding:'3px 8px',borderRadius:10,border:'1px solid #fde68a',fontWeight:700}}>
               📤 {opls.filter(isEnvioDireto).length} envio(s) direto(s) — sem producao
@@ -506,11 +506,11 @@ export default function EngenhariaTab({ currentUser }) {
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OPL aguardando Engenharia.</div>
+            <div className="acn-empty">Nenhuma OP aguardando Engenharia.</div>
           ) : (
             <table>
               <thead><tr>
-                <th>Data Entrada</th><th>OPL</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Status</th>
+                <th>Data Entrada</th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Status</th>
                 <th>Responsavel</th><th>Inicio</th><th>Tempo</th><th>Arquivos</th><th>Acoes</th>
               </tr></thead>
               <tbody>
@@ -796,7 +796,7 @@ export default function EngenhariaTab({ currentUser }) {
           <div className="modal-box" style={{maxWidth:420}}>
             <div className="modal-title">Iniciar Analise — Engenharia</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12,background:'#f8fafc',padding:'8px 10px',borderRadius:4,border:'1px solid #e2e8f0'}}>
-              <div><strong>OPL:</strong> {modalIniciar.opl} | <strong>Chassi:</strong> {modalIniciar.chassi || '—'}</div>
+              <div><strong>OP:</strong> {modalIniciar.opl} | <strong>Chassi:</strong> {modalIniciar.chassi || '—'}</div>
               <div style={{marginTop:3}}><strong>Tipo:</strong> {modalIniciar.tipo_projeto}</div>
               {isEnvioDireto(modalIniciar) && (
                 <div style={{marginTop:4,background:'#fef3c7',padding:'4px 8px',borderRadius:4,color:'#92400e',fontWeight:700,fontSize:10}}>
