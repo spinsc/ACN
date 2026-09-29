@@ -696,11 +696,28 @@ saem do filtro "Em Producao" (que reconhecia por "contém CQ") e ficam só em
 
 Tirar o nome antigo de `STATUS_LIBERACAO_COMERCIAL_TODOS` (uma linha em
 `FluxoEntrega.ts`) **só depois** de conferir no banco que nenhuma OP voltou a
-ter o nome antigo desde a migração de 29/09/2026 (`select count(*) … where
-status_geral = 'Aprovado CQ - Aguardando Liberacao Comercial'` deve dar zero, por
-alguns dias: abas antigas ainda abertas podiam gravá-lo). Esse é o passo "aperta o
+ter o nome antigo desde a migração de 29/09/2026. Esse é o passo "aperta o
 código" do princípio 4. Manter a leitura do nome antigo em qualquer tela que
 consulte **histórico**, se aparecer alguma.
+
+**Medido em 29/09/2026 (11h UTC): a contagem em zero ainda não prova nada.** A
+regra dos dois nomes foi ao ar às **06h07 UTC** e, desde então, **não houve nenhuma
+aprovação no CQ** (a última foi em 25/09; são 203 em um mês e meio, uns 4 por dia
+útil). O nome antigo só seria gravado por uma **aba antiga** aprovando uma OP no CQ,
+então "zero OPs com o nome antigo" só vale depois que houver aprovações para
+testar. **Critério para apertar:** pelo menos ~10 aprovações no CQ depois do deploy,
+**todas** com o nome oficial, e alguns dias úteis passados:
+
+```sql
+select count(*) filter (where status_novo = 'Aguardando Liberacao Comercial') as oficial,
+       count(*) filter (where status_novo = 'Aprovado CQ - Aguardando Liberacao Comercial') as antigo
+  from logs_movimentacao_opl
+ where setor = 'CQ' and evento like 'Auditoria CQ APROVADA%'
+   and data_hora > '2026-09-29 06:07+00';
+```
+
+Só apertar com `antigo = 0` e `oficial` em torno de 10 ou mais. (Aprovação de OP
+de serralheria com envio grava `Aguardando Embalagem` e não entra nessa conta.)
 
 #### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
 
