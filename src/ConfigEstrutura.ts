@@ -154,6 +154,41 @@ export function montarMaterial(materiais: any[], respostas: Record<string, strin
   return [...soma.values()];
 }
 
+// ── Catálogo inteiro para os seletores ───────────────────────────────────────
+
+/**
+ * Todos os itens ATIVOS do catálogo, em ordem de nome, para alimentar seletor.
+ *
+ * O servidor devolve no máximo 1.000 linhas por consulta e ignora `.limit(5000)`
+ * (medido em 29/09/2026: pedir 5.000 devolve 1.000). Os dois seletores que
+ * liam assim — Admin > Estruturas e a estrutura do chicote — só enxergavam os
+ * 1.000 primeiros de 4.429 itens: nenhum "CONJUNTO ELETRICO" (que começa depois
+ * do milésimo) podia ser escolhido. Aqui se pagina com `.range` até esgotar,
+ * como já faz o Cadastro de Itens (achado A8 do PLANO_UX_FLUXO_TRABALHO.md).
+ *
+ * O desempate por `id` é obrigatório: há nomes repetidos no catálogo ("CONJUNTO
+ * ELÉTRICO" três vezes) e, sem ordem total, o banco pode embaralhar os empatados
+ * entre uma página e a seguinte — item que aparece duas vezes ou que some.
+ *
+ * `colunas` é a lista do `select` (ex.: 'id,codigo,nome'). Só leitura.
+ */
+export async function itensAtivosDoCatalogo(colunas: string): Promise<any[]> {
+  const PAGINA_SUPABASE = 1000;
+  let lista: any[] = [];
+  for (let de = 0; ; de += PAGINA_SUPABASE) {
+    const { data, error } = await supabase.from('cadastro_itens').select(colunas)
+      .eq('ativo', true).order('nome').order('id')
+      .range(de, de + PAGINA_SUPABASE - 1);
+    // falha no meio não pode passar por lista completa em silêncio — foi
+    // exatamente esse silêncio que escondeu o corte de 1.000 por tanto tempo
+    if (error) { console.error('Catálogo de itens: falha ao ler a página a partir de', de, error.message); break; }
+    const pagina = (data || []) as any[];
+    lista = lista.concat(pagina);
+    if (pagina.length < PAGINA_SUPABASE) break;
+  }
+  return lista;
+}
+
 // ── O interruptor ────────────────────────────────────────────────────────────
 
 /** Itens marcados como "Conjunto Elétrico" no cadastro.

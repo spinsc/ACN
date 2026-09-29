@@ -18,7 +18,7 @@ import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
 import { SelectBusca } from './Interface';
 import { SelectVeiculo } from './VeiculoCadastro';
-import { perguntasDoItem, materiaisDoVeiculo } from './ConfigEstrutura';
+import { perguntasDoItem, materiaisDoVeiculo, itensAtivosDoCatalogo } from './ConfigEstrutura';
 import { ehAdminOuGerente } from './utils/permissoes';
 
 const campo = { padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
@@ -28,9 +28,9 @@ const rotulo = { fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block
 function useItens() {
   const [itens, setItens] = useState([]);
   useEffect(() => {
-    supabase.from('cadastro_itens').select('id,codigo,nome,unidade,controla_estoque,eh_conjunto_instalacao')
-      .eq('ativo', true).order('nome').limit(5000)
-      .then(({ data }) => setItens(data || []));
+    // paginado: o servidor corta em 1.000 linhas (achado A8, 29/09/2026)
+    itensAtivosDoCatalogo('id,codigo,nome,unidade,controla_estoque,eh_conjunto_instalacao')
+      .then(setItens);
   }, []);
   return itens;
 }

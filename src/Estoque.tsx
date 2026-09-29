@@ -26,6 +26,7 @@ import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
 import { SelectBusca, MenuAcoes } from './Interface';
+import { itensAtivosDoCatalogo } from './ConfigEstrutura';
 import { mdiPencilOutline, mdiCloseCircleOutline } from '@mdi/js';
 
 /** Requisição de reposição aberta = ainda não virou material na prateleira.
@@ -1231,9 +1232,10 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
 function useTodosOsItens() {
   const [itens, setItens] = useState<any[]>([]);
   useEffect(() => {
-    supabase.from('cadastro_itens').select('id,codigo,nome,unidade')
-      .eq('ativo', true).order('nome').limit(5000)
-      .then(({ data }) => setItens(data || []));
+    // paginado: o servidor corta em 1.000 linhas e o material (fio, terminal…)
+    // ficava restrito ao começo do alfabeto (achado A8, 29/09/2026)
+    itensAtivosDoCatalogo('id,codigo,nome,unidade')
+      .then(setItens);
   }, []);
   return itens;
 }

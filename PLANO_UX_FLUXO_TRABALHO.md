@@ -166,7 +166,7 @@ montagem automática do estoque (Etapa 7) está desligada por esse caminho;
 escolhido entre os itens do início do alfabeto. Não é polimento: é uma tela que
 parece funcionar e não alcança o que precisa. **Corrigir** com paginação
 (`.range`, como já faz `CadastroItensTab.tsx`) ou com busca no servidor — ver
-5.5.
+5.5. **✅ Resolvido na 5.5 (29/09/2026)**, por paginação.
 
 ### B. Código morto / caminhos órfãos (achado em 3 pontos independentes)
 
@@ -782,16 +782,63 @@ antes); as mensagens de WhatsApp saem com "OP"; no histórico de uma OP, os even
 antigos dizem "OPL" e os novos "OP". Uma linha de `Estoque.tsx` (1710, texto de
 tela) foi tocada — é o único ponto que não é do fluxo.
 
-#### ⬜ 5.5 — Corrigir o corte de 1.000 itens nas duas telas de item (A8)
+#### ✅ 5.5 — Corrigir o corte de 1.000 itens nas duas telas de item (A8)
 
-Bug funcional achado na 5.3, **fora do escopo da nomenclatura**. Carregar todos os
-itens ativos com paginação (`.range`, 4.429 itens) — ou trocar o seletor por busca
-no servidor — em `ConfigEstruturaTela.tsx:32` e `Estoque.tsx:1235`. Depois de
-corrigido, **conferir com o usuário** se os itens "CONJUNTO ELETRICO" devem ser
-marcados como o interruptor (`eh_conjunto_instalacao`): hoje nenhum está, e marcar
-liga a montagem automática do material nas OPs novas — decisão do estoque, não desta
-correção. Como `Estoque.tsx` é da frente do estoque, combinar com a sessão que
-estiver nele.
+Bug funcional achado na 5.3, **fora do escopo da nomenclatura**.
+
+**Feito em:** 29/09/2026 (código; **nenhum dado foi alterado**).
+
+**O que foi feito:**
+
+- **Uma função só para as duas telas:** `itensAtivosDoCatalogo(colunas)` em
+  `ConfigEstrutura.ts` lê os itens ativos em blocos de 1.000 (`.range`, o mesmo
+  padrão do `CadastroItensTab`) até acabar. Ordena por nome **e desempata por id**:
+  o catálogo tem nomes repetidos ("CONJUNTO ELÉTRICO" três vezes, "COPIA DE
+  CONJUNTO ELETRICO PV 67" quatro) e, sem esse desempate, o banco pode embaralhar os
+  empatados na virada de página — item que aparece duas vezes ou que some. Se uma
+  página falhar no meio, o erro vai para o console em vez de a lista incompleta
+  passar por completa (foi esse silêncio que escondeu o corte).
+- **As duas telas passaram a usá-la:** `useItens` (Admin > Estruturas,
+  `ConfigEstruturaTela.tsx`) e `useTodosOsItens` (estrutura do chicote, `Estoque.tsx`).
+  O resto das duas telas não mudou; o seletor continua o mesmo `SelectBusca`.
+- **Por que paginar e não buscar no servidor:** o seletor já busca no navegador,
+  sem acento e por palavras, e trocá-lo mexeria na tela toda. O preço são 5 leituras
+  seguidas (~4.400 linhas) a cada abertura da tela — **o tempo de abertura não foi
+  medido**. Se o catálogo passar de algumas dezenas de milhares de itens, o caminho
+  é a busca no servidor (como `DemandaItens` e a Formação de Preços já fazem).
+- **`Estoque.tsx` é da frente do estoque:** antes de editar, conferi que `main`
+  estava no mesmo commit e que não havia outra worktree aberta — sem colisão. Foram
+  tocadas só duas coisas ali: o `import` e o corpo de `useTodosOsItens`.
+
+**Testado** (16 de 16, navegador automatizado com **gravações bloqueadas** — nenhuma
+tentativa de gravar; nenhum dado alterado):
+
+- **A premissa continua valendo:** pedir 5.000 linhas ao servidor hoje devolve 1.000.
+- **Admin > Estruturas:** 5 leituras (a partir de 0, 1.000, 2.000, 3.000 e 4.000),
+  **4.429 itens, 4.429 códigos distintos** (nenhum repetido entre páginas), na ordem
+  nome + id. Buscando "conjunto eletrico" o seletor acha 438 resultados; o item
+  **1687 — CONJUNTO ELETRICO** aparece e, ao escolhê-lo, a tela mostra o marcador
+  **"Este item é o Conjunto Elétrico"** (**desmarcado — não cliquei nele**). Um item
+  do fim do alfabeto (3581 — VISOR DE OLEO…, letra V) também é achado.
+- **Estrutura do chicote** (aberta no chicote 116, "CHICOTE AUXILIAR PARA TOMADA
+  12V"): a mesma leitura, 5 blocos, 4.429 itens sem repetição; o material **3581 ·
+  VISOR DE OLEO…** é achado, e "terminal" lista 57 materiais (letra T).
+
+**Números medidos no banco (só leitura):** 4.429 itens ativos; **429** começam com
+"CONJUNTO ELETRICO" (o levantamento do A8 dizia 432); **0** itens marcados como
+interruptor.
+
+**O que continua com o usuário:** os itens "CONJUNTO ELETRICO" agora **aparecem** no
+seletor e podem ser marcados, mas **nenhum foi marcado**. Marcar liga a montagem
+automática do material nas OPs novas — decisão do estoque (Etapa 7 do plano de
+estoque), não desta correção. Falta decidir **quais** itens marcar (só o genérico
+1687? os 429?).
+
+**Visto de passagem, sem mexer:** `Estoque.tsx` (lista de itens com controle de
+estoque) lê `cadastro_itens` sem `limit` e, portanto, também esbarraria nas 1.000
+linhas. Hoje são **20** itens — longe do corte —, então não precisa de correção
+agora; vale lembrar se o controle de estoque for ligado em massa. As demais leituras
+de `cadastro_itens` são buscas com `limit` pequeno (6 a 200) ou por `id`/código.
 
 ### ⬜ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 Um componente (provavelmente estendendo `OplDetalheModal`/`OpVinculos.ts`,
