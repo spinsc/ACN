@@ -295,7 +295,12 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
  *  campo do cabeçalho, que é um só.
  *
  *  `recarregarEm` muda para forçar a releitura do catálogo: unidade cadastrada
- *  pelo cabeçalho precisa aparecer nos selects de baixo sem recarregar a tela. */
+ *  pelo cabeçalho precisa aparecer nos selects de baixo sem recarregar a tela.
+ *
+ *  `onChange(id, veiculo)` entrega TAMBÉM a ficha escolhida (29/09/2026). Antes só ia o id, e
+ *  quem chamava procurava a ficha numa lista própria, carregada uma vez só: veículo cadastrado
+ *  agora no "+ Novo" não estava nela, o texto "Modelo" da OP ficava em branco e as listas
+ *  passavam a dizer "sem modelo" (foi o que aconteceu no lote 1673.2609). */
 export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = false,
                                recarregarEm, placeholder }) {
   const [veiculos, setVeiculos] = useState([]);
@@ -311,7 +316,7 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
           <SelectBusca
             opcoes={veiculos.map(v => ({ valor: v.id, rotulo: textoVeiculo(v),
               busca: [v.marca, v.modelo, v.nome_exibicao, v.ano_de, v.ano_ate] }))}
-            valor={valor || ''} onChange={onChange}
+            valor={valor || ''} onChange={(id) => onChange?.(id, veiculos.find(v => v.id === id) || null)}
             placeholder={placeholder || (compacto ? 'Veículo' : 'Procure o veículo (marca, modelo ou ano)')} />
         </div>
         {!compacto && (
@@ -326,8 +331,29 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
       {cadastrando && (
         <ModalCadastrarVeiculo currentUser={currentUser}
           aoFechar={() => setCadastrando(false)}
-          aoSalvar={(v) => { setCadastrando(false); recarregar(); onChange?.(v.id); }} />
+          aoSalvar={(v) => { setCadastrando(false); recarregar(); onChange?.(v.id, v); }} />
       )}
     </>
+  );
+}
+
+/**
+ * O campo "Veículo" das telas de EDIÇÃO da OP — o mesmo da criação: escolhe do catálogo da casa ou
+ * cadastra na hora (com a faixa de anos). Pedido do usuário em 29/09/2026: na edição não dava para
+ * trocar nem configurar o veículo, só digitar o modelo em texto.
+ *
+ * Escolher grava os DOIS campos, como a criação faz: `veiculo_id` (a ficha do catálogo, que recebe a
+ * estrutura de material do Conjunto Elétrico) e `modelo` (o texto que as listas mostram). Por isso
+ * `onChange` devolve os dois de uma vez. Ficha vazia limpa só o `veiculo_id`: o texto que já estava
+ * na OP não é apagado por engano.
+ */
+export function VeiculoDaOp({ veiculoId, onChange, currentUser, compacto = false, placeholder, style }) {
+  return (
+    <SelectVeiculo valor={veiculoId || ''} currentUser={currentUser} compacto={compacto}
+      placeholder={placeholder} style={style}
+      onChange={(id, ficha) => onChange?.({
+        veiculo_id: id || '',
+        ...(ficha ? { modelo: ficha.nome_exibicao } : {}),
+      })} />
   );
 }

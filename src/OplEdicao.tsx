@@ -16,6 +16,8 @@ import { ORIGENS } from './OrigemVenda';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { TIPOS_SERVICO_TERCEIRO } from './NovaOpOsModal';
 import { confirmar } from './Feedback';
+import { VeiculoDaOp } from './VeiculoCadastro';
+import { carregarVeiculos, textoVeiculo } from './Veiculos';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 
@@ -31,13 +33,16 @@ export const STATUS_OPL = [
 const STATUS_ALMOX = ['', 'Kit OK', 'Falta de Material', 'Liberado com Pendencia'];
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
-type Campo = { campo: string; rotulo: string; tipo: 'texto' | 'numero' | 'moeda' | 'data' | 'select' | 'textarea'; opcoes?: string[]; grupo: string };
+// 'veiculo' = o campo do catálogo de veículos (veiculo_id): o mesmo seletor da criação da OP, que
+// também preenche o texto "Modelo". Pedido do usuário em 29/09/2026 — na edição só dava para digitar.
+type Campo = { campo: string; rotulo: string; tipo: 'texto' | 'numero' | 'moeda' | 'data' | 'select' | 'textarea' | 'veiculo'; opcoes?: string[]; grupo: string };
 export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Identificação', campo: 'cliente_nome', rotulo: 'Cliente', tipo: 'texto' },
   { grupo: 'Identificação', campo: 'tipo_projeto', rotulo: 'Tipo de projeto', tipo: 'texto' },
   { grupo: 'Identificação', campo: 'faturamento_empresa', rotulo: 'Empresa (faturamento)', tipo: 'select', opcoes: ['ACN', 'Detech'] },
   { grupo: 'Identificação', campo: 'quantidade', rotulo: 'Quantidade', tipo: 'numero' },
   { grupo: 'Identificação', campo: 'numero_nf', rotulo: 'NF-e', tipo: 'texto' },
+  { grupo: 'Veículo / envio', campo: 'veiculo_id', rotulo: 'Veículo (catálogo)', tipo: 'veiculo' },
   { grupo: 'Veículo / envio', campo: 'modelo', rotulo: 'Modelo', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'chassi', rotulo: 'Chassi', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'placa', rotulo: 'Placa', tipo: 'texto' },
@@ -94,8 +99,11 @@ const mostrar = (c: Campo, v: any) => {
   return String(v).length > 60 ? String(v).slice(0, 60) + '…' : String(v);
 };
 
-function Entrada({ c, valor, onChange }: { c: Campo; valor: string; onChange: (v: string) => void }) {
+function Entrada({ c, valor, onChange, onVeiculo, currentUser }: { c: Campo; valor: string; onChange: (v: string) => void; onVeiculo?: (p: { veiculo_id: string; modelo?: string }) => void; currentUser?: any }) {
   const est = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' as const };
+  if (c.tipo === 'veiculo') {
+    return <VeiculoDaOp veiculoId={valor} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
+  }
   if (c.tipo === 'select') {
     const ops = c.opcoes || [];
     return (
@@ -116,6 +124,9 @@ function Entrada({ c, valor, onChange }: { c: Campo; valor: string; onChange: (v
 async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, motivo: string, currentUser: any, origem: string) {
   const falhas: string[] = [];
   const agora = new Date().toISOString();
+  // o histórico mostra o NOME do veículo, não o código da ficha
+  const fichas = new Map((await carregarVeiculos()).map((v: any) => [v.id, textoVeiculo(v)]));
+  const nomeFicha = (id: any) => id ? (fichas.get(id) || `ficha ${String(id).slice(0, 8)}`) : '—';
   for (const op of ops) {
     const upd = mudancas(op);
     const campos = Object.keys(upd).filter(k => String(op[k] ?? '') !== String(upd[k] ?? ''));
@@ -127,7 +138,8 @@ async function aplicar(ops: any[], mudancas: (op: any) => Record<string, any>, m
       oldRow: Object.fromEntries(campos.map(k => [k, op[k]])), newRow: alteracao, user: currentUser });
     const texto = campos.map(k => {
       const c = CAMPOS_OPL.find(x => x.campo === k);
-      return `${c?.rotulo || k}: ${c ? mostrar(c, op[k]) : op[k]} → ${c ? mostrar(c, upd[k]) : upd[k]}`;
+      const fmt = (v: any) => c?.tipo === 'veiculo' ? nomeFicha(v) : (c ? mostrar(c, v) : v);
+      return `${c?.rotulo || k}: ${fmt(op[k])} → ${fmt(upd[k])}`;
     }).join('; ');
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: op.id, numero_opl: op.opl, setor: currentUser?.perfil || 'Admin',
@@ -176,7 +188,8 @@ export function ModalEditarOpl({ opl, currentUser, onClose, onSalvo }) {
                       <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: mudou ? '#b45309' : '#6b7280', textTransform: 'uppercase', marginBottom: 2 }}>
                         {c.rotulo}{mudou ? ' • alterado' : ''}
                       </label>
-                      <Entrada c={c} valor={form[c.campo]} onChange={v => setForm(f => ({ ...f, [c.campo]: v }))} />
+                      <Entrada c={c} valor={form[c.campo]} onChange={v => setForm(f => ({ ...f, [c.campo]: v }))} currentUser={currentUser}
+                        onVeiculo={p => setForm(f => ({ ...f, veiculo_id: p.veiculo_id, ...(p.modelo !== undefined ? { modelo: p.modelo } : {}) }))} />
                     </div>
                   );
                 })}
@@ -207,14 +220,19 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
   const [valor, setValor] = useState('');
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
-  useEffect(() => { setValor(c.tipo === 'select' ? (c.opcoes?.[0] ?? '') : ''); }, [campo]);
+  // ao escolher um veículo do catálogo, o texto "Modelo" das OPs acompanha (como na criação)
+  const [modeloDaFicha, setModeloDaFicha] = useState<string | undefined>(undefined);
+  useEffect(() => { setValor(c.tipo === 'select' ? (c.opcoes?.[0] ?? '') : ''); setModeloDaFicha(undefined); }, [campo]);
   const salvar = async () => {
     if (!motivo.trim()) { alert('Informe o motivo da alteração.'); return; }
     const novo = paraBanco(c, valor);
     // era o confirm() do navegador, a última janela nativa do sistema fora do Estoque (Etapa 7, 29/09/2026)
     if (novo == null && !await confirmar(`Deixar "${c.rotulo}" em branco nas ${ops.length} OPs?`)) return;
     setSalvando(true);
-    const falhas = await aplicar(ops, () => ({ [c.campo]: novo }), motivo.trim(), currentUser, `Edição em lote (${ops.length} OPs)`);
+    const mudanca = c.tipo === 'veiculo' && novo && modeloDaFicha !== undefined
+      ? { veiculo_id: novo, modelo: modeloDaFicha }
+      : { [c.campo]: novo };
+    const falhas = await aplicar(ops, () => mudanca, motivo.trim(), currentUser, `Edição em lote (${ops.length} OPs)`);
     setSalvando(false);
     if (falhas.length) alert('Algumas OPs não foram alteradas:\n' + falhas.join('\n'));
     onSalvo();
@@ -236,7 +254,10 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
           ))}
         </select>
         <label className="acn-label">Novo valor</label>
-        <div style={{ marginBottom: 4 }}><Entrada c={c} valor={valor} onChange={setValor} /></div>
+        <div style={{ marginBottom: 4 }}>
+          <Entrada c={c} valor={valor} onChange={setValor} currentUser={currentUser}
+            onVeiculo={p => { setValor(p.veiculo_id); setModeloDaFicha(p.modelo); }} />
+        </div>
         <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
           {iguais ? `${iguais} de ${ops.length} já estão com este valor e não mudam.` : `Muda nas ${ops.length} OPs.`}
           {c.campo === 'status_geral' && ' Mudar o status tira as OPs da fase atual sem passar pelo fluxo.'}
@@ -271,7 +292,7 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
 // regra de desmembrar o lote quando a quantidade aumenta. Aqui é só o
 // formulário — por isso o componente é controlado (form + onCampo).
 // ─────────────────────────────────────────────────────────────────────────────
-type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi';
+type TipoCampoCom = 'texto' | 'textarea' | 'numero' | 'moeda' | 'data' | 'select' | 'centro' | 'colaborador' | 'bool' | 'multi' | 'veiculo';
 type CampoCom = {
   campo: string; rotulo: string; tipo: TipoCampoCom; grupo: string;
   opcoes?: { valor: string; label: string }[];
@@ -307,6 +328,10 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: '🚦 Fluxo de entrega', tipo: 'select',
     opcoes: [{ valor: '', label: '— Fluxo de entrega —' }, ...FLUXOS.map(f => ({ valor: f.valor, label: f.label }))],
     dica: 'define em qual fila a OP aparece na Produção' },
+  // mesmo seletor da criação da OP: escolhe do catálogo (ou cadastra, com a faixa de anos) e preenche o
+  // "Modelo" abaixo. Só para OP com veículo — venda de envio não tem (29/09/2026)
+  { grupo: 'Veículo / envio', campo: 'veiculo_id', rotulo: 'Veículo (catálogo)', tipo: 'veiculo', soVeiculo: true,
+    dica: 'escolhe do catálogo ou cadastra com os anos; preenche o modelo sozinho' },
   { grupo: 'Veículo / envio', campo: 'modelo', rotulo: 'Modelo', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'veiculo', rotulo: 'Equipamento / Veículo', tipo: 'texto', dica: 'Ex.: Rádio Motorola APX' },
   { grupo: 'Veículo / envio', campo: 'chassi', rotulo: 'Chassi', tipo: 'texto', soVeiculo: true },
@@ -372,10 +397,14 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
 const GRUPOS_COM = [...new Set(CAMPOS_OPL_COMERCIAL.map(c => c.grupo))];
 
 /** Campo do formulário. Controlado: quem guarda o estado é a tela do CRM. */
-function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto }) {
+function EntradaCom({ c, valor, onChange, centrosCusto, tiposProjeto, onVeiculo = null, currentUser = null }) {
   const est = { width: '100%', padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: 4,
     fontSize: 11, boxSizing: 'border-box' as const, fontFamily: 'inherit' };
   const txt = valor == null ? '' : String(valor);
+
+  if (c.tipo === 'veiculo') {
+    return <VeiculoDaOp veiculoId={txt} currentUser={currentUser} onChange={onVeiculo || ((p) => onChange(p.veiculo_id))} />;
+  }
 
   if (c.tipo === 'colaborador') {
     return <ColaboradorSelect value={txt} onChange={(v: string) => onChange(v)} placeholder="Selecione..." />;
@@ -512,6 +541,8 @@ export function ModalOplComercial({ opl, form, onCampo, currentUser, centrosCust
                         </label>
                       )}
                       <EntradaCom c={c} valor={form?.[c.campo]} centrosCusto={centrosCusto} tiposProjeto={tiposProjeto}
+                        currentUser={currentUser}
+                        onVeiculo={(p: any) => { onCampo('veiculo_id', p.veiculo_id); if (p.modelo !== undefined) onCampo('modelo', p.modelo); }}
                         onChange={(v: any) => onCampo(c.campo, v)} />
                       {c.dica && c.tipo !== 'texto' && c.tipo !== 'textarea' && (
                         <div style={{ fontSize: 8.5, color: '#94a3b8', marginTop: 2 }}>{c.dica}</div>

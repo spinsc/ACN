@@ -41,6 +41,7 @@ import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { OndeEstaCelula } from './OndeEstaAgora';
 import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias, resumoDasOps } from './EtapasOp';
 import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
+import { VeiculoDaOp } from './VeiculoCadastro';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -991,18 +992,28 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   /** Abre o modal de edição da OP com o formulário já preenchido. As datas vêm
    *  do banco como timestamp e o <input type="date"> só aceita AAAA-MM-DD. */
-  const abrirEdicaoOpl = (o: any) => {
+  const abrirEdicaoOpl = async (o: any) => {
+    // A lista só carrega ALGUMAS colunas da OP. Partir dela abria o formulário com o resto vazio —
+    // resumo dos serviços, origem da venda, seriais, terceiro, veículo do catálogo... — e o "Salvar"
+    // gravava tudo, inclusive esses vazios que a pessoa nunca viu (achado em 29/09/2026, na OP
+    // 1482.1502: o banco tinha o resumo e a origem, a tela abria em branco). Por isso o formulário
+    // parte da OP INTEIRA, lida do banco na hora de abrir.
+    const { data: completa, error } = await supabase.from('oples').select('*').eq('id', o.id).maybeSingle();
+    if (error || !completa) {
+      mostrarAviso(`Não foi possível abrir a edição\n${error?.message || 'A OP não foi encontrada — pode ter sido excluída. Atualize a tela.'}`, 'erro');
+      return;
+    }
     const soData = (v: any) => (v ? String(v).slice(0, 10) : '');
     setOplFormEdit({
-      ...o,
-      data_entrada:             soData(o.data_entrada),
-      data_prevista_entrega:    soData(o.data_prevista_entrega),
-      data_chegada_veiculo:     soData(o.data_chegada_veiculo),
-      prazo_entrega_comercial:  soData(o.prazo_entrega_comercial),
-      prazo_entrega_producao:   soData(o.prazo_entrega_producao),
-      data_aceite_cliente:      soData(o.data_aceite_cliente),
+      ...completa,
+      data_entrada:             soData(completa.data_entrada),
+      data_prevista_entrega:    soData(completa.data_prevista_entrega),
+      data_chegada_veiculo:     soData(completa.data_chegada_veiculo),
+      prazo_entrega_comercial:  soData(completa.prazo_entrega_comercial),
+      prazo_entrega_producao:   soData(completa.prazo_entrega_producao),
+      data_aceite_cliente:      soData(completa.data_aceite_cliente),
     });
-    setOplEditando(o);
+    setOplEditando(completa);
   };
 
   const salvarOplEdit = async () => {
@@ -1058,6 +1069,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           faturamento_empresa:           oplFormEdit.faturamento_empresa || 'ACN',
           tipo_projeto:                  completa.tipo_projeto,
           modelo:                        oplFormEdit.modelo || null,
+          veiculo_id:                    oplFormEdit.veiculo_id || null,
           data_entrada:                  completa.data_entrada,
           data_prevista_entrega:         oplFormEdit.data_prevista_entrega || null,
           data_chegada_veiculo:          completa.data_chegada_veiculo,
@@ -1099,6 +1111,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         const { error: errOriginal } = await supabase.from('oples').update({
           chassi:                oplFormEdit.chassi || null,
           modelo:                oplFormEdit.modelo || null,
+          veiculo_id:            oplFormEdit.veiculo_id || null,
           quantidade:            1,
           valor_total:                   valoresTotal[0],
           valor_mao_de_obra:             valoresMO[0],
@@ -1150,6 +1163,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       numero_nf:             txt(oplFormEdit.numero_nf),
       // veículo / envio
       fluxo_entrega:         txt(oplFormEdit.fluxo_entrega),
+      veiculo_id:            txt(oplFormEdit.veiculo_id),
       modelo:                txt(oplFormEdit.modelo),
       veiculo:               txt(oplFormEdit.veiculo),
       chassi:                txt(oplFormEdit.chassi),
@@ -1205,13 +1219,29 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       oplPayload.valor_mao_de_obra             = num(oplFormEdit.valor_mao_de_obra);
       oplPayload.valor_mao_de_obra_serralheria = num(oplFormEdit.valor_mao_de_obra_serralheria);
     }
+    // Só grava o que a pessoa MUDOU (29/09/2026). O "Salvar" mandava TODOS os campos do formulário;
+    // campo que ninguém tocou não deve ser regravado — nem por engano de leitura, nem por cima do que
+    // outro setor alterou enquanto a janela ficou aberta.
+    const CAMPOS_DATA = new Set(['data_entrada', 'data_chegada_veiculo', 'data_prevista_entrega', 'prazo_entrega_comercial', 'prazo_entrega_producao', 'data_aceite_cliente']);
+    const CAMPOS_NUM  = new Set(['quantidade', 'valor_total', 'valor_mao_de_obra', 'valor_mao_de_obra_serralheria']);
+    const norm = (k: string, v: any) => {
+      if (k === 'servico_terceiro') return v ? '1' : '0';
+      if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) return '';
+      if (Array.isArray(v)) return JSON.stringify(v);
+      if (CAMPOS_DATA.has(k)) return String(v).slice(0, 10);
+      if (CAMPOS_NUM.has(k)) return String(Number(v));
+      return String(v).trim();
+    };
+    const mudados: Record<string, any> = Object.fromEntries(
+      Object.entries(oplPayload).filter(([k, v]) => norm(k, v) !== norm(k, oplEditando[k])));
+    if (!Object.keys(mudados).length) { setOplSalvando(false); setOplEditando(null); return; }
     const { error } = await supabase.from('oples').update({
-      ...oplPayload, data_atualizacao: new Date().toISOString(),
+      ...mudados, data_atualizacao: new Date().toISOString(),
     }).eq('id', oplEditando.id);
     setOplSalvando(false);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
     logChange({ module: 'comercial', entityType: 'oples', entityId: oplEditando.id, changeType: 'UPDATE',
-      oldRow: oplEditando, newRow: oplPayload, user: currentUser });
+      oldRow: Object.fromEntries(Object.keys(mudados).map(k => [k, oplEditando[k]])), newRow: mudados, user: currentUser });
     setOplEditando(null);
     fetchOplsEmAberto();
   };
@@ -1224,6 +1254,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       form[o.id] = {
         chassi: o.chassi || '', placa: o.placa || '',
         cnpj_faturamento: o.cnpj_faturamento || '', razao_social_faturamento: o.razao_social_faturamento || '',
+        veiculo_id: o.veiculo_id || '', modelo: o.modelo || '',
       };
     });
     setLoteForm(form);
@@ -1233,6 +1264,23 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
 
   const setLoteCampo = (id: string, campo: string, valor: string) =>
     setLoteForm(f => ({ ...f, [id]: { ...f[id], [campo]: valor } }));
+
+  // Veículo do lote inteiro (pedido do usuário em 29/09/2026): o "🚗 Lote" só lançava chassi, placa e
+  // CNPJ, mas o carro é o mesmo nas unidades — e é ele que permite guardar a configuração do Conjunto
+  // Elétrico. Escolher aqui vale para todas; chassi e placa continuam por unidade (podem ficar vazios:
+  // o carro chega zero km).
+  const veiculoComumDoLote = () => {
+    const ids = new Set((modalLote || []).map(o => loteForm[o.id]?.veiculo_id || ''));
+    return ids.size === 1 ? [...ids][0] as string : '';
+  };
+  const aplicarVeiculoNoLote = (p: { veiculo_id: string; modelo?: string }) =>
+    setLoteForm(f => {
+      const novo = { ...f };
+      (modalLote || []).forEach(o => {
+        novo[o.id] = { ...novo[o.id], veiculo_id: p.veiculo_id, ...(p.modelo !== undefined ? { modelo: p.modelo } : {}) };
+      });
+      return novo;
+    });
 
   // Cola uma lista vinda do Excel (Ctrl+C na planilha, Ctrl+V aqui) e aplica
   // às unidades do lote. Duas situações:
@@ -1305,17 +1353,32 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     if (!modalLote) return;
     setLoteSalvando(true);
     const agora = new Date().toISOString();
+    const falhas: string[] = [];
     for (const o of modalLote) {
       const dados = loteForm[o.id] || {};
-      await supabase.from('oples').update({
+      const upd: any = {
         chassi: dados.chassi?.trim() || null,
         placa: dados.placa?.trim() || null,
         cnpj_faturamento: dados.cnpj_faturamento?.trim() || null,
         razao_social_faturamento: dados.razao_social_faturamento?.trim() || null,
         data_atualizacao: agora,
-      }).eq('id', o.id);
+      };
+      // o veículo só é regravado nas unidades em que mudou; o texto do modelo acompanha a ficha
+      const trocouVeiculo = (dados.veiculo_id || '') !== (o.veiculo_id || '');
+      if (trocouVeiculo) {
+        upd.veiculo_id = dados.veiculo_id || null;
+        if (dados.veiculo_id && dados.modelo) upd.modelo = dados.modelo;
+      }
+      const { error } = await supabase.from('oples').update(upd).eq('id', o.id);
+      if (error) { falhas.push(`${o.opl}: ${error.message}`); continue; }
+      if (trocouVeiculo) {
+        logChange({ module: 'comercial', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
+          oldRow: { veiculo_id: o.veiculo_id, modelo: o.modelo }, newRow: { veiculo_id: upd.veiculo_id, modelo: upd.modelo ?? o.modelo }, user: currentUser });
+      }
     }
     setLoteSalvando(false);
+    // antes o erro de uma unidade passava calado e a janela fechava como se tivesse salvo tudo
+    if (falhas.length) { mostrarAviso(`Algumas unidades não foram salvas\n${falhas.join('\n')}`, 'erro'); fetchOplsEmAberto(); return; }
     setModalLote(null);
     fetchOplsEmAberto();
   };
@@ -1324,7 +1387,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     setOplsLoading(true);
     const { data } = await supabase
       .from('oples')
-      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,' + COLUNAS_MARCOS_OP)
+      .select('id,opl,cliente_nome,modelo,chassi,placa,tipo_projeto,status_geral,data_entrada,data_prevista_entrega,faturamento_empresa,responsavel_comercial,crm_oportunidade_id,quantidade,cnpj_faturamento,razao_social_faturamento,centro_custo,observacoes_comercial,veiculo,fluxo_entrega,destino_cidade,destino_uf,destino_cep,prazo_garantia,obs_devolucao,pendencias_kit,veiculo_id,' + COLUNAS_MARCOS_OP)
       .not('status_geral', 'in', '("Faturado","Cancelado")')
       .order('data_entrada', { ascending: false });
     const lista = data || [];
@@ -4737,6 +4800,16 @@ const SUB_STATUS_COR: Record<string,string> = {
             {modalLote.length} unidades. Cada veículo pode ter seu próprio CNPJ de faturamento, diferente do cliente.
           </div>
 
+          <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:6, padding:10, marginBottom:10 }}>
+            <div style={{ fontSize:9, fontWeight:700, color:'#075985', marginBottom:4 }}>🚗 Veículo de todas as unidades</div>
+            <VeiculoDaOp veiculoId={veiculoComumDoLote()} currentUser={currentUser} onChange={aplicarVeiculoNoLote} />
+            <div style={{ fontSize:8, color:'#64748b', marginTop:4 }}>
+              {veiculoComumDoLote()
+                ? `Vale para as ${modalLote.length} unidades e preenche o Modelo. Chassi e placa abaixo são por unidade e podem ficar vazios (carro 0 km).`
+                : 'As unidades estão com veículos diferentes (ou sem veículo): escolher aqui aplica o mesmo a todas.'}
+            </div>
+          </div>
+
           <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:10, marginBottom:14 }}>
             <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:4 }}>Colar do Excel (Ctrl+C na planilha, Ctrl+V aqui)</div>
             <div style={{ fontSize:8, color:'#94a3b8', marginBottom:6 }}>
@@ -4756,7 +4829,10 @@ const SUB_STATUS_COR: Record<string,string> = {
           <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
             {modalLote.map(o => (
               <div key={o.id} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:10 }}>
-                <div style={{ fontSize:10, fontWeight:700, color:'#0891b2', marginBottom:6 }}>{o.opl}</div>
+                <div style={{ fontSize:10, fontWeight:700, color:'#0891b2', marginBottom:6 }}>
+                  {o.opl}
+                  <span style={{ fontWeight:400, color:'#64748b' }}> · {loteForm[o.id]?.modelo || 'sem modelo'}</span>
+                </div>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:6 }}>
                   <div>
                     <div style={{ fontSize:8, color:'#475569', marginBottom:2 }}>Chassi</div>

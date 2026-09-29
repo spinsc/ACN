@@ -180,6 +180,20 @@ piora a cada mês, porque a tabela só cresce. As outras leituras de tabelas gra
 foram conferidas e não têm o problema: o histórico de OP (2.428 linhas) é lido por
 OP, a FIPE (11.399) por filtro, e o catálogo já foi corrigido na 5.5.
 
+**A10 — A edição de OP pelo CRM abria com a linha parcial da lista e gravava TODOS os
+campos.** *(Achado em 29/09/2026, na Etapa 7.1; **resolvido lá**.)* A lista "OPs em aberto" lê
+só algumas colunas da OP, e o formulário "✏️ Editar" partia dessa linha: o que a lista não
+trazia (resumo dos serviços, origem da venda, seriais, serviço de terceiro, veículo do
+catálogo…) abria **vazio**, e o "Salvar" mandava o formulário inteiro — os vazios que a
+pessoa nunca viu eram **gravados como vazios**. Visto ao vivo na OP 1482.1502 (o banco tinha o
+resumo e a origem; a tela abria em branco). **Não consegui medir se alguma edição antiga já
+apagou algo**: a auditoria só guarda o que mudou, e a linha "antiga" também era parcial.
+
+**A11 — Veículo cadastrado na hora deixava o "Modelo" da OP em branco.** *(Etapa 7.1;
+**resolvido lá**.)* A criação procurava a ficha recém-criada numa lista carregada uma vez só, não
+achava, e gravava a OP com o veículo ligado mas o texto do modelo vazio (as listas passam a dizer
+"sem modelo"). Atingiu **40 OPs**: as 39 do lote 1673.2609 e a D0778.2609.
+
 ### B. Código morto / caminhos órfãos (achado em 3 pontos independentes)
 
 **B1 — `src/ComercialTab.tsx`**: tela inteira (1.450 linhas, medido em
@@ -1221,6 +1235,85 @@ versão **real** do `Feedback.tsx` servida pelo Vite):
 - **As ~600 chamadas de `alert()` não foram reescritas uma a uma**, de propósito: a regra central
   agora acerta 100% das 590 fixas revisadas, e o tom explícito fica para o que o texto não revela.
 
+### ✅ Etapa 7.1 — Edição de OP igual à criação, cartão completo e janela que não fecha à toa
+
+**Feito em:** 29/09/2026, **fora da ordem do plano, por pedido do usuário** ("antes de continuar").
+
+**O pedido:** (1) na **edição** da OP não dava para adicionar e configurar o veículo (modelo e ano)
+como na criação — as telas de edição têm de ser iguais e funcionar; (2) o **cartão da OP** tem de
+trazer tudo o que foi cadastrado, sem exceção; (3) o **lote 1673.2609** (39 Renegade 2026/2027, a mesma
+adaptação de 2015 em diante) precisa do carro em todas as unidades, **sem placa e sem chassi** (chega
+zero km), porque o modelo é o que permite começar a guardar a configuração do Conjunto Elétrico;
+(4) no **cadastro de cliente aberto pela criação de OP**, o Ctrl+V fechava a janela.
+
+**Como o veículo funciona (levantado):** a OP guarda o **código de uma ficha do catálogo de veículos**
+(`veiculo_id`) e um texto `modelo`. Os **anos moram na ficha** (faixa "2015 em diante"), não na OP, e é
+na ficha que se pendura a configuração do Conjunto Elétrico (`veiculo_item_materiais`, hoje com 0
+linhas). O catálogo só tem tela para **cadastrar** ficha (na criação, pelo "+ Novo"); não há como
+editar uma ficha existente.
+
+**Dados alterados, com autorização do usuário** (migração `veiculo_renegade_anos_e_modelo_das_ops_sem_texto`,
+com trava de contagem): **1 ficha** — "Jeep Renegade 4x4", criada às 12h45 pela Tatiana **sem anos**, passou a valer
+de **2015 em diante** (o nome não mudou; foi a opção que o usuário escolheu) — e **40 OPs** (as 39 do
+lote e a D0778.2609, Toro) receberam em "Modelo" o nome da ficha. Chassi e placa continuam
+vazios. Conferido depois: 39 OPs em Renegade e 1 em Toro, 0 sem modelo, 0 com chassi ou placa.
+
+**O que foi feito:**
+
+- **Veículo do catálogo em todas as telas de edição**, o mesmo seletor da criação (escolhe da lista ou
+  cadastra na hora com a faixa de anos) e que **preenche o "Modelo" sozinho**: edição do Comercial (CRM),
+  edição completa do Admin/Gerente (a partir do cartão), edição em lote (o campo "Veículo (catálogo)")
+  e o **"🚗 Lote"**, que ganhou "Veículo de todas as unidades" (chassi e placa seguem por unidade e podem
+  ficar vazios). No histórico da OP o veículo aparece pelo **nome com os anos**, não pelo código. O
+  componente comum é `VeiculoDaOp` (`VeiculoCadastro.tsx`); o `SelectVeiculo` passou a devolver também a
+  ficha escolhida.
+- **Defeito da criação corrigido (A11):** o modelo passa a vir da ficha que o próprio seletor entrega.
+- **Edição do CRM corrigida (A10):** o formulário parte da **OP inteira**, lida do banco ao abrir, e o
+  "Salvar" grava **só o que a pessoa mudou** (sem mudar nada, não grava nada). O "🚗 Lote" também passou a
+  avisar quando uma unidade não salva (antes o erro passava calado e a janela fechava como se tudo tivesse ido).
+- **Cartão da OP com todos os dados cadastrados:** entraram **Veículo (catálogo, com os anos)**, **Placa**,
+  Equipamento/Veículo, Local de instalação, **Fluxo de entrega**, cidade/UF e CEP de entrega, Frete CIF/FOB,
+  Observações do envio, Cliente final, Vendedor, Canal de venda, Edital, Nº da proposta, um bloco
+  **Faturamento** (CNPJ/CPF, razão social, centro de custo, observações) e **Especificações**. E o
+  **"Cadastrado em"**, que saía sempre vazio (lia a coluna `criado_em`, que não existe; é `data_criacao`).
+  Como sempre, campo vazio não aparece.
+- **Janela que não fecha à toa (`ProtecaoDeFundo.ts`, vale para todas as janelas do sistema):** o Ctrl+V
+  em si funcionava; o que fechava a janela era **selecionar o texto do campo arrastando o mouse e soltar
+  fora da janelinha** (para colar por cima): o navegador entrega o clique ao fundo escuro e a janela fecha
+  antes da colagem. **Reproduzi** e a proteção descarta só o clique que **começou dentro e terminou no
+  fundo**; apertar e soltar no fundo continua fechando, e botão flutuante (chat, barra de ações) não é afetado.
+
+**Testado** (37 verificações novas; navegador com **gravações bloqueadas** — toda escrita foi barrada ou
+respondida de dentro do navegador, e o **corpo do que seria gravado foi conferido**):
+
+- **Janela:** arrastar o mouse para fora do campo do cadastro de cliente **não fecha mais**; o Ctrl+V cola por
+  cima da seleção; clicar no fundo continua fechando; o mesmo vale para a janela "🚗 Lote".
+- **Edição do CRM:** a OP 1482.1502 abre com o resumo e a origem que tem no banco (antes vazios); salvar sem
+  mudar nada **não grava nada**; mudar só a observação grava **só** `observacoes_comercial` e a data de atualização.
+- **Veículo nas telas de edição:** Comercial e Admin gravam `veiculo_id` + `modelo` (Admin com o nome da ficha no
+  histórico); a edição em lote grava nas duas OPs marcadas; o "🚗 Lote" do 1673.2609 mostra "Jeep Renegade 4x4 · 2015+"
+  e "vale para as 39 unidades", trocar o veículo troca as 39 e grava as 39 (salvar sem trocar não regrava o veículo).
+- **Defeito da criação:** com uma ficha nova cadastrada na hora (simulada), escolher na linha da unidade preenche o
+  Modelo ("ZZ Carro"); na edição, a janela "Cadastrar veículo" abre **por cima** da edição e devolve o modelo.
+- **Cartão:** com uma OP de teste **toda preenchida** (leitura simulada), os **22 campos** que faltavam aparecem; na OP real
+  1673.2609/01 aparecem "Jeep Renegade 4x4 · 2015+" e o Modelo, sem placa/chassi.
+- **Regressões:** CRM 16/16, lista de OPs 30/30, selo do card 23/23, reenvio 20/20, status 13/13, avisos (Etapa 7) 16/16,
+  faixa do detalhe 21/21 e 4/4, "não lido" 9/9, Engenharia 13/13, banner/Marketing/Financeiro 13/13, "OP/Conjunto"
+  21/21, seletor do catálogo 5/5; "Lançar OS" e licitação sem erro. O teste de "não lido" passou a **calcular** o número
+  de licitações em vez de comparar com um número fixo (mudou de 90 para 92, 93 e 94 no mesmo dia).
+
+**O que ficou de fora:**
+
+- **A OP criada sozinha quando o card vira Vencido** (`criarOpAutomatica`) grava `modelo` = **título do card** e **não
+  liga veículo do catálogo**: essas OPs nascem sem ficha, e a Aplicação do Conjunto Elétrico diz "a OP não tem veículo
+  do catálogo". Faz parte da pergunta aberta sobre a criação automática.
+- **Não há tela para editar ou desativar uma ficha do catálogo** (só cadastrar): corrigir os anos de uma ficha existente
+  hoje só por SQL, como foi feito com o Renegade. Vale uma tela simples no Admin.
+- **Fotos "como o carro chegou"** só podem ser postas na criação; o cartão as mostra, mas nenhuma tela de edição as troca.
+- **As duas edições (Comercial e Admin) têm listas de campos diferentes de propósito** (o Comercial não muda status,
+  o Admin não tem cliente final, vendedor, edital…). Só o veículo foi igualado.
+- **Perda de dado por edições antigas (A10) não foi medida** e nada foi restaurado (regra 4).
+
 ### ⬜ Etapa 8 — Aba "pendente da minha aprovação" em Compras
 Hoje só existe menção/e-mail. Uma aba/filtro dedicado pra quem tem
 `pode_aprovar_compra=true` ver de cara o que está esperando por ele.
@@ -1288,5 +1381,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Selo "onde está" do card (6.3)**: um segundo selo ao lado do número da OP, com setor e dias da OP mais parada; clicar abre o detalhe da OP (a primeira unidade, se forem várias). O `Selo` ganhou `onClick` (vira `<button>`). Só na coluna "Vencido" por enquanto. |
 | 29/09/2026 | Os nomes das etapas da OP, o setor de cada uma e a regra do "desde quando" moram em **`EtapasOp.ts`** (fonte única da barra de progresso e da faixa). Quem lê histórico compara etapas por `mesmaEtapa()`, nunca por `===`, porque o histórico guarda o nome antigo da liberação comercial. |
 | 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
+| 29/09/2026 | **Etapa 7.1 (pedido do usuário, fora de ordem)**: na edição da OP o veículo é escolhido do **catálogo** (o mesmo seletor da criação) e preenche o Modelo; a edição do CRM parte da OP inteira e grava **só o que mudou**; o cartão da OP mostra todos os dados cadastrados; a ficha "Jeep Renegade 4x4" passou a valer **de 2015 em diante** (nome mantido) e as 40 OPs sem texto de modelo receberam o nome da ficha — decisões do usuário. |
+| 29/09/2026 | Clique que **nasce dentro de uma janela e termina no fundo** (arrastar o mouse ao selecionar texto) **não fecha a janela**; vale para todas de uma vez (`ProtecaoDeFundo.ts`). Clique de verdade no fundo continua fechando. |
 | 29/09/2026 | **Tom dos avisos (Etapa 7)**: o `tomDe()` do `Feedback.tsx` compara sem acento e trata **recusa por permissão como erro (vermelho)**, regra que barrou/validação/resultado parcial como **atenção (amarelo)**; mensagem montada na hora (erro do banco) leva o tom explícito. Nenhuma duração mudou. Suposição minha: recusa por permissão é vermelha, como já era "sem permissão". |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |

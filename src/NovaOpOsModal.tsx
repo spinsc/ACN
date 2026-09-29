@@ -911,9 +911,11 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                         <SelectVeiculo compacto style={{ minWidth: 0 }}
                           valor={v.veiculo_id || ''} currentUser={currentUser}
                           recarregarEm={form.veiculo_id}
-                          onChange={(id) => {
+                          onChange={(id, ficha) => {
                             const veiculos = [...(form.veiculos||[])];
-                            const vc = veiculosCarregados.find(x => x.id === id);
+                            // a ficha vem do próprio seletor (inclui a que acabou de ser cadastrada no
+                            // "+ Novo"); a lista carregada só no início é a reserva (29/09/2026)
+                            const vc = ficha || veiculosCarregados.find(x => x.id === id);
                             veiculos[i] = { ...veiculos[i], veiculo_id: id,
                                             modelo: vc ? vc.nome_exibicao : veiculos[i]?.modelo };
                             setF('veiculos', veiculos);
@@ -995,11 +997,14 @@ export default function NovaOpOsModal({ isOpen, onClose, onSaved, currentUser, c
                         placeholder={veiculoObrigatorio
                           ? 'Escolha o veículo (obrigatório nesta venda)'
                           : 'Procure o veículo (marca, modelo ou ano)'}
-                        onChange={(id) => {
+                        onChange={(id, ficha) => {
                           setF('veiculo_id', id);
                           // o texto livre acompanha, para relatório antigo e
-                          // busca continuarem enxergando o modelo
-                          const v = veiculosCarregados.find(x => x.id === id);
+                          // busca continuarem enxergando o modelo. A ficha vem do próprio
+                          // seletor: procurar só na lista carregada no início deixava o
+                          // modelo em branco para veículo recém-cadastrado (lote 1673.2609,
+                          // 29/09/2026).
+                          const v = ficha || veiculosCarregados.find(x => x.id === id);
                           if (v) setF('modelo', v.nome_exibicao);
                         }} />
                     ) : (

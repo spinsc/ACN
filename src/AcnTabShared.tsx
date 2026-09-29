@@ -15,7 +15,8 @@ import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
-import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, aguardaLiberacaoComercial, fluxoLabel } from './FluxoEntrega';
+import { textoVeiculo } from './Veiculos';
 import { etapaDaOp } from './EtapasOp';
 import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
@@ -660,6 +661,17 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
       .then(({ data }) => setComprasVinculadas(data || []));
   }, [opl?.id, opl?.opl, opl?.crm_oportunidade_id]);
 
+  // A ficha do veículo do catálogo (marca, nome e faixa de anos) — a OP guarda só o código dela.
+  // Lida por id, e não pela lista de fichas ativas, para aparecer mesmo se a ficha for desativada.
+  const [fichaVeiculo, setFichaVeiculo] = useState<any>(null);
+  useEffect(() => {
+    if (!opl?.veiculo_id) { setFichaVeiculo(null); return; }
+    let vivo = true;
+    supabase.from('veiculos').select('*').eq('id', opl.veiculo_id).maybeSingle()
+      .then(({ data }) => { if (vivo) setFichaVeiculo(data || null); });
+    return () => { vivo = false; };
+  }, [opl?.veiculo_id]);
+
   // Auditoria/colaboração (infra global — ver AuditSystem.tsx): este é o modal
   // de "👁 Ver" reutilizado por praticamente todos os módulos (Engenharia, PCP,
   // Almoxarifado, Produção, Comercial/CRM...) — instrumentar aqui uma vez cobre
@@ -992,7 +1004,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Qtd. Veículos"     value={opl.quantidade} />
           <Campo label="NF-e"              value={opl.numero_nf} />
           <Campo label="Criado por"        value={opl.criado_por_nome || opl.criado_por} />
-          <Campo label="Cadastrado em"     value={fmtDtH(opl.criado_em)} />
+          {/* a coluna é data_criacao; "criado_em" não existe em oples e o campo saía sempre vazio (29/09/2026) */}
+          <Campo label="Cadastrado em"     value={fmtDtH(opl.data_criacao || opl.criado_em)} />
+          {/* Dados comerciais que a criação e a edição pedem e o cartão não mostrava (29/09/2026) */}
+          <Campo label="Cliente final"     value={opl.cliente_final} field="cliente_final" />
+          <Campo label="Vendedor"          value={opl.vendedor} field="vendedor" />
+          <Campo label="Canal de venda"    value={opl.canal_venda} field="canal_venda" />
+          <Campo label="Edital"            value={opl.edital} field="edital" />
+          <Campo label="Nº da proposta"    value={opl.proposta} field="proposta" />
           {opl.crm_oportunidade_id && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Proposta</div>
@@ -1011,8 +1030,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <div style={{ marginBottom: 8 }}><SeloFrete o={opl} /></div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+          <Campo label="Veículo (catálogo)"        value={fichaVeiculo ? textoVeiculo(fichaVeiculo) : null} field="veiculo_id" />
           <Campo label="Modelo"                    value={opl.modelo} field="modelo" />
           <Campo label="Chassi"                    value={opl.chassi} field="chassi" />
+          <Campo label="Placa"                     value={opl.placa} field="placa" />
+          <Campo label="Equipamento / Veículo"     value={opl.veiculo} field="veiculo" />
+          <Campo label="Local de instalação"       value={opl.local_instalacao} field="local_instalacao" />
           <Campo label={soEnvio(opl.fluxo_entrega) ? "Quantidade" : "Qtd. Veículos"} value={opl.quantidade} field="quantidade" />
           <Campo label="Data Entrada"              value={fmtDt(opl.data_entrada)} field="data_entrada" />
           <Campo label="Recebimento do Veículo"    value={fmtDt(opl.data_chegada_veiculo)} field="data_chegada_veiculo" />
@@ -1021,6 +1044,14 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Prazo Entrega Produção"    value={fmtDt(opl.prazo_entrega_producao)} field="prazo_entrega_producao" />
           <Campo label="Data Aceite Cliente"       value={fmtDt(opl.data_aceite_cliente)} field="data_aceite_cliente" />
           <Campo label="🛡️ Prazo de Garantia"      value={opl.prazo_garantia} field="prazo_garantia" />
+        </div>
+        {/* Rota da entrega: fluxo, destino e frete (cadastrados na criação e na edição) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+          <Campo label="🚦 Fluxo de entrega"       value={opl.fluxo_entrega ? fluxoLabel(opl.fluxo_entrega) : null} field="fluxo_entrega" />
+          <Campo label="Cidade / UF de entrega"    value={[opl.destino_cidade, opl.destino_uf].filter(Boolean).join(' / ') || null} field="destino_cidade" />
+          <Campo label="CEP de entrega"            value={opl.destino_cep} field="destino_cep" />
+          <Campo label="🚚 Frete (CIF/FOB)"        value={opl.frete_responsavel} field="frete_responsavel" />
+          <Campo label="Observações do envio"      value={opl.envio_obs} field="envio_obs" full />
         </div>
 
         {/* ── Financeiro ── */}
@@ -1039,6 +1070,19 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
                 <Campo label="Faturamento"           value={opl.faturamento_empresa} field="faturamento_empresa" />
               </div>
             )}
+          </>
+        )}
+
+        {/* ── Faturamento (CNPJ/CPF, razão social e centro de custo — cadastrados na edição) ── */}
+        {(opl.cnpj_faturamento || opl.razao_social_faturamento || opl.centro_custo || opl.observacoes_faturamento) && (
+          <>
+            <Sec title="🧾 Faturamento" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+              <Campo label="CNPJ / CPF de faturamento"  value={opl.cnpj_faturamento} field="cnpj_faturamento" />
+              <Campo label="Razão social de faturamento" value={opl.razao_social_faturamento} field="razao_social_faturamento" />
+              <Campo label="🏷️ Centro de custo"         value={opl.centro_custo} field="centro_custo" />
+              <Campo label="Observações de faturamento" value={opl.observacoes_faturamento} field="observacoes_faturamento" full />
+            </div>
           </>
         )}
 
@@ -1139,6 +1183,16 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
             <Sec title="🔧 Resumo dos Serviços a serem executados" />
             <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 6 }}>
               <div style={{ fontSize: 11, color: '#14532d', whiteSpace: 'pre-wrap' }}><Linkify text={opl.resumo_servicos} /></div>
+            </div>
+          </>
+        )}
+
+        {/* ── Especificações (texto da edição do Comercial que o cartão não mostrava) ── */}
+        {opl.especificacoes && (
+          <>
+            <Sec title="📐 Especificações" />
+            <div style={{ marginBottom: 8, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: '#374151', whiteSpace: 'pre-wrap' }}><Linkify text={opl.especificacoes} /></div>
             </div>
           </>
         )}
