@@ -1476,23 +1476,6 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
     setPedidoEmitido(numero);
   };
 
-  const prepararOpComercial = () => {
-    const prefill = {
-      cliente_nome: licit.nome_projeto || '',
-      modelo: licit.numero || '',
-      // o que foi definido aqui no primeiro card segue com a OP
-      origem_venda:   'licitacao',
-      fluxo_entrega:  licit.fluxo_entrega  || '',
-      destino_cidade: licit.destino_cidade || '',
-      destino_uf:     licit.destino_uf     || '',
-      destino_cep:    licit.destino_cep    || '',
-      observacoes: `${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} vencida: ${licit.numero} — ${licit.nome_projeto}`,
-      licitacao_id:   licit.id,   // permite carregar os itens vendidos da formação de preços dela
-    };
-    localStorage.setItem('acn_nova_op_prefill', JSON.stringify(prefill));
-    alert('Dados salvos!' + '\n\n' + 'Va em Comercial/CRM e clique em "Nova OP / OS" - o formulario ja abre preenchido' + (licit.fluxo_entrega ? ', inclusive com o Fluxo de Entrega.' : '.' + '\n\n' + 'Atencao: o Fluxo de Entrega nao foi definido nesta licitacao - sera preciso escolher na criacao da OP.'));
-  };
-
   // ── Toggle marcador ───────────────────────────────────────────────────────
   const alternar = (lista: string[], m: string) =>
     lista.includes(m) ? lista.filter(x => x !== m) : [...lista, m];

@@ -135,12 +135,27 @@ essa mesma OP, ele pode continuar mostrando a pendência como aberta.
 **A6 — Liberar BOM não avisa sobre pendência de fabricação em aberto da
 mesma OP.** Só quem chegar depois, no Almoxarifado, esbarra nisso.
 
+**A7 — OP devolvida ao Comercial não tem caminho de volta para a Engenharia.**
+*(Achado na Etapa 3, em 29/09/2026, ao conferir o que o `ComercialTab.tsx`
+guardava antes de apagá-lo.)* O botão "reenviar para a Engenharia"
+(`enviarParaEngenharia`: `Devolvida Comercial` → `Em Espera Engenharia`) só
+existe nesse arquivo, que saiu do menu em 23/07/2026 na unificação
+Comercial+CRM. Nenhuma tela viva faz esse reenvio: hoje só Admin/Gerente
+consegue, trocando o status à mão em `OplEdicao.tsx`. **Medido no banco em
+29/09/2026: 10 OPs paradas em `Devolvida Comercial`**, 4 delas devolvidas pela
+Engenharia em 17 e 18/09 (motivos como "informação incompleta" e "ainda não
+confirmada a venda"), e **só 1 reenvio registrado em toda a história** (20/07,
+três dias antes de o arquivo sair do menu). É o mesmo tipo de degrau quebrado
+da A2: o sistema devolve, mas ninguém consegue devolver de volta.
+
 ### B. Código morto / caminhos órfãos (achado em 3 pontos independentes)
 
-**B1 — `src/ComercialTab.tsx`**: tela inteira (~800 linhas) com seu próprio
-formulário de "+ Nova OP", importada em `DashboardTab.tsx` mas **nunca
-renderizada** em nenhuma navegação real. Tem `confirmarEntrega` duplicado
-do que existe em `FiscalTab.tsx`.
+**B1 — `src/ComercialTab.tsx`**: tela inteira (1.450 linhas, medido em
+29/09/2026; o plano dizia ~800) com seu próprio formulário de "+ Nova OP",
+importada em `DashboardTab.tsx` mas **nunca renderizada** em nenhuma navegação
+real. Tem `confirmarEntrega` duplicado do que existe em `FiscalTab.tsx`.
+*Ver A7: não pode ser apagada antes de o reenvio de OP devolvida ganhar uma
+tela viva (Etapa 3.1).*
 
 **B2 — `prepararOpComercial`** em `LicitacoesTab.tsx`: grava um prefill e
 mostra um alerta orientando "vá em Comercial/CRM e clique em Nova OP/OS" —
@@ -357,11 +372,68 @@ sem OP nenhuma** (todos os funis). Pode ser legítimo — em licitação a OP na
 pelo pedido de empenho, não pelo card —, mas vale conferir quando a criação de
 OP for unificada.
 
-### ⬜ Etapa 3 — Limpar os caminhos órfãos (B1-B4)
-Confirmar com o usuário que cada um está morto de verdade (checar uso), e
-então: apagar ou arquivar `ComercialTab.tsx`, `prepararOpComercial`,
-`PedidoCompraList.tsx` e os dois `EngenhariaTab-*.tsx` vazios. Baixo risco,
-alto ganho de clareza pra quem mexer no sistema depois — inclusive pra mim.
+### 🟡 Etapa 3 — Limpar os caminhos órfãos (B1-B4)
+
+**Feito em:** 29/09/2026 — **B2, B3 e B4 concluídos; B1 (`ComercialTab.tsx`)
+espera a Etapa 3.1** e continua no repositório de propósito.
+
+**O que foi feito:**
+
+- **Prova de que estão mortos** (busca por `import`, por nome, por
+  `import()` dinâmico e pelo menu do `DashboardTab`): `prepararOpComercial`
+  definida e nunca chamada; `PedidoCompraList.tsx` sem nenhum importador e fora
+  do menu (a tela viva de compras é a `ComprasTab`); os dois
+  `EngenhariaTab-*.tsx` só com `export {}` e sem referência.
+- **Apagados, com a confirmação do usuário na conversa:** a função
+  `prepararOpComercial` (`LicitacoesTab.tsx`), `src/PedidoCompraList.tsx` (363
+  linhas, que ainda carregava uma cópia da chave anon do banco escrita à mão),
+  `src/EngenhariaTab-COM-PERMISSOES.tsx` e
+  `src/EngenhariaTab-NOVO-COM-LIBERAR-BOM.tsx`. O histórico continua no git.
+- **Mantida de propósito:** a chave `acn_nova_op_prefill` do navegador.
+  `prepararOpComercial` era só um dos dois que a escreviam; o outro,
+  `LicitacaoEntregas.tsx` ("Gerar OP" do Contrato e Entregas), e quem lê,
+  `NovaOpOsModal.tsx`, estão vivos.
+- **B1 não foi apagado.** Conferi o que o `ComercialTab` faz e onde cada ação
+  vive hoje: Nova OP → `NovaOpOsModal`; editar e desmembrar por quantidade →
+  `CrmTab` (`salvarOplEdit`); liberar para o Fiscal → `CrmTab`; confirmar
+  entrega → `CrmTab` e `FiscalTab`; categoria nova de projeto → gravava em
+  `sac_categorias`, que é a tabela de categorias do **SAC** (misturava as duas
+  coisas), e o `NovaOpOsModal` vivo não oferece criar categoria de projeto;
+  manutenção agendada → **zero uso na história do banco** (0 eventos, 0
+  agendamentos). **A única ação sem equivalente vivo é o reenvio da OP
+  devolvida — ver A7.**
+- **O arquivo continuou recebendo edição depois de sair do menu, e isso é um
+  risco.** Em 14/09, 17/09 e 25/09 foram varreduras que passam por todo o
+  projeto (janelas do sistema, busca, fuso). Já o commit de **28/09/2026**
+  ("Formulários de OP…") mexeu em cerca de 50 linhas deste arquivo de
+  propósito — o comentário "corrigido em 28/09/2026" no `salvarOPL` é dele —
+  provavelmente por ele parecer mais um formulário de OP. Nada disso aparece na
+  tela, porque o componente nunca é desenhado: era trabalho gasto em código
+  morto. Mais um motivo para apagar o arquivo assim que a 3.1 fechar.
+
+**Testado:** `npx vite build` verde. Detalhe de uma licitação (onde morava
+`prepararOpComercial`) aberto no navegador com gravações bloqueadas: abre, sem
+nenhum erro de página, e a única gravação tentada e barrada foi o registro de
+"última visualização", igual a abrir qualquer card. **Não testei o "Gerar OP" do
+Contrato e Entregas de ponta a ponta**: o código dele e o do leitor não foram
+tocados.
+
+**O que ficou de fora:** `ComercialTab.tsx` (B1), à espera da 3.1; e o
+`publicar.bat`, o caminho manual antigo, ainda cita `git add
+src/ComercialTab.tsx` em várias linhas — só vira problema quando o arquivo for
+apagado (na 3.1), e lá se trata. **Nenhum dado foi alterado.**
+
+### ⬜ Etapa 3.1 — Dar uma tela viva ao reenvio da OP devolvida (A7), e então apagar o `ComercialTab.tsx` (B1)
+Colocar de volta, numa tela que existe no menu, o "reenviar para a Engenharia"
+das OPs em `Devolvida Comercial`. A candidata natural é a aba **OPLs em aberto**
+do CRM, que já lista essas OPs e já pinta esse status. O que a tela precisa
+mostrar: quem devolveu, o motivo (`obs_devolucao`) e a data, para o Comercial
+corrigir antes de reenviar. O reenvio grava o mesmo que o botão antigo
+(`status_geral: 'Em Espera Engenharia'`, linha em `logs_movimentacao_opl`,
+`notificarEvento('op_enviada_engenharia')`). **Não corrigir as 10 OPs
+paradas em massa** — quem decide o que reenviar é o Comercial, uma por uma
+(regra 4 do CLAUDE.md). Feito isso, apagar `ComercialTab.tsx`, o `import` no
+`DashboardTab.tsx` e as linhas do `publicar.bat`, e fechar a Etapa 3.
 
 ### ⬜ Etapa 4 — Convergir a criação de OP num caminho só (A1)
 Decisão de negócio necessária: o formulário simplificado do CRM
@@ -420,8 +492,9 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 
 - **Etapa 4:** o formulário simplificado do CRM deve morrer ou virar um
   "modo rápido" oficial e documentado?
-- **Etapa 3:** confirmar que nenhum dos 4 arquivos órfãos guarda alguma
-  regra de negócio que ainda vale antes de apagar.
+- **Etapa 3.1:** OP devolvida pelo **Fiscal** (2 das 10 paradas, ambas
+  "teste") também volta para a Engenharia no reenvio, como no botão antigo, ou
+  deveria voltar para a liberação comercial? O botão antigo não distinguia.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -436,3 +509,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | Card do CRM com OP já lançada: não esconder "Lançar OP" (há card com mais de uma OP de verdade); trocar por "Lançar outra OP" com confirmação e mostrar o selo com o número. |
 | 29/09/2026 | Liberar BOM com demanda de Serralheria/Chicotes/Compras em aberto: **avisa e deixa seguir**, não trava. |
 | 29/09/2026 | Aviso de falha do sistema passa o tom explícito (`atencao`/`erro`): o tom por adivinhação pelo texto pinta "não foi criada" de verde. |
+| 29/09/2026 | Órfãos seguros apagados (`prepararOpComercial`, `PedidoCompraList.tsx`, os dois `EngenhariaTab-*` vazios). `ComercialTab.tsx` só sai depois de o reenvio de OP devolvida ganhar tela viva (Etapa 3.1) — decisão do usuário. |
