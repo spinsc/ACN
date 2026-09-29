@@ -46,6 +46,7 @@ export const MOTIVO = {
   RETIRADA: 'retirada',
   COMPRA_RECEBIDA: 'compra_recebida',
   FABRICACAO_RECEBIDA: 'fabricacao_recebida',
+  CONSUMO_ESTRUTURA: 'consumo_estrutura',
   AJUSTE: 'ajuste',
 };
 
@@ -654,6 +655,47 @@ export async function liberarReservaDaOp({ oplId, motivo, currentUser }: any) {
 }
 
 /**
+ * ESTRUTURA DO CHICOTE (Etapa 9 do plano) — metros de fio por cor, conexões,
+ * terminais que 1 unidade do chicote consome ao ser fabricada.
+ *
+ * "Só faz sentido depois que o chicote inteiro já entra e sai do estoque
+ * direito" (o próprio plano) — por isso mora ao lado da fabricação, não antes
+ * dela. É opcional por chicote: sem estrutura cadastrada, nada é consumido —
+ * mesmo princípio de opt-in de sempre.
+ */
+export async function materiaisDoChicote(chicoteItemId: string) {
+  if (!chicoteItemId) return [];
+  const { data } = await supabase.from('chicote_materiais')
+    .select('id,quantidade,material_item_id,material:cadastro_itens!chicote_materiais_material_item_id_fkey(id,codigo,nome,unidade,controla_estoque,estoque_atual)')
+    .eq('chicote_item_id', chicoteItemId)
+    .order('criado_em');
+  return data || [];
+}
+
+export async function adicionarMaterialChicote({ chicoteItemId, materialItemId, quantidade, currentUser }: any) {
+  const { error } = await supabase.from('chicote_materiais').insert({
+    chicote_item_id: chicoteItemId, material_item_id: materialItemId,
+    quantidade: num(quantidade), criado_por: currentUser?.email || null,
+  });
+  if (error) return { erro: error.code === '23505' ? 'Este material já está na estrutura deste chicote.' : error.message };
+  return { ok: true };
+}
+
+export async function removerMaterialChicote(id: string) {
+  const { error } = await supabase.from('chicote_materiais').delete().eq('id', id);
+  return error ? { erro: error.message } : { ok: true };
+}
+
+/** O que fabricar `quantidade` chicotes vai consumir — usado tanto para
+ *  mostrar a prévia na tela quanto para de fato dar baixa (mesma conta). */
+export function materiaisAConsumir(estrutura: any[], quantidade: number) {
+  const qtd = num(quantidade);
+  return (estrutura || [])
+    .filter(m => m.material)
+    .map(m => ({ ...m, aConsumir: num(m.quantidade) * qtd }));
+}
+
+/**
  * Demandas de fabricação prontas, esperando o Almoxarifado conferir.
  *
  * É a fila do balcão: a peça já foi feita, o setor disse quanto produziu, e o
@@ -695,6 +737,31 @@ export async function creditarFabricacaoRecebida({ demanda, quantidade, currentU
     currentUser,
   });
   if (r?.erro || r?.ignorado) return r;
+
+  // Estrutura do chicote (Etapa 9): se este chicote tem material cadastrado,
+  // fabricar `qtd` unidades consome esse material também — na quantidade
+  // PRODUZIDA, mesma regra do chicote em si. Passa pelo mesmo
+  // movimentarEstoque, então material que cair no mínimo já pede reposição
+  // sozinho, sem nada novo a disparar aqui.
+  const estrutura = await materiaisDoChicote(demanda.item_id);
+  if (estrutura.length) {
+    const avisosEstrutura: string[] = [];
+    const requisicoesEstrutura: any[] = [];
+    for (const m of materiaisAConsumir(estrutura, qtd)) {
+      const rm = await movimentarEstoque({
+        itemId: m.material.id, tipo: 'saida', quantidade: m.aConsumir,
+        motivo: MOTIVO.CONSUMO_ESTRUTURA,
+        observacoes: `Consumido pela fabricação de ${fmtQtd(qtd)} ${demanda.unidade || 'un'} do chicote`
+          + (demanda.numero_demanda ? ` (${demanda.numero_demanda})` : '') + '.',
+        vinculo: { tipo: 'fabricacao', id: demanda.id, descricao: demanda.numero_demanda || `Demanda ${demanda.setor_destino}` },
+        currentUser,
+      });
+      if (rm?.erro) avisosEstrutura.push(`${m.material.nome}: ${rm.erro}`);
+      else if (rm?.requisicao?.criada) requisicoesEstrutura.push({ material: m.material.nome, ...rm.requisicao });
+    }
+    if (avisosEstrutura.length) r.avisosEstrutura = avisosEstrutura;
+    if (requisicoesEstrutura.length) r.requisicoesEstrutura = requisicoesEstrutura;
+  }
 
   // Marca depois de creditar: se a movimentação falhar, a demanda continua na
   // fila e alguém tenta de novo. O contrário deixaria peça fora do saldo.
@@ -1154,6 +1221,126 @@ export function CamposEstoqueItem({ form, set, currentUser }: any) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ESTRUTURA DO CHICOTE — editor embutido no Cadastro de Itens (Etapa 9)
+//
+// Aparece só no chicote (fabricação interna do setor Chicotes) que já foi
+// salvo — precisa do id para pendurar os materiais nele. Cadastrar aqui não
+// obriga nada: chicote sem estrutura continua funcionando como sempre
+// (crédito de estoque sem baixar material nenhum).
+// ─────────────────────────────────────────────────────────────────────────────
+function useTodosOsItens() {
+  const [itens, setItens] = useState<any[]>([]);
+  useEffect(() => {
+    supabase.from('cadastro_itens').select('id,codigo,nome,unidade')
+      .eq('ativo', true).order('nome').limit(5000)
+      .then(({ data }) => setItens(data || []));
+  }, []);
+  return itens;
+}
+
+export function CamposEstruturaChicote({ item, currentUser }: any) {
+  const pode = podeGerirEstoque(currentUser);
+  const [materiais, setMateriais] = useState<any[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [materialId, setMaterialId] = useState('');
+  const [qtdNova, setQtdNova] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const todosOsItens = useTodosOsItens();
+
+  const carregar = async () => { setCarregando(true); setMateriais(await materiaisDoChicote(item.id)); setCarregando(false); };
+  useEffect(() => { if (item?.id) carregar(); }, [item?.id]);
+
+  const jaTem = new Set(materiais.map(m => m.material_item_id));
+  const opcoes = todosOsItens
+    .filter(i => i.id !== item.id && !jaTem.has(i.id))
+    .map(i => ({ valor: i.id, rotulo: `${i.codigo ? i.codigo + ' · ' : ''}${i.nome}`, detalhe: i.unidade || 'UN', busca: [i.codigo, i.nome] }));
+
+  const adicionar = async () => {
+    if (!materialId) { alert('Escolha o material.'); return; }
+    if (!(num(qtdNova) > 0)) { alert('Informe a quantidade por unidade do chicote.'); return; }
+    setSalvando(true);
+    const r = await adicionarMaterialChicote({ chicoteItemId: item.id, materialItemId: materialId, quantidade: qtdNova, currentUser });
+    setSalvando(false);
+    if (r?.erro) { alert('Não foi possível adicionar: ' + r.erro); return; }
+    setMaterialId(''); setQtdNova('');
+    carregar();
+  };
+
+  const remover = async (m: any) => {
+    if (!await confirmar(`Remover "${m.material?.nome}" da estrutura deste chicote?`)) return;
+    const r = await removerMaterialChicote(m.id);
+    if (r?.erro) { alert('Não foi possível remover: ' + r.erro); return; }
+    carregar();
+  };
+
+  if (!item?.id) return (
+    <div style={{ fontSize: 9.5, color: '#94a3b8', fontStyle: 'italic', marginBottom: 10 }}>
+      Salve o item primeiro para cadastrar a estrutura de material.
+    </div>
+  );
+
+  return (
+    <div style={{ marginBottom: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '9px 11px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>🧵 Estrutura deste chicote</div>
+      <div style={{ fontSize: 9, color: '#78350f', marginTop: 3, marginBottom: 8 }}>
+        Quanto de cada material 1 unidade deste chicote consome ao ser fabricada — fio por cor, conexão,
+        terminal. Ao dar entrada no estoque desta fabricação, o sistema desconta isto sozinho, na quantidade
+        que o setor de fato produziu. Sem nada aqui, a entrada credita só o chicote, como sempre foi.
+      </div>
+
+      {carregando ? (
+        <div style={{ fontSize: 10, color: '#94a3b8' }}>Carregando...</div>
+      ) : materiais.length === 0 ? (
+        <div style={{ fontSize: 9.5, color: '#94a3b8', fontStyle: 'italic', marginBottom: 8 }}>Nenhum material cadastrado ainda.</div>
+      ) : (
+        <div style={{ marginBottom: 8 }}>
+          {materiais.map(m => (
+            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: '1px solid #fef3c7' }}>
+              <span style={{ flex: 1, fontSize: 10.5, color: '#1e293b' }}>
+                {m.material?.codigo ? m.material.codigo + ' · ' : ''}{m.material?.nome}
+                {!m.material?.controla_estoque && (
+                  <span style={{ color: '#b45309', fontSize: 8.5, marginLeft: 5 }}>(sem controle de estoque ligado)</span>
+                )}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#334155', whiteSpace: 'nowrap' }}>
+                {fmtQtd(m.quantidade)} {m.material?.unidade || 'UN'} / chicote
+              </span>
+              {pode && (
+                <button onClick={() => remover(m)} title="Remover"
+                  style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #fca5a5', borderRadius: 4,
+                    background: '#fff', color: '#dc2626', cursor: 'pointer' }}>
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pode && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 2, minWidth: 180 }}>
+            <div style={{ fontSize: 8.5, color: '#78350f', marginBottom: 2 }}>Material</div>
+            <SelectBusca valor={materialId} onChange={setMaterialId} opcoes={opcoes}
+              placeholder="— escolha o material —" vazio="— nenhum material —" />
+          </div>
+          <div style={{ width: 110 }}>
+            <div style={{ fontSize: 8.5, color: '#78350f', marginBottom: 2 }}>Qtd / chicote</div>
+            <input type="number" min={0} step="any" value={qtdNova} onChange={e => setQtdNova(e.target.value)}
+              style={{ width: '100%', padding: '6px 8px', border: '1px solid #fbbf24', borderRadius: 4, fontSize: 11, boxSizing: 'border-box' }} />
+          </div>
+          <button onClick={adicionar} disabled={salvando}
+            style={{ fontSize: 10, fontWeight: 700, padding: '6px 14px', border: 'none', borderRadius: 4,
+              background: '#b45309', color: '#fff', cursor: 'pointer' }}>
+            {salvando ? '...' : '+ Adicionar'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RETIRADA — alguém veio pedir material no balcão
 //
 // A lista é do que saiu, com quantidade e quem levou. Só aparecem itens sob
@@ -1462,15 +1649,21 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
   const [conferindo, setConferindo] = useState<any>(null);
   const [qtd, setQtd] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Estrutura do chicote (Etapa 9): mostra ANTES de confirmar o que também vai
+  // ser descontado, na mesma proporção da quantidade digitada.
+  const [estrutura, setEstrutura] = useState<any[]>([]);
   const pode = podeGerirEstoque(currentUser);
 
   const recarregar = async () => setFila(await fabricacoesAguardandoCredito());
   useEffect(() => { recarregar(); }, []);
 
-  const abrir = (d: any) => {
+  const abrir = async (d: any) => {
     setQtd(String(d.quantidade_produzida ?? d.quantidade ?? ''));
+    setEstrutura(await materiaisDoChicote(d.item_id));
     setConferindo(d);
   };
+
+  const consumoPrevisto = materiaisAConsumir(estrutura, qtd);
 
   const confirmar_ = async () => {
     const n = num(qtd);
@@ -1483,6 +1676,13 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
     let msg = `Estoque atualizado: entraram ${fmtQtd(n)}, saldo agora ${fmtQtd(r.saldo_depois)}.`;
     if (r?.requisicao?.criada) msg += `\n\nMesmo assim o saldo seguiu no mínimo, então já pedi mais — ${paraQuem(r.requisicao)}.`;
     if (r?.avisoMarcacao) msg += `\n\n⚠️ O saldo subiu, mas a demanda não saiu da fila: ${r.avisoMarcacao}`;
+    if (r?.requisicoesEstrutura?.length) {
+      msg += `\n\nMaterial da estrutura também no mínimo, já pedi:\n`
+        + r.requisicoesEstrutura.map((q: any) => `• ${q.material} — ${paraQuem(q)}`).join('\n');
+    }
+    if (r?.avisosEstrutura?.length) {
+      msg += `\n\n⚠️ Não deu para descontar todo o material da estrutura:\n` + r.avisosEstrutura.join('\n');
+    }
     alert(msg);
     setConferindo(null);
     recarregar();
@@ -1540,6 +1740,19 @@ export function PainelFabricacaoRecebimento({ currentUser, onCreditou }: any) {
               O setor informou {fmtQtd(conferindo.quantidade_produzida ?? conferindo.quantidade)} {conferindo.unidade || 'un'}.
               Se chegou menos, corrija aqui — vale o que está na prateleira.
             </div>
+
+            {consumoPrevisto.length > 0 && (
+              <div style={{ fontSize: 9.5, color: '#78350f', background: '#fffbeb', border: '1px solid #fde68a',
+                borderRadius: 4, padding: '6px 8px', marginTop: 8 }}>
+                🧵 Esta entrada também vai descontar da estrutura do chicote:
+                <ul style={{ margin: '3px 0 0', paddingLeft: 16 }}>
+                  {consumoPrevisto.map((m: any) => (
+                    <li key={m.id}>{fmtQtd(m.aConsumir)} {m.material?.unidade || 'UN'} de {m.material?.nome}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button onClick={confirmar_} disabled={salvando}
                 style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>

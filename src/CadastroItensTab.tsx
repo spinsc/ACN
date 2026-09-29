@@ -7,7 +7,7 @@ import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
 import { lerPlanilha, primeiraAbaComDados } from './LerPlanilha';
 import { EXT_PLANILHAS_IMPORTACAO } from './FormatosArquivo';
 import { confirmar } from './Feedback';
-import { CamposEstoqueItem } from './Estoque';
+import { CamposEstoqueItem, CamposEstruturaChicote } from './Estoque';
 import { hojeISO } from './Interface';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -458,6 +458,13 @@ function ItemModal({
               </div>
             </Field>
           </Row>
+
+          {form.origem_producao === 'interna' && form.setor_fabricante === 'Chicotes' && (
+            <>
+              <Section title="🧵 Estrutura do chicote (Etapa 9)" />
+              <CamposEstruturaChicote item={form} currentUser={currentUser} />
+            </>
+          )}
 
           <Section title="📊 Impostos e Markup (sugestão de partida)" />
           <div style={{

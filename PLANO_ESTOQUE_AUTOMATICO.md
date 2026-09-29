@@ -992,17 +992,73 @@ movimentou nada.
 
 ---
 
-### ⬜ Etapa 9 — Estrutura do chicote (o micro) · **PRÓXIMA**
+### ✅ Etapa 9 — Estrutura do chicote (o micro)
 
 **O que muda:** o chicote ganha sua própria estrutura — metros de fio por cor,
 conexões, terminais. Mandar fabricar dá baixa nesses materiais e dispara a
 compra deles quando faltar.
 
 **Só faz sentido depois** que o chicote inteiro já entra e sai do estoque
-direito e que o setor esteja confortável com o controle.
+direito e que o setor esteja confortável com o controle. Perguntado antes de
+começar (28/09/2026, com o número real do banco — 12 de 72 chicotes
+cadastrados já sob controle, subiu de 3 em três dias): usuário confirmou que
+sim, pode seguir.
 
-**Feito em:** —
-**O que foi feito:** —
+**Feito em:** 28/09/2026.
+
+**O que foi feito:**
+
+- Migração `estrutura_do_chicote`: tabela `chicote_materiais` (chicote ×
+  material, quantidade por unidade fabricada, único por par).
+- `Estoque.tsx`:
+  - `materiaisDoChicote`, `adicionarMaterialChicote`, `removerMaterialChicote`,
+    `materiaisAConsumir` (a mesma conta serve pra prévia na tela e pra baixa de
+    verdade — quantidade produzida × quantidade por chicote).
+  - `creditarFabricacaoRecebida` passou a, depois de creditar o chicote, olhar
+    a estrutura dele e descontar cada material — pelo **mesmo**
+    `movimentarEstoque` de sempre. Foi por isso que "dispara a compra quando
+    faltar" não pediu nada novo: o gatilho de reposição automática (Etapa 2/4)
+    já mora dentro do movimento, não na tela. Falha ao descontar um material
+    não desfaz o crédito do chicote — vira aviso, não trava a fabricação.
+  - `CamposEstruturaChicote` — editor embutido no Cadastro de Itens: lista os
+    materiais do chicote com botão de remover, e um `SelectBusca` + quantidade
+    para adicionar. Só aparece no item já salvo, fabricado aqui dentro, do
+    setor Chicotes.
+  - `PainelFabricacaoRecebimento` ganhou a prévia: antes de confirmar a
+    entrada, mostra o que também vai ser descontado, na proporção da
+    quantidade digitada.
+- `CadastroItensTab.tsx`: nova seção "🧵 Estrutura do chicote (Etapa 9)",
+  logo depois de "Origem do item".
+
+**Testado** de ponta a ponta, com gravação real em dados sintéticos
+(`ZZT-CHI9` chicote, `ZZT-FIO9` fio vermelho, `ZZT-TER9` terminal — 2m de fio
+e 4 terminais por chicote):
+
+| Passo | Resultado |
+|---|---|
+| Estrutura cadastrada pela tela (Cadastro de Itens) | os dois materiais aparecem certos, com botão de remover |
+| Demanda com 8 produzidos (pedido de 10) na fila do Almoxarifado | aparece em "Fabricação pronta para conferir" |
+| Modal de dar entrada | prévia mostra **16 M de fio** e **32 PC de terminal** (8 × 2 e 8 × 4) |
+| Confirmado | chicote **0 → 8**; fio **100 → 84**; terminal **40 → 8** |
+| Terminal ficou abaixo do mínimo (20) | pediu compra sozinho — **PC-LXMCXL**, avisado na hora na mensagem de confirmação |
+
+Dado de teste apagado (3 itens, 1 demanda, 1 estrutura, 3 movimentos, 1
+requisição de compra); banco conferido de volta em 4.438 itens (4.429 ativos),
+como antes.
+
+**Achado no caminho, fora do escopo desta etapa:** a fila de
+`fabricacoesAguardandoCredito()` filtra status `['Concluido', 'Concluída']`
+(sem acento numa grafia, com acento na outra), mas o banco tem hoje demandas
+de verdade com status **`Concluida`** (sem acento, feminino) — uma terceira
+grafia que não bate com nenhuma das duas do filtro. Uma demanda nesse status
+nunca aparece na fila de crédito de estoque. Não mexi nisso porque é um dado
+real e um comportamento fora do que a Etapa 9 pediu — fica anotado para
+decisão à parte.
+
+**O que ficou de fora de propósito:** nada. A etapa era a última do plano
+principal (ver "Onde queremos chegar" e a Revisão de arquitetura de
+26/09/2026) — o que resta é o que já estava listado como aberto nas etapas
+anteriores (ver "Perguntas em aberto", abaixo).
 
 ---
 
