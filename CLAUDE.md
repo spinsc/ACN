@@ -11,6 +11,10 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > Projeto longo em curso: [PLANO_ESTOQUE_AUTOMATICO.md](PLANO_ESTOQUE_AUTOMATICO.md)
 > — estoque, reserva e automação da lista de material, em etapas. Retomado pelo
 > comando `/estoque-auto`, de qualquer máquina.
+>
+> Outro projeto longo: [PLANO_UX_FLUXO_TRABALHO.md](PLANO_UX_FLUXO_TRABALHO.md)
+> — visualização do fluxo do PV à entrega e polimento de UX, em etapas. Retomado
+> pelo comando `/ux-fluxo`, de qualquer máquina.
 
 ---
 
