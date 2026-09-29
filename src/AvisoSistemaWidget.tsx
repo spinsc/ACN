@@ -23,6 +23,17 @@ function prazoLabel(av: any): string {
   return '';
 }
 
+// Pedido do usuário em 29/09/2026: mostrar o horário em que o aviso foi
+// publicado, não só quem publicou. `criado_em` já é gravado pelo banco
+// (timestamptz), então é só exibir. Fica aqui para o painel flutuante e a tela
+// de Admin mostrarem o mesmo formato.
+export function criadoEmLabel(av: any): string {
+  if (!av?.criado_em) return '';
+  const d = new Date(av.criado_em);
+  if (isNaN(d.getTime())) return '';
+  return `🕐 ${d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+}
+
 // ─── componente ──────────────────────────────────────────────────────────────
 export default function AvisoSistemaWidget({ currentUser }: any) {
   const [avisos, setAvisos]           = useState<any[]>([]);
@@ -384,7 +395,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                       <Linkify text={av.mensagem} />
                     </div>
                     <div style={{ fontSize: 9, color: '#6b7280', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                      <span>✍️ {av.criado_por_nome || '—'}</span>
+                      <span>✍️ {av.criado_por_nome || '—'}{criadoEmLabel(av) ? ` · ${criadoEmLabel(av)}` : ''}</span>
                       <span>{prazoLabel(av)}</span>
                     </div>
                   </div>
