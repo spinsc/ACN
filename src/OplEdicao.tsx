@@ -15,6 +15,7 @@ import { ehAdminOuGerente } from './utils/permissoes';
 import { ORIGENS } from './OrigemVenda';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { TIPOS_SERVICO_TERCEIRO } from './NovaOpOsModal';
+import { confirmar } from './Feedback';
 
 export const podeEditarOplCompleta = (u: any) => ehAdminOuGerente(u);
 
@@ -210,7 +211,8 @@ export function ModalEditarOplLote({ ops, currentUser, onClose, onSalvo }) {
   const salvar = async () => {
     if (!motivo.trim()) { alert('Informe o motivo da alteração.'); return; }
     const novo = paraBanco(c, valor);
-    if (novo == null && !confirm(`Deixar "${c.rotulo}" em branco nas ${ops.length} OPs?`)) return;
+    // era o confirm() do navegador, a última janela nativa do sistema fora do Estoque (Etapa 7, 29/09/2026)
+    if (novo == null && !await confirmar(`Deixar "${c.rotulo}" em branco nas ${ops.length} OPs?`)) return;
     setSalvando(true);
     const falhas = await aplicar(ops, () => ({ [c.campo]: novo }), motivo.trim(), currentUser, `Edição em lote (${ops.length} OPs)`);
     setSalvando(false);

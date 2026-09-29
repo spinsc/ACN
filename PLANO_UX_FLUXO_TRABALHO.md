@@ -260,6 +260,10 @@ cascas vazias de uma refatoração anterior.
   visual — sem hierarquia de "resolve isso primeiro".
 - `alert()`/`confirm()` nativos do navegador em quase toda ação — sem
   hierarquia de severidade, sem estilo do sistema.
+  *Correção da Etapa 7 (29/09/2026): isto já estava resolvido no essencial — todo
+  `alert()` é redirecionado para o aviso do sistema em `main.tsx`, e `confirmar`/
+  `pedirTexto` (`Feedback.tsx`) já cobrem confirmação e texto. Sobravam só 2 `confirm()`
+  nativos e o **tom** dos avisos, que é adivinhado pelo texto e errava em 16% deles.*
 - Kiting em lote: nenhuma sugestão de fabricação vem pré-marcada — pra um
   lote de 90 carros, isso é dezenas de cliques de checkbox.
 - Dois campos de prazo parecidos no pedido de compra (`data_prevista_
@@ -1138,10 +1142,84 @@ liberada):
   aba.
 - **O link direto do frete** da faixa para o registro na Logística (já anotado na 6.1).
 
-### ⬜ Etapa 7 — Trocar `alert`/`confirm` nativos pelo padrão do sistema
-Generalizar `Feedback.tsx` (`confirmar`/`pedirTexto` já existem) para cobrir
-também mensagens de sucesso/erro com a hierarquia visual do sistema, e
-trocar os usos mais críticos primeiro (aprovações, exclusões).
+### ✅ Etapa 7 — Trocar `alert`/`confirm` nativos pelo padrão do sistema
+
+**Feito em:** 29/09/2026. **Nenhum dado foi alterado.**
+
+**O que o levantamento achou (o plano estava desatualizado):** o `Feedback.tsx` já faz o que a
+etapa pedia. Todo `alert()` (cerca de 600 chamadas em 65 arquivos) vira aviso do sistema em
+`main.tsx`; `confirmar()` (cerca de 130 usos) e `pedirTexto()` já existem; não sobrou nenhum `prompt()`.
+Faltava outra coisa: **o tom do aviso é adivinhado pelo texto**, e errava — o mesmo mecanismo que
+já tinha pintado "Não foi criada" de verde na Etapa 2. Medido nas **590 mensagens fixas** do
+sistema (extraídas do código, uma a uma): **94 (16%) saíam com o tom errado**.
+
+- **Verde onde devia ser amarelo (16):** "Kit liberado com pendência, **mas** o estoque ficou
+  negativo", "Marque ao menos um item para **salvar** a separação", "A solicitação foi **criada**,
+  mas alguns anexos não foram enviados", "Esta OP já mudou de status"…
+- **Azul (neutro) onde devia ser amarelo ou vermelho (74):** todas as recusas por permissão
+  ("Só Compras, gerentes ou administradores podem…", "Você não tem autorização para aprovar
+  compra"), as barras de regra ("Não dá para fechar o Kit 100%…", "Volte uma etapa por vez") e
+  as validações ("Descreva o motivo", "Adicione pelo menos um item", "Arquivo muito grande").
+- **Outros 4:** "A tarefa foi concluída, mas a próxima ocorrência não pôde ser criada" (verde → vermelho)
+  e "Deletado!" (2 vezes) e "Pedido de hora extra cancelado" (azul → verde).
+
+**O que foi feito:**
+
+- **`tomDe()` (`Feedback.tsx`) reescrito**, com o texto comparado **sem acento** (as expressões não
+  precisam mais repetir as duas grafias): erro (o sistema falhou **ou a pessoa não tem
+  permissão**) → atenção (falta a pessoa fazer algo, uma regra barrou, ou o resultado foi
+  parcial) → ok → info. Distribuição das 590: **erro 223 → 242, atenção 223 → 295, ok 61 → 47,
+  info 83 → 6**. As 446 que já saíam vermelhas ou amarelas **não mudaram**; das 144 que saíam
+  verdes ou azuis, 94 mudaram e 50 ficaram como estavam (conferidas uma a uma).
+- **Tom explícito onde o texto não ajuda** (6 pontos, todos `mostrarAviso(texto, tom)`): o erro
+  cru do banco em `ChicotesTab` e `SerralheriaTab` (`alert(err.message)`, 4 pontos — antes o
+  palpite dava azul), a validação montada na hora em `AlmoxarifadoTab` (2 pontos) e, em `ComprasTab`,
+  a recusa "O recebimento é registrado por Compras…" (o palpite dava **verde**, por causa de
+  "registrado") e "Esta é a cotação vencedora… use Editar" (verde, por causa de "aprovada").
+- **Último `confirm()` nativo trocado** (`OplEdicao.tsx`, edição em lote de OPs: "Deixar o campo em
+  branco nas N OPs?") pela janela do sistema.
+- **Botão de perigo** (`RE_PERIGO`): "**Deletar** pedido?" (3 confirmações) e "Regenerar o token
+  **invalida** o link antigo" agora saem com o botão vermelho, como as exclusões.
+- **Não mexi nas durações** (erro 9 s, atenção 7 s, o resto de 4 a 9 s) — ver "Perguntas em aberto".
+
+**Testado** (16 verificações; navegador com **gravações bloqueadas**; a regra é testada na
+versão **real** do `Feedback.tsx` servida pelo Vite):
+
+- **Regra contra as 590 mensagens:** as 446 vermelhas/amarelas de antes **continuam iguais** (0
+  mudaram) e as 144 verdes/azuis **conferem 144 de 144** com a tabela revisada à mão.
+- **Na tela de verdade:** 13 avisos disparados por `alert()` saem na cor certa (amarelo, vermelho,
+  verde, azul), inclusive palavras que só **começam** como as da regra ("Coleta registrada",
+  "Massa de dados importada" não viram amarelo); o tom explícito vence o palpite (a mensagem de
+  Compras daria verde sem ele).
+- **Confirmações:** "Deletar…" e "…invalida…" ficam com o botão de perigo; "Excluir…" continua; uma
+  pergunta comum ("Concluir a demanda?") continua normal.
+- **Edição em lote de OPs no CRM:** com duas OPs marcadas, deixar o campo em branco abre a
+  **janela do sistema** ("Deixar "Cliente" em branco nas 2 OPs?"), **nenhum diálogo nativo** do
+  navegador; cancelar não grava e mantém a edição aberta; confirmar tenta gravar
+  `cliente_nome = null` nas duas (barrado pelo teste) e o aviso "Algumas OPs não foram alteradas"
+  sai **amarelo** (antes saía verde).
+- **Regressões:** CRM 16/16, lista de OPs 30/30, selo do card 23/23, reenvio 20/20, status 13/13,
+  Engenharia 13/13, banner/Marketing/Financeiro 13/13, faixa do detalhe 21/21 e 4/4, "não lido" 9/9,
+  "OP/Conjunto" 21/21 e seletor do catálogo 5/5. Dois desses testes (lista de OPs e "não lido") tinham **número fixo**
+  e falharam porque o dado real mudou no meio do dia: um lote novo de 39 unidades (`1673.2609`)
+  levou as OPs abertas de 329 para 368, e mais 2 licitações receberam alteração; conferi os dois no
+  banco e atualizei os testes (o da lista passou a calcular o esperado).
+- **Não exercitados na tela** (só pelo código, o build e a regra): os 4 pontos de erro cru
+  (`Chicotes`/`Serralheria`, que só disparam com exceção de rede), a validação do Almoxarifado
+  (exige embalar uma OP) e as duas recusas de Compras (exigem outro perfil arrastando um cartão).
+- **Cuidado de teste, para a próxima máquina:** o servidor de desenvolvimento pode servir uma cópia
+  velha de um arquivo editado duas vezes seguidas (aconteceu com o `Feedback.tsx`); um `touch` no
+  arquivo força a releitura. O build e o que vai ao ar não são afetados.
+
+**O que ficou de fora:**
+
+- **1 `confirm()` nativo em `Estoque.tsx:1421`** ("O mesmo item aparece em mais de uma linha… Seguir
+  assim?"): o arquivo é da frente de estoque, que roda em outra sessão; fica para ela (troca de uma
+  duas linhas: `revisar` passa a `async` e o `confirm(...)` vira `await confirmar(...)`).
+- **Mensagens montadas na hora que continuam no palpite** (`ComprasTab.mostrarDica`,
+  `LogisticaTab:1462`, `PCPTab:257`, quatro em `Estoque.tsx`): dependem do texto que o código monta.
+- **As ~600 chamadas de `alert()` não foram reescritas uma a uma**, de propósito: a regra central
+  agora acerta 100% das 590 fixas revisadas, e o tom explícito fica para o que o texto não revela.
 
 ### ⬜ Etapa 8 — Aba "pendente da minha aprovação" em Compras
 Hoje só existe menção/e-mail. Uma aba/filtro dedicado pra quem tem
@@ -1179,6 +1257,9 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Selo "onde está" nos cards fora de "Vencido" (6.3):** hoje só aparece na coluna "Vencido".
   Há 2 cards em "Faturado" com a OP ainda esperando a liberação comercial e 1 em "Enviado" com a
   OP na fila da produção. Mostrar o selo em qualquer coluna em que o card tenha OP?
+- **Quanto tempo o aviso fica na tela (Etapa 7):** hoje erro some em 9 s e atenção em 7 s.
+  Para uma falha ao gravar (a pessoa pode estar olhando outra coisa), vale o erro **ficar até ser
+  fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -1207,4 +1288,5 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Selo "onde está" do card (6.3)**: um segundo selo ao lado do número da OP, com setor e dias da OP mais parada; clicar abre o detalhe da OP (a primeira unidade, se forem várias). O `Selo` ganhou `onClick` (vira `<button>`). Só na coluna "Vencido" por enquanto. |
 | 29/09/2026 | Os nomes das etapas da OP, o setor de cada uma e a regra do "desde quando" moram em **`EtapasOp.ts`** (fonte única da barra de progresso e da faixa). Quem lê histórico compara etapas por `mesmaEtapa()`, nunca por `===`, porque o histórico guarda o nome antigo da liberação comercial. |
 | 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
+| 29/09/2026 | **Tom dos avisos (Etapa 7)**: o `tomDe()` do `Feedback.tsx` compara sem acento e trata **recusa por permissão como erro (vermelho)**, regra que barrou/validação/resultado parcial como **atenção (amarelo)**; mensagem montada na hora (erro do banco) leva o tom explícito. Nenhuma duração mudou. Suposição minha: recusa por permissão é vermelha, como já era "sem permissão". |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |

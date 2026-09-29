@@ -1,7 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // AVISOS E CONFIRMAÇÕES DO SISTEMA — no lugar das janelas do navegador
 //   alert()   → mostrarAviso(): aviso no canto que some sozinho (window.alert
-//               é redirecionado para cá em main.tsx, então todo alert vira aviso)
+//               é redirecionado para cá em main.tsx, então todo alert vira aviso).
+//               O tom (verde/amarelo/vermelho/azul) vem do texto — ver tomDe — ou de
+//               quem chama: mostrarAviso(texto, 'erro' | 'atencao' | 'ok' | 'info')
 //   confirm() → await confirmar(msg): janela do sistema, devolve true/false
 //   prompt()  → await pedirTexto(msg, padrao): janela com campo, devolve texto ou null
 // As perguntas e decisões são exatamente as mesmas de antes; muda só a aparência
@@ -23,14 +25,27 @@ let pedidos: Pedido[] = [];
 const ouvintes = new Set<() => void>();
 const avisar = () => ouvintes.forEach(f => f());
 
-const RE_ERRO = /\b(erro|falha|falhou|não foi possível|nao foi possivel|inválid|invalid|incorret|sem permissão|bloquead|não pode|nao pode|negad)/i;
-const RE_ATENCAO = /\b(informe|selecione|preencha|obrigatóri|obrigatori|atenção|atencao|aviso|escolha|precisa|necessário|necessario|máximo|minimo|mínimo|nenhum|nenhuma|já existe|ja existe)/i;
-const RE_OK = /\b(salv|atualizad|registrad|enviad|concluíd|concluid|criad|importad|removid|excluíd|excluid|copiad|gerad|aprovad|vinculad|desvinculad|finalizad|marcad|liberad|restaurad|cadastrad|alterad|adicionad|sucesso|ok!)/i;
+// Tom do aviso quando quem chamou não disse qual é: adivinhado pelo texto, do mais grave para o
+// mais leve — erro (o sistema falhou ou a pessoa não tem permissão) → atenção (falta a pessoa
+// fazer algo, uma regra barrou, ou o resultado foi parcial) → ok (deu certo) → info.
+// O texto é comparado SEM ACENTO, então as expressões não repetem as duas grafias.
+//
+// Revisto em 29/09/2026 (Etapa 7 do PLANO_UX_FLUXO_TRABALHO.md): das 590 mensagens fixas do
+// sistema, 94 saíam com o tom errado. "Kit liberado, mas o estoque ficou negativo" e "Marque ao
+// menos um item para salvar" saíam VERDES (por causa de "liberad"/"salv"); "Só Compras,
+// gerentes… podem" e "Você não tem autorização" saíam azuis, como se fossem informação. Para
+// mensagem montada na hora (o erro que vem do banco, por exemplo) o texto não ajuda: quem chama
+// passa o tom — mostrarAviso(texto, 'erro') — como já se fez na criação automática de OP.
+const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '');
+const RE_ERRO = /\b(erro|falha|falhou|nao foi possivel|invalid|incorret|sem permiss|sem autoriz|bloquead|nao pode|negad|nao tem (autoriz|permiss)|voce nao tem|nao subiu|so (quem|compras|administradores|gerentes|o gestor))/i;
+const RE_ATENCAO = /\b(informe|selecione|preencha|obrigatori|atencao|aviso|escolha|precisa|necessari|maximo|minimo|nenhum|nenhuma|ja existe|descreva|adicione|anexe|marque|cole\b|classifique|assine|vincule|posicione|permita|libere|salve|volte uma|avance uma|lance pelo menos|deve ser|muito grande|nao da para|nao e possivel|nao (foi|foram|esta|estao|tem)|nao encontrad|ja (mudou|foi|tem)|ficou negativ|nem tudo|alguns|algumas|ainda nao|mas\b|fora d[oa]|aparece mais de uma vez|bloqueou|nao permitiu|pendencia|confira|faltou|vazi[ao]|reative|rejeitad|reprovad|nao (bat|confer)|divergen)/i;
+const RE_OK = /\b(salv|atualizad|registrad|enviad|concluid|criad|importad|removid|excluid|deletad|copiad|gerad|aprovad|vinculad|desvinculad|finalizad|marcad|liberad|restaurad|cadastrad|alterad|adicionad|cancelad|sucesso|ok!)/i;
 
-function tomDe(texto: string): Tom {
-  if (RE_ERRO.test(texto)) return 'erro';
-  if (RE_ATENCAO.test(texto)) return 'atencao';
-  if (RE_OK.test(texto)) return 'ok';
+export function tomDe(texto: string): Tom {
+  const t = semAcento(texto);
+  if (RE_ERRO.test(t)) return 'erro';
+  if (RE_ATENCAO.test(t)) return 'atencao';
+  if (RE_OK.test(t)) return 'ok';
   return 'info';
 }
 
@@ -67,7 +82,9 @@ function devolverFoco(p: Pedido) {
   } catch { /* elemento já saiu da tela */ }
 }
 
-const RE_PERIGO = /(exclu|apag|remov|cancel|devolv|descart|desvincul|reprov|limpar|desativ|sobrescrev|substitu|perd)/i;
+// "delet" (Deletar pedido?, Deletar N registros?) e "invalida" (Regenerar o token invalida o link
+// antigo) ficavam de fora e saíam com o botão azul de confirmação normal — Etapa 7, 29/09/2026.
+const RE_PERIGO = /(exclu|apag|remov|cancel|devolv|descart|desvincul|reprov|limpar|desativ|sobrescrev|substitu|perd|delet|invalida)/i;
 
 export function confirmar(mensagem: any): Promise<boolean> {
   return new Promise(resolve => {

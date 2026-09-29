@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { LinkOpl } from './AcnTabShared';
+import { mostrarAviso } from './Feedback';
 
 
 export default function SerralheriaTab({ currentUser }) {
@@ -111,7 +112,8 @@ export default function SerralheriaTab({ currentUser }) {
         fetchData();
       }
     } catch (err) {
-      alert(err.message);
+      // texto vindo do banco/da rede: o tom não dá para adivinhar, e aqui é sempre falha (29/09/2026)
+      mostrarAviso(err.message, 'erro');
     }
   };
 
@@ -131,7 +133,7 @@ export default function SerralheriaTab({ currentUser }) {
         fetchData();
       }
     } catch (err) {
-      alert(err.message);
+      mostrarAviso(err.message, 'erro');
     }
   };
 

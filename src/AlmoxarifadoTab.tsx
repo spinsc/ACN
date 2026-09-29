@@ -13,7 +13,7 @@ import { ModalDevolverOp } from './DevolverOp';
 import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -248,7 +248,8 @@ export default function AlmoxarifadoTab({ currentUser }) {
     } else if (!f.seriais?.trim())  { alert('Informe os números de série dos equipamentos.'); return; }
     if (!f.peso_total)       { alert('Informe o peso da embalagem.'); return; }
     const erroConf = validarConferencia(conferencia);
-    if (erroConf) { alert(erroConf); return; }
+    // texto montado na hora, sempre uma pendência de preenchimento: tom explícito (29/09/2026)
+    if (erroConf) { mostrarAviso(erroConf, 'atencao'); return; }
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
       alert('Informe a cidade e a UF de entrega.'); return;
     }
@@ -371,7 +372,7 @@ Embalar e enviar assim mesmo?`)) return;
       return;
     }
     const erroConf = validarConferencia(conferencia);
-    if (erroConf) { alert(erroConf); return; }
+    if (erroConf) { mostrarAviso(erroConf, 'atencao'); return; }
 
     // Item sob controle sem saldo não fecha Kit 100% — mesma regra que já vale
     // para peça de fabricação/compra que não chegou. A saída continua sendo

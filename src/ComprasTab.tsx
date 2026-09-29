@@ -10,7 +10,7 @@ import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
 import { combinaBusca } from './SearchUtils';
 import { useCelular, SeletorEtapas, etapaInicial } from './Celular';
-import { confirmar, pedirTexto } from './Feedback';
+import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 import { Botao, MenuAcoes, Selo } from './Interface';
 import { mdiPencilOutline, mdiUndoVariant, mdiCloseCircleOutline, mdiRestore, mdiArrowRight } from '@mdi/js';
 import { ModalReceberPedido } from './LogisticaTab';
@@ -1062,7 +1062,8 @@ export default function ComprasTab({ currentUser }) {
       abrirFluxo('confirmar', p); return;
     }
     if (atual === 'Comprado' && destino === 'Recebido') {
-      if (!gestor && currentUser?.perfil !== 'Almoxarifado') { alert('O recebimento é registrado por Compras, Almoxarifado, gerentes ou administradores.'); return; }
+      // negação de permissão: tom explícito, porque o texto diz "registrado" e o palpite saía verde (29/09/2026)
+      if (!gestor && currentUser?.perfil !== 'Almoxarifado') { mostrarAviso('O recebimento é registrado por Compras, Almoxarifado, gerentes ou administradores.', 'erro'); return; }
       abrirFluxo('receber', p); return;
     }
     alert(`Avance uma etapa por vez: depois de "${atual}" vem "${PROXIMA_ETAPA[atual] || '—'}".`);
@@ -1203,7 +1204,8 @@ export default function ComprasTab({ currentUser }) {
     // simplesmente sumir — se o valor dela estava errado, o caminho é
     // corrigir (✏️ Editar), não excluir (perderia o registro/rastreio).
     if (id === vencedoraId && ['Aprovado','Comprado'].includes(modalCotacoes?.status_compra)) {
-      alert('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "Editar" para corrigir o valor em vez de excluir.');
+      // o texto diz "aprovada/comprada" e o palpite saía verde, mas é uma recusa (29/09/2026)
+      mostrarAviso('Esta é a cotação vencedora de uma compra já aprovada/comprada — use "Editar" para corrigir o valor em vez de excluir.', 'atencao');
       return;
     }
     if (!await confirmar('Remover esta cotação?')) return;
