@@ -928,10 +928,10 @@ sempre); por isso o número inicial pode parecer alto.
 **O que ficou de fora:** o destaque de **campo** dentro de uma entidade
 (`useUnreadChanges`) lê a auditoria de **uma** entidade só, então não tem o problema.
 
-### 🟡 Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
+### ✅ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 
 Feita em fatias, na ordem escolhida pelo usuário: **6.1** faixa no detalhe da OP e no
-Dossiê ✅ · **6.2** coluna na lista "OPs em aberto" ✅ · **6.3** selo no card do CRM ⬜.
+Dossiê ✅ · **6.2** coluna na lista "OPs em aberto" ✅ · **6.3** selo no card do CRM ✅.
 
 **Levantamento (29/09/2026, dados reais):**
 
@@ -1075,11 +1075,68 @@ gravado como **62026-10-20** (ano com cinco dígitos, erro de digitação) e a l
 1453.2607 - ESL AUTO CENTER", " A 1470.2607 - PREMIUM AUTOMOTIVE", " D 710.2607 - COMANDO
 MILITAR DO SUL", "OPL A1436.2707 "). Corrigir é decisão do usuário.
 
-#### ⬜ 6.3 — Selo no card do CRM
+#### ✅ 6.3 — Selo "onde está" no card do CRM
 
-O selo `OP A1234.0926` que o card já mostra (Etapa 2) passa a dizer a etapa e os dias, e a
-abrir o detalhe da OP ao clicar. Só vale para os cards que têm OP (18% das OPs). Reaproveita
-a função da 6.2.
+**Feito em:** 29/09/2026. **Nenhum dado foi alterado**; nenhuma função nova no banco (reaproveita
+`desde_quando_na_etapa`, da 6.2).
+
+- **O card** (coluna "Vencido", onde o selo `OP A1234.0926` já morava desde a Etapa 2) ganhou,
+  ao lado dele, um **segundo selo com o setor e os dias**: `Engenharia · há 12 dias`. Azul
+  normal; **âmbar** se alguma OP do card está devolvida/em retrabalho; sem cor de alerta por
+  tempo (decisão da 6.1). A data aproximada leva "≈". **Clicar em qualquer um dos dois abre o
+  detalhe da OP** (com a faixa "Onde está agora" da 6.1 no topo); o selo do número continua com
+  o mesmo texto de antes.
+- **Por que dois selos e não um só:** o card tem ~210px úteis e o selo do número já ocupa 117;
+  um selo único (`OP A1234.0926 · Engenharia · há 12 dias`) passaria da borda. Lado a lado, o
+  segundo desce para a linha de baixo quando não cabe. Desvio pequeno do que o plano dizia.
+- **Card com várias OPs** (lote, venda desmembrada — 4 cards hoje, até 4 OPs): o selo mostra
+  **uma frase** — o setor (ou "N setores", se as unidades estão em lugares diferentes) e os dias
+  da unidade **há mais tempo na etapa**, que é a que pede atenção. A dica lista **cada OP** com
+  setor, estado e data. Clicar abre a **primeira unidade** (no detalhe há o "Resumo do lote"),
+  o mesmo comportamento do botão "Ir para a OP" do card aberto.
+- **`Selo` (`Interface.tsx`) ganhou `onClick`:** com ele, vira um `<button>` (teclado, foco
+  visível e leitor de tela funcionam) com a mesma aparência (`design.css`, `.acn-selo.clicavel`).
+  Sem `onClick` continua sendo o mesmo `<span>` de sempre, então nenhuma outra tela muda.
+- **`EtapasOp.ts`** ganhou `resumoDasOps()` (a frase, a cor e a dica do selo). No `CrmTab`, a
+  consulta que já trazia os números das OPs por card passou a trazer também id, status e as
+  colunas dos marcos, e **uma** chamada à função do banco (com as OPs abertas dos cards) traz o
+  "desde quando". Ela roda **fora do caminho principal**: o selo do número aparece na hora e o
+  segundo chega depois, sem atrasar o Kanban.
+- **Só na coluna "Vencido"**, onde o selo já aparecia: **3 dos 53 cards com OP estão fora dela**
+  — 2 em "Faturado" e 1 em "Enviado" — e nesses o selo não aparece (ver "O que ficou de fora").
+
+**Testado** (23 verificações; navegador com **gravações bloqueadas**, só a função de leitura
+liberada):
+
+- **O texto do selo de cada card contra uma conta feita à parte:** o teste lê cards, estágios,
+  OPs e o histórico inteiro direto do banco, refaz a regra em JavaScript e compara com a tela:
+  **50 de 50 cards iguais** (setor, "≈" e dias). Cor: 5 âmbar e 45 azuis, todos conforme a
+  regra. Os dois selos são botões; a dica traz uma linha por OP e a instrução de clique; os
+  4 cards de várias OPs avisam que o número é o da unidade mais parada.
+- **Clique:** o card de uma OP em produção abre a `D0775.2609` e a faixa diz "Produção" e
+  "desde 28/09", como o selo; o de OP devolvida abre a `1625.2609` ("Comercial", "desde
+  17/09"); o de várias OPs abre a primeira unidade (`A1660.2609/01`). O selo do número abre a
+  mesma OP, e **Enter no teclado** também. Abrir não grava nada.
+- **Falha simulada:** com a função do banco fora do ar, os 50 cards continuam com o selo do
+  número e o "onde está" cai no marco (todos com "≈"), com o erro no console.
+- **Modo escuro** conferido em imagem (cores e legibilidade do selo).
+- **Regressões:** CRM 16/16 (o teste antigo lia o texto da linha inteira; passou a ler só o
+  selo do número), lista da 6.2 30/30 (idem: o Kanban agora também chama a função, então o
+  teste passou a olhar a chamada da aba "OPs em aberto"), reenvio 20/20, status 13/13, faixa do
+  detalhe 21/21 e 4/4, "não lido" 9/9, "Lançar OS" e licitação sem erro. Nenhuma gravação foi
+  tentada além do registro de "última visualização" que abrir um detalhe já fazia antes (o
+  teste o tolera e, se aparecer, é barrado como toda gravação).
+
+**O que ficou de fora:**
+
+- **O selo nas colunas "Faturado" e "Enviado".** Hoje há 2 cards em "Faturado" cujas OPs
+  continuam em "Aguardando Liberação Comercial" e 1 em "Enviado" com a OP aguardando início da
+  produção: é exatamente o tipo de descompasso que o selo mostraria, mas mudar a coluna onde o
+  selo aparece é decisão sua (ver "Perguntas em aberto").
+- **O contador de "devolvidas ao Comercial"** que a Etapa 3.1 sugeriu para este painel: a lista
+  "OPs em aberto" já mostra cada devolvida com setor e dias, mas ninguém é avisado sem abrir a
+  aba.
+- **O link direto do frete** da faixa para o registro na Logística (já anotado na 6.1).
 
 ### ⬜ Etapa 7 — Trocar `alert`/`confirm` nativos pelo padrão do sistema
 Generalizar `Feedback.tsx` (`confirmar`/`pedirTexto` já existem) para cobrir
@@ -1119,6 +1176,9 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Criação automática de OP (pós-Etapa 4):** ao ganhar o card, a OP nasce sem
   os gates do `NovaOpOsModal`. Exigimos/avisamos o fluxo de entrega nesse
   momento? Qual regra?
+- **Selo "onde está" nos cards fora de "Vencido" (6.3):** hoje só aparece na coluna "Vencido".
+  Há 2 cards em "Faturado" com a OP ainda esperando a liberação comercial e 1 em "Enviado" com a
+  OP na fila da produção. Mostrar o selo em qualquer coluna em que o card tenha OP?
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -1144,6 +1204,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | Migração de dado de status só depois de a publicação do código estar no ar, e só com autorização; histórico (`logs_movimentacao_opl`, `audit_log`, `lixeira`) nunca é reescrito. |
 | 29/09/2026 | **Etapa 6 ("onde está agora")**: aparece nos **três lugares** (detalhe da OP e Dossiê, coluna da lista "OPs em aberto", selo do card do CRM), em fatias 6.1 → 6.2 → 6.3; conteúdo = etapa, setor, desde quando e pendências, mais frete e NF quando existem; o "há quantos dias" é **só o número, sem cor de alerta** — decisão do usuário. |
 | 29/09/2026 | **Coluna da lista "OPs em aberto" (6.2)**: mostra as pendências que **seguram a OP** (o índice que a Produção e o Almoxarifado já usam), não todas as da faixa; e o "desde quando" vem de uma **função de leitura no banco** (`desde_quando_na_etapa`), criada com autorização do usuário — decisões do usuário. |
+| 29/09/2026 | **Selo "onde está" do card (6.3)**: um segundo selo ao lado do número da OP, com setor e dias da OP mais parada; clicar abre o detalhe da OP (a primeira unidade, se forem várias). O `Selo` ganhou `onClick` (vira `<button>`). Só na coluna "Vencido" por enquanto. |
 | 29/09/2026 | Os nomes das etapas da OP, o setor de cada uma e a regra do "desde quando" moram em **`EtapasOp.ts`** (fonte única da barra de progresso e da faixa). Quem lê histórico compara etapas por `mesmaEtapa()`, nunca por `===`, porque o histórico guarda o nome antigo da liberação comercial. |
 | 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |

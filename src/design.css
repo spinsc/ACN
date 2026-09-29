@@ -326,6 +326,10 @@ html body .acn-tela-cab h1 { margin: 0; font-size: 20px !important; line-height:
 .acn-selo { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px !important; font-weight: 500; white-space: nowrap; line-height: 1; background: var(--acn-f-soft); color: var(--acn-f); }
 .acn-selo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .acn-selo.sem-ponto::before { display: none; }
+/* Selo que abre alguma coisa (Selo com onClick vira <button>): mesma cara, com mão e foco visível */
+button.acn-selo.clicavel { border: 0; font-family: inherit; cursor: pointer; }
+button.acn-selo.clicavel:hover { filter: brightness(.94); }
+button.acn-selo.clicavel:focus-visible { outline: 2px solid var(--acn-brand); outline-offset: 2px; }
 .acn-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: var(--acn-r1); font-size: 11px !important; font-weight: 600; letter-spacing: .02em; border: 1px solid var(--acn-line); color: var(--acn-text); background: var(--acn-surface); white-space: nowrap; }
 
 /* Célula de duas linhas (título + apoio), números e códigos */

@@ -200,10 +200,22 @@ export function rotuloStatus(status: string | null | undefined): string {
   }).join('');
 }
 
-export function Selo({ status, familia, children, ponto = true, title }: { status?: string | null; familia?: Familia; children?: React.ReactNode; ponto?: boolean; title?: string }) {
+// `onClick` transforma o selo num botão (teclado e leitor de tela funcionam) com a mesma
+// aparência — usado pelo card do CRM para abrir a OP a partir do "onde está" (Etapa 6.3
+// do PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026). Sem `onClick` continua sendo o <span> de sempre.
+export function Selo({ status, familia, children, ponto = true, title, onClick }: { status?: string | null; familia?: Familia; children?: React.ReactNode; ponto?: boolean; title?: string; onClick?: (e: React.MouseEvent) => void }) {
   const f = familia || familiaStatus(status);
+  const classe = 'acn-selo' + (ponto ? '' : ' sem-ponto') + (onClick ? ' clicavel' : '');
+  const dica = title ?? (status && !children ? String(status) : undefined);
+  if (onClick) {
+    return (
+      <button type="button" className={classe} data-acn-familia={f} title={dica} onClick={onClick}>
+        {children ?? rotuloStatus(status)}
+      </button>
+    );
+  }
   return (
-    <span className={'acn-selo' + (ponto ? '' : ' sem-ponto')} data-acn-familia={f} title={title ?? (status && !children ? String(status) : undefined)}>
+    <span className={classe} data-acn-familia={f} title={dica}>
       {children ?? rotuloStatus(status)}
     </span>
   );

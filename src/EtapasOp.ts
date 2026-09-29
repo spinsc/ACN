@@ -149,6 +149,43 @@ export function desdeQuandoDaLista(op: any, dataDoEvento?: string | null) {
   return desdeQuandoNaEtapa(op, []);
 }
 
+/**
+ * O resumo de "onde está" para o selo do card do CRM (Etapa 6.3, 29/09/2026). Um card pode
+ * ter mais de uma OP (lote, venda desmembrada: no máximo 4 hoje); o selo mostra UMA frase:
+ * o setor (ou "N setores", se as unidades estão em lugares diferentes) e os dias da unidade
+ * que está há MAIS tempo na etapa, porque é essa a que pede atenção. O detalhe de cada
+ * unidade vai na dica. Sem cor de alerta por tempo (decisão do usuário na 6.1); só âmbar
+ * quando alguma unidade está em retrabalho/devolvida.
+ * `ops` traz, por OP, o número, o status e o "desde quando" (desdeQuandoDaLista).
+ */
+export function resumoDasOps(ops: Array<{ opl: string; status_geral: string; desde: any }>) {
+  if (!ops || !ops.length) return null;
+  const encerrada = (o: any) => o.status_geral === 'Cancelado' || !!etapaDaOp(o.status_geral).concluida;
+  const abertas = ops.filter(o => !encerrada(o));
+  const linha = (o: any) => {
+    const e = etapaDaOp(o.status_geral);
+    const onde = o.status_geral === 'Cancelado' ? 'cancelada' : e.concluida ? 'concluída' : `${e.setor || e.label} — ${e.estado}`;
+    const quando = !encerrada(o) && o.desde
+      ? ` · desde ${o.desde.fonte === 'marco' ? '≈ ' : ''}${textoData(o.desde.data)} (${textoDias(diasDesde(o.desde.data))})` : '';
+    return `${String(o.opl || '').trim()}: ${onde}${quando}`;
+  };
+  const dica = ops.map(linha).join('\n');
+
+  if (!abertas.length) {
+    const canceladas = ops.every(o => o.status_geral === 'Cancelado');
+    return { texto: canceladas ? 'Cancelada' : 'Concluída', familia: (canceladas ? 'neutro' : 'ok') as 'neutro' | 'ok', titulo: dica };
+  }
+  const setores = Array.from(new Set(abertas.map(o => { const e = etapaDaOp(o.status_geral); return e.setor || e.label; })));
+  const setor = setores.length === 1 ? setores[0] : `${setores.length} setores`;
+  const maisParada = abertas.filter(o => o.desde)
+    .sort((a, b) => new Date(a.desde.data).getTime() - new Date(b.desde.data).getTime())[0];
+  const dias = maisParada ? diasDesde(maisParada.desde.data) : null;
+  const texto = dias == null ? setor : `${setor} · ${maisParada.desde.fonte === 'marco' ? '≈ ' : ''}${textoDias(dias)}`;
+  const familia = (abertas.some(o => etapaDaOp(o.status_geral).retrabalho) ? 'atencao' : 'info') as 'atencao' | 'info';
+  const rodape = ops.length > 1 ? '\n(o número do selo é o da unidade há mais tempo na etapa)' : '';
+  return { texto, familia, titulo: `${dica}${rodape}\nClique para abrir ${ops.length > 1 ? 'a primeira unidade' : 'a OP'}.` };
+}
+
 /** "há 12 dias", "há 1 dia", "hoje". */
 export function textoDias(n: number | null): string {
   if (n == null) return '';
