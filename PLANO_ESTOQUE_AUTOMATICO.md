@@ -908,7 +908,18 @@ materiais) e contagem conferida zerada em sete tabelas.
 - **Teste com as 39 Renegade 4x4** (OPs 1673.2609/01–39, veículo "Renegade 4x4" 2015+, cada uma vende 13 itens incluindo o 1687): fluxo verificado de ponta a ponta com estrutura **simulada só na leitura**
   (18/18): o painel cobra os 9 itens físicos, calcula o material multiplicado pela quantidade vendida e libera a mesma BOM para as 39. **Falta cadastrar a estrutura de verdade** (0 linhas de material e 0 perguntas hoje) em
   Administração → Estruturas: 225, 226, 222, 244, 245, 1177, 1287, 1356 e 2894 × Renegade 4x4.
-- **Ponto aberto:** **não há tela para responder perguntas de uma OP que já existe** (as respostas só nascem na abertura da OP). Para as 39, começar por material fixo; pergunta nas 39 exige resposta em lote.
+- **Ponto que estava aberto — resolvido na Etapa 7.6:** não havia tela para responder perguntas de uma OP que já existe.
+
+### ✅ Etapa 7.6 — Tela de resposta em lote das perguntas sobre o carro
+
+**Feito em 29/09/2026, por pedido do usuário.** Detalhe completo na **Etapa 7.5 do `PLANO_UX_FLUXO_TRABALHO.md`**. Resumo para este projeto:
+
+- **Nova tela `RespostasEmLote.tsx`**, aberta por **"Responder agora (n OPs)"** no painel da estrutura da Engenharia (no lote atende todas as marcadas). **Padrão para todas as OPs** + **exceções por OP**; pergunta filha só aparece depois da
+  resposta-pai; mostra o que já está gravado hoje. Só entram OPs com veículo do catálogo e o 1687 na venda.
+- **Grava em `op_configuracao_respostas`** (o mesmo lugar da abertura da OP; upsert por OP + pergunta) e uma linha no histórico de cada OP. Trocar a resposta-pai **apaga as filhas** (o painel também passou a ignorar filha órfã: `podarRespostas`).
+  A BOM que a OP já tenha **não é refeita sozinha**.
+- **Liberação em lote:** aviso quando as OPs marcadas têm respostas diferentes (a mesma BOM iria para todas); lista do lote agora em ordem de número; a sugestão inicial da BOM passou a **somar** em vez de substituir a lista (corrida antiga).
+- **Testado** com as 39 Renegade reais e perguntas/material simulados só na leitura: **26/26**.
 
 ### ✅ Etapa 8 — Checklist de separação no Almoxarifado, com baixa por item
 

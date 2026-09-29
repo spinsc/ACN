@@ -19,8 +19,9 @@ import { supabase } from './supabaseClient';
 import {
   perguntasDeVariosItens, perguntasPendentes, respostasAutomaticas,
   materiaisDoVeiculo, montarMaterial, itensSemEstrutura,
-  itensConjunto, vendaTemConjunto,
+  itensConjunto, vendaTemConjunto, podarRespostas,
 } from './ConfigEstrutura';
+import { RespostasEmLote } from './RespostasEmLote';
 
 const num = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 const fmt = (v) => Number.isInteger(num(v)) ? String(num(v)) : num(v).toFixed(2).replace('.', ',');
@@ -44,8 +45,14 @@ export async function previsaoDeFalta(linhas) {
   return falta;
 }
 
-export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
+/**
+ * `opsParaResponder`: as OPs que o botão "Responder agora" atende de uma vez. Na liberação individual é só a própria
+ * OP; na liberação em LOTE são todas as marcadas (a tela de resposta em lote existe justamente para elas).
+ */
+export function PainelConferenciaEstrutura({ opl, onUsar, currentUser, opsParaResponder, onRespondido }) {
   const [estado, setEstado] = useState({ carregando: true });
+  const [responder, setResponder] = useState(false);
+  const [tick, setTick] = useState(0);   // sobe quando as respostas mudam, para o painel recalcular o material
 
   useEffect(() => {
     (async () => {
@@ -76,8 +83,11 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
       // respostas que o vendedor já deu na abertura da OPL
       const { data: salvas } = await supabase.from('op_configuracao_respostas')
         .select('pergunta_id,opcao_id,automatica').eq('opl_id', opl.id);
+      // podadas: resposta a pergunta "filha" cuja resposta-pai foi trocada não vale, senão o material dela entraria
       const respostas = { ...auto };
       (salvas || []).forEach(r => { respostas[r.pergunta_id] = r.opcao_id; });
+      const respostasValidas = podarRespostas(perguntas, respostas);
+      Object.keys(respostas).forEach(k => { if (!respostasValidas[k]) delete respostas[k]; });
 
       const qtdPorItem = {};
       vendidos.forEach(v => { if (v.item_id) qtdPorItem[v.item_id] = num(v.quantidade) || 1; });
@@ -88,9 +98,9 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
       const nomesSem = vendidos.filter(v => semEstrutura.includes(String(v.item_id)));
 
       setEstado({ carregando: false, temConjunto: true, conj, linhas, falta, pendentes,
-        semEstrutura: nomesSem, respondidas: Object.keys(respostas).length });
+        semEstrutura: nomesSem, respondidas: Object.keys(respostas).length, totalPerguntas: perguntas.length });
     })();
-  }, [opl?.id]);
+  }, [opl?.id, tick]);
 
   const e = estado;
   if (e.carregando) {
@@ -135,7 +145,28 @@ export function PainelConferenciaEstrutura({ opl, onUsar, currentUser }) {
         <Caixa cor="#fffbeb" borda="#fcd34d" texto="#92400e">
           {e.pendentes.length} pergunta(s) sobre o carro sem resposta — normalmente respondidas
           pelo vendedor na abertura da OP. O material pode sair incompleto.
+          <div style={{ marginTop: 5 }}>
+            <button type="button" onClick={() => setResponder(true)}
+              style={{ fontSize: 9.5, fontWeight: 700, padding: '3px 11px', border: 'none', borderRadius: 4,
+                background: '#7c3aed', color: '#fff', cursor: 'pointer' }}>
+              Responder agora{(opsParaResponder || []).length > 1 ? ` (${opsParaResponder.length} OPs)` : ''}
+            </button>
+          </div>
         </Caixa>
+      )}
+      {/* já respondidas: continua dando para rever (a OP pode ter mudado de ideia, ou a resposta foi dada com pressa) */}
+      {!(e.pendentes?.length > 0) && e.totalPerguntas > 0 && (
+        <div style={{ fontSize: 9.5, color: '#64748b', marginBottom: 6 }}>
+          Perguntas sobre o carro: todas respondidas.{' '}
+          <button type="button" onClick={() => setResponder(true)}
+            style={{ border: 'none', background: 'none', color: '#7c3aed', fontSize: 9.5, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+            rever respostas
+          </button>
+        </div>
+      )}
+      {responder && (
+        <RespostasEmLote ops={(opsParaResponder && opsParaResponder.length) ? opsParaResponder : [opl]} currentUser={currentUser}
+          onClose={() => setResponder(false)} onSalvo={() => { setTick(t => t + 1); onRespondido?.(); }} />
       )}
 
       {e.linhas?.length > 0 && (

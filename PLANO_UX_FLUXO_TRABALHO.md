@@ -1556,11 +1556,48 @@ Elétrico", que saiu; agora conferem o 1687 travado e, para o item 4108 (depois 
 
 **O que ficou de fora / a decidir:**
 
-- **Responder as perguntas de uma OP que já existe não tem tela.** As respostas só são gravadas **na abertura da OP** (vendedor). Para as 39 Renegade, que nasceram antes, qualquer **pergunta** cadastrada ("tem hack?") ficaria sem resposta
-  (o painel só avisa). Para o teste, vale começar por **material fixo** ("sempre, neste carro"), que não precisa de resposta. Se forem usar perguntas nas 39, falta uma forma de responder em lote.
+- **Responder as perguntas de uma OP que já existe** não tinha tela — **resolvido na Etapa 7.5** (tela de resposta em lote, aberta pelo painel da Engenharia).
 - **Os serviços continuam na BOM sugerida** (película, instalação do kit, garantia estendida): só deixaram de ser cobrados na estrutura. Tirá-los da lista de separação do Almoxarifado é decisão do usuário.
 - **41 itens ativos continuam sem código** (os criados à mão): dar código a eles fica **depois de o usuário decidir a planilha de auditoria**, para não codificar quem vai ser unificado.
 - A liberação **individual** ("LIBERAR BOM" de uma OP só) recebeu a mesma mudança do "Jogar na BOM", mas **não foi exercitada** no navegador (as OPs do lote estão "Em Espera" e o botão individual só aparece depois de iniciar).
+
+### ✅ Etapa 7.5 — Tela de resposta em lote das perguntas sobre o carro
+
+**Feito em:** 29/09/2026, por pedido do usuário ("construa a tela de resposta em lote das perguntas").
+
+**Por quê:** a resposta de uma pergunta de item ("tem hack de teto?") só nascia na abertura da OP, pelo vendedor. As 39 Renegade (1673.2609) e qualquer OP aberta antes de a pergunta
+existir ficavam para sempre com a pergunta "sem resposta": a conferência da Engenharia só avisava, e não havia onde responder.
+
+**O que foi feito** (`RespostasEmLote.tsx`, novo; `AplicarEstrutura.tsx`, `ConfigEstrutura.ts`, `EngenhariaTab.tsx`):
+
+- **Onde se abre:** botão **"Responder agora (39 OPs)"** dentro da caixa "n pergunta(s) sobre o carro sem resposta" do painel da estrutura, na Engenharia. No **lote** atende todas as OPs marcadas; na liberação
+  individual, a própria OP. Com tudo respondido, o mesmo lugar mostra "rever respostas".
+- **Padrão + exceções**, a mesma ideia da abertura da OP em lote: em **"Para todas as OPs"** escolhe-se a resposta de cada pergunta; em **"Algum carro responde diferente?"** cada OP pode ter as suas.
+  Pergunta "filha" só aparece depois da resposta-pai; embaixo de cada pergunta a tela diz **o que já está gravado hoje** ("38 com 'Na grade', 1 com 'No parachoque'"), e o que todas as OPs já respondem igual vem marcado.
+- **Regras que a tela segue:** só entram OPs com veículo do catálogo **e** com o 1687 na venda (as outras aparecem como "ficam de fora"); o que o sistema já responde pela combinação de itens (botão "regra")
+  fica "o sistema já sabia" e não se muda; trocar a resposta-pai **apaga** as respostas filhas (senão o material delas continuaria entrando); trocar resposta que já estava gravada **pede confirmação** e diz quantas;
+  a BOM que a OP já tenha montada **não muda sozinha** (a tela avisa quantas OPs estão nisso).
+- **O que grava:** `op_configuracao_respostas` (upsert por OP + pergunta, o mesmo lugar da abertura da OP, com quem respondeu e quando), mais **uma linha no histórico de cada OP** ("Respostas sobre o carro registradas: …", sem mudar a
+  etapa). Falha no meio: gravar é repetível, clicar de novo completa sem duplicar.
+- **Painel:** recalcula na hora o material com as respostas. Passou a **ignorar resposta "filha" órfã** (`podarRespostas`): antes, uma resposta filha sobrando ainda liberava o material dela.
+- **Liberação em lote:** ganhou o aviso **"as OPs marcadas têm respostas diferentes"** (a mesma BOM iria para todas), que se refaz depois de responder.
+- **Duas correções achadas no caminho:** (1) a lista de OPs do lote vinha **fora de ordem** (31, 11, 19…), e a "OP de referência" do painel caía numa unidade qualquer (a /31); agora vem em ordem de número (a referência é a /01);
+  (2) **corrida antiga:** a sugestão inicial da BOM chega depois de a janela abrir e **substituía** a lista inteira, então quem clicasse em "Jogar na BOM" nesse intervalo via o material sumir (apareceu uma vez, em 1 de ~10
+  execuções do teste do lote). Agora a sugestão **soma** ao que já está na lista.
+
+**Testado** (navegador, gravações bloqueadas; perguntas, opções e material do carro **simulados só na leitura**, com um armazém em memória que devolve o que a tela tentou gravar — assim o painel recalcula de verdade):
+`teste_16` **26/26** com as 39 Renegade reais — a tela abre para as 39 OPs, com a pergunta filha escondida; responder a resposta-pai faz a filha aparecer; uma **exceção** na OP /05; **grava 116 respostas** (38 OPs × 3 + a /05 × 2, sem a filha),
+nenhuma "automática", com quem respondeu; **39 linhas de histórico** sem mudar etapa; **nada apagado nem gravado em outro lugar**; o painel recalcula e mostra o material das respostas da /01 (×2 do SLIMLED) sem o das outras
+respostas; aparece o aviso de "respostas diferentes"; ao **rever**, o "hoje" mostra 38 × 1 e a resposta igual em todas já vem marcada; **trocar o padrão** pede confirmação ("38 respostas serão TROCADAS"), grava só nas 38 que mudam e
+**apaga as 38 respostas filhas**; a janela está **na frente** da janela de BOM (posição na tela conferida e captura de tela vista). Regressão do que mexi: lote 18/18, Engenharia 13/13, Estruturas 12/12, 21/21 e 5/5.
+
+**O que ficou de fora:**
+
+- **Liberação individual** ("LIBERAR BOM" de uma OP só): usa o mesmo painel e o mesmo botão, mas **não foi exercitada** na tela (as OPs do lote estão "Em Espera").
+- **Voltar uma pergunta para "sem resposta"** não existe: a tela troca a resposta, mas só apaga as filhas de uma resposta-pai trocada.
+- **Sem restrição por perfil:** quem consegue abrir a liberação da BOM consegue responder (fica registrado quem e quando). Decisão a confirmar com o usuário se deve valer só para Engenharia/PCP/Admin.
+- A tela só existe **dentro da liberação da BOM**; não há tela avulsa para responder OPs que estejam em outra etapa.
+- Uma resposta dada **não refaz a BOM** que a OP já tinha montada (a tela avisa).
 
 ### ⬜ Etapa 8 — Aba "pendente da minha aprovação" em Compras
 Hoje só existe menção/e-mail. Uma aba/filtro dedicado pra quem tem
@@ -1603,8 +1640,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
 - **Unificação de itens (7.2) — marcar a planilha:** o usuário escreve SIM/NÃO nas abas `Decidir` (48) e `Sem candidato` (21) de
   `auditoria_unificacao_de_itens.xlsx`; aplicar com `unificar_item(…, 'planilha')`, com nova liberação de gravação.
-- **Perguntas nas OPs que já existem (7.4):** as respostas ("tem hack?") só são gravadas na abertura da OP. Se o usuário for usar perguntas nas 39 Renegade
-  (ou em qualquer OP antiga), falta uma forma de **responder em lote**. Material fixo ("sempre, neste carro") não precisa de resposta.
+- **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
@@ -1641,6 +1677,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | O "Conjunto Elétrico PV …" novo vindo do ERP entra inativo na importação (7.2): a pergunta perdeu o sentido — o usuário disse que **não vai mais importar** do ERP e a regra passou a valer no banco (7.4). |
 | 29/09/2026 | **Só existe UM Conjunto Elétrico, o 1687 (7.4, decisão do usuário):** qualquer outro "Conjunto Elétrico" fica inativo e o banco recusa ativá-lo; só o 1687 é o gatilho e ele é protegido (não desativa, não muda de código, não exclui). |
 | 29/09/2026 | **Itens deixam de vir do ERP (7.4, decisão do usuário):** item novo é criado no sistema e o **código é gerado pelo sistema**, continuando a numeração (4410 em diante; o 999999 é reservado). |
+| 29/09/2026 | **Perguntas de OP já aberta são respondidas em lote pela Engenharia** (7.5, pedido do usuário): padrão para todas + exceções por OP; troca de resposta-pai apaga as filhas; a BOM que a OP já tenha não é refeita sozinha; resposta fica com quem respondeu e ganha linha no histórico. |
 | 29/09/2026 | **Jogar na BOM** (estrutura automática) tira o Conjunto Elétrico da lista de separação e marca o material como "do CONJUNTO ELETRICO"; serviço/`GENERICO` nunca é cobrado como "nunca adaptado". |
 | 29/09/2026 | **Recebimento de reposição (7.3):** entra no estoque a quantidade **realmente recebida**, e a janela **abre com a quantidade COMPRADA** (a pessoa corrige se chegou outra). Pedido de reposição recebido sem entrada no estoque é falha visível, nunca silêncio. Para PC-FU6DS9 o usuário decidiu creditar **10 (a comprada)**. |
 | 29/09/2026 | Formulário de edição **abre com o que está salvo e só grava o que mudou**; valor em dinheiro entra no campo **já em formato brasileiro**, porque o "salvar" trata o ponto como milhar (`fmtValorEdit`). |

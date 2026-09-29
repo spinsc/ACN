@@ -19,6 +19,7 @@ import { OrigemVendaBadge } from './OrigemVenda';
 import { fluxoLabel } from './FluxoEntrega';
 import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
+import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { indicePendencias } from './OpPendencias';
 import { MenuAcoes } from './Interface';
 
@@ -135,7 +136,17 @@ export default function EngenhariaTab({ currentUser }) {
   const prepararBom = async (o: any, setter: (v: any[]) => void) => {
     if ((o?.bom_itens || []).length) { setter(o.bom_itens); return; }
     setter([]);
-    if ((o?.itens_vendidos || []).length) setter(await sugerirBom(o.itens_vendidos));
+    if ((o?.itens_vendidos || []).length) {
+      const sugerida = await sugerirBom(o.itens_vendidos);
+      // A sugestão chega DEPOIS de a janela abrir (uma consulta por item vendido). Antes ela SUBSTITUÍA a lista: quem
+      // clicasse em "Jogar na BOM" nesse intervalo, ou já tivesse digitado uma linha, via o material sumir quando a
+      // sugestão terminava de carregar (visto em 29/09/2026, máquina lenta). Agora ela só soma o que ainda não está na lista.
+      setter((atuais: any[]) => {
+        const chave = (l: any) => l?.item_id || `txt:${l?.nome}`;
+        const ja = new Set((atuais || []).map(chave));
+        return [...(atuais || []), ...sugerida.filter((l: any) => !ja.has(chave(l)))];
+      });
+    }
   };
   const abrirLiberarBom = (o: any) => {
     setModalBom(o); setObsBom(''); setFabBom(fabricacaoVazia());
@@ -160,6 +171,7 @@ export default function EngenhariaTab({ currentUser }) {
   const [obsBomLote, setObsBomLote] = useState('');
   const [selecionadosLote, setSelecionadosLote] = useState({});
   const [liberandoLote, setLiberandoLote] = useState(false);
+  const [versaoRespostas, setVersaoRespostas] = useState(0);   // sobe quando as respostas do lote mudam (refaz o aviso de respostas diferentes)
   const [iniciandoLote, setIniciandoLote] = useState(false);
   // Grupos desmembrados aparecem colapsados numa única linha "LOTE" na
   // tabela — expande[base]=true mostra as unidades individuais por baixo.
@@ -359,7 +371,9 @@ export default function EngenhariaTab({ currentUser }) {
 
   const abrirBomLote = (opl) => {
     const base = baseOplDe(opl.opl);
-    const irmaos = opls.filter(o => baseOplDe(o.opl) === base);
+    // em ordem de número (/01, /02…): antes vinha na ordem da lista, e a "OP de referência" da estrutura (a primeira marcada)
+    // caía numa unidade qualquer, como a /31 (29/09/2026)
+    const irmaos = opls.filter(o => baseOplDe(o.opl) === base).sort((a, b) => sufixoNum(a.opl) - sufixoNum(b.opl));
     const marcados = {};
     irmaos.forEach(o => { marcados[o.id] = true; });
     setSelecionadosLote(marcados);
@@ -975,8 +989,11 @@ export default function EngenhariaTab({ currentUser }) {
                       e a mesma BOM vai para todas — desmarque as diferentes e libere-as à parte.
                     </div>
                   )}
+                  {/* respostas diferentes entre as marcadas: a mesma BOM iria para todas (29/09/2026) */}
+                  <AvisoRespostasDiferentes ops={marcadas} refOpl={ref.opl} versao={versaoRespostas} />
                   <div style={{fontSize:9.5,color:'#64748b',marginBottom:3}}>Estrutura calculada com base na OP <b>{ref.opl}</b>.</div>
-                  <PainelConferenciaEstrutura opl={ref} currentUser={currentUser}
+                  <PainelConferenciaEstrutura opl={ref} currentUser={currentUser} opsParaResponder={marcadas}
+                    onRespondido={() => setVersaoRespostas(v => v + 1)}
                     onUsar={(linhas, idsConj = []) => setBomLote(atuais => {
                       const mapa = new Map();
                       [...(atuais || []).filter(l => (l?.item_id || String(l?.nome || '').trim()) && !idsConj.includes(String(l?.item_id))), ...linhas]

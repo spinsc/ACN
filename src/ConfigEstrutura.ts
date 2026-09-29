@@ -214,6 +214,41 @@ export function vendaTemConjunto(vendidos: any[], idsConjunto: string[]) {
   return (vendidos || []).some(v => v?.item_id && conj.has(String(v.item_id)));
 }
 
+// ── Respostas das OPs ────────────────────────────────────────────────────────
+
+/**
+ * Tira as respostas que perderam o sentido: a resposta a uma pergunta "filha" só vale
+ * se a resposta-pai que leva a ela está escolhida. Sem isso, trocar "Tem hack" por
+ * "Não tem" deixaria a resposta de "hack alto ou baixo?" ligada, e o material dela
+ * continuaria entrando na BOM (`montarMaterial` conta toda opção escolhida).
+ */
+export function podarRespostas(perguntas: any[], respostas: Record<string, string>) {
+  const r: Record<string, string> = { ...(respostas || {}) };
+  for (let volta = 0; volta < 10; volta++) {
+    const escolhidas = new Set(Object.values(r).filter(Boolean));
+    let mudou = false;
+    for (const p of perguntas || []) {
+      if (r[p.id] && p.opcao_pai_id && !escolhidas.has(p.opcao_pai_id)) { delete r[p.id]; mudou = true; }
+    }
+    if (!mudou) break;
+  }
+  return r;
+}
+
+/** Respostas já gravadas de várias OPs: mapa opl_id → { pergunta_id → { opcao_id, automatica } }. */
+export async function respostasDasOps(oplIds: string[]) {
+  const ids = [...new Set((oplIds || []).filter(Boolean).map(String))];
+  const mapa: Record<string, Record<string, { opcao_id: string; automatica: boolean }>> = {};
+  ids.forEach(id => { mapa[id] = {}; });
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await supabase.from('op_configuracao_respostas')
+      .select('opl_id,pergunta_id,opcao_id,automatica').in('opl_id', ids.slice(i, i + 100));
+    if (error) throw new Error(error.message);
+    (data || []).forEach((r: any) => { (mapa[r.opl_id] ||= {})[r.pergunta_id] = { opcao_id: r.opcao_id, automatica: !!r.automatica }; });
+  }
+  return mapa;
+}
+
 /** Como a OPL quer o veículo naquele tipo de venda. */
 export async function modoDoVeiculo(fluxo: string) {
   if (!fluxo) return 'opcional';
