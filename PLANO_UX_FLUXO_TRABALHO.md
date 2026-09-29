@@ -274,11 +274,88 @@ o clique real teria:
 Dado sintético apagado ao final (OP, frete, acompanhamento e log — zero
 resíduo conferido).
 
-### ⬜ Etapa 2 — Resolver as colisões silenciosas (A3, A4, A6)
-Avisar na tela quando `criarOpAutomatica` não conseguir criar sozinha (em
-vez de falhar calado); indicar visualmente no card do CRM quando a OP já
-existe (esconder/trocar o "Lançar OP"); avisar na tela da Engenharia quando
-há pendência de fabricação em aberto ao liberar BOM.
+### ✅ Etapa 2 — Resolver as colisões silenciosas (A3, A4, A6)
+
+**Feito em:** 29/09/2026.
+
+**O que foi feito:**
+
+- **A3 — `criarOpAutomatica` (`CrmTab.tsx`) deixou de falhar calada.** Passou a
+  devolver `{ opl, aviso }`: quando não cria, o `aviso` diz o porquê e quem
+  chamou mostra na tela. Três motivos, três avisos: **PV ausente** (tom de
+  atenção), **número já em uso por outra OP** (atenção, com o número) e **erro
+  ao gravar** (tom de erro, com a mensagem do banco). "Já existe OP ligada a
+  este card" continua sem aviso, de propósito: é o esperado, não falha. São
+  dois os lugares que criam OP sozinha — arrastar o card para Vencido e salvar
+  o card pelo modal já em Vencido — e os dois passaram a avisar. **Achado no
+  caminho:** antes, o arrastar só avisava o caso "sem PV" (colisão e erro
+  passavam calados) e o caminho do modal não avisava nenhum dos três.
+- **Achado no caminho, do mesmo trecho:** o `alert()` do sistema já é
+  redirecionado para `mostrarAviso` (`main.tsx`), que **adivinha o tom pelo
+  texto**. "Não foi criada" casa com "criad" e sairia **verde**, como se
+  tivesse dado certo. Por isso os avisos novos passam o tom explícito
+  (`mostrarAviso(texto, 'atencao' | 'erro')`), com o título na primeira linha.
+- **A4 — o card do CRM agora mostra que a OP já existe.** Na coluna Vencido
+  aparece o selo verde `OP A1234.0926` (ou `2 OPs`, com os números no
+  `title`). O menu troca "Lançar OP" por **"Lançar outra OP"** e, antes de abrir
+  o formulário, **pede confirmação** dizendo qual OP já existe. Card sem OP
+  fica exatamente como era. As OPs de cada card vêm de **uma consulta só** na
+  carga da tela (`oplsPorCard`), e o formulário recarrega a tela ao salvar,
+  para o selo aparecer na hora.
+- **A6 — liberar a BOM avisa das demandas em aberto.** Em `EngenhariaTab.tsx`,
+  `liberarBOM` e `liberarBomLote` perguntam, antes de gravar, se a OP tem
+  demanda de Serralheria, Chicotes ou Compras aberta (usa `indicePendencias`
+  de `OpPendencias.tsx`: 3 consultas para a tela toda, não 13 por OP). Se tem,
+  lista as demandas (no lote, com o número de cada OP) e pergunta "Liberar a
+  BOM mesmo assim?". Cancelar mantém o modal aberto para ajustar. Se a
+  consulta falhar, a liberação segue: aviso que não carregou não trava a
+  Engenharia.
+
+**Decisões de desenho (suposições minhas, registradas):**
+
+- **"Lançar OP" não some, vira "Lançar outra OP" com confirmação.** O plano
+  dizia "esconder/trocar". Medi antes: **4 de 53 cards com OP têm mais de uma**
+  (lotes e vendas desmembradas, no máximo 4). Esconder o botão tiraria um
+  caminho legítimo; então o risco de duplicar é tratado com selo + pergunta.
+- **A6 é aviso, não trava.** Liberar a BOM com demanda aberta é normal — a
+  "liberação parcial p/ Serralheria" abre uma de propósito —, então a pergunta
+  aparece, mas a Engenharia decide. Consequência: quem já usou a liberação
+  parcial vai ver a pergunta ao liberar o resto. Se incomodar, o ajuste é
+  ignorar as demandas de `tipo_solicitacao = 'liberacao_parcial_bom'`.
+
+**Testado** com Puppeteer e **todas as gravações bloqueadas** (nenhuma
+requisição de escrita chegou ao banco; o corpo do que seria gravado foi
+lido). Dados reais em leitura; a colisão foi simulada respondendo a consulta
+do número da OP. **32 de 32 verificações:**
+
+| Cenário | Resultado |
+|---|---|
+| A4 — selo `OP D0778.2609` no card de 1 OP, `2 OPs` no de 2, nada no card sem OP | ✓ |
+| A4 — menu "Lançar outra OP"; confirmação cita a(s) OP(s); cancelar não abre o formulário; confirmar abre | ✓ |
+| A4 — card sem OP continua com "Lançar OP" | ✓ |
+| A3 — arrastar para Vencido: colisão de número → aviso de atenção, nenhuma OP inserida | ✓ |
+| A3 — arrastar para Vencido: falha na gravação → aviso vermelho com o número da OP | ✓ |
+| A3 — arrastar para Vencido: sem PV → aviso de atenção | ✓ |
+| A3 — salvar pelo modal em Vencido: colisão e falha na gravação avisam (antes era mudo) | ✓ |
+| A6 — 1 OP com 3 demandas abertas: lista as 3; cancelar não grava; "mesmo assim" tenta gravar `Em Espera PCP` | ✓ |
+| A6 — lote de 2 OPs (5 demandas): lista cada uma com o número da OP; cancelar não grava | ✓ |
+| A6 — OP sem demanda aberta: não pergunta nada e segue direto | ✓ |
+
+Conferido no banco depois do teste: 331 OPs (as mesmas), nenhuma OP
+`A1060.2609`, o card do PV 1060 continua em "Enviado", as OPs da Engenharia
+com o mesmo status. Zero resíduo. As 3 demandas do aviso da `1525.2609/01`
+foram conferidas à mão no banco: as 3 estão "Em Andamento".
+
+**O que ficou de fora:** o aviso da colisão diz que o número está em uso, mas
+não diz por qual OP nem se ela pertence a outro card (daria para consultar; o
+custo é uma consulta a mais no caminho). O `mostrarAviso` some sozinho em 7 a 9
+segundos; se a Etapa 7 (avisos com hierarquia) mudar isso, vale revisar estes
+três. **Sem correção retroativa:** nenhum dado foi alterado.
+
+**Observação para a Etapa 4 (não mexi):** há **13 cards em estágio "ganho"
+sem OP nenhuma** (todos os funis). Pode ser legítimo — em licitação a OP nasce
+pelo pedido de empenho, não pelo card —, mas vale conferir quando a criação de
+OP for unificada.
 
 ### ⬜ Etapa 3 — Limpar os caminhos órfãos (B1-B4)
 Confirmar com o usuário que cada um está morto de verdade (checar uso), e
@@ -356,3 +433,6 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 |---|---|
 | 29/09/2026 | Bug funcional (A2, frete) tem prioridade sobre qualquer polimento visual. |
 | 29/09/2026 | Nomenclatura só muda migrando dado junto, nunca só no código. |
+| 29/09/2026 | Card do CRM com OP já lançada: não esconder "Lançar OP" (há card com mais de uma OP de verdade); trocar por "Lançar outra OP" com confirmação e mostrar o selo com o número. |
+| 29/09/2026 | Liberar BOM com demanda de Serralheria/Chicotes/Compras em aberto: **avisa e deixa seguir**, não trava. |
+| 29/09/2026 | Aviso de falha do sistema passa o tom explícito (`atencao`/`erro`): o tom por adivinhação pelo texto pinta "não foi criada" de verde. |

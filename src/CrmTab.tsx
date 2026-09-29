@@ -37,7 +37,7 @@ import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
 import { GruposLoteMisto, grupoInicial, validarGrupos, unidadesDosGrupos, type GrupoLote } from './LoteMisto';
-import { confirmar, pedirTexto } from './Feedback';
+import { confirmar, pedirTexto, mostrarAviso } from './Feedback';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -373,6 +373,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [cardsExpandidos, setCardsExpandidos] = useState<Set<string>>(new Set());
   // ── modal Nova OP/OS ──
   const [modalNovaOpOs, setModalNovaOpOs]   = useState<{ crmCard?: any } | null>(null);
+  // Números das OPs já ligadas a cada card (id do card -> ['A1234.0926', ...]).
+  // Serve para o card mostrar que a OP já existe e o menu não oferecer "Lançar
+  // OP" como se ainda não houvesse — achado A4 do PLANO_UX_FLUXO_TRABALHO.md.
+  const [oplsPorCard, setOplsPorCard]       = useState<Record<string, string[]>>({});
 
   // ── modal ABRIR (split-screen CRM) ──
   const [modalAbrir, setModalAbrir]         = useState<any|null>(null);
@@ -448,6 +452,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       .select('*')
       .not('oportunidade_id','is',null);
     setPedidosCompra(pcData || []);
+    // OPs já lançadas a partir de cada card (uma consulta só para a tela inteira)
+    const { data: oplsDosCards } = await supabase
+      .from('oples').select('opl,crm_oportunidade_id').not('crm_oportunidade_id', 'is', null).order('opl');
+    const porCard: Record<string, string[]> = {};
+    (oplsDosCards || []).forEach((o: any) => {
+      const k = String(o.crm_oportunidade_id);
+      (porCard[k] = porCard[k] || []).push(o.opl);
+    });
+    setOplsPorCard(porCard);
     // Termômetro de markup — busca em lote (1x por tela), não bloqueia o load principal
     carregarMarkupPorProcesso('crm').then(setMarkupPorOp);
     carregarBandasMarkupPorTipo().then(setBandasMarkup);
@@ -1535,13 +1548,18 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       formatters: { estagio_id: (v) => getEst(v)?.nome || '—' },
     });
     let oplCriada: string|null = null;
+    let avisoOp: { tom: 'atencao'|'erro'; texto: string }|null = null;
     if (entrouEmVencidoAgora && formOp.empresa_vencedora) {
-      oplCriada = await criarOpAutomatica({ ...formOp, id: modalAbrir.id }, formOp.empresa_vencedora);
+      const r = await criarOpAutomatica({ ...formOp, id: modalAbrir.id }, formOp.empresa_vencedora);
+      oplCriada = r.opl;
+      avisoOp = r.aviso;
     }
     setSalvando(false);
     await load(true);
     if (oplCriada) {
       alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
+    } else if (avisoOp) {
+      mostrarAviso(avisoOp.texto, avisoOp.tom);
     }
   };
 
@@ -1579,15 +1597,27 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // fluxo normal ("Em Espera Engenharia"). Idempotente: não cria de novo se
   // já existir uma OP vinculada a esta oportunidade, nem se o número gerado
   // já estiver em uso — nesses casos fica só o botão manual como fallback.
-  const criarOpAutomatica = async (op: any, empresa: 'ACN'|'DETECH') => {
-    if (!op.numero_pv) return null; // sem PV não dá pra gerar número — fica pro fluxo manual
+  //
+  // Devolve { opl, aviso }. Quando não cria, `aviso` diz o porquê para quem
+  // chamou mostrar na tela. Antes devolvia só null, e a colisão de número e o
+  // erro de gravação passavam calados: a pessoa só descobria conferindo a lista
+  // depois (achado A3 do PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026). Se já existe
+  // OP vinculada, não há aviso: é o esperado, não uma falha.
+  // O tom vai explícito porque o Feedback adivinha pelo texto, e "não foi
+  // criada" casa com "criad" e sairia verde, como se tivesse dado certo.
+  const criarOpAutomatica = async (op: any, empresa: 'ACN'|'DETECH'): Promise<{ opl: string|null; aviso: { tom: 'atencao'|'erro'; texto: string }|null }> => {
+    if (!op.numero_pv) {
+      return { opl: null, aviso: { tom: 'atencao', texto: 'A OP não foi criada sozinha\nEsta oportunidade não tem PV atribuído, então não deu para gerar o número. Use "Lançar OP" no menu do card.' } };
+    }
 
     const { data: jaExiste } = await supabase.from('oples').select('id').eq('crm_oportunidade_id', op.id).limit(1).maybeSingle();
-    if (jaExiste) return null; // já tem OP vinculada — não duplica
+    if (jaExiste) return { opl: null, aviso: null }; // já tem OP vinculada — não duplica
 
     const baseOpl = numOpDePv(empresa, op.numero_pv);
     const { data: colisao } = await supabase.from('oples').select('id').eq('opl', baseOpl).maybeSingle();
-    if (colisao) return null; // número já em uso — deixa pro fluxo manual resolver
+    if (colisao) {
+      return { opl: null, aviso: { tom: 'atencao', texto: `A OP ${baseOpl} não foi criada sozinha\nEsse número já está em uso por outra OP. Use "Lançar OP" no menu do card e informe outro número.` } };
+    }
 
     const agora = new Date().toISOString();
     // itens vendidos: da formação de preços ligada ao card (oficial; senão a mais recente)
@@ -1610,14 +1640,17 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       destino_uf:            op.destino_uf || null,
       destino_cep:           op.destino_cep || null,
     }]).select().single();
-    if (error) { console.error('Erro ao gerar OP automática:', error); return null; }
+    if (error) {
+      console.error('Erro ao gerar OP automática:', error);
+      return { opl: null, aviso: { tom: 'erro', texto: `Não foi possível criar a OP ${baseOpl} sozinha\n${error.message}. Use "Lançar OP" no menu do card.` } };
+    }
     if (novaOp) {
       await supabase.from('crm_historico').insert({
         oportunidade_id: op.id, tipo: 'conversao_op',
         conteudo: `OP criada automaticamente ao entrar em Vencido: ${baseOpl}${itensVendidos?.length ? ` (${itensVendidos.length} item(ns) vendido(s) da formação de preços)` : ' (sem formação de preços: informe os itens vendidos no detalhe da OP)'}`, usuario_nome: currentUser?.nome,
       });
     }
-    return baseOpl;
+    return { opl: baseOpl, aviso: null };
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1998,12 +2031,24 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
     };
     const isDetech = (op.faturamento_empresa || 'ACN') === 'Detech';
     const abrir = () => { setFormOp(formOpFromOp(op)); setModalAbrir(op); setAbrirTabDir('andamento'); setAbrirNovoText(''); };
+    // OPs que este card já gerou. Não some com o "Lançar OP" porque há card com
+    // mais de uma OP de verdade (4 de 53 em 29/09/2026: lotes e vendas
+    // desmembradas), mas deixa de oferecer como se fosse a primeira e pede
+    // confirmação antes de abrir o formulário — risco de lançamento em duplicidade.
+    const opsDoCard = oplsPorCard[String(op.id)] || [];
+    const lancarOp = async () => {
+      if (opsDoCard.length) {
+        const ja = opsDoCard.length === 1 ? `a OP ${opsDoCard[0]}` : `as OPs ${opsDoCard.join(', ')}`;
+        if (!await confirmar(`Este card já tem ${ja}.\n\nLançar mais uma OP para o mesmo card?`)) return;
+      }
+      setModalNovaOpOs({ crmCard: op });
+    };
 
     // Ações do cartão: "Atualizar" e as demais ficam no menu ⋯ (mesmas regras de antes)
     const acoes = [
       { rotulo: 'Atualizar andamento', icone: mdiUpdate, onClick: () => abrirAndamento(op) },
       { rotulo: 'Abrir', icone: mdiFolderOpenOutline, onClick: abrir, oculto: perdido || desistiu },
-      { rotulo: 'Lançar OP', icone: mdiClipboardTextOutline, onClick: () => setModalNovaOpOs({ crmCard: op }), oculto: !ganho },
+      { rotulo: opsDoCard.length ? 'Lançar outra OP' : 'Lançar OP', icone: mdiClipboardTextOutline, onClick: lancarOp, oculto: !ganho },
       { rotulo: 'Lançar OS', icone: mdiWrenchOutline, onClick: () => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }, oculto: !(ganho && funil === 'venda_direta') },
       { rotulo: 'Nova venda', icone: mdiPlus, onClick: () => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }, oculto: !ganho },
       { rotulo: 'Compras', icone: mdiPackageVariantClosed, onClick: () => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }, oculto: !ganho },
@@ -2085,6 +2130,15 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           <div className="acn-kmeta">
             <span>Vencedora</span>
             {op.empresa_vencedora ? <Tag>{op.empresa_vencedora}</Tag> : <span className="acn-fraco">— empresa</span>}
+          </div>
+        )}
+
+        {/* OP já lançada — quem olha o card vê que não precisa lançar de novo */}
+        {col?.tipo === 'ganho' && opsDoCard.length > 0 && (
+          <div className="acn-kmeta">
+            <Selo familia="ok" title={`OP(s) lançada(s) a partir deste card: ${opsDoCard.join(', ')}`}>
+              {opsDoCard.length === 1 ? `OP ${opsDoCard[0]}` : `${opsDoCard.length} OPs`}
+            </Selo>
           </div>
         )}
 
@@ -3453,12 +3507,12 @@ const SUB_STATUS_COR: Record<string,string> = {
                   setModalEmpresaVenc(null);
                   // OP nasce sozinha, já numerada a partir do PV (A/D+PV+.+MMAA)
                   // e entra direto no fluxo normal — sem precisar de "Lançar OP" manual.
-                  const oplCriada = await criarOpAutomatica(opVenc, emp);
+                  const { opl: oplCriada, aviso } = await criarOpAutomatica(opVenc, emp);
                   await load();
                   if (oplCriada) {
                     alert(`OP ${oplCriada} criada automaticamente e enviada para Engenharia!`);
-                  } else if (!opVenc.numero_pv) {
-                    alert('Esta oportunidade não tem PV atribuído — use o botão "Lançar OP" para criar manualmente.');
+                  } else if (aviso) {
+                    mostrarAviso(aviso.texto, aviso.tom);
                   }
                 }} style={{
                   flex:1, padding:'12px', fontSize:14, fontWeight:800, borderRadius:8, border:'2px solid',
@@ -4784,7 +4838,7 @@ const SUB_STATUS_COR: Record<string,string> = {
         onClose={() => setModalNovaOpOs(null)}
         currentUser={currentUser}
         crmCard={modalNovaOpOs.crmCard}
-        onSaved={() => setModalNovaOpOs(null)}
+        onSaved={() => { setModalNovaOpOs(null); load(true); }}
       />
     )}
 

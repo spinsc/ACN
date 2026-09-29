@@ -19,6 +19,7 @@ import { OrigemVendaBadge } from './OrigemVenda';
 import { fluxoLabel } from './FluxoEntrega';
 import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpItens';
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
+import { indicePendencias } from './OpPendencias';
 import { MenuAcoes } from './Interface';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -250,10 +251,38 @@ export default function EngenhariaTab({ currentUser }) {
     setNovaObs(''); setModalObs(null); fetchAll();
   };
 
+  // Aviso de pendência em aberto ao liberar a BOM (achado A6 do
+  // PLANO_UX_FLUXO_TRABALHO.md, 29/09/2026). Antes a Engenharia liberava sem
+  // saber que a OP já tinha demanda de Serralheria, Chicotes ou Compras aberta,
+  // e quem esbarrava nisso era o Almoxarifado, na hora de fechar o kit. É
+  // aviso, não trava: liberar com demanda aberta é normal (a liberação parcial
+  // da Serralheria, por exemplo, abre uma de propósito). Devolve true para
+  // seguir. Se a consulta falhar, segue: um aviso que não carregou não pode
+  // impedir a Engenharia de trabalhar.
+  const confirmarComPendenciasAbertas = async (ops) => {
+    let abertas = [];
+    try {
+      const indice = await indicePendencias();
+      ops.forEach(o => (indice.get(String(o.id)) || []).filter(p => p.aberto)
+        .forEach(p => abertas.push({ ...p, opl: o.opl })));
+    } catch (e) {
+      console.error('Não consegui checar as pendências antes de liberar a BOM:', e);
+      return true;
+    }
+    if (!abertas.length) return true;
+    const varias = ops.length > 1;
+    const linhas = abertas.slice(0, 10).map(p => `• ${varias ? p.opl + ' — ' : ''}${p.setor}: ${p.titulo}`).join('\n');
+    const resto = abertas.length > 10 ? `\n… e mais ${abertas.length - 10}` : '';
+    return confirmar(
+      `${varias ? 'Estas OPs já têm' : 'Esta OP já tem'} ${abertas.length} demanda(s) de fabricação/compra em aberto:\n\n${linhas}${resto}\n\n` +
+      'Liberar a BOM mesmo assim? As demandas seguem abertas, e o Almoxarifado vai encontrá-las na hora de fechar o kit.');
+  };
+
   const liberarBOM = async () => {
     const opl = modalBom;
     const bom = bomPreenchida(bomLinhas);
     if (!bom.length) { alert('Preencha a BOM com pelo menos 1 item: o material que será usado nesta OP.'); return; }
+    if (!await confirmarComPendenciasAbertas([opl])) return;
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
@@ -376,6 +405,7 @@ export default function EngenhariaTab({ currentUser }) {
     if (selecionados.length === 0) { alert('Selecione ao menos uma OP.'); return; }
     const bom = bomPreenchida(bomLote);
     if (!bom.length) { alert('Preencha a BOM com pelo menos 1 item: o material de cada unidade.'); return; }
+    if (!await confirmarComPendenciasAbertas(selecionados)) return;
     setLiberandoLote(true);
     const agora = new Date().toISOString();
     try {
