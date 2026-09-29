@@ -580,7 +580,7 @@ publicável sozinha. **Glossário decidido com o usuário na conversa:**
 
 | Conceito | Nome oficial | Onde está |
 |---|---|---|
-| Etapa "OP pronta, esperando o Comercial liberar para o Fiscal" (`oples.status_geral`) | **`Aguardando Liberacao Comercial`** (o curto) | 5.1a ✅ código · 5.1b ⬜ migração dos dados · 5.1c ⬜ apertar |
+| Etapa "OP pronta, esperando o Comercial liberar para o Fiscal" (`oples.status_geral`) | **`Aguardando Liberacao Comercial`** (o curto) | 5.1a ✅ código · 5.1b ✅ migração dos dados · 5.1c ⬜ apertar |
 | 4º passo da liberação parcial de BOM (`oples.serralheria_status`) | **`Sanado`**, no vocabulário da serralheria e fora do menu da Produção | 5.2 ✅ |
 | Última etapa da compra | **`Recebido`** (nunca "Concluído" nas compras) | 5.2 ✅ |
 | Item que liga a montagem automática do material | **Conjunto Elétrico** (nome do catálogo). A coluna `eh_conjunto_instalacao` **não muda**: é nome interno | 5.3 ✅ |
@@ -636,13 +636,38 @@ Producao" reconhece por pedaço de texto ("contém CQ"). Depois da migração, a
 OPs migradas deixam de casar ali (o nome curto não tem "CQ") e ficam só em
 "Concluidas" — o que é o correto, mas é uma mudança que as pessoas vão notar.
 
-#### ⬜ 5.1b — Migrar os dados do status (depende de publicar a 5.1a e de autorização)
+#### ✅ 5.1b — Migrar os dados do status
 
-Só depois de a 5.1a estar no ar (senão os Relatórios da versão antiga perderiam
-as OPs migradas). É **uma** atualização em `oples.status_geral`, por
-`apply_migration`: `Aprovado CQ - Aguardando Liberacao Comercial` →
-`Aguardando Liberacao Comercial`, hoje **188 OPs** (conferir a contagem na hora,
-relatar antes e depois). Verificado antes de propor:
+**Feito em:** 29/09/2026, **depois de a 5.1a estar no ar** (conferido no bundle
+publicado: já tinha a regra dos dois nomes e "OPs em aberto") e **com a
+autorização do usuário**, dada na conversa.
+
+**Resultado:** migração `oples_status_liberacao_comercial_nome_unico`, **uma**
+atualização em `oples.status_geral`, com trava (se as linhas atualizadas fossem
+diferentes das contadas antes, desfazia tudo). **188 OPs** passaram de
+`Aprovado CQ - Aguardando Liberacao Comercial` para `Aguardando Liberacao Comercial`:
+
+| | Antes | Depois |
+|---|---|---|
+| Nome antigo (longo) | 188 | **0** |
+| Nome oficial (curto) | 2 | **190** |
+| Total de OPs | 331 | 331 |
+
+As 188 migradas têm `resultado_cq = 'Aprovado'`: o "passou pelo CQ" continua
+registrado ali. **Histórico intacto:** 234 linhas de `logs_movimentacao_opl` e 119 de
+`audit_log` seguem com o nome de época. As 2 OPs de envio (`A1664.2609`,
+`A1671.2609`) ficaram como estavam.
+
+**Testado depois da migração** (dados reais, gravações bloqueadas): status 13/13,
+banner/Marketing/Financeiro/PCP 13/13, CRM 16/16, reenvio 20/20; na aba "OPs em
+aberto" as 53 linhas visíveis no oficial têm "Liberar Fiscal".
+
+**Efeito que as pessoas vão notar:** o texto do status das 188 OPs fica mais curto
+("Aguardando Liberacao Comercial") nas tabelas; e, no Marketing, as OPs migradas
+saem do filtro "Em Producao" (que reconhecia por "contém CQ") e ficam só em
+"Concluidas".
+
+**Como foi verificado antes de propor:**
 
 - **Sem dependência no banco:** nenhuma regra, função, visão ou política cita o
   texto; os dois gatilhos de `oples` são inofensivos para uma troca de status
@@ -659,9 +684,11 @@ relatar antes e depois). Verificado antes de propor:
 
 Tirar o nome antigo de `STATUS_LIBERACAO_COMERCIAL_TODOS` (uma linha em
 `FluxoEntrega.ts`) **só depois** de conferir no banco que nenhuma OP voltou a
-ter o nome antigo desde a migração (`select count(*) … where status_geral =
-'Aprovado CQ - Aguardando Liberacao Comercial'` deve dar zero, por alguns
-dias). Esse é o passo "aperta o código" do princípio 4.
+ter o nome antigo desde a migração de 29/09/2026 (`select count(*) … where
+status_geral = 'Aprovado CQ - Aguardando Liberacao Comercial'` deve dar zero, por
+alguns dias: abas antigas ainda abertas podiam gravá-lo). Esse é o passo "aperta o
+código" do princípio 4. Manter a leitura do nome antigo em qualquer tela que
+consulte **histórico**, se aparecer alguma.
 
 #### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
 
