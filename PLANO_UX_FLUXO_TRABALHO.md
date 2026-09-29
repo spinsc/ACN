@@ -168,6 +168,18 @@ parece funcionar e não alcança o que precisa. **Corrigir** com paginação
 (`.range`, como já faz `CadastroItensTab.tsx`) ou com busca no servidor — ver
 5.5. **✅ Resolvido na 5.5 (29/09/2026)**, por paginação.
 
+**A9 — O mapa de "alteração não lida" pode cortar em 1.000 linhas.** *(Observado em
+29/09/2026, ao procurar outras leituras com o mesmo corte do A8; **não reproduzido
+em tela**.)* `AuditSystem.tsx:184` (`useUnreadMap`) busca em `audit_log` todas as
+mudanças das entidades de uma lista (`.in('entity_id', ids)`, da mais nova para a
+mais velha) **sem paginar**, e o servidor devolve no máximo 1.000. Hoje a
+`audit_log` tem **2.762 linhas de licitações** (92 licitações) e **1.582 de OPs**
+(220 OPs). Efeito esperado: uma entidade cuja única alteração ainda não vista é mais
+antiga que as 1.000 alterações mais novas fica **sem o destaque de "não lido"** — e
+piora a cada mês, porque a tabela só cresce. As outras leituras de tabelas grandes
+foram conferidas e não têm o problema: o histórico de OP (2.428 linhas) é lido por
+OP, a FIPE (11.399) por filtro, e o catálogo já foi corrigido na 5.5.
+
 ### B. Código morto / caminhos órfãos (achado em 3 pontos independentes)
 
 **B1 — `src/ComercialTab.tsx`**: tela inteira (1.450 linhas, medido em
@@ -839,6 +851,14 @@ estoque) lê `cadastro_itens` sem `limit` e, portanto, também esbarraria nas 1.
 linhas. Hoje são **20** itens — longe do corte —, então não precisa de correção
 agora; vale lembrar se o controle de estoque for ligado em massa. As demais leituras
 de `cadastro_itens` são buscas com `limit` pequeno (6 a 200) ou por `id`/código.
+
+#### ⬜ 5.6 — Mapa de "não lido" sem o corte de 1.000 (A9)
+
+Primeiro **reproduzir**: com um usuário que tenha alterações não vistas só em
+entidades antigas de licitações ou OPs, ver se o destaque falha. Se falhar, corrigir
+pedindo só a **última alteração de cada entidade** (uma função no banco, em vez de
+trazer todas as linhas) ou paginando com `.range` e desempate por `id`, como na 5.5.
+Só leitura; nenhum dado é alterado.
 
 ### ⬜ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
 Um componente (provavelmente estendendo `OplDetalheModal`/`OpVinculos.ts`,
