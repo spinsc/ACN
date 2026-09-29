@@ -15,7 +15,9 @@ import { horasUteis, dentroDoExpediente } from './utils/horasUteis';
 import { combinaBusca } from './SearchUtils';
 import { useFieldHighlight, logChange } from './AuditSystem';
 import { abrirVinculo } from './VinculoPicker';
-import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, STATUS_LIBERACAO_COMERCIAL_TODOS, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { soEnvio, TIPO_VENDA_ENVIO, terminaEmEnvio, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { etapaDaOp } from './EtapasOp';
+import { OndeEstaAgoraAuto } from './OndeEstaAgora';
 import { podeAlterarNumeroOplPv } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { OrigemVendaBadge, ORIGENS, podeEditarOrigem, origemInfo } from './OrigemVenda';
@@ -36,29 +38,11 @@ export function dividirValorEmUnidades(valor: number|null|undefined, qtd: number
 }
 
 // ─── Progresso da OP/OS ao longo do pipeline (Comercial → Faturado) ──────────
-const OPL_PIPELINE: { match: string[]; pct: number; label: string; retrabalho?: boolean }[] = [
-  { match: ['Em Espera Engenharia'], pct: 10, label: 'Aguardando Engenharia' },
-  { match: ['Devolvida Comercial', 'Rejeitada - Análise Requerida'], pct: 10, label: 'Devolvida ao Comercial', retrabalho: true },
-  { match: ['Em Analise Engenharia'], pct: 20, label: 'Em Análise — Engenharia' },
-  { match: ['Devolvida para Engenharia'], pct: 20, label: 'Devolvida à Engenharia', retrabalho: true },
-  { match: ['Em Espera PCP'], pct: 35, label: 'Aguardando PCP' },
-  { match: ['Devolvida PCP'], pct: 35, label: 'Devolvida ao PCP', retrabalho: true },
-  { match: ['Kit OK - Aguardando PCP', 'Aguardando Almox'], pct: 45, label: 'Almoxarifado' },
-  { match: ['Aguardando Inicio Producao', 'Aguardando Agendamento Manutenção', 'Manutenção Agendada'], pct: 55, label: 'Aguardando Produção' },
-  { match: ['Em Producao'], pct: 70, label: 'Em Produção' },
-  { match: ['Em Retrabalho', 'Retrabalho'], pct: 70, label: 'Em Retrabalho', retrabalho: true },
-  { match: ['Aguardando CQ'], pct: 80, label: 'Controle de Qualidade' },
-  // Fluxos que terminam em envio: produzido -> embalar -> frete.
-  { match: ['Aguardando Embalagem'], pct: 80, label: 'Embalagem — Almoxarifado' },
-  { match: ['Aguardando Cotacao Frete'], pct: 85, label: 'Cotação de Frete — Logística' },
-  { match: STATUS_LIBERACAO_COMERCIAL_TODOS, pct: 90, label: 'Aguardando Liberação Comercial' },
-  { match: ['Aguarda Emissao NF'], pct: 95, label: 'Fiscal — Emissão de NF' },
-  { match: ['Faturado', 'Faturado e Disponivel para Entrega'], pct: 100, label: 'Faturado' },
-];
-
+// Os nomes e percentuais das etapas moraram aqui; agora vêm de EtapasOp.ts, que a faixa
+// "Onde está agora" também usa (Etapa 6 do PLANO_UX_FLUXO_TRABALHO.md). A barra é a mesma.
 function progressoOpl(status: string) {
-  const found = OPL_PIPELINE.find(s => s.match.includes(status));
-  return found || { pct: 5, label: status || 'Iniciado', retrabalho: false };
+  const e = etapaDaOp(status);
+  return { pct: e.pct, label: e.label, retrabalho: !!e.retrabalho };
 }
 
 export function OplProgressBar({ status }: { status: string }) {
@@ -931,6 +915,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           </span>
           <button onClick={fecharEMarcarLido} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 20, cursor: 'pointer', marginLeft: 6 }}>✕</button>
         </div>
+
+        <OndeEstaAgoraAuto op={opl} onAbrirDossie={() => setVerDossie(true)} />
 
         {opl.status_geral !== 'Cancelado' && <OplProgressBar status={opl.status_geral} />}
 

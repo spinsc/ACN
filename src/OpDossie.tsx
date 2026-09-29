@@ -17,6 +17,7 @@ import { carregarDossie, buscarOps } from './OpVinculos';
 import { QuadroItensOp } from './OpItens';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
+import { OndeEstaAgora } from './OndeEstaAgora';
 
 const fmtD   = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 const fmtDH  = (d) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
@@ -135,6 +136,8 @@ export function DossieOp({ op, dossieCarregado = null }) {
           {gerandoPdf ? 'Gerando...' : '📄 Baixar PDF'}
         </button>
       </div>
+
+      <OndeEstaAgora op={o} vinculos={vinculos} logs={logs} />
 
       <OplProgressBar status={o.status_geral} />
 

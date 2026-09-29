@@ -242,6 +242,10 @@ cascas vazias de uma refatoração anterior.
 - Não existe painel único "PV 1234 → Ganho → OP A1234.0926 → Em Análise
   Engenharia" — hoje é card do CRM + aba Licitações + lista da Engenharia,
   três lugares.
+  *Correção da Etapa 6 (29/09/2026): o **Dossiê da OP** (21/09) já é um painel
+  único e completo — origem da venda, tudo o que está ligado, tempos, marcos, linha
+  do tempo e PDF. O que faltava era um **relance** (uma faixa que responda "onde
+  está agora") e um caminho a partir da lista e do card do CRM.*
 - Dentro do detalhe da OP não há link direto pro registro de frete
   correspondente (a busca em Logística é textual).
 - Não existe tela que some quanto uma OP específica já gastou (compras +
@@ -924,13 +928,97 @@ sempre); por isso o número inicial pode parecer alto.
 **O que ficou de fora:** o destaque de **campo** dentro de uma entidade
 (`useUnreadChanges`) lê a auditoria de **uma** entidade só, então não tem o problema.
 
-### ⬜ Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
-Um componente (provavelmente estendendo `OplDetalheModal`/`OpVinculos.ts`,
-que já existem) que mostre, num lugar só: estágio do funil → OP → status
-atual → pendências abertas → frete (se houver) → faturamento. Reaproveitar
-`OPL_PIPELINE`/barra de progresso já existente, hoje subutilizada. Levar um
-resumo disso pro card do Kanban do CRM também, sem precisar abrir o
-detalhe.
+### 🟡 Etapa 6 — Painel único "onde está isso agora" — o coração do pedido
+
+Feita em fatias, na ordem escolhida pelo usuário: **6.1** faixa no detalhe da OP e no
+Dossiê ✅ · **6.2** coluna na lista "OPs em aberto" ⬜ · **6.3** selo no card do CRM ⬜.
+
+**Levantamento (29/09/2026, dados reais):**
+
+- **O Dossiê já existia** (ver a correção no achado D). Faltava o relance.
+- **A trilha "PV → OP" só existe para 18% das OPs:** das 331, **59 têm card do CRM** e
+  **nenhuma** tem pedido de licitação ligado; **272 (82%) nascem sem origem ligada**.
+  Por isso o painel é **centrado na OP**, não no card.
+- **"Desde quando" nem sempre existe:** das 329 OPs em aberto, só **139** têm um evento
+  no histórico que levou a OP à etapa de hoje; **190 não têm**. Nelas a data vem do
+  último marco registrado na própria OP (CQ, liberação…), e a tela avisa que é
+  aproximada. Média de 17,6 dias na etapa (nas que têm evento), máxima de 71.
+- **A fila escondida que o painel revela:** das 329 OPs em aberto, **190 (58%) estão em
+  "Aguardando Liberação Comercial"**: 8 há até 7 dias, 110 entre 8 e 30 dias e **70 há
+  mais de 30 dias** (a maior há 61), 32 delas com card do CRM. Pode ser fila real ou OPs
+  já entregues que ninguém avançou no sistema; **não mexi em nenhuma** (regra 4).
+
+**Decisões do usuário (29/09/2026):** aparecer **nos três lugares**; o conteúdo é
+**etapa, setor, desde quando e pendências**, mais frete e NF quando existem; e o "há
+quantos dias" é **só o número, sem cor de alerta** (as metas do Dashboard foram feitas
+para tempo de trabalho, não para fila parada de semanas).
+
+#### ✅ 6.1 — A faixa "Onde está agora" no detalhe da OP e no Dossiê
+
+**Feito em:** 29/09/2026. **Nenhum dado foi alterado.**
+
+- **`EtapasOp.ts` (novo) é agora a fonte única das etapas.** Os nomes e percentuais
+  moravam num vetor privado do `AcnTabShared` (só para a barra de progresso); passaram
+  para lá, ganharam `setor` (com quem a OP está) e `estado` (o que ela espera), e a
+  barra continua **exatamente igual** (verificado para os 22 status). Traz também
+  `mesmaEtapa()`, `desdeQuandoNaEtapa()`, `diasDesde()`, `textoDias()` e `textoData()`.
+- **`OndeEstaAgora.tsx` (novo) desenha a faixa:** `📍 Setor — estado`, `⏱ desde dd/mm
+  (há N dias)`, `⚠ N pendências abertas` (clicável: abre o Dossiê), `🚚 Frete: status` e
+  `🧾 NF` só quando existem, e `📦 Entregue em` nas concluídas. Cor: azul normal, âmbar
+  em devolvida/retrabalho, verde em concluída. **Sem cor de alerta por tempo.**
+- **Onde aparece:** no topo do detalhe da OP (acima da barra de progresso; o detalhe
+  relê a OP inteira, porque recebe linhas parciais das listas) e no topo do Dossiê
+  (que já tinha os dados carregados e só os repassa).
+- **"Desde quando":** primeiro o último evento do histórico que **levou** a OP ao status
+  de hoje (anotação com o mesmo status antes e depois não conta); se não houver, o último
+  marco registrado, marcado com "≈" e uma dica dizendo qual marco; se não houver nada,
+  "sem registro". **O histórico guarda o nome antigo da liberação comercial** (Etapa 5):
+  a comparação é por `mesmaEtapa()`, nunca por `===`; é a primeira leitura de histórico
+  por nome no sistema, e é por isso que a 5.1c ainda pede cuidado.
+- **Suposição minha, registrada:** a coluna `estado` ("na fila, aguardando iniciar a
+  análise", "cotando o frete"…) é redação minha a partir dos nomes já existentes; e o
+  setor de cada status também (por exemplo, "Kit OK - Aguardando PCP" é do PCP, e
+  "Faturado e Disponivel para Entrega" é do Comercial). Ajustar é uma linha em
+  `ETAPAS_OP`.
+
+**Testado** (25 verificações; navegador automatizado com **gravações bloqueadas**):
+
+- **Regras (9):** a barra não mudou em 22 status; todo status conhecido tem setor (menos
+  o "Faturado", ciclo fechado); status desconhecido volta como está; os dois nomes da
+  liberação são a mesma etapa; "desde" acha o evento **pelo nome antigo** e ignora
+  anotação; cai no marco e diz qual; textos de dias e datas.
+- **Detalhe da OP com casos reais (10):** OP de envio (A1671.2609, "desde 28/09");
+  **OP migrada** (A1656.2609, evento gravado com o nome antigo, "desde 25/09"); devolvida
+  (1625.2609, âmbar, "desde 17/09"); com frete (0756.2609, "Frete: Cotação"); a faixa vem
+  antes da barra e a barra segue igual.
+- **Dossiê (5):** 1525.2609/01 ("Engenharia — em análise", "desde 17/09", "3
+  pendências"); a faturada sem evento (1403.2026: "Concluída", "desde ≈ 06/07", "NF 123",
+  "Entregue em 06/07", com a dica da data aproximada).
+- **Botão de pendências (4):** no detalhe da 1525.2609/01, clicar em "3 pendências" abre
+  o Dossiê, que mostra a sua própria faixa e o banner.
+- **Regressões:** CRM 16/16, reenvio 20/20, status 13/13, banner/Marketing/Financeiro/PCP
+  13/13, "OP/Conjunto" 21/21, "não lido" 9/9, Engenharia 13/13, licitação.
+
+**O que ficou de fora:** o **link direto** do frete da faixa para o registro na Logística
+(o achado D, 2º item): hoje a faixa diz o status do frete, mas não abre o registro. O
+"quanto a OP já gastou" e a "aba pendente da minha aprovação" (3º e 4º itens do achado D)
+seguem para a Etapa 8 e uma etapa própria.
+
+#### ⬜ 6.2 — Coluna "Onde está / desde" na lista "OPs em aberto"
+
+Uma coluna para as 329 OPs em aberto, ordenável por "parada há mais tempo", com o setor, a
+etapa e os dias. **Cuidado técnico:** o histórico tem 2.428 linhas e o servidor devolve no
+máximo 1.000 por leitura (achado A8/A9), então **não dá para ler o histórico da lista no
+navegador**: precisa de uma função de leitura no banco (mesmo desenho da 5.6) que devolva
+"desde quando" por OP, com o marco como reserva. Decidir com o usuário quais "pendências"
+contam na lista (a faixa usa demandas, compras e ajustes em aberto; a lista poderia usar só
+`indicePendencias()`, que é mais barata).
+
+#### ⬜ 6.3 — Selo no card do CRM
+
+O selo `OP A1234.0926` que o card já mostra (Etapa 2) passa a dizer a etapa e os dias, e a
+abrir o detalhe da OP ao clicar. Só vale para os cards que têm OP (18% das OPs). Reaproveita
+a função da 6.2.
 
 ### ⬜ Etapa 7 — Trocar `alert`/`confirm` nativos pelo padrão do sistema
 Generalizar `Feedback.tsx` (`confirmar`/`pedirTexto` já existem) para cobrir
@@ -993,5 +1081,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Sigla nas telas: "OP"**, não "OPL"; nomes internos não mudam — decisão do usuário. |
 | 29/09/2026 | `Sanado` é valor legítimo de `serralheria_status` (4º passo da liberação parcial, gravado pelo PCP), fora do menu da Produção. |
 | 29/09/2026 | Migração de dado de status só depois de a publicação do código estar no ar, e só com autorização; histórico (`logs_movimentacao_opl`, `audit_log`, `lixeira`) nunca é reescrito. |
+| 29/09/2026 | **Etapa 6 ("onde está agora")**: aparece nos **três lugares** (detalhe da OP e Dossiê, coluna da lista "OPs em aberto", selo do card do CRM), em fatias 6.1 → 6.2 → 6.3; conteúdo = etapa, setor, desde quando e pendências, mais frete e NF quando existem; o "há quantos dias" é **só o número, sem cor de alerta** — decisão do usuário. |
+| 29/09/2026 | Os nomes das etapas da OP, o setor de cada uma e a regra do "desde quando" moram em **`EtapasOp.ts`** (fonte única da barra de progresso e da faixa). Quem lê histórico compara etapas por `mesmaEtapa()`, nunca por `===`, porque o histórico guarda o nome antigo da liberação comercial. |
 | 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |
