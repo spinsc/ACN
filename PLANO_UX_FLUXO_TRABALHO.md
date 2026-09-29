@@ -1340,9 +1340,9 @@ formulários de edição** para ver se abrem com os dados já salvos ou em branc
 defeito que a edição de OP tinha); (3) na edição de um lançamento do **Centro de Custo**, poder **configurar o parcelamento
 e em quantas vezes**.
 
-**As perguntas que fiz não foram respondidas** (o usuário só disse "pode seguir"). Segui pelo que recomendei e registro
-como suposição, para ele corrigir se quiser: o principal do Conjunto Elétrico é o item de **código 1687** ("CONJUNTO
-ELETRICO", o único que já aparece em OPs); o parcelamento do centro de custo vale para o **contrato parcelado** (guarda
+**As perguntas que fiz ficaram sem resposta na hora** (o usuário só disse "pode seguir"), e segui pelo que recomendei. **O usuário
+confirmou depois, no chat, as duas ("SIM E SIM")**: o principal do Conjunto Elétrico é o item de **código 1687** ("CONJUNTO
+ELETRICO", o único que já aparecia em OPs); o parcelamento do centro de custo vale para o **contrato parcelado** (guarda
 "em quantas vezes" e acompanha "pagas x de N"), **sem gerar cronograma de parcelas**.
 
 #### 3) Centro de custo — "Em quantas vezes?" ✅
@@ -1462,7 +1462,7 @@ para o Fiscal; e o número de OPs "com alteração não vista" foi de 218 para 2
 - **A aplicação das decisões da planilha** (48 + 21 linhas): depende de o usuário marcar SIM/NÃO.
 - **Não há tela de "itens unificados"** no cadastro: a nota está na descrição do item inativo e o registro em `itens_unificacoes`.
 - **O ERP continuará criando itens sem código de nome parecido?** Não medi; o que a importação faz com os sem código (sempre insere) não mudou.
-- **Cronograma de parcelas no centro de custo** (datas de vencimento de cada parcela) **não foi feito** de propósito: a pergunta ficou sem resposta.
+- **Cronograma de parcelas no centro de custo** (datas de vencimento de cada parcela) **não foi feito** de propósito, e o usuário confirmou ("SIM") que não precisa por ora.
 
 ### ✅ Etapa 7.3 — Compra de reposição recebida não subia para o estoque (PC-FU6DS9)
 
@@ -1544,11 +1544,8 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
 - **Unificação de itens (7.2) — marcar a planilha:** o usuário escreve SIM/NÃO nas abas `Decidir` (48) e `Sem candidato` (21) de
   `auditoria_unificacao_de_itens.xlsx`; aplicar com `unificar_item(…, 'planilha')`, com nova liberação de gravação.
-- **Conjunto Elétrico (7.2):** o principal ficou o **1687** (suposição — foi o único que já aparecia em OPs — e já gravada, com
-  reversão possível). Os "CONJUNTO ELETRICO PV …" **novos** que o ERP trouxer **entram inativos** na importação: já está no código;
-  é regra nova, o usuário deve confirmar.
-- **Parcelas do centro de custo (7.2):** basta guardar "em quantas vezes" e acompanhar "pagas x de N", ou o usuário quer **cronograma**
-  (uma linha por parcela, com vencimento e "paga/aberta")? Hoje é o primeiro.
+- **Conjunto Elétrico (7.2):** os "CONJUNTO ELETRICO PV …" **novos** que o ERP trouxer **entram inativos** na importação: já está no
+  código e no ar; é regra nova e **o usuário ainda não confirmou** (o 1687 como principal já foi confirmado).
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -1580,7 +1577,8 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | **Etapa 7.1 (pedido do usuário, fora de ordem)**: na edição da OP o veículo é escolhido do **catálogo** (o mesmo seletor da criação) e preenche o Modelo; a edição do CRM parte da OP inteira e grava **só o que mudou**; o cartão da OP mostra todos os dados cadastrados; a ficha "Jeep Renegade 4x4" passou a valer **de 2015 em diante** (nome mantido) e as 40 OPs sem texto de modelo receberam o nome da ficha — decisões do usuário. |
 | 29/09/2026 | **Etapa 7.2 (pedido do usuário, fora de ordem)**: itens repetidos são **unificados sem apagar** (o repetido fica inativo, com nota e registro em `itens_unificacoes`); preferência **sempre pelo item com código**; o que for duvidoso vai para a **planilha de auditoria** e o usuário decide. O **Conjunto Elétrico é um item só** (gatilho). Custo do repetido **não** é copiado para o principal. |
 | 29/09/2026 | **Unificação gravada com autorização do usuário no chat** ("liberar a gravação da unificação dos itens"): 441 itens, só o que não deixava dúvida; o resto só depois de o usuário marcar a planilha, **com nova liberação a cada gravação em massa**. |
-| 29/09/2026 | **Suposições da 7.2 que o usuário ainda não confirmou** (ficaram sem resposta): principal do Conjunto Elétrico = **1687**; "Conjunto Elétrico PV …" novo vindo do ERP **entra inativo**; parcelas do centro de custo = **número combinado + "pagas x de N"**, sem cronograma. |
+| 29/09/2026 | **Confirmado pelo usuário no chat ("SIM E SIM")**: o principal do Conjunto Elétrico é o item **1687**; as parcelas do centro de custo são **número combinado + "pagas x de N"**, **sem cronograma** (uma linha por parcela com vencimento só se ele pedir depois). |
+| 29/09/2026 | **Ainda sem confirmação do usuário (7.2):** o "Conjunto Elétrico PV …" novo vindo do ERP **entra inativo** na importação (já no ar). |
 | 29/09/2026 | **Recebimento de reposição (7.3):** entra no estoque a quantidade **realmente recebida**, e a janela **abre com a quantidade COMPRADA** (a pessoa corrige se chegou outra). Pedido de reposição recebido sem entrada no estoque é falha visível, nunca silêncio. Para PC-FU6DS9 o usuário decidiu creditar **10 (a comprada)**. |
 | 29/09/2026 | Formulário de edição **abre com o que está salvo e só grava o que mudou**; valor em dinheiro entra no campo **já em formato brasileiro**, porque o "salvar" trata o ponto como milhar (`fmtValorEdit`). |
 | 29/09/2026 | Clique que **nasce dentro de uma janela e termina no fundo** (arrastar o mouse ao selecionar texto) **não fecha a janela**; vale para todas de uma vez (`ProtecaoDeFundo.ts`). Clique de verdade no fundo continua fechando. |
