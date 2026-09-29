@@ -1355,13 +1355,31 @@ const VAZIO_RECEBIMENTO = {
 // volume e conferência). Usada no painel "Aguardando Recebimento" daqui e ao
 // arrastar um card para "Concluído" no kanban de Compras — o mesmo registro
 // (manifesto + fechamento + liberação do faturamento) nos dois caminhos.
-export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: any) {
+export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClose, onFeito }: any) {
+  // O pedido que chega aqui pode ser uma linha PARCIAL de uma lista: a tela "Aguardando Recebimento" lia só
+  // algumas colunas, sem o vínculo com o item de estoque e sem a quantidade comprada. Resultado (pedido PC-FU6DS9,
+  // 29/09/2026): a janela abria com a quantidade PEDIDA (9) em vez da COMPRADA (10) e, ao confirmar, o crédito no
+  // estoque saía em silêncio ("não se aplica") — o pedido ficava Recebido e o saldo, parado. Por isso a janela
+  // lê o pedido inteiro ao abrir e de novo ao confirmar, qualquer que seja quem a chamou.
+  const [pedido, setPedido] = useState(pedidoRecebido);
+  const tocouQtd = useRef(false);
   // vem preenchido com o que o Compras COMPROU (caixa fechada, lote mínimo),
   // não com o que a requisição pediu — é o que se espera ver chegar. Pedido
   // antigo, sem quantidade_comprada, cai no pedido como antes (25/09/2026).
   const esperado = pedido?.quantidade_comprada ?? pedido?.quantidade;
   const [form, setForm] = useState({ ...VAZIO_RECEBIMENTO, quantidade_recebida: esperado != null ? String(esperado) : '' });
   const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (!pedidoRecebido?.id) return;
+    supabase.from('pcp_pedidos_compra').select('*').eq('id', pedidoRecebido.id).maybeSingle().then(({ data }) => {
+      if (!data) return;
+      setPedido(data);
+      // só troca o número se a pessoa ainda não digitou nada
+      const q = data.quantidade_comprada ?? data.quantidade;
+      if (!tocouQtd.current && q != null) setForm(f => ({ ...f, quantidade_recebida: String(q) }));
+    });
+  }, [pedidoRecebido?.id]);
 
   // Mesmo padrão de notificarCriadorPedido (ComprasTab.tsx) / notificarCriadorFrete
   // (FretesPanel acima) — avisa quem fez a compra que a divergência precisa ser resolvida.
@@ -1449,11 +1467,17 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
     // NF conferida: com divergência o material pode não ser o que se pediu, e
     // aí o certo é o Almoxarifado contar a prateleira (24/09/2026).
     if (form.confere) {
+      // lê o pedido de novo: o crédito depende do vínculo com o item, e uma linha parcial não o traz
+      const { data: pedidoInteiro } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', pedido.id).maybeSingle();
+      const doEstoque = String((pedidoInteiro || pedido)?.vinculo_tipo || '').startsWith('estoque');
       const credito = await creditarCompraRecebida({
-        pedido, quantidade: numOrNull(form.quantidade_recebida), currentUser,
+        pedido: pedidoInteiro || pedido, quantidade: numOrNull(form.quantidade_recebida), currentUser,
       });
       if (credito?.erro) {
         alert('Recebimento registrado, mas não foi possível creditar o estoque: ' + credito.erro);
+      } else if (doEstoque && credito?.naoSeAplica) {
+        // antes isto passava em silêncio: a compra ficava Recebida e o estoque, sem a entrada
+        alert('Recebimento registrado, mas NADA entrou no estoque: ' + (credito.motivo || 'não foi possível identificar o item.') + ' Faça a entrada pela tela do Estoque.');
       } else if (credito?.ok) {
         const novo = `Estoque atualizado: entraram ${fmtQtd(numOrNull(form.quantidade_recebida))}, saldo agora ${fmtQtd(credito.saldo_depois)}.`;
         const aindaFalta = credito.requisicao?.criada
@@ -1504,7 +1528,7 @@ export function ModalReceberPedido({ pedido, currentUser, onClose, onFeito }: an
             <div className="form-group">
               <label className="acn-label">Quantidade Recebida</label>
               <input type="number" className="acn-input" style={{ width: '100%' }} value={form.quantidade_recebida}
-                onChange={e => setForm(f => ({ ...f, quantidade_recebida: e.target.value }))} />
+                onChange={e => { tocouQtd.current = true; setForm(f => ({ ...f, quantidade_recebida: e.target.value })); }} />
             </div>
             <div className="form-group">
               <label className="acn-label">Volume (embalagens)</label>
@@ -1566,7 +1590,9 @@ function PainelRecebimento({ currentUser }: any) {
   const fetchAll = async () => {
     setLoading(true);
     const { data } = await supabase.from('pcp_pedidos_compra')
-      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome')
+      // vinculo_* e quantidade_comprada TÊM de vir: sem eles a janela de recebimento não sabe que é reposição de
+      // estoque e não credita nada (pedido PC-FU6DS9, 29/09/2026)
+      .select('id, numero_pedido, numero_oc, descricao_material, fornecedor, quantidade, quantidade_comprada, valor_compra, data_prevista_recebimento, opl, criado_por, criado_por_nome, vinculo_tipo, vinculo_id, vinculo_descricao')
       .eq('status_compra', 'Comprado')
       .order('data_prevista_recebimento', { ascending: true, nullsFirst: false });
     setPedidos(data || []);
@@ -1838,6 +1864,25 @@ export default function LogisticaTab({ currentUser }) {
           .eq('pedido_id', form.pedido_compra_id);
         if (errCompra || errFat) {
           alert('Manifesto salvo, mas houve erro ao atualizar o pedido de compra/faturamento: ' + (errCompra?.message || errFat?.message) + '. Verifique manualmente.');
+        }
+        // Reposição de estoque recebida por este caminho também tem de entrar no saldo. Antes só a janela "Receber"
+        // creditava; aqui a compra fechava e o estoque ficava parado (achado com o pedido PC-FU6DS9, 29/09/2026).
+        // Entra a quantidade informada no registro; sem ela, a quantidade comprada.
+        if (!errCompra) {
+          const { data: pedidoInteiro } = await supabase.from('pcp_pedidos_compra').select('*').eq('id', form.pedido_compra_id).maybeSingle();
+          if (String(pedidoInteiro?.vinculo_tipo || '').startsWith('estoque')) {
+            const informada = parseFloat(String(form.quantidade).replace(',', '.'));
+            const qtd = informada > 0 ? informada : (Number(pedidoInteiro.quantidade_comprada ?? pedidoInteiro.quantidade) || 0);
+            const credito = await creditarCompraRecebida({ pedido: pedidoInteiro, quantidade: qtd, currentUser });
+            if (credito?.erro) {
+              alert('Recebimento registrado, mas não foi possível creditar o estoque: ' + credito.erro);
+            } else if (credito?.naoSeAplica) {
+              alert('Recebimento registrado, mas NADA entrou no estoque: ' + (credito.motivo || 'não foi possível identificar o item.') + ' Faça a entrada pela tela do Estoque.');
+            } else if (credito?.ok) {
+              await supabase.from('pcp_pedidos_compra').update({ quantidade_recebida: qtd }).eq('id', pedidoInteiro.id);
+              alert(`Estoque atualizado: entraram ${fmtQtd(qtd)}, saldo agora ${fmtQtd(credito.saldo_depois)}.`);
+            }
+          }
         }
       }
       setForm(FORM_VAZIO); setFotos([]); setShowForm(false); fetchAll();

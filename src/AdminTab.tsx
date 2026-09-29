@@ -198,7 +198,7 @@ function PainelUsuarios() {
     const abas = Array.isArray(u.abas_permitidas) && u.abas_permitidas.length > 0
       ? u.abas_permitidas
       : TODAS_ABAS.map(a=>a.id);
-    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
+    setEditForm({ nome: u.nome||'', email: u.email||'', whatsapp: u.whatsapp||'', perfil: u.perfil||'Operador', novaSenha:'', abas_permitidas: abas, pode_autorizar_rh: u.pode_autorizar_rh||false, permissoes_crm: Array.isArray(u.permissoes_crm) ? u.permissoes_crm : [], permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [], recebe_alerta_analise: u.recebe_alerta_analise||false, pode_enviar_avisos: u.pode_enviar_avisos||false, pode_aprovar_compra: u.pode_aprovar_compra||false, ve_todas_tarefas_financeiro: u.ve_todas_tarefas_financeiro||false, pode_deletar_anexos: u.pode_deletar_anexos||false, ver_valores: u.ver_valores !== false, gestor_id: u.gestor_id || null });
     setModalEditar(u);
   };
 
@@ -221,6 +221,9 @@ function PainelUsuarios() {
       pode_enviar_avisos: editForm.pode_enviar_avisos,
       pode_aprovar_compra: !!editForm.pode_aprovar_compra,
       ve_todas_tarefas_financeiro: !!editForm.ve_todas_tarefas_financeiro,
+      // a caixa "Pode excluir anexos em Licitações" existia na tela, mas não era carregada nem gravada:
+      // abria sempre desmarcada e marcar não tinha efeito (achado em 29/09/2026)
+      pode_deletar_anexos: !!editForm.pode_deletar_anexos,
       permissoes_crm: editForm.permissoes_crm,
       permissoes_rh: editForm.permissoes_rh,
       recebe_alerta_analise: editForm.recebe_alerta_analise,
@@ -3302,13 +3305,14 @@ function PainelAvisos() {
       criticidade: form.criticidade,
       permanente:  !!form.permanente,
       data_expiracao: (!form.permanente && form.data_expiracao) ? new Date(form.data_expiracao).toISOString() : null,
-      ativo: true,
     };
     if (editId) {
+      // editar NÃO mexe em "ativo": antes o payload forçava ativo:true e editar um aviso desativado o reativava
       await supabase.from('avisos_sistema').update(payload).eq('id', editId);
       setEditId(null);
     } else {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
+      payload.ativo = true;
       payload.criado_por      = user.email || '';
       payload.criado_por_nome = user.nome  || '';
       await supabase.from('avisos_sistema').insert([payload]);

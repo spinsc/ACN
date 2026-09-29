@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { normalizarBusca, buscarPorPalavras, combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import * as XLSX from 'xlsx';
-import { linhasDoKit, custoDoKit, usosDoKit } from './KitEstrutura';
+import { linhasDoKit, linhasDoKitComErro, custoDoKit, usosDoKit } from './KitEstrutura';
 import { ProdutoArquivos } from './ProdutoArquivos';
 import { custoComImpostos, precoUnitario } from './FormacaoCalculo';
 
@@ -438,6 +438,12 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
   const [linhas, setLinhas]       = useState<any[]>([]);
   const [salvando, setSalvando]   = useState(false);
   const [loadingBom, setLoadingBom] = useState(false);
+  // A estrutura do kit só pode ser regravada se foi LIDA com sucesso (ou se o produto é novo, sem
+  // estrutura). Antes, salvar com a estrutura ainda carregando — ou depois de uma falha de leitura,
+  // que virava lista vazia — apagava a estrutura inteira do kit (achado em 29/09/2026, revisão dos
+  // formulários de edição).
+  const [bomCarregado, setBomCarregado] = useState(!(produto?.id || copiarBomDe));
+  const [erroBom, setErroBom] = useState('');
   const [adicionarVarios, setAdicionarVarios] = useState(false);
   // Fotos e catálogo
   const [fotos, setFotos]         = useState<string[]>(produto?.fotos || []);
@@ -484,9 +490,10 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
   const idDoBom = produto?.id || copiarBomDe;
   useEffect(() => {
     if (!idDoBom) return;
-    setLoadingBom(true);
-    linhasDoKit(idDoBom)
-      .then(async (linhasSalvas: any[]) => {
+    setLoadingBom(true); setBomCarregado(false); setErroBom('');
+    linhasDoKitComErro(idDoBom)
+      .then(async ({ linhas: linhasSalvas, erro }: { linhas: any[]; erro: string }) => {
+        if (erro) { setErroBom(erro); setLoadingBom(false); return; }
         const montadas = [];
         for (const l of linhasSalvas) {
           const base = { ...l, id: produto?.id ? l.id : undefined, _tmpId: Math.random().toString(36).slice(2) };
@@ -499,8 +506,10 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
           }
         }
         setLinhas(montadas);
+        setBomCarregado(true);
         setLoadingBom(false);
-      });
+      })
+      .catch((e: any) => { setErroBom(e?.message || 'Falha ao ler a estrutura do kit.'); setLoadingBom(false); });
   }, [idDoBom]);
 
   // Um item ou uma leva inteira. Item que já está no kit soma na quantidade,
@@ -578,6 +587,13 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
 
   const handleSave = async () => {
     if (!form.nome?.trim()) return;
+    // sem a estrutura lida, salvar regravaria uma lista vazia por cima da que existe
+    if (!bomCarregado) {
+      alert(erroBom
+        ? `Não foi possível ler a estrutura deste kit (${erroBom}).\n\nFeche e abra de novo o produto antes de salvar, para a estrutura não ser apagada.`
+        : 'A estrutura do kit ainda está carregando. Aguarde um instante e salve de novo.');
+      return;
+    }
     setSalvando(true);
 
     const payload: any = {
@@ -610,10 +626,17 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
     }
 
     if (produtoId) {
-      // Recria BOM
-      await supabase.from('cadastro_produtos_itens').delete().eq('produto_id', produtoId);
+      // Recria a estrutura: grava as linhas NOVAS primeiro e só então remove as ANTIGAS. Antes era apagar e
+      // depois inserir — uma falha no meio deixava o kit sem estrutura.
+      const { data: antigas } = await supabase.from('cadastro_produtos_itens').select('id').eq('produto_id', produtoId);
+      const idsAntigos = (antigas || []).map((a: any) => a.id);
+      if (isEdit && linhas.length === 0 && idsAntigos.length > 0
+          && !await confirmar(`Este kit tem ${idsAntigos.length} item(ns) na estrutura e a lista está vazia.\n\nSalvar assim APAGA a estrutura inteira. Confirmar?`)) {
+        setSalvando(false);
+        return;
+      }
       if (linhas.length > 0) {
-        await supabase.from('cadastro_produtos_itens').insert(
+        const { error: erroInsert } = await supabase.from('cadastro_produtos_itens').insert(
           linhas.map((l, idx) => ({
             produto_id:  produtoId,
             item_id:     l.item_id || null,
@@ -626,7 +649,13 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
             ordem:       idx,
           }))
         );
+        if (erroInsert) {
+          setSalvando(false);
+          alert('Os dados do produto foram salvos, mas a estrutura NÃO foi gravada (a anterior continua como estava): ' + erroInsert.message);
+          return;
+        }
       }
+      if (idsAntigos.length) await supabase.from('cadastro_produtos_itens').delete().in('id', idsAntigos);
     }
 
     setSalvando(false);
@@ -991,7 +1020,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
           </button>
           <button
             onClick={handleSave}
-            disabled={salvando || !form.nome?.trim()}
+            disabled={salvando || loadingBom || !form.nome?.trim()}
             style={{
               padding: '6px 18px', border: 'none', borderRadius: 5,
               background: !form.nome?.trim() ? '#9ca3af' : '#7c3aed', color: '#fff',
@@ -999,7 +1028,7 @@ function ProdutoModal({ produto, onSave, onClose, currentUser, copiarBomDe }: an
               fontSize: 11, fontWeight: 700, opacity: salvando ? .6 : 1,
             }}
           >
-            {salvando ? 'Salvando...' : isEdit ? '💾 Salvar Produto' : '✅ Cadastrar Produto'}
+            {salvando ? 'Salvando...' : loadingBom ? 'Carregando estrutura...' : isEdit ? '💾 Salvar Produto' : '✅ Cadastrar Produto'}
           </button>
         </div>
       </div>

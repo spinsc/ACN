@@ -292,8 +292,55 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
 // TODAS as linhas desta tabela, então o contrato (valor:0) não infla nada
 // e cada medição conta como o pagamento real que é, sem mexer em nenhuma
 // fórmula de totais existente.
+// ─── EM QUANTAS VEZES (pedido do usuário em 29/09/2026) ───────────────────
+// O contrato parcelado sabia o valor total, mas não em quantas vezes foi combinado — então a lista
+// não conseguia dizer "pagas 2 de 6" nem sugerir o valor da próxima parcela. O número fica em
+// `num_parcelas` (vazio = ainda não combinado; é o caso de todos os contratos anteriores).
+// Não gera cronograma: as parcelas continuam sendo lançadas uma a uma como medições, na data em que
+// são pagas — o número só serve de régua para conferir e sugerir o valor.
+const lerParcelas = (txt: any): { ok: boolean; n: number | null } => {
+  const s = String(txt ?? '').trim();
+  if (!s) return { ok: true, n: null };
+  const n = Number(s);
+  return Number.isInteger(n) && n >= 2 && n <= 120 ? { ok: true, n } : { ok: false, n: null };
+};
+const MSG_PARCELAS = 'Em quantas vezes: informe um número inteiro de 2 a 120, ou deixe em branco se ainda não foi combinado.';
+
+// escopo de módulo de propósito: declarado dentro de um modal, remontaria o campo a cada tecla
+function CampoParcelas({ parcelas, onChange, total, feitas = 0 }: any) {
+  const { ok, n } = lerParcelas(parcelas);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label className="acn-label">Em quantas vezes?</label>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input className="acn-input" style={{ width: 72 }} inputMode="numeric" placeholder="ex: 6" aria-label="Número de parcelas"
+          value={parcelas} onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 3))} />
+        {[2, 3, 4, 6, 10, 12].map(q => (
+          <button key={q} type="button" onClick={() => onChange(String(q))}
+            style={{ padding: '4px 8px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+              border: `1.5px solid ${n === q ? '#0f766e' : '#d1d5db'}`,
+              background: n === q ? '#ccfbf1' : '#fff', color: n === q ? '#0f766e' : '#6b7280' }}>{q}x</button>
+        ))}
+      </div>
+      {!ok && <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 4 }}>{MSG_PARCELAS}</div>}
+      {ok && n && total > 0 && (
+        <div style={{ fontSize: 10, color: '#0f766e', marginTop: 4 }}>
+          Cada parcela: <b>{moeda(total / n)}</b> ({moeda(total)} ÷ {n}). As parcelas entram depois, uma a uma, como medições.
+        </div>
+      )}
+      {ok && !n && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>Deixe em branco se ainda não foi combinado.</div>}
+      {ok && feitas > 0 && (
+        <div style={{ fontSize: 10, marginTop: 2, color: n && feitas > n ? '#b91c1c' : '#64748b' }}>
+          Já lançadas: <b>{feitas}</b>{n ? ` de ${n}` : ''}{n && feitas > n ? ' — há mais medições do que parcelas combinadas.' : '.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
   const [parcelado, setParcelado] = useState(false);
+  const [parcelas, setParcelas] = useState('');
   const [valor, setValor] = useState('');
   const [descricao, setDescricao] = useState('');
   const [data, setData] = useState(() => hojeISO());
@@ -303,9 +350,11 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
     const v = parseFloat(String(valor).replace(',', '.'));
     if (!v || v <= 0) { alert(parcelado ? 'Informe o valor total negociado.' : 'Informe um valor válido.'); return; }
     if (!descricao.trim()) { alert('Informe a descrição da despesa.'); return; }
+    const p = lerParcelas(parcelas);
+    if (parcelado && !p.ok) { alert(MSG_PARCELAS); return; }
     setSalvando(true);
     const payload: any = parcelado
-      ? { centro_custo_id: centro.id, valor: 0, valor_total_negociado: v, parcelado: true, descricao: descricao.trim(), data }
+      ? { centro_custo_id: centro.id, valor: 0, valor_total_negociado: v, parcelado: true, num_parcelas: p.n, descricao: descricao.trim(), data }
       : { centro_custo_id: centro.id, valor: v, descricao: descricao.trim(), data };
     const { error } = await supabase.from('centro_custo_despesas').insert([{
       ...payload, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
@@ -339,6 +388,7 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
             Isso só registra o valor combinado. Os pagamentos parciais (medições) são lançados depois, um a um.
           </div>
         )}
+        {parcelado && <CampoParcelas parcelas={parcelas} onChange={setParcelas} total={parseFloat(String(valor).replace(',', '.')) || 0} />}
         <label className="acn-label">Descrição *</label>
         <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
           placeholder="Ex: Manutenção do compressor, material extra..."
@@ -360,27 +410,40 @@ function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
 // ─── LANÇAR MEDIÇÃO (pagamento parcial contra um contrato "Parcelado") ────
 export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: any) {
   const [jaPago, setJaPago]   = useState<number | null>(null);
+  const [qtdFeitas, setQtdFeitas] = useState(0);
   const [valor, setValor]     = useState('');
   const [obs, setObs]         = useState('');
   const [data, setData]       = useState(() => hojeISO());
   const [salvando, setSalvando] = useState(false);
 
+  const totalNegociado = Number(contrato.valor_total_negociado) || 0;
+  const nParcelas = Number(contrato.num_parcelas) || 0;
+  // valor sugerido da próxima parcela = o que falta pagar ÷ as parcelas que faltam (só quando o número foi combinado)
+  const sugestao = (pago: number, feitas: number) =>
+    nParcelas > feitas && totalNegociado > pago ? Math.round((totalNegociado - pago) / (nParcelas - feitas) * 100) / 100 : 0;
+
   useEffect(() => {
     supabase.from('centro_custo_despesas').select('valor').eq('despesa_pai_id', contrato.id)
-      .then(({ data }) => setJaPago((data || []).reduce((s: number, r: any) => s + (Number(r.valor) || 0), 0)));
+      .then(({ data }) => {
+        const pago = (data || []).reduce((s: number, r: any) => s + (Number(r.valor) || 0), 0);
+        setJaPago(pago); setQtdFeitas((data || []).length);
+        const s = sugestao(pago, (data || []).length);
+        // só preenche se a pessoa ainda não digitou nada
+        if (s > 0) setValor(v => v || s.toFixed(2).replace('.', ','));
+      });
   }, [contrato.id]);
 
-  const totalNegociado = Number(contrato.valor_total_negociado) || 0;
   const vNum = parseFloat(String(valor).replace(',', '.')) || 0;
   const somaComEsta = (jaPago || 0) + vNum;
   const excedente = somaComEsta - totalNegociado;
+  const numeroDaParcela = qtdFeitas + 1;
 
   const salvar = async () => {
     if (!vNum || vNum <= 0) { alert('Informe um valor válido.'); return; }
     setSalvando(true);
     const { error } = await supabase.from('centro_custo_despesas').insert([{
       centro_custo_id: contrato.centro_custo_id, despesa_pai_id: contrato.id, valor: vNum,
-      descricao: obs.trim() || `Medição — ${contrato.descricao || ''}`, data,
+      descricao: obs.trim() || (nParcelas ? `Parcela ${numeroDaParcela}/${nParcelas} — ${contrato.descricao || ''}` : `Medição — ${contrato.descricao || ''}`), data,
       criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
     }]);
     setSalvando(false);
@@ -395,6 +458,13 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
         <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>
           Total negociado: <strong>R$ {totalNegociado.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
           {' · '}Já pago: <strong>{jaPago == null ? '...' : `R$ ${jaPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}</strong>
+          {nParcelas > 0 && jaPago != null && (
+            <div style={{ marginTop: 4, color: qtdFeitas >= nParcelas ? '#b45309' : '#0f766e', fontWeight: 700 }}>
+              {qtdFeitas >= nParcelas
+                ? `As ${nParcelas} parcelas combinadas já foram lançadas (${qtdFeitas}).`
+                : `Parcela ${numeroDaParcela} de ${nParcelas}${sugestao(jaPago, qtdFeitas) > 0 ? ` — sugestão: R$ ${sugestao(jaPago, qtdFeitas).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : ''}`}
+            </div>
+          )}
         </div>
         <label className="acn-label">Valor desta Medição (R$) *</label>
         <input className="acn-input" style={{ width:'100%', marginBottom:6 }} placeholder="0,00" inputMode="decimal"
@@ -407,7 +477,7 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
         )}
         <label className="acn-label">Observação</label>
         <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
-          placeholder="Ex: 1ª parcela, referente à etapa X..."
+          placeholder={nParcelas ? `Ex: referente à etapa X (sem texto, vai como "Parcela ${numeroDaParcela}/${nParcelas}")` : 'Ex: 1ª parcela, referente à etapa X...'}
           value={obs} onChange={e => setObs(e.target.value)} />
         <label className="acn-label">Data</label>
         <input type="date" className="acn-input" style={{ width:'100%', marginBottom:14 }}
@@ -442,9 +512,11 @@ export const podeEditarLancamento = (u: any) => ehAdminOuGerente(u);
 
 const moeda = (v: any) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onClose, onSalvo }: any) {
+export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, currentUser, onClose, onSalvo }: any) {
   const eraContrato = !!lancamento?.parcelado;
   const ehMedicao = !!lancamento?.despesa_pai_id;
+  // "Em quantas vezes?" abre com o número que já estava combinado (pedido do usuário em 29/09/2026)
+  const [parcelas, setParcelas] = useState(String(lancamento?.num_parcelas || ''));
   const [descricao, setDescricao] = useState(lancamento?.descricao || '');
   const [valor, setValor] = useState(String(
     (eraContrato ? lancamento?.valor_total_negociado : lancamento?.valor) ?? '').replace('.', ','));
@@ -475,6 +547,12 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onC
     if (!Number.isFinite(v) || v < 0) { alert('Informe um valor válido.'); return; }
     if (!data) { alert('Informe a data.'); return; }
     if (!centroId) { alert('Escolha o centro de custo.'); return; }
+    const pp = lerParcelas(parcelas);
+    if (ehContrato && !pp.ok) { alert(MSG_PARCELAS); return; }
+    // menos parcelas do que as medições já lançadas: pode ser renegociação ou erro de digitação — pergunta
+    if (ehContrato && pp.n && medicoes > pp.n && !await confirmar(
+      `Já existem ${medicoes} medições lançadas neste contrato, e você combinou ${pp.n} parcelas.\n\n` +
+      `A lista vai mostrar "${medicoes} de ${pp.n}". Se foi renegociação, tudo bem. Salvar assim?`)) return;
     // contrato com total abaixo do já pago: avisa, mas deixa seguir — renegociar
     // para menos acontece (decidido com o usuário em 24/09/2026)
     if (abaixoDoPago && !await confirmar(
@@ -501,13 +579,15 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onC
     const antes = {
       descricao: lancamento.descricao, data: lancamento.data, centro_custo_id: lancamento.centro_custo_id,
       valor: lancamento.valor, valor_total_negociado: lancamento.valor_total_negociado,
-      parcelado: lancamento.parcelado,
+      parcelado: lancamento.parcelado, num_parcelas: lancamento.num_parcelas ?? null,
     };
     // no contrato o dinheiro mora em valor_total_negociado e `valor` fica 0 —
     // é o que faz o contrato não inflar a soma do centro (ver ModalLancarDespesa)
     const depois: any = { descricao: descricao.trim(), data, centro_custo_id: centroId };
     if (ehContrato) { depois.parcelado = true;  depois.valor_total_negociado = v; depois.valor = 0; }
     else            { depois.parcelado = false; depois.valor = v; depois.valor_total_negociado = null; }
+    // o número de parcelas é do contrato: a medição não tem, e virar à vista o zera
+    if (!ehMedicao) depois.num_parcelas = ehContrato ? pp.n : null;
 
     const { error } = await supabase.from('centro_custo_despesas').update(depois).eq('id', lancamento.id);
     setSalvando(false);
@@ -594,6 +674,12 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, currentUser, onC
           </div>
         </div>
 
+        {/* Em quantas vezes: só no contrato parcelado (medição é o pagamento de UMA parcela) */}
+        {ehContrato && !ehMedicao && (
+          <div style={{ marginTop: 8 }}>
+            <CampoParcelas parcelas={parcelas} onChange={setParcelas} total={Number.isFinite(v) ? v : 0} feitas={medicoes} />
+          </div>
+        )}
         {ehContrato && jaPago > 0 && (
           <div style={{ fontSize: 10, color: abaixoDoPago ? '#b91c1c' : '#64748b', marginTop: 6 }}>
             Já lançado em medições: <b>{moeda(jaPago)}</b>

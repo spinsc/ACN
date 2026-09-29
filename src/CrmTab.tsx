@@ -2721,7 +2721,13 @@ const SUB_STATUS_COR: Record<string,string> = {
                   </td>
                   <td style={{ padding:'5px 7px' }}>
                     <button className="acn-btn" style={{ background:'#475569' }}
-                      onClick={() => { setModalVenda({ op: opv, venda: v }); setFormVenda({ ...VAZIO_VENDA, ...v }); }}>
+                      onClick={() => {
+                        setModalVenda({ op: opv, venda: v });
+                        // os valores entram no campo já no formato brasileiro (1.234,56): o "salvar" trata todo ponto
+                        // como separador de milhar, e o número cru do banco (1234.56) virava 123456 ao salvar sem mexer
+                        // no valor — 100 vezes maior (achado na revisão dos formulários de edição, 29/09/2026)
+                        setFormVenda({ ...VAZIO_VENDA, ...v, valor_unitario: fmtValorEdit(v.valor_unitario), valor_total: fmtValorEdit(v.valor_total) });
+                      }}>
                       ✏️
                     </button>
                   </td>

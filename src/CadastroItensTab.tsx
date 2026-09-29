@@ -108,6 +108,10 @@ function exportarItens(itens: any[], nomeArquivo: string) {
   XLSX.writeFile(wb, nomeArquivo);
 }
 
+// "CONJUNTO ELETRICO PV 747", "CONJUNTO ELETRICO OPL A0690", "COPIA DE CONJUNTO ELETRICO PV 67" — os criados por pedido.
+// O item "CONJUNTO ELETRICO" puro (código 1687, o gatilho) NÃO casa: exige algo depois do nome.
+const CONJUNTO_POR_PEDIDO = /^(copia de\s+)?conjunto\s+el[eé]trico\s+\S/i;
+
 function parseValorBool(v: any) {
   const s = String(v ?? '').trim().toLowerCase();
   return !(s === 'não' || s === 'nao' || s === 'n' || s === 'false' || s === '0' || s === 'inativo');
@@ -554,7 +558,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
   const [ordenar, setOrdenar]       = useState<{ col: string; dir: 'asc' | 'desc' }>({ col: 'nome', dir: 'asc' });
   const [pagina, setPagina]         = useState(0);
   const [importando, setImportando] = useState(false);
-  const [resultadoImport, setResultadoImport] = useState<{ novos: number; atualizados: number; ignorados: number; erro?: string } | null>(null);
+  const [resultadoImport, setResultadoImport] = useState<{ novos: number; atualizados: number; ignorados: number; mantidosInativos?: number; conjuntosInativos?: number; erro?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const POR_PAG = 50;
 
@@ -656,11 +660,25 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
       const TAM_LOTE = 500;
 
       // Itens com código: upsert (atualiza se já existir, cria se não existir)
+      let mantidosInativos = 0, conjuntosInativos = 0;
       for (let i = 0; i < comCodigo.length; i += TAM_LOTE) {
-        const lote = comCodigo.slice(i, i + TAM_LOTE).map(it => ({ ...it, criado_por: currentUser?.email || '' }));
+        const codigosLote = comCodigo.slice(i, i + TAM_LOTE).map(it => it.codigo);
         const { data: existentes } = await supabase
-          .from('cadastro_itens').select('codigo').in('codigo', lote.map(it => it.codigo));
+          .from('cadastro_itens').select('codigo').in('codigo', codigosLote);
         const codigosExistentes = new Set((existentes || []).map((e: any) => e.codigo));
+        // Unificação de itens repetidos (pedido do usuário em 29/09/2026): o item unificado fica inativo e a
+        // planilha do ERP, que traz "Ativo = Sim", não pode reativá-lo — senão o repetido volta a cada importação.
+        const { data: unificados } = await supabase
+          .from('itens_unificacoes').select('codigo_duplicado').in('codigo_duplicado', codigosLote);
+        const jaUnificados = new Set((unificados || []).map((u: any) => u.codigo_duplicado));
+        const lote = comCodigo.slice(i, i + TAM_LOTE).map(it => {
+          const base = { ...it, criado_por: currentUser?.email || '' };
+          if (jaUnificados.has(it.codigo)) { mantidosInativos++; return { ...base, ativo: false }; }
+          // O ERP cria um "CONJUNTO ELETRICO PV ..." novo a cada pedido. O gatilho do Conjunto Elétrico é UM item só
+          // (o de código 1687, decisão do usuário em 29/09/2026): os novos entram inativos, sem sujar o catálogo.
+          if (!codigosExistentes.has(it.codigo) && CONJUNTO_POR_PEDIDO.test(it.nome || '')) { conjuntosInativos++; return { ...base, ativo: false }; }
+          return base;
+        });
         const { error } = await supabase.from('cadastro_itens').upsert(lote, { onConflict: 'codigo' });
         if (error) throw error;
         lote.forEach(it => codigosExistentes.has(it.codigo) ? atualizados++ : novos++);
@@ -674,7 +692,7 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
         novos += lote.length;
       }
 
-      setResultadoImport({ novos, atualizados, ignorados: 0 });
+      setResultadoImport({ novos, atualizados, ignorados: 0, mantidosInativos, conjuntosInativos });
       await carregar();
     } catch (err: any) {
       setResultadoImport({ novos: 0, atualizados: 0, ignorados: 0, erro: err?.message || 'Erro ao importar arquivo.' });
@@ -798,7 +816,9 @@ export default function CadastroItensTab({ currentUser }: { currentUser: any }) 
           <span>
             {resultadoImport.erro
               ? `❌ ${resultadoImport.erro}`
-              : `✅ Importação concluída — ${resultadoImport.novos} novo(s), ${resultadoImport.atualizados} atualizado(s).`}
+              : `✅ Importação concluída — ${resultadoImport.novos} novo(s), ${resultadoImport.atualizados} atualizado(s).`
+                + (resultadoImport.conjuntosInativos ? ` ${resultadoImport.conjuntosInativos} "Conjunto Elétrico PV …" entraram inativos (o Conjunto Elétrico é um item só).` : '')
+                + (resultadoImport.mantidosInativos ? ` ${resultadoImport.mantidosInativos} item(ns) já unificado(s) continuaram inativos.` : '')}
           </span>
           <button onClick={() => setResultadoImport(null)} style={{
             background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'inherit',

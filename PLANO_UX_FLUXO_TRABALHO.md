@@ -194,6 +194,18 @@ apagou algo**: a auditoria só guarda o que mudou, e a linha "antiga" também er
 achava, e gravava a OP com o veículo ligado mas o texto do modelo vazio (as listas passam a dizer
 "sem modelo"). Atingiu **40 OPs**: as 39 do lote 1673.2609 e a D0778.2609.
 
+**A12 a A16 — Formulários de edição que gravavam por cima do que estava salvo** *(Etapa 7.2, 29/09/2026;
+**resolvidos lá**, detalhe no bloco da etapa)*: kit de produto que apagava a estrutura se ela não tivesse carregado (A12);
+caixa "Pode excluir anexos" do usuário que abria desmarcada e não gravava (A13); aviso desativado que voltava a ficar ativo ao
+editar (A14); contato do CRM que era reativado e trocava de responsável ao editar (A15); venda do CRM com valor multiplicado por
+10 ou 100 ao salvar sem mexer (A16, R$ 7.847,50 → R$ 78.475).
+
+**A17 — Compra de reposição recebida pela Logística não subia para o estoque** *(pedido PC-FU6DS9, 29/09/2026, relatado pelo
+usuário; **resolvido**, detalhe no bloco "Etapa 7.3")*: a tela "Aguardando Recebimento" da Logística lia o pedido **sem `vinculo_tipo`,
+`vinculo_id` nem `quantidade_comprada`**; sem o vínculo, o crédito no estoque saía em silêncio ("não se aplica") e a janela abria com a
+quantidade **pedida** (9) em vez da **comprada** (10). O pedido ficava Recebido e o saldo, parado. Era o **primeiro** pedido de reposição
+recebido: nunca houve uma entrada por compra no estoque (`compra_recebida`).
+
 ### B. Código morto / caminhos órfãos (achado em 3 pontos independentes)
 
 **B1 — `src/ComercialTab.tsx`**: tela inteira (1.450 linhas, medido em
@@ -1314,6 +1326,183 @@ respondida de dentro do navegador, e o **corpo do que seria gravado foi conferid
   o Admin não tem cliente final, vendedor, edital…). Só o veículo foi igualado.
 - **Perda de dado por edições antigas (A10) não foi medida** e nada foi restaurado (regra 4).
 
+### ✅ Etapa 7.2 — Três ajustes pedidos: itens repetidos, formulários de edição e parcelas do centro de custo
+
+**Feito em:** 29/09/2026, **fora da ordem do plano, por pedido do usuário**. **Os 3 ajustes estão feitos.** Da unificação de itens,
+**o que não deixava dúvida foi gravado** (441 itens); o resto **depende do usuário marcar a planilha de auditoria** (48 + 21 linhas).
+A gravação foi barrada uma vez pelo Claude Code e **liberada pelo usuário no chat** ("liberar a gravação da unificação dos itens").
+
+**O pedido:** (1) unificar os itens repetidos do catálogo — principalmente "CONJUNTO ELETRICO" e as derivações com PV
+—, deixando **um só** como gatilho do Conjunto Elétrico; para o resto do catálogo (4 mil e poucos itens), varrer os
+repetidos, **preferindo sempre o item com código** (o sem código costuma ter sido criado por quem não sabia usar o
+sistema) e, nos casos duvidosos, gerar **uma planilha de auditoria** para o usuário marcar; (2) revisar **todos os
+formulários de edição** para ver se abrem com os dados já salvos ou em branco e gravam em branco por cima (o mesmo
+defeito que a edição de OP tinha); (3) na edição de um lançamento do **Centro de Custo**, poder **configurar o parcelamento
+e em quantas vezes**.
+
+**As perguntas que fiz não foram respondidas** (o usuário só disse "pode seguir"). Segui pelo que recomendei e registro
+como suposição, para ele corrigir se quiser: o principal do Conjunto Elétrico é o item de **código 1687** ("CONJUNTO
+ELETRICO", o único que já aparece em OPs); o parcelamento do centro de custo vale para o **contrato parcelado** (guarda
+"em quantas vezes" e acompanha "pagas x de N"), **sem gerar cronograma de parcelas**.
+
+#### 3) Centro de custo — "Em quantas vezes?" ✅
+
+- **Banco** (migração `centro_custo_despesas_num_parcelas`, só acréscimo): coluna `num_parcelas` (2 a 120, vazia = "não combinado").
+  Nenhuma linha existente mudou (o único contrato existente, "EDIFICAÇÃO DAS PAREDES LATERAIS…", R$ 6.500 com 1 medição de R$ 2.000,
+  continua sem número).
+- **Edição do lançamento** (`ModalEditarLancamento`): quando é contrato parcelado aparece **"Em quantas vezes?"** (campo + atalhos
+  2x, 3x, 4x, 6x, 10x, 12x), com o valor de cada parcela (total ÷ N) e "Já lançadas: x de N". O campo **abre com o número já
+  salvo**. Combinar menos parcelas do que as medições já lançadas **pergunta antes**. Virar "À Vista" zera o número — mas a regra
+  antiga continua valendo: contrato com medição lançada não vira à vista. A alteração vai para a auditoria com o valor de antes.
+- **Lançar despesa nova** (`ModalLancarDespesa`, "Parcelado"): o mesmo campo, para o contrato já nascer com o número.
+- **Lançar medição:** mostra "Parcela 2 de 4 — sugestão: R$ …" (o que falta pagar ÷ as parcelas que faltam), **já preenche o valor
+  sugerido** (a pessoa pode trocar) e, sem observação, grava "Parcela 2/4 — descrição do contrato".
+- **Lista de lançamentos:** o contrato mostra "x de N parcelas" (ou "n medição(ões)" quando não há número).
+- **Correção necessária no caminho:** a lista somava as medições de um contrato **só as do mês filtrado**; um contrato com parcelas
+  pagas em outros meses aparecia com o "pago" menor (e o aviso "total abaixo do já pago" ao editar também). Agora soma **todas** as
+  medições do contrato. Não tem efeito hoje (a única medição existente é do mesmo mês do contrato), mas passaria a errar assim que
+  uma parcela caísse em outro mês.
+
+#### 2) Revisão dos formulários de edição ✅ (5 defeitos corrigidos)
+
+Critério: o formulário de edição tem de abrir com **o que está salvo** e só gravar o que a pessoa mexeu; não pode abrir vazio por
+falta de coluna na leitura, nem gravar valor fixo por cima do que existe.
+
+- **A12 — Kit do produto (`CadastroProdutosTab`):** o "Salvar" **apagava a estrutura inteira e regravava a lista da tela**. Se a
+  estrutura ainda estivesse carregando, ou se a leitura falhasse (o erro virava lista vazia), o kit ficava **sem nenhum item**.
+  Agora o botão só libera depois de a estrutura ser lida (e avisa se a leitura falhou), grava as linhas novas **antes** de apagar as
+  antigas (por id) e pergunta antes de salvar uma estrutura vazia sobre um kit que tinha itens.
+- **A13 — Admin > Usuários:** a caixa "Pode excluir anexos em Licitações" **abria sempre desmarcada e não era gravada** (marcar não
+  tinha efeito). Agora abre com o valor da pessoa e grava.
+- **A14 — Avisos do sistema (Admin):** editar um aviso **desativado** o **reativava** (o "salvar" mandava `ativo = true`).
+- **A15 — Contatos do CRM:** editar um contato o **reativava e trocava o responsável** para quem estava editando.
+- **A16 — Venda do CRM (aba Faturamentos, ✏️):** o campo abria com o número cru do banco (`7847.5`) e o "salvar" trata todo ponto
+  como separador de milhar — **salvar sem mexer no valor multiplicava por 10 ou 100**. Caso real: a venda "FUNDOE STADUAL DE SAUDE",
+  R$ 7.847,50, viraria R$ 78.475 (é a única venda com centavos hoje). Agora os valores abrem em formato brasileiro (`7.847,50`).
+  *A edição da oportunidade já formatava certo (`fmtValorEdit`); a da venda não.*
+
+**Revisados e sem defeito** (abrem completos e gravam só o que devem): RH (funcionário), Veículos NFC, Vistorias de pátio,
+Marketing (pedidos), WhatsApp (conexões), Perguntas da venda, Configuração da estrutura, Cotações (proposta e aprovação),
+Análise (setores), Horas extras, Horas de Engenharia, e a edição de cotação do Compras (valores entram em formato brasileiro).
+**Observação sem efeito hoje:** a edição de lançamento de RH (`rh_lancamentos`) gravaria `criado_por = 'sistema'` por cima do
+original, mas **nenhuma tela a abre** (o modal só é chamado para criar). **Não revisei os formulários da primeira parte da
+sessão um a um por escrito** (a lista de "revisados" dessa parte não ficou registrada aqui; os defeitos dela são A12–A15).
+Perda de dado por edições antigas **não foi medida** e nada foi restaurado (regra 4).
+
+#### 1) Itens repetidos — o inequívoco **gravado**; o resto na planilha ✅
+
+**Levantamento** (leitura direta do banco, 29/09/2026): o catálogo tem **4.438 itens** (4.429 ativos): **4.389 com código** e
+**49 sem código**. A família "Conjunto Elétrico" tem **437 itens**: 434 com código (um por PV, mais 5 "COPIA DE…" e o próprio 1687) e
+**3 sem código** (custo 240, 290 e 390). **Nenhum** está marcado como gatilho hoje (`eh_conjunto_instalacao`). Só dois aparecem em OPs:
+o **1687** e o "CONJUNTO ELÉTRICO" sem código de custo 390, vendido em **8 OPs** (A1656.2609, A1657.2609, A1660.2609/01 e /02,
+A1662.2609, D0775.2609, D0777.2609, D0778.2609). Nenhum item da família tem estoque ou movimento. Só **8 dos 4.389 itens com código
+têm custo** (o custo vem da formação de preços), por isso o custo do repetido **não é copiado** para o principal — fica no registro.
+
+**Estrutura criada antes** (migração `unificacao_de_itens_registro_e_funcao`, **não altera nenhum dado existente**): a tabela
+`itens_unificacoes` (registro de quem foi unificado em quem, o que foi movido e o custo que o repetido tinha) e a função
+`unificar_item(repetido, principal, origem, gravar)`, que **reaponta** o item em OPs (itens vendidos, BOM, conferência do kit),
+kits de produto, demandas, pedidos de compra, reservas de estoque, estrutura de veículo e perguntas — e deixa o repetido
+**inativo, com nota na descrição** (nunca apaga). Recusa item com movimento ou saldo de estoque. `gravar = false` só conta
+(simulação). A execução foi **retirada do acesso público** (só o administrador do banco chama).
+
+**Gravado no banco em 29/09/2026** (migração `unificacao_conjunto_eletrico_e_nomes_identicos`, liberada pelo usuário no chat depois de o
+Claude Code barrar a primeira tentativa; **simulada antes** com `gravar = false`, com trava de contagem 436 + 5 = 441 que desfaz tudo se
+divergir). O que ela fez:
+
+- marcou o **1687** ("CONJUNTO ELETRICO") como o **único gatilho** do Conjunto Elétrico (`eh_conjunto_instalacao`);
+- unificou nele as **436** restantes da família (as 3 sem código, as 5 "COPIA DE…" e as de PV): ficaram **inativas**, com a nota
+  "Unificado em 29/09/2026 no item [1687] CONJUNTO ELETRICO" na descrição;
+- unificou **5 itens sem código de nome idêntico** ao de um item com código: RC3002 UN → **1801**, FRETE → **4063**, SIRENE AMPLIFICADA
+  LF40 → **1278**, DH410 UHF 400-470 → **1912**, SINALIZADOR INTERLED2 VERMELHO → **225**.
+
+**Conferido depois, no banco:** `itens_unificacoes` com **441 registros**; o catálogo continua com **4.438 itens** (nenhum apagado), **3.988
+ativos** (eram 4.429) e **450 inativos** (eram 9); **1 gatilho** (o 1687) e **1 item de Conjunto Elétrico ativo**; rodando a função em modo
+simulação de novo nos 441, **nenhum tem mais referência** apontando para ele. **O que foi apontado para outro item:** **8 linhas de
+`oples.itens_vendidos`** (as 8 OPs A1656.2609, A1657.2609, A1660.2609/01 e /02, A1662.2609, D0775.2609, D0777.2609, D0778.2609, que vendiam o
+"CONJUNTO ELÉTRICO" sem código de custo 390 e agora vendem o 1687) e, do SINALIZADOR INTERLED2 VERMELHO, **3 de itens vendidos, 2 de BOM e 1
+de conferência de kit**. Nada mais tinha referência. Os custos que os repetidos tinham (por exemplo 390, 240 e 290 nos três "CONJUNTO
+ELÉTRICO" sem código, e 115,36 no FRETE) **ficaram no registro** e na nota da descrição, e **não foram copiados** para o principal.
+
+**Efeito que a Engenharia vai ver:** as 8 OPs acima passam a **ter o gatilho** (o item virou o 1687). As 7 que não têm veículo do catálogo dirão,
+na Aplicação da estrutura, "leva Conjunto Elétrico, mas a OP não tem veículo do catálogo"; a D0778.2609 (Toro) já pode receber a estrutura.
+É o comportamento pretendido do gatilho, mas é mudança visível.
+
+**Para desfazer** uma unificação: reativar o item repetido, apontar de volta o que consta em `itens_unificacoes.referencias` e apagar a
+linha do registro (as OPs guardam o `nome` original, só o código do item mudou).
+
+**A planilha de auditoria** (`auditoria_unificacao_de_itens.xlsx`, entregue ao usuário): abas **Como usar**, **Decidir** (48 linhas: 20 itens
+sem código × item com código e 28 pares com código × com código, ordenados dos idênticos aos mais parecidos; cada linha traz custo,
+onde é usado, principal sugerido com % de semelhança, as palavras que diferem e as opções 2 e 3), **Sem candidato** (21 itens sem
+código que não parecem com nenhum com código; muitos são serviços/consumíveis usados na estrutura de produto — ficam como estão
+a não ser que o usuário aponte o principal) e **Já unificados** (os 441 acima, para conferir). O usuário escreve **SIM/NÃO** em "DECISÃO" e,
+se o principal certo for outro, o código em "Outro principal". Linha em branco = não mexe.
+**Para aplicar a planilha marcada:** para cada linha com SIM, `select public.unificar_item('<ID do item>', '<id do principal>', 'planilha')`
+(o principal é achado pelo código digitado ou, na falta, pela coluna "ID do principal sugerido"); a função recusa quem tem movimento de
+estoque (aparece o ⚠ na planilha — ex.: "SLIMLED G2 VM": ajustar o saldo à parte). Conferir as contagens antes e depois, e **só gravar com
+o usuário liberando de novo** (cada gravação em massa pede autorização).
+
+**Importação de itens (`CadastroItensTab`) — já no código:** a planilha do ERP traz "Ativo = Sim" e **reativaria** os unificados a cada
+importação, e criaria **um "CONJUNTO ELETRICO PV …" novo por pedido**. Agora o item já unificado (está em `itens_unificacoes`)
+**continua inativo**, e um "CONJUNTO ELETRICO PV …/OPL …/COPIA DE …" **novo entra inativo**; o aviso do resultado conta os dois casos.
+O "CONJUNTO ELETRICO" puro (1687) não é tocado. **É uma regra nova de negócio — o usuário deve confirmar** que quer os PVs novos entrando inativos.
+
+**Testado** (navegador com **gravações bloqueadas**, corpo do que seria gravado conferido; **os testes não gravaram nada em produção** — a única gravação foi a migração acima, feita à parte e conferida):
+`teste_9` formulários corrigidos **9/9** (usuário, aviso inativo, contato, kit com leitura falhando e ordem inserir-antes-de-apagar);
+`teste_10` centro de custo **26/26** (contrato real sem número, cenário com 4 parcelas simulado, medição com sugestão, lançar novo com 3x);
+`teste_11` importação de itens **9/9** (planilha sintética: PV novo inativo, item comum ativo, 1687 intocado, unificado (simulado) continua
+inativo); `teste_12` venda do CRM **6/6** (a venda real de R$ 7.847,50 abre formatada e salva 7847,5). **Regressão completa** (rodada com todas as
+mudanças da 7.2, **sem nenhuma falha**): CRM 16/16, lista de OPs 30/30, selo do card 23/23, reenvio 20/20, status 13/13, avisos 16/16,
+31/31 e 6/6 (edição de OP), faixa do detalhe 21/21 e 4/4, "não lido" 9/9, Engenharia 13/13, banner/Marketing/Financeiro 11/11 (2 checagens
+puladas: a OP A1671.2609 saiu da etapa), "OP/Conjunto" 21/21, seletor do catálogo 5/5, "Lançar OS" e licitação sem erro. O teste do
+catálogo (21/21) e o do seletor (5/5) rodaram **com a unificação já gravada**. **Três testes antigos foram atualizados** porque fixavam o estado de uma OP real que andou hoje (a A1671.2609 foi do Comercial
+para o Fiscal; e o número de OPs "com alteração não vista" foi de 218 para 219): passam a calcular o esperado em vez de repetir um número.
+
+**O que ficou de fora:**
+
+- **A aplicação das decisões da planilha** (48 + 21 linhas): depende de o usuário marcar SIM/NÃO.
+- **Não há tela de "itens unificados"** no cadastro: a nota está na descrição do item inativo e o registro em `itens_unificacoes`.
+- **O ERP continuará criando itens sem código de nome parecido?** Não medi; o que a importação faz com os sem código (sempre insere) não mudou.
+- **Cronograma de parcelas no centro de custo** (datas de vencimento de cada parcela) **não foi feito** de propósito: a pergunta ficou sem resposta.
+
+### ✅ Etapa 7.3 — Compra de reposição recebida não subia para o estoque (PC-FU6DS9)
+
+**Feito em:** 29/09/2026, **por relato do usuário**: "PC-FU6DS9 foi comprado e recebido, mas não subiu para o estoque a quantidade comprada."
+
+**O que aconteceu (medido no banco):** o pedido é a reposição do item **4117** (disco de desbaste, unidade PC): pedidos 9, **comprados 10**,
+recebimento gravado em 29/09 como **9** com NF 1234, status Recebido. O item ficou com **saldo 1** e **nenhum movimento** de entrada.
+Nunca houve, em todo o estoque, uma entrada do tipo "compra recebida": este era o primeiro pedido de reposição a ser recebido.
+**Causa:** o painel "Aguardando Recebimento" da Logística (`PainelRecebimento`) lia o pedido com uma lista de colunas que **não trazia**
+`vinculo_tipo`, `vinculo_id` (o vínculo com o item de estoque) nem `quantidade_comprada`. A função de crédito
+(`creditarCompraRecebida`) só age em pedido "de estoque"; sem o vínculo ela devolvia "não se aplica" **sem avisar ninguém**. E a janela
+abria com a quantidade pedida (9) em vez da comprada (10), sem o aviso "📦 Reposição de estoque" que ela já tinha. (Mesma família do A10:
+formulário aberto a partir de uma linha parcial.) A abertura pelo quadro do Compras (arrastar para "Recebido") lê o pedido inteiro e
+**não tinha o problema**.
+
+**Dado corrigido, com decisão do usuário** ("10 — a comprada"): uma **entrada de 10** no item 4117, lançada pela mesma função do banco que
+a tela usa (`estoque_movimentar`, motivo `compra_recebida`, ligada ao pedido; observação explica a correção), **saldo 1 → 11**, e o
+"recebido" do pedido acertado de 9 para 10. Trava: só gravaria com o saldo ainda em 1 e o pedido sem movimento. Conferido depois: saldo 11,
+3 movimentos do item (contagem 0→2, saída 2→1, entrada 1→11), 1 entrada por compra no total. **Nenhum outro pedido de reposição estava
+nessa situação** (dos 21 pedidos Recebidos, só este é de estoque).
+
+**O que foi feito no código (`LogisticaTab.tsx`):**
+
+- O painel passa a ler `quantidade_comprada`, `vinculo_tipo`, `vinculo_id` e `vinculo_descricao`.
+- A janela de recebimento (`ModalReceberPedido`) **lê o pedido inteiro ao abrir e de novo ao confirmar**, seja quem for que a chamou; a
+  quantidade recebida abre com a **comprada** (a pessoa pode trocar; se já digitou, não é sobrescrita).
+- **Silêncio acabou:** se o pedido é de reposição e o crédito "não se aplica" (sem quantidade, por exemplo), a tela agora diz "Recebimento
+  registrado, mas NADA entrou no estoque…".
+- **Segundo caminho com o mesmo furo:** o recebimento lançado à mão em "Histórico / Novo Registro", vinculado a um pedido, fechava a compra
+  e **também não creditava** o estoque. Agora credita (a quantidade informada no registro; sem ela, a comprada) e grava o "recebido".
+
+**Testado** (`teste_13`, **14/14**, gravações bloqueadas): a leitura simulada devolve **só as colunas que a tela pediu**, como o banco. **Antes
+da correção o teste reproduziu o relato** (2/9: janela abre com 9, sem aviso de reposição, sem chamada ao estoque); depois: aviso e "comprada:
+10" aparecem, a quantidade abre com 10, confirmar chama `estoque_movimentar` com entrada de 10 no item 4117 ligada ao pedido, o pedido grava 10
+recebidos e a tela diz "entraram 10, saldo agora 11"; o mesmo no registro à mão. O teste não gravou nada no banco (conferido).
+
+**O que ficou de fora:** o recebimento pelo **quadro do Compras** (arrastar) não foi exercitado no navegador — ele já lia o pedido inteiro e
+usa a mesma janela, agora corrigida. Um pedido de reposição recebido **antes** desta correção por qualquer um dos dois caminhos e **sem** entrada no estoque
+seria o único caso pendente; hoje não há outro.
+
 ### ⬜ Etapa 8 — Aba "pendente da minha aprovação" em Compras
 Hoje só existe menção/e-mail. Uma aba/filtro dedicado pra quem tem
 `pode_aprovar_compra=true` ver de cara o que está esperando por ele.
@@ -1353,6 +1542,13 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Quanto tempo o aviso fica na tela (Etapa 7):** hoje erro some em 9 s e atenção em 7 s.
   Para uma falha ao gravar (a pessoa pode estar olhando outra coisa), vale o erro **ficar até ser
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
+- **Unificação de itens (7.2) — marcar a planilha:** o usuário escreve SIM/NÃO nas abas `Decidir` (48) e `Sem candidato` (21) de
+  `auditoria_unificacao_de_itens.xlsx`; aplicar com `unificar_item(…, 'planilha')`, com nova liberação de gravação.
+- **Conjunto Elétrico (7.2):** o principal ficou o **1687** (suposição — foi o único que já aparecia em OPs — e já gravada, com
+  reversão possível). Os "CONJUNTO ELETRICO PV …" **novos** que o ERP trouxer **entram inativos** na importação: já está no código;
+  é regra nova, o usuário deve confirmar.
+- **Parcelas do centro de custo (7.2):** basta guardar "em quantas vezes" e acompanhar "pagas x de N", ou o usuário quer **cronograma**
+  (uma linha por parcela, com vencimento e "paga/aberta")? Hoje é o primeiro.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -1382,6 +1578,11 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | Os nomes das etapas da OP, o setor de cada uma e a regra do "desde quando" moram em **`EtapasOp.ts`** (fonte única da barra de progresso e da faixa). Quem lê histórico compara etapas por `mesmaEtapa()`, nunca por `===`, porque o histórico guarda o nome antigo da liberação comercial. |
 | 29/09/2026 | Mapa de "alteração não lida": a conta passa a ser feita **no banco** (função de leitura `entidades_com_alteracao_nao_vista`), não paginando no navegador, porque a auditoria só cresce — decisão do usuário. O caminho antigo fica como reserva. |
 | 29/09/2026 | **Etapa 7.1 (pedido do usuário, fora de ordem)**: na edição da OP o veículo é escolhido do **catálogo** (o mesmo seletor da criação) e preenche o Modelo; a edição do CRM parte da OP inteira e grava **só o que mudou**; o cartão da OP mostra todos os dados cadastrados; a ficha "Jeep Renegade 4x4" passou a valer **de 2015 em diante** (nome mantido) e as 40 OPs sem texto de modelo receberam o nome da ficha — decisões do usuário. |
+| 29/09/2026 | **Etapa 7.2 (pedido do usuário, fora de ordem)**: itens repetidos são **unificados sem apagar** (o repetido fica inativo, com nota e registro em `itens_unificacoes`); preferência **sempre pelo item com código**; o que for duvidoso vai para a **planilha de auditoria** e o usuário decide. O **Conjunto Elétrico é um item só** (gatilho). Custo do repetido **não** é copiado para o principal. |
+| 29/09/2026 | **Unificação gravada com autorização do usuário no chat** ("liberar a gravação da unificação dos itens"): 441 itens, só o que não deixava dúvida; o resto só depois de o usuário marcar a planilha, **com nova liberação a cada gravação em massa**. |
+| 29/09/2026 | **Suposições da 7.2 que o usuário ainda não confirmou** (ficaram sem resposta): principal do Conjunto Elétrico = **1687**; "Conjunto Elétrico PV …" novo vindo do ERP **entra inativo**; parcelas do centro de custo = **número combinado + "pagas x de N"**, sem cronograma. |
+| 29/09/2026 | **Recebimento de reposição (7.3):** entra no estoque a quantidade **realmente recebida**, e a janela **abre com a quantidade COMPRADA** (a pessoa corrige se chegou outra). Pedido de reposição recebido sem entrada no estoque é falha visível, nunca silêncio. Para PC-FU6DS9 o usuário decidiu creditar **10 (a comprada)**. |
+| 29/09/2026 | Formulário de edição **abre com o que está salvo e só grava o que mudou**; valor em dinheiro entra no campo **já em formato brasileiro**, porque o "salvar" trata o ponto como milhar (`fmtValorEdit`). |
 | 29/09/2026 | Clique que **nasce dentro de uma janela e termina no fundo** (arrastar o mouse ao selecionar texto) **não fecha a janela**; vale para todas de uma vez (`ProtecaoDeFundo.ts`). Clique de verdade no fundo continua fechando. |
 | 29/09/2026 | **Tom dos avisos (Etapa 7)**: o `tomDe()` do `Feedback.tsx` compara sem acento e trata **recusa por permissão como erro (vermelho)**, regra que barrou/validação/resultado parcial como **atenção (amarelo)**; mensagem montada na hora (erro do banco) leva o tom explícito. Nenhuma duração mudou. Suposição minha: recusa por permissão é vermelha, como já era "sem permissão". |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |

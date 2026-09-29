@@ -179,13 +179,13 @@ export default function ContactosSection({ currentUser }: { currentUser: any }) 
       observacoes:   limpar(formC.observacoes),
       foco_id:       limpar(formC.foco_id),
       operador_nome: formC.operador_nome || currentUser?.nome,
-      operador_id:   currentUser?.id || null,
-      ativo:         true,
     };
     if (modalContato?.id) {
+      // editar NÃO troca o responsável nem reativa: antes o payload mandava operador_id = quem editava e
+      // ativo:true, e um contato desativado voltava a aparecer e mudava de dono (achado em 29/09/2026)
       await supabase.from('crm_contatos').update({ ...p, atualizado_em: new Date().toISOString() }).eq('id', modalContato.id);
     } else {
-      const { data } = await supabase.from('crm_contatos').insert(p).select().single();
+      const { data } = await supabase.from('crm_contatos').insert({ ...p, operador_id: currentUser?.id || null, ativo: true }).select().single();
       if (data) setContatoSel(data);
     }
     setSalvando(false);

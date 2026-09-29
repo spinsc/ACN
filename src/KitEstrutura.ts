@@ -28,6 +28,16 @@ export async function linhasDoKit(produtoId: string) {
   return data || [];
 }
 
+/** Igual a `linhasDoKit`, mas DIZ quando a leitura falhou. Quem vai regravar a estrutura precisa
+ *  saber a diferença entre "kit sem itens" e "não consegui ler": lista vazia por falha, salva por
+ *  cima, apagava a estrutura (29/09/2026). */
+export async function linhasDoKitComErro(produtoId: string): Promise<{ linhas: any[]; erro: string }> {
+  if (!produtoId) return { linhas: [], erro: '' };
+  const { data, error } = await supabase.from('cadastro_produtos_itens')
+    .select(SELECT_LINHAS).eq('produto_id', produtoId).order('ordem');
+  return { linhas: data || [], erro: error?.message || '' };
+}
+
 /** Estrutura do kit com os sub-kits abertos, item a item (protegida contra ciclo) */
 export async function estruturaDoKit(produtoId: string, quantidade = 1, caminho: string[] = [], vistos: string[] = []): Promise<LinhaKit[]> {
   if (!produtoId || vistos.includes(produtoId)) return [];

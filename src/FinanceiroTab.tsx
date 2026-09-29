@@ -71,17 +71,21 @@ const celaTexto: React.CSSProperties = {
   overflow: 'hidden', maxWidth: 250, lineHeight: 1.35,
 };
 
-function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar }: any) {
+function ModalComprasCentro({ centro, compras, todasDespesas, onClose, currentUser, onAtualizar }: any) {
   const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
   const [modalMedicao, setModalMedicao] = useState<any>(null); // contrato "Parcelado" selecionado
   const [modalEditar, setModalEditar] = useState<any>(null);   // lançamento sendo corrigido
   const [modalPedido, setModalPedido] = useState<any>(null);   // pedido de compra sendo corrigido
-  // soma de medições por contrato — feito no cliente a partir da própria lista
-  // (as medições já vêm junto em `compras`, mesmo centro_custo_id do contrato)
+  // soma de medições por contrato — feito no cliente. Antes somava só as medições que estavam nesta lista, e a
+  // lista respeita o filtro de mês: um contrato com parcelas pagas em outros meses aparecia com o "pago" menor
+  // (e o aviso de "total abaixo do já pago" ao editar também). Agora soma TODAS as medições do contrato, em
+  // qualquer mês (corrigido em 29/09/2026, junto com o "pagas x de N", que precisa da contagem certa).
   const pagoPorContrato: Record<string, number> = {};
-  compras.forEach((p: any) => {
-    if (p.despesaAvulsa && p.despesa_pai_id) {
+  const medicoesPorContrato: Record<string, number> = {};   // quantas parcelas já foram lançadas (29/09/2026)
+  (todasDespesas || compras.filter((p: any) => p.despesaAvulsa)).forEach((p: any) => {
+    if (p.despesa_pai_id) {
       pagoPorContrato[p.despesa_pai_id] = (pagoPorContrato[p.despesa_pai_id] || 0) + (Number(p.valor) || 0);
+      medicoesPorContrato[p.despesa_pai_id] = (medicoesPorContrato[p.despesa_pai_id] || 0) + 1;
     }
   });
   return (
@@ -146,6 +150,14 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
                               <div style={{ background:'#e2e8f0', borderRadius:4, height:5, overflow:'hidden' }}>
                                 <div style={{ width:`${pct}%`, background: pago > totalNeg ? '#dc2626' : '#0f766e', height:'100%' }} />
                               </div>
+                              {/* "pagas x de N" — só quando o número de parcelas foi combinado (29/09/2026) */}
+                              {(Number(p.num_parcelas) > 0 || medicoesPorContrato[p.id] > 0) && (
+                                <div style={{ fontSize:9, color: Number(p.num_parcelas) > 0 && medicoesPorContrato[p.id] > Number(p.num_parcelas) ? '#dc2626' : '#64748b', marginTop:2 }}>
+                                  {Number(p.num_parcelas) > 0
+                                    ? `${medicoesPorContrato[p.id] || 0} de ${p.num_parcelas} parcelas`
+                                    : `${medicoesPorContrato[p.id]} medição(ões)`}
+                                </div>
+                              )}
                             </div>
                           );
                         })()
@@ -265,7 +277,7 @@ function ModalComprasCentro({ centro, compras, onClose, currentUser, onAtualizar
       )}
       {modalEditar && (
         <ModalEditarLancamento lancamento={modalEditar} currentUser={currentUser}
-          jaPago={pagoPorContrato[modalEditar.id] || 0}
+          jaPago={pagoPorContrato[modalEditar.id] || 0} medicoes={medicoesPorContrato[modalEditar.id] || 0}
           onClose={() => setModalEditar(null)}
           // fecha a lista junto: o valor ou o centro podem ter mudado, e a
           // lista aberta mostraria número velho até alguém reabrir
@@ -780,6 +792,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
         <ModalComprasCentro
           centro={modalCompras.centro}
           compras={modalCompras.compras}
+          todasDespesas={despesas}
           currentUser={currentUser}
           onAtualizar={carregar}
           onClose={() => setModalCompras(null)}
