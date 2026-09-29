@@ -1676,87 +1676,10 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   const converterGanho = async () => {
     if (!modalConverter) return;
-    if (tipoConverter === 'op' && !numOp.trim()) {
-      alert('Informe o número da OP.');
-      return;
-    }
     setSalvando(true);
     const op = modalConverter;
     const agora = new Date().toISOString();
     try {
-      if (tipoConverter === 'op') {
-        const baseOpl = numOp.trim();
-        const qty = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
-        // Mesma regra da abertura (NovaOpOsModal): envio direto não gera lote.
-        const semLote = soEnvio(op.fluxo_entrega);
-        const desmembrar = qty > 1 && !semLote;
-        const unidadesMisto = desmembrar && loteMistoConv ? unidadesDosGrupos(gruposConv) : null;
-        if (unidadesMisto) {
-          const errGrupos = validarGrupos(gruposConv, qty);
-          if (errGrupos) { alert(errGrupos); setSalvando(false); return; }
-        }
-
-        // Checa duplicata antes de inserir
-        const { data: existente } = await supabase.from('oples').select('id').eq('opl', desmembrar ? `${baseOpl}/01` : baseOpl).maybeSingle();
-        if (existente) {
-          alert(`OP "${desmembrar ? baseOpl + '/01' : baseOpl}" já está cadastrada. Use outro número.`);
-          setSalvando(false);
-          return;
-        }
-
-        const makePayload = (oplNum: string, veiculo?: {chassi:string,placa:string}, valorTotal?: number|null) => ({
-          opl:                   oplNum,
-          modelo:                op.titulo,
-          chassi:                veiculo?.chassi || null,
-          placa:                 veiculo?.placa || null,
-          valor_total:           valorTotal ?? null,
-          cliente_nome:          op.orgao || op.titulo,
-          responsavel_comercial: op.responsavel_nome || null,
-          status_geral:          'Em Espera Engenharia',
-          data_entrada:          agora.slice(0, 10),
-          criado_por_nome:       currentUser?.nome,
-          criado_por:            currentUser?.email,
-          crm_oportunidade_id:   op.id,
-          origem_venda:          origemDeOportunidade(op),
-          resumo_servicos:       resumoConv.trim() || null,
-          // Antes a OP nascia daqui SEM fluxo de entrega — e fluxo vazio é
-          // tratado como adaptação, então venda de envio caía na fila errada.
-          fluxo_entrega:         op.fluxo_entrega || null,
-          destino_cidade:        op.destino_cidade || null,
-          destino_uf:            op.destino_uf || null,
-          destino_cep:           op.destino_cep || null,
-          quantidade:            semLote ? qty : 1,
-        });
-
-        if (desmembrar) {
-          // Valor da oportunidade dividido igualmente entre os veículos —
-          // antes esse campo nem era gravado nas OPs desmembradas.
-          const valoresTotal = dividirValorEmUnidades(op.valor_registrado ?? null, qty);
-          for (let i = 0; i < qty; i++) {
-            const suf = String(i + 1).padStart(2, '0');
-            const payload: any = makePayload(`${baseOpl}/${suf}`, veiculosConv[i], valoresTotal[i]);
-            if (unidadesMisto) {
-              payload.resumo_servicos = unidadesMisto[i].servicos;
-              if (unidadesMisto[i].valor != null) payload.valor_total = unidadesMisto[i].valor;
-            }
-            const { error } = await supabase.from('oples').insert([payload]);
-            if (error) throw error;
-          }
-          await supabase.from('crm_historico').insert({
-            oportunidade_id: op.id, tipo: 'conversao_op',
-            conteudo: `${qty} OPs criadas: ${baseOpl}/01 até ${baseOpl}/${String(qty).padStart(2,'0')}`, usuario_nome: currentUser?.nome,
-          });
-        } else {
-          const { data: novaOp, error } = await supabase.from('oples').insert([makePayload(baseOpl, undefined, op.valor_registrado ?? null)]).select().single();
-          if (error) throw error;
-          if (novaOp) {
-            await supabase.from('crm_historico').insert({
-              oportunidade_id: op.id, tipo: 'conversao_op',
-              conteudo: `OP criada: ${baseOpl}`, usuario_nome: currentUser?.nome,
-            });
-          }
-        }
-      } else {
         // OS: busca dados completos do cliente e redireciona para SAC
         let clienteObj = null;
         if (op.cliente_id) {
@@ -1791,19 +1714,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
         window.dispatchEvent(new CustomEvent('crm:navegar-sac'));
         setSalvando(false);
         return;
-      }
-      const qtyDigitada = Math.max(1, parseInt(String(qtdVeiculosConv)) || 1);
-      const qtyFinal = soEnvio(op.fluxo_entrega) ? 1 : qtyDigitada;  // envio = 1 OP só
-      setModalConverter(null);
-      setNumOp('');
-      setResumoConv('');
-      setQtdVeiculosConv(1);
-      setVeiculosConv([]);
-      setLoteMistoConv(false);
-      setGruposConv(grupoInicial(1));
-      alert(qtyFinal > 1
-        ? `${qtyFinal} OPs criadas: ${numOp.trim()}/01 até ${numOp.trim()}/${String(qtyFinal).padStart(2,'0')}! Acesse a aba Engenharia para acompanhar.`
-        : `OP ${numOp.trim()} criada! Acesse a aba Engenharia para acompanhar.`);
     } catch (e: any) {
       alert('Erro ao criar: ' + (e?.message || 'Verifique o console.'));
     }
@@ -4049,111 +3959,15 @@ const SUB_STATUS_COR: Record<string,string> = {
               <div style={{ fontSize:10, color:'#0f766e', fontWeight:700, marginTop:2 }}>{fmtMoeda(modalConverter.valor_registrado)}</div>
             </div>
 
-            <div style={{ fontSize:10, fontWeight:700, color:'#374151', marginBottom:8 }}>Tipo de lançamento:</div>
-            <div style={{ display:'grid', gridTemplateColumns: funil==='venda_direta' ? '1fr 1fr' : '1fr', gap:8, marginBottom:12 }}>
-              {([
-                { tipo:'op', icon:'📋', title:'Ordem de Produção', desc:'Equipamentos / instalação / fabricação', dest:'→ Aba Engenharia', cor:'#2563eb' },
-                ...(funil==='venda_direta' ? [{ tipo:'os', icon:'🔧', title:'Ordem de Serviço', desc:'Manutenção / suporte técnico / garantia', dest:'→ Aba SAC', cor:'#ea580c' }] : []),
-              ] as any[]).map(({ tipo, icon, title, desc, dest, cor }) => (
-                <div key={tipo} onClick={() => setTipoConverter(tipo)}
-                  style={{ border:`2px solid ${tipoConverter===tipo ? cor : '#e2e8f0'}`,
-                    borderRadius:6, padding:'10px 8px', textAlign:'center', cursor:'pointer',
-                    background: tipoConverter===tipo ? `${cor}12` : 'white', transition:'all .15s' }}>
-                  <div style={{ fontSize:24, marginBottom:4 }}>{icon}</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:'#1e293b' }}>{title}</div>
-                  <div style={{ fontSize:8, color:'#64748b', margin:'3px 0' }}>{desc}</div>
-                  <div style={{ fontSize:8, color:cor, fontWeight:700 }}>{dest}</div>
-                </div>
-              ))}
-            </div>
-
-            {tipoConverter === 'op' && (
-              <div style={{ marginBottom:10 }}>
-                <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
-                  Número da OP *
-                </label>
-                <input
-                  className="acn-input"
-                  style={{ width:'100%', fontSize:11 }}
-                  placeholder="Ex: A1234.0826 ou 2024.0001"
-                  value={numOp}
-                  onChange={e => setNumOp(mascaraOpComLetra(e.target.value))}
-                  maxLength={10}
-                  autoFocus
-                />
-                <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>Formato: [A/D]XXXX.MMAA — gerado a partir do PV quando disponível</div>
-              </div>
-            )}
-
-            {tipoConverter === 'op' && (
-              <div style={{ marginBottom:10 }}>
-                <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
-                  {soEnvio(modalConverter?.fluxo_entrega) ? 'Quantidade' : 'Qtd. Veículos'}
-                </label>
-                <input className="acn-input" style={{ width:'100%', fontSize:11 }} type="number" min={1} max={99}
-                  value={qtdVeiculosConv}
-                  onChange={e => {
-                    const qty = Math.max(1, parseInt(e.target.value) || 1);
-                    setQtdVeiculosConv(qty);
-                    setVeiculosConv(prev => Array.from({ length: qty }, (_, i) => prev[i] || { chassi:'', placa:'' }));
-                  }} />
-                {qtdVeiculosConv > 1 && soEnvio(modalConverter?.fluxo_entrega) && (
-                  <div style={{ background:'#f0fdfa', border:'1px solid #99f6e4', borderRadius:6, padding:8, marginTop:6, fontSize:9, color:'#0f766e' }}>
-                    📦 <strong>Envio:</strong> será criada 1 OP com quantidade {qtdVeiculosConv}, sem lote.
-                  </div>
-                )}
-                {qtdVeiculosConv > 1 && !soEnvio(modalConverter?.fluxo_entrega) && (
-                  <div style={{ background:'#f5f3ff', border:'1px solid #c4b5fd', borderRadius:6, padding:8, marginTop:6 }}>
-                    <div style={{ fontSize:8, fontWeight:800, color:'#7c3aed', marginBottom:6, textTransform:'uppercase' }}>
-                      🚗 Dados por Veículo (desmembramento em {qtdVeiculosConv} OPs)
-                    </div>
-                    <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:9, fontWeight:700, color:'#6b21a8', marginBottom:6, cursor:'pointer' }}>
-                      <input type="checkbox" checked={loteMistoConv} style={{ accentColor:'#7c3aed' }}
-                        onChange={e => { setLoteMistoConv(e.target.checked); if (e.target.checked) setGruposConv(grupoInicial(qtdVeiculosConv, resumoConv)); }} />
-                      Adaptações diferentes entre os veículos (lote misto)
-                    </label>
-                    {loteMistoConv && (
-                      <div style={{ marginBottom:8 }}>
-                        <GruposLoteMisto compacto quantidade={qtdVeiculosConv} grupos={gruposConv} onChange={setGruposConv} />
-                      </div>
-                    )}
-                    {veiculosConv.map((v, i) => (
-                      <div key={i} style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:5, marginBottom:5, alignItems:'center' }}>
-                        <span style={{ fontSize:9, fontWeight:800, color:'#7c3aed', width:24 }}>{String(i+1).padStart(2,'0')}</span>
-                        <input className="acn-input" style={{ fontSize:10 }} placeholder="Chassi" value={v.chassi}
-                          onChange={e => setVeiculosConv(prev => { const n=[...prev]; n[i]={...n[i],chassi:e.target.value}; return n; })} />
-                        <input className="acn-input" style={{ fontSize:10 }} placeholder="Placa" value={v.placa}
-                          onChange={e => setVeiculosConv(prev => { const n=[...prev]; n[i]={...n[i],placa:e.target.value.toUpperCase()}; return n; })} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {tipoConverter === 'op' && !(loteMistoConv && qtdVeiculosConv > 1 && !soEnvio(modalConverter?.fluxo_entrega)) && (
-              <div style={{ marginBottom:10 }}>
-                <label style={{ fontSize:9, fontWeight:700, color:'#374151', display:'block', marginBottom:3 }}>
-                  Resumo dos Serviços a serem executados
-                </label>
-                <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', fontSize:10 }}
-                  placeholder="Descreva os serviços que serão executados nesta OP..."
-                  value={resumoConv} onChange={e => setResumoConv(e.target.value)} />
-              </div>
-            )}
-
             <div style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'5px 8px', marginBottom:10 }}>
-              {tipoConverter === 'op'
-                ? 'Título → Modelo, Órgão → Cliente. Status: Em Espera Engenharia.'
-                : 'Número da OS será gerado automaticamente.'}
+              Número da OS será gerado automaticamente.
             </div>
 
             <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => { setModalConverter(null); setNumOp(''); setResumoConv(''); setQtdVeiculosConv(1); setVeiculosConv([]); setLoteMistoConv(false); setGruposConv(grupoInicial(1)); }}>Cancelar</button>
-              <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px',
-                background: tipoConverter==='op' ? '#2563eb' : '#ea580c', opacity: salvando?.5:1 }}
+              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }} onClick={() => setModalConverter(null)}>Cancelar</button>
+              <button className="acn-btn" style={{ fontSize:10, padding:'4px 12px', background:'#ea580c', opacity: salvando?.5:1 }}
                 onClick={converterGanho} disabled={salvando}>
-                {salvando ? 'Criando...' : tipoConverter==='op' ? '📋 Criar OP' : '🔧 Criar OS'}
+                {salvando ? 'Criando...' : '🔧 Criar OS'}
               </button>
             </div>
           </div>

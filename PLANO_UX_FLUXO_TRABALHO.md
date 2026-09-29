@@ -508,11 +508,36 @@ nenhum log de reenvio foi criado.**
   `ComercialTab` que acabou de sair. Nunca foi usada (0 registros), então não
   quebra nada; fica anotado para uma limpeza futura.
 
-### ⬜ Etapa 4 — Convergir a criação de OP num caminho só (A1)
-Decisão de negócio necessária: o formulário simplificado do CRM
-(`converterGanho`) devia deixar de existir (todo mundo passa pelo
-`NovaOpOsModal`), ou vale mantê-lo como "modo rápido" documentado para
-casos simples? Depois de decidido, alinhar os gates que faltam.
+### ✅ Etapa 4 — Convergir a criação de OP num caminho só (A1)
+
+**Feito em:** 29/09/2026.
+
+**O que foi feito:**
+
+- **Decisão do usuário: o formulário simplificado de OP deixa de existir.**
+  Toda OP lançada à mão passa pelo `NovaOpOsModal` ("Lançar OP" do card), com
+  todos os gates. A janela "Negócio Ganho — Lançar no Sistema" (aberta por
+  "Lançar OS") passou a servir **só para OS**: saíram o seletor de tipo, os
+  campos de OP (número, quantidade de veículos, lote misto, resumo) e o ramo de
+  OP do `converterGanho` (`CrmTab.tsx`, cerca de 200 linhas). A OS segue igual.
+- **Correção de um erro meu, na conversa:** eu havia afirmado que esse ramo já
+  estava inalcançável. Estava errado: a janela do "Lançar OS" tinha o botão
+  "Ordem de Produção". Percebi lendo o modal antes de apagar, corrigi a
+  informação e o usuário decidiu de novo, já com o fato certo.
+- Dos três caminhos do achado A1, sobra **um manual** (`NovaOpOsModal`); o do
+  `ComercialTab` saiu na 3.1 e o do `converterGanho` saiu agora.
+
+**Testado:** `npx vite build` verde; navegador com gravações bloqueadas: o
+"Lançar OS" abre a janela **sem** opção de OP e com "Criar OS", sem erro de
+página e sem gravação; teste do CRM da Etapa 2 segue 16/16.
+
+**O que ficou de fora — decisão sua:** existe um **quarto caminho**, a OP criada
+**sozinha** quando o card vira Vencido (`criarOpAutomatica`). Ele **não passa
+pelos gates** do `NovaOpOsModal` (fluxo de entrega, veículo, perguntas de
+configuração): copia o fluxo e o destino do card. Desde agosto, de 199 OPs, 167
+nasceram sem fluxo de entrega e 179 sem itens vendidos. Alinhar isso **muda
+comportamento** (exigir ou avisar no ganho do card) e depende da sua regra;
+não mexi. Fica como candidato a etapa própria.
 
 ### ⬜ Etapa 5 — Um glossário só de nomenclatura (C)
 Levantar cada par de nomes sinônimos (listados no achado C), decidir um
@@ -563,8 +588,9 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 
 ## Perguntas em aberto
 
-- **Etapa 4:** o formulário simplificado do CRM deve morrer ou virar um
-  "modo rápido" oficial e documentado?
+- **Criação automática de OP (pós-Etapa 4):** ao ganhar o card, a OP nasce sem
+  os gates do `NovaOpOsModal`. Exigimos/avisamos o fluxo de entrega nesse
+  momento? Qual regra?
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
 
@@ -582,3 +608,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | Órfãos seguros apagados (`prepararOpComercial`, `PedidoCompraList.tsx`, os dois `EngenhariaTab-*` vazios). `ComercialTab.tsx` só sai depois de o reenvio de OP devolvida ganhar tela viva (Etapa 3.1) — decisão do usuário. |
 | 29/09/2026 | **OP devolvida ao Comercial volta para quem devolveu** (Engenharia → `Em Espera Engenharia`; Fiscal → `Aguarda Emissao NF`), não sempre para a Engenharia — decisão do usuário. |
 | 29/09/2026 | Reenvio de OP devolvida é **um por um**, feito pelo Comercial depois de corrigir; sem lote e sem correção em massa das paradas. |
+| 29/09/2026 | **Formulário simplificado de OP do CRM removido**: toda OP manual nasce pelo `NovaOpOsModal`; a janela "Lançar OS" serve só para OS — decisão do usuário. |
