@@ -714,6 +714,14 @@ function FretesPanel({ currentUser }: any) {
   // padrão que CRM (crm_historico) e Licitações (licitacao_documentos categoria
   // 'andamento') já usam pra timeline; pra OP/OS reaproveita op_acompanhamentos
   // (o mesmo que OplAcompModal.tsx grava).
+  //
+  // Achado na varredura de UX de 29/09/2026: a OP que sai por frete CIF
+  // (embalagem → Aguardando Cotacao Frete, ver AlmoxarifadoTab.tsx) ficava
+  // presa nesse status pra sempre — nada aqui avançava o status_geral dela
+  // quando o frete chegava, então alguém precisava editar a OP na mão pra
+  // destravar. Agora, entregando um frete ligado a uma OP que ainda está
+  // "Aguardando Cotacao Frete", ela segue sozinha pra liberação comercial —
+  // o mesmo destino que o caminho FOB (sem frete a cotar) já usa.
   const postarAndamentoVinculo = async (frete: any) => {
     if (!frete.vinculo_tipo || !frete.vinculo_id) return;
     const valorFmt = frete.valor_frete
@@ -721,12 +729,31 @@ function FretesPanel({ currentUser }: any) {
     const texto = `🚚 Frete entregue — ${frete.descricao}\nTransportadora: ${frete.transportadora || '—'} · Valor: ${valorFmt}\nEntregue em: ${new Date().toLocaleString('pt-BR')}`;
     try {
       if (frete.vinculo_tipo === 'op_os') {
+        const { data: opl } = await supabase.from('oples').select('id,opl,status_geral').eq('id', frete.vinculo_id).maybeSingle();
+        // referencia_id do acompanhamento é o NÚMERO da OP (numero_opl), não o
+        // UUID — é assim que OplAcompModal.tsx busca (AcnTabShared.tsx:1612,
+        // `modalAcomp.numero_opl || String(modalAcomp.id)`). Bug irmão achado
+        // na mesma varredura de 29/09/2026: com o UUID aqui, o recado nunca
+        // aparecia na aba de Acompanhamento de ninguém, mesmo sendo gravado.
         await supabase.from('op_acompanhamentos').insert({
-          referencia_id: frete.vinculo_id, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc,
+          referencia_id: opl?.opl || frete.vinculo_id, referencia_tipo: 'op', referencia_desc: frete.vinculo_desc,
           setor: 'Logística', texto,
           usuario_id: String(currentUser?.id || ''), usuario_nome: currentUser?.nome || 'Sistema',
           criado_em: new Date().toISOString(),
         });
+        if (opl?.status_geral === 'Aguardando Cotacao Frete') {
+          const statusNovo = 'Aguardando Liberacao Comercial';
+          await supabase.from('oples').update({ status_geral: statusNovo }).eq('id', opl.id);
+          logChange({ module: 'logistica', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
+            oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: statusNovo }, user: currentUser });
+          await supabase.from('logs_movimentacao_opl').insert({
+            opl_id: opl.id, numero_opl: opl.opl, setor: 'Logística',
+            evento: `Frete entregue — segue para liberação comercial`,
+            status_anterior: opl.status_geral, status_novo: statusNovo,
+            usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
+          });
+          notificarEvento('frete_entregue', `🚚 Frete da OP ${opl.opl} entregue — liberada para o Comercial.`);
+        }
       } else if (frete.vinculo_tipo === 'licitacao') {
         await supabase.from('licitacao_documentos').insert({
           licitacao_id: frete.vinculo_id, categoria: 'andamento', nome: 'Andamento', conteudo: texto,

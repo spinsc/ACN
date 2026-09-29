@@ -315,7 +315,13 @@ Embalar e enviar assim mesmo?`)) return;
       medida_altura:      num(f.altura),
       medida_largura:     num(f.largura),
       medida_comprimento: num(f.comprimento),
-      vinculo_tipo: 'opl', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}`,
+      // 'op_os' (não 'opl') é o valor que o resto do sistema espera pra "isto
+      // pertence a uma OP" — é o que o formulário manual de frete usa
+      // (LogisticaTab.tsx) e o único que postarAndamentoVinculo reconhece pra
+      // avisar a OP quando o frete é entregue. Bug achado em 29/09/2026 na
+      // varredura de UX: com 'opl' aqui, a entrega do frete não acontecia
+      // pra ninguém — nem o recado no acompanhamento, nem o avanço de status.
+      vinculo_tipo: 'op_os', vinculo_id: opl.id, vinculo_desc: `OP ${opl.opl}`,
       observacoes: f.observacoes || null,
       criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
     }]);
