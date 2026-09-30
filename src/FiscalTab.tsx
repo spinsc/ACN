@@ -7,6 +7,8 @@ import { notificarEvento, msg } from './whatsappHelper';
 import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
+import { Botao, Selo, Tag, MenuAcoes } from './Interface';
+import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose } from '@mdi/js';
 
 const semDado = (v) => !v || !String(v).trim();
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -251,83 +253,69 @@ export default function FiscalTab({ currentUser }) {
     return n;
   });
 
+  // Etapa 11 do plano de UX (30/09/2026): a parte visual desta tela passou para as peças do design system
+  // (Botao, Selo, Tag, MenuAcoes e as classes acn-kpi / acn-tabela / acn-barra-selecao / acn-linha-*), no lugar
+  // do estilo pintado à mão em cada elemento. Só aparência: os cliques, as gravações e as regras de cima são as mesmas.
+  // O botão "Faturado" é o próximo passo da linha (principal); "Ver detalhes" e "Devolver ao Comercial" ficam no menu ⋯,
+  // como no PCP — a devolução é a saída de exceção, não o caminho normal.
   return (
     <div>
-      {/* PIPELINE — Notas Pendentes / Emitidas (OPLs + OS veiculares, tudo que está na fila agora) */}
-      <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:14}}>
-        <div style={{flex:'1 1 220px',minWidth:200,background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:'12px 16px'}}>
-          <div style={{fontSize:10,fontWeight:700,color:'#92400e',textTransform:'uppercase',letterSpacing:'.3px',marginBottom:4}}>📤 Notas Pendentes</div>
-          <div style={{fontSize:26,fontWeight:800,color:'#b45309'}}>{totalPendentes}</div>
-          <div style={{fontSize:10,color:'#92400e'}}>{aguardando.length} OP{aguardando.length!==1?'s':''} · {osAguardando.length} OS</div>
+      {/* RESUMO — notas pendentes / emitidas (OPs + OS veiculares, tudo que está na fila agora) */}
+      <div className="acn-kpis">
+        <div className="acn-kpi">
+          <span className="rot"><i style={{ background: 'var(--acn-warn)' }} />Notas pendentes</span>
+          <span className="val acn-num">{totalPendentes}</span>
+          <span className="sub">{aguardando.length} OP{aguardando.length!==1?'s':''} · {osAguardando.length} OS</span>
         </div>
-        <div style={{flex:'1 1 220px',minWidth:200,background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:8,padding:'12px 16px'}}>
-          <div style={{fontSize:10,fontWeight:700,color:'#166534',textTransform:'uppercase',letterSpacing:'.3px',marginBottom:4}}>✅ Notas Emitidas</div>
-          <div style={{fontSize:26,fontWeight:800,color:'#15803d'}}>{totalEmitidas}</div>
-          <div style={{fontSize:10,color:'#166534'}}>{faturados.length} OP{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</div>
+        <div className="acn-kpi">
+          <span className="rot"><i style={{ background: 'var(--acn-ok)' }} />Notas emitidas</span>
+          <span className="val acn-num">{totalEmitidas}</span>
+          <span className="sub">{faturados.length} OP{faturados.length!==1?'s':''} · {osFaturadas.length} OS — aguardando entrega</span>
         </div>
       </div>
 
-      {/* AGUARDANDO EMISSAO */}
+      {/* AGUARDANDO EMISSÃO */}
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
-          <span style={{color:'#92400e'}}>OPs Aguardando Emissao de NF-e ({filtrarOpls(aguardando, busca).length})</span>
+        <div className="sec-hdr">
+          <span>OPs aguardando emissão de NF-e <Selo familia="atencao" ponto={false}>{filtrarOpls(aguardando, busca).length}</Selo></span>
         </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
 
-        {selecionados.size > 0 && (
-          <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#ede9fe',borderBottom:'2px solid #7c3aed',flexWrap:'wrap'}}>
-            <span style={{fontWeight:700,fontSize:11,color:'#5b21b6'}}>🔗 {selecionados.size} selecionada(s)</span>
-            <input className="acn-input" style={{width:140}} placeholder="NF-e 000000000"
-              value={nfLote} onChange={e=>setNfLote(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
-            <button className="acn-btn" style={{background:'#7c3aed'}} disabled={faturandoLote} onClick={faturarSelecionados}>
-              {faturandoLote ? 'Faturando...' : `FATURAR ${selecionados.size} SELECIONADA(S)`}
-            </button>
-            <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setSelecionados(new Set())}>
-              Limpar seleção
-            </button>
-          </div>
-        )}
-
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : aguardando.length === 0 ? (
-            <div className="acn-empty">Nenhuma OP aguardando emissao de NF-e.</div>
+            <div className="acn-empty">Nenhuma OP aguardando emissão de NF-e.</div>
           ) : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr>
-                <th></th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Cliente</th><th>Lib. Comercial</th>
-                <th>Seriais / Nº Equipamentos</th><th>Numero NF-e</th><th>Acao</th>
+                <th></th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo de projeto</th><th>Cliente</th><th>Lib. comercial</th>
+                <th title="Seriais / nº de equipamentos, informados pelo Almoxarifado no kiting">Seriais</th><th title="Número da NF-e">NF-e</th><th>Ação</th>
               </tr></thead>
               <tbody>
                 {filtrarOpls(aguardando, busca).map(o => (
-                  <tr key={o.id} style={oplsNaoLidas.has(String(o.id))
-                    ? {background:'#fffdf0',borderLeft:'3px solid #eab308'}
-                    : ehLote(o) ? {background:'#faf5ff',borderLeft:'3px solid #7c3aed'} : undefined}>
+                  <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : ehLote(o) ? 'acn-linha-marca' : undefined}>
                     <td>
                       <input type="checkbox" checked={selecionados.has(o.id)} onChange={()=>toggleSelecionado(o.id)} />
                     </td>
                     <td>
                       <LinkOpl opl={o} currentUser={currentUser} />
-                      {ehLote(o) && <div><span style={{fontSize:8,fontWeight:700,background:'#7c3aed',color:'white',padding:'1px 5px',borderRadius:10}}>🔗 LOTE</span></div>}
+                      {ehLote(o) && <div><Tag title="Faturada junto com as outras unidades do lote, numa NF-e só">Lote</Tag></div>}
                     </td>
-                    <td style={{fontSize:10}}>
+                    <td>
                       <VeiculoOuEnvio o={o} />
                     </td>
-                    <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                    <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
+                    <td><span className={'acn-num ' + ((o.quantidade||1)>1 ? 'acn-forte' : 'acn-fraco')}>{o.quantidade||1}</span></td>
+                    <td>{o.tipo_projeto}</td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td>{fmtDt(o.data_liberacao_comercial)}</td>
+                    <td className="acn-num">{fmtDt(o.data_liberacao_comercial)}</td>
                     <td>
                       {o.seriais_equipamentos ? (
-                        <div style={{width:180,fontSize:10,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",whiteSpace:'pre-wrap',color:'#1e3a8a',background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:4,padding:'4px 7px'}}>
-                          <Linkify text={o.seriais_equipamentos} />
-                        </div>
+                        <div className="acn-nota-mono"><Linkify text={o.seriais_equipamentos} /></div>
                       ) : (
-                        <span style={{fontSize:9,color:'#dc2626',fontStyle:'italic'}}>⚠️ Não informado pelo Almoxarifado no kiting</span>
+                        <Selo familia="atencao" ponto={false} title="Não informado pelo Almoxarifado no kiting: os seriais / nº dos equipamentos não foram preenchidos">Sem serial</Selo>
                       )}
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:120}}
+                      <input className="acn-input" style={{width:118}}
                         placeholder="NF-e 000000000"
                         value={nfs[o.id] || ''}
                         onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
@@ -335,14 +323,14 @@ export default function FiscalTab({ currentUser }) {
                       />
                     </td>
                     <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#22c55e'}} disabled={faturandoId===o.id} onClick={()=>faturar(o)}>
-                          {faturandoId===o.id ? '...' : 'FATURADO'}
-                        </button>
-                        <button className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalDevolver(o);setObsDevolver('');}}>
-                          ↩ Devolver
-                        </button>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
+                      <div className="acn-acoes-linha">
+                        <Botao pequeno variante="primario" disabled={faturandoId===o.id} onClick={()=>faturar(o)}>
+                          {faturandoId===o.id ? '...' : 'Faturado'}
+                        </Botao>
+                        <MenuAcoes rotulo="Mais ações da OP" itens={[
+                          { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
+                          { rotulo: 'Devolver ao Comercial', icone: mdiUndoVariant, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
+                        ]} />
                       </div>
                     </td>
                   </tr>
@@ -353,39 +341,39 @@ export default function FiscalTab({ currentUser }) {
         </div>
       </div>
 
-      {/* JA FATURADOS */}
+      {/* JÁ FATURADOS */}
       {faturados.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#f0fdf4',borderBottom:'2px solid #22c55e'}}>
-            <span style={{color:'#166534'}}>Faturados — Aguardando Retirada/Entrega ({faturados.length})</span>
+          <div className="sec-hdr">
+            <span>Faturados — aguardando retirada/entrega <Selo familia="ok" ponto={false}>{faturados.length}</Selo></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
-            <table>
+            <table className="acn-tabela">
               <thead><tr>
-                <th>OP</th><th>Veículo</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th><th>Acao</th>
+                <th>OP</th><th>Veículo</th><th>Cliente</th><th>NF-e</th><th>Data de emissão</th><th>Resp. fiscal</th><th>Ação</th>
               </tr></thead>
               <tbody>
                 {faturados.map(o => (
-                  <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
-                    <td><LinkOpl opl={o} currentUser={currentUser} color="#22c55e" /></td>
-                    <td style={{fontSize:10}}>
+                  <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
+                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                    <td>
                       <VeiculoOuEnvio o={o} />
                     </td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>
-                      <strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong>
+                      <Selo familia="ok" ponto={false}>#{o.numero_nf}</Selo>
                       {o.observacoes_faturamento && (
-                        <div style={{marginTop:3,width:200,fontSize:9,fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace",whiteSpace:'pre-wrap',color:'#5b21b6',background:'#faf5ff',border:'1px solid #d8b4fe',borderRadius:4,padding:'4px 6px'}}>
-                          🔗 NF em lote:<br/>{o.observacoes_faturamento}
-                        </div>
+                        <div className="acn-nota-mono"><b>NF em lote:</b>{'\n'}{o.observacoes_faturamento}</div>
                       )}
                     </td>
-                    <td>{fmtDt(o.data_emissao_nf)}</td>
+                    <td className="acn-num">{fmtDt(o.data_emissao_nf)}</td>
                     <td>{o.responsavel_fiscal || '—'}</td>
                     <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
-                        <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>✅ Confirmar Entrega</button>
+                      <div className="acn-acoes-linha">
+                        <Botao pequeno variante="primario" icone={mdiTruckCheckOutline} onClick={()=>{setModalEntregue(o);setNomeRecebeu('');}}>Confirmar entrega</Botao>
+                        <MenuAcoes rotulo="Mais ações da OP" itens={[
+                          { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
+                        ]} />
                       </div>
                     </td>
                   </tr>
@@ -396,31 +384,37 @@ export default function FiscalTab({ currentUser }) {
         </div>
       )}
 
-      {/* OS DE MANUTENÇÃO VEICULAR — AGUARDANDO EMISSAO */}
+      {/* OS DE MANUTENÇÃO VEICULAR — AGUARDANDO EMISSÃO */}
       {osAguardando.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
-            <span style={{color:'#92400e'}}>OS Veiculares Aguardando Emissao de NF-e ({osAguardando.length})</span>
+          <div className="sec-hdr">
+            <span>OS veiculares aguardando emissão de NF-e <Selo familia="atencao" ponto={false}>{osAguardando.length}</Selo></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
-            <table>
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Numero NF-e</th><th>Ação</th></tr></thead>
+            <table className="acn-tabela">
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Número da NF-e</th><th>Ação</th></tr></thead>
               <tbody>
                 {osAguardando.map(o => (
-                  <tr key={o.id} style={osNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
-                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
+                  <tr key={o.id} className={osNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
+                    <td><strong className="acn-forte">{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td style={{fontSize:10}}>
-                      <div>{semDado(o.veiculo_modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.veiculo_modelo}</div>
-                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
+                    <td>
+                      <div className="acn-duas">
+                        <span>{semDado(o.veiculo_modelo) ? <Selo familia="atencao" ponto={false}>sem modelo</Selo> : o.veiculo_modelo}</span>
+                        <small>{semDado(o.chassi) ? <Selo familia="atencao" ponto={false}>sem chassi</Selo> : `Chassi ${o.chassi}`}</small>
+                      </div>
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:120}} placeholder="NF-e 000000000"
+                      <input className="acn-input" style={{width:130}} placeholder="NF-e 000000000"
                         value={nfs[o.id] || ''}
                         onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturarOS(o)} />
                     </td>
-                    <td><button className="acn-btn" style={{background:'#22c55e'}} onClick={()=>faturarOS(o)}>FATURADO</button></td>
+                    <td>
+                      <div className="acn-acoes-linha">
+                        <Botao pequeno variante="primario" icone={mdiReceiptTextCheckOutline} onClick={()=>faturarOS(o)}>Faturado</Botao>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -429,22 +423,22 @@ export default function FiscalTab({ currentUser }) {
         </div>
       )}
 
-      {/* OS DE MANUTENÇÃO VEICULAR — JA FATURADAS */}
+      {/* OS DE MANUTENÇÃO VEICULAR — JÁ FATURADAS */}
       {osFaturadas.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#f0fdf4',borderBottom:'2px solid #22c55e'}}>
-            <span style={{color:'#166534'}}>OS Veiculares Faturadas — Aguardando Entrega ({osFaturadas.length})</span>
+          <div className="sec-hdr">
+            <span>OS veiculares faturadas — aguardando entrega <Selo familia="ok" ponto={false}>{osFaturadas.length}</Selo></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
-            <table>
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>NF-e</th><th>Data Emissao</th><th>Resp. Fiscal</th></tr></thead>
+            <table className="acn-tabela">
+              <thead><tr><th>Nº OS</th><th>Cliente</th><th>NF-e</th><th>Data de emissão</th><th>Resp. fiscal</th></tr></thead>
               <tbody>
                 {osFaturadas.map(o => (
-                  <tr key={o.id} style={osNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
-                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
+                  <tr key={o.id} className={osNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
+                    <td><strong className="acn-forte">{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
-                    <td><strong style={{color:'#22c55e'}}>#{o.numero_nf}</strong></td>
-                    <td>{fmtDt(o.data_emissao_nf)}</td>
+                    <td><Selo familia="ok" ponto={false}>#{o.numero_nf}</Selo></td>
+                    <td className="acn-num">{fmtDt(o.data_emissao_nf)}</td>
                     <td>{o.responsavel_fiscal || '—'}</td>
                   </tr>
                 ))}
@@ -457,20 +451,34 @@ export default function FiscalTab({ currentUser }) {
       <OplMovimentadas setor="Fiscal" />
       <DemandaFooter setor="Fiscal" />
 
+      {/* BARRA DE FATURAMENTO EM LOTE — OPs desmembradas (mesmo lote), uma NF-e para todas as marcadas */}
+      {selecionados.size > 0 && (
+        <div className="acn-barra-selecao">
+          <strong className="acn-num">{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
+          <input className="acn-input" style={{width:150}} placeholder="NF-e 000000000"
+            value={nfLote} onChange={e=>setNfLote(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
+          <Botao pequeno variante="primario" icone={mdiReceiptTextCheckOutline} disabled={faturandoLote} onClick={faturarSelecionados}>
+            {faturandoLote ? 'Faturando...' : `Faturar ${selecionados.size} selecionada${selecionados.size!==1?'s':''}`}
+          </Botao>
+          <Botao pequeno variante="discreto" icone={mdiClose} onClick={()=>setSelecionados(new Set())}>Limpar seleção</Botao>
+        </div>
+      )}
+
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
 
       {/* MODAL DEVOLVER AO COMERCIAL */}
       {modalDevolver && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalDevolver(null);}}>
           <div className="modal-box">
-            <div className="modal-title">↩ Devolver para Comercial — {modalDevolver.opl}</div>
+            <div className="modal-title">Devolver ao Comercial — {modalDevolver.opl}</div>
             <label className="acn-label">Inconsistência encontrada *</label>
             <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
               placeholder="Descreva o que precisa ser corrigido pelo Comercial..."
               value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} autoFocus />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={devolverComercial}>CONFIRMAR DEVOLUÇÃO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDevolver(null)}>Cancelar</button>
+              <Botao variante="secundario" onClick={()=>setModalDevolver(null)}>Cancelar</Botao>
+              <Botao variante="perigo" style={{flex:1}} onClick={devolverComercial}>Confirmar devolução</Botao>
             </div>
           </div>
         </div>
@@ -480,14 +488,14 @@ export default function FiscalTab({ currentUser }) {
       {modalEntregue && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)setModalEntregue(null);}}>
           <div className="modal-box">
-            <div className="modal-title">✅ Confirmar Entrega — {modalEntregue.opl}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>NF: <strong>#{modalEntregue.numero_nf}</strong></div>
+            <div className="modal-title">Confirmar entrega — {modalEntregue.opl}</div>
+            <div className="acn-fraco" style={{marginBottom:12}}>NF: <strong className="acn-forte">#{modalEntregue.numero_nf}</strong></div>
             <label className="acn-label">Nome completo de quem recebeu o equipamento</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:14,fontSize:13,padding:'8px'}}
+            <input className="acn-input" style={{width:'100%',marginBottom:14}}
               autoFocus placeholder="Nome do receptor" value={nomeRecebeu} onChange={e=>setNomeRecebeu(e.target.value)} onKeyDown={e=>e.key==='Enter'&&confirmarEntrega()} />
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'8px'}} onClick={confirmarEntrega}>CONFIRMAR ENTREGA</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEntregue(null)}>Cancelar</button>
+              <Botao variante="secundario" onClick={()=>setModalEntregue(null)}>Cancelar</Botao>
+              <Botao variante="primario" style={{flex:1}} onClick={confirmarEntrega}>Confirmar entrega</Botao>
             </div>
           </div>
         </div>

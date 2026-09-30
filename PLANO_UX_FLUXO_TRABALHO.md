@@ -303,6 +303,7 @@ cascas vazias de uma refatoração anterior.
   `SelectBusca`, `MenuAcoes`) — mas só o Dashboard (e as telas que eu mexi
   nesta sessão: CRM, Licitações, Cotações, Estoque) o usam de verdade.
   RH, SAC, Fiscal, Logística e Relatórios reinventam cor e botão à mão.
+  *(Fiscal migrada na Etapa 11, em 30/09/2026 — piloto; faltam SAC, RH, Logística e Relatórios, Etapa 12.)*
 - `TonsVisuais.ts` é uma heurística de runtime que varre o DOM e *adivinha*
   a semântica da cor pintada à mão — sintoma de que a migração real
   (trocar `style` inline por `<Botao variante="...">`) nunca terminou.
@@ -1709,9 +1710,43 @@ Regressão da tela do PCP: `teste_18` 29/29, `teste_5x` 11/11, `teste_54` 21/21,
 - **O editor de fabricação da Engenharia** (na liberação da BOM) **não usa** essa lista de sugestões e **não foi tocado**.
 - **"Marcar só o que falta no estoque"** continua sendo o passo futuro já anotado no código (depende do controle de saldo e de estoque mínimo); esta etapa é só o atalho manual.
 
-### ⬜ Etapa 11 — Migrar Fiscal para o design system (piloto)
-A menor das telas que ainda não usa `Interface.tsx` (497 linhas) — serve de
-prova de conceito antes de encarar SAC (a maior, 3000+ linhas).
+### ✅ Etapa 11 — Migrar Fiscal para o design system (piloto)
+
+**Feito em:** 30/09/2026.
+
+**Ponto de partida conferido em 30/09/2026:** a `FiscalTab.tsx` (497 linhas) tinha **61 `style` inline, 12 botões `acn-btn` com cor própria e 66 cores hex** escritas à mão. Na tela ela já parecia razoável porque o `design.css` e o `TonsVisuais`
+repintam em tempo de execução (é exatamente o "remendo" da Etapa 13); o que faltava era a tela **usar as peças** em vez de depender do remendo. Com o dado real (25 OPs aguardando NF-e, 1 faturada, 0 OS) a tabela **passava da largura do quadro
+e escondia o botão "Ver"** à direita.
+
+**O que foi feito** (`FiscalTab.tsx`, parte visual; `design.css` ganhou 1 classe; **nenhuma regra, gravação ou dado foi mexido** — a lógica do topo do arquivo ficou byte a byte igual):
+
+- **Botões:** os 12 `acn-btn` viraram `Botao`. Em cada OP, **"Faturado" é o botão principal** (próximo passo) e **"Ver detalhes" e "Devolver ao Comercial" foram para o menu ⋯** (como no PCP): a devolução é a saída de exceção. Faturados: "Confirmar entrega"
+  principal e "Ver detalhes" no menu. Janelas: Cancelar (secundário) + Confirmar (principal / perigo na devolução).
+- **Resumo:** os dois cartões de "Notas pendentes / emitidas" passaram para `acn-kpis` / `acn-kpi` (os mesmos do Dashboard).
+- **Etiquetas e cabeçalhos:** os cabeçalhos dos quadros perderam a cor de fundo pintada (ficam neutros, com a contagem num `Selo`); **NF-e** virou `Selo` verde; "Lote" virou `Tag`; "sem modelo / sem chassi" e "sem serial" viraram `Selo` de atenção.
+- **Tabela e barra:** `acn-tabela` e os filetes de linha do sistema (`acn-linha-nova` = alteração não vista, `acn-linha-marca` = OP de lote). A barra de **faturamento em lote** virou a **`acn-barra-selecao`** (fixa embaixo, como na Produção), com o mesmo campo de NF-e.
+- **Classe nova `acn-nota-mono`** (`design.css`): o bloco de texto em fonte mono dos seriais e da lista "NF em lote", que antes levava cor e borda pintadas em cada um; já tem versão para o modo escuro.
+- **Texto na tela:** acentos que faltavam ("emissão", "número", "ação") e emojis decorativos tirados (o sistema usa ícones). O aviso "⚠️ Não informado pelo Almoxarifado no kiting", repetido em cada linha, virou o selo **"Sem serial"** (o texto completo está na dica).
+- **Largura:** cabeçalhos "Seriais" e "NF-e" (o texto completo na dica) e o botão da linha sem ícone. A tabela passou de **1.248 px** (não cabia nem em 1500 px) para **1.109 px**: cabe a partir de ~1.400 px de tela; abaixo disso rola dentro do quadro.
+
+**Resultado no código:** `style` inline **61 → 16** (só largura e espaçamento, nenhum de cor), `acn-btn` **12 → 0**, cores hex **66 → 0**.
+
+**Como foi testado (o teste vale para a tela velha E para a nova):** `teste_20` é escrito com os mesmos passos e as mesmas expectativas para as duas versões; rodei **antes de migrar (24/24)** e **depois (29/29: as mesmas 24 + 5 estruturais)**.
+Cobre, com leitura e gravação **simuladas** (nada chegou ao banco): as 4 OPs, as 2 faturadas e as 2 OS aparecem; só as 2 unidades do lote vêm pré-marcadas; **faturar o lote** grava as 2 OPs com a mesma NF, o mesmo status, quem faturou, a observação com
+chassi/placa/serial e a **trava contra faturar duas vezes** (`status_geral = Aguarda Emissao NF` na gravação); faturar uma OP sem NF avisa e não grava; **devolver** exige o motivo e grava "Devolvida Comercial"; **ver** abre o detalhe; **confirmar entrega**
+exige o nome e grava "Faturado"; **faturar OS** grava a NF e o novo status; histórico e auditoria registrados; nada gravado fora das tabelas esperadas. Com o dado real: 25 + 1 linhas, iguais às de antes, sem rolagem lateral a 1500 px, sem nenhuma gravação só de abrir.
+Modo escuro e celular (390 px, sem rolagem lateral da página) conferidos por captura. Regressão: `teste_18` 29/29, `teste_5x` 11/11, `teste_63` 23/23, `teste_status` 13/13, `teste_reenvio` 20/20; build ok.
+
+**O que ficou de fora:**
+
+- **`LinkOpl`, `VeiculoOuEnvio`, `BuscaOplInput`, `OplMovimentadas` e `DemandaFooter`** são componentes compartilhados de `AcnTabShared.tsx` e **ainda têm estilo inline próprio** (por exemplo o número da OP em azul e o "sem chassi" em vermelho): migrá-los mexe em todas as telas, então fica para a Etapa 12 ou 13.
+- **Os campos de texto** continuam `<input className="acn-input">` (o `Interface.tsx` não tem componente de campo); os 16 `style` que sobram são larguras e espaços.
+- **As janelas "Devolver" e "Confirmar entrega" continuam com o próprio `modal-overlay`** (só os botões mudaram); trocá-las pelo `pedirTexto` do `Feedback.tsx` mudaria o desenho da janela e não foi feito.
+- **Menu ⋯ em vez de botões visíveis** para "Ver" e "Devolver": é uma escolha de desenho minha (igual ao PCP), sem confirmação do usuário — se a devolução precisar ficar à vista, é voltar um botão `perigo-sec`.
+- **A tela SAC etc.** não foi tocada (Etapa 12).
+
+**O que o piloto ensinou para a Etapa 12** (receita que funcionou): (1) escrever o teste de comportamento **antes**, com seletores que valham para a tela velha e a nova, e rodar nas duas; (2) trocar só a parte visual do arquivo, sem tocar na lógica;
+(3) botão principal = próximo passo da linha, o resto no `MenuAcoes`; (4) cores e bordas viram `Selo` / `Tag` / classe do `design.css`, nunca hex; (5) **medir a largura da tabela com o dado real** — o design system engorda o espaço das células e uma tabela que "cabia" pode passar a rolar.
 
 ### ⬜ Etapa 12 — Migrar SAC, RH, Logística, Relatórios
 Depois do piloto validado, o resto na mesma linha.
@@ -1785,4 +1820,5 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Etapa 8 (Compras):** o painel "Esperando a sua aprovação" é visto **só por quem tem `pode_aprovar_compra`**; a compra fica na caixa **de todos** os aprovadores e qualquer um resolve (regra de 24/09), então a lista é a mesma para os quatro; tem consulta própria, **não depende do filtro da tela**; o tempo de espera é **só o número, sem cor de alerta** (mesma linha da Etapa 6). Suposição minha, não confirmada com o usuário. |
 | 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |
 | 30/09/2026 | **Etapa 9 (PCP):** em vez de abas, uma **faixa de resumo + blocos que só acompanham abrem recolhidos**; "pede ação" = o que tem botão do PCP na linha, o resto é acompanhamento de outro setor; quem pede ação abre sozinho e sobe dentro do bloco; a reposição de estoque sobe para logo abaixo do "material em falta". **Suposição minha, não confirmada com o usuário**: recolher por padrão o que não pede ação (um clique abre; o número continua no cabeçalho e na faixa). |
+| 30/09/2026 | **Etapa 11 (Fiscal, piloto do design system):** migração **só visual**, testada com o mesmo teste na tela velha e na nova (24/24 → 29/29); "Faturado" é o botão principal da linha e "Ver" / "Devolver" foram para o menu ⋯ (igual ao PCP) — **suposição minha, não confirmada com o usuário**; os cartões de resumo viraram `acn-kpi`; a barra de faturamento em lote virou a barra fixa `acn-barra-selecao`; nova classe `acn-nota-mono`. Receita para a Etapa 12 no bloco da etapa. |
 | 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |

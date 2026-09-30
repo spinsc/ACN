@@ -339,6 +339,10 @@ button.acn-selo.clicavel:focus-visible { outline: 2px solid var(--acn-brand); ou
 .acn-fraco { color: var(--acn-muted); }
 .acn-mono { font-family: var(--acn-mono); font-size: 12px; }
 .acn-num { font-variant-numeric: tabular-nums; }
+/* Bloco de texto em fonte mono com fundo suave: seriais dos equipamentos e a lista de OPs de uma NF-e em lote
+   (tela Fiscal, Etapa 11 do plano de UX, 30/09/2026 — antes cada bloco levava cor e borda pintadas à mão) */
+.acn-nota-mono { font-family: var(--acn-mono); font-size: 12px; white-space: pre-wrap; max-width: 260px; margin-top: 3px; padding: 4px 8px; border-radius: var(--acn-r1); background: var(--acn-surface-2); border: 1px solid var(--acn-line); color: var(--acn-ink); }
+body.dark .acn-nota-mono { background: #0f172a; border-color: #334155; color: #cbd5e1; }
 .acn-aviso-mini { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--acn-warn); white-space: nowrap; }
 table tr.acn-linha-alerta > td:first-child { box-shadow: inset 3px 0 0 var(--acn-bad); }
 table tr.acn-linha-marca > td:first-child { box-shadow: inset 3px 0 0 #8b5cf6; }
