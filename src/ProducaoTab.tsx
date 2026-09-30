@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { ColaboradorSelect, useColaboradores } from './ColaboradorSelect';
+import { EquipeDaOpModal } from './EquipeDaOp';
 import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, VeiculoOuEnvio, VeiculoCompacto } from './AcnTabShared';
 import { ModalAnexos, useContagemAnexos } from './OplAnexosWidget';
@@ -2081,11 +2082,6 @@ export default function ProducaoTab({ currentUser }) {
   const [editEquipeSel, setEditEquipeSel] = useState<any>(null);
   // Gerenciar equipe (responsáveis/apoios livres pós-início)
   const [modalGerenciarEquipe, setModalGerenciarEquipe] = useState<any>(null);
-  const [equipeAtual, setEquipeAtual] = useState<any[]>([]);
-  const [novoRespNome, setNovoRespNome] = useState('');
-  const [novoRespId, setNovoRespId] = useState<string|null>(null);
-  const [novoApoioNome, setNovoApoioNome] = useState('');
-  const [novoApoioId, setNovoApoioId] = useState<string|null>(null);
 
   // Deep-link vindo de um chip de vínculo (VinculoPicker.tsx) ou de qualquer
   // outro lugar que aponte pra uma OP — abre o OplDetalheModal direto, mesmo
@@ -2287,53 +2283,8 @@ export default function ProducaoTab({ currentUser }) {
     setModalEditResp(null); fetchAll();
   };
 
-  // ── Gerenciar Equipe (responsáveis/apoios livres, pós-início) ──────────────
-  const carregarEquipeAtual = async (opl: any) => {
-    const { data } = await supabase.from('responsaveis_producao')
-      .select('*').eq('tipo', 'op').eq('referencia_id', opl.id).order('criado_em');
-    setEquipeAtual(data || []);
-  };
-
-  const abrirGerenciarEquipe = (opl: any) => {
-    setModalGerenciarEquipe(opl);
-    setNovoRespNome(''); setNovoRespId(null);
-    setNovoApoioNome(''); setNovoApoioId(null);
-    carregarEquipeAtual(opl);
-  };
-
-  const adicionarMembroEquipe = async (papel: 'responsavel'|'apoio') => {
-    const opl = modalGerenciarEquipe;
-    if (!opl) return;
-    const nome = papel === 'responsavel' ? novoRespNome : novoApoioNome;
-    const id   = papel === 'responsavel' ? novoRespId   : novoApoioId;
-    if (!nome.trim()) { alert('Selecione um técnico.'); return; }
-    await supabase.from('responsaveis_producao').insert([{
-      tipo: 'op', referencia_id: opl.id, papel, tecnico_id: id, tecnico_nome: nome,
-      adicionado_por: currentUser?.email, adicionado_por_nome: currentUser?.nome,
-    }]);
-    await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
-      evento: `${papel === 'responsavel' ? 'Responsável' : 'Apoio'} adicionado: ${nome}`,
-      status_anterior: opl.status_geral, status_novo: opl.status_geral,
-      usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
-    }]);
-    if (papel === 'responsavel') { setNovoRespNome(''); setNovoRespId(null); }
-    else { setNovoApoioNome(''); setNovoApoioId(null); }
-    carregarEquipeAtual(opl);
-  };
-
-  const removerMembroEquipe = async (membro: any) => {
-    if (!await confirmar(`Remover ${membro.tecnico_nome} (${membro.papel})?`)) return;
-    const opl = modalGerenciarEquipe;
-    await supabase.from('responsaveis_producao').delete().eq('id', membro.id);
-    await supabase.from('logs_movimentacao_opl').insert([{
-      opl_id: opl.id, numero_opl: opl.opl, setor: 'Producao',
-      evento: `${membro.papel === 'responsavel' ? 'Responsável' : 'Apoio'} removido: ${membro.tecnico_nome}`,
-      status_anterior: opl.status_geral, status_novo: opl.status_geral,
-      usuario_nome: currentUser?.nome, data_hora: new Date().toISOString(),
-    }]);
-    carregarEquipeAtual(opl);
-  };
+  // Equipe da OP (responsáveis, apoios e serralheria): a janela mora em EquipeDaOp.tsx desde 30/09/2026,
+  // para a Produção, o Fiscal e o detalhe da OP usarem a mesma e a correção valer até o Fiscal faturar.
 
   const liberarChecklist = async (opl) => {
     // A adaptação não fecha a sua etapa com peça de fabricação/compra em aberto:
@@ -2443,7 +2394,7 @@ export default function ProducaoTab({ currentUser }) {
       setEditResp2Id(opl.tecnico_producao_2_id || null);
       setEditEquipeSel(opl.equipe_id ? { id: opl.equipe_id, nome: opl.equipe_nome, head_line_nome: opl.responsavel_producao } : null);
     }
-    if (tipo === 'gerenciar_equipe') abrirGerenciarEquipe(opl);
+    if (tipo === 'gerenciar_equipe') setModalGerenciarEquipe(opl);
   };
 
   const [abaProducao, setAbaProducao] = useState('producao');
@@ -2907,63 +2858,10 @@ export default function ProducaoTab({ currentUser }) {
         </div>
       )}
 
-      {/* MODAL GERENCIAR EQUIPE — responsáveis/apoios livres, pós-início */}
+      {/* MODAL EQUIPE DA OP — adaptação e serralheria (EquipeDaOp.tsx) */}
       {modalGerenciarEquipe && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">Equipe — OP {modalGerenciarEquipe.opl}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
-              Responsáveis recebem comissão pelo próprio percentual configurado. Apoios recebem 0,1% fixo
-              do valor de mão de obra desta OP, além do que os responsáveis já recebem.
-            </div>
-
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>RESPONSÁVEIS</div>
-            {equipeAtual.filter(m=>m.papel==='responsavel').length === 0 ? (
-              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum responsável ainda.</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
-                {equipeAtual.filter(m=>m.papel==='responsavel').map(m => (
-                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-                    padding:'6px 10px',background:'#eef2ff',borderRadius:6,fontSize:11}}>
-                    <span>{m.tecnico_nome}</span>
-                    <button onClick={()=>removerMembroEquipe(m)}
-                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{display:'flex',gap:6,marginBottom:16}}>
-              <ColaboradorSelect value={novoRespNome}
-                onChange={nome=>{ setNovoRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoRespId(c?.id||null); }}
-                placeholder="Adicionar responsável..." className="acn-input" style={{flex:1}} />
-              <button className="acn-btn" style={{background:'#6366f1',fontSize:10}} onClick={()=>adicionarMembroEquipe('responsavel')}>+ Add</button>
-            </div>
-
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>APOIOS (0,1% da mão de obra)</div>
-            {equipeAtual.filter(m=>m.papel==='apoio').length === 0 ? (
-              <div style={{fontSize:10,color:'#9ca3af',marginBottom:10}}>Nenhum apoio ainda.</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
-                {equipeAtual.filter(m=>m.papel==='apoio').map(m => (
-                  <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-                    padding:'6px 10px',background:'#f0fdf4',borderRadius:6,fontSize:11}}>
-                    <span>{m.tecnico_nome}</span>
-                    <button onClick={()=>removerMembroEquipe(m)}
-                      style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11}}>🗑️</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{display:'flex',gap:6,marginBottom:16}}>
-              <ColaboradorSelect value={novoApoioNome}
-                onChange={nome=>{ setNovoApoioNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setNovoApoioId(c?.id||null); }}
-                placeholder="Adicionar apoio..." className="acn-input" style={{flex:1}} />
-              <button className="acn-btn" style={{background:'#16a34a',fontSize:10}} onClick={()=>adicionarMembroEquipe('apoio')}>+ Add</button>
-            </div>
-
-            <Botao variante="secundario" style={{width:'100%'}} onClick={()=>setModalGerenciarEquipe(null)}>Fechar</Botao>
-          </div>
-        </div>
+        <EquipeDaOpModal opl={modalGerenciarEquipe} currentUser={currentUser}
+          aoFechar={()=>setModalGerenciarEquipe(null)} />
       )}
 
       {/* MODAL VER OPL */}

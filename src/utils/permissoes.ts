@@ -79,6 +79,18 @@ export function ehAdminOuGerente(usuarioAtual: any): boolean {
 }
 
 /**
+ * Quem corrige a equipe de uma OP (quem trabalhou na adaptação e na serralheria) — decidido com o
+ * usuário em 30/09/2026: Admin, qualquer "Gerente ..." (o Gerente de Produção, que faz o apontamento,
+ * e o Gerente administrativo, que fatura) e quem já tem a aba "Adaptação" — a mesma gente que já
+ * mexia na Equipe dentro da Produção. A trava de "até o Fiscal faturar" está em EquipeDaOp.tsx.
+ */
+export function podeEditarEquipeDaOp(usuarioAtual: any): boolean {
+  if (ehAdminOuGerente(usuarioAtual)) return true;
+  const abas = usuarioAtual?.abas_permitidas;
+  return Array.isArray(abas) && abas.includes('producao');
+}
+
+/**
  * Retorna mensagem de erro sobre permissão
  */
 export function getMensagemPermissao(acao: string, setor: string): string {

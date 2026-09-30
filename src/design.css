@@ -527,3 +527,12 @@ html body .acn-main:not(.acn-main-tv) table tr.acn-eng-info > td { padding-top: 
 .acn-eng-prazo { font-weight: 600; color: var(--acn-ink); font-variant-numeric: tabular-nums; }
 .acn-eng-prazo.perto { color: var(--acn-warn); }
 .acn-eng-prazo.atrasado { color: var(--acn-bad); }
+/* ── Equipe da OP (quem trabalhou na adaptação e na serralheria) — EquipeDaOp.tsx, 30/09/2026 ── */
+.acn-equipe-titulo { margin: 16px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-ink); }
+.acn-equipe-ajuda { margin: 0 0 6px; font-size: 11px; color: var(--acn-muted); }
+.acn-equipe-vazio { margin: 0 0 6px; font-size: 11px; color: var(--acn-muted); font-style: italic; }
+.acn-equipe-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; padding: 5px 10px; font-size: 12px; color: var(--acn-ink); background: var(--acn-surface-2); border: 1px solid var(--acn-line-soft); border-radius: var(--acn-r2); }
+.acn-equipe-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.acn-equipe-lote { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 8px 10px; font-size: 11px; color: var(--acn-text); border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); cursor: pointer; }
+.acn-equipe-lote input { margin-top: 2px; }
+.acn-equipe-lote em { display: block; margin-top: 2px; color: var(--acn-warn); font-style: normal; }

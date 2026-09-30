@@ -1808,8 +1808,12 @@ function ComissoesRH({ funcionarios, currentUser }) {
     // dentro do período). A Faturar: já concluído na produção dentro do
     // período, mas ainda sem NF emitida — dá visão do que vem pela frente.
     let opQuery = supabase.from('oples')
-      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome')
-      .not('tecnico_producao_id','is',null);
+      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome');
+    // Antes havia aqui `.not('tecnico_producao_id','is',null)`: OP sem o técnico principal nem entrava na
+    // conta. Desde 30/09/2026 a equipe pode ser apontada ou corrigida depois (EquipeDaOp.tsx), inclusive
+    // numa OP que nunca teve técnico principal — e quem manda é a lista em `responsaveis_producao`, não
+    // o campo da OP. Conferido no banco antes de tirar: nenhuma linha de equipe existia em OP sem técnico
+    // principal, então o resultado de hoje não muda (fotografia da tela antes e depois: compara_rh.cjs).
     opQuery = modoFatura === 'faturada'
       ? opQuery.gte('data_emissao_nf', inicio).lte('data_emissao_nf', fim)
       : opQuery.gte('data_conclusao_producao', inicio).lte('data_conclusao_producao', fim).is('data_emissao_nf', null);
@@ -1888,7 +1892,9 @@ function ComissoesRH({ funcionarios, currentUser }) {
     // direto aqui, pra não contar o técnico principal duas vezes.
     const idsRelevantes = [...ops.map((o:any)=>o.id), ...oss.map((o:any)=>o.id)];
     const { data: respData } = idsRelevantes.length > 0
-      ? await supabase.from('responsaveis_producao').select('*').in('referencia_id', idsRelevantes)
+      // ordem fixa (30/09/2026): sem ela a ordem dos técnicos e das OPs na tela era a que o banco
+      // devolvesse naquele momento, e mudava sozinha quando a consulta mudava
+      ? await supabase.from('responsaveis_producao').select('*').in('referencia_id', idsRelevantes).order('criado_em').order('id')
       : { data: [] as any[] };
     const responsaveis: any[] = respData || [];
 
@@ -1921,6 +1927,10 @@ function ComissoesRH({ funcionarios, currentUser }) {
     Object.values(mapa).forEach((tec: any) => {
       const allItems = [...tec.ops, ...tec.oss];
       const getBase = (i: any) => {
+        // Quem trabalhou na serralheria (30/09/2026, regra do usuário): comissão em cima da mão de obra de
+        // SERRALHERIA da OP, qualquer que seja o "incide em" do cadastro — o que vale é em que lista da
+        // OP a pessoa foi apontada. Usa o percentual dela, como o responsável.
+        if (i.papel === 'serralheria') return Number(i.valor_mao_de_obra_serralheria || 0);
         if (i.papel === 'apoio') return Number(i.valor_mao_de_obra || 0);
         if (tec.incideEm === 'Mão de Obra') return Number(i.valor_mao_de_obra || 0);
         if (tec.incideEm === 'Serralheria') return Number(i.valor_mao_de_obra_serralheria || 0);
@@ -1958,7 +1968,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
     const mapaGrupos: Record<string, any> = {};
     Object.values(mapa).forEach((tec: any) => {
       [...tec.ops, ...tec.oss].forEach((item: any) => {
-        if (item.papel === 'apoio') return; // apoio não define o grupo, só é contabilizado dentro dele
+        if (item.papel === 'apoio' || item.papel === 'serralheria') return; // apoio e serralheria não definem o grupo, só são contabilizados dentro dele
         const g = chaveGrupo(item);
         if (!g) return;
         if (!mapaGrupos[g.chave]) {
@@ -1986,10 +1996,19 @@ function ComissoesRH({ funcionarios, currentUser }) {
         const grupoDono = Object.values(mapaGrupos).find((gr: any) => gr.itensVistos.has(item.id));
         if (grupoDono) grupoDono.totalComissao += item.base * 0.001;
       });
+      // quem trabalhou na serralheria entra no total do grupo da OP com o percentual próprio
+      [...tec.ops, ...tec.oss].filter((i: any) => i.papel === 'serralheria').forEach((item: any) => {
+        const grupoDono = Object.values(mapaGrupos).find((gr: any) => gr.itensVistos.has(item.id));
+        if (grupoDono) grupoDono.totalComissao += item.base * tec.percentual / 100;
+      });
     });
 
     setDados(Object.values(mapa));
-    setGrupos(Object.values(mapaGrupos).sort((a: any, b: any) => b.qtdTotal - a.qtdTotal));
+    // Empate em nº de OP/OS: desempata pelo nome (30/09/2026). Antes a ordem dos cartões empatados era a
+    // ordem em que o banco devolvia as linhas da equipe — que muda sozinha quando a consulta muda — e
+    // dois cartões com a mesma contagem trocavam de lugar entre uma abertura e outra.
+    setGrupos(Object.values(mapaGrupos).sort((a: any, b: any) =>
+      b.qtdTotal - a.qtdTotal || String(a.label).localeCompare(String(b.label), 'pt-BR')));
     setLoading(false);
   };
 
@@ -2175,6 +2194,10 @@ function ComissoesRH({ funcionarios, currentUser }) {
                             <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
                               background:'#fef3c7',color:'#92400e',marginLeft:4}}>APOIO</span>
                           )}
+                          {item.papel==='serralheria' && (
+                            <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
+                              background:'#ffedd5',color:'#9a3412',marginLeft:4}}>SERRALHERIA</span>
+                          )}
                         </td>
                         <td style={{padding:'4px 8px',fontWeight:700}}>
                           {item.numero||'—'}
@@ -2187,7 +2210,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
                         </td>
                         <td style={{padding:'4px 8px'}}>{item.cliente||'—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_total != null ? fmtMoeda(item.valor_total) : '—'}</td>
-                        <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_mao_de_obra != null ? fmtMoeda(item.valor_mao_de_obra) : '—'}</td>
+                        <td style={{padding:'4px 8px',textAlign:'right'}}>{(item.papel==='serralheria' ? item.valor_mao_de_obra_serralheria : item.valor_mao_de_obra) != null ? fmtMoeda(item.papel==='serralheria' ? item.valor_mao_de_obra_serralheria : item.valor_mao_de_obra) : '—'}</td>
                         <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700}}>{fmtMoeda(item.base)}</td>
                         <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#2563eb'}}>
                           {fmtMoeda(item.papel==='apoio' ? item.base * 0.001 : item.base * tec.percentual / 100)}

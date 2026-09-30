@@ -26,6 +26,7 @@ import { ModalEditarOpl, ModalEditarOplLote, podeEditarOplCompleta } from './Opl
 import { QuadroItensOp, ItensVendidosEditor } from './OpItens';
 import { FotosVeiculoVer } from './FotosVeiculo';
 import { itensPreenchidos } from './DemandaItens';
+import { EquipeDaOpResumo } from './EquipeDaOp';
 
 // ─── Divisão de valor no desmembramento (1 OP com N veículos → N OPs) ────────
 // O resto de arredondamento (centavos) fica todo na última unidade, pra soma
@@ -1131,6 +1132,12 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Fiscal"       value={opl.responsavel_fiscal} field="responsavel_fiscal" />
           <Campo label="Qualidade"    value={opl.responsavel_qualidade} field="responsavel_qualidade" />
         </div>
+
+        {/* ── Quem trabalhou na adaptação e na serralheria (30/09/2026) ──
+            É o apontamento em que a comissão dos técnicos se apoia; pode ser corrigido daqui até o
+            Fiscal faturar (ver EquipeDaOp.tsx). */}
+        <Sec title="🛠 Quem trabalhou na OP" />
+        <EquipeDaOpResumo opl={opl} currentUser={usuario} />
 
         {/* ── Vendido × BOM × Separado ── */}
         <Sec title="📦 Vendido × BOM × Separado no kit" />

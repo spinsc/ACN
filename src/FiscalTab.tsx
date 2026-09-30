@@ -8,7 +8,9 @@ import Linkify from './Linkify';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { Botao, Selo, Tag, MenuAcoes } from './Interface';
-import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose } from '@mdi/js';
+import { mdiReceiptTextCheckOutline, mdiTruckCheckOutline, mdiEyeOutline, mdiUndoVariant, mdiClose, mdiAccountMultipleOutline } from '@mdi/js';
+import { EquipeDaOpModal, situacaoDaEquipe, faltaApontar } from './EquipeDaOp';
+import { podeEditarEquipeDaOp } from './utils/permissoes';
 
 const semDado = (v) => !v || !String(v).trim();
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
@@ -20,6 +22,10 @@ export default function FiscalTab({ currentUser }) {
   const [loading, setLoading] = useState(false);
   const [nfs, setNfs] = useState({});
   const [modalVer, setModalVer] = useState(null);
+  // Quem trabalhou em cada OP (30/09/2026): a comissão dos técnicos sai do apontamento quando o Fiscal
+  // fatura, e depois de faturar ele trava. Por isso o aviso e a correção aparecem AQUI, antes do clique.
+  const [modalEquipe, setModalEquipe] = useState(null);
+  const [situacaoEquipe, setSituacaoEquipe] = useState(null);   // null = ainda não carregou (sem falso alarme)
   const [busca, setBusca] = useState('');
   const [modalDevolver, setModalDevolver] = useState(null);
   const [obsDevolver, setObsDevolver] = useState('');
@@ -48,6 +54,8 @@ export default function FiscalTab({ currentUser }) {
     ]);
     setOpls(oplsRes.data || []);
     setOrdensOS(osRes.data || []);
+    situacaoDaEquipe((oplsRes.data || []).filter(o => o.status_geral === 'Aguarda Emissao NF').map(o => o.id))
+      .then(setSituacaoEquipe);
     if (!silent) setLoading(false);
   };
 
@@ -299,6 +307,14 @@ export default function FiscalTab({ currentUser }) {
                     <td>
                       <LinkOpl opl={o} currentUser={currentUser} />
                       {ehLote(o) && <div><Tag title="Faturada junto com as outras unidades do lote, numa NF-e só">Lote</Tag></div>}
+                      {situacaoEquipe && faltaApontar(o, situacaoEquipe[o.id]).algum && (
+                        <div>
+                          <Selo familia="atencao" ponto={false}
+                            title="Tem mão de obra lançada e ninguém apontado para recebê-la: sem isso não sai comissão. Depois de faturar, a equipe trava. Use ⋯ › Equipe.">
+                            Equipe não apontada
+                          </Selo>
+                        </div>
+                      )}
                     </td>
                     <td>
                       <VeiculoOuEnvio o={o} />
@@ -329,6 +345,7 @@ export default function FiscalTab({ currentUser }) {
                         </Botao>
                         <MenuAcoes rotulo="Mais ações da OP" itens={[
                           { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
+                          { rotulo: 'Equipe (quem trabalhou)', icone: mdiAccountMultipleOutline, onClick: () => setModalEquipe(o), oculto: !podeEditarEquipeDaOp(currentUser) },
                           { rotulo: 'Devolver ao Comercial', icone: mdiUndoVariant, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
                         ]} />
                       </div>
@@ -466,6 +483,10 @@ export default function FiscalTab({ currentUser }) {
       )}
 
       {modalVer && <OplDetalheModal opl={modalVer} onClose={()=>setModalVer(null)} currentUser={currentUser} />}
+      {modalEquipe && (
+        <EquipeDaOpModal opl={modalEquipe} currentUser={currentUser}
+          aoFechar={()=>{ setModalEquipe(null); fetchAll(true); }} />
+      )}
 
       {/* MODAL DEVOLVER AO COMERCIAL */}
       {modalDevolver && (
