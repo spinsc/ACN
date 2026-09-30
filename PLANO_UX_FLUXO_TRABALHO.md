@@ -284,6 +284,7 @@ cascas vazias de uma refatoração anterior.
 - Tabelas de 8-11 colunas em fonte 9-11px (PCP, Engenharia, Compras).
 - PCP empilha **6 blocos de alerta** verticalmente, todos com o mesmo peso
   visual — sem hierarquia de "resolve isso primeiro".
+  *(Resolvido na Etapa 9, em 30/09/2026: faixa "O que pede o PCP agora" e blocos que só acompanham abrem recolhidos.)*
 - `alert()`/`confirm()` nativos do navegador em quase toda ação — sem
   hierarquia de severidade, sem estilo do sistema.
   *Correção da Etapa 7 (29/09/2026): isto já estava resolvido no essencial — todo
@@ -1639,9 +1640,40 @@ não vê valores), falha de consulta (500) sem quebrar a tela. **Nenhuma gravaç
 - **Sem contador no menu** ("Compras (2)"): o painel só é visto depois de abrir Compras.
 - O painel mostra as compras **da etapa de aprovação apenas**; as que exigem alçada por valor ou departamento (`pcp_aprovacoes`) continuam sendo resolvidas dentro da Mesa de Cotações.
 
-### ⬜ Etapa 9 — Reorganizar a tela do PCP
-Os 6 blocos de alerta empilhados viram abas ou um accordion com prioridade
-visual clara (o que precisa de ação agora primeiro).
+### ✅ Etapa 9 — Reorganizar a tela do PCP
+
+**Feito em:** 30/09/2026.
+
+**Ponto de partida conferido em 30/09/2026** (dado real, tela aberta com as gravações bloqueadas): a Triagem **já tinha subido para o topo em 28/09**, então o problema não era mais "a Triagem em sexto lugar",
+e sim o que vinha depois: cinco blocos de alerta (só aparecem quando há dado) com o mesmo peso, num total de **~6.270 px** de rolagem. Os dois mais altos — **Serralheria, 29 OPs, ~1.400 px**, e **Pendências de
+fabricação/compra, 34 OPs, ~3.900 px** — tinham **zero linhas esperando o PCP**: eram só OPs aguardando a Serralheria e os setores. Já o que pedia ação (2 itens de "material em falta" e os botões de lote da Triagem) ficava
+espremido entre eles.
+
+**O que foi feito** (`PCPTab.tsx`; `OpPendencias.tsx` ganhou uma função; nenhuma tabela, coluna nem dado foi mexido; nenhum botão mudou de comportamento):
+
+- **Faixa "O que pede o PCP agora"** no topo: um botão por bloco que tem dado, com o **total** e quantos **pedem ação do PCP** (destaque) ou "aguardando…" (cinza). Clicar **abre o bloco e leva até ele**. Bloco vazio não ganha botão;
+  sem nenhum bloco de alerta, a faixa some.
+- **Pede ação = o que tem botão do PCP na linha**: Triagem (kiting, produção, embalagem), material em falta (sanar), reposição (liberar), Serralheria (só as "Concluída", para sanar), Pendências (só as OPs em que o setor
+  concluiu, o Almoxarifado recebeu e falta o "✔ Liberar" do PCP — nova `liberaveisPeloPcp`, a mesma condição do botão), Envio direto (as prontas para embalar).
+- **Bloco que só acompanha abre recolhido**, com o cabeçalho e uma pílula ("só aguardando a Serralheria terminar"); **o que pede ação abre sozinho**. Quando um bloco passa a pedir ação (atualização de 30 s), ele **abre sozinho**;
+  o que a pessoa abriu ou recolheu à mão **não é desfeito** pela atualização enquanto nada mudar.
+- **Dentro do bloco, o que pede ação vem primeiro** (Serralheria: as "Concluída" primeiro; Pendências: as OPs que o PCP pode liberar primeiro).
+- **Ordem dos blocos:** Triagem → material em falta → **reposição de estoque (subiu, era o último)** → Serralheria → Pendências → Envio direto.
+- **Um controle só para recolher/abrir:** o painel da Serralheria tinha um estado próprio (mais uma setinha) **além** do recolhimento global do `DashboardTab`; saiu, para os dois não brigarem com o estado inicial.
+
+**Testado** (navegador, gravações bloqueadas): `teste_18` **29/29** — com o dado real: a faixa tem 4 botões (Triagem 33 e 30 pedem ação, falta 2, Serralheria 29, Pendências 34), os totais batem com o banco, Serralheria e Pendências abrem
+recolhidas (43 px cada) e o **conteúdo caiu de ~6.270 px para 990 px**; clicar no botão abre o bloco e o traz para a tela; o cabeçalho continua recolhendo e abrindo. Com **dados simulados só na leitura**: os seis blocos na ordem certa e todos
+abertos quando todos pedem ação; a OP "para sanar" sobe na Serralheria e a que o PCP libera sobe nas Pendências; **"SANAR PENDÊNCIA" segue gravando o mesmo** (só se viu o corpo, nada chegou ao banco); só acompanhamento → 3 blocos
+recolhidos e a faixa com 4 botões; **abertura automática** na atualização de 30 s sem desfazer o que a pessoa abriu; nada em alerta → sem faixa. **Nenhuma gravação** em nenhum cenário. Modo escuro e celular (390 px, sem rolagem
+lateral) conferidos por captura de tela. Regressão: `teste_5x` 11/11, `teste_54` 21/21, `teste_63` 23/23, `teste_17` 24/24, `teste_7` 16/16, `teste_8` 31/31.
+
+**O que ficou de fora:**
+
+- **Envio direto continua repetindo linhas da Triagem** (as mesmas OPs aparecem nos dois blocos, como antes): tirar o bloco ou a duplicação muda o que o PCP vê e não estava na etapa.
+- **Sem cor de urgência por tempo parado** (mesma linha da Etapa 6): a etapa separa "pede ação" de "aguarda outro setor", não ordena por atraso.
+- **O bloco de Pendências, quando abre, ainda tem uma OP por linha** (~115 px cada): só as que pedem ação vêm primeiro. Uma lista mais densa (tabela) seria outra etapa.
+- **"Demandas Avulsas", "OPs movimentadas" e o rodapé** (abaixo dos blocos) ficaram como estavam.
+- **Só testei o dado real de hoje, em que nenhuma Serralheria/Pendência pede ação**: o caminho "pede ação" com dado real não existia para conferir; foi coberto com dado simulado.
 
 ### ⬜ Etapa 10 — Ações em lote maiores no kiting
 Botão "marcar tudo que o setor já fabrica" além do "marcar item a item",
@@ -1722,3 +1754,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |
 | 30/09/2026 | **Etapa 8 (Compras):** o painel "Esperando a sua aprovação" é visto **só por quem tem `pode_aprovar_compra`**; a compra fica na caixa **de todos** os aprovadores e qualquer um resolve (regra de 24/09), então a lista é a mesma para os quatro; tem consulta própria, **não depende do filtro da tela**; o tempo de espera é **só o número, sem cor de alerta** (mesma linha da Etapa 6). Suposição minha, não confirmada com o usuário. |
 | 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |
+| 30/09/2026 | **Etapa 9 (PCP):** em vez de abas, uma **faixa de resumo + blocos que só acompanham abrem recolhidos**; "pede ação" = o que tem botão do PCP na linha, o resto é acompanhamento de outro setor; quem pede ação abre sozinho e sobe dentro do bloco; a reposição de estoque sobe para logo abaixo do "material em falta". **Suposição minha, não confirmada com o usuário**: recolher por padrão o que não pede ação (um clique abre; o número continua no cabeçalho e na faixa). |

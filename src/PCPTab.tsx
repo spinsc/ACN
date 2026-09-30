@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
-import { indicePendencias, ChecklistPendencias, travaConclusaoProducao } from './OpPendencias';
+import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp } from './OpPendencias';
 import { PinturaCampos } from './PinturaSerralheria';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
@@ -19,6 +19,49 @@ import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
 // setores que recebem demanda avulsa (cada um tem o seu painel)
 const SETORES = ['Chicotes','Serralheria','Laboratorio','Telecom','Compras','Almoxarifado','Engenharia'];
 const semDado = (v) => !v || !String(v).trim();
+
+// ─── O QUE PEDE O PCP AGORA (Etapa 9 do plano de UX, 30/09/2026) ─────────────
+// A tela empilhava a Triagem e cinco blocos de alerta com o mesmo peso: com o dado real de 30/09 eram
+// ~6.400 px, e os dois blocos mais altos (Serralheria, ~1.400 px, e Pendências de fabricação, ~3.900 px)
+// não tinham NENHUMA linha esperando o PCP — só aguardavam a Serralheria e os setores. Por isso cada
+// bloco agora separa o que pede ação DO PCP do que é só acompanhamento: quem tem ação abre sozinho, quem
+// só acompanha abre recolhido (um clique abre), e a faixa do topo diz onde agir e leva até lá.
+// O abrir/recolher é o global do DashboardTab (a classe `sec-collapsed` no cartão); o estado inicial
+// vem do className, e só muda de novo se o bloco passar a pedir (ou deixar de pedir) ação.
+const irParaBloco = (id: string) => {
+  const card = document.getElementById(id);
+  if (!card) return;
+  card.classList.remove('sec-collapsed');
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+function ChipPrioridade({ icone, nome, total, acao, alvo, textoAcao, textoAcomp }: any) {
+  const pede = acao > 0;
+  return (
+    <button type="button" onClick={() => irParaBloco(alvo)} data-pcp-chip={alvo}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+        border: pede ? '1px solid #f59e0b' : '1px solid #e2e8f0', background: pede ? '#fffbeb' : '#f8fafc' }}>
+      <span style={{ fontSize: 16 }}>{icone}</span>
+      <span>
+        <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: pede ? '#92400e' : '#475569' }}>{nome} · {total}</span>
+        <span style={{ display: 'block', fontSize: 10, fontWeight: pede ? 700 : 400, color: pede ? '#b45309' : '#94a3b8' }}>
+          {pede ? `${acao} ${textoAcao}` : textoAcomp}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// aparece no cabeçalho do bloco, que continua visível quando ele está recolhido
+function PilulaAcao({ acao, textoAcao, textoAcomp }: any) {
+  const pede = acao > 0;
+  return (
+    <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, padding: '1px 8px', borderRadius: 10, textTransform: 'none', letterSpacing: 0,
+      background: pede ? '#fde68a' : '#f1f5f9', color: pede ? '#92400e' : '#64748b' }}>
+      {pede ? `${acao} ${textoAcao}` : textoAcomp}
+    </span>
+  );
+}
 
 export default function PCPTab({ currentUser }) {
   const [opls, setOpls] = useState([]);
@@ -49,7 +92,8 @@ export default function PCPTab({ currentUser }) {
   // Serralheria termina.
   const [oplsSerralheria, setOplsSerralheria] = useState([]);
   const [sanandoSerralheria, setSanandoSerralheria] = useState(null);
-  const [painelSerralheriaAberto, setPainelSerralheriaAberto] = useState(true);
+  // (o abrir/recolher do painel de Serralheria era um estado próprio; foi para o recolhimento global do
+  // cartão — dois controles para a mesma coisa brigariam com o estado inicial da Etapa 9)
   // Solicitações de reposição do Almoxarifado aguardando liberação do PCP —
   // ver AlmoxarifadoTab.tsx (onde são criadas) e a rota de liberarSolicitacaoAlmox
   // abaixo (roteia pra OFI se fabricação interna, senão pra Compras).
@@ -443,15 +487,51 @@ export default function PCPTab({ currentUser }) {
   const isEnvioDireto = (o) =>
     ehEnvio(o) || o.item_envio === true || TIPOS_ENVIO_DIRETO.some(t => (o.tipo_projeto||'').includes(t));
 
+  // ── Etapa 9 (30/09/2026): em cada bloco, o que pede ação DO PCP e o que só acompanha ──
+  // "Pede ação" segue o botão que o PCP tem na linha (sanar, liberar, kiting, embalar); o resto é
+  // trabalho de outro setor que o PCP só precisa enxergar.
+  const pendenciasDe = (o) => pendPorOp.get(String(o.id)) || [];
+  const pcpLibera = (o) => liberaveisPeloPcp(pendenciasDe(o), o).length > 0;
+  const serralheriaPedeSanar = (o) => o.serralheria_status === 'Concluido';
+  const nSerralheriaSanar = oplsSerralheria.filter(serralheriaPedeSanar).length;
+  const nPendenciasLiberar = oplsPendencia.filter(pcpLibera).length;
+  const enviosDiretos = opls.filter(isEnvioDireto);
+  const nEnvioEmbalar = enviosDiretos.filter(prontoParaEmbalagem).length;
+  const nTriagemAgir = opls.filter(o => o.status_geral === 'Em Espera PCP' || podeLiberar(o) || prontoParaEmbalagem(o)).length;
+  const temBlocoDeAlerta = oplsFalta.length + solicitacoesAlmox.length + oplsSerralheria.length + oplsPendencia.length + enviosDiretos.length > 0;
+  // bloco que só acompanha abre recolhido; se passar a pedir ação, o className muda e ele abre sozinho
+  const classeBloco = (temAcao) => 'sec-card' + (temAcao ? '' : ' sec-collapsed');
+
   return (
     <div>
+      {temBlocoDeAlerta && (
+        <div data-pcp-faixa style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: .4, marginBottom: 6 }}>O que pede o PCP agora</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <ChipPrioridade icone="📋" nome="Triagem de OPs" total={opls.length} acao={nTriagemAgir} alvo="pcp-bloco-triagem"
+              textoAcao="pedem ação" textoAcomp="nada a liberar agora" />
+            {oplsFalta.length > 0 && <ChipPrioridade icone="🚫" nome="Material em falta / com pendência" total={oplsFalta.length} acao={oplsFalta.length}
+              alvo="pcp-bloco-falta" textoAcao="para sanar" textoAcomp="" />}
+            {solicitacoesAlmox.length > 0 && <ChipPrioridade icone="📦" nome="Reposição de estoque" total={solicitacoesAlmox.length} acao={solicitacoesAlmox.length}
+              alvo="pcp-bloco-reposicao" textoAcao="para liberar" textoAcomp="" />}
+            {oplsSerralheria.length > 0 && <ChipPrioridade icone="🔧" nome="Serralheria (liberação parcial)" total={oplsSerralheria.length} acao={nSerralheriaSanar}
+              alvo="pcp-bloco-serralheria" textoAcao="para sanar" textoAcomp="aguardando a Serralheria" />}
+            {oplsPendencia.length > 0 && <ChipPrioridade icone="🧰" nome="Pendências de fabricação/compra" total={oplsPendencia.length} acao={nPendenciasLiberar}
+              alvo="pcp-bloco-pendencias" textoAcao="OP(s) para liberar" textoAcomp="aguardando os setores" />}
+            {enviosDiretos.length > 0 && <ChipPrioridade icone="📤" nome="Envio direto" total={enviosDiretos.length} acao={nEnvioEmbalar}
+              alvo="pcp-bloco-envio" textoAcao="pronta(s) para embalar" textoAcomp="o Almoxarifado separa e embala" />}
+          </div>
+        </div>
+      )}
+
       {/* TRIAGEM OPLs — PRIMEIRA COISA DA TELA (28/09/2026)
           É o trabalho do PCP: a fila de OPs esperando decisão. Ficava em sexto
           lugar, depois de quatro blocos de alerta que só aparecem quando há
           problema — em dia cheio de pendência era preciso rolar a tela para
           chegar no que se faz o dia inteiro. Os alertas seguem logo abaixo. */}
-      <div className="sec-card">
-        <div className="sec-hdr"><span>Triagem de OPs — PCP ({filtrarOpls(opls, busca).length})</span></div>
+      <div className="sec-card" id="pcp-bloco-triagem">
+        <div className="sec-hdr"><span>Triagem de OPs — PCP ({filtrarOpls(opls, busca).length})
+          {!loading && opls.length > 0 && <PilulaAcao acao={nTriagemAgir} textoAcao="pedem ação" textoAcomp="nada a liberar agora" />}</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
@@ -616,9 +696,10 @@ export default function PCPTab({ currentUser }) {
       </div>
       {/* ALERTA: MATERIAIS EM FALTA / COM PENDENCIA */}
       {oplsFalta.length > 0 && (
-        <div className="sec-card">
+        <div className="sec-card" id="pcp-bloco-falta">
           <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #ef4444'}}>
-            <span style={{color:'#991b1b'}}>Alertas Almoxarifado — Materiais em Falta / Com Pendencia ({oplsFalta.length})</span>
+            <span style={{color:'#991b1b'}}>Alertas Almoxarifado — Materiais em Falta / Com Pendencia ({oplsFalta.length})
+              <PilulaAcao acao={oplsFalta.length} textoAcao="para sanar" textoAcomp="" /></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table>
@@ -657,6 +738,36 @@ export default function PCPTab({ currentUser }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* LIBERAÇÃO DE REPOSIÇÃO DO ALMOXARIFADO — vira OFI (fabricação interna)
+          ou pedido de Compras, conforme o item, assim que liberado aqui.
+          Subiu para logo abaixo do "material em falta" na Etapa 9 (30/09/2026): os dois são sempre
+          trabalho do PCP, e ficavam depois dos blocos que só acompanham. */}
+      {solicitacoesAlmox.length > 0 && (
+        <div className="sec-card" id="pcp-bloco-reposicao">
+          <div className="sec-hdr" style={{ background:'#fef9c3', borderBottom:'2px solid #fde047' }}>
+            <span style={{ color:'#854d0e' }}>📦 Reposição de Estoque — Aguardando Liberação PCP ({solicitacoesAlmox.length})
+              <PilulaAcao acao={solicitacoesAlmox.length} textoAcao="para liberar" textoAcomp="" /></span>
+          </div>
+          <div className="sec-body" style={{ padding:'10px 12px' }}>
+            {solicitacoesAlmox.map((sol: any) => (
+              <div key={sol.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
+                border:'1px solid #fde047', background:'#fffdf0', borderRadius:6, marginBottom:6, fontSize:11 }}>
+                <div style={{ flex:1 }}>
+                  <strong>{sol.item_nome}</strong> — {sol.quantidade}
+                  {sol.motivo && <div style={{ fontSize:9, color:'#6b7280' }}>{sol.motivo}</div>}
+                  {sol.vinculo_descricao && <div style={{ fontSize:9, color:'#1d4ed8' }}>🔗 {sol.vinculo_descricao}</div>}
+                  <div style={{ fontSize:9, color:'#9ca3af' }}>Solicitado por {sol.criado_por_nome || '—'}</div>
+                </div>
+                <button className="acn-btn" style={{ background:'#16a34a', fontSize:10, padding:'5px 12px' }}
+                  onClick={() => liberarSolicitacaoAlmox(sol)} disabled={liberandoSolic === sol.id}>
+                  {liberandoSolic === sol.id ? '...' : '✅ Liberar'}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -711,20 +822,19 @@ export default function PCPTab({ currentUser }) {
           parte metálica/estrutural sem esperar o resto do BOM; aparece aqui
           mesmo antes de "Em Espera PCP", trilha independente do status_geral) */}
       {oplsSerralheria.length > 0 && (
-        <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#faf5ff',borderBottom:'2px solid #7c3aed',cursor:'pointer'}}
-            onClick={()=>setPainelSerralheriaAberto(a=>!a)}>
-            <span style={{color:'#6d28d9'}}>🔧 Controle de Serralheria — Liberação Parcial ({oplsSerralheria.length})</span>
-            <span style={{fontSize:11,color:'#94a3b8'}}>{painelSerralheriaAberto ? '▾' : '▸'}</span>
+        <div className={classeBloco(nSerralheriaSanar > 0)} id="pcp-bloco-serralheria">
+          <div className="sec-hdr" style={{background:'#faf5ff',borderBottom:'2px solid #7c3aed'}}>
+            <span style={{color:'#6d28d9'}}>🔧 Controle de Serralheria — Liberação Parcial ({oplsSerralheria.length})
+              <PilulaAcao acao={nSerralheriaSanar} textoAcao="para sanar" textoAcomp="só aguardando a Serralheria terminar" /></span>
           </div>
-          {painelSerralheriaAberto && (
-            <div className="sec-body" style={{overflowX:'auto'}}>
+          <div className="sec-body" style={{overflowX:'auto'}}>
               <table>
                 <thead><tr>
                   <th>OP</th><th>Veículo</th><th>Cliente</th><th>Status Geral</th><th>Serralheria</th><th>Ação</th>
                 </tr></thead>
                 <tbody>
-                  {oplsSerralheria.map(o => (
+                  {/* as que pedem "sanar" primeiro (a ordem de chegada se mantém dentro de cada grupo) */}
+                  {[...oplsSerralheria].sort((a, b) => Number(serralheriaPedeSanar(b)) - Number(serralheriaPedeSanar(a))).map(o => (
                     <tr key={o.id} style={{background: o.serralheria_status==='Concluido' ? '#f0fdf4' : '#faf5ff'}}>
                       <td><strong style={{color:'#6d28d9'}}>{o.opl}</strong></td>
                       <td style={{fontSize:10}}>
@@ -754,8 +864,7 @@ export default function PCPTab({ currentUser }) {
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -766,16 +875,18 @@ export default function PCPTab({ currentUser }) {
           brigava com ele e o painel nunca aparecia, mesmo com dado carregado
           (achado em 23/09/2026: o botão "Liberar" nunca esteve acessível). */}
       {oplsPendencia.length > 0 && (
-        <div className="sec-card">
+        <div className={classeBloco(nPendenciasLiberar > 0)} id="pcp-bloco-pendencias">
           <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'2px solid #f59e0b'}}>
-            <span style={{color:'#b45309'}}>🧰 Pendências de fabricação/compra ({oplsPendencia.length})</span>
+            <span style={{color:'#b45309'}}>🧰 Pendências de fabricação/compra ({oplsPendencia.length})
+              <PilulaAcao acao={nPendenciasLiberar} textoAcao="OP(s) para você liberar" textoAcomp="só aguardando os setores" /></span>
           </div>
           <div className="sec-body">
             <div style={{fontSize:10,color:'#78350f',marginBottom:6}}>
               Cada pendência fecha em três etapas: o setor conclui, o Almoxarifado confirma o recebimento
               e o PCP libera para a produção. A produção não conclui a OP enquanto faltar alguma.
             </div>
-            {oplsPendencia.map(o => (
+            {/* as OPs em que o PCP pode liberar algo agora vêm primeiro */}
+            {[...oplsPendencia].sort((a, b) => Number(pcpLibera(b)) - Number(pcpLibera(a))).map(o => (
               <div key={o.id} style={{marginBottom:8}}>
                 <div style={{fontSize:11,fontWeight:700}}>
                   <LinkOpl opl={o} currentUser={currentUser} />
@@ -792,9 +903,10 @@ export default function PCPTab({ currentUser }) {
 
       {/* ENVIO DIRETO ALERT */}
       {opls.filter(isEnvioDireto).length > 0 && (
-        <div className="sec-card">
+        <div className={classeBloco(nEnvioEmbalar > 0)} id="pcp-bloco-envio">
           <div className="sec-hdr" style={{background:'#fffbeb',borderBottom:'3px solid #f59e0b'}}>
-            <span style={{color:'#78350f',fontWeight:700}}>📤 Itens de Envio Direto — Sem Linha de Producao ({opls.filter(isEnvioDireto).length})</span>
+            <span style={{color:'#78350f',fontWeight:700}}>📤 Itens de Envio Direto — Sem Linha de Producao ({opls.filter(isEnvioDireto).length})
+              <PilulaAcao acao={nEnvioEmbalar} textoAcao="pronta(s) para embalar" textoAcomp="só aguardando o Almoxarifado" /></span>
             <span style={{fontSize:10,color:'#92400e',background:'#fde68a',padding:'2px 8px',borderRadius:10}}>
               Apenas separacao Almox + Chicotes / Serralheria / Lab se necessario
             </span>
@@ -845,33 +957,6 @@ export default function PCPTab({ currentUser }) {
         </div>
       )}
 
-
-      {/* LIBERAÇÃO DE REPOSIÇÃO DO ALMOXARIFADO — vira OFI (fabricação interna)
-          ou pedido de Compras, conforme o item, assim que liberado aqui. */}
-      {solicitacoesAlmox.length > 0 && (
-        <div className="sec-card" style={{ marginTop:12 }}>
-          <div className="sec-hdr" style={{ background:'#fef9c3', borderBottom:'2px solid #fde047' }}>
-            <span style={{ color:'#854d0e' }}>📦 Reposição de Estoque — Aguardando Liberação PCP ({solicitacoesAlmox.length})</span>
-          </div>
-          <div className="sec-body" style={{ padding:'10px 12px' }}>
-            {solicitacoesAlmox.map((sol: any) => (
-              <div key={sol.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
-                border:'1px solid #fde047', background:'#fffdf0', borderRadius:6, marginBottom:6, fontSize:11 }}>
-                <div style={{ flex:1 }}>
-                  <strong>{sol.item_nome}</strong> — {sol.quantidade}
-                  {sol.motivo && <div style={{ fontSize:9, color:'#6b7280' }}>{sol.motivo}</div>}
-                  {sol.vinculo_descricao && <div style={{ fontSize:9, color:'#1d4ed8' }}>🔗 {sol.vinculo_descricao}</div>}
-                  <div style={{ fontSize:9, color:'#9ca3af' }}>Solicitado por {sol.criado_por_nome || '—'}</div>
-                </div>
-                <button className="acn-btn" style={{ background:'#16a34a', fontSize:10, padding:'5px 12px' }}
-                  onClick={() => liberarSolicitacaoAlmox(sol)} disabled={liberandoSolic === sol.id}>
-                  {liberandoSolic === sol.id ? '...' : '✅ Liberar'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <OplMovimentadas setor="PCP" />
       <DemandaAvulsaPanel currentUser={currentUser} setor="PCP" setoresDestino={['PCP', ...SETORES]}

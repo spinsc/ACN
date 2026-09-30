@@ -289,6 +289,16 @@ export function travaRecebimento(pendenciasDaOp, op) {
   });
 }
 
+/** Só o que o PCP pode fazer AGORA: o setor já concluiu, o Almoxarifado já recebeu e falta o "PCP
+ *  liberou". É a mesma condição do botão "✔ Liberar" do checklist, para a tela do PCP contar quantas
+ *  OPs pedem ação dele e quantas só aguardam outro setor (Etapa 9 do plano de UX, 30/09/2026). */
+export function liberaveisPeloPcp(pendenciasDaOp, op) {
+  return (pendenciasDaOp || []).filter(p => {
+    const reg = (op?.pendencias_kit || {})[p.id] || {};
+    return !p.aberto && !!reg.recebido && !reg.liberado;
+  });
+}
+
 /** A Produção só conclui com as três etapas cumpridas em todas as pendências. */
 export function travaConclusaoProducao(pendenciasDaOp, op) {
   return (pendenciasDaOp || []).filter(p => {
