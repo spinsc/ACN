@@ -208,12 +208,18 @@ export async function carregarVeiculos() {
   return data || [];
 }
 
+/** A faixa de anos da ficha: "2022–2024", "2026+" (em diante) ou "2015" (um ano só). */
+export function faixaDeAnos(v) {
+  if (!v) return '';
+  return v.ano_de && v.ano_ate && v.ano_de !== v.ano_ate ? `${v.ano_de}–${v.ano_ate}`
+       : v.ano_de && !v.ano_ate ? `${v.ano_de}+`
+       : v.ano_de ? String(v.ano_de) : '';
+}
+
 /** Como o veículo aparece numa lista: nome mais a faixa de anos. */
 export function textoVeiculo(v) {
   if (!v) return '';
-  const faixa = v.ano_de && v.ano_ate && v.ano_de !== v.ano_ate ? `${v.ano_de}–${v.ano_ate}`
-              : v.ano_de && !v.ano_ate ? `${v.ano_de}+`
-              : v.ano_de ? String(v.ano_de) : '';
+  const faixa = faixaDeAnos(v);
   return `${v.marca} ${v.nome_exibicao}${faixa ? ` · ${faixa}` : ''}`;
 }
 

@@ -1651,9 +1651,37 @@ Polo → Polo TSI, Polo Comfortline TSI, Polo Highline TSI, Polo GTS TSI, Polo G
 **O que ficou de fora / limites:**
 
 - **A lista de carros ficou bem maior** (Fiat: 387 itens; Toyota Hilux sozinha tem dezenas): é o que a opção B pede; a busca da janela continua por palavras ("toro adventure"). Se ficar pesado, a opção A (só emblemas) é uma troca de regra.
-- **As 4 fichas já cadastradas** ("Renegade 4x4", "Toro", "Titano 4x4", "C3") **não foram renomeadas** (não pedi nem fiz): o "Toro" da ficha continua sendo o Toro de todas as versões; as versões aparecem nos **próximos** cadastros.
+- **As 4 fichas já cadastradas** ("Renegade 4x4", "Toro", "Titano 4x4", "C3") **não foram renomeadas** (não pedi nem fiz): o "Toro" da ficha continua sendo o Toro de todas as versões; as versões aparecem nos **próximos** cadastros. **A correção passou a ter tela na Etapa 7.7** ("Editar veículo").
 - **Abreviações não cobertas:** "Advent." (Idea) sai como "Advent. Adventure Locker" e "Extremeloc" fica colado; poucas dezenas de nomes antigos. Marcas de luxo e vans ainda carregam alguma numeração de modelo (BMW 30e, Sprinter 16L) — não é motorização dos carros que a fábrica adapta.
 - **Ano:** os anos oferecidos continuam sendo a união de todas as linhas do grupo (como antes).
+
+### ✅ Etapa 7.7 — Tela "Editar veículo" (corrigir a ficha do catálogo)
+
+**Feito em:** 30/09/2026, por pedido do usuário no chat ("saber quem cadastrou os carros que já estão cadastrados e quais os PV's, e saber se há opção hoje de ajustar o modelo do carro… por exemplo a toro"). Mostrei as duas saídas (criar a tela de edição × ajustar as 4 fichas agora pelo banco) e ele escolheu **criar a tela**.
+
+**Ponto de partida conferido (30/09/2026):** só existia **cadastro** de ficha (`ModalCadastrarVeiculo` era o único lugar que gravava em `veiculos`); nenhuma tela editava nem apagava. 4 fichas, 43 OPs ligadas e **0 linhas de estrutura de material** (`veiculo_item_materiais`) — por isso corrigir agora não mexe em material nenhum.
+Quem cadastrou (resposta ao usuário): **C3** — TATIANA ROSA, 28/09, OP 1669.25609, 2 unidades, texto "C3 YOU"; **Toro** — THIAGO MEDEIROS, 28/09, OP D0778.2609, 1 unidade; **Renegade 4x4** — TATIANA ROSA, 29/09, lote 1673.2609, 39 unidades; **Titano 4x4** — THIAGO MEDEIROS, 30/09, OP A1678.2609, 1 unidade.
+
+**O que foi feito** (`VeiculoCadastro.tsx`, `Veiculos.tsx`, `AdminTab.tsx`; nenhuma tabela, coluna, gatilho nem dado foi mexido):
+
+- **Lista no Admin → aba "🚗 Veículos"** (`PainelFichasVeiculos`, abaixo da atualização da FIPE): marca e nome, tipo, anos, **quantas OPs** usam a ficha, **quem cadastrou e quando**, observações e o botão **Editar** (só Admin e Gerente). Tem busca por marca, modelo, ano ou quem cadastrou. **Não há "excluir".**
+- **Janela "Editar veículo":** é o **mesmo** modal do cadastro (`ModalCadastrarVeiculo` ganhou a propriedade `veiculo`), não uma tela paralela. Abre com a ficha atual em destaque ("Fiat Toro · 2026+ · 1 OP ligada · cadastrado por…"), a **marca já escolhida** e nome, anos e observação preenchidos. Escolher a versão na FIPE é **opcional**: serve para trocar a versão; para corrigir nome, ano ou observação basta mexer nos campos. O nome aceita até 100 letras (é o que o campo "Modelo" da OP guarda).
+- **Ligação com a FIPE:** só muda se a pessoa pediu (escolheu outra versão, ou "soltar da FIPE e editar à mão"); corrigir só o nome deixa a ligação como estava.
+- **"Modelo" das OPs ligadas:** o texto "Modelo" da OP é uma **cópia** do nome da ficha, gravada quando a ficha foi escolhida; renomear a ficha não muda a cópia, e as listas continuariam dizendo "Toro". A janela mostra a caixinha "Trocar também o campo Modelo de N das M OPs…" com **o texto de hoje**. Ela vem **marcada só quando o nome mudou**; se o nome não mudou, vem desmarcada (não sobrescreve um texto digitado à mão, como o "C3 YOU"). Marcada, o "Salvar" pede **confirmação com a contagem e o texto antigo** antes de gravar. A coluna de busca (`modelo_norm`) se refaz sozinha pelo gatilho `sync_norm_oples`.
+- **Histórico:** a mudança da ficha e a de **cada OP** entram no `audit_log` (quem, o quê, de → para). Se a ficha grava e a troca nas OPs falha, o aviso diz exatamente isso e **não** escreve histórico de OP.
+- **Dentro da OP:** ao lado do "+ Novo" do campo de veículo (criação e edição da OP) aparece **"✏️ Editar"** quando já há uma ficha escolhida (só Admin e Gerente); abre a mesma janela e, ao salvar, o campo Modelo do formulário aberto acompanha o nome novo.
+
+**Testado:** `teste_23` (navegador, dado real, **gravações bloqueadas**: o que seria gravado fica capturado e a resposta é simulada no navegador) **33/33**. A lista tem as 4 fichas, OPs 2/1/39/1 e quem cadastrou iguais ao banco; a busca "tatiana" deixa 2. A janela abre com a ficha, a marca Fiat e os campos preenchidos; salvar sem mudar nada avisa "Nada mudou" e não grava.
+Renomear a Toro para "Toro Freedom" marca a caixinha, pede confirmação ("Toro" em 1 OP), **Cancelar não grava**, confirmar grava a ficha (`nome_norm` "fiat toro freedom", **sem** tocar na ligação com a FIPE), troca **só** o `modelo` da OP e escreve 2 linhas de histórico. Escolher "Toro Volcano" na FIPE liga a ficha a uma das 3 linhas do grupo; "soltar da FIPE" zera a ligação e não mexe nas OPs.
+C3: a caixinha vem **desmarcada**, salvar só o ano não toca nas OPs, marcada pede confirmação ("C3 YOU" em 2 OPs), e uma falha simulada na troca das OPs avisa e não escreve histórico de OP. O "✏️ Editar" da OP só aparece depois de escolher a ficha; só Admin e "Gerente …" passam na permissão. **No fim o banco real ficou idêntico** (fichas e "Modelo" das 43 OPs). Regressão (a janela de cadastro foi mexida): `teste_22` 12/12, `teste_8b` 6/6, `teste_12` 6/6, `teste_15` 12/12, `teste_54` 21/21, `teste_crm` 16/16; build ok.
+
+**O que ficou de fora / limites:**
+
+- **Nenhuma das 4 fichas foi corrigida ainda** — falta o **modelo exato** de cada uma (ver "Perguntas em aberto"); quem souber corrige pela tela, ou eu aplico pelo banco com a contagem.
+- **Quem edita:** só Admin e Gerente (`ehAdminOuGerente`, a mesma regra da edição completa da OP). A equipe de Comercial/CRM, que cadastrou as fichas, **não** edita; dar a ela o poder é trocar por `temPoderDeGerente` numa linha — decisão do usuário.
+- **Desativar ficha** (tirar da lista sem apagar) não entrou: não foi pedido.
+- Só as OPs ligadas à ficha por `veiculo_id` têm o "Modelo" trocado; OP sem ficha (texto digitado à mão) segue como está.
+- O caminho de gravação foi exercitado **por simulação**; nada foi gravado na produção.
 
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
@@ -1867,8 +1895,10 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Quanto tempo o aviso fica na tela (Etapa 7):** hoje erro some em 9 s e atenção em 7 s.
   Para uma falha ao gravar (a pessoa pode estar olhando outra coisa), vale o erro **ficar até ser
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
-- **As 4 fichas de veículo já cadastradas (7.6)** ("Renegade 4x4", "Toro", "Titano 4x4", "C3", com 43 OPs ligadas) continuam com o nome curto de antes; as **versões** aparecem nos cadastros **novos**. Renomear ou desdobrar a ficha "Toro" em
-  "Toro Freedom", "Toro Volcano"… mexe nas OPs e na estrutura de material ligadas a ela e **não foi pedido**: decisão do usuário.
+- **As 4 fichas de veículo já cadastradas (7.6/7.7)** ("Renegade 4x4", "Toro", "Titano 4x4", "C3", com 43 OPs ligadas) continuam com o nome curto de antes; a tela "Editar veículo" (7.7) já permite corrigir. **Falta o modelo exato de cada uma:**
+  Toro (PV D 778, 1 unidade — Freedom? Volcano? Endurance?), Renegade 4x4 (lote 1673.2609, 39 unidades — qual versão?), Titano 4x4 (a observação da ficha diz "Volcano": "Titano Volcano 4x4"?) e C3 (as OPs dizem "C3 YOU": "C3 You!"?).
+  Posso aplicar pelo banco, com a contagem das OPs mexidas, ou a equipe corrige pela tela — decisão do usuário.
+- **Quem edita a ficha (7.7):** hoje só Admin e Gerente; a equipe de Comercial/CRM (quem cadastra) também deve poder?
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
@@ -1921,3 +1951,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Versão do carro sem motorização (7.6, decisão do usuário):** para **carros**, a lista de modelos do "Cadastrar veículo" mostra **uma entrada por versão** (Toro Freedom, Polo Highline TSI, HUNTER HD 4x4 CTI, Strada Adventure CD) e tira só a **motorização** (1.0/2.0, cv, 16V, Flex, Diesel, Aut./Mec., 4p). Motivo dele: *no Fiat Toro o suporte muda de uma Adventure para uma Freedom; o motor não importa.* Ele escolheu a opção **"todas as versões"** (5.805 itens de carros, contra 1.557 antes) entre "só emblemas", "todas" e "emblemas + seletor", e **"só carros"**: motos e caminhões ficam como estavam. Emblemas de motor que funcionam como nome de versão (**TSI, CTI, TDI**) **ficam**. |
 | 30/09/2026 | **Etapa 12 (ordem e passo):** **uma tela por vez**, das de menor risco para as de maior — Relatórios (sem gravação) → Logística → RH → SAC; cada fatia sobe e funciona sozinha e o plano ganha um bloco por fatia. **Relatórios (12a):** status pela **família do design system** (uma cor por família, não mais uma por status), 14 abas em `Chips` que quebram de linha, Centro de Custo **recolhido** por padrão — **suposições minhas, não confirmadas com o usuário**. |
 | 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |
+| 30/09/2026 | **Editar veículo (7.7, pedido do usuário):** corrigir a ficha = **editar a mesma ficha**, não criar outra (as OPs e a estrutura de material apontam para ela). A tela é o mesmo modal do cadastro; a lista fica no Admin → "🚗 Veículos". O "Modelo" das OPs ligadas só é trocado **com a caixinha marcada e uma confirmação com a contagem** (vem marcada só se o nome mudou; o texto digitado à mão, como "C3 YOU", não é sobrescrito sem pedir). **Suposição minha, não confirmada com o usuário:** só Admin e Gerente editam; sem botão de excluir; o histórico guarda a ficha e cada OP mexida. |

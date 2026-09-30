@@ -8,6 +8,7 @@ import { CentrosCustoManager } from './CentroCustoShared';
 import { confirmar } from './Feedback';
 import PainelFeriados from './FeriadosAdmin';
 import { PainelFipeSync } from './Veiculos';
+import { PainelFichasVeiculos } from './VeiculoCadastro';
 import ConfigEstruturaTela from './ConfigEstruturaTela';
 import FluxoConfigTela from './FluxoConfigTela';
 import { TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO, SLUG_TIPO_NEGOCIO } from './MarkupTermometro';
@@ -3539,7 +3540,12 @@ export default function AdminTab() {
       {abaAtiva === 'feriados'     && <PainelFeriados />}
       {/* AdminTab não recebe o usuário por props; os painéis daqui leem do
           localStorage, como os outros desta tela já fazem. */}
-      {abaAtiva === 'veiculos'     && <PainelFipeSync currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
+      {abaAtiva === 'veiculos'     && (
+        <>
+          <PainelFipeSync currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />
+          <PainelFichasVeiculos currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />
+        </>
+      )}
       {abaAtiva === 'estruturas'   && <ConfigEstruturaTela currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
       {abaAtiva === 'fluxo_cfg'    && <FluxoConfigTela currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
       {abaAtiva === 'checklist'    && <PainelChecklist />}

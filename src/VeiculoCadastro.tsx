@@ -9,11 +9,15 @@
 // existe na lista da Yamaha, e veículo que a fábrica adapta não pode depender
 // de a FIPE conhecer — daí o "cadastrar à mão" ao lado.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { mdiPencilOutline } from '@mdi/js';
 import { supabase } from './supabaseClient';
-import { normalizarBusca } from './SearchUtils';
-import { SelectBusca } from './Interface';
-import { TIPOS_VEICULO, anosDoModelo, anosDoGrupo, carregarVeiculos, textoVeiculo } from './Veiculos';
+import { normalizarBusca, combinaBusca } from './SearchUtils';
+import { SelectBusca, Botao, Faixa, Selo } from './Interface';
+import { confirmar } from './Feedback';
+import { logChange } from './AuditSystem';
+import { ehAdminOuGerente } from './utils/permissoes';
+import { TIPOS_VEICULO, anosDoModelo, anosDoGrupo, carregarVeiculos, textoVeiculo, faixaDeAnos } from './Veiculos';
 
 const ANO_CORTE = 2010;   // de 2010 pra frente aparece direto; antes, sob pedido
 
@@ -53,8 +57,25 @@ const campo = { width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1',
                 borderRadius: 4, fontSize: 11, boxSizing: 'border-box' };
 const rotulo = { fontSize: 9, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 2 };
 
-export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
-  const [tipo, setTipo] = useState('carros');
+/**
+ * CADASTRAR OU EDITAR A FICHA (editar: 30/09/2026)
+ *
+ * Com `veiculo` a janela vira EDIÇÃO da ficha que já existe. O pedido veio do usuário: as fichas
+ * feitas antes da regra das versões ("Toro", "Titano 4x4") precisavam ir para o modelo exato, e o
+ * sistema só sabia criar. Corrigir é editar a MESMA ficha, não criar outra: as OPs e a estrutura de
+ * material apontam para ela, e uma segunda ficha deixaria as OPs velhas presas na primeira.
+ *
+ * A busca na FIPE é a mesma do cadastro (marca → versão → anos), só que a marca já vem escolhida e
+ * escolher a versão é opcional: para corrigir só o nome, o ano ou a observação basta mexer nos campos.
+ *
+ * O campo "Modelo" da OP é uma CÓPIA do nome da ficha, gravada na hora em que a ficha foi escolhida.
+ * Renomear a ficha não muda essa cópia, e as listas continuariam mostrando "Toro". Por isso a janela
+ * oferece trocar também o "Modelo" das OPs ligadas — sempre com a contagem na tela, uma confirmação
+ * antes de gravar e o registro da troca no histórico de cada OP.
+ */
+export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar, veiculo = null }) {
+  const editando = !!veiculo;
+  const [tipo, setTipo] = useState(veiculo?.tipo || 'carros');
   const [marcas, setMarcas] = useState([]);
   const [marcaId, setMarcaId] = useState('');
   const [modelos, setModelos] = useState([]);
@@ -63,20 +84,45 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
   const [buscandoAnos, setBuscandoAnos] = useState(false);
   const [erroAnos, setErroAnos] = useState('');
   const [verAntigos, setVerAntigos] = useState(false);
-  const [manual, setManual] = useState(false);
+  // ficha que nasceu "à mão" (sem ligação com a FIPE) abre direto no modo manual
+  const [manual, setManual] = useState(editando && !veiculo.fipe_modelo_id);
   const [versaoFipeId, setVersaoFipeId] = useState('');
   const [progresso, setProgresso] = useState(null);
   const [salvando, setSalvando] = useState(false);
-  const [form, setForm] = useState({ marca: '', nome: '', ano_de: '', ano_ate: '', observacoes: '' });
+  const [form, setForm] = useState(editando ? {
+    marca: veiculo.marca || '', nome: veiculo.nome_exibicao || '',
+    ano_de: veiculo.ano_de == null ? '' : String(veiculo.ano_de),
+    ano_ate: veiculo.ano_ate == null ? '' : String(veiculo.ano_ate),
+    observacoes: veiculo.observacoes || '',
+  } : { marca: '', nome: '', ano_de: '', ano_ate: '', observacoes: '' });
+  const [opsLigadas, setOpsLigadas] = useState([]);
+  // null = "o padrão": marcado quando o NOME mudou, desmarcado quando não mudou. Uma escolha do
+  // usuário na caixinha vale sobre o padrão (ver `trocarModeloDasOps`).
+  const [trocaOps, setTrocaOps] = useState(null);
+  const tocouTipo = useRef(false);
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('veiculos_fipe_marcas')
         .select('id,nome,codigo_fipe').eq('tipo', tipo).order('nome');
       setMarcas(data || []);
-      setMarcaId(''); setModelos([]); setModeloId(''); setAnos([]);
+      // ao editar, a marca da ficha já vem escolhida (enquanto ninguém trocou o tipo): o usuário
+      // não precisa procurar de novo a marca que não quer mudar. `tocouTipo` e não "primeira
+      // carga" porque o StrictMode roda este efeito duas vezes.
+      const dela = editando && !tocouTipo.current
+        ? (data || []).find(m => normalizarBusca(m.nome) === normalizarBusca(veiculo.marca)) : null;
+      setMarcaId(dela?.id || ''); setModelos([]); setModeloId(''); setAnos([]);
     })();
   }, [tipo]);
+
+  useEffect(() => {
+    if (!editando) return;
+    (async () => {
+      const { data } = await supabase.from('oples').select('id,opl,modelo')
+        .eq('veiculo_id', veiculo.id).order('opl');
+      setOpsLigadas(data || []);
+    })();
+  }, []);
 
   useEffect(() => {
     if (!marcaId) { setModelos([]); setModeloId(''); return; }
@@ -121,6 +167,71 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
   const anosVisiveis = anos.filter(a => verAntigos || !a.ano || a.ano >= ANO_CORTE);
   const temAntigos = anos.some(a => a.ano && a.ano < ANO_CORTE);
 
+  // as OPs ligadas cujo "Modelo" difere do nome que está no campo agora
+  const nomeNovo = String(form.nome || '').trim();
+  const opsAfetadas = opsLigadas.filter(o => String(o.modelo || '') !== nomeNovo);
+  const trocarModeloDasOps = trocaOps ?? (editando && nomeNovo !== String(veiculo.nome_exibicao || ''));
+
+  const gravarEdicao = async ({ marca, nome, de, ate, anoEscolhido }) => {
+    const novo = {
+      tipo, marca, modelo: nome, nome_exibicao: nome,
+      nome_norm: normalizarBusca(marca + ' ' + nome),
+      ano_de: de, ano_ate: ate,
+      observacoes: String(form.observacoes || '').trim() || null,
+    };
+    // a ligação com a FIPE só muda se o usuário pediu: escolheu uma versão nova, ou passou para o
+    // modo manual. Só corrigir nome/ano/observação deixa a ligação como estava.
+    if (manual) { novo.fipe_modelo_id = null; novo.fipe_codigo = null; }
+    else if (modeloId) {
+      novo.fipe_modelo_id = versaoFipeId || anoEscolhido?.modelo_id || modeloId;
+      novo.fipe_codigo = anoEscolhido?.codigo_fipe || null;
+    }
+    const mudou = Object.keys(novo).some(c => (novo[c] ?? null) !== (veiculo[c] ?? null));
+    const afetadas = trocarModeloDasOps ? opsAfetadas : [];
+    if (!mudou && !afetadas.length) { alert('Nada mudou no cadastro.'); return; }
+
+    if (afetadas.length) {
+      // o campo "Modelo" da OP guarda até 100 letras
+      if (nome.length > 100) { alert('O nome passa de 100 letras e não cabe no campo "Modelo" da OP. Encurte o nome.'); return; }
+      const porTexto = {};
+      afetadas.forEach(o => { const k = o.modelo || '(vazio)'; porTexto[k] = (porTexto[k] || 0) + 1; });
+      const resumo = Object.entries(porTexto).map(([k, n]) => `• "${k}" em ${n} OP(s)`).join('\n');
+      const ok = await confirmar(
+        `Trocar o "Modelo" de ${afetadas.length} OP(s) para "${nome}"?\n\n${resumo}\n\n`
+        + 'A ficha do veículo também é salva. Cada OP fica com o registro da troca no histórico.');
+      if (!ok) return;
+    }
+
+    setSalvando(true);
+    const { data, error } = await supabase.from('veiculos').update(novo).eq('id', veiculo.id).select('*').single();
+    if (error) { setSalvando(false); alert('Não foi possível salvar: ' + error.message); return; }
+
+    const vistos = ['tipo', 'marca', 'nome_exibicao', 'ano_de', 'ano_ate', 'observacoes'];
+    const recorte = (o) => Object.fromEntries(vistos.map(c => [c, o[c]]));
+    await logChange({ module: 'comercial', entityType: 'veiculos', entityId: veiculo.id, changeType: 'UPDATE',
+      oldRow: recorte(veiculo), newRow: recorte(data), user: currentUser });
+
+    let trocadas = 0, falhouOps = '';
+    if (afetadas.length) {
+      const { data: mexidas, error: erroOps } = await supabase.from('oples')
+        .update({ modelo: nome }).in('id', afetadas.map(o => o.id)).select('id');
+      if (erroOps) falhouOps = erroOps.message;
+      else {
+        const ids = new Set((mexidas || []).map(o => o.id));
+        trocadas = ids.size;
+        await Promise.all(afetadas.filter(o => ids.has(o.id)).map(o => logChange({
+          module: 'comercial', entityType: 'oples', entityId: o.id, changeType: 'UPDATE',
+          oldRow: { modelo: o.modelo }, newRow: { modelo: nome }, user: currentUser,
+          metadata: { origem: 'Edição da ficha do veículo' } })));
+      }
+    }
+    setSalvando(false);
+    if (falhouOps) alert(`A ficha foi salva, mas não deu para atualizar o Modelo das OPs: ${falhouOps}`);
+    else if (afetadas.length && trocadas !== afetadas.length) alert(`Ficha salva. O Modelo mudou em ${trocadas} de ${afetadas.length} OP(s) — confira as outras.`);
+    else alert(afetadas.length ? `Ficha salva. O Modelo de ${trocadas} OP(s) foi atualizado.` : 'Ficha salva.');
+    aoSalvar?.(data);
+  };
+
   const salvar = async () => {
     const marca = String(form.marca || '').trim();
     const nome = String(form.nome || '').trim();
@@ -129,6 +240,7 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
     const ate = form.ano_ate === '' ? null : parseInt(form.ano_ate, 10);
     if (de && ate && ate < de) { alert('O ano final não pode ser menor que o inicial.'); return; }
     const anoEscolhido = anos.find(a => String(a.ano) === String(de));
+    if (editando) return gravarEdicao({ marca, nome, de, ate, anoEscolhido });
     setSalvando(true);
     const { data, error } = await supabase.from('veiculos').insert([{
       tipo, marca, modelo: nome, nome_exibicao: nome,
@@ -150,11 +262,25 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
   return (
     <div className="modal-overlay" onClick={() => !salvando && aoFechar?.()}>
       <div className="modal-box" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-title">🚗 Cadastrar veículo</div>
+        <div className="modal-title">{editando ? '✏️ Editar veículo' : '🚗 Cadastrar veículo'}</div>
+
+        {editando && (
+          <div style={{ margin: '8px 0' }}>
+            <Faixa tom="info">
+              <strong>{textoVeiculo(veiculo)}</strong>
+              {' · '}{opsLigadas.length} OP(s) ligada(s)
+              {veiculo.criado_por_nome ? ` · cadastrado por ${veiculo.criado_por_nome}` : ''}
+              <div style={{ fontSize: 11, marginTop: 2 }}>
+                Para corrigir só o nome, os anos ou a observação, basta mexer nos campos. Escolher na
+                FIPE serve para trocar a versão.
+              </div>
+            </Faixa>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 6, margin: '10px 0' }}>
           {TIPOS_VEICULO.map(t => (
-            <button key={t.chave} onClick={() => setTipo(t.chave)}
+            <button key={t.chave} onClick={() => { tocouTipo.current = true; setTipo(t.chave); }}
               style={{ flex: 1, padding: '5px 0', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
                 border: '1px solid ' + (tipo === t.chave ? '#2563eb' : '#cbd5e1'),
                 background: tipo === t.chave ? '#eff6ff' : '#fff',
@@ -247,7 +373,7 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
         )}
 
         <label style={rotulo}>NOME DO VEÍCULO * — encurte como a fábrica chama</label>
-        <input style={campo} value={form.nome}
+        <input style={campo} maxLength={100} value={form.nome}
           onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex.: Nivus" />
         <div style={{ fontSize: 9, color: '#64748b', margin: '2px 0 8px' }}>
           A FIPE devolve o nome completo da versão. Guarde o nome curto — é ele que aparece na OP
@@ -275,11 +401,36 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
         <input style={campo} value={form.observacoes}
           onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Opcional" />
 
+        {editando && (
+          <div style={{ marginTop: 10, padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 10.5 }}>
+            {opsLigadas.length === 0 ? (
+              <span style={{ color: '#64748b' }}>Nenhuma OP usa este veículo ainda.</span>
+            ) : opsAfetadas.length === 0 ? (
+              <span style={{ color: '#64748b' }}>
+                As {opsLigadas.length} OP(s) ligadas já mostram "{nomeNovo}" no campo Modelo.
+              </span>
+            ) : (
+              <label style={{ display: 'flex', gap: 6, alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input type="checkbox" checked={trocarModeloDasOps} style={{ marginTop: 2 }}
+                  onChange={e => setTrocaOps(e.target.checked)} />
+                <span>
+                  Trocar também o campo <strong>Modelo</strong> de {opsAfetadas.length} das {opsLigadas.length} OP(s)
+                  ligadas para "{nomeNovo || '…'}".
+                  <span style={{ display: 'block', color: '#64748b', marginTop: 2 }}>
+                    Hoje elas mostram: {[...new Set(opsAfetadas.map(o => `"${o.modelo || 'vazio'}"`))].slice(0, 4).join(', ')}.
+                    Sem marcar, só a ficha muda e as OPs continuam com o texto antigo.
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
           <button onClick={salvar} disabled={salvando}
             style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4,
               padding: '6px 14px', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-            {salvando ? '...' : '✓ Cadastrar'}
+            {salvando ? '...' : editando ? '✓ Salvar' : '✓ Cadastrar'}
           </button>
           <button onClick={aoFechar} disabled={salvando}
             style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 4,
@@ -287,7 +438,7 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
           <button type="button" onClick={() => setManual(m => !m)}
             style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#2563eb',
               fontSize: 9.5, fontWeight: 700, cursor: 'pointer' }}>
-            {manual ? '← voltar a procurar na FIPE' : 'não está na FIPE? cadastrar à mão'}
+            {manual ? '← voltar a procurar na FIPE' : editando ? 'não está na FIPE? soltar da FIPE e editar à mão' : 'não está na FIPE? cadastrar à mão'}
           </button>
         </div>
       </div>
@@ -312,9 +463,15 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
                                recarregarEm, placeholder }) {
   const [veiculos, setVeiculos] = useState([]);
   const [cadastrando, setCadastrando] = useState(false);
+  const [editandoFicha, setEditandoFicha] = useState(false);
 
   const recarregar = async () => setVeiculos(await carregarVeiculos());
   useEffect(() => { recarregar(); }, [recarregarEm]);
+
+  // Corrigir a ficha escolhida sem sair da OP (30/09/2026): quem vê o modelo errado na OP está
+  // olhando para este campo. Só Admin e Gerente, como a atualização da FIPE.
+  const fichaAtual = valor ? veiculos.find(v => v.id === valor) : null;
+  const podeEditarFicha = !compacto && !!fichaAtual && ehAdminOuGerente(currentUser);
 
   return (
     <>
@@ -334,7 +491,20 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
             + Novo
           </button>
         )}
+        {podeEditarFicha && (
+          <button type="button" onClick={() => setEditandoFicha(true)}
+            title="Corrigir o cadastro deste veículo: nome, versão, anos"
+            style={{ fontSize: 9, fontWeight: 700, padding: '5px 9px', border: '1px solid #64748b',
+              borderRadius: 4, background: '#fff', color: '#334155', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            ✏️ Editar
+          </button>
+        )}
       </div>
+      {editandoFicha && fichaAtual && (
+        <ModalCadastrarVeiculo currentUser={currentUser} veiculo={fichaAtual}
+          aoFechar={() => setEditandoFicha(false)}
+          aoSalvar={(v) => { setEditandoFicha(false); recarregar(); onChange?.(v.id, v); }} />
+      )}
       {cadastrando && (
         <ModalCadastrarVeiculo currentUser={currentUser}
           aoFechar={() => setCadastrando(false)}
@@ -362,5 +532,92 @@ export function VeiculoDaOp({ veiculoId, onChange, currentUser, compacto = false
         veiculo_id: id || '',
         ...(ficha ? { modelo: ficha.nome_exibicao } : {}),
       })} />
+  );
+}
+
+/**
+ * AS FICHAS CADASTRADAS — a lista do Admin, com o botão de editar (30/09/2026)
+ *
+ * Até aqui o catálogo só tinha tela de cadastro: ficha errada não tinha como ser corrigida, e as
+ * primeiras (feitas antes da regra das versões: "Toro", "Titano 4x4") ficaram com o nome genérico.
+ * A lista mostra quem cadastrou, quando e quantas OPs usam cada ficha — o que o usuário perguntou
+ * ao pedir a correção.
+ *
+ * Só Admin e Gerente editam. Não há "excluir": ficha em uso por OP não sai do catálogo, e a regra
+ * do projeto é não apagar dado do usuário.
+ */
+export function PainelFichasVeiculos({ currentUser }) {
+  const [fichas, setFichas] = useState(null);
+  const [usos, setUsos] = useState({});
+  const [busca, setBusca] = useState('');
+  const [editando, setEditando] = useState(null);
+  const pode = ehAdminOuGerente(currentUser);
+
+  const recarregar = async () => {
+    const lista = await carregarVeiculos();
+    // a consulta devolve no máximo 1000 linhas por vez: lê em páginas para a conta não parar
+    // no milésimo vínculo quando houver muitas OPs
+    const contagem = {};
+    for (let de = 0; ; de += 1000) {
+      const { data } = await supabase.from('oples').select('veiculo_id')
+        .not('veiculo_id', 'is', null).order('id').range(de, de + 999);
+      (data || []).forEach(o => { contagem[o.veiculo_id] = (contagem[o.veiculo_id] || 0) + 1; });
+      if ((data || []).length < 1000) break;
+    }
+    setUsos(contagem); setFichas(lista);
+  };
+  useEffect(() => { recarregar(); }, []);
+
+  const visiveis = (fichas || []).filter(v =>
+    combinaBusca([v.marca, v.nome_exibicao, v.ano_de, v.ano_ate, v.criado_por_nome, v.observacoes], busca));
+  const rotuloTipo = (t) => (TIPOS_VEICULO.find(x => x.chave === t) || {}).rotulo || t;
+
+  return (
+    <div className="sec-card" style={{ marginTop: 12 }}>
+      <div className="sec-hdr">
+        <span>🚗 Veículos cadastrados na casa <Selo familia="info" ponto={false}>{fichas ? visiveis.length : '…'}</Selo></span>
+      </div>
+      <div className="sec-body" style={{ overflowX: 'auto' }}>
+        <div className="acn-filtros">
+          <input className="acn-input" style={{ width: 300, maxWidth: '100%' }} placeholder="Marca, modelo, ano ou quem cadastrou"
+            value={busca} onChange={e => setBusca(e.target.value)} />
+        </div>
+        {fichas === null ? <div className="acn-empty">Carregando...</div>
+          : visiveis.length === 0 ? <div className="acn-empty">Nenhum veículo encontrado.</div> : (
+          <table className="acn-tabela">
+            <thead><tr>
+              <th>Veículo</th><th>Tipo</th><th>Anos</th>
+              <th title="Quantas OPs estão ligadas a esta ficha">OPs</th>
+              <th>Cadastrado por</th><th>Observações</th>{pode && <th></th>}
+            </tr></thead>
+            <tbody>
+              {visiveis.map(v => (
+                <tr key={v.id}>
+                  <td><strong>{v.marca}</strong> {v.nome_exibicao}</td>
+                  <td>{rotuloTipo(v.tipo)}</td>
+                  <td className="acn-num">{faixaDeAnos(v) || '—'}</td>
+                  <td className="acn-num">{usos[v.id] || 0}</td>
+                  <td>
+                    {v.criado_por_nome || '—'}
+                    <div className="acn-fraco">{v.criado_em ? new Date(v.criado_em).toLocaleDateString('pt-BR') : ''}</div>
+                  </td>
+                  <td className="acn-texto-longo">{v.observacoes || '—'}</td>
+                  {pode && (
+                    <td>
+                      <Botao pequeno icone={mdiPencilOutline} onClick={() => setEditando(v)}>Editar</Botao>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {editando && (
+        <ModalCadastrarVeiculo currentUser={currentUser} veiculo={editando}
+          aoFechar={() => setEditando(null)}
+          aoSalvar={() => { setEditando(null); recarregar(); }} />
+      )}
+    </div>
   );
 }
