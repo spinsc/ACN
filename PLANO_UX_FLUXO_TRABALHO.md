@@ -753,6 +753,11 @@ select count(*) filter (where status_novo = 'Aguardando Liberacao Comercial') as
 Só apertar com `antigo = 0` e `oficial` em torno de 10 ou mais. (Aprovação de OP
 de serralheria com envio grava `Aguardando Embalagem` e não entra nessa conta.)
 
+**Medido de novo em 30/09/2026 (11h UTC): critério ainda não cumprido, 5.1c não foi apertada.**
+Aprovações no CQ desde o deploy: **0** (a última continua sendo a de 25/09, do auditor
+FELIPE OLIVEIRA); OPs com o nome antigo agora: **0**. O zero segue sem provar nada, pelo
+mesmo motivo: não houve aprovação para testar. Voltar a medir quando o CQ voltar a aprovar.
+
 #### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
 
 **Feito em:** 29/09/2026 (código; **nenhum dado foi alterado**).
@@ -1599,9 +1604,40 @@ respostas; aparece o aviso de "respostas diferentes"; ao **rever**, o "hoje" mos
 - A tela só existe **dentro da liberação da BOM**; não há tela avulsa para responder OPs que estejam em outra etapa.
 - Uma resposta dada **não refaz a BOM** que a OP já tinha montada (a tela avisa).
 
-### ⬜ Etapa 8 — Aba "pendente da minha aprovação" em Compras
-Hoje só existe menção/e-mail. Uma aba/filtro dedicado pra quem tem
-`pode_aprovar_compra=true` ver de cara o que está esperando por ele.
+### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
+
+**Feito em:** 30/09/2026.
+
+**Por quê:** quem aprova compra (as pessoas com a permissão marcada no Admin) só ficava sabendo por menção e e-mail. Para saber o que esperava por ele, tinha de abrir a lista de
+requisições, filtrar por "Aguardando Aprovação" e conferir um a um.
+
+**Ponto de partida conferido em 30/09/2026:** 2 compras em "Aguardando Aprovação" (PC-DEBMAA e PC-LBY8LY) e 4 aprovadores marcados (LUCIANO SPINELLI, BRUNA, RAFAEL NUNES e RAPHAEL WEBER MELLO).
+Nenhuma das duas tinha vencedora escolhida.
+
+**O que foi feito** (`ComprasTab.tsx`; nenhuma tabela, coluna nem dado foi mexido):
+
+- **Painel no topo da tela de Compras**, entre o cabeçalho e os contadores: "Esperando a sua aprovação (n)". **Só aparece para quem tem `pode_aprovar_compra`** — a mesma regra do botão de aprovar
+  (`podeAprovarCompra`). Quem não aprova não vê o painel e a consulta nem é feita.
+- **Cada linha:** número da compra, **há quanto tempo espera**, descrição, quem pediu (e a OP, quando há), **quantas cotações** existem (ou "⚠ sem cotação"), se a **vencedora já foi escolhida**
+  (com fornecedor e valor, só para quem vê valores) e o botão **"Abrir e decidir"**, que abre a mesma Mesa de Cotações do botão "🔒 Aprovação" do quadro.
+- **Ordem:** a que espera há mais tempo primeiro. O "há quanto tempo" conta da **última vez que a compra entrou na etapa** (uma compra devolvida e reenviada conta de novo), lida do histórico da compra.
+- **Fila vazia:** uma linha discreta ("✓ Nenhuma compra esperando a sua aprovação"), sem caixa laranja.
+- **Independe do filtro da tela:** o painel tem consulta própria; escolher "Recebido" no filtro de status não o esvazia. Atualiza junto com a tela (a cada 30 s e depois de cada ação).
+- **Falha na consulta do painel:** o painel some e o resto da tela segue normal (não vira aviso de erro no meio do trabalho).
+- **Mostra também quem mais recebe:** "Qualquer aprovador pode decidir; também recebem: …" (sem o próprio usuário).
+
+**Testado** (navegador, gravações bloqueadas): `teste_17` **24/24** — com o dado real, o aprovador vê o painel com **2** compras na ordem certa, os 3 outros aprovadores, 2 botões, painel logo acima dos
+contadores, filtro em "Recebido" não muda o painel, "Abrir e decidir" abre a Mesa de Cotações da primeira da fila; quem não aprova **não vê nada e não dispara a consulta**; fila vazia; e, com **dados simulados só
+na leitura**, a ordem pelo histórico (a reenviada há 2 h fica depois da que espera há 30 h), "há 1 dia" / "há 2 h", contagem de cotações, "sem cotação", vencedora com valor (Admin) e **sem valor** (perfil que
+não vê valores), falha de consulta (500) sem quebrar a tela. **Nenhuma gravação** em nenhum cenário. Regressão: `teste_7` 16/16, `teste_8` 31/31, `teste_61` 21/21, `teste_62` 30/30, `teste_63` 23/23.
+
+**O que ficou de fora:**
+
+- **Aprovação de ponta a ponta não foi exercitada**: abrir a Mesa de Cotações foi testado; escolher a vencedora e aprovar (grava e pede senha) não, por gravar em produção. O painel se refaz
+  sozinho depois dessa ação porque ela recarrega a tela (lido no código, não visto).
+- **Sem aviso de atraso por cor** (verde/amarelo/vermelho por tempo de espera), como na Etapa 6: só o "há quanto tempo". Prazo aceitável para aprovar é decisão do usuário.
+- **Sem contador no menu** ("Compras (2)"): o painel só é visto depois de abrir Compras.
+- O painel mostra as compras **da etapa de aprovação apenas**; as que exigem alçada por valor ou departamento (`pcp_aprovacoes`) continuam sendo resolvidas dentro da Mesa de Cotações.
 
 ### ⬜ Etapa 9 — Reorganizar a tela do PCP
 Os 6 blocos de alerta empilhados viram abas ou um accordion com prioridade
@@ -1684,3 +1720,5 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 29/09/2026 | Clique que **nasce dentro de uma janela e termina no fundo** (arrastar o mouse ao selecionar texto) **não fecha a janela**; vale para todas de uma vez (`ProtecaoDeFundo.ts`). Clique de verdade no fundo continua fechando. |
 | 29/09/2026 | **Tom dos avisos (Etapa 7)**: o `tomDe()` do `Feedback.tsx` compara sem acento e trata **recusa por permissão como erro (vermelho)**, regra que barrou/validação/resultado parcial como **atenção (amarelo)**; mensagem montada na hora (erro do banco) leva o tom explícito. Nenhuma duração mudou. Suposição minha: recusa por permissão é vermelha, como já era "sem permissão". |
 | 29/09/2026 | "OPL" só vira "OP" onde é texto para ler. **Ficam:** `tipo_op` (OPL = OP da ACN, OPD = da Detech), o tipo de documento de Vistorias, o par "OPL ou OPD", identificadores, comentários, o que as pessoas digitaram e o histórico já gravado. |
+| 30/09/2026 | **Etapa 8 (Compras):** o painel "Esperando a sua aprovação" é visto **só por quem tem `pode_aprovar_compra`**; a compra fica na caixa **de todos** os aprovadores e qualquer um resolve (regra de 24/09), então a lista é a mesma para os quatro; tem consulta própria, **não depende do filtro da tela**; o tempo de espera é **só o número, sem cor de alerta** (mesma linha da Etapa 6). Suposição minha, não confirmada com o usuário. |
+| 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |

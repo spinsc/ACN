@@ -740,8 +740,63 @@ function ResumoCompraModal({ pedido: p, canVerValor, departamentos, onClose, cur
   );
 }
 
+// ─── ESPERANDO A SUA APROVAÇÃO (Etapa 8 do plano de UX, 30/09/2026) ──────────
+// Quem aprova compra (as pessoas marcadas no Admin) só ficava sabendo por menção e e-mail: para saber o
+// que esperava por ele, tinha de abrir a lista, filtrar por "Aguardando Aprovação" e conferir um a um.
+// Este painel fica no topo e só aparece para quem tem a permissão de aprovar — a mesma regra do botão de
+// aprovar (`podeAprovarCompra`). O pedido fica na caixa de TODOS os aprovadores e qualquer um resolve
+// (regra de 24/09/2026), por isso a lista é a mesma para os quatro. Não depende do filtro de status da tela.
+const esperaTexto = (iso: any) => {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (!Number.isFinite(t)) return '—';
+  const h = (Date.now() - t) / 3600000;
+  if (h < 1) return 'há menos de 1 h';
+  if (h < 24) return `há ${Math.floor(h)} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'há 1 dia' : `há ${d} dias`;
+};
+
+function PainelEsperandoMinhaAprovacao({ lista, outros, canVerValor, fmt, onAbrir }: any) {
+  if (!lista.length) {
+    return <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>✓ Nenhuma compra esperando a sua aprovação.</div>;
+  }
+  return (
+    <div style={{ border: '1px solid #fdba74', background: '#fff7ed', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: '#9a3412' }}>Esperando a sua aprovação ({lista.length})</div>
+      <div style={{ fontSize: 10, color: '#7c2d12', margin: '2px 0 6px' }}>
+        Qualquer aprovador pode decidir{outros.length ? `; também recebem: ${outros.join(', ')}` : ''}. Mais antigas primeiro.
+      </div>
+      {lista.map((p: any) => (
+        <div key={p.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '7px 0', borderTop: '1px solid #fed7aa', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 100 }}>
+            <strong style={{ fontSize: 11 }}>{p.numero_pedido}</strong>
+            <div style={{ fontSize: 9, color: '#9a3412' }}>aguardando {esperaTexto(p._desde)}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 220, fontSize: 11 }}>
+            <DescricaoCompacta texto={p.descricao_material} />
+            <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>
+              Pedido por {p.criado_por_nome || '—'}{p.opl ? ` · OP ${p.opl}` : ''}
+            </div>
+          </div>
+          <div style={{ minWidth: 170, fontSize: 10 }}>
+            <div>{p._cotacoes ? `${p._cotacoes} ${p._cotacoes === 1 ? 'cotação' : 'cotações'}` :<span style={{ color: '#b91c1c', fontWeight: 700 }}>⚠ sem cotação</span>}</div>
+            <div style={{ fontSize: 9, color: '#64748b' }}>
+              {p.vencedora_id
+                ? `Vencedora: ${p.fornecedor || '—'}${canVerValor && p.valor_compra ? ` — ${fmt(p.valor_compra)}` : ''}`
+                : 'Vencedora ainda não escolhida'}
+            </div>
+          </div>
+          <Botao variante="primario" pequeno onClick={() => onAbrir(p)}>Abrir e decidir</Botao>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ComprasTab({ currentUser }) {
   const [pedidos, setPedidos]   = useState([]);
+  // Compras que esperam aprovação (só para quem aprova): null = ainda não carregou ou não é aprovador
+  const [esperando, setEsperando] = useState<any[] | null>(null);
   // Linhas com alteração não vista por este usuário ganham borda amarela —
   // mesmo padrão usado nas outras telas (ver AuditSystem.tsx).
   const { naoLidoSet: pedidosNaoLidos } = useUnreadMap('pcp_pedidos_compra', pedidos.map((p: any) => p.id), currentUser);
@@ -972,7 +1027,31 @@ export default function ComprasTab({ currentUser }) {
 
   const [queryError, setQueryError] = useState<string|null>(null);
 
+  // Lista própria, à parte do filtro de status da tela: o painel "Esperando a sua aprovação" tem de mostrar
+  // tudo o que espera, qualquer que seja o filtro escolhido. Três leituras pequenas, e só para quem aprova.
+  const carregarEsperando = async () => {
+    if (!podeAprovarCompra(currentUser)) { setEsperando(null); return; }
+    const { data: peds, error } = await supabase.from('pcp_pedidos_compra').select('*')
+      .eq('status_compra', 'Aguardando Aprovação').order('data_criacao', { ascending: true });
+    if (error) { console.warn('Compras esperando aprovação: falha ao ler —', error.message); return; }
+    const ids = (peds || []).map((p: any) => p.id);
+    const desde: Record<string, string> = {}, nCot: Record<string, number> = {};
+    if (ids.length) {
+      const [{ data: hist }, { data: cots }] = await Promise.all([
+        supabase.from('pcp_pedidos_compra_historico').select('pedido_id,criado_em').in('pedido_id', ids).eq('status_para', 'Aguardando Aprovação'),
+        supabase.from('pcp_cotacoes_fornecedores').select('pedido_id').in('pedido_id', ids),
+      ]);
+      // "aguardando há": a ÚLTIMA vez que entrou na etapa (um pedido devolvido e reenviado conta de novo)
+      (hist || []).forEach((h: any) => { if (!desde[h.pedido_id] || h.criado_em > desde[h.pedido_id]) desde[h.pedido_id] = h.criado_em; });
+      (cots || []).forEach((c: any) => { nCot[c.pedido_id] = (nCot[c.pedido_id] || 0) + 1; });
+    }
+    setEsperando((peds || [])
+      .map((p: any) => ({ ...p, _desde: desde[p.id] || p.ultima_movimentacao_em || p.data_criacao, _cotacoes: nCot[p.id] || 0 }))
+      .sort((a: any, b: any) => String(a._desde).localeCompare(String(b._desde))));
+  };
+
   const load = async (silent=false) => {
+    carregarEsperando();
     if (!silent) setLoading(true);
     setQueryError(null);
     let q = supabase.from('pcp_pedidos_compra').select('*').order('data_criacao', {ascending:false});
@@ -1894,6 +1973,13 @@ export default function ComprasTab({ currentUser }) {
         </select>
         </div>
       </div>
+
+      {/* Só para quem aprova (a permissão marcada no Admin): o que está esperando por essa pessoa, logo de cara */}
+      {esperando !== null && podeAprovarCompra(currentUser) && (
+        <PainelEsperandoMinhaAprovacao lista={esperando} canVerValor={canVerValor} fmt={fmt}
+          outros={aprovadoresCompra.filter((a: any) => String(a.id) !== String(currentUser?.id)).map((a: any) => a.nome)}
+          onAbrir={abrirModalCotacoes} />
+      )}
 
       {/* KPIs — resumo no topo, antes da lista */}
       <div style={{marginBottom:14,display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10}}>
