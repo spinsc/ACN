@@ -18,26 +18,33 @@ import { TIPOS_VEICULO, anosDoModelo, anosDoGrupo, carregarVeiculos, textoVeicul
 const ANO_CORTE = 2010;   // de 2010 pra frente aparece direto; antes, sob pedido
 
 /**
- * UM MODELO POR CHASSI, NÃO POR MOTOR (28/09/2026)
+ * UM ITEM POR VERSÃO, NÃO POR MOTOR (28/09/2026; regra dos carros mudou em 30/09/2026)
  *
- * A FIPE lista versão de motor: 43 Saveiros, 37 Peugeot 206, 14 Jettas. Quem
- * abre a OP não acha o carro no meio disso — e para adaptar acessório a
- * cilindrada não muda nada. O que muda é o chassi e onde a peça é presa.
+ * A FIPE lista uma linha para cada motor e câmbio: 43 Saveiros, 37 Peugeot 206, 14 Jettas. Quem
+ * abre a OP não acha o carro no meio disso — e para adaptar acessório a cilindrada não muda nada.
  *
- * O agrupamento vem pronto do banco (`nome_simplificado`), calculado pela
- * função `fipe_modelo_simplificado`. Aqui é só juntar as versões num item só
- * da lista, guardando as originais para quem quiser os anos exatos.
+ * Em 28/09 a lista passou a ter um item por chassi ("Toro", "Polo"). Em 30/09 o usuário pediu a
+ * VERSÃO de volta, só sem a motorização: no Fiat Toro o suporte muda de uma Adventure para uma
+ * Freedom, e o motor não importa. Para CARROS a lista tem um item por versão ("Toro Freedom",
+ * "Polo Highline TSI", "HUNTER HD 4x4 CTI"); motos e caminhões continuam com um item por chassi.
  *
- * O representante é a primeira versão do grupo: é dela que saem os anos
- * oferecidos. Como o ano continua digitável, isso é conveniência, não regra.
+ * O agrupamento vem pronto do banco (`nome_simplificado`): `fipe_modelo_versao_carros` para
+ * carros e `fipe_modelo_simplificado` para o resto. Aqui é só juntar as linhas da FIPE que
+ * ficaram com o mesmo nome (só mudavam de motor, câmbio ou portas), guardando as originais
+ * para quem quiser o nome exato e os anos. A FIPE escreve o mesmo carro com caixas diferentes
+ * ("ARGO DRIVE" e "Argo Drive"), então a chave ignora maiúscula e acento.
+ *
+ * O representante é a primeira linha do grupo: é dela que saem os anos oferecidos. Como o ano
+ * continua digitável, isso é conveniência, não regra.
  */
 export function agruparModelos(linhas) {
   const grupos = new Map();
   for (const m of linhas || []) {
     const chave = m.nome_simplificado || m.nome;
-    const ja = grupos.get(chave);
+    const k = normalizarBusca(chave);
+    const ja = grupos.get(k);
     if (ja) { ja.versoes.push(m); continue; }
-    grupos.set(chave, { ...m, nome: chave, nome_fipe: m.nome, versoes: [m] });
+    grupos.set(k, { ...m, nome: chave, nome_fipe: m.nome, versoes: [m] });
   }
   return [...grupos.values()].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 }
@@ -88,8 +95,8 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
     setVersaoFipeId('');
     const modelo = modelos.find(m => m.id === id);
     if (!modelo) return;
-    // o nome que fica na OP é o simplificado ("Saveiro CD"), não a versão de
-    // motor da FIPE. Continua editável na mão de quem cadastra.
+    // o nome que fica na OP é o da versão sem motorização ("Toro Freedom", "Saveiro CD"), não a
+    // linha da FIPE com motor e câmbio. Continua editável na mão de quem cadastra.
     setForm(f => ({ ...f, nome: modelo.nome }));
     setBuscandoAnos(true); setErroAnos(''); setAnos([]); setProgresso(null);
     // os anos são a união de TODAS as versões do grupo — buscar só a primeira
@@ -168,14 +175,14 @@ export function ModalCadastrarVeiculo({ currentUser, aoSalvar, aoFechar }) {
               <>
                 <label style={rotulo}>
                   MODELO — {modelos.length} modelo(s)
-                  {totalVersoesFipe > modelos.length && `, de ${totalVersoesFipe} versões da FIPE`}
+                  {totalVersoesFipe > modelos.length && `, de ${totalVersoesFipe} linhas da FIPE`}
                 </label>
                 <SelectBusca opcoes={modelos.map(m => ({ valor: m.id, rotulo: m.nome }))}
                   valor={modeloId} onChange={escolherModelo} placeholder="Procure o modelo" />
                 {modeloEscolhido?.versoes?.length > 1 && (
                   <div style={{ fontSize: 9, color: '#6b7280', marginTop: 3 }}>
-                    Junta {modeloEscolhido.versoes.length} versões de motor da FIPE — o que muda entre elas
-                    não muda onde o acessório é preso. Os anos abaixo são de todas elas.
+                    Junta {modeloEscolhido.versoes.length} linhas da FIPE que só mudam de motor, câmbio ou portas
+                    — isso não muda onde o acessório é preso. Os anos abaixo são de todas elas.
                   </div>
                 )}
                 {/* Licitação e nota às vezes pedem o nome exato como está na

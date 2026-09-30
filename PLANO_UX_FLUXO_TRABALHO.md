@@ -1582,7 +1582,7 @@ Elétrico", que saiu; agora conferem o 1687 travado e, para o item 4108 (depois 
 - **Responder as perguntas de uma OP que já existe** não tinha tela — **resolvido na Etapa 7.5** (tela de resposta em lote, aberta pelo painel da Engenharia).
 - **Os serviços continuam na BOM sugerida** (película, instalação do kit, garantia estendida): só deixaram de ser cobrados na estrutura. Tirá-los da lista de separação do Almoxarifado é decisão do usuário.
 - **41 itens ativos continuam sem código** (os criados à mão): dar código a eles fica **depois de o usuário decidir a planilha de auditoria**, para não codificar quem vai ser unificado.
-  *(30/09/2026: a planilha foi decidida; dos 41 sobraram **11** ativos sem código — os marcados NÃO sem comentário, itens diferentes dos com código. Dar código a esses 11 é o passo seguinte e **ainda pede a confirmação do usuário**.)*
+  *(30/09/2026: a planilha foi decidida; dos 41 sobraram **11** ativos sem código — os marcados NÃO sem comentário. **Os 11 receberam os códigos 4413 a 4423 no mesmo dia, por pedido do usuário** — ver Etapa 7.6. Hoje: 0 ativos sem código.)*
 - A liberação **individual** ("LIBERAR BOM" de uma OP só) recebeu a mesma mudança do "Jogar na BOM", mas **não foi exercitada** no navegador (as OPs do lote estão "Em Espera" e o botão individual só aparece depois de iniciar).
 
 ### ✅ Etapa 7.5 — Tela de resposta em lote das perguntas sobre o carro
@@ -1622,6 +1622,38 @@ respostas; aparece o aviso de "respostas diferentes"; ao **rever**, o "hoje" mos
 - **Sem restrição por perfil:** quem consegue abrir a liberação da BOM consegue responder (fica registrado quem e quando). Decisão a confirmar com o usuário se deve valer só para Engenharia/PCP/Admin.
 - A tela só existe **dentro da liberação da BOM**; não há tela avulsa para responder OPs que estejam em outra etapa.
 - Uma resposta dada **não refaz a BOM** que a OP já tinha montada (a tela avisa).
+
+### ✅ Etapa 7.6 — Versões dos carros sem motorização + códigos dos 11 itens que sobraram
+
+**Feito em:** 30/09/2026, por dois pedidos do usuário no chat ("Pode gerar os códigos dos 11 itens" e "ajuste os carros e modelos para aparecer versões, não motorização, 1.6, 2.0 e etc, mas preciso de versões, como TSI e CTI, ADVENTURE").
+
+**1) Códigos dos 11 itens** (os ativos sem código que sobraram da unificação): gravados com o **mesmo mecanismo do código automático** (sequência `cadastro_itens_codigo_seq`, que pula número já existente), na ordem de criação, num bloco único
+(tudo ou nada, com trava de contagem): **4413 a 4423** — disco de corte 4413, disco flap 4414, Mão de obra (h) 4415, RADIO MOVEL DM660 VHF 4416, RÁDIO DH410 VHF 4417, FRETE CLIENTE 4418, FRETE DE ENVIO 4419, RÁDIO DH 410 UHF 4420, CALHA DE CHUVA 4421,
+PROTETOR DE MOTOR/CARENAGEM 4422, TUBO DE ACO REDONDO 2 POL 4423. Conferido: **ativos sem código: 0**, nenhum código ativo repetido, a sequência segue em 4423. Nada mais foi alterado nesses itens (as OPs que os citam guardam o item pelo id, não pelo código).
+
+**2) Versão do carro, sem motorização** (lista de modelos da janela "Cadastrar veículo"). **Ponto de partida:** desde 28/09 a regra `fipe_modelo_simplificado` juntava tudo num "modelo por chassi" e **jogava fora a versão** (Polo, Toro e Compass viravam um item só;
+o TSI era apagado junto com a cilindrada). O usuário pediu o contrário e deu o motivo: *no Fiat Toro o suporte muda de uma Adventure para uma Freedom; o motor delas não importa*. Mostrei três opções com números (só emblemas ≈ 2.100 itens; **todas as versões**
+5.878; emblemas + seletor) e ele escolheu **B — todas as versões, só para carros**.
+
+- **Regra nova, só carros** (função `fipe_modelo_versao_carros`, migrações `fipe_versoes_dos_carros_sem_motorizacao` e `fipe_versoes_carros_sufixo_colado_e_kwh`): **sai** cilindrada (1.0, 2.0, 1.6i, 1.6Mi), potência (cv, kWh), válvulas (16V), combustível (Flex, Diesel), câmbio (Aut., Mec., Tiptronic),
+  portas (4p, 5p) e tração 4x2; **ficam** a versão e os emblemas (Freedom, Volcano, Comfortline, Longitude, **TSI, CTI, TDI**, **Adventure**, 4x4, CD/CE/CS, Híbrido…). Abreviações que a FIPE corta viram o nome inteiro (Comfor. → Comfortline, Hig. → Highline, Adv. → Adventure,
+  Volc. → Volcano, Ed. → Edition…). Um emblema **colado** ao número ("1.4TSI") não é engolido junto com a cilindrada.
+- **Motos e caminhões não mudam:** o gatilho escolhe a regra pelo tipo da marca; a cilindrada/numeração faz parte do nome deles. **A coluna `nome_simplificado` é derivada e regenerável**; a FIPE (nome, códigos, anos) e as fichas do catálogo (`veiculos`) **não foram tocadas**.
+- **Tela** (`VeiculoCadastro.tsx`): o agrupamento ignora maiúscula e acento (a FIPE escreve "ARGO DRIVE" e "Argo Drive" para o mesmo carro) e os textos de ajuda dizem "junta N linhas da FIPE que só mudam de motor, câmbio ou portas". O seletor "Preciso do nome exato da FIPE" continua com o nome cru.
+
+**Números (banco real):** carros recalculados **7.366**, dos quais **6.635 mudaram** o nome simplificado; itens distintos na lista de carros **1.557 → 5.805**. Exemplos: Toro → Blackjack, Endurance, Freedom, Freedom Road, Opening Edition, Ranch 4x4, Ultra, Volcano, Volcano 4x4…;
+Polo → Polo TSI, Polo Comfortline TSI, Polo Highline TSI, Polo GTS TSI, Polo GTI…; HUNTER (JAC) → HUNTER HD 4x4 CTI; Strada → Strada Adventure CD/CE, Strada Trekking…. Emblemas mantidos: **TSI 87 de 87, CTI 4 de 4, Adventure 37 de 37**. Sobra de motorização: 1 nome de 7.366 (um Range Rover "3.0i6").
+
+**Testado:** consultas de conferência no banco (contagens acima; **motos e caminhões: 0 linhas alteradas**; fichas `veiculos` 4 e OPs ligadas 43, iguais); **o gatilho com modelos de mentira** (inseridos e desfeitos por exceção, 0 resíduo): "ZZTESTE Adventure 1.8 16V Flex Aut. 4p" → "ZZTESTE Adventure",
+"Highline 1.4TSI Flex Aut." → "ZZTESTE Highline TSI", "Hunter HD 2.0 CTI Diesel Aut." → "ZZTESTE Hunter HD CTI", e uma moto seguiu a regra antiga. `teste_22` (navegador, dado real, gravações bloqueadas) **12/12**: a janela abre; o contador da marca Fiat bate com o banco (585 linhas → 387 itens);
+"toro" lista as 14 versões sem motorização; nenhuma opção com 1.6/2.0/Flex/Aut.; nenhum item repetido por caixa; "Toro Freedom" vira o nome do cadastro; o nome cru da FIPE segue disponível; "adventure" traz as versões Adventure; o agrupamento junta só o que difere na caixa. Regressão: `teste_8b` 6/6, `teste_12` 6/6, `teste_15` 12/12, `teste_54` 21/21, `teste_crm` 16/16; build ok.
+
+**O que ficou de fora / limites:**
+
+- **A lista de carros ficou bem maior** (Fiat: 387 itens; Toyota Hilux sozinha tem dezenas): é o que a opção B pede; a busca da janela continua por palavras ("toro adventure"). Se ficar pesado, a opção A (só emblemas) é uma troca de regra.
+- **As 4 fichas já cadastradas** ("Renegade 4x4", "Toro", "Titano 4x4", "C3") **não foram renomeadas** (não pedi nem fiz): o "Toro" da ficha continua sendo o Toro de todas as versões; as versões aparecem nos **próximos** cadastros.
+- **Abreviações não cobertas:** "Advent." (Idea) sai como "Advent. Adventure Locker" e "Extremeloc" fica colado; poucas dezenas de nomes antigos. Marcas de luxo e vans ainda carregam alguma numeração de modelo (BMW 30e, Sprinter 16L) — não é motorização dos carros que a fábrica adapta.
+- **Ano:** os anos oferecidos continuam sendo a união de todas as linhas do grupo (como antes).
 
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
@@ -1835,9 +1867,8 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Quanto tempo o aviso fica na tela (Etapa 7):** hoje erro some em 9 s e atenção em 7 s.
   Para uma falha ao gravar (a pessoa pode estar olhando outra coisa), vale o erro **ficar até ser
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
-- **Códigos para os 11 itens ativos sem código que sobraram da unificação (7.2):** CALHA DE CHUVA, FRETE CLIENTE, disco de corte, RADIO MOVEL DM660 VHF, PROTETOR DE MOTOR/CARENAGEM, disco flap, FRETE DE ENVIO,
-  TUBO DE ACO REDONDO 2 POL, RÁDIO DH410 VHF, RÁDIO DH 410 UHF e Mão de obra (h). O usuário os marcou NÃO (são diferentes dos itens com código), então ficam ativos; gerar o código pelo sistema (4410 em diante)
-  é gravação em massa e pede a liberação dele.
+- **As 4 fichas de veículo já cadastradas (7.6)** ("Renegade 4x4", "Toro", "Titano 4x4", "C3", com 43 OPs ligadas) continuam com o nome curto de antes; as **versões** aparecem nos cadastros **novos**. Renomear ou desdobrar a ficha "Toro" em
+  "Toro Freedom", "Toro Volcano"… mexe nas OPs e na estrutura de material ligadas a ela e **não foi pedido**: decisão do usuário.
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
@@ -1886,6 +1917,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |
 | 30/09/2026 | **Etapa 9 (PCP):** em vez de abas, uma **faixa de resumo + blocos que só acompanham abrem recolhidos**; "pede ação" = o que tem botão do PCP na linha, o resto é acompanhamento de outro setor; quem pede ação abre sozinho e sobe dentro do bloco; a reposição de estoque sobe para logo abaixo do "material em falta". **Suposição minha, não confirmada com o usuário**: recolher por padrão o que não pede ação (um clique abre; o número continua no cabeçalho e na faixa). |
 | 30/09/2026 | **Etapa 11 (Fiscal, piloto do design system):** migração **só visual**, testada com o mesmo teste na tela velha e na nova (24/24 → 29/29); "Faturado" é o botão principal da linha e "Ver" / "Devolver" foram para o menu ⋯ (igual ao PCP) — **suposição minha, não confirmada com o usuário**; os cartões de resumo viraram `acn-kpi`; a barra de faturamento em lote virou a barra fixa `acn-barra-selecao`; nova classe `acn-nota-mono`. Receita para a Etapa 12 no bloco da etapa. |
-| 30/09/2026 | **Unificação de itens, rodada 2 (planilha decidida pelo usuário):** 7 SIM unificados no item de menor código; os 21 "sem candidato" e os 8 itens sem código marcados "se desativa" foram **desativados** (nada apagado); para os 8 em uso em OPs o usuário escolheu **só desativar, sem apontar as OPs para o item com código**. **Regra dele:** *o que não tem código se desativa; o que tem código se mantém.* Sobraram 11 itens ativos sem código (NÃO, diferentes) — código para eles pede liberação. |
+| 30/09/2026 | **Unificação de itens, rodada 2 (planilha decidida pelo usuário):** 7 SIM unificados no item de menor código; os 21 "sem candidato" e os 8 itens sem código marcados "se desativa" foram **desativados** (nada apagado); para os 8 em uso em OPs o usuário escolheu **só desativar, sem apontar as OPs para o item com código**. **Regra dele:** *o que não tem código se desativa; o que tem código se mantém.* Sobraram 11 itens ativos sem código (NÃO, diferentes) — **receberam os códigos 4413 a 4423 por pedido do usuário no mesmo dia**. |
+| 30/09/2026 | **Versão do carro sem motorização (7.6, decisão do usuário):** para **carros**, a lista de modelos do "Cadastrar veículo" mostra **uma entrada por versão** (Toro Freedom, Polo Highline TSI, HUNTER HD 4x4 CTI, Strada Adventure CD) e tira só a **motorização** (1.0/2.0, cv, 16V, Flex, Diesel, Aut./Mec., 4p). Motivo dele: *no Fiat Toro o suporte muda de uma Adventure para uma Freedom; o motor não importa.* Ele escolheu a opção **"todas as versões"** (5.805 itens de carros, contra 1.557 antes) entre "só emblemas", "todas" e "emblemas + seletor", e **"só carros"**: motos e caminhões ficam como estavam. Emblemas de motor que funcionam como nome de versão (**TSI, CTI, TDI**) **ficam**. |
 | 30/09/2026 | **Etapa 12 (ordem e passo):** **uma tela por vez**, das de menor risco para as de maior — Relatórios (sem gravação) → Logística → RH → SAC; cada fatia sobe e funciona sozinha e o plano ganha um bloco por fatia. **Relatórios (12a):** status pela **família do design system** (uma cor por família, não mais uma por status), 14 abas em `Chips` que quebram de linha, Centro de Custo **recolhido** por padrão — **suposições minhas, não confirmadas com o usuário**. |
 | 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |
