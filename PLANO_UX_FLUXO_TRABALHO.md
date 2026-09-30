@@ -293,6 +293,7 @@ cascas vazias de uma refatoração anterior.
   nativos e o **tom** dos avisos, que é adivinhado pelo texto e errava em 16% deles.*
 - Kiting em lote: nenhuma sugestão de fabricação vem pré-marcada — pra um
   lote de 90 carros, isso é dezenas de cliques de checkbox.
+  *(Etapa 10, 30/09/2026: a premissa estava errada — a marcação é por peça sugerida, uma vez por lote, e hoje são de 1 a 5 cliques. "Marcar todos" foi feito mesmo assim, para quando as BOMs crescerem; nada vem marcado sozinho.)*
 - Dois campos de prazo parecidos no pedido de compra (`data_prevista_
   recebimento` vs `prazo_prometido_entrega`) — fácil de confundir.
 
@@ -1675,9 +1676,38 @@ lateral) conferidos por captura de tela. Regressão: `teste_5x` 11/11, `teste_54
 - **"Demandas Avulsas", "OPs movimentadas" e o rodapé** (abaixo dos blocos) ficaram como estavam.
 - **Só testei o dado real de hoje, em que nenhuma Serralheria/Pendência pede ação**: o caminho "pede ação" com dado real não existia para conferir; foi coberto com dado simulado.
 
-### ⬜ Etapa 10 — Ações em lote maiores no kiting
-Botão "marcar tudo que o setor já fabrica" além do "marcar item a item",
-pra lotes grandes.
+### ✅ Etapa 10 — Ações em lote maiores no kiting
+
+**Feito em:** 30/09/2026.
+
+**Ponto de partida conferido em 30/09/2026 (o plano estava errado na premissa):** o plano dizia "pra um lote de 90 carros, isso é dezenas de cliques de checkbox". A marcação, porém, é **por peça sugerida, uma vez por lote**
+(a lista sai da BOM da primeira OP do lote e a quantidade é "por OP × nº de OPs"), **não por carro**. Medido no banco: só **20 das 371 OPs têm BOM**; **10** têm sugestão de fabricação; o **máximo é 5 sugestões** por OP
+(distribuição: 1→2 OPs, 2→1, 4→5, 5→2); **nenhuma repete peça** na lista; o catálogo tem 72 chicotes e 3 itens de serralheria "internos" ativos. O único lote esperando kiting hoje (0763.2609, 3 OPs) **não tem nenhuma sugestão**.
+Ou seja: hoje são de 1 a 5 cliques. O botão em lote ganha peso quando as BOMs crescerem (a montagem automática das Renegade, por exemplo), e custa pouco; por isso foi feito, mas o ganho de hoje é pequeno.
+
+**O que foi feito** (`PCPTab.tsx`, só a janela "Liberar kiting"; nenhuma tabela nem dado mexido):
+
+- **Barra de ações na lista de sugestões:** contador **"n de N marcados"**, **"☑ Marcar todos (N)"**, **"☑ Todos de <setor> (n)"** (aparece só quando a lista tem os dois setores, Chicotes e Serralheria) e **"☐ Desmarcar todos"**.
+  Cada botão some quando não tem o que fazer (tudo já marcado, nada marcado).
+- **Nada vem marcado sozinho** (regra de 21/09/2026 mantida): a janela abre com "0 de N marcados"; marcar é sempre um clique da pessoa, agora podendo ser um clique para vários.
+- **Um caminho só:** o clique numa sugestão e os botões passam pela mesma função (`aplicarSugestoes`). Ela **não desfaz** o que a pessoa fez à mão: a quantidade que ela ajustou numa peça já marcada e os itens que digitou continuam
+  quando se marca ou desmarca outros; "Desmarcar todos" tira só o que veio das sugestões.
+- **Defeito achado no caminho (existia no clique único):** se a **mesma peça aparece em duas linhas da BOM**, marcar a segunda **trocava** a primeira, e a demanda saía com a quantidade de uma linha só (2 + 3 pedia 3, e não 5).
+  Agora **soma**, e desmarcar uma das linhas tira só a parte dela. **Nenhuma OP real tem peça repetida hoje** (medido), então nenhuma demanda já aberta foi afetada.
+
+**Testado** (navegador, gravações bloqueadas; lote de **39 OPs simulado só na leitura**, com 6 sugestões — 4 chicotes, um deles em duas linhas, e 2 de serralheria — e um material comum que não é fabricado aqui): `teste_19` **19/19** — a janela abre
+com "0 de 6 marcados" e as caixas vazias; "Marcar todos" marca 6 e **soma a peça repetida (2+3=5)**; "Desmarcar todos" zera; "Todos de Chicotes" marca 4 e o botão do setor some; a quantidade ajustada à mão (B=7) e o item digitado à mão
+**sobrevivem** aos botões; desmarcar uma linha do chicote repetido cai de 5 para 3, a outra o remove, e remarcar em ordem inversa volta a 5; ao liberar, **tenta mudar as 39 OPs para "Aguardando Almox"** e abre **uma demanda por setor com
+a quantidade × 39** (Chicotes A=195, B=39, C=117 e o digitado 4×39=156; Serralheria D=39, E=78), sem o material comum, e a demanda fica ligada às 39 OPs. Nada chegou ao banco (43 gravações tentadas, todas abortadas).
+Regressão da tela do PCP: `teste_18` 29/29, `teste_5x` 11/11, `teste_54` 21/21, `teste_63` 23/23.
+
+**O que ficou de fora:**
+
+- **Só testei com lote simulado:** não há hoje OP real esperando kiting com sugestão para conferir.
+- **A lista do lote vem da BOM da primeira OP** (como antes): se as unidades do lote tiverem BOMs diferentes, a janela não avisa. Não mudei.
+- **A liberação individual do kiting** ("LIBERAR KITING" de uma OP só) usa a mesma janela e a mesma função, mas **não foi exercitada** à parte.
+- **O editor de fabricação da Engenharia** (na liberação da BOM) **não usa** essa lista de sugestões e **não foi tocado**.
+- **"Marcar só o que falta no estoque"** continua sendo o passo futuro já anotado no código (depende do controle de saldo e de estoque mínimo); esta etapa é só o atalho manual.
 
 ### ⬜ Etapa 11 — Migrar Fiscal para o design system (piloto)
 A menor das telas que ainda não usa `Interface.tsx` (497 linhas) — serve de
@@ -1755,3 +1785,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Etapa 8 (Compras):** o painel "Esperando a sua aprovação" é visto **só por quem tem `pode_aprovar_compra`**; a compra fica na caixa **de todos** os aprovadores e qualquer um resolve (regra de 24/09), então a lista é a mesma para os quatro; tem consulta própria, **não depende do filtro da tela**; o tempo de espera é **só o número, sem cor de alerta** (mesma linha da Etapa 6). Suposição minha, não confirmada com o usuário. |
 | 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |
 | 30/09/2026 | **Etapa 9 (PCP):** em vez de abas, uma **faixa de resumo + blocos que só acompanham abrem recolhidos**; "pede ação" = o que tem botão do PCP na linha, o resto é acompanhamento de outro setor; quem pede ação abre sozinho e sobe dentro do bloco; a reposição de estoque sobe para logo abaixo do "material em falta". **Suposição minha, não confirmada com o usuário**: recolher por padrão o que não pede ação (um clique abre; o número continua no cabeçalho e na faixa). |
+| 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |

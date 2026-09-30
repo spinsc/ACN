@@ -9,10 +9,10 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import DemandaAvulsaPanel from './DemandaAvulsaPanel';
-import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio } from './DemandaItens';
+import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio, SETORES_FABRICACAO } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
-import { MenuAcoes } from './Interface';
+import { MenuAcoes, Botao } from './Interface';
 import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
 
 
@@ -328,19 +328,48 @@ export default function PCPTab({ currentUser }) {
     if (achados.length) setSugestaoFab({ achados, origem });
   };
 
-  // Marcar/desmarcar uma sugestão: entra ou sai da lista de fabricação, sem
-  // mexer no que a pessoa tenha digitado à mão.
-  const alternarSugestao = (a, i) => {
-    const jaPedido = fabPedidos.has(i);
+  // Marcar/desmarcar sugestões: entram ou saem da lista de fabricação, sem mexer no que a pessoa
+  // tenha digitado à mão nem na quantidade que ela tenha ajustado nas outras já marcadas.
+  // Etapa 10 do plano de UX (30/09/2026): o clique numa sugestão só e os botões "marcar todos" /
+  // "todos de <setor>" / "desmarcar todos" passam pelo MESMO caminho. Nada vem marcado sozinho
+  // (regra de 21/09/2026): é sempre um clique da pessoa, agora podendo ser um clique para vários.
+  // Se a mesma peça aparece em duas linhas da lista, marcar as duas SOMA a quantidade (antes a segunda
+  // trocava a primeira e o pedido saía menor do que a BOM pede); desmarcar uma tira só a parte dela.
+  const aplicarSugestoes = (indices: number[], marcar: boolean) => {
+    const achados = sugestaoFab?.achados || [];
+    const alvo = indices.filter(i => marcar ? !fabPedidos.has(i) : fabPedidos.has(i));
+    if (!alvo.length) return;
+    const depois = new Set(fabPedidos);
+    alvo.forEach(i => { if (marcar) depois.add(i); else depois.delete(i); });
+    const mesmaPeca = (x, a) => x.nome === a.nome && (x.item_id || null) === (a.item_id || null);
     setFabKiting(prev => {
-      const lista = (prev?.[a.setor] || []).filter(x => String(x.nome || '').trim());
-      const semEle = lista.filter(x => !(x.nome === a.nome && (x.item_id || null) === (a.item_id || null)));
-      const nova = jaPedido ? semEle
-        : [...semEle, { nome: a.nome, quantidade: a.quantidade, descricao: a.descricao || '', item_id: a.item_id }];
-      return { ...prev, [a.setor]: [...nova, itemVazio()] };
+      const novo = { ...prev };
+      const atual = new Set(fabPedidos);              // as marcas, uma a uma, na ordem em que são aplicadas
+      for (const i of alvo) {
+        const a = achados[i];
+        const irmaMarcada = achados.some((b, j) => j !== i && atual.has(j) && b.setor === a.setor && mesmaPeca(b, a));
+        const lista = (novo[a.setor] || []).filter(x => String(x.nome || '').trim());
+        let nova;
+        const linhaExiste = lista.some(x => mesmaPeca(x, a));      // a pessoa pode ter apagado a linha à mão
+        if (marcar) {
+          nova = irmaMarcada && linhaExiste
+            ? lista.map(x => mesmaPeca(x, a) ? { ...x, quantidade: Number(x.quantidade) + Number(a.quantidade) } : x)
+            : [...lista.filter(x => !mesmaPeca(x, a)), { nome: a.nome, quantidade: a.quantidade, descricao: a.descricao || '', item_id: a.item_id }];
+          atual.add(i);
+        } else {
+          nova = irmaMarcada
+            ? lista.map(x => mesmaPeca(x, a) ? { ...x, quantidade: Number(x.quantidade) - Number(a.quantidade) } : x)
+                .filter(x => !mesmaPeca(x, a) || Number(x.quantidade) > 0)
+            : lista.filter(x => !mesmaPeca(x, a));
+          atual.delete(i);
+        }
+        novo[a.setor] = [...nova, itemVazio()];
+      }
+      return novo;
     });
-    setFabPedidos(s => { const n = new Set(s); if (jaPedido) n.delete(i); else n.add(i); return n; });
+    setFabPedidos(depois);
   };
+  const alternarSugestao = (a, i) => aplicarSugestoes([i], !fabPedidos.has(i));
   const confirmarKiting = async () => {
     const { ops, grupo } = modalKiting;
     setLiberandoKiting(true);
@@ -790,6 +819,30 @@ export default function PCPTab({ currentUser }) {
                   Encontrados na {sugestaoFab.origem}. <strong>Marque só o que precisa ser fabricado</strong> —
                   o que já tem no estoque não precisa de demanda. Sem marcar nada, nenhuma demanda é aberta.
                 </div>
+                {/* Etapa 10 (30/09/2026): marcar vários de uma vez. Continua sendo um clique da pessoa — nada vem marcado sozinho. */}
+                {(() => {
+                  const achados = sugestaoFab.achados;
+                  const todos = achados.map((_, i) => i);
+                  const setoresDaLista = SETORES_FABRICACAO.filter(s => achados.some(a => a.setor === s));
+                  return (
+                    <div data-kiting-acoes style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', margin:'0 0 6px' }}>
+                      <span data-kiting-contagem style={{ fontSize:10, fontWeight:700, color:'#475569', marginRight:4 }}>
+                        {fabPedidos.size} de {achados.length} marcados
+                      </span>
+                      {todos.some(i => !fabPedidos.has(i)) && (
+                        <Botao pequeno onClick={() => aplicarSugestoes(todos, true)}>☑ Marcar todos ({achados.length})</Botao>
+                      )}
+                      {setoresDaLista.length > 1 && setoresDaLista.map(s => {
+                        const doSetor = todos.filter(i => achados[i].setor === s);
+                        if (doSetor.every(i => fabPedidos.has(i))) return null;
+                        return <Botao key={s} pequeno onClick={() => aplicarSugestoes(doSetor, true)}>☑ Todos de {s} ({doSetor.length})</Botao>;
+                      })}
+                      {fabPedidos.size > 0 && (
+                        <Botao pequeno variante="discreto" onClick={() => aplicarSugestoes(todos, false)}>☐ Desmarcar todos</Botao>
+                      )}
+                    </div>
+                  );
+                })()}
                 {sugestaoFab.achados.map((a, i) => (
                   <label key={`${a.item_id}-${i}`}
                     style={{ display:'flex', alignItems:'center', gap:7, padding:'3px 0', cursor:'pointer',
