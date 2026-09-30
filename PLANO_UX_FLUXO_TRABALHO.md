@@ -1449,6 +1449,21 @@ se o principal certo for outro, o código em "Outro principal". Linha em branco 
 estoque (aparece o ⚠ na planilha — ex.: "SLIMLED G2 VM": ajustar o saldo à parte). Conferir as contagens antes e depois, e **só gravar com
 o usuário liberando de novo** (cada gravação em massa pede autorização).
 
+**Rodada 2 da unificação — planilha decidida pelo usuário (30/09/2026).** O usuário marcou a planilha e escreveu, no chat: *"os sem candidatos, desativa o que não tem código e mantém o que tem código"*. Li as abas e cruzei com o
+banco **antes de gravar** (nenhuma gravação sem a liberação dele; ele respondeu a perguntas clicáveis):
+
+- **Aba Decidir (48 linhas):** **7 SIM** (2432→2429, 1644→896, sem código "RADIO PORTATIL CALTTA DH410 VHF"→3063, 2259→1821, 2769→2249, 2024→1801, 1872→1862). Nas seis primeiras ele escreveu "MENOR CODIGO (NUMERO MENOR)" onde iria um código:
+  conferi que em **todas** o principal sugerido já é o de menor número. **41 NÃO** (itens diferentes; ficam como estão). A simulação (`unificar_item(…, false)`) deu **zero referências e zero estoque** nas 7, então **nenhuma OP, BOM ou kit mudou**.
+- **8 linhas marcadas NÃO com o comentário "AQUI TUDO CERTO, O QUE NÃO TEM CÓDIGO SE DESATIVA"** (SLIMLED4 G2 VM, SLIMLED4 G2 VERMELHA, SLIMLED4 G2 AZ, INTERLED2 AZ, INTERLED2 VM, INTERLED8 VM/AZ, INSTALAÇÃO KIT e SLIMLED G2 VM): conflito entre a
+  decisão e o comentário, e eram itens **em uso** em OPs (BOM, vendido e conferência de kit). Perguntei; ele escolheu **"só desativar, sem mexer nas OPs"** (a alternativa era apontar tudo para o item com código, como nos 441). **As OPs continuam apontando
+  para esses itens inativos** (SLIMLED4 G2 AZ em 3 OPs, SLIMLED4 G2 VM em 3, INSTALAÇÃO KIT em 5, etc.). O SLIMLED G2 VM tinha saldo 2 de uma contagem de teste de 24/09, mas **não controla estoque** (`controla_estoque = false`) e o pedido ligado a ele estava descartado.
+- **Aba Sem candidato (21 itens, todos sem código):** ele escolheu **desativar os 21**. Hoje: 12 não usados; **8 dentro de estrutura de kit** (arame de solda, cantoneira, consumível de tocha, corte e dobra, disco desbaste, fundo vermelho, serviço munk, tinta epóxi) e **1 no BOM de uma OP**
+  (BARRA SINALIZADORA WINGLUX RONTAN). **Conferi no código que o kit lê o item sem filtrar ativo/inativo e o custo vem do `custo_unit`: desativar não tira o item do kit nem muda o custo do kit**; ele só some das listas de escolha.
+
+**Gravado em 30/09/2026, num bloco único (tudo ou nada, com travas de contagem):** **7 unificações** (`unificar_item`, origem `planilha`) e **29 desativações** (8 + 21), cada uma com a nota "Desativado em 30/09/2026: item sem código (decisão do usuário na auditoria de itens repetidos)".
+**Conferido depois, por consulta independente:** 7 registros novos em `itens_unificacoes`; 29 itens desativados por falta de código + 7 inativos por unificação hoje; os 7 principais seguem ativos; **ativos sem código: 41 → 11**; ativos no total **3.955** de 4.441 itens. **Nada foi apagado.**
+Esta foi gravação de **dados** (não de estrutura), por isso `execute_sql` e não `apply_migration`; os identificadores vieram da planilha.
+
 **Importação de itens (`CadastroItensTab`) — já no código:** a planilha do ERP traz "Ativo = Sim" e **reativaria** os unificados a cada
 importação, e criaria **um "CONJUNTO ELETRICO PV …" novo por pedido**. Agora o item já unificado (está em `itens_unificacoes`)
 **continua inativo**, e um "CONJUNTO ELETRICO PV …/OPL …/COPIA DE …" **novo entra inativo**; o aviso do resultado conta os dois casos.
@@ -1467,7 +1482,7 @@ para o Fiscal; e o número de OPs "com alteração não vista" foi de 218 para 2
 
 **O que ficou de fora:**
 
-- **A aplicação das decisões da planilha** (48 + 21 linhas): depende de o usuário marcar SIM/NÃO.
+- **A aplicação das decisões da planilha** (48 + 21 linhas): ~~depende de o usuário marcar SIM/NÃO~~ — **feita em 30/09/2026, ver "Rodada 2 da unificação" abaixo**.
 - **Não há tela de "itens unificados"** no cadastro: a nota está na descrição do item inativo e o registro em `itens_unificacoes`.
 - **O ERP continuará criando itens sem código de nome parecido?** Não medi; o que a importação faz com os sem código (sempre insere) não mudou.
 - **Cronograma de parcelas no centro de custo** (datas de vencimento de cada parcela) **não foi feito** de propósito, e o usuário confirmou ("SIM") que não precisa por ora.
@@ -1567,6 +1582,7 @@ Elétrico", que saiu; agora conferem o 1687 travado e, para o item 4108 (depois 
 - **Responder as perguntas de uma OP que já existe** não tinha tela — **resolvido na Etapa 7.5** (tela de resposta em lote, aberta pelo painel da Engenharia).
 - **Os serviços continuam na BOM sugerida** (película, instalação do kit, garantia estendida): só deixaram de ser cobrados na estrutura. Tirá-los da lista de separação do Almoxarifado é decisão do usuário.
 - **41 itens ativos continuam sem código** (os criados à mão): dar código a eles fica **depois de o usuário decidir a planilha de auditoria**, para não codificar quem vai ser unificado.
+  *(30/09/2026: a planilha foi decidida; dos 41 sobraram **11** ativos sem código — os marcados NÃO sem comentário, itens diferentes dos com código. Dar código a esses 11 é o passo seguinte e **ainda pede a confirmação do usuário**.)*
 - A liberação **individual** ("LIBERAR BOM" de uma OP só) recebeu a mesma mudança do "Jogar na BOM", mas **não foi exercitada** no navegador (as OPs do lote estão "Em Espera" e o botão individual só aparece depois de iniciar).
 
 ### ✅ Etapa 7.5 — Tela de resposta em lote das perguntas sobre o carro
@@ -1819,8 +1835,9 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Quanto tempo o aviso fica na tela (Etapa 7):** hoje erro some em 9 s e atenção em 7 s.
   Para uma falha ao gravar (a pessoa pode estar olhando outra coisa), vale o erro **ficar até ser
   fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
-- **Unificação de itens (7.2) — marcar a planilha:** o usuário escreve SIM/NÃO nas abas `Decidir` (48) e `Sem candidato` (21) de
-  `auditoria_unificacao_de_itens.xlsx`; aplicar com `unificar_item(…, 'planilha')`, com nova liberação de gravação.
+- **Códigos para os 11 itens ativos sem código que sobraram da unificação (7.2):** CALHA DE CHUVA, FRETE CLIENTE, disco de corte, RADIO MOVEL DM660 VHF, PROTETOR DE MOTOR/CARENAGEM, disco flap, FRETE DE ENVIO,
+  TUBO DE ACO REDONDO 2 POL, RÁDIO DH410 VHF, RÁDIO DH 410 UHF e Mão de obra (h). O usuário os marcou NÃO (são diferentes dos itens com código), então ficam ativos; gerar o código pelo sistema (4410 em diante)
+  é gravação em massa e pede a liberação dele.
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
@@ -1869,5 +1886,6 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |
 | 30/09/2026 | **Etapa 9 (PCP):** em vez de abas, uma **faixa de resumo + blocos que só acompanham abrem recolhidos**; "pede ação" = o que tem botão do PCP na linha, o resto é acompanhamento de outro setor; quem pede ação abre sozinho e sobe dentro do bloco; a reposição de estoque sobe para logo abaixo do "material em falta". **Suposição minha, não confirmada com o usuário**: recolher por padrão o que não pede ação (um clique abre; o número continua no cabeçalho e na faixa). |
 | 30/09/2026 | **Etapa 11 (Fiscal, piloto do design system):** migração **só visual**, testada com o mesmo teste na tela velha e na nova (24/24 → 29/29); "Faturado" é o botão principal da linha e "Ver" / "Devolver" foram para o menu ⋯ (igual ao PCP) — **suposição minha, não confirmada com o usuário**; os cartões de resumo viraram `acn-kpi`; a barra de faturamento em lote virou a barra fixa `acn-barra-selecao`; nova classe `acn-nota-mono`. Receita para a Etapa 12 no bloco da etapa. |
+| 30/09/2026 | **Unificação de itens, rodada 2 (planilha decidida pelo usuário):** 7 SIM unificados no item de menor código; os 21 "sem candidato" e os 8 itens sem código marcados "se desativa" foram **desativados** (nada apagado); para os 8 em uso em OPs o usuário escolheu **só desativar, sem apontar as OPs para o item com código**. **Regra dele:** *o que não tem código se desativa; o que tem código se mantém.* Sobraram 11 itens ativos sem código (NÃO, diferentes) — código para eles pede liberação. |
 | 30/09/2026 | **Etapa 12 (ordem e passo):** **uma tela por vez**, das de menor risco para as de maior — Relatórios (sem gravação) → Logística → RH → SAC; cada fatia sobe e funciona sozinha e o plano ganha um bloco por fatia. **Relatórios (12a):** status pela **família do design system** (uma cor por família, não mais uma por status), 14 abas em `Chips` que quebram de linha, Centro de Custo **recolhido** por padrão — **suposições minhas, não confirmadas com o usuário**. |
 | 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |
