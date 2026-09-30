@@ -6,19 +6,14 @@ import * as XLSX from 'xlsx';
 import { labelHierarquico } from './CentroCustoShared';
 import { MARKUP_BANDAS, corMarkup, markupPonderadoItens, cotacaoAlvo, Termometro } from './MarkupTermometro';
 import { RelDossieOp } from './OpDossie';
-import { hojeISO, diaISO } from './Interface';
+import { hojeISO, diaISO, Botao, Chips, Selo, Tag, Faixa, rotuloStatus } from './Interface';
+import Icone from './Icone';
+import { mdiPrinterOutline, mdiFileExcelOutline, mdiLinkVariant } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO, STATUS_LIBERACAO_COMERCIAL_TODOS } from './FluxoEntrega';
 
 
 const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
 const semDado = (v) => !v || !String(v).trim();
-const STATUS_CORES = {
-  Pendente:'#f59e0b','Em Andamento':'#3b82f6',Concluido:'#22c55e',
-  'Em Espera PCP':'#f59e0b','Em Analise Engenharia':'#6366f1',
-  'Aguardando Inicio Producao':'#3b82f6','Em Producao':'#0891b2',
-  'Aguardando CQ':'#8b5cf6',[STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO]:'#16a34a',[STATUS_AGUARDANDO_LIBERACAO_COMERCIAL]:'#16a34a',
-  'Faturado e Disponivel para Entrega':'#059669','Faturado':'#374151',
-};
 
 function fmtDt(d) { return d ? new Date(d).toLocaleString('pt-BR') : '—'; }
 function fmtData(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'; }
@@ -27,6 +22,44 @@ function iniPeriodo() {
   const d = new Date(); d.setDate(d.getDate()-30);
   return diaISO(d);
 }
+
+// ── Peças que se repetiam nos 13 relatórios ──────────────────────────────────
+// Etapa 12 do plano de UX (30/09/2026): os relatórios pintavam à mão, em cada um, o filtro de período, os cartões de resumo,
+// os selos de status (uma tabela de cores hex só para isso) e a barra de abas. Agora usam o design system (Botao, Chips, Selo,
+// Tag, Faixa, acn-kpi, acn-tabela, acn-filtros, acn-linha-*): o status tem uma cor por família, igual em todas as telas.
+// Só aparência — as consultas, as contas e o que cada tabela mostra são os mesmos de antes.
+const TOM = { neutro:'var(--acn-neutral)', atencao:'var(--acn-warn)', info:'var(--acn-info)', ok:'var(--acn-ok)', erro:'var(--acn-bad)', marca:'var(--acn-brand)' };
+
+// cartões de resumo: { l: rótulo, v: valor, tom, onClick?, apagado? }
+function Indicadores({ itens, carregando = false }) {
+  return (
+    <div className="acn-kpis">
+      {itens.map(k => (
+        <div key={k.l} className={'acn-kpi' + (k.onClick ? ' clicavel' : '') + (k.apagado ? ' apagado' : '')}
+          onClick={k.onClick} role={k.onClick ? 'button' : undefined} tabIndex={k.onClick ? 0 : undefined}>
+          <span className="rot"><i style={{ background: TOM[k.tom || 'neutro'] }} />{k.l}</span>
+          <span className="val acn-num">{carregando ? '...' : k.v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// "De / Até / Filtrar" (+ Imprimir); o que mais o relatório tiver de filtro entra como children
+function FiltroPeriodo({ ini, setIni, fim, setFim, onFiltrar, imprimir = false, children = null }) {
+  return (
+    <div className="acn-filtros acn-filtros-campos">
+      <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" value={ini} onChange={e=>setIni(e.target.value)}/></div>
+      <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" value={fim} onChange={e=>setFim(e.target.value)}/></div>
+      <Botao variante="primario" onClick={onFiltrar}>Filtrar</Botao>
+      {imprimir && <Botao variante="secundario" icone={mdiPrinterOutline} onClick={()=>window.print()}>Imprimir</Botao>}
+      {children}
+    </div>
+  );
+}
+
+// botão de imprimir só com o ícone, para o cabeçalho de um quadro
+const BotaoImprimir = () => <Botao pequeno variante="discreto" icone={mdiPrinterOutline} aria-label="Imprimir" title="Imprimir" onClick={()=>window.print()} />;
 
 // ── Relatório por Área (demandas_setoriais) ──
 function RelAreaDemandas() {
@@ -63,56 +96,32 @@ function RelAreaDemandas() {
       {/* filtros */}
       <div className="sec-card">
         <div className="sec-hdr">Relatório por Área — Demandas Setoriais</div>
-        <div className="sec-body">
-          {/* Linha 1: Setores */}
-          <div style={{marginBottom:10}}>
-            <label className="acn-label" style={{display:'block',marginBottom:6}}>Setor</label>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              {SETORES_DEMANDA.map(s=>(
-                <button key={s} className="acn-btn"
-                  style={{background: setor===s?'#1e293b':'#94a3b8', minWidth:100}}
-                  onClick={()=>setSetor(s)}>{s}</button>
-              ))}
-            </div>
+        <div className="acn-filtros acn-filtros-campos">
+          <div className="form-group">
+            <label className="acn-label">Setor</label>
+            <Chips rotulo="Setor" ativo={setor} onChange={setSetor} itens={SETORES_DEMANDA.map(s => ({ id: s, rotulo: s }))} />
           </div>
-          {/* Linha 2: Período + Filtrar */}
-          <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
-            <div className="form-group" style={{minWidth:140}}>
-              <label className="acn-label">De</label>
-              <input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/>
-            </div>
-            <div className="form-group" style={{minWidth:140}}>
-              <label className="acn-label">Até</label>
-              <input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/>
-            </div>
-            <button className="acn-btn" style={{background:'#1e293b',padding:'8px 20px'}} onClick={buscar}>Filtrar</button>
-          </div>
-          {/* KPI cards */}
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-            {[
-              {l:'Total',v:dados.length,c:'#374151'},
-              {l:'Pendentes',v:pendentes.length,c:'#f59e0b'},
-              {l:'Em Andamento',v:andamento.length,c:'#3b82f6'},
-              {l:'Concluídas',v:concluidos.length,c:'#22c55e'},
-              {l:'Atrasadas >48h',v:atrasados.length,c:'#ef4444'},
-              {l:'Paradas >8h',v:paradas.length,c:'#f97316'},
-              {l:'Tempo Médio',v:tempoMedio?fmtH(tempoMedio):'—',c:tempoMedio&&tempoMedio<24?'#22c55e':'#f59e0b'},
-            ].map(k=>(
-              <div key={k.l} style={{flex:'1 1 110px',background:'var(--bg-card)',border:`1px solid var(--border)`,borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
-                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
-                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
-              </div>
-            ))}
-          </div>
+          <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" value={ini} onChange={e=>setIni(e.target.value)}/></div>
+          <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" value={fim} onChange={e=>setFim(e.target.value)}/></div>
+          <Botao variante="primario" onClick={buscar}>Filtrar</Botao>
         </div>
       </div>
+      <Indicadores carregando={carregando} itens={[
+        {l:'Total',v:dados.length,tom:'neutro'},
+        {l:'Pendentes',v:pendentes.length,tom:'atencao'},
+        {l:'Em Andamento',v:andamento.length,tom:'info'},
+        {l:'Concluídas',v:concluidos.length,tom:'ok'},
+        {l:'Atrasadas >48h',v:atrasados.length,tom:'erro'},
+        {l:'Paradas >8h',v:paradas.length,tom:'atencao'},
+        {l:'Tempo Médio',v:tempoMedio?fmtH(tempoMedio):'—',tom:tempoMedio&&tempoMedio<24?'ok':'atencao'},
+      ]} />
       {/* tabela */}
       <div className="sec-card">
         <div className="sec-hdr">{setor} — {dados.length} registros no período</div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando ? <div className="acn-empty">Carregando...</div> :
            dados.length===0 ? <div className="acn-empty">Nenhuma demanda no período.</div> : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr>
                 <th>Data</th><th>OP</th><th>Descrição</th><th>Status</th>
                 <th>Responsável</th><th>Abertura</th><th>Conclusão</th><th>Tempo</th>
@@ -122,15 +131,15 @@ function RelAreaDemandas() {
                   const hrs = d.data_abertura ? (agora-new Date(d.data_abertura))/3600000 : 0;
                   const atras = d.status!=='Concluido' && hrs>48;
                   return (
-                    <tr key={d.id} style={atras?{background:'#fef2f2'}:{}}>
+                    <tr key={d.id} className={atras?'acn-linha-alerta':undefined}>
                       <td>{fmtData(d.data_abertura)}</td>
                       <td>{d.numero_opl||'—'}</td>
-                      <td style={{ maxWidth:180, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
-                      <td><span className="acn-badge" style={{background:STATUS_CORES[d.status]||'#94a3b8'}}>{d.status}</span></td>
+                      <td className="acn-texto-longo">{d.descricao||'—'}</td>
+                      <td><Selo status={d.status} /></td>
                       <td>{d.responsavel_nome||'—'}</td>
                       <td>{fmtDt(d.data_abertura)}</td>
                       <td>{fmtDt(d.data_conclusao)}</td>
-                      <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtH(d.tempo_execucao_horas)}</td>
+                      <td className={atras?'acn-txt-erro':undefined}>{fmtH(d.tempo_execucao_horas)}</td>
                     </tr>
                   );
                 })}
@@ -184,29 +193,17 @@ function RelProducao() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">Relatório de Produção por Executor</div>
-        <div className="sec-body">
-          <div className="form-row" style={{alignItems:'flex-end'}}>
-            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
-            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
-            <button className="acn-btn" style={{background: agrupar?'#6366f1':'#94a3b8'}} onClick={()=>setAgrupar(!agrupar)}>{agrupar?'Agrupar: ON':'Agrupar: OFF'}</button>
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-            {[
-              {l:'Total OPs',v:ops.length,c:'#374151'},
-              {l:'Em Produção',v:emProd,c:'#0891b2'},
-              {l:'Concluídas',v:conc,c:'#22c55e'},
-              {l:'Tempo Médio',v:tMedio?fmtH(tMedio):'—',c:'#6366f1'},
-              {l:'Executores',v:Object.keys(porResp).length,c:'#374151'},
-            ].map(k=>(
-              <div key={k.l} style={{flex:'1 1 110px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
-                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
-                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <FiltroPeriodo ini={ini} setIni={setIni} fim={fim} setFim={setFim} onFiltrar={buscar}>
+          <Botao variante={agrupar?'primario':'secundario'} onClick={()=>setAgrupar(!agrupar)}>{agrupar?'Agrupar: ON':'Agrupar: OFF'}</Botao>
+        </FiltroPeriodo>
       </div>
+      <Indicadores carregando={carregando} itens={[
+        {l:'Total OPs',v:ops.length,tom:'neutro'},
+        {l:'Em Produção',v:emProd,tom:'info'},
+        {l:'Concluídas',v:conc,tom:'ok'},
+        {l:'Tempo Médio',v:tMedio?fmtH(tMedio):'—',tom:'marca'},
+        {l:'Executores',v:Object.keys(porResp).length,tom:'neutro'},
+      ]} />
       {carregando ? <div className="acn-empty">Carregando...</div> : ops.length===0 ? <div className="acn-empty">Nenhum dado no período.</div> :
       agrupar ? (
         Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([resp,itens])=>{
@@ -215,26 +212,26 @@ function RelProducao() {
           const conc2 = itens.filter(i=>['Aguardando CQ',...STATUS_LIBERACAO_COMERCIAL_TODOS,'Faturado e Disponivel para Entrega','Faturado'].includes(i.status_geral)).length;
           return (
             <div key={resp} className="sec-card">
-              <div className="sec-hdr" style={{background:'#1e293b',color:'white'}}>
+              <div className="sec-hdr">
                 <span>{resp}</span>
-                <span style={{fontSize:9,opacity:.8}}>
+                <span className="acn-fraco">
                   {itens.length} OPs | {conc2} concluídas
                   {med ? ` | média: ${fmtH(med)}` : ''}
                 </span>
               </div>
-              <div className="sec-body" style={{overflowX:'auto'}}>
-                <table>
+              <div className="sec-body acn-rolagem">
+                <table className="acn-tabela">
                   <thead><tr><th>OP</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Técnicos</th><th>Início Prod.</th><th>Fim Prod.</th><th>Tempo</th></tr></thead>
                   <tbody>
                     {itens.map(o=>(
                       <tr key={o.id}>
-                        <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                        <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
-                        <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
-                        <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
-                        <td style={{fontSize:9}}>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
+                        <td><strong className="acn-forte">{o.opl}</strong></td>
+                        <td>
+                          <VeiculoOuEnvio o={o} />
+                        </td>
+                        <td>{o.tipo_projeto}</td>
+                        <td><Selo status={o.status_geral} /></td>
+                        <td>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
                         <td>{fmtDt(o.data_inicio_producao)}</td>
                         <td>{fmtDt(o.data_fim_producao)}</td>
                         <td>{fmtH(o.tempo_producao_horas)}</td>
@@ -248,20 +245,20 @@ function RelProducao() {
         })
       ) : (
         <div className="sec-card">
-          <div className="sec-body" style={{overflowX:'auto'}}>
-            <table>
+          <div className="sec-body acn-rolagem">
+            <table className="acn-tabela">
               <thead><tr><th>OP</th><th>Veículo</th><th>Tipo</th><th>Status</th><th>Executor</th><th>Técnicos</th><th>Início Prod.</th><th>Tempo</th></tr></thead>
               <tbody>
                 {ops.map(o=>(
                   <tr key={o.id}>
-                    <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                    <td style={{fontSize:10}}>
+                    <td><strong className="acn-forte">{o.opl}</strong></td>
+                    <td>
                       <VeiculoOuEnvio o={o} />
                     </td>
-                    <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
-                    <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8'}}>{o.status_geral}</span></td>
+                    <td>{o.tipo_projeto}</td>
+                    <td><Selo status={o.status_geral} /></td>
                     <td>{o.responsavel_producao||'—'}</td>
-                    <td style={{fontSize:9}}>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
+                    <td>{Array.isArray(o.tecnicos_producao)?o.tecnicos_producao.join(', '):'—'}</td>
                     <td>{fmtDt(o.data_inicio_producao)}</td>
                     <td>{fmtH(o.tempo_producao_horas)}</td>
                   </tr>
@@ -324,41 +321,24 @@ function RelOplsGeral() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">Relatório Geral de OPs</div>
-        <div className="sec-body">
-          <div className="form-row" style={{alignItems:'flex-end'}}>
-            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
-            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-            {[
-              {l:'Total',v:ops.length,c:'#374151'},
-              {l:'Em Andamento',v:andamento,c:'#3b82f6'},
-              {l:'Paradas/Devolvidas',v:paradas,c:'#ef4444'},
-              {l:'Finalizadas',v:finalizadas,c:'#22c55e'},
-              {l:'Atrasadas',v:atrasadas,c:'#dc2626'},
-            ].map(k=>(
-              <div key={k.l} style={{flex:'1 1 110px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
-                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
-                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:10}}>
-            {['Todos','Em Andamento','Paradas','Finalizadas'].map(s=>(
-              <button key={s} className="acn-btn"
-                style={{background:filtroStatus===s?'#1e293b':'#94a3b8',fontSize:9}}
-                onClick={()=>setFiltroStatus(s)}>{s}</button>
-            ))}
-          </div>
-        </div>
+        <FiltroPeriodo ini={ini} setIni={setIni} fim={fim} setFim={setFim} onFiltrar={buscar}>
+          <Chips rotulo="Grupo de status" className="acn-filtros-dir" ativo={filtroStatus} onChange={setFiltroStatus}
+            itens={['Todos','Em Andamento','Paradas','Finalizadas'].map(s => ({ id: s, rotulo: s }))} />
+        </FiltroPeriodo>
       </div>
+      <Indicadores carregando={carregando} itens={[
+        {l:'Total',v:ops.length,tom:'neutro'},
+        {l:'Em Andamento',v:andamento,tom:'info'},
+        {l:'Paradas/Devolvidas',v:paradas,tom:'erro'},
+        {l:'Finalizadas',v:finalizadas,tom:'ok'},
+        {l:'Atrasadas',v:atrasadas,tom:'erro'},
+      ]} />
       <div className="sec-card">
         <div className="sec-hdr">{lista.length} OPs — {filtroStatus}</div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando ? <div className="acn-empty">Carregando...</div> :
            lista.length===0 ? <div className="acn-empty">Nenhuma OP no filtro.</div> : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr>
                 <th>Data Entrada</th><th>OP</th><th>Veículo</th><th>Tipo Projeto</th>
                 <th>Status</th><th>Prev. Entrega</th><th>Engenharia</th><th>Produção</th>
@@ -367,15 +347,15 @@ function RelOplsGeral() {
                 {lista.map(o=>{
                   const atras = o.data_prevista_entrega && new Date(o.data_prevista_entrega)<agora && !GRUPOS['Finalizadas'].includes(o.status_geral);
                   return (
-                    <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
+                    <tr key={o.id} className={atras?'acn-linha-alerta':undefined}>
                       <td>{fmtData(o.data_entrada)}</td>
-                      <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                      <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
-                      <td style={{ maxWidth:140, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
-                      <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
-                      <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(o.data_prevista_entrega)}</td>
+                      <td><strong className="acn-forte">{o.opl}</strong></td>
+                      <td>
+                        <VeiculoOuEnvio o={o} />
+                      </td>
+                      <td>{o.tipo_projeto}</td>
+                      <td><Selo status={o.status_geral} /></td>
+                      <td className={atras?'acn-txt-erro':undefined}>{fmtData(o.data_prevista_entrega)}</td>
                       <td>{o.responsavel_engenharia||'—'}</td>
                       <td>{o.responsavel_producao||'—'}</td>
                     </tr>
@@ -419,38 +399,29 @@ function RelOplsFinalizadas() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">OPs Finalizadas por Período</div>
-        <div className="sec-body">
-          <div className="form-row" style={{alignItems:'flex-end'}}>
-            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
-            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
-            <button className="acn-btn" style={{background:'#475569'}} onClick={()=>window.print()}>🖨️ Imprimir</button>
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-            {[{l:'Total Finalizadas',v:ops.length,c:'#374151'},{l:'Faturadas/Entregues',v:faturadas,c:'#22c55e'},{l:'Disp. Entrega',v:dispEntrega,c:'#3b82f6'}]
-              .map(k=><div key={k.l} style={{flex:'1 1 120px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:4,padding:'7px 10px'}}>
-                <div style={{fontSize:9,color:'var(--text-muted)',marginBottom:2}}>{k.l}</div>
-                <div style={{fontSize:18,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
-              </div>)}
-          </div>
-        </div>
+        <FiltroPeriodo ini={ini} setIni={setIni} fim={fim} setFim={setFim} onFiltrar={buscar} imprimir />
       </div>
+      <Indicadores carregando={carregando} itens={[
+        {l:'Total Finalizadas',v:ops.length,tom:'neutro'},
+        {l:'Faturadas/Entregues',v:faturadas,tom:'ok'},
+        {l:'Disp. Entrega',v:dispEntrega,tom:'info'},
+      ]} />
       <div className="sec-card">
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OP finalizada no período.</div>:(
-            <table><thead><tr>
+            <table className="acn-tabela"><thead><tr>
               <th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th>
               <th>Entrada</th><th>Prev. Entrega</th><th>Data Entrega</th><th>Responsável Prod.</th>
             </tr></thead><tbody>
               {ops.map(o=>(
                 <tr key={o.id}>
-                  <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                  <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
+                  <td><strong className="acn-forte">{o.opl}</strong></td>
+                  <td>
+                    <VeiculoOuEnvio o={o} />
+                  </td>
                   <td>{o.cliente_nome||'—'}</td>
-                  <td style={{fontSize:9}}>{o.tipo_projeto}</td>
-                  <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
+                  <td>{o.tipo_projeto}</td>
+                  <td><Selo status={o.status_geral} /></td>
                   <td>{fmtData(o.data_entrada)}</td>
                   <td>{fmtData(o.data_prevista_entrega)}</td>
                   <td>{fmtData(o.data_entrega)||'—'}</td>
@@ -499,46 +470,36 @@ function RelOplsPorSetor() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">OPs em Andamento — Distribuição por Setor</div>
-        <div className="sec-body">
-          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-            {['Todos',...Object.keys(SETORES_STATUS)].map(s=>(
-              <button key={s} className="acn-btn" style={{background:setor===s?'#1e293b':'#94a3b8',fontSize:9}} onClick={()=>setSetor(s)}>{s}</button>
-            ))}
-            <button className="acn-btn" style={{background:'#475569',marginLeft:'auto'}} onClick={()=>window.print()}>🖨️</button>
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {Object.entries(SETORES_STATUS).map(([s,statuses])=>{
-              const n = ops.filter(o=>statuses.includes(o.status_geral)).length;
-              return <div key={s} style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:'3px solid #3b82f6',borderRadius:4,padding:'6px 10px',cursor:'pointer',opacity:n>0?1:.4}}
-                onClick={()=>setSetor(s)}>
-                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
-                <div style={{fontSize:20,fontWeight:700,color:'#3b82f6'}}>{carregando?'...':n}</div>
-              </div>;
-            })}
-            <div style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:'3px solid #dc2626',borderRadius:4,padding:'6px 10px'}}>
-              <div style={{fontSize:8,color:'var(--text-muted)'}}>Atrasadas</div>
-              <div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{atrasadas}</div>
-            </div>
-          </div>
+        <div className="acn-filtros">
+          <Chips rotulo="Setor" ativo={setor} onChange={setSetor}
+            itens={['Todos',...Object.keys(SETORES_STATUS)].map(s => ({ id: s, rotulo: s }))} />
+          <span className="acn-filtros-dir"><BotaoImprimir /></span>
         </div>
       </div>
+      <Indicadores carregando={carregando} itens={[
+        ...Object.entries(SETORES_STATUS).map(([s,statuses])=>{
+          const n = ops.filter(o=>statuses.includes(o.status_geral)).length;
+          return { l:s, v:n, tom:'info', onClick:()=>setSetor(s), apagado:n===0 };
+        }),
+        { l:'Atrasadas', v:atrasadas, tom:'erro' },
+      ]} />
       <div className="sec-card">
         <div className="sec-hdr">{lista.length} OPs — {setor}</div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando?<div className="acn-empty">Carregando...</div>:lista.length===0?<div className="acn-empty">Nenhuma OP.</div>:(
-            <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
+            <table className="acn-tabela"><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Entrada</th><th>Prev. Entrega</th></tr></thead>
             <tbody>{lista.map(o=>{
               const atras = o.data_prevista_entrega && new Date(o.data_prevista_entrega)<agora;
-              return <tr key={o.id} style={atras?{background:'#fef2f2'}:{}}>
-                <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
+              return <tr key={o.id} className={atras?'acn-linha-alerta':undefined}>
+                <td><strong className="acn-forte">{o.opl}</strong></td>
+                <td>
+                  <VeiculoOuEnvio o={o} />
+                </td>
                 <td>{o.cliente_nome||'—'}</td>
-                <td style={{fontSize:9}}>{o.tipo_projeto}</td>
-                <td><span className="acn-badge" style={{background:STATUS_CORES[o.status_geral]||'#94a3b8',fontSize:8}}>{o.status_geral}</span></td>
+                <td>{o.tipo_projeto}</td>
+                <td><Selo status={o.status_geral} /></td>
                 <td>{fmtData(o.data_entrada)}</td>
-                <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(o.data_prevista_entrega)}</td>
+                <td className={atras?'acn-txt-erro':undefined}>{fmtData(o.data_prevista_entrega)}</td>
               </tr>;
             })}</tbody></table>
           )}
@@ -583,37 +544,30 @@ function RelOplsAtrasadas() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#fef2f2'}}>
-          <span style={{color:'#dc2626'}}>⚠️ OPs Atrasadas ({ops.length})</span>
-          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>window.print()}>🖨️</button>
-        </div>
-        <div className="sec-body">
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {Object.keys(SETORES_STATUS).map(s=>{
-              const n = ops.filter(o=>porSetor(o)===s).length;
-              return <div key={s} style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${n>0?'#dc2626':'#e5e7eb'}`,borderRadius:4,padding:'6px 10px'}}>
-                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
-                <div style={{fontSize:20,fontWeight:700,color:n>0?'#dc2626':'#94a3b8'}}>{carregando?'...':n}</div>
-              </div>;
-            })}
-          </div>
+        <div className="sec-hdr">
+          <span>OPs Atrasadas <Selo familia="erro" ponto={false}>{ops.length}</Selo></span>
+          <BotaoImprimir />
         </div>
       </div>
+      <Indicadores carregando={carregando} itens={Object.keys(SETORES_STATUS).map(s => {
+        const n = ops.filter(o=>porSetor(o)===s).length;
+        return { l:s, v:n, tom:n>0?'erro':'neutro' };
+      })} />
       <div className="sec-card">
-        <div className="sec-body" style={{overflowX:'auto'}}>
-          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OP atrasada!</div>:(
-            <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
+        <div className="sec-body acn-rolagem">
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OP atrasada!</div>:(
+            <table className="acn-tabela"><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Setor Atual</th><th>Status</th><th>Prev. Entrega</th><th>Atraso</th></tr></thead>
             <tbody>{ops.map(o=>(
-              <tr key={o.id} style={{background:'#fef2f2'}}>
-                <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
+              <tr key={o.id} className="acn-linha-alerta">
+                <td><strong className="acn-forte">{o.opl}</strong></td>
+                <td>
+                  <VeiculoOuEnvio o={o} />
+                </td>
                 <td>{o.cliente_nome||'—'}</td>
-                <td><strong style={{color:'#dc2626'}}>{porSetor(o)}</strong></td>
-                <td><span className="acn-badge" style={{background:'#dc2626',fontSize:8}}>{o.status_geral}</span></td>
-                <td style={{color:'#dc2626',fontWeight:700}}>{fmtData(o.data_prevista_entrega)}</td>
-                <td style={{color:'#dc2626',fontWeight:700}}>{diasAtraso(o)}d</td>
+                <td><strong className="acn-txt-erro">{porSetor(o)}</strong></td>
+                <td><Selo familia="erro" ponto={false}>{rotuloStatus(o.status_geral)}</Selo></td>
+                <td className="acn-txt-erro">{fmtData(o.data_prevista_entrega)}</td>
+                <td className="acn-txt-erro">{diasAtraso(o)}d</td>
               </tr>
             ))}</tbody></table>
           )}
@@ -657,41 +611,36 @@ function RelRecebimentosEnvios() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">Recebimentos e Envios</div>
+        <FiltroPeriodo ini={ini} setIni={setIni} fim={fim} setFim={setFim} onFiltrar={buscar} imprimir />
         <div className="sec-body">
-          <div className="form-row" style={{alignItems:'flex-end'}}>
-            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
-            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
-            <button className="acn-btn" style={{background:'#475569'}} onClick={()=>window.print()}>🖨️</button>
-          </div>
-          <div style={{display:'flex',gap:0,marginTop:10,borderRadius:5,overflow:'hidden',border:'1px solid #e5e7eb'}}>
-            <button style={{flex:1,padding:'7px 0',border:'none',borderBottom:aba==='rec'?'2px solid #0891b2':'2px solid transparent',background:'transparent',fontWeight:700,fontSize:10,cursor:'pointer',color:aba==='rec'?'#0891b2':'#94a3b8'}} onClick={()=>setAba('rec')}>📦 Recebimentos de Mercadoria ({recebimentos.length})</button>
-            <button style={{flex:1,padding:'7px 0',border:'none',borderBottom:aba==='env'?'2px solid #16a34a':'2px solid transparent',background:'transparent',fontWeight:700,fontSize:10,cursor:'pointer',color:aba==='env'?'#16a34a':'#94a3b8'}} onClick={()=>setAba('env')}>🚚 Envios/Entregas ({envios.length})</button>
-          </div>
+          <Chips rotulo="Mostrar" ativo={aba} onChange={setAba} itens={[
+            { id: 'rec', rotulo: `Recebimentos de Mercadoria (${recebimentos.length})` },
+            { id: 'env', rotulo: `Envios/Entregas (${envios.length})` },
+          ]} />
         </div>
       </div>
       {aba==='rec' && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#f0f9ff'}}>
-            <span style={{color:'#0891b2'}}>📦 Recebimentos Previstos ({recebimentos.length})</span>
+          <div className="sec-hdr">
+            <span>Recebimentos Previstos <Selo familia="info" ponto={false}>{recebimentos.length}</Selo></span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+          <div className="sec-body acn-rolagem">
             {carregando?<div className="acn-empty">Carregando...</div>:recebimentos.length===0?<div className="acn-empty">Nenhum recebimento no período.</div>:(
-              <table><thead><tr><th>Nº Pedido</th><th>Descrição</th><th>Fornecedor</th><th>Qtd</th><th>Prev. Recebimento</th><th>Valor</th><th>Status</th></tr></thead>
+              <table className="acn-tabela"><thead><tr><th>Nº Pedido</th><th>Descrição</th><th>Fornecedor</th><th>Qtd</th><th>Prev. Recebimento</th><th>Valor</th><th>Status</th></tr></thead>
               <tbody>{recebimentos.map(r=>{
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
                 const dt = r.data_prevista_recebimento ? new Date(r.data_prevista_recebimento.slice(0,10)+'T00:00:00') : null;
                 // 'Recebido' desde 22/09/2026 (era 'Concluído'): com o nome
                 // antigo, compra já recebida continuava saindo como atrasada
                 const atras = dt && dt < hoje && r.status_compra !== 'Recebido';
-                return <tr key={r.id} style={atras?{background:'#fef2f2'}:{}}>
-                  <td><strong>{r.numero_pedido||'—'}</strong></td>
-                  <td style={{ maxWidth:180, wordBreak:'break-word' }}>{r.descricao_material||'—'}</td>
+                return <tr key={r.id} className={atras?'acn-linha-alerta':undefined}>
+                  <td><strong className="acn-forte">{r.numero_pedido||'—'}</strong></td>
+                  <td className="acn-texto-longo">{r.descricao_material||'—'}</td>
                   <td>{r.fornecedor||'—'}</td>
                   <td>{r.quantidade||'—'}</td>
-                  <td style={{color:atras?'#dc2626':'inherit',fontWeight:atras?700:400}}>{fmtData(r.data_prevista_recebimento)}</td>
+                  <td className={atras?'acn-txt-erro':undefined}>{fmtData(r.data_prevista_recebimento)}</td>
                   <td>{fmtVal(r.valor_compra)}</td>
-                  <td><span className="acn-badge" style={{background:r.status_compra==='Recebido'?'#22c55e':r.status_compra==='Em Andamento'?'#3b82f6':'#94a3b8',fontSize:8}}>{r.status_compra||'—'}</span></td>
+                  <td><Selo familia={r.status_compra==='Recebido'?'ok':r.status_compra==='Em Andamento'?'info':'neutro'}>{r.status_compra||'—'}</Selo></td>
                 </tr>;
               })}</tbody></table>
             )}
@@ -700,21 +649,21 @@ function RelRecebimentosEnvios() {
       )}
       {aba==='env' && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#f0fdf4'}}>
-            <span style={{color:'#16a34a'}}>🚚 Envios/Entregas ({envios.length})</span>
+          <div className="sec-hdr">
+            <span>Envios/Entregas <Selo familia="ok" ponto={false}>{envios.length}</Selo></span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
+          <div className="sec-body acn-rolagem">
             {carregando?<div className="acn-empty">Carregando...</div>:envios.length===0?<div className="acn-empty">Nenhum envio no período.</div>:(
-              <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
+              <table className="acn-tabela"><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Tipo</th><th>Status</th><th>Data Entrega</th></tr></thead>
               <tbody>{envios.map(o=>(
                 <tr key={o.id}>
-                  <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                  <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
+                  <td><strong className="acn-forte">{o.opl}</strong></td>
+                  <td>
+                    <VeiculoOuEnvio o={o} />
+                  </td>
                   <td>{o.cliente_nome||'—'}</td>
-                  <td style={{fontSize:9}}>{o.tipo_projeto}</td>
-                  <td><span className="acn-badge" style={{background:'#22c55e',fontSize:8}}>{o.status_geral}</span></td>
+                  <td>{o.tipo_projeto}</td>
+                  <td><Selo familia="ok">{rotuloStatus(o.status_geral)}</Selo></td>
                   <td>{fmtData(o.data_entrega)||'—'}</td>
                 </tr>
               ))}</tbody></table>
@@ -756,34 +705,20 @@ function RelDemandasAvulsas() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">Demandas Avulsas (sem OP vinculada)</div>
-        <div className="sec-body">
-          <div className="form-row" style={{alignItems:'flex-end'}}>
-            <div className="form-group"><label className="acn-label">De</label><input type="date" className="acn-input" style={{width:'100%'}} value={ini} onChange={e=>setIni(e.target.value)}/></div>
-            <div className="form-group"><label className="acn-label">Até</label><input type="date" className="acn-input" style={{width:'100%'}} value={fim} onChange={e=>setFim(e.target.value)}/></div>
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
-            <button className="acn-btn" style={{background:'#475569'}} onClick={()=>window.print()}>🖨️</button>
-          </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}}>
-            {Object.entries(porSetor).sort((a,b)=>b[1]-a[1]).map(([s,n])=>(
-              <div key={s} style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:'3px solid #6366f1',borderRadius:4,padding:'6px 10px'}}>
-                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
-                <div style={{fontSize:18,fontWeight:700,color:'#6366f1'}}>{n}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <FiltroPeriodo ini={ini} setIni={setIni} fim={fim} setFim={setFim} onFiltrar={buscar} imprimir />
       </div>
+      <Indicadores itens={Object.entries(porSetor).sort((a,b)=>b[1]-a[1]).map(([s,n]) => ({ l:s, v:n, tom:'marca' }))} />
       <div className="sec-card">
         <div className="sec-hdr">{dados.length} Demandas Avulsas no período</div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando?<div className="acn-empty">Carregando...</div>:dados.length===0?<div className="acn-empty">Nenhuma demanda avulsa no período.</div>:(
-            <table><thead><tr><th>Data</th><th>Setor</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Tempo</th></tr></thead>
+            <table className="acn-tabela"><thead><tr><th>Data</th><th>Setor</th><th>Descrição</th><th>Status</th><th>Responsável</th><th>Tempo</th></tr></thead>
             <tbody>{dados.map(d=>(
               <tr key={d.id}>
                 <td>{fmtData(d.data_abertura)}</td>
                 <td>{d.setor_destino||'—'}</td>
-                <td style={{ maxWidth:200, wordBreak:'break-word' }}>{d.descricao||'—'}</td>
-                <td><span className="acn-badge" style={{background:STATUS_CORES[d.status]||'#94a3b8'}}>{d.status}</span></td>
+                <td className="acn-texto-longo">{d.descricao||'—'}</td>
+                <td><Selo status={d.status} /></td>
                 <td>{d.responsavel_nome||'—'}</td>
                 <td>{fmtH(d.tempo_execucao_horas)}</td>
               </tr>
@@ -819,37 +754,30 @@ function RelOplsParadas() {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#fff7ed'}}>
-          <span style={{color:'#c2410c'}}>🚧 OPs Paradas / Devolvidas ({ops.length})</span>
-          <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>window.print()}>🖨️</button>
-        </div>
-        <div className="sec-body">
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {STATUS_PARADA.map(s=>{
-              const n = ops.filter(o=>o.status_geral===s).length;
-              return <div key={s} style={{flex:'1 1 100px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${n>0?'#f97316':'#e5e7eb'}`,borderRadius:4,padding:'6px 10px'}}>
-                <div style={{fontSize:8,color:'var(--text-muted)'}}>{s}</div>
-                <div style={{fontSize:20,fontWeight:700,color:n>0?'#f97316':'#94a3b8'}}>{carregando?'...':n}</div>
-              </div>;
-            })}
-          </div>
+        <div className="sec-hdr">
+          <span>OPs Paradas / Devolvidas <Selo familia="atencao" ponto={false}>{ops.length}</Selo></span>
+          <BotaoImprimir />
         </div>
       </div>
+      <Indicadores carregando={carregando} itens={STATUS_PARADA.map(s => {
+        const n = ops.filter(o=>o.status_geral===s).length;
+        return { l:s, v:n, tom:n>0?'atencao':'neutro' };
+      })} />
       <div className="sec-card">
-        <div className="sec-body" style={{overflowX:'auto'}}>
-          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty" style={{color:'#22c55e'}}>✅ Nenhuma OP parada!</div>:(
-            <table><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
+        <div className="sec-body acn-rolagem">
+          {carregando?<div className="acn-empty">Carregando...</div>:ops.length===0?<div className="acn-empty">Nenhuma OP parada!</div>:(
+            <table className="acn-tabela"><thead><tr><th>OP</th><th>Veículo</th><th>Cliente</th><th>Motivo</th><th>Entrada</th><th>Prev. Entrega</th><th>Dias Parada</th></tr></thead>
             <tbody>{ops.sort((a,b)=>diasParada(b)-diasParada(a)).map(o=>(
-              <tr key={o.id} style={{background:'#fff7ed'}}>
-                <td><strong style={{color:'#2563eb'}}>{o.opl}</strong></td>
-                <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
+              <tr key={o.id} className="acn-linha-alerta">
+                <td><strong className="acn-forte">{o.opl}</strong></td>
+                <td>
+                  <VeiculoOuEnvio o={o} />
+                </td>
                 <td>{o.cliente_nome||'—'}</td>
-                <td><span className="acn-badge" style={{background:'#f97316',fontSize:8}}>{o.status_geral}</span></td>
+                <td><Selo familia="atencao">{rotuloStatus(o.status_geral)}</Selo></td>
                 <td>{fmtData(o.data_entrada)}</td>
-                <td style={{color:'#dc2626'}}>{fmtData(o.data_prevista_entrega)}</td>
-                <td style={{color:'#dc2626',fontWeight:700}}>{diasParada(o)}d</td>
+                <td className="acn-txt-erro">{fmtData(o.data_prevista_entrega)}</td>
+                <td className="acn-txt-erro">{diasParada(o)}d</td>
               </tr>
             ))}</tbody></table>
           )}
@@ -865,7 +793,6 @@ function RelCentroCusto() {
   const [despesas, setDespesas] = useState<any[]>([]);
   const [centrosCusto, setCentrosCusto] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandido, setExpandido] = useState<Record<string,boolean>>({});
 
   useEffect(() => {
     (async () => {
@@ -928,80 +855,63 @@ function RelCentroCusto() {
   const fmt = (v:any) => v!=null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
   const total = (g:any[]) => g.reduce((s,r)=>s+Number(r.valor_total||0),0);
 
-  const th: any = {padding:'6px 8px',fontWeight:700,fontSize:9,color:'#64748b',borderBottom:'2px solid #e2e8f0',textAlign:'left'};
-  const td: any = {padding:'5px 8px',fontSize:10,borderBottom:'1px solid #f1f5f9',verticalAlign:'middle'};
-
-  if (loading) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Carregando...</div>;
-  if (centros.length===0) return <div style={{textAlign:'center',padding:40,color:'#94a3b8'}}>Nenhuma compra ou despesa com centro de custo definido.</div>;
+  if (loading) return <div className="acn-empty">Carregando...</div>;
+  if (centros.length===0) return <div className="acn-empty">Nenhuma compra ou despesa com centro de custo definido.</div>;
 
   const totalGeral = todasLinhas.reduce((s,r)=>s+Number(r.valor_total||0),0);
 
   return (
     <div>
       {/* Resumo geral */}
-      <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
-        <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
-          <div style={{fontSize:9,color:'#1d4ed8',fontWeight:700,marginBottom:4}}>CENTROS COM LANÇAMENTOS</div>
-          <div style={{fontSize:22,fontWeight:900,color:'#1e40af'}}>{centros.length}</div>
-        </div>
-        <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
-          <div style={{fontSize:9,color:'#166534',fontWeight:700,marginBottom:4}}>TOTAL GERAL (COMPRAS + DESPESAS)</div>
-          <div style={{fontSize:22,fontWeight:900,color:'#15803d'}}>{fmt(totalGeral)}</div>
-        </div>
-        <div style={{background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:8,padding:'12px 18px',flex:'0 0 auto'}}>
-          <div style={{fontSize:9,color:'#9a3412',fontWeight:700,marginBottom:4}}>LANÇAMENTOS TOTAL</div>
-          <div style={{fontSize:22,fontWeight:900,color:'#c2410c'}}>{todasLinhas.length}</div>
-        </div>
-      </div>
+      <Indicadores itens={[
+        { l:'CENTROS COM LANÇAMENTOS', v:centros.length, tom:'info' },
+        { l:'TOTAL GERAL (COMPRAS + DESPESAS)', v:fmt(totalGeral), tom:'ok' },
+        { l:'LANÇAMENTOS TOTAL', v:todasLinhas.length, tom:'atencao' },
+      ]} />
 
+      {/* Um quadro por centro de custo, RECOLHIDO ao abrir: o clique no cabeçalho abre e fecha (recolhimento do quadro, o mesmo do resto do sistema) */}
       {centros.map(centro => {
         const itens = grupos[centro];
         const tot = total(itens);
         const pct = totalGeral > 0 ? (tot/totalGeral*100).toFixed(1) : '0';
-        const aberto = expandido[centro];
         return (
-          <div key={centro} style={{marginBottom:10,borderRadius:8,border:'1.5px solid #e2e8f0',overflow:'hidden'}}>
-            <div onClick={()=>setExpandido(p=>({...p,[centro]:!p[centro]}))}
-              style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',cursor:'pointer',
-                background:'#f8fafc',borderBottom:aberto?'1.5px solid #e2e8f0':'none'}}>
-              <span style={{fontSize:13}}>{aberto?'▼':'▶'}</span>
-              <span style={{fontWeight:800,fontSize:12,color:'#1e293b',flex:1}}>{centro}</span>
-              <span style={{fontSize:10,color:'#64748b'}}>{itens.length} pedido{itens.length!==1?'s':''}</span>
-              <span style={{background:'#eff6ff',color:'#1d4ed8',borderRadius:10,padding:'2px 10px',fontSize:11,fontWeight:700}}>{fmt(tot)}</span>
-              <span style={{background:'#f1f5f9',color:'#475569',borderRadius:10,padding:'2px 8px',fontSize:9,fontWeight:700}}>{pct}%</span>
+          <div key={centro} className="sec-card sec-collapsed">
+            <div className="sec-hdr">
+              <span className="acn-forte">{centro}</span>
+              <span className="acn-fraco">{itens.length} pedido{itens.length!==1?'s':''}</span>
+              <Selo familia="info" ponto={false}>{fmt(tot)}</Selo>
+              <Tag>{pct}%</Tag>
             </div>
-            {aberto && (
-              <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <div className="sec-body acn-rolagem">
+              <table className="acn-tabela">
                 <thead>
-                  <tr style={{background:'#f8fafc'}}>
-                    <th style={th}>Pedido</th>
-                    <th style={th}>Descrição</th>
-                    <th style={th}>Fornecedor</th>
-                    <th style={th}>Status</th>
-                    <th style={th}>Data</th>
-                    <th style={{...th,textAlign:'right'}}>Valor</th>
+                  <tr>
+                    <th>Pedido</th>
+                    <th>Descrição</th>
+                    <th>Fornecedor</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th className="acn-dir">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
                   {itens.map(r=>(
                     <tr key={r.id}>
-                      <td style={td}><span style={{fontWeight:700,color:'#4f46e5',fontSize:9}}>{r.numero_pedido||'—'}</span></td>
-                      <td style={{...td,maxWidth:180}}><span style={{ display:'block', maxWidth:180, wordBreak:'break-word' }}>{r.descricao_material||'—'}</span></td>
-                      <td style={td}>{r.fornecedor||'—'}</td>
-                      <td style={td}>
-                        <span style={{background:'#f1f5f9',borderRadius:10,padding:'2px 7px',fontSize:8,fontWeight:700,color:'#475569'}}>{r.status_compra||'—'}</span>
-                      </td>
-                      <td style={td}>{r.data_pedido ? new Date(r.data_pedido).toLocaleDateString('pt-BR') : '—'}</td>
-                      <td style={{...td,textAlign:'right',fontWeight:700,color:'#0f766e'}}>{fmt(r.valor_total)}</td>
+                      <td><strong className="acn-forte">{r.numero_pedido||'—'}</strong></td>
+                      <td className="acn-texto-longo">{r.descricao_material||'—'}</td>
+                      <td>{r.fornecedor||'—'}</td>
+                      <td><Tag>{r.status_compra||'—'}</Tag></td>
+                      <td>{r.data_pedido ? new Date(r.data_pedido).toLocaleDateString('pt-BR') : '—'}</td>
+                      <td className="acn-dir acn-forte">{fmt(r.valor_total)}</td>
                     </tr>
                   ))}
-                  <tr style={{background:'#f8fafc'}}>
-                    <td colSpan={5} style={{...td,fontWeight:700,color:'#475569',textAlign:'right'}}>TOTAL {centro}</td>
-                    <td style={{...td,fontWeight:900,color:'#1d4ed8',textAlign:'right'}}>{fmt(tot)}</td>
+                  <tr>
+                    <td colSpan={5} className="acn-dir acn-fraco">TOTAL {centro}</td>
+                    <td className="acn-dir acn-forte">{fmt(tot)}</td>
                   </tr>
                 </tbody>
               </table>
-            )}
+            </div>
           </div>
         );
       })}
@@ -1100,85 +1010,73 @@ function RelMarkupVendedor() {
   ];
 
   return (
-    <div style={{ padding: 4 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Mês de Referência</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <input type="month" value={mes} onChange={(e) => setMes(e.target.value)}
-              style={{ padding: '5px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 11 }} />
-            {mes && (
-              <button onClick={() => setMes('')}
-                style={{ background: '#f1f5f9', border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 9, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
-                Todos
-              </button>
-            )}
+    <div>
+      <div className="sec-card">
+        <div className="acn-filtros acn-filtros-campos">
+          <div className="form-group">
+            <label className="acn-label">Mês de Referência</label>
+            <input type="month" className="acn-input" value={mes} onChange={(e) => setMes(e.target.value)} />
           </div>
+          {mes && <Botao variante="secundario" onClick={() => setMes('')}>Todos</Botao>}
+          <div className="form-group">
+            <label className="acn-label">Funil</label>
+            <Chips rotulo="Funil" ativo={funil} onChange={setFunil} itens={FUNIS.map(f => ({ id: f.id, rotulo: f.label }))} />
+          </div>
+          {!loading && (
+            <span className="acn-fraco">
+              {linhas.length} vendedor(es) com cotação vinculada em {labelMes}
+            </span>
+          )}
         </div>
-        <div>
-          <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Funil</div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {FUNIS.map((f) => (
-              <button key={f.id} onClick={() => setFunil(f.id)}
-                style={{ padding: '5px 10px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                  border: '1px solid ' + (funil === f.id ? '#0891b2' : '#d1d5db'),
-                  background: funil === f.id ? '#0891b2' : '#fff', color: funil === f.id ? '#fff' : '#475569' }}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {!loading && (
-          <div style={{ fontSize: 10, color: '#64748b' }}>
-            {linhas.length} vendedor(es) com cotação vinculada em {labelMes}
-          </div>
-        )}
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>Carregando...</div>
+        <div className="acn-empty">Carregando...</div>
       ) : linhas.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#9ca3af', padding: 24, fontSize: 11 }}>
+        <div className="acn-empty">
           Nenhuma cotação vinculada encontrada nesse período/funil.
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#64748b' }}>Vendedor</th>
-                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#64748b' }}>Funil</th>
-                <th style={{ textAlign: 'center', padding: '6px 10px', color: '#64748b' }}>Propostas</th>
-                <th style={{ textAlign: 'left', padding: '6px 10px', color: '#64748b' }}>Markup Médio</th>
-                {MARKUP_BANDAS.map((b) => (
-                  <th key={b.id} style={{ textAlign: 'center', padding: '6px 8px', color: b.cor }} title={b.label}>
-                    {b.id === 'dourado' ? '🥇' : '●'}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((v, idx) => (
-                <tr key={v.nome + v.funil} style={{ borderTop: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '6px 10px', fontWeight: 700, color: '#1e293b' }}>{v.nome}</td>
-                  <td style={{ padding: '6px 10px', color: '#64748b' }}>{v.funil === 'crm' ? 'Comercial/CRM' : 'Licitações'}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700 }}>{v.qtd}</td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <Termometro pct={v.mediaMarkup} size={16} />
-                      <strong style={{ color: corMarkup(v.mediaMarkup).cor }}>{v.mediaMarkup.toFixed(1)}%</strong>
-                    </span>
-                  </td>
+        <div className="sec-card">
+          <div className="sec-body acn-rolagem">
+            <table className="acn-tabela">
+              <thead>
+                <tr>
+                  <th>Vendedor</th>
+                  <th>Funil</th>
+                  <th className="acn-centro">Propostas</th>
+                  <th>Markup Médio</th>
                   {MARKUP_BANDAS.map((b) => (
-                    <td key={b.id} style={{ padding: '6px 8px', textAlign: 'center',
-                      color: v.porFaixa[b.id] ? b.cor : '#cbd5e1', fontWeight: v.porFaixa[b.id] ? 800 : 400 }}>
-                      {v.porFaixa[b.id] || 0}
-                    </td>
+                    // a cor de cada faixa vem da escala do termômetro de markup (MarkupTermometro.tsx) — é dado, não enfeite
+                    <th key={b.id} className="acn-centro" style={{ color: b.cor }} title={b.label}>
+                      {b.id === 'dourado' ? '🥇' : '●'}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {linhas.map((v) => (
+                  <tr key={v.nome + v.funil}>
+                    <td className="acn-forte">{v.nome}</td>
+                    <td className="acn-fraco">{v.funil === 'crm' ? 'Comercial/CRM' : 'Licitações'}</td>
+                    <td className="acn-centro acn-forte">{v.qtd}</td>
+                    <td>
+                      <span className="acn-acoes-linha" style={{ justifyContent: 'flex-start', gap: 5 }}>
+                        <Termometro pct={v.mediaMarkup} size={16} />
+                        <strong style={{ color: corMarkup(v.mediaMarkup).cor }}>{v.mediaMarkup.toFixed(1)}%</strong>
+                      </span>
+                    </td>
+                    {MARKUP_BANDAS.map((b) => (
+                      <td key={b.id} className={'acn-centro' + (v.porFaixa[b.id] ? ' acn-forte' : ' acn-fraco')}
+                        style={v.porFaixa[b.id] ? { color: b.cor } : undefined}>
+                        {v.porFaixa[b.id] || 0}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -1237,96 +1135,86 @@ function RelComissoes() {
   const labelMes = `${nomesMes[Number(mesNumLabel)-1]}/${anoLabel}`;
 
   return (
-    <div style={{ padding:4 }}>
+    <div>
       {/* Seletor de mês */}
-      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Mês de Referência</div>
-          <input type="month" value={mes} onChange={e=>setMes(e.target.value)}
-            style={{ padding:'5px 10px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11 }} />
-        </div>
-        {!loading && (
-          <div style={{ fontSize:10, color:'#64748b' }}>
-            {ops.length} OP(s) faturada(s) em {labelMes} · {funcionarios.length} vendedor(es) com comissão cadastrada
+      <div className="sec-card">
+        <div className="acn-filtros acn-filtros-campos">
+          <div className="form-group">
+            <label className="acn-label">Mês de Referência</label>
+            <input type="month" className="acn-input" value={mes} onChange={e=>setMes(e.target.value)} />
           </div>
-        )}
+          {!loading && (
+            <span className="acn-fraco">
+              {ops.length} OP(s) faturada(s) em {labelMes} · {funcionarios.length} vendedor(es) com comissão cadastrada
+            </span>
+          )}
+        </div>
       </div>
 
       {loading ? (
-        <div style={{ textAlign:'center', color:'#94a3b8', padding:40 }}>Carregando...</div>
+        <div className="acn-empty">Carregando...</div>
       ) : (
         <>
           {/* Cards de resumo */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8, marginBottom:16 }}>
-            <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px' }}>
-              <div style={{ fontSize:9, color:'#2563eb', fontWeight:700, marginBottom:3 }}>Total Faturado (Base)</div>
-              <div style={{ fontSize:14, fontWeight:800, color:'#1d4ed8' }}>{fmtR(totalBase)}</div>
-            </div>
-            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px' }}>
-              <div style={{ fontSize:9, color:'#16a34a', fontWeight:700, marginBottom:3 }}>Total Comissões</div>
-              <div style={{ fontSize:14, fontWeight:800, color:'#15803d' }}>{fmtR(totalComissoes)}</div>
-            </div>
-            <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px' }}>
-              <div style={{ fontSize:9, color:'#475569', fontWeight:700, marginBottom:3 }}>OPs Faturadas</div>
-              <div style={{ fontSize:14, fontWeight:800, color:'#1e293b' }}>{ops.length}</div>
-            </div>
-          </div>
+          <Indicadores itens={[
+            { l:'Total Faturado (Base)', v:fmtR(totalBase), tom:'info' },
+            { l:'Total Comissões', v:fmtR(totalComissoes), tom:'ok' },
+            { l:'OPs Faturadas', v:ops.length, tom:'neutro' },
+          ]} />
 
           {/* Aviso de vendedores sem cadastro */}
           {semCadastro.length > 0 && (
-            <div style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'8px 12px', marginBottom:12, fontSize:10, color:'#92400e' }}>
-              ⚠️ <strong>Vendedores com OPs faturadas mas sem comissão cadastrada no RH:</strong>{' '}
+            <Faixa tom="atencao">
+              <strong>Vendedores com OPs faturadas mas sem comissão cadastrada no RH:</strong>{' '}
               {semCadastro.join(', ')}
-            </div>
+            </Faixa>
           )}
 
           {/* Tabela de comissões */}
           {comissoes.length === 0 ? (
-            <div style={{ textAlign:'center', color:'#9ca3af', padding:24, fontSize:11 }}>
+            <div className="acn-empty">
               Nenhum vendedor com comissão cadastrada encontrado. Configure em RH → Funcionários → Recebe Comissão.
             </div>
           ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              {comissoes.map(c => (
-                <div key={c.id} style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-                  {/* Cabeçalho vendedor */}
-                  <div style={{ background:'#f8fafc', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                    <div>
-                      <span style={{ fontWeight:800, fontSize:13, color:'#1e293b' }}>{c.nome}</span>
-                      {c.cargo && <span style={{ fontSize:9, color:'#64748b', marginLeft:8 }}>{c.cargo}</span>}
-                      <span style={{ marginLeft:10, fontSize:9, fontWeight:700, background:'#dbeafe', color:'#1d4ed8', borderRadius:10, padding:'1px 8px' }}>
-                        {c.percentual_comissao}% sobre {c.incide_em || 'Faturamento'}
-                      </span>
-                    </div>
-                    <div style={{ textAlign:'right' }}>
-                      <div style={{ fontSize:10, color:'#64748b' }}>Base: <strong>{fmtR(c.baseTotal)}</strong></div>
-                      <div style={{ fontSize:14, fontWeight:800, color:'#15803d' }}>Comissão: {fmtR(c.comissao)}</div>
-                    </div>
-                  </div>
-                  {/* OPs do vendedor */}
-                  {c.opsVendedor.length === 0 ? (
-                    <div style={{ padding:'8px 14px', fontSize:10, color:'#94a3b8' }}>Nenhuma OP faturada em {labelMes}.</div>
-                  ) : (
-                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
+            comissoes.map(c => (
+              <div key={c.id} className="sec-card">
+                {/* Cabeçalho vendedor */}
+                <div className="sec-hdr">
+                  <span>
+                    <span className="acn-forte">{c.nome}</span>
+                    {c.cargo && <span className="acn-fraco"> {c.cargo}</span>}
+                    {' '}<Selo familia="info" ponto={false}>{c.percentual_comissao}% sobre {c.incide_em || 'Faturamento'}</Selo>
+                  </span>
+                  <span className="acn-dir">
+                    <span className="acn-fraco">Base: <strong>{fmtR(c.baseTotal)}</strong></span>
+                    {' '}<strong className="acn-forte">Comissão: {fmtR(c.comissao)}</strong>
+                  </span>
+                </div>
+                {/* OPs do vendedor */}
+                {c.opsVendedor.length === 0 ? (
+                  <div className="acn-empty">Nenhuma OP faturada em {labelMes}.</div>
+                ) : (
+                  <div className="sec-body acn-rolagem">
+                    <table className="acn-tabela">
                       <thead>
-                        <tr style={{ borderBottom:'1px solid #f1f5f9' }}>
-                          <th style={{ padding:'5px 14px', textAlign:'left', fontWeight:700, color:'#64748b' }}>OP</th>
-                          <th style={{ padding:'5px 14px', textAlign:'left', fontWeight:700, color:'#64748b' }}>Cliente</th>
-                          <th style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#64748b' }}>Valor Total</th>
-                          <th style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#16a34a' }}>Comissão</th>
-                          <th style={{ padding:'5px 14px', textAlign:'left', fontWeight:700, color:'#64748b' }}>NF em</th>
+                        <tr>
+                          <th>OP</th>
+                          <th>Cliente</th>
+                          <th className="acn-dir">Valor Total</th>
+                          <th className="acn-dir">Comissão</th>
+                          <th>NF em</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {c.opsVendedor.map((o, idx) => {
+                        {c.opsVendedor.map((o) => {
                           const comOp = (Number(o.valor_total)||0) * ((Number(c.percentual_comissao)||0)/100);
                           return (
-                            <tr key={o.id} style={{ borderTop:'1px solid #f8fafc', background: idx%2===0?'#fff':'#fafafa' }}>
-                              <td style={{ padding:'5px 14px', fontWeight:700, color:'#1e293b' }}>{o.opl}</td>
-                              <td style={{ padding:'5px 14px', color:'#475569' }}>{o.cliente_nome || '—'}</td>
-                              <td style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#1d4ed8' }}>{fmtR(o.valor_total)}</td>
-                              <td style={{ padding:'5px 14px', textAlign:'right', fontWeight:700, color:'#15803d' }}>{fmtR(comOp)}</td>
-                              <td style={{ padding:'5px 14px', color:'#64748b' }}>
+                            <tr key={o.id}>
+                              <td className="acn-forte">{o.opl}</td>
+                              <td>{o.cliente_nome || '—'}</td>
+                              <td className="acn-dir acn-num">{fmtR(o.valor_total)}</td>
+                              <td className="acn-dir acn-num acn-forte">{fmtR(comOp)}</td>
+                              <td className="acn-fraco">
                                 {o.data_emissao_nf ? new Date(o.data_emissao_nf).toLocaleDateString('pt-BR') : '—'}
                               </td>
                             </tr>
@@ -1334,10 +1222,10 @@ function RelComissoes() {
                         })}
                       </tbody>
                     </table>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </>
       )}
@@ -1459,68 +1347,56 @@ function RelOpsOssEmServico() {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>📋 OPs e OSs em Serviço</span>
-          <button className="acn-btn" style={{background:'#16a34a'}} onClick={exportar} disabled={carregando || linhasFiltradas.length===0}>
-            📥 Baixar Planilha (.xlsx)
-          </button>
+          <span>OPs e OSs em Serviço</span>
+          <Botao variante="secundario" icone={mdiFileExcelOutline} onClick={exportar} disabled={carregando || linhasFiltradas.length===0}>
+            Baixar Planilha (.xlsx)
+          </Botao>
         </div>
-        <div className="sec-body">
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:10}}>
-            {[
-              {l:'Unidades em Serviço',v:totalUnidades,c:'#7c3aed'},
-              {l:'OPs',v:totalOps,c:'#2563eb'},
-              {l:'OSs',v:totalOss,c:'#dc2626'},
-              {l:'Lotes Agrupados',v:totalLotes,c:'#f59e0b'},
-            ].map(k=>(
-              <div key={k.l} style={{flex:'1 1 130px',background:'var(--bg-card)',border:'1px solid var(--border)',borderTop:`3px solid ${k.c}`,borderRadius:6,padding:'10px 14px'}}>
-                <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:3,fontWeight:600,textTransform:'uppercase',letterSpacing:'.3px'}}>{k.l}</div>
-                <div style={{fontSize:24,fontWeight:700,color:k.c}}>{carregando?'...':k.v}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-            {['Todos','OP','OS'].map(t=>(
-              <button key={t} className="acn-btn"
-                style={{background:filtroTipo===t?'#1e293b':'#94a3b8',fontSize:10}}
-                onClick={()=>setFiltroTipo(t)}>{t==='Todos'?'Todos':t==='OP'?'Somente OPs':'Somente OSs'}</button>
-            ))}
-          </div>
+        <div className="acn-filtros">
+          <Chips rotulo="Tipo" ativo={filtroTipo} onChange={setFiltroTipo}
+            itens={['Todos','OP','OS'].map(t => ({ id: t, rotulo: t==='Todos'?'Todos':t==='OP'?'Somente OPs':'Somente OSs' }))} />
         </div>
       </div>
+      <Indicadores carregando={carregando} itens={[
+        {l:'Unidades em Serviço',v:totalUnidades,tom:'marca'},
+        {l:'OPs',v:totalOps,tom:'info'},
+        {l:'OSs',v:totalOss,tom:'erro'},
+        {l:'Lotes Agrupados',v:totalLotes,tom:'atencao'},
+      ]} />
       <div className="sec-card">
         <div className="sec-hdr">{linhasFiltradas.length} linha(s) — {linhasFiltradas.reduce((s,l)=>s+l.qtd,0)} unidade(s)</div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando ? <div className="acn-empty">Carregando...</div> :
            linhasFiltradas.length===0 ? <div className="acn-empty">Nenhuma OP/OS em serviço no momento.</div> : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr>
                 <th>Tipo</th><th>Número</th><th>Qtd</th><th>Veículo</th><th>Cliente</th><th>Status</th><th>Observações</th>
               </tr></thead>
               <tbody>
                 {linhasFiltradas.map((l,i)=>(
-                  <tr key={l.tipo+l.numero+i} style={l.qtd>1?{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}:{}}>
-                    <td><span className="acn-badge" style={{background:l.tipo==='OP'?'#2563eb':'#dc2626',fontSize:8}}>{l.tipo}</span></td>
-                    <td><strong>{l.qtd>1 && '🔗 '}{l.numero}</strong></td>
-                    <td style={{textAlign:'center',fontWeight:l.qtd>1?700:400,color:l.qtd>1?'#7c3aed':'inherit'}}>{l.qtd}</td>
-                    <td style={{fontSize:10}}>
+                  <tr key={l.tipo+l.numero+i} className={l.qtd>1?'acn-linha-marca':undefined}>
+                    <td><Selo familia={l.tipo==='OP'?'info':'marca'} ponto={false}>{l.tipo}</Selo></td>
+                    <td><strong className="acn-forte">{l.qtd>1 && <Icone path={mdiLinkVariant} size={14} style={{ display:'inline-block', verticalAlign:'-2px', marginRight:4 }} />}{l.numero}</strong></td>
+                    <td className={'acn-centro' + (l.qtd>1 ? ' acn-forte' : '')}>{l.qtd}</td>
+                    <td>
                       {/* OP: mesma célula das demais listas (kit/envio não têm veículo) */}
                       {l.tipo === 'OP' && l._op ? <VeiculoOuEnvio o={l._op} /> : (<>
-                      <div>{l.modelo==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : l.modelo}</div>
-                      <div style={{color:'#94a3b8'}}>{l.chassi==='—' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${l.chassi}`}</div>
-                      <div style={{color:'#94a3b8'}}>{l.placa==='—' ? (l.tipo==='OP' ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem placa</span> : <span style={{color:'var(--text-muted)'}}>—</span>) : `🚘 ${l.placa}`}</div>
+                      <div>{l.modelo==='—' ? <Selo familia="atencao" ponto={false}>sem modelo</Selo> : l.modelo}</div>
+                      <div className="acn-fraco">{l.chassi==='—' ? <Selo familia="atencao" ponto={false}>sem chassi</Selo> : l.chassi}</div>
+                      <div className="acn-fraco">{l.placa==='—' ? (l.tipo==='OP' ? <Selo familia="atencao" ponto={false}>sem placa</Selo> : <span>—</span>) : l.placa}</div>
                       </>)}
                     </td>
-                    <td style={{ maxWidth:150, wordBreak:'break-word' }} title={l.cliente}>{l.cliente}</td>
+                    <td className="acn-texto-longo" title={l.cliente}>{l.cliente}</td>
                     <td>
-                      <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                      <div className="acn-selos">
                         {l.statusLista.map((s,si)=>(
-                          <span key={si} className="acn-badge" style={{background:STATUS_CORES[s.status]||'#94a3b8',fontSize:8,whiteSpace:'nowrap'}}>
-                            {l.qtd>1 ? `${s.qtd}x ` : ''}{s.status}
-                          </span>
+                          <Selo key={si} status={s.status}>
+                            {l.qtd>1 ? `${s.qtd}x ` : ''}{rotuloStatus(s.status)}
+                          </Selo>
                         ))}
                       </div>
                     </td>
-                    <td style={{ maxWidth:240, wordBreak:'break-word' }} title={l.obs}>{l.obs}</td>
+                    <td className="acn-texto-longo" title={l.obs}>{l.obs}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1553,15 +1429,9 @@ export default function RelatoriosTab({ currentUser }) {
 
   return (
     <div>
-      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:5,overflow:'hidden',border:'1px solid #e5e7eb',background:'var(--bg-card)',flexWrap:'wrap'}}>
-        {ABAS.map(a=>(
-          <button key={a.id} onClick={()=>setAba(a.id)}
-            style={{flex:'1 1 80px',padding:'8px 4px',border:'none',borderBottom: aba===a.id?'2px solid #1e293b':'2px solid transparent',
-              background:'transparent',fontWeight:700,fontSize:9,cursor:'pointer',
-              color: aba===a.id?'#1e293b':'#94a3b8',letterSpacing:'.3px',textTransform:'uppercase'}}>
-            {a.label}
-          </button>
-        ))}
+      {/* Os 14 relatórios em "chips" que quebram de linha: todos visíveis, sem rolar para o lado (Etapa 12 do plano de UX, 30/09/2026) */}
+      <div style={{marginBottom:12}}>
+        <Chips rotulo="Relatório" ativo={aba} onChange={setAba} itens={ABAS.map(a => ({ id: a.id, rotulo: a.label }))} />
       </div>
       {aba==='servico'     && <RelOpsOssEmServico />}
       {aba==='opls'        && <RelOplsGeral />}

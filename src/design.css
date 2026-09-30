@@ -343,6 +343,20 @@ button.acn-selo.clicavel:focus-visible { outline: 2px solid var(--acn-brand); ou
    (tela Fiscal, Etapa 11 do plano de UX, 30/09/2026 — antes cada bloco levava cor e borda pintadas à mão) */
 .acn-nota-mono { font-family: var(--acn-mono); font-size: 12px; white-space: pre-wrap; max-width: 260px; margin-top: 3px; padding: 4px 8px; border-radius: var(--acn-r1); background: var(--acn-surface-2); border: 1px solid var(--acn-line); color: var(--acn-ink); }
 body.dark .acn-nota-mono { background: #0f172a; border-color: #334155; color: #cbd5e1; }
+/* Relatórios (Etapa 12 do plano de UX, 30/09/2026): o que cada relatório pintava à mão, agora uma classe */
+.acn-rolagem { overflow-x: auto; }
+/* (o nome acn-quebra já existe no responsivo.css e nas telas de cadastro, com outro sentido) */
+.acn-texto-longo { max-width: 240px; overflow-wrap: break-word; }
+.acn-dir { text-align: right !important; }
+.acn-centro { text-align: center !important; }
+.acn-txt-erro { color: var(--acn-bad); font-weight: 600; }
+body.dark .acn-txt-erro { color: #fca5a5; }
+.acn-selos { display: flex; gap: 4px; flex-wrap: wrap; }
+.acn-filtros-campos { align-items: flex-end; }
+.acn-filtros .form-group { margin: 0; }
+.acn-kpi.clicavel { cursor: pointer; }
+.acn-kpi.clicavel:hover { border-color: var(--acn-brand); }
+.acn-kpi.apagado { opacity: .5; }
 .acn-aviso-mini { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--acn-warn); white-space: nowrap; }
 table tr.acn-linha-alerta > td:first-child { box-shadow: inset 3px 0 0 var(--acn-bad); }
 table tr.acn-linha-marca > td:first-child { box-shadow: inset 3px 0 0 #8b5cf6; }

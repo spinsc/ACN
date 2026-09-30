@@ -303,7 +303,7 @@ cascas vazias de uma refatoração anterior.
   `SelectBusca`, `MenuAcoes`) — mas só o Dashboard (e as telas que eu mexi
   nesta sessão: CRM, Licitações, Cotações, Estoque) o usam de verdade.
   RH, SAC, Fiscal, Logística e Relatórios reinventam cor e botão à mão.
-  *(Fiscal migrada na Etapa 11, em 30/09/2026 — piloto; faltam SAC, RH, Logística e Relatórios, Etapa 12.)*
+  *(Fiscal migrada na Etapa 11 e Relatórios na 12a, em 30/09/2026; faltam Logística, RH e SAC — 12b a 12d.)*
 - `TonsVisuais.ts` é uma heurística de runtime que varre o DOM e *adivinha*
   a semântica da cor pintada à mão — sintoma de que a migração real
   (trocar `style` inline por `<Botao variante="...">`) nunca terminou.
@@ -1748,8 +1748,56 @@ Modo escuro e celular (390 px, sem rolagem lateral da página) conferidos por ca
 **O que o piloto ensinou para a Etapa 12** (receita que funcionou): (1) escrever o teste de comportamento **antes**, com seletores que valham para a tela velha e a nova, e rodar nas duas; (2) trocar só a parte visual do arquivo, sem tocar na lógica;
 (3) botão principal = próximo passo da linha, o resto no `MenuAcoes`; (4) cores e bordas viram `Selo` / `Tag` / classe do `design.css`, nunca hex; (5) **medir a largura da tabela com o dado real** — o design system engorda o espaço das células e uma tabela que "cabia" pode passar a rolar.
 
-### ⬜ Etapa 12 — Migrar SAC, RH, Logística, Relatórios
-Depois do piloto validado, o resto na mesma linha.
+### 🟡 Etapa 12 — Migrar SAC, RH, Logística, Relatórios
+Depois do piloto validado, o resto na mesma linha. **Uma tela por vez**, cada uma sobe e funciona sozinha, começando pelas de menor risco (ordem combinada
+com o usuário no fim da Etapa 11; medido em 30/09/2026):
+
+| Fatia | Tela | Linhas | `style` inline | `acn-btn` | cores hex | Gravações no código | Estado |
+|---|---|---|---|---|---|---|---|
+| 12a | **Relatórios** | 1.582 | 273 | 18 | 241 | **0** (só leitura + planilha) | ✅ 30/09/2026 |
+| 12b | Logística | 2.174 | 243 | 29 | 197 | 31 | ⬜ |
+| 12c | RH | 2.443 | 381 | 0 | 391 | 9 | ⬜ |
+| 12d | SAC | 3.025 | 570 | 79 | 552 | 33 | ⬜ |
+
+#### ✅ 12a — Relatórios
+
+**Feito em:** 30/09/2026. **Escolhida primeiro** por não gravar nada: dá para provar "a mesma informação" comparando fotografias das duas versões, sem risco ao dado.
+
+**O que foi feito** (`RelatoriosTab.tsx`, parte visual; `design.css` ganhou classes; **nenhuma consulta, conta ou regra foi mexida**, e `OpDossie.tsx` — a 14ª aba, "Dossiê da OP" — não foi tocado):
+
+- **Três peças locais** no lugar do que se repetia nos 13 relatórios: `Indicadores` (cartões `acn-kpi`, com o "clicável / esmaecido" do Por Setor), `FiltroPeriodo` ("De / Até / Filtrar" e "Imprimir") e `BotaoImprimir` (só o ícone, para o cabeçalho).
+- **Barra de 14 abas → `Chips`**, que **quebra de linha**: todas visíveis, sem rolar para o lado (o `Abas` esconderia o excesso).
+- **Status por família do design system**: a tabela de cores hex só para status (`STATUS_CORES`) saiu; `Selo` dá **uma cor por família**, igual às outras telas (ex.: "Aguardando CQ" âmbar, "Em produção" azul, "Faturado" verde, "Em espera PCP" cinza). O rótulo passou a sair formatado ("Em produção", "Aguardando início").
+- **Tabelas** em `acn-tabela`; linha atrasada/parada em `acn-linha-alerta`, lote em `acn-linha-marca`; texto de atraso em `acn-txt-erro`.
+- **Centro de Custo:** cada quadro nasce **recolhido** e abre/fecha pelo recolhimento global do sistema (a classe `sec-collapsed`, como no PCP); o estado local `expandido` saiu.
+- **Comissões:** o aviso de "vendedores sem comissão cadastrada" virou `Faixa`; cada vendedor é um quadro (`sec-card`) com o percentual num `Selo`.
+- **Markup e Em Serviço:** filtros em `Chips` e `Botao`; a exportação da planilha continua igual, agora num `Botao`. As cores das faixas do termômetro de markup continuam vindo de `MarkupTermometro.tsx` (são dado, não enfeite).
+- **Classes novas no `design.css`:** `acn-rolagem`, `acn-texto-longo`, `acn-dir`, `acn-centro`, `acn-txt-erro`, `acn-selos`, `acn-filtros-campos` e as variações `acn-kpi.clicavel` / `.apagado`.
+- **Emojis decorativos tirados** dos títulos, botões e avisos (o sistema usa ícones).
+
+**Resultado no código:** `style` inline **273 → 6**, `acn-btn` **18 → 0**, cores hex **241 → 0**, `<button>` cru **23 → 0**, **1.582 → 1.452** linhas.
+
+**Como foi testado (só leitura; a tela não grava nada):**
+
+- **Fotografia comparada** (`snap_relatorios.cjs`, igual para a tela velha e a nova): percorre as **14 abas e cada sub-estado** (filtros de cada aba, agrupar, sub-abas, os 4 setores do Por Área, os 3 funis do Markup, 3 meses de Comissões, todos os
+  centros abertos) e guarda **tabelas (cabeçalho e cada linha), indicadores, títulos e mensagens de vazio**, normalizados (sem acento, sem emoji). **125/125 comparações iguais** com o dado real. Como o dado real deixa vazios alguns estados (Comissões sem OP
+  faturada no mês, Envios, Laboratório), uma segunda fotografia com **dados simulados só na leitura** (Comissões com 2 vendedores e um sem cadastro, recebimentos atrasado/recebido/em andamento, envios, demandas do Laboratório) deu **16/16 iguais**,
+  incluindo os avisos e os totais soltos.
+- **Comportamento** (`teste_21`, **13/13**): 14 abas visíveis e uma só marcada; trocar de aba; os dois botões de imprimir (ícone e texto); **"Filtrar" manda o período digitado para a consulta**; clicar no indicador "Engenharia" filtra igual ao botão; indicador
+  sem OP fica esmaecido; **"Baixar Planilha" gera `Relatorio_OPs_OSs_em_Servico_<data>.xlsx`**; Centro de Custo nasce recolhido, abre (com a linha de TOTAL) e recolhe; o "Todos" do mês do Markup limpa o mês e some; **nenhuma gravação**; sem erro de console.
+- Modo escuro e celular (390 px, sem rolagem lateral da página) conferidos por captura. Regressão: `teste_20` (Fiscal, que compartilha o `design.css`) 29/29, `teste_18` 29/29, `teste_17` 24/24, `teste_5x` 11/11, `teste_63` 23/23; build ok.
+
+**O que ficou de fora / limites:**
+
+- **Dossiê da OP** (`OpDossie.tsx`, `RelDossieOp`) e os componentes compartilhados (`VeiculoOuEnvio`, `Termometro`) **não foram migrados** — só conferi que a aba abre.
+- **Comissões com dado real**: hoje há **11 vendedores com comissão cadastrada e nenhuma OP faturada no mês**, então a tabela de OPs por vendedor só foi verificada com dado simulado.
+- **Atrasadas / Paradas vazias** ("Nenhuma OP atrasada!") não puderam ser vistas com dado real (as duas têm linhas); o texto continua o mesmo, sem o emoji e sem a cor verde.
+- **As cores dos status mudam de propósito** (uma por família); quem se acostumou com "Aguardando CQ" roxo verá âmbar.
+- **6 `style` inline** restam: a cor vinda do termômetro de markup (dado), um espaçamento e o ponto de cor do indicador.
+
+**O que a fatia 12a ensinou para as próximas** (além da receita do piloto): (1) **fotografia antes/depois** é o teste certo para tela sem gravação, mas **o banco de produção anda** — na primeira tentativa 3 linhas diferiam porque uma OP mudou de etapa no meio; a solução foi
+guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequência**; (2) o normalizador do teste precisa conhecer os rótulos curtos do design system (`Aguardando inicio producao` → `Aguardando início`); (3) **procure o nome da classe antes de criar**:
+`acn-quebra` já existia no `responsivo.css` e nas telas de cadastro, com outro sentido — a minha virou `acn-texto-longo`; (4) `overflow-wrap: anywhere` encolhe a coluna e quebra "Transformacao" ao meio, `break-word` não; (5) script com regex e barra invertida via heredoc perde a barra — use o `Edit`.
 
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex
 Só depois que a migração acima cobrir o suficiente — os dois remendos
@@ -1821,4 +1869,5 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **5.1c continua adiada:** 0 aprovações no CQ desde o deploy do nome oficial (a última é de 25/09); só apertar o código com ~10 aprovações todas no nome oficial. |
 | 30/09/2026 | **Etapa 9 (PCP):** em vez de abas, uma **faixa de resumo + blocos que só acompanham abrem recolhidos**; "pede ação" = o que tem botão do PCP na linha, o resto é acompanhamento de outro setor; quem pede ação abre sozinho e sobe dentro do bloco; a reposição de estoque sobe para logo abaixo do "material em falta". **Suposição minha, não confirmada com o usuário**: recolher por padrão o que não pede ação (um clique abre; o número continua no cabeçalho e na faixa). |
 | 30/09/2026 | **Etapa 11 (Fiscal, piloto do design system):** migração **só visual**, testada com o mesmo teste na tela velha e na nova (24/24 → 29/29); "Faturado" é o botão principal da linha e "Ver" / "Devolver" foram para o menu ⋯ (igual ao PCP) — **suposição minha, não confirmada com o usuário**; os cartões de resumo viraram `acn-kpi`; a barra de faturamento em lote virou a barra fixa `acn-barra-selecao`; nova classe `acn-nota-mono`. Receita para a Etapa 12 no bloco da etapa. |
+| 30/09/2026 | **Etapa 12 (ordem e passo):** **uma tela por vez**, das de menor risco para as de maior — Relatórios (sem gravação) → Logística → RH → SAC; cada fatia sobe e funciona sozinha e o plano ganha um bloco por fatia. **Relatórios (12a):** status pela **família do design system** (uma cor por família, não mais uma por status), 14 abas em `Chips` que quebram de linha, Centro de Custo **recolhido** por padrão — **suposições minhas, não confirmadas com o usuário**. |
 | 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |
