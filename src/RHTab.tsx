@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
-import { hojeISO, diaISO } from './Interface';
+import { hojeISO, diaISO, Botao, Selo } from './Interface';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -32,6 +32,7 @@ const STATUS_COR: Record<string,string> = {
   'Folga':      '#2563eb',
   'Férias':     '#7c3aed',
   'Afastado':   '#dc2626',
+  'Desligado':  '#6b7280',
 };
 
 // Efeito no banco de horas por tipo
@@ -668,12 +669,14 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // SEÇÃO — PAINEL DE STATUS
 // ─────────────────────────────────────────────────────────────────────────────
-function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, currentUser }) {
+function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, onDesligar, currentUser }) {
   const [collapsed, setCollapsed] = useState(false);
   const ativos = funcionarios.filter(f => f.ativo);
   const { naoLidoSet } = useUnreadMap('rh_funcionarios', ativos.map(f => f.id), currentUser);
 
   const alterarStatus = async (f: any, status: string) => {
+    // Desligado pede data e motivo e tira a pessoa das listas de trabalho: tem janela própria (ModalDesligar)
+    if (status === 'Desligado') { onDesligar?.(f); return; }
     await supabase.from('rh_funcionarios').update({ status_presenca: status }).eq('id', f.id);
     logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: f.id, changeType: 'UPDATE',
       oldRow: f, newRow: { ...f, status_presenca: status }, user: currentUser });
@@ -735,7 +738,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, currentUser }
                         color: STATUS_COR[f.status_presenca] || '#374151',
                         cursor:'pointer',
                       }}>
-                      {['Ativo','Em Viagem','Folga','Férias','Afastado'].map(s => (
+                      {['Ativo','Em Viagem','Folga','Férias','Afastado','Desligado'].map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
@@ -752,6 +755,124 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, currentUser }
                           borderRadius:4, background:'#fef2f2', cursor:'pointer', color:'#dc2626', fontWeight:700 }}>
                         🗑️
                       </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEÇÃO — DESLIGADOS (30/09/2026, pedido do usuário)
+//
+// Até aqui o RH não tinha como dizer que uma pessoa foi demitida ou pediu demissão: a única saída era a
+// lixeira, que só esconde o cadastro (ativo = false), sem data e sem motivo. "Desligado" é um status de
+// verdade: guarda a data e o motivo (demissão pela empresa ou pedido de demissão).
+//
+// A pessoa desligada fica com ativo = false — assim sai sozinha de tudo que lista gente para trabalhar
+// (seletor de responsável, Lançar Horas, Autorização) — mas NÃO some: continua neste bloco, com o nome
+// preservado nas comissões, nos lançamentos de horas e nas autorizações que já existem (lançamentos e
+// autorizações apagam em cascata se o cadastro for excluído, por isso nada aqui exclui). Pode ser
+// reativada. O login do sistema (Admin › Usuários) é outra coisa e não é mexido aqui.
+// ─────────────────────────────────────────────────────────────────────────────
+const MOTIVOS_DESLIGAMENTO = [
+  { v: 'Demissão',           rotulo: 'Demissão (pela empresa)' },
+  { v: 'Pedido de demissão', rotulo: 'Pedido de demissão (da pessoa)' },
+];
+const diaBR = (d: any) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';
+
+function ModalDesligar({ func, corrigindo, onClose, onSalvo, currentUser }) {
+  const [data, setData] = useState(func.data_desligamento ? String(func.data_desligamento).slice(0, 10) : hojeISO());
+  const [motivo, setMotivo] = useState(func.motivo_desligamento || '');
+  const [salvando, setSalvando] = useState(false);
+
+  const salvar = async () => {
+    if (!data) { alert('Informe a data do desligamento.'); return; }
+    if (!motivo) { alert('Escolha o motivo: demissão ou pedido de demissão.'); return; }
+    const admissao = func.data_admissao ? String(func.data_admissao).slice(0, 10) : '';
+    if (admissao && data < admissao) { alert(`A data do desligamento não pode ser anterior à da admissão (${diaBR(admissao)}).`); return; }
+    setSalvando(true);
+    const novo = { status_presenca: 'Desligado', ativo: false, data_desligamento: data, motivo_desligamento: motivo };
+    const { error } = await supabase.from('rh_funcionarios').update(novo).eq('id', func.id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível salvar: ' + error.message); return; }
+    logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: func.id, changeType: 'UPDATE',
+      oldRow: func, newRow: { ...func, ...novo }, user: currentUser });
+    onSalvo();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={() => !salvando && onClose()}>
+      <div className="modal-box" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-title">{corrigindo ? '✏️ Corrigir desligamento' : '🚪 Desligar colaborador'} — {func.nome}</div>
+        {!corrigindo && (
+          <div style={{ fontSize: 11, color: '#64748b', margin: '6px 0 12px' }}>
+            A pessoa sai das listas de trabalho (seletor de responsável, Lançar Horas, Autorização) e passa para
+            "Desligados". O histórico, as horas e as comissões já calculadas continuam com o nome dela.
+            O login do sistema não é alterado — se ela tinha acesso, desative em Admin › Usuários.
+          </div>
+        )}
+        <div className="form-group">
+          <label className="acn-label">Data do desligamento *</label>
+          <input type="date" className="acn-input" value={data} onChange={e => setData(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="acn-label">Motivo *</label>
+          <select className="acn-input" value={motivo} onChange={e => setMotivo(e.target.value)}>
+            <option value="">— escolha —</option>
+            {MOTIVOS_DESLIGAMENTO.map(m => <option key={m.v} value={m.v}>{m.rotulo}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <Botao variante="primario" disabled={salvando} onClick={salvar}>
+            {salvando ? 'Salvando...' : corrigindo ? 'Salvar' : 'Confirmar desligamento'}
+          </Botao>
+          <Botao variante="secundario" disabled={salvando} onClick={onClose}>Cancelar</Botao>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PainelDesligados({ desligados, onCorrigir, onReativar }) {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <div className="sec-card" data-rh-desligados>
+      <div className="sec-hdr" style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        onClick={() => setCollapsed(c => !c)}>
+        <span>🚪 Desligados <Selo familia="neutro" ponto={false}>{desligados.length}</Selo></span>
+        <button onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'inherit', padding: '0 2px' }}>
+          {collapsed ? '▸' : '▾'}
+        </button>
+      </div>
+      {!collapsed && <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+        {desligados.length === 0 ? (
+          <div className="acn-empty">Nenhum colaborador desligado. Para desligar alguém, escolha "Desligado" no status dele, acima.</div>
+        ) : (
+          <table className="acn-tabela">
+            <thead>
+              <tr>
+                <th>Nome</th><th>Tipo</th><th>Cargo / Depto.</th><th>Desligado em</th><th>Motivo</th><th style={{ width: 170 }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {desligados.map(f => (
+                <tr key={f.id}>
+                  <td style={{ fontWeight: 700 }}>{f.nome}</td>
+                  <td>{f.tipo_colaborador || 'Funcionário'}</td>
+                  <td>{[f.cargo, f.departamento].filter(Boolean).join(' · ') || '—'}</td>
+                  <td className="acn-num">{diaBR(f.data_desligamento)}</td>
+                  <td>{f.motivo_desligamento || '—'}</td>
+                  <td>
+                    <div className="acn-acoes-linha">
+                      <Botao pequeno variante="secundario" onClick={() => onCorrigir(f)}>Corrigir</Botao>
+                      <Botao pequeno variante="secundario" onClick={() => onReativar(f)}>Reativar</Botao>
                     </div>
                   </td>
                 </tr>
@@ -2320,7 +2441,7 @@ export function ComissoesTecnicosStandalone({ currentUser }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from('rh_funcionarios').select('*').eq('ativo', true).order('nome')
+    supabase.from('rh_funcionarios').select('*').or('ativo.eq.true,status_presenca.eq.Desligado').order('nome')
       .then(({ data }) => { setFuncionarios(data || []); setLoading(false); });
   }, []);
 
@@ -2333,6 +2454,8 @@ export function ComissoesTecnicosStandalone({ currentUser }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function RHTab({ currentUser }) {
   const [funcionarios, setFuncionarios]   = useState<any[]>([]);
+  const [desligados, setDesligados]       = useState<any[]>([]);
+  const [modalDesligar, setModalDesligar] = useState<any>(null);
   const [lancamentos, setLancamentos]     = useState<any[]>([]);
   const [autorizacoes, setAutorizacoes]   = useState<any[]>([]);
   const [loading, setLoading]             = useState(true);
@@ -2346,18 +2469,34 @@ export default function RHTab({ currentUser }) {
 
   const fetch = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
-    const [fRes, lRes, aRes] = await Promise.all([
+    const [fRes, lRes, aRes, dRes] = await Promise.all([
       supabase.from('rh_funcionarios').select('*').eq('ativo', true).order('nome'),
       supabase.from('rh_lancamentos').select('*').order('data', { ascending: false }),
       supabase.from('rh_autorizacoes').select('*').order('data', { ascending: false }),
+      supabase.from('rh_funcionarios').select('*').eq('status_presenca', 'Desligado')
+        .order('data_desligamento', { ascending: false, nullsFirst: false }).order('nome'),
     ]);
     setFuncionarios(fRes.data || []);
+    setDesligados(dRes.data || []);
     setLancamentos(lRes.data || []);
     setAutorizacoes(aRes.data || []);
     if (!silent) setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); const t = setInterval(()=>fetch(true), 60000); return () => clearInterval(t); }, [fetch]);
+
+  // Horas, autorizações e comissões antigas apontam para gente que já saiu: para mostrar o nome (e o percentual)
+  // delas, essas telas recebem os desligados junto. As listas de trabalho usam só `funcionarios` (ativo).
+  const comDesligados = [...funcionarios, ...desligados];
+  const reativar = async (f: any) => {
+    if (!await confirmar(`Reativar "${f.nome}"?\n\nEla volta para as listas de trabalho com o status Ativo.`)) return;
+    const novo = { status_presenca: 'Ativo', ativo: true, data_desligamento: null, motivo_desligamento: null };
+    const { error } = await supabase.from('rh_funcionarios').update(novo).eq('id', f.id);
+    if (error) { alert('Não foi possível reativar: ' + error.message); return; }
+    logChange({ module: 'rh', entityType: 'rh_funcionarios', entityId: f.id, changeType: 'UPDATE',
+      oldRow: f, newRow: { ...f, ...novo }, user: currentUser });
+    fetch();
+  };
 
   const resumo = {
     ativos:    funcionarios.filter(f=>f.status_presenca==='Ativo').length,
@@ -2411,11 +2550,12 @@ export default function RHTab({ currentUser }) {
       ) : (
         <>
           {/* Resumo (KPIs de absenteísmo e horas) no topo, antes das listas */}
-          <KpiRH funcionarios={funcionarios} lancamentos={lancamentos} />
+          <KpiRH funcionarios={comDesligados} lancamentos={lancamentos} />
           <PainelStatus
             funcionarios={funcionarios}
             onRefresh={fetch}
             onEdit={(f)=>setModalFunc(f)}
+            onDesligar={(f)=>setModalDesligar({ func: f, corrigindo: false })}
             currentUser={currentUser}
             onDelete={async (f)=>{
               if (!await confirmar(`Excluir o funcionário "${f.nome}"?\n\nEsta ação irá desativá-lo do sistema.`)) return;
@@ -2424,13 +2564,16 @@ export default function RHTab({ currentUser }) {
               fetch();
             }}
           />
-          <BancoHoras funcionarios={funcionarios} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
+          <PainelDesligados desligados={desligados}
+            onCorrigir={(f)=>setModalDesligar({ func: f, corrigindo: true })}
+            onReativar={reativar} />
+          <BancoHoras funcionarios={comDesligados} lancamentos={lancamentos} currentUser={currentUser} onRefresh={fetch} />
           <RelatoriosRH funcionarios={funcionarios} lancamentos={lancamentos} />
           <RelatorioTecnicos funcionarios={funcionarios} />
           <RelatorioUniformes funcionarios={funcionarios} />
-          <ComissoesRH funcionarios={funcionarios} currentUser={currentUser} />
+          <ComissoesRH funcionarios={comDesligados} currentUser={currentUser} />
           <ListaAutorizacoes
-            funcionarios={funcionarios}
+            funcionarios={comDesligados}
             autorizacoes={autorizacoes}
             onImprimir={(a, f) => imprimirAutorizacao(a, f)}
           />
@@ -2459,6 +2602,15 @@ export default function RHTab({ currentUser }) {
           funcionarios={funcionarios}
           onClose={()=>setModalAut(false)}
           onSaved={fetch}
+        />
+      )}
+      {modalDesligar && (
+        <ModalDesligar
+          func={modalDesligar.func}
+          corrigindo={modalDesligar.corrigindo}
+          onClose={()=>setModalDesligar(null)}
+          onSalvo={()=>{ setModalDesligar(null); fetch(); }}
+          currentUser={currentUser}
         />
       )}
     </div>

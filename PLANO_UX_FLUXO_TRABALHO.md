@@ -1726,6 +1726,34 @@ Respondeu três perguntas minhas: (1) **é o apontamento que já existe, feito p
 - **"Gerar os orçamentos":** entendi como o **cálculo de comissão do RH ao faturar**, que foi o que ele descreveu. Se "orçamento" for outra coisa (por exemplo, custo de mão de obra por OP para orçar vendas), é uma etapa nova.
 - O caminho de gravação foi exercitado **por simulação**; nada foi gravado na produção.
 
+### ✅ Etapa 7.9 — Status "Desligado" no RH
+
+**Feito em:** 30/09/2026, por pedido do usuário no chat ("Adicionar status em RH de desligado, pois hoje não podemos mudar uma pessoa que foi demitida ou se demitiu para um status que faça jus"). Ele escolheu entre opções minhas: **sai das listas de trabalho e fica num bloco "Desligados"**; registrar **data + motivo**; e **deixar como estão os 6 cadastros que já estavam escondidos**.
+
+**Ponto de partida conferido (30/09/2026):**
+
+- A única saída do RH era a **lixeira** (🗑️ "Excluir"), que só esconde o cadastro (`ativo = false`): sem data, sem motivo, e a pessoa some de tudo. Os status de presença eram Ativo, Em Viagem, Folga, Férias e Afastado.
+- `status_presenca` é **texto livre** (sem restrição no banco): "Desligado" não exige mudança de estrutura. Horas, autorizações e fechamentos de comissão apontam para o cadastro **em cascata** (`ON DELETE CASCADE`): excluir de verdade apagaria o histórico, por isso nada aqui exclui.
+- 6 cadastros já estavam escondidos pela lixeira: ADRIAN GABRIEL BATISTUTA, ALDO FABIAN BATISTUTA, ARILSON EUGENIO VIEIRA FILHO, JAIRO BORGES, LUCIANO SPINELLI e LUIZ CLAUDIO. **Nenhum aparece em equipe de OP, comissão ou fechamento** (só o Luciano tem 3 lançamentos de horas).
+
+**O que foi feito** (`RHTab.tsx`; migração `rh_funcionarios_desligamento`):
+
+- **Migração (só acrescenta):** duas colunas em `rh_funcionarios` — `data_desligamento` (data) e `motivo_desligamento` (só "Demissão" ou "Pedido de demissão", com trava no banco). **Nenhuma linha existente foi alterada.**
+- **Seletor de status** ganhou **"Desligado"**. Escolhê-lo **não grava na hora**: abre a janela **"Desligar colaborador"**, que pede a **data** (vem com hoje; não pode ser anterior à admissão) e o **motivo** (demissão pela empresa ou pedido de demissão). Confirmando, grava `status_presenca = Desligado`, `ativo = false`, a data e o motivo, e registra no histórico do RH quem fez.
+- **Bloco "Desligados"** (logo abaixo do Status dos Colaboradores): nome, tipo, cargo, **data**, **motivo**, e os botões **Corrigir** (abre a janela preenchida) e **Reativar** (pede confirmação; volta para Ativo e limpa data e motivo).
+- **Sai das listas de trabalho sozinho:** como a pessoa fica com `ativo = false`, deixa de aparecer no seletor de responsável (`ColaboradorSelect`), no Lançar Horas e na Autorização, e do Status dos Colaboradores.
+- **Não some das contas antigas:** as telas que mostram histórico (**comissões, banco de horas/KPIs de horas, lista de autorizações**) recebem os desligados junto, para manterem o **nome e o percentual** de quem já saiu; sem isso a comissão antiga dele apareceria como "—" e 0%. A aba avulsa "Comissões de técnicos" também carrega os desligados.
+
+**Testado:** `teste_25` (navegador, dado real, gravações bloqueadas) **20/20**: o seletor tem as 6 opções; escolher "Desligado" abre a janela e **não grava** (e o seletor volta ao que era); sem motivo e data anterior à admissão são recusados; cancelar não grava; confirmar grava **só aquela pessoa** com `{Desligado, ativo false, data, motivo}` e o histórico; o bloco "Desligados" lista a pessoa com data (15/09/2026) e motivo; ela **sai da lista de status**; Corrigir abre preenchido e grava; Reativar pede confirmação e volta para Ativo limpando data e motivo; com um técnico real (CELIO) **simulado como desligado**, a comissão dele continua com **nome, percentual, 2 OP, base R$ 352,00 e comissão R$ 0,88**, e os outros 5 técnicos ficam idênticos; banco real idêntico no fim (46 linhas do RH). **A trava do banco recusa um motivo fora da lista** (teste desfeito por exceção, nada gravado). **Comissões — fotografia antes × depois** (20 telas): **24 técnicos, 30 cartões, 448 linhas idênticos**. Build ok.
+
+**O que ficou de fora / limites:**
+
+- **Os 6 cadastros já escondidos não foram tocados** (decisão dele): seguem com `ativo = false` e o status antigo, **fora** do bloco "Desligados". Quando ele disser quais são desligados, é marcar pela tela nova (ou eu aplico, relatando a contagem).
+- **O login do sistema não é alterado:** quem saiu e tinha acesso continua podendo entrar até ser desativado em Admin › Usuários (a janela avisa isso).
+- **Banco de horas de quem saiu** não tem acerto final aqui: o saldo não aparece nas listas de trabalho. Os lançamentos continuam gravados.
+- **RelatoriosRH (consolidado de horas)** e o relatório de uniformes seguem só com quem está ativo, de propósito: incluir os desligados mudaria os números desses relatórios.
+- O caminho de gravação foi exercitado **por simulação**; nada foi gravado na produção.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -1943,6 +1971,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
   Posso aplicar pelo banco, com a contagem das OPs mexidas, ou a equipe corrige pela tela — decisão do usuário.
 - **Quem edita a ficha (7.7):** hoje só Admin e Gerente; a equipe de Comercial/CRM (quem cadastra) também deve poder?
 - **Percentual de comissão dos serralheiros (7.8):** JORGE FERREIRA, MARLON PAULO, SALOMÃO e WESLEI estão no RH como "não recebe comissão"; só o MURIEL tem percentual (0,5%). Quem é apontado na serralheria sem percentual sai com comissão R$ 0,00. Qual percentual cada um recebe em cima da MO de serralheria? E o serralheiro pode ter **dois** percentuais (um na serralheria, outro na adaptação)?
+- **Os 6 cadastros já escondidos pela lixeira (7.9):** ADRIAN GABRIEL BATISTUTA, ALDO FABIAN BATISTUTA, ARILSON EUGENIO VIEIRA FILHO, JAIRO BORGES, LUCIANO SPINELLI e LUIZ CLAUDIO. Quais deles são desligados (e com que data e motivo)? Os outros voltam para a lista ou ficam escondidos?
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
@@ -1997,3 +2026,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Etapa 10 (kiting):** "marcar todos" / "todos de <setor>" / "desmarcar todos" nas sugestões de fabricação, **sem marcar nada sozinho** (regra de 21/09/2026 mantida); peça repetida na BOM **soma** a quantidade; o que a pessoa ajustou ou digitou à mão nunca é desfeito pelos botões. A premissa do plano ("dezenas de cliques") estava errada: são de 1 a 5 hoje. |
 | 30/09/2026 | **Editar veículo (7.7, pedido do usuário):** corrigir a ficha = **editar a mesma ficha**, não criar outra (as OPs e a estrutura de material apontam para ela). A tela é o mesmo modal do cadastro; a lista fica no Admin → "🚗 Veículos". O "Modelo" das OPs ligadas só é trocado **com a caixinha marcada e uma confirmação com a contagem** (vem marcada só se o nome mudou; o texto digitado à mão, como "C3 YOU", não é sobrescrito sem pedir). **Suposição minha, não confirmada com o usuário:** só Admin e Gerente editam; sem botão de excluir; o histórico guarda a ficha e cada OP mexida. |
 | 30/09/2026 | **Equipe da OP (7.8, pedido do usuário):** quem trabalhou na **adaptação** (responsável/apoio) e na **serralheria** (lista nova, papel `serralheria` em `responsaveis_producao`) é apontado pelo gerente da produção e **pode ser corrigido em qualquer etapa até o Fiscal faturar**; depois **trava para todos, inclusive Admin**. Edita Admin, qualquer "Gerente …" e quem tem a aba Adaptação. Ao faturar, a comissão sai **sozinha** em cima da **MO de adaptação** (quem trabalhou na adaptação) e da **MO de serralheria** (quem trabalhou na serralheria). **Suposição minha, não confirmada:** serralheiro recebe o **percentual único do cadastro do RH**; apoio só na adaptação; caixinha de lote desmarcada por padrão. |
+| 30/09/2026 | **Status "Desligado" no RH (7.9, pedido do usuário):** a pessoa desligada **sai das listas de trabalho** (`ativo = false`: seletor de responsável, Lançar Horas, Autorização) e fica num **bloco "Desligados"** com **data + motivo** (demissão pela empresa / pedido de demissão), podendo ser corrigida ou reativada; o nome e o percentual dela seguem nas **comissões, horas e autorizações** antigas. **Os 6 cadastros já escondidos pela lixeira ficam como estão** até ele dizer quais são desligados. **Nada é excluído** (horas, autorizações e fechamentos apagam em cascata). Suposição minha: o login do sistema não é mexido (a janela avisa). |
