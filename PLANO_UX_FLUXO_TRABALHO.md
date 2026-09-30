@@ -1789,6 +1789,34 @@ não vê valores), falha de consulta (500) sem quebrar a tela. **Nenhuma gravaç
 - **Sem contador no menu** ("Compras (2)"): o painel só é visto depois de abrir Compras.
 - O painel mostra as compras **da etapa de aprovação apenas**; as que exigem alçada por valor ou departamento (`pcp_aprovacoes`) continuam sendo resolvidas dentro da Mesa de Cotações.
 
+### 🔧 Correção da Etapa 8 — ninguém conseguia aprovar compra (PC-DEBMAA parado)
+
+**Achado em:** 30/09/2026, por relato do usuário ("foi selecionado a cotação vencedora, mas o Weber nem ninguém consegue aprovar depois dos últimos ajustes").
+
+**Causa — duas, que se somavam:**
+
+1. **A sessão do navegador nunca recebia a marca `pode_aprovar_compra`.** O login (`LoginTab.tsx`), o "ver como" (`AdminTab.tsx`) e a atualização da sessão (`DashboardTab.tsx`) copiam uma **lista fixa** de campos do usuário, e essa marca não estava nela. Desde a regra de 24/09 ("aprovar é de quatro pessoas"), `podeAprovarCompra(currentUser)` dava **falso para todo mundo**, inclusive para os quatro marcados no Admin (Luciano Spinelli, Bruna, Rafael Nunes e Raphael Weber Mello). Nada aparecia errado até alguém precisar aprovar; **o painel "Esperando a sua aprovação" da Etapa 8 também nunca apareceu em produção**.
+2. **Não havia botão para aprovar uma alçada já pendente.** O botão "Aprovar esta cotação como vencedora" some quando há alçada pendente, e o painel de aprovação manda "aprovar clicando em ✅ Aprovar na cotação vencedora" — mas esse botão não existia (`aprovarNivelAtivo` não estava ligada a nada).
+
+**O que aconteceu no PC-DEBMAA** (ATLASMAQ, R$ 55.421,18): às 15h38 o Weber escolheu a vencedora; o sistema, sem reconhecê-lo como aprovador, **criou a alçada de nível 1 e a deixou pendente**; em seguida o botão sumiu. Ficou sem saída para os quatro.
+
+**Por que a Etapa 8 não pegou:** o `teste_17` (meu) **injetava `pode_aprovar_compra: true` direto na sessão do navegador**, coisa que o login real nunca faz. Ele provou a tela, não o caminho real. O `teste_26` novo usa a sessão **como o login a monta** (sem a marca) e os ids reais do Weber e do Luiz.
+
+**Correção** (`LoginTab.tsx`, `AdminTab.tsx`, `DashboardTab.tsx`, `ComprasTab.tsx`; nenhum dado mexido):
+
+- A marca entra no **login**, no **"ver como"** e na **leitura que atualiza a sessão** — quem já estava logado ganha a marca **ao reabrir o sistema**, sem novo login.
+- A lista "Esperando a sua aprovação" **recarrega quando a marca chega** (antes o intervalo de 30 s ficava preso ao usuário sem a marca e o painel nunca carregava).
+- A cotação **vencedora** ganha o botão **"✅ Aprovar"** quando há alçada pendente (só para quem aprova; pede a senha; **só resolve a pendência**: confere no banco que a alçada já está pendente para a mesma vencedora e **não cria outra linha de aprovação nem devolve o pedido à etapa**).
+
+**Testado:** `teste_26` (navegador, dado real, gravações bloqueadas, senha **simulada**) **15/15**: a sessão do Weber recebe a marca; o painel aparece com os 2 pedidos; a Mesa do PC-DEBMAA mostra "Aprovação — Nível 1" com "Não aprovar" e o "✅ Aprovar" na ATLASMAQ; aprovar grava a aprovação do nível 1 em nome dele e passa o pedido para **Aprovado** com histórico, **sem** criar linha nova; o pedido sem vencedora (PC-N40GWU) segue com "Aprovar esta cotação como vencedora" nas duas cotações; **quem não aprova** (Luiz, do Compras) continua sem painel e sem botão e vê "Aguardando aprovação de: BRUNA, LUCIANO SPINELLI, RAFAEL NUNES, RAPHAEL WEBER MELLO". **O mesmo teste no código que estava no ar falha** (marca `undefined`, sem painel, sem botão). `teste_17` (painel da Etapa 8) 24/24. Build ok.
+
+**O PC-DEBMAA continua pendente no banco** — não aprovei em nome de ninguém; quem aprova decide, depois de atualizar a tela.
+
+**Fora / limites:**
+
+- Quem escolhe a vencedora **sem ser aprovador** (o botão por cotação aparece para todos quando não há pendência) cria a alçada pendente e espera os aprovadores — agora esses conseguem aprovar. Não mudei quem vê o botão.
+- **Mesmo vício em outra marca:** `ver_valores` (valores ocultos por pessoa no Admin) também **não chega à sessão**; hoje **os valores aparecem para todos**, inclusive para as 6 pessoas marcadas para não ver. Não mexi (ver "Perguntas em aberto").
+
 ### ✅ Etapa 9 — Reorganizar a tela do PCP
 
 **Feito em:** 30/09/2026.
@@ -1972,6 +2000,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Quem edita a ficha (7.7):** hoje só Admin e Gerente; a equipe de Comercial/CRM (quem cadastra) também deve poder?
 - **Percentual de comissão dos serralheiros (7.8):** JORGE FERREIRA, MARLON PAULO, SALOMÃO e WESLEI estão no RH como "não recebe comissão"; só o MURIEL tem percentual (0,5%). Quem é apontado na serralheria sem percentual sai com comissão R$ 0,00. Qual percentual cada um recebe em cima da MO de serralheria? E o serralheiro pode ter **dois** percentuais (um na serralheria, outro na adaptação)?
 - **Os 6 cadastros já escondidos pela lixeira (7.9):** ADRIAN GABRIEL BATISTUTA, ALDO FABIAN BATISTUTA, ARILSON EUGENIO VIEIRA FILHO, JAIRO BORGES, LUCIANO SPINELLI e LUIZ CLAUDIO. Quais deles são desligados (e com que data e motivo)? Os outros voltam para a lista ou ficam escondidos?
+- **Valores ocultos que não estão ocultos (achado da correção da aprovação):** `ver_valores` está desligado no Admin para JAIRO BORGES, SERGIO DANIEL HAMANN, LUIZ ALBANEZ, MARLON DE AMORIM, MURIEL DOS REIS GOBEL e FERNANDO WAECHTER, mas a marca **nunca chega à sessão**, então **todos veem os valores**. Ligar a regra passa a **esconder valores** dessas 6 pessoas (inclui o Luiz Albanez, do Compras, que lida com cotação). Ligo? (`pode_deletar_anexos` tem o mesmo vício, mas ninguém está marcado.)
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
@@ -2028,3 +2057,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Equipe da OP (7.8, pedido do usuário):** quem trabalhou na **adaptação** (responsável/apoio) e na **serralheria** (lista nova, papel `serralheria` em `responsaveis_producao`) é apontado pelo gerente da produção e **pode ser corrigido em qualquer etapa até o Fiscal faturar**; depois **trava para todos, inclusive Admin**. Edita Admin, qualquer "Gerente …" e quem tem a aba Adaptação. Ao faturar, a comissão sai **sozinha** em cima da **MO de adaptação** (quem trabalhou na adaptação) e da **MO de serralheria** (quem trabalhou na serralheria). **Suposição minha, não confirmada:** serralheiro recebe o **percentual único do cadastro do RH**; apoio só na adaptação; caixinha de lote desmarcada por padrão. |
 | 30/09/2026 | **Status "Desligado" no RH (7.9, pedido do usuário):** a pessoa desligada **sai das listas de trabalho** (`ativo = false`: seletor de responsável, Lançar Horas, Autorização) e fica num **bloco "Desligados"** com **data + motivo** (demissão pela empresa / pedido de demissão), podendo ser corrigida ou reativada; o nome e o percentual dela seguem nas **comissões, horas e autorizações** antigas. **Os 6 cadastros já escondidos pela lixeira ficam como estão** até ele dizer quais são desligados. **Nada é excluído** (horas, autorizações e fechamentos apagam em cascata). Suposição minha: o login do sistema não é mexido (a janela avisa). |
 | 30/09/2026 | **OP 1450 duplicada unificada (correção de dado, pedido do usuário):** existiam `OPL A 1450.2607` (13/07, chassi HJ023180, modelo RANGER, CQ 12/12 OK) e `1450.2608` (27/08, R$ 20.000, ligada ao CRM, equipe apontada). **Ficou a 1450.2608**, que recebeu da antiga só o que estava **vazio** nela (chassi, previsão de entrega, observação comercial, tipo de projeto, anotações da engenharia); **onde as duas tinham valor, valeu o da mais nova** (inclusive cliente e modelo, que na nova são a descrição da OP, e não "RANGER"). Histórico (10), CQ (1), menções (4) e acompanhamentos (2) da antiga **passaram para a que ficou** — a OP passou a ter **2 CQs** (um com 12/12 OK, outro aprovado com os 12 itens pendentes). A antiga foi para a **Lixeira do Admin** (24 h) e há cópia completa fora do sistema. Nada mais foi tocado: o **card do CRM "OPL A 1450.2607 — POMERODE"** continua lá, sem OP ligada. |
+| 30/09/2026 | **Aprovação de compra travada (correção da Etapa 8):** a marca `pode_aprovar_compra` **passa a fazer parte da sessão** (login, "ver como" e atualização), e a cotação vencedora ganha o botão **"✅ Aprovar"** para a alçada já pendente. **Teste de sessão deve usar a sessão como o login a monta**, sem injetar permissão à mão (o `teste_17` injetava e escondeu o erro). O PC-DEBMAA **não foi aprovado por mim**: segue pendente para quem aprova. |

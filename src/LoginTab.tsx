@@ -73,6 +73,9 @@ export default function LoginTab() {
         permissoes_rh:         usuario.permissoes_rh         || [],
         recebe_alerta_analise: usuario.recebe_alerta_analise || false,
         pode_enviar_avisos:    usuario.pode_enviar_avisos    || false,
+        // Quem aprova compra (30/09/2026): sem isto a marca nunca chegava ao navegador, e desde a regra de
+        // 24/09 o sistema tratava TODO MUNDO como não-aprovador — inclusive os quatro marcados no Admin.
+        pode_aprovar_compra:   usuario.pode_aprovar_compra   || false,
         ultimo_login_anterior: ultimoLoginAnterior,
       }));
 

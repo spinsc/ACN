@@ -667,7 +667,9 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
   useEffect(() => {
     if (!currentUserProp?.id) return;
     supabase.from('auth_usuarios')
-      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise')
+      // `pode_aprovar_compra` entra aqui (30/09/2026) para quem já estava logado: a sessão guardada antes não
+      // tem a marca, e sem ela ninguém aprovava compra. A leitura corrige a sessão na próxima abertura.
+      .select('id,email,nome,perfil,abas_permitidas,pode_autorizar_rh,permissoes_crm,permissoes_rh,recebe_alerta_analise,pode_aprovar_compra')
       .eq('id', currentUserProp.id)
       .single()
       .then(({ data }) => {

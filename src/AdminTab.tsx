@@ -259,6 +259,7 @@ function PainelUsuarios() {
         permissoes_rh: Array.isArray(u.permissoes_rh) ? u.permissoes_rh : [],
         recebe_alerta_analise: u.recebe_alerta_analise || false,
         pode_enviar_avisos: u.pode_enviar_avisos || false,
+        pode_aprovar_compra: u.pode_aprovar_compra || false,
         ultimo_login_anterior: null,
       }));
     } catch (e: any) { alert('Erro: ' + e.message); return; }

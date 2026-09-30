@@ -928,7 +928,10 @@ export default function ComprasTab({ currentUser }) {
     loadDepartamentos();
     const t = setInterval(()=>load(true), 30000);
     return () => clearInterval(t);
-  }, [filtro]);
+    // `podeAprovarCompra` na lista (30/09/2026): o painel "Esperando a sua aprovação" só carrega para quem
+    // aprova, e a marca chega DEPOIS da tela abrir (a sessão é atualizada do banco). Sem isto, o intervalo de
+    // 30 s ficava preso ao usuário de antes, sem a marca, e o painel nunca aparecia.
+  }, [filtro, podeAprovarCompra(currentUser)]);
 
   // Deep-link vindo do painel de Menções ("Pedido X" clicável): abre a Mesa de
   // Cotações do pedido direto, em vez de só cair na aba Compras genérica. Usa um
@@ -1612,13 +1615,23 @@ export default function ComprasTab({ currentUser }) {
     const textoJustificativa = (cotacao.area_livre || '')
       .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
       || `Cotação vencedora: ${cotacao.fornecedor_nome}`;
-    const { error } = await dispararOuConfirmar(modalCotacoes.id, {
-      vencedora_id: cotacao.id,
-      justificativa_vencedora: textoJustificativa,
-      fornecedor: cotacao.fornecedor_nome,
-      valor_compra: cotacao.valor,
-      // sem data_prevista_recebimento: ela é do Compras, na efetivação
-    });
+    // Se a alçada JÁ está pendente para esta mesma vencedora, só falta aprovar: disparar de novo criaria
+    // outra linha de aprovação pendente para o mesmo nível (30/09/2026). Confere no banco, não no estado da tela.
+    const { data: jaPendentes } = await supabase.from('pcp_aprovacoes').select('id,tipo')
+      .eq('pedido_id', modalCotacoes.id).eq('status', 'pendente');
+    const alcadaJaPendente = (jaPendentes || []).some((a: any) => a.tipo !== 'departamento');
+    const { data: pedidoVenc } = await supabase.from('pcp_pedidos_compra')
+      .select('vencedora_id').eq('id', modalCotacoes.id).maybeSingle();
+    const mesmaVencedora = pedidoVenc?.vencedora_id === cotacao.id;
+    const { error } = alcadaJaPendente && mesmaVencedora
+      ? { error: null }
+      : await dispararOuConfirmar(modalCotacoes.id, {
+          vencedora_id: cotacao.id,
+          justificativa_vencedora: textoJustificativa,
+          fornecedor: cotacao.fornecedor_nome,
+          valor_compra: cotacao.valor,
+          // sem data_prevista_recebimento: ela é do Compras, na efetivação
+        });
     if (error) {
       setVerificandoSenha(false);
       setErroSenha('Erro: ' + error.message);
@@ -2481,6 +2494,17 @@ export default function ComprasTab({ currentUser }) {
                       <button className="acn-btn" style={{background:'#16a34a',width:'100%',marginTop:6}}
                         onClick={()=>aprovarCotacaoComoVencedora(c)}>
                         ✅ Aprovar esta cotação como vencedora
+                      </button>
+                    )}
+                    {/* Aprovação de alçada JÁ pendente (30/09/2026): o painel de cima manda "aprovar clicando em
+                        ✅ Aprovar na cotação vencedora", mas o botão acima some quando há pendência — e não havia
+                        outro. A compra ficava parada sem ninguém conseguir aprovar. Agora quem aprova vê o botão
+                        na cotação que já é a vencedora (só nela: a escolha da vencedora já foi feita). */}
+                    {!compraDecidida && vencedoraId === c.id && podeAprovarCompra(currentUser)
+                      && aprovacoesPedido.some(a => a.status === 'pendente' && a.tipo !== 'departamento') && (
+                      <button className="acn-btn" style={{background:'#16a34a',width:'100%',marginTop:6}}
+                        onClick={()=>aprovarCotacaoComoVencedora(c)}>
+                        ✅ Aprovar
                       </button>
                     )}
                     </>)}
