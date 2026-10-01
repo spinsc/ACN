@@ -1837,6 +1837,20 @@ Respondeu três perguntas minhas: (1) **é o apontamento que já existe, feito p
 
 **Fora / não sei:** **não dá para saber se alguém já foi salvo sem comissão por causa disso** — o banco só guarda o resultado (comissão desligada), não o clique. Quem acha que cadastrou comissão e vê R$ 0,00 na tela de comissões pode ter caído nesta armadilha; vale conferir, pelo cadastro, **quem deveria receber** (ver também a pergunta sobre os serralheiros em "Perguntas em aberto").
 
+### ✅ Etapa 7.15 — Relatório de Técnicos (RH): a data das OPs aparecia um dia antes
+
+**Feito em:** 01/10/2026. **Achado** ao ler o código dos Relatórios para a Etapa 12c3 e conferido com dado real — o mesmo erro da Etapa 7.10 (Logística).
+
+**Causa:** a coluna `oples.data_entrada` é do tipo **date** ("2026-09-30"). O relatório formatava com `new Date(d).toLocaleDateString('pt-BR')`: o JavaScript lê "2026-09-30" como **meia-noite de Londres**, que no Brasil ainda é o dia anterior. As datas das **ordens de serviço** (`timestamp with time zone`) estavam certas; só as das OPs erravam.
+
+**Medido com dado real (antes):** **0 das 200 OPs** do relatório mostravam a data certa — por exemplo, a OP 1673.2609/24, do dia **30/10/2026**, aparecia como **29/10/2026**. Vale também para o **HTML da impressão**, que usa a mesma função.
+
+**O que foi feito** (`RHTab.tsx`, **uma linha**; nenhum dado mexido): o formatador do relatório passou a tirar o dia **direto do texto** quando ele só tem a data, e a seguir o fuso de quem usa quando tem hora (as OS têm).
+
+**Testado:** `teste_35` (navegador, **dado real**, só leitura): abre cada um dos 4 técnicos e compara a data de cada OP na tela com o banco — **antes 0/200 certas, depois 200/200**. Build ok.
+
+**Fora / pendente:** o **Histórico de comissões** (`HistoricoComissoes`) tem a mesma forma de formatador (`new Date(d)`) — será conferido com dado real na **12c4**, antes da comparação. Continuam valendo as **52 ocorrências** da pergunta sobre datas em outras telas.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2336,5 +2350,6 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 01/10/2026 | **Fretes migrados para o design system (12b3):** o status do frete vira `Selo` por família (Cotação cinza, Aguardando aprovação âmbar, Em trânsito azul, Entregue verde, Cancelado vermelho); **"Aprovar" é o botão principal e "Rejeitar" é vermelho**; cancelar e remover cotação viram ícone com nome; o vínculo ao processo vira `Chips`. **Nome de classe novo se confere com `grep` em `src` inteiro antes de criar** (a `acn-busca` já era a busca do cabeçalho). Nas comparações antes/depois, **gravações disparadas sem esperar a resposta são comparadas como conjunto**. Suposições minhas, não confirmadas: as cores do status por família (o "Aguardando aprovação" era laranja forte), os botões de ação como ícone e o botão "Cotações" em destaque na linha. |
 | 01/10/2026 | **CEP na embalagem (7.13, decisão do usuário):** **CEP obrigatório e válido** e **cidade e UF preenchidas pelo CEP**, só na janela de embalagem do Almoxarifado. Suposições minhas: o CEP sobrescreve cidade e UF; "inexistente" só quando o ViaCEP e o BrasilAPI concordam; serviço fora do ar não barra a embalagem; CEP gravado como 00000-000. |
 | 01/10/2026 | **Janela do colaborador (7.14):** o par de botões "Sim / Não" sob "Recebe Comissão?" saiu (não gravava nada); ficou só "Recebe Comissão / Sem Comissão". Correção só de tela; nenhum dado mexido. |
+| 01/10/2026 | **Datas do Relatório de Técnicos (7.15):** coluna *date* nunca passa por `new Date(texto)`; o relatório tira o dia do texto (como na 7.10). Correção só de formatação; nenhum dado mexido. |
 | 01/10/2026 | **RH migrado em quatro fatias (12c1 a 12c4), por quadro da página, de cima para baixo.** Na 12c1: o status de presença e o tipo de lançamento passam a usar as **famílias de cor** do design system (o `Selo` e a classe `acn-sel-status`), o recolher dos quadros mantém a lógica e perde a seta duplicada (`no-collapse`). Suposições minhas, não confirmadas: Férias na cor da marca, Folga e Viagem no mesmo azul, e os 10 tipos de lançamento em 6 famílias. |
 | 01/10/2026 | **Janelas de cadastro do RH (12c2):** as fileiras de botões coloridos viram `Chips` (mesmas opções, mesmo valor gravado); a janela passa a ser a `modal-overlay` do sistema. Suposições minhas, não confirmadas: o aviso de "sem duração" do lançamento usa Falta âmbar, Atestado verde e os demais azul; Saída âmbar e Entrada azul na lista de autorizações. |

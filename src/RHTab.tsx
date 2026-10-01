@@ -1618,7 +1618,10 @@ function RelatorioTecnicos({ funcionarios }) {
     load();
   }, [funcionarios]);
 
-  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  // Etapa 7.15 (01/10/2026): oples.data_entrada é do tipo DATE ("2026-09-30"). new Date("2026-09-30") é meia-noite de Londres, que no Brasil
+  // ainda é o dia anterior: as 200 OPs do relatório (e o HTML da impressão) mostravam um dia a menos. Texto só com a data: o dia sai direto
+  // do texto. Data com hora (as OS têm) continua pelo fuso de quem usa. Mesmo erro já corrigido na Logística (Etapa 7.10).
+  const fmtDt = (d) => !d ? '—' : /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d).split('-').reverse().join('/') : new Date(d).toLocaleDateString('pt-BR');
   const STC = { 'Em Execucao':'#8b5cf6','Manutencao Concluida':'#0d9488','Aguardando Inicio':'#f59e0b' };
   const stcOf = (s) => { for (const k of Object.keys(STC)) if (s && s.includes(k.split(' ')[0])) return STC[k]; return '#94a3b8'; };
 
