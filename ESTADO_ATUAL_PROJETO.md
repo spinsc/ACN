@@ -297,7 +297,7 @@ Antes de qualquer deploy, rodar no Supabase SQL Editor (na ordem):
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `src/DashboardTab.tsx` | Shell principal: sidebar, roteamento de tabs, auth, CSS global |
+| `src/DashboardTab.tsx` | Shell principal: menu lateral em **gaveta** (escondido; abre por cima pelo botão do cabeçalho — Etapa 14a, 01/10/2026), roteamento de tabs, auth, CSS global |
 | `src/supabaseClient.ts` | Cliente Supabase com URL e anon key hardcoded |
 | `src/CrmTab.tsx` | Comercial/CRM — kanban venda direta, faturamentos, OPLs |
 | `src/LicitacoesTab.tsx` | Licitações — lista, filtros, modal detalhado, relatório |

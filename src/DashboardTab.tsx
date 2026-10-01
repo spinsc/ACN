@@ -199,9 +199,14 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-faixa-vercomo button { background:#fff; color:#7c2d12; border:none; border-radius:6px; padding:3px 10px; font-weight:700; cursor:pointer; font-size:12px; }
 
 /* ── MENU LATERAL ── */
-.acn-sidebar { width:232px; flex-shrink:0; background:#fff; border-right:1px solid #dee4ea; display:flex; flex-direction:column; height:100vh; }
-.acn-marca { height:56px; display:flex; align-items:center; padding:0 16px; border-bottom:1px solid #edf1f4; flex-shrink:0; }
-.acn-marca img { height:36px; max-width:100%; object-fit:contain; }
+/* Etapa 14a (01/10/2026, pedido do usuário): o menu NÃO ocupa mais uma coluna da tela. Ele fica escondido e abre POR CIMA do conteúdo, abaixo do cabeçalho, pelo
+   botão ao lado do logo; escolher uma tela fecha o menu. Era assim só no celular; agora vale para qualquer tela. Escondido, ele sai da ordem do Tab (visibility). */
+.acn-sidebar { position:fixed; top:56px; bottom:0; left:-260px; z-index:300; width:240px; visibility:hidden; background:#fff; border-right:1px solid #dee4ea; display:flex; flex-direction:column; transition:left .2s ease, visibility 0s linear .2s; }
+.acn-sidebar.mob-open { left:0; visibility:visible; box-shadow:6px 0 24px rgba(23,33,43,.22); transition:left .2s ease; }
+.acn-mob-overlay { display:none; position:fixed; inset:0; top:56px; background:rgba(15,23,42,.38); z-index:299; }
+.acn-mob-overlay.mob-open { display:block; }
+/* o logo foi do menu para o cabeçalho, ao lado do botão */
+.acn-logo-topo { height:32px; width:auto; margin:0 4px 0 2px; display:block; flex-shrink:0; }
 .acn-nav-lista { flex:1; overflow-y:auto; padding:8px 8px 12px; display:flex; flex-direction:column; gap:1px; }
 .sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 10px 4px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
 .sidebar-section:hover { color:#3b4856; }
@@ -365,22 +370,17 @@ body.dark .acn-footer-setor strong { color:#7fd8cc !important; }
 /* ══════════════════════════════════════════════════════════════════
    MOBILE — tela estreita (< 700px)
    ══════════════════════════════════════════════════════════════════ */
-.acn-hamburger { display:none; align-items:center; justify-content:center; width:36px; height:36px; background:transparent; border:none; border-radius:8px; color:#3b4856; cursor:pointer; flex-shrink:0; }
+.acn-hamburger { position:relative; display:flex; align-items:center; justify-content:center; width:36px; height:36px; background:transparent; border:none; border-radius:8px; color:#3b4856; cursor:pointer; flex-shrink:0; }
 .acn-hamburger:hover { background:#eef1f4; }
+/* soma dos avisos que ficam nos itens do menu (análises de Engenharia/Produção e WhatsApp do CRM): com o menu fechado eles não aparecem, então vêm no botão */
+.acn-hamburger-aviso { position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:#c2700f; color:#fff; font-size:10px; font-weight:700; line-height:16px; text-align:center; pointer-events:none; }
 
 @media (max-width:700px) {
-  /* Menu vira gaveta; cabeçalho enxuto */
-  .acn-hamburger { display:flex; }
+  /* cabeçalho enxuto (o menu em gaveta é o mesmo de todas as telas, definido acima) */
+  .acn-logo-topo { display:none; }
   .acn-header { padding:0 8px; gap:8px; }
   .acn-trilha-secao, .acn-trilha-sep, .acn-rotulo, .acn-kbd { display:none; }
   .acn-busca { min-width:110px; }
-  .acn-sidebar {
-    position:fixed; top:0; bottom:0; left:-250px; z-index:300; width:240px;
-    transition:left .22s ease; box-shadow:none;
-  }
-  .acn-sidebar.mob-open { left:0; box-shadow:3px 0 16px rgba(0,0,0,.25); }
-  .acn-mob-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.40); z-index:299; }
-  .acn-mob-overlay.mob-open { display:block; }
 
   .acn-main  { padding:8px; }
   .sec-body  { overflow-x:auto; -webkit-overflow-scrolling:touch; }
@@ -429,7 +429,7 @@ body.dark .acn-user-btn { background:#133a36 !important; color:#86d9ce !importan
 body.dark .acn-user-menu { background:#1e293b !important; border-color:#334155 !important; color:#e2e8f0 !important; }
 body.dark .acn-user-menu button { color:#cbd5e1 !important; }
 body.dark .acn-user-menu button:hover { background:#0f172a !important; }
-body.dark .acn-marca, body.dark .acn-parceiro, body.dark .acn-user-menu .acn-user-menu-topo { border-color:#263045 !important; }
+body.dark .acn-parceiro, body.dark .acn-user-menu .acn-user-menu-topo { border-color:#263045 !important; }
 body.dark .sidebar-item .sidebar-icone { color:#64748b; }
 body.dark .sidebar-item.active .sidebar-icone { color:#2dd4bf; }
 body.dark .sidebar-section { color:#7d8ea3 !important; }
@@ -736,6 +736,14 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, []);
+
+  // Esc fecha o menu em gaveta (Etapa 14a)
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [sidebarOpen]);
 
   // Fecha dropdown de busca ao clicar fora
   useEffect(() => {
@@ -1212,6 +1220,12 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     engenharia: { icon:'🔩', cor:'#0e7490', label:'Desenvolvimento (Engenharia)' },
   };
 
+  // Etapa 14a: com o menu escondido, os avisos dos itens (análises técnicas de Engenharia/Produção e as mensagens de WhatsApp do CRM) vêm somados no botão do menu
+  const totalAvisosMenu = SIDEBAR_GROUPS.flatMap(g => g.items).filter(i => isVisible(i.id)).reduce((soma, i) => {
+    const setor = ({ engenharia: 'Engenharia', producao: 'Producao' } as Record<string, string>)[i.id];
+    return soma + (setor ? (analisesPorSetor[setor] || 0) : 0) + (i.id === 'crm' ? waNotifCount : 0);
+  }, 0);
+
   return (
     <>
       <style>{CSS}</style>
@@ -1224,10 +1238,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         />
 
         {/* ── MENU LATERAL ── */}
-        <nav className={`acn-sidebar${sidebarOpen ? ' mob-open' : ''}`} aria-label="Menu principal">
-          <div className="acn-marca">
-            <img src={import.meta.env.BASE_URL + 'logo.png'} alt="ACN Sinal Verde" />
-          </div>
+        <nav id="acn-menu-principal" className={`acn-sidebar${sidebarOpen ? ' mob-open' : ''}`} aria-label="Menu principal">
           <div className="acn-nav-lista">
             {SIDEBAR_GROUPS.map(group => {
               const collapsed = sectionsCollapsed.has(group.section);
@@ -1283,13 +1294,16 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         <div className="acn-coluna">
         {/* ── CABEÇALHO ── */}
         <header className={`acn-header${buscaMobile ? ' acn-busca-aberta' : ''}`}>
-          {/* Celular/tablet: abre o menu */}
+          {/* Botão do menu (todas as telas): abre/fecha a gaveta; com o menu fechado leva a soma dos avisos dos itens */}
           <button
             className="acn-hamburger"
             onClick={() => setSidebarOpen(o => !o)}
-            aria-label="Menu" title="Menu">
+            aria-label="Menu" aria-expanded={sidebarOpen} aria-controls="acn-menu-principal"
+            title={totalAvisosMenu > 0 ? `Menu — ${totalAvisosMenu} aviso(s) nos itens` : 'Menu'}>
             <Icone path={sidebarOpen ? mdiClose : mdiMenu} size={22} />
+            {!sidebarOpen && totalAvisosMenu > 0 && <span className="acn-hamburger-aviso">{totalAvisosMenu > 9 ? '9+' : totalAvisosMenu}</span>}
           </button>
+          <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.png'} alt="ACN Sinal Verde" />
 
           {/* Caminho da tela: seção › aba */}
           {(() => {

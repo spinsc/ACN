@@ -111,6 +111,7 @@ O padrão do projeto é Puppeteer headless em `scratchpad/fstest/`, com o Chrome
 Windows (`C:/Program Files/Google/Chrome/Application/chrome.exe`):
 
 - injetar o usuário em `localStorage.user` para entrar no sistema;
+- **o menu lateral é uma gaveta escondida** (Etapa 14a): para trocar de tela, clique por script em `.sidebar-item` pelo texto de `.sidebar-rotulo` (funciona escondido) ou abra pelo botão `.acn-hamburger`; a área útil das telas é a janela inteira;
 - **interceptar e abortar toda requisição externa que não seja GET/HEAD/OPTIONS** —
   assim nenhum teste grava em produção, e dá para ler o corpo do que *seria* gravado;
 - para simular um cenário que não existe nos dados reais, responder a consulta com

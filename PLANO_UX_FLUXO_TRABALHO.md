@@ -2474,8 +2474,41 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 Só depois que a migração acima cobrir o suficiente — os dois remendos
 deixam de ser necessários quando não sobrar `style` inline pra adivinhar.
 
-### ⬜ Etapa 14 — Reorganizar a barra lateral
-Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
+### 🟡 Etapa 14 — Menu lateral: gaveta (14a ✅) e grupos (14b ⬜)
+
+#### ✅ 14a — Menu lateral em gaveta
+
+**Feito em:** 01/10/2026. **Pedido do usuário:** o menu lateral ocupava cerca de 232 px da tela o dia inteiro, e as pessoas costumam ficar na mesma tela. Ele passa a ficar **escondido**, abre **por cima da tela** por um **botão ao lado do logo** e **fecha ao escolher a tela**, para que **todas as telas usem a janela inteira**. Foi **avaliado antes** (medido nas 31 telas, sem alterar nada) e feito **antes da 12d3**, por escolha do usuário: as medidas de largura das fatias seguintes já nascem na tela final.
+
+**Decisões do usuário** (perguntas clicáveis, opção recomendada primeiro): fazer **agora, antes da 12d3**; a gaveta abre **abaixo do cabeçalho** (o botão continua visível e fecha o menu); os avisos dos itens do menu vêm **somados no botão**.
+
+**O que foi feito** (`DashboardTab.tsx` e `responsivo.css`; **nenhuma tela foi mexida** — todas aparecem dentro de uma única área de conteúdo e nenhuma sabe da largura do menu; **nenhum dado alterado**):
+
+- **O menu vira gaveta em qualquer tela:** o mecanismo (menu fixo, escondido à esquerda, fundo escurecido, botão, fecha ao escolher) **já existia só para celular/tablet**; passou a valer para todas as larguras e as **três versões** que existiam (janela estreita, aparelho de toque e computador) viraram **uma só** (as regras de toque mantêm só o tamanho maior de letra e de alvo).
+- **O botão do menu** aparece em todas as telas, com `aria-expanded`; **o logo saiu do menu e foi para o cabeçalho, ao lado do botão** (some em janela de até 700 px, onde o cabeçalho é estreito).
+- **Com o menu fechado**, ele sai da ordem do Tab (`visibility: hidden`); **Esc**, **clicar no fundo** e **escolher uma tela** fecham.
+- **Soma dos avisos no botão** (as análises técnicas de Engenharia/Produção e as mensagens de WhatsApp do CRM — só dos itens que a pessoa enxerga); aberto, cada item continua mostrando o seu.
+- **Impressão:** o menu continua fora do papel; modo escuro e celular (toque) seguem funcionando.
+
+**Como foi testado** (navegador, dado real, **gravações bloqueadas**, cliques de mouse e toque de verdade): `teste_44` **24/24** (antes: o botão nem existia no computador) — escondido por padrão; conteúdo na **janela inteira** (1400 e 1100 px); botão e logo ao lado; abre **por cima, abaixo do cabeçalho**, sem empurrar o conteúdo; os 31 itens do Admin; Esc, clique fora e escolher "Engenharia" fecham; o selo do botão é a soma dos avisos dos itens; escuro; celular (toque); impressão; **usuário restrito só vê as telas liberadas** (Dashboard, Painel TV e RH).
+
+- **As 31 telas do menu, em 1100, 1400 e 1920 px, com o código real:** **área útil 868 → 1100, 1168 → 1400 e 1688 → 1920 px**; **nenhuma tela com rolagem lateral** na página nem dentro da área; **nenhuma tela deixou de ocupar a largura**; **tabelas que rolavam e deixaram de rolar:** 6 telas a 1400 px e 12 a 1100 px. **Uma tela apareceu com "mais uma tabela rolando" a 1100 px (Cadastro de itens)**: é **falso alarme** — a tabela tem 1.208 px, ainda não tinha carregado na medição antiga e já rolaria no menu fixo (868 px); agora rola menos. Só **7 de 31 telas** têm blocos de **largura máxima fixa** e todos são pequenos (um campo de 400 px, caixas de texto de 720 px para leitura, cartões de 380 px, a barra de abas do Financeiro). Dado real, 0 gravações, 0 erros de console.
+- **Capturas** em claro, escuro e celular: menu fechado (com o selo no botão) e aberto; **0 px de rolagem lateral**.
+- **Regressão:** `teste_20` 24/24, `teste_24` 28/28, `teste_25` 20/20, `teste_28` 6/6, `teste_29` 4/4, `teste_30` 7/7, `teste_31` 5/5, `teste_32` 19/19, `teste_34` 4/4, `teste_35` 3/3, `teste_36` 45/45, `teste_37` 17/17, `teste_38` 9/9, `teste_39` 8/8, `teste_40` 10/10, `teste_42` 9/9, `teste_43` 11/11; build ok. (Uma rodada do `teste_42` deu erro e passou 9/9 em três rodadas seguidas: oscilação.) Os testes que navegam clicando por script em `.sidebar-item` **continuam funcionando com o menu escondido**.
+
+**O que muda para o trabalho daqui para frente:** a **área útil das telas passa a ser a janela inteira** (1400 → 1400, 1100 → 1100; 390 não muda). As medidas de largura das fatias 12d3 a 12d8 valem para esses números; as das fatias já feitas (a 1400 e 1100 px cabiam com folga a 1168 e 868 px) **só ganham espaço**.
+
+**O que ficou de fora / limites:**
+
+- **A 14b** (reorganizar os grupos) segue pendente. Com a gaveta, vale também **deixar a lista caber sem rolar em tela baixa**: em 860 px de altura os últimos grupos rolam **dentro** da gaveta.
+- **Documentos fora do código que citam o "menu lateral"** e ficam desatualizados: **o Manual (`Manual_ACN_Sinal_Verde.docx` e o `.pdf`)** e **o treinamento (`ACN_Sinal_Verde_Treinamento.pptx`)**. Não os alterei (são arquivos do usuário).
+- **Não testado em aparelho antigo** (iPad com iOS 10): o menu em gaveta que ele já usava é o mesmo, mas o computador agora também o usa.
+- **Não feitos** (propostos na avaliação): atalho de teclado para abrir o menu e um "fixar menu" opcional. Não conferi o visual das 31 telas uma a uma (medi todas e olhei PCP, CRM e Painel TV).
+
+**O que a 14a ensinou:** (1) **avaliar antes de mexer** — injetar o CSS no navegador de teste e passar por todas as telas mostrou o impacto real sem tocar no código; (2) **o sistema já tinha 90% do mecanismo** (gaveta do celular): a mudança foi unificar, não inventar; (3) o **medidor de tabelas que rolam depende de a tela ter carregado**: dar tempo antes de medir (foi o que gerou o falso alarme do Cadastro de itens).
+
+#### ⬜ 14b — Reorganizar os grupos do menu
+Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis; com o menu em gaveta, também **fazer a lista caber sem rolar em tela baixa** (por exemplo, abrir só o grupo da tela atual por padrão).
 
 ---
 
@@ -2659,5 +2692,6 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | 01/10/2026 | **Chamados NFC — filtro e contador (R25, resposta do usuário):** **escolher o status no filtro já recarrega a lista** (o botão "Carregar" continua, relendo com o filtro escolhido) e o **"N aberto(s)" do cabeçalho é o total real de chamados abertos** (uma leitura à parte), não só os carregados (`carregarChamadosNfc`, `SacTab.tsx`). Aplicada em 01/10/2026; `teste_40` 10/10 (antes 3/10); contra o banco real só mudou o que a resposta pede. **Os testes de fotografia e de comportamento da 12d1 (`snap_sac1`/`comport_sac1`) tratavam "o filtro só vale ao clicar em Carregar" como comportamento igual: passam a divergir de propósito nesse ponto (4 blocos de 26) e ficam como referência histórica da 12d1.** Nenhum dado alterado. |
 | 01/10/2026 | **Cadastros do SAC (12d2):** as sub-abas viram `Chips`; "Desativar" é o botão vermelho suave e "Ativar" o botão comum; Ativo/Ativa verde e Inativo/Inativa cinza; "Despesas de campo: SIM" em âmbar; a linha de um cadastro desativado fica esmaecida (menos a que está em edição). **Gravação recusada nesta aba agora avisa o erro e mantém o que foi digitado (7.20).** Suposições minhas, não confirmadas. |
 | 01/10/2026 | **Equipamentos desativados no SAC (resposta do usuário à pergunta da 7.20):** a aba **Cadastros mostra também os equipamentos desativados**, **esmaecidos e com o botão "Ativar"** (ativos primeiro, depois os desativados, cada grupo em ordem de nome); desativar deixa de ser definitivo pela tela. A lista "Tipo de Equipamento" da janela **Nova OS continua só com os ativos**. Aplicada em 01/10/2026 (`SacTab.tsx`, uma só leitura traz todos): `teste_43` 11/11 (antes 2/11); com o banco real a aba mostra **16 equipamentos (4 ativos e 12 desativados, cada um com "Ativar")** e a Nova OS segue com os 4 ativos; nenhuma gravação, nenhum dado alterado. **Os testes de fotografia e de comportamento da 12d2 (`snap_sac2`/`comport_sac2`) tratavam "o desativado some da lista" como comportamento igual: passam a divergir de propósito nos blocos de equipamentos (12 de 46) e ficam como referência histórica da 12d2.** |
+| 01/10/2026 | **Menu lateral em gaveta (14a, pedido do usuário):** o menu fica **escondido em todas as telas**, abre **por cima, abaixo do cabeçalho**, por um botão ao lado do logo (o logo vai para o cabeçalho; some em janela de até 700 px) e **fecha ao escolher a tela**, com Esc ou clicando fora; os avisos dos itens vêm **somados no botão**. **A área útil das telas passa a ser a janela inteira.** Feito **antes da 12d3**. Suposições minhas, não confirmadas: a soma do botão só conta os itens que a pessoa enxerga; o selo some com o menu aberto. |
 | 01/10/2026 | **Tipos de serviço do SAC vazios (resposta do usuário ao achado da 12d2):** **nada a fazer** — a lista está vazia só porque o SAC começou a ser usado de fato hoje e ainda vai ser preenchida. Os 4 tipos "de mentira" mostrados quando a tabela vem vazia ficam como estão. |
 | 01/10/2026 | **Como perguntar (pedido do usuário):** as perguntas que forem necessárias durante o trabalho são feitas **na hora em que surgem**, não em lote no fim. |
