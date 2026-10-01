@@ -1808,16 +1808,23 @@ function ComissoesRH({ funcionarios, currentUser }) {
     // numa OP que nunca teve técnico principal — e quem manda é a lista em `responsaveis_producao`, não
     // o campo da OP. Conferido no banco antes de tirar: nenhuma linha de equipe existia em OP sem técnico
     // principal, então o resultado de hoje não muda (fotografia da tela antes e depois: compara_rh.cjs).
+    // Etapa 7.17 (01/10/2026): data_emissao_nf, data_conclusao_producao e data_conclusao_manutencao são DATA-E-HORA. "lte fim" com a data pura
+    // (ex.: 2026-09-30) vira meia-noite UTC do dia 30 — o último dia inteiro ficava de fora — e "gte inicio" (dia 01) vira 21h do dia anterior em
+    // Brasília — entravam 3 h do mês anterior. Conferido no banco real: em setembro a tela contava 1 NF emitida contra 3 de verdade; em julho,
+    // 7 OPs "a faturar" contra 11. Agora o período é [dia inicial 00h, dia seguinte ao final 00h) em Brasília (sem horário de verão desde 2019).
+    // data_faturamento (sac_ordens_servico) é só DATA: continua gte/lte com a data pura.
+    const [yF, mF, dF] = fim.split('-').map(Number);
+    const desde = `${inicio}T00:00:00-03:00`, ateAntes = `${diaISO(new Date(yF, mF - 1, dF + 1))}T00:00:00-03:00`;
     opQuery = modoFatura === 'faturada'
-      ? opQuery.gte('data_emissao_nf', inicio).lte('data_emissao_nf', fim)
-      : opQuery.gte('data_conclusao_producao', inicio).lte('data_conclusao_producao', fim).is('data_emissao_nf', null);
+      ? opQuery.gte('data_emissao_nf', desde).lt('data_emissao_nf', ateAntes)
+      : opQuery.gte('data_conclusao_producao', desde).lt('data_conclusao_producao', ateAntes).is('data_emissao_nf', null);
 
     let osQuery = supabase.from('sac_ordens_servico')
       .select('id,numero_os,cliente_nome,tecnico_producao_id,tecnico_responsavel,valor_total,valor_mao_de_obra,data_faturamento,data_conclusao_manutencao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,is_manutencao_veicular')
       .not('tecnico_producao_id','is',null);
     osQuery = modoFatura === 'faturada'
       ? osQuery.gte('data_faturamento', inicio).lte('data_faturamento', fim)
-      : osQuery.gte('data_conclusao_manutencao', inicio).lte('data_conclusao_manutencao', fim).is('data_faturamento', null);
+      : osQuery.gte('data_conclusao_manutencao', desde).lt('data_conclusao_manutencao', ateAntes).is('data_faturamento', null);
 
     const [opRes, osRes, fechRes] = await Promise.all([
       opQuery,
