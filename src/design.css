@@ -745,3 +745,13 @@ html body .acn-main table.acn-tabela.acn-compacta td:first-child { white-space: 
 .acn-nfc-acoes { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 /* título de janela com ícone: o ícone fica ao lado do texto (o Icone é display:block) */
 .acn-modal-cab .modal-title { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── SAC · aba Cadastros (Etapa 12d2, 01/10/2026): só aparência ───────────────────────────────────────────────── */
+.acn-cad-sub { margin-bottom: 10px; }
+/* a barra de "novo" (campo + Adicionar) em cima de cada tabela de cadastro */
+.sec-body.acn-cad-barra { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; border-bottom: 1px solid var(--acn-line); }
+html body .acn-input.acn-cad-campo { flex: 1; min-width: 180px; }
+html body .acn-input.acn-cad-campo-fixo { width: 250px; max-width: 100%; }
+.acn-cad-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; padding: 6px 0; }
+/* linha de um cadastro desativado: esmaecida (antes opacity pintada à mão na linha) */
+html body .acn-main table.acn-tabela tr.acn-linha-inativa > td { opacity: .55; }

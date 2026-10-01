@@ -12,9 +12,9 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { Abas, Botao, Selo } from './Interface';
+import { Abas, Botao, Selo, Chips } from './Interface';
 import Icone from './Icone';
-import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline } from '@mdi/js';
+import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -1439,44 +1439,44 @@ OK = ACN   |   Cancelar = DETECH`;
       )}
 
       {/* ── ABA CADASTROS ── */}
+      {/* Etapa 12d2 (01/10/2026): só aparência — as sub-abas viram o seletor em pílulas, os campos e botões usam os do sistema e as tabelas a do guia. As
+          gravações, as validações (nome vazio, Enter) e os textos são os de antes. Os cartões continuam .sec-card/.sec-hdr: o clique global do cabeçalho
+          que recolhe o cartão já valia aqui. */}
       {abaAtiva === 'cadastros' && (
         <div>
           {/* Sub-abas */}
-          <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-            {[{id:'equipamentos',label:'Equipamentos'},{id:'categorias',label:'Categorias (Tipo Projeto)'},{id:'tipos_servico',label:'Tipos de Serviço'}].map(a=>(
-              <button key={a.id} className="acn-btn"
-                style={{background:abaCad===a.id?'#0f766e':'#94a3b8'}}
-                onClick={()=>setAbaCad(a.id as any)}>{a.label}</button>
-            ))}
+          <div className="acn-cad-sub">
+            <Chips ativo={abaCad} onChange={id=>setAbaCad(id as any)} rotulo="Cadastro" itens={[
+              { id:'equipamentos',  rotulo:'Equipamentos' },
+              { id:'categorias',    rotulo:'Categorias (Tipo Projeto)' },
+              { id:'tipos_servico', rotulo:'Tipos de Serviço' },
+            ]} />
           </div>
 
           {/* ── Equipamentos ── */}
           {abaCad === 'equipamentos' && (
             <div className="sec-card">
-              <div className="sec-hdr"><span>Tipos de Equipamento</span></div>
-              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
-                <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <input className="acn-input" style={{flex:1}} placeholder="Nome do equipamento..."
-                    value={novoEquipCad} onChange={e=>setNovoEquipCad(e.target.value)}
-                    onKeyDown={e=>e.key==='Enter'&&salvarEquipamentoCad()} />
-                  <button className="acn-btn" style={{background:'#0f766e'}} onClick={salvarEquipamentoCad}>+ Adicionar</button>
-                </div>
+              <div className="sec-hdr"><span className="acn-cab-titulo"><Icone path={mdiRadioHandheld} size={16} /> Tipos de Equipamento</span></div>
+              <div className="sec-body acn-cad-barra">
+                <input className="acn-input acn-cad-campo" placeholder="Nome do equipamento..."
+                  value={novoEquipCad} onChange={e=>setNovoEquipCad(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&salvarEquipamentoCad()} />
+                <Botao variante="primario" icone={mdiPlus} onClick={salvarEquipamentoCad}>Adicionar</Botao>
               </div>
-              <div className="sec-body" style={{overflowX:'auto',padding:0}}>
-                <table>
+              <div className="sec-body acn-rolagem acn-sem-recuo">
+                <table className="acn-tabela">
                   <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
                   <tbody>
                     {equipamentos.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum equipamento cadastrado.</div></td></tr>}
-                    {[...equipamentos, ...supabase && []].map ? equipamentos.map((e: any) => (
-                      <tr key={e.id} style={{opacity:e.ativo?1:0.5}}>
-                        <td><strong>{e.nome}</strong></td>
-                        <td><span className="acn-badge" style={{background:e.ativo?'#22c55e':'#94a3b8'}}>{e.ativo?'Ativo':'Inativo'}</span></td>
+                    {equipamentos.map((e: any) => (
+                      <tr key={e.id} className={e.ativo ? '' : 'acn-linha-inativa'}>
+                        <td className="acn-forte">{e.nome}</td>
+                        <td><Selo familia={e.ativo ? 'ok' : 'neutro'} ponto={false}>{e.ativo?'Ativo':'Inativo'}</Selo></td>
                         <td>
-                          <button className="acn-btn" style={{background:e.ativo?'#ef4444':'#22c55e',fontSize:9}}
-                            onClick={()=>toggleEquipamento(e)}>{e.ativo?'Desativar':'Ativar'}</button>
+                          <Botao pequeno variante={e.ativo ? 'perigo-sec' : 'secundario'} onClick={()=>toggleEquipamento(e)}>{e.ativo?'Desativar':'Ativar'}</Botao>
                         </td>
                       </tr>
-                    )) : null}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1486,59 +1486,56 @@ OK = ACN   |   Cancelar = DETECH`;
           {/* ── Categorias ── */}
           {abaCad === 'categorias' && (
             <div className="sec-card">
-              <div className="sec-hdr"><span>Categorias (Tipos de Projeto)</span></div>
-              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
-                <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
-                  <div>
-                    <label className="acn-label">Nome da Categoria</label>
-                    <input className="acn-input" style={{width:250}} placeholder="Ex: Serviço de Emergência..."
-                      value={novaCat.nome} onChange={e=>setNovaCat(f=>({...f,nome:e.target.value}))} />
-                  </div>
-                  <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,cursor:'pointer',padding:'4px 0'}}>
-                    <input type="checkbox" checked={novaCat.tem_despesas}
-                      onChange={e=>setNovaCat(f=>({...f,tem_despesas:e.target.checked}))} />
-                    <span>Exibe despesas de campo (Serviço Externo)</span>
-                  </label>
-                  <button className="acn-btn" style={{background:'#0f766e'}} onClick={salvarCategoria}>+ Adicionar</button>
+              <div className="sec-hdr"><span className="acn-cab-titulo"><Icone path={mdiShapeOutline} size={16} /> Categorias (Tipos de Projeto)</span></div>
+              <div className="sec-body acn-cad-barra">
+                <div>
+                  <label className="acn-label">Nome da Categoria</label>
+                  <input className="acn-input acn-cad-campo-fixo" placeholder="Ex: Serviço de Emergência..."
+                    value={novaCat.nome} onChange={e=>setNovaCat(f=>({...f,nome:e.target.value}))} />
                 </div>
+                <label className="acn-cad-check">
+                  <input type="checkbox" checked={novaCat.tem_despesas}
+                    onChange={e=>setNovaCat(f=>({...f,tem_despesas:e.target.checked}))} />
+                  <span>Exibe despesas de campo (Serviço Externo)</span>
+                </label>
+                <Botao variante="primario" icone={mdiPlus} onClick={salvarCategoria}>Adicionar</Botao>
               </div>
-              <div className="sec-body" style={{overflowX:'auto',padding:0}}>
-                <table>
+              <div className="sec-body acn-rolagem acn-sem-recuo">
+                <table className="acn-tabela">
                   <thead><tr><th>Nome</th><th>Despesas de Campo</th><th>Status</th><th>Ações</th></tr></thead>
                   <tbody>
                     {categorias.length === 0 && <tr><td colSpan={4}><div className="acn-empty">Nenhuma categoria.</div></td></tr>}
                     {categorias.map((c: any) => (
-                      <tr key={c.id} style={{opacity:c.ativo?1:0.5}}>
-                        <td>
+                      <tr key={c.id} className={c.ativo || editCat?.id === c.id ? '' : 'acn-linha-inativa'}>
+                        <td className={editCat?.id === c.id ? '' : 'acn-forte'}>
                           {editCat?.id === c.id ? (
                             <input className="acn-input" value={editCat.nome} onChange={e=>setEditCat(f=>({...f,nome:e.target.value}))} />
-                          ) : <strong>{c.nome}</strong>}
+                          ) : c.nome}
                         </td>
                         <td>
                           {editCat?.id === c.id ? (
-                            <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,cursor:'pointer'}}>
+                            <label className="acn-cad-check">
                               <input type="checkbox" checked={editCat.tem_despesas} onChange={e=>setEditCat(f=>({...f,tem_despesas:e.target.checked}))} />
                               Sim
                             </label>
                           ) : (
                             c.tem_despesas
-                              ? <span className="acn-badge" style={{background:'#f59e0b',fontSize:8}}>🚗 SIM</span>
-                              : <span style={{fontSize:10,color:'#94a3b8'}}>—</span>
+                              ? <Selo familia="atencao" ponto={false}><Icone path={mdiCarOutline} size={13} />SIM</Selo>
+                              : <span className="acn-fraco">—</span>
                           )}
                         </td>
-                        <td><span className="acn-badge" style={{background:c.ativo?'#22c55e':'#94a3b8'}}>{c.ativo?'Ativa':'Inativa'}</span></td>
+                        <td><Selo familia={c.ativo ? 'ok' : 'neutro'} ponto={false}>{c.ativo?'Ativa':'Inativa'}</Selo></td>
                         <td>
-                          <div style={{display:'flex',gap:4}}>
+                          <div className="acn-acoes-linha">
                             {editCat?.id === c.id ? (
                               <>
-                                <button className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={salvarEdicaoCategoria}>Salvar</button>
-                                <button className="acn-btn" style={{background:'#94a3b8',fontSize:9}} onClick={()=>setEditCat(null)}>Cancel</button>
+                                <Botao pequeno variante="primario" onClick={salvarEdicaoCategoria}>Salvar</Botao>
+                                <Botao pequeno onClick={()=>setEditCat(null)}>Cancel</Botao>
                               </>
                             ) : (
-                              <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setEditCat({...c})}>✏️ Editar</button>
+                              <Botao pequeno icone={mdiPencilOutline} onClick={()=>setEditCat({...c})}>Editar</Botao>
                             )}
-                            <button className="acn-btn" style={{background:c.ativo?'#ef4444':'#22c55e',fontSize:9}}
-                              onClick={()=>toggleCategoria(c)}>{c.ativo?'Desativar':'Ativar'}</button>
+                            <Botao pequeno variante={c.ativo ? 'perigo-sec' : 'secundario'} onClick={()=>toggleCategoria(c)}>{c.ativo?'Desativar':'Ativar'}</Botao>
                           </div>
                         </td>
                       </tr>
@@ -1552,27 +1549,24 @@ OK = ACN   |   Cancelar = DETECH`;
           {/* ── Tipos de Serviço ── */}
           {abaCad === 'tipos_servico' && (
             <div className="sec-card">
-              <div className="sec-hdr"><span>Tipos de Serviço</span></div>
-              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
-                <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <input className="acn-input" style={{flex:1}} placeholder="Nome do tipo de serviço..."
-                    value={novoTipoServico} onChange={e=>setNovoTipoServico(e.target.value)}
-                    onKeyDown={e=>e.key==='Enter'&&salvarTipoServico()} />
-                  <button className="acn-btn" style={{background:'#0f766e'}} onClick={salvarTipoServico}>+ Adicionar</button>
-                </div>
+              <div className="sec-hdr"><span className="acn-cab-titulo"><Icone path={mdiClipboardListOutline} size={16} /> Tipos de Serviço</span></div>
+              <div className="sec-body acn-cad-barra">
+                <input className="acn-input acn-cad-campo" placeholder="Nome do tipo de serviço..."
+                  value={novoTipoServico} onChange={e=>setNovoTipoServico(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&salvarTipoServico()} />
+                <Botao variante="primario" icone={mdiPlus} onClick={salvarTipoServico}>Adicionar</Botao>
               </div>
-              <div className="sec-body" style={{overflowX:'auto',padding:0}}>
-                <table>
+              <div className="sec-body acn-rolagem acn-sem-recuo">
+                <table className="acn-tabela">
                   <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
                   <tbody>
                     {tiposServico.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum tipo cadastrado. Rode o SQL sac_tipos_servico.sql no Supabase.</div></td></tr>}
                     {tiposServico.map((t: any) => (
-                      <tr key={t.id} style={{opacity:t.ativo?1:0.5}}>
-                        <td><strong>{t.nome}</strong></td>
-                        <td><span className="acn-badge" style={{background:t.ativo?'#22c55e':'#94a3b8'}}>{t.ativo?'Ativo':'Inativo'}</span></td>
+                      <tr key={t.id} className={t.ativo ? '' : 'acn-linha-inativa'}>
+                        <td className="acn-forte">{t.nome}</td>
+                        <td><Selo familia={t.ativo ? 'ok' : 'neutro'} ponto={false}>{t.ativo?'Ativo':'Inativo'}</Selo></td>
                         <td>
-                          <button className="acn-btn" style={{background:t.ativo?'#ef4444':'#22c55e',fontSize:9}}
-                            onClick={()=>toggleTipoServico(t)}>{t.ativo?'Desativar':'Ativar'}</button>
+                          <Botao pequeno variante={t.ativo ? 'perigo-sec' : 'secundario'} onClick={()=>toggleTipoServico(t)}>{t.ativo?'Desativar':'Ativar'}</Botao>
                         </td>
                       </tr>
                     ))}
