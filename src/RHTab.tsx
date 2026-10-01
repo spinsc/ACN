@@ -4,9 +4,9 @@ import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
-import { hojeISO, diaISO, Botao, Selo } from './Interface';
+import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import Icone from './Icone';
-import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline } from '@mdi/js';
+import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -198,24 +198,14 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
   const set = (k, v) => setForm(f=>({...f,[k]:v}));
 
   const lbl = (txt) => (
-    <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>{txt}</label>
+    <label className="acn-label">{txt}</label>
   );
   const inp = (k, placeholder='', type='text') => (
-    <input type={type} value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={placeholder}
-      style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+    <input className="acn-input" type={type} value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={placeholder} />
   );
+  // Etapa 12c2 (01/10/2026): a fileira de botões coloridos virou o `Chips` do design system (mesmas opções, mesmo valor gravado).
   const toggle = (options, key) => (
-    <div style={{ display:'flex', gap:6 }}>
-      {options.map(([val, label, cor]) => (
-        <button key={val} onClick={()=>set(key, val)}
-          style={{ flex:1, padding:'6px 0', border:`2px solid ${form[key]===val ? (cor||'#2563eb') : '#d1d5db'}`,
-            borderRadius:6, background: form[key]===val ? (cor||'#2563eb')+'18' : '#fff',
-            color: form[key]===val ? (cor||'#2563eb') : '#374151',
-            fontWeight: form[key]===val ? 700 : 400, fontSize:11, cursor:'pointer' }}>
-          {label}
-        </button>
-      ))}
-    </div>
+    <Chips ativo={String(form[key])} onChange={v => set(key, v)} itens={options.map(([val, label]) => ({ id: val, rotulo: label }))} />
   );
 
   const salvar = async () => {
@@ -249,30 +239,29 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
   const isFuncionario = form.tipo_colaborador === 'Funcionário';
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e=>{ if(e.target===e.currentTarget) fecharModal(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(500px,95vw)', maxHeight:'90vh', overflow:'auto', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between', position:'sticky', top:0, background:'#fff', zIndex:1 }}>
-          <span>{func ? '✏️ Editar Colaborador' : '+ Novo Colaborador'}</span>
-          <button onClick={fecharModal} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
+    <div className="modal-overlay" onClick={e=>{ if(e.target===e.currentTarget) fecharModal(); }}>
+      <div className="modal-box acn-modal-cadastro">
+        <div className="acn-modal-cab">
+          <span className="modal-title">{func ? 'Editar Colaborador' : 'Novo Colaborador'}</span>
+          <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={fecharModal} />
         </div>
 
-        <div style={{ padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
 
           {/* TIPO DE VÍNCULO */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', ...campoDestaque('tipo_colaborador') }}>
+          <div className="acn-quadro" style={campoDestaque('tipo_colaborador')}>
             {lbl('Tipo de Vínculo')}
-            {toggle([['Funcionário','🏢 Funcionário','#2563eb'],['Terceiro','🤝 Terceiro','#7c3aed']], 'tipo_colaborador')}
+            {toggle([['Funcionário','Funcionário'],['Terceiro','Terceiro']], 'tipo_colaborador')}
           </div>
 
           {/* DADOS PESSOAIS */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>📋 Dados do Colaborador</div>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">Dados do Colaborador</div>
             {[['nome','Nome completo *'],['email','E-mail'],
               ['cargo','Cargo / Função'],['departamento','Departamento / Empresa']].map(([k,l])=>(
               <div key={k} style={campoDestaque(k)}>{lbl(l)}{inp(k)}</div>
             ))}
-            <div style={{ display:'grid', gridTemplateColumns: isFuncionario ? '1fr' : '1fr 1fr', gap:8 }}>
+            <div className={isFuncionario ? undefined : 'acn-grade-2'}>
               <div style={campoDestaque('cpf')}>{lbl('CPF')}{inp('cpf','000.000.000-00')}</div>
               {!isFuncionario && (
                 <div style={campoDestaque('cnpj')}>{lbl('CNPJ da Empresa')}{inp('cnpj','00.000.000/0001-00')}</div>
@@ -280,20 +269,18 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
             </div>
             <div style={campoDestaque('data_admissao')}>
               {lbl(isFuncionario ? 'Data de Admissão' : 'Data de Início')}
-              <input type="date" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)}
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+              <input type="date" className="acn-input" value={form.data_admissao} onChange={e=>set('data_admissao',e.target.value)} />
             </div>
           </div>
 
           {/* UNIFORME */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>👕 Tamanhos do uniforme</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">Tamanhos do uniforme</div>
+            <div className="acn-grade-3">
               {[['tamanho_camiseta','Camiseta',TAMANHOS_CAMISETA],['tamanho_calca','Calça',TAMANHOS_CALCA],['tamanho_sapato','Sapato',TAMANHOS_SAPATO]].map(([k, l, ops]: any) => (
                 <div key={k} style={campoDestaque(k)}>
                   {lbl(l)}
-                  <select value={form[k]} onChange={e=>set(k, e.target.value)} aria-label={`Tamanho ${l}`}
-                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', background:'#fff' }}>
+                  <select className="acn-input" value={form[k]} onChange={e=>set(k, e.target.value)} aria-label={`Tamanho ${l}`}>
                     <option value="">—</option>
                     {ops.map((o: string) => <option key={o} value={o}>{o}</option>)}
                     {form[k] && !ops.includes(form[k]) && <option value={form[k]}>{form[k]}</option>}
@@ -304,31 +291,29 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
           </div>
 
           {/* ENDEREÇO */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#0f766e', marginBottom:2 }}>🏠 Endereço</div>
-            <div style={{ display:'grid', gridTemplateColumns:'130px 1fr', gap:8 }}>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">Endereço</div>
+            <div className="acn-grade-cep">
               <div style={campoDestaque('cep')}>
                 {lbl('CEP')}
-                <input value={form.cep} placeholder="00000-000" inputMode="numeric"
-                  onChange={e => { set('cep', e.target.value); if (e.target.value.replace(/\D/g, '').length === 8) preencherPeloCep(e.target.value); }}
-                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                <input className="acn-input" value={form.cep} placeholder="00000-000" inputMode="numeric"
+                  onChange={e => { set('cep', e.target.value); if (e.target.value.replace(/\D/g, '').length === 8) preencherPeloCep(e.target.value); }} />
               </div>
               <div style={campoDestaque('endereco_logradouro')}>{lbl('Rua / Logradouro')}{inp('endereco_logradouro')}</div>
             </div>
             {(buscandoCep || avisoCep) && (
-              <div style={{ fontSize:9, color: avisoCep ? '#b45309' : '#64748b' }}>{buscandoCep ? 'Buscando o CEP...' : avisoCep}</div>
+              <div className={'acn-ajuda' + (avisoCep ? ' atencao' : '')}>{buscandoCep ? 'Buscando o CEP...' : avisoCep}</div>
             )}
-            <div style={{ display:'grid', gridTemplateColumns:'90px 1fr 1fr', gap:8 }}>
+            <div className="acn-grade-num">
               <div style={campoDestaque('endereco_numero')}>{lbl('Número')}{inp('endereco_numero')}</div>
               <div style={campoDestaque('endereco_complemento')}>{lbl('Complemento')}{inp('endereco_complemento','Apto, bloco...')}</div>
               <div style={campoDestaque('endereco_bairro')}>{lbl('Bairro')}{inp('endereco_bairro')}</div>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 90px', gap:8 }}>
+            <div className="acn-grade-uf">
               <div style={campoDestaque('endereco_cidade')}>{lbl('Cidade')}{inp('endereco_cidade')}</div>
               <div style={campoDestaque('endereco_uf')}>
                 {lbl('UF')}
-                <select value={form.endereco_uf} onChange={e=>set('endereco_uf', e.target.value)} aria-label="UF"
-                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', background:'#fff' }}>
+                <select className="acn-input" value={form.endereco_uf} onChange={e=>set('endereco_uf', e.target.value)} aria-label="UF">
                   <option value="">—</option>
                   {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
@@ -337,14 +322,13 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
           </div>
 
           {/* CONTATO DE EMERGÊNCIA */}
-          <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#b91c1c', marginBottom:2 }}>🚨 Contato de emergência</div>
+          <div className="acn-quadro tom-erro">
+            <div className="acn-quadro-titulo">Contato de emergência</div>
             <div style={campoDestaque('emergencia_nome')}>{lbl('Nome')}{inp('emergencia_nome')}</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            <div className="acn-grade-2">
               <div style={campoDestaque('emergencia_parentesco')}>
                 {lbl('Parentesco')}
-                <select value={form.emergencia_parentesco} onChange={e=>set('emergencia_parentesco', e.target.value)} aria-label="Parentesco"
-                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box', background:'#fff' }}>
+                <select className="acn-input" value={form.emergencia_parentesco} onChange={e=>set('emergencia_parentesco', e.target.value)} aria-label="Parentesco">
                   <option value="">—</option>
                   {PARENTESCOS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
@@ -354,74 +338,64 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
           </div>
 
           {/* REMUNERAÇÃO */}
-          <div style={{ background:'#f0fdf4', border:'1px solid #86efac', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#166534', marginBottom:2 }}>💰 Remuneração</div>
+          <div className="acn-quadro tom-ok">
+            <div className="acn-quadro-titulo">Remuneração</div>
             {isFuncionario ? (
               <div style={campoDestaque('salario')}>
                 {lbl('Salário (R$)')}
-                <input type="number" min="0" step="0.01" value={form.salario} onChange={e=>set('salario',e.target.value)}
-                  placeholder="Ex: 3500.00"
-                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                <input type="number" min="0" step="0.01" className="acn-input" value={form.salario} onChange={e=>set('salario',e.target.value)}
+                  placeholder="Ex: 3500.00" />
               </div>
             ) : (
               <div style={campoDestaque('valor_servicos')}>
                 {lbl('Valor dos Serviços (R$)')}
-                <input type="number" min="0" step="0.01" value={form.valor_servicos} onChange={e=>set('valor_servicos',e.target.value)}
-                  placeholder="Ex: 5000.00"
-                  style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
-                <div style={{ fontSize:9, color:'#6b7280', marginTop:2 }}>Valor do contrato ou por serviço prestado</div>
+                <input type="number" min="0" step="0.01" className="acn-input" value={form.valor_servicos} onChange={e=>set('valor_servicos',e.target.value)}
+                  placeholder="Ex: 5000.00" />
+                <div className="acn-ajuda">Valor do contrato ou por serviço prestado</div>
               </div>
             )}
           </div>
 
           {/* COMISSÃO */}
-          <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontWeight:700, fontSize:10, color:'#92400e', marginBottom:2 }}>📈 Comissão</div>
+          <div className="acn-quadro tom-atencao">
+            <div className="acn-quadro-titulo">Comissão</div>
             {/* Etapa 7.14 (01/10/2026): aqui havia um segundo par de botões "Sim / Não" que gravava em recebe_comissao_str, um campo que
                 ninguém lê — clicar "Sim" parecia ligar a comissão e não ligava (a pessoa era salva sem comissão). Ficou só o par que funciona. */}
             {lbl('Recebe Comissão?')}
-            <div style={{ display:'flex', gap:6, ...campoDestaque('recebe_comissao') }}>
-              {[['Sim','#16a34a'],['Não','#94a3b8']].map(([label, cor]) => (
-                <button key={label} onClick={()=>set('recebe_comissao', label==='Sim')}
-                  style={{ flex:1, padding:'6px 0', border:`2px solid ${(label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor : '#d1d5db'}`,
-                    borderRadius:6, background: (label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor+'18' : '#fff',
-                    color: (label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? cor : '#374151',
-                    fontWeight: (label==='Sim'?form.recebe_comissao:!form.recebe_comissao) ? 700 : 400, fontSize:11, cursor:'pointer' }}>
-                  {label==='Sim' ? '✅ Recebe Comissão' : '✗ Sem Comissão'}
-                </button>
-              ))}
+            <div style={campoDestaque('recebe_comissao')}>
+              <Chips ativo={form.recebe_comissao ? 'sim' : 'nao'} onChange={v => set('recebe_comissao', v === 'sim')}
+                itens={[{ id: 'sim', rotulo: 'Recebe Comissão' }, { id: 'nao', rotulo: 'Sem Comissão' }]} />
             </div>
             {form.recebe_comissao && (
               <>
                 <div style={campoDestaque('percentual_comissao')}>
                   {lbl('Percentual de Comissão (%)')}
-                  <input type="number" min="0" max="100" step="0.1" value={form.percentual_comissao}
-                    onChange={e=>set('percentual_comissao',e.target.value)} placeholder="Ex: 5.0"
-                    style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+                  <input type="number" min="0" max="100" step="0.1" className="acn-input" value={form.percentual_comissao}
+                    onChange={e=>set('percentual_comissao',e.target.value)} placeholder="Ex: 5.0" />
                 </div>
                 <div style={campoDestaque('incide_em')}>
                   {lbl('Comissão Incide Sobre')}
-                  {toggle([['Faturamento','💼 Faturamento','#2563eb'],['Mão de Obra','🔧 MO Adaptação','#7c3aed'],['Serralheria','⚙️ MO Serralheria','#d97706']], 'incide_em')}
+                  {toggle([['Faturamento','Faturamento'],['Mão de Obra','MO Adaptação'],['Serralheria','MO Serralheria']], 'incide_em')}
                 </div>
-                <div style={{ background:'#fef3c7', border:'1px solid #fde68a', borderRadius:4, padding:'6px 8px', fontSize:9, color:'#92400e' }}>
-                  ℹ️ Estes dados serão usados para cálculo automático de comissões nos relatórios futuros.
-                </div>
+                <Faixa tom="info" icone={mdiInformationOutline}>
+                  Estes dados serão usados para cálculo automático de comissões nos relatórios futuros.
+                </Faixa>
               </>
             )}
           </div>
 
         </div>
 
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end', position:'sticky', bottom:0, background:'#fff' }}>
-          <button onClick={fecharModal} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? '...' : '✓ Salvar Colaborador'}
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={fecharModal}>Cancelar</Botao>
+          <Botao variante="primario" icone={mdiCheck} onClick={salvar} disabled={salvando}>
+            {salvando ? '...' : 'Salvar Colaborador'}
+          </Botao>
         </div>
       </div>
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -476,41 +450,29 @@ function ModalLancamento({ funcionarios, onClose, onSaved, lancEdit }) {
   const semDuracao = ['Falta','Atestado','Férias','Folga','Viagem'].includes(form.tipo);
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(460px,95vw)', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between' }}>
-          <span>📋 {lancEdit ? 'Editar' : 'Novo'} Lançamento</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
+    <div className="modal-overlay" onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro menor">
+        <div className="acn-modal-cab">
+          <span className="modal-title">{lancEdit ? 'Editar' : 'Novo'} Lançamento</span>
+          <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
         </div>
-        <div style={{ padding:16, display:'flex', flexDirection:'column', gap:10 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Funcionário *</label>
-            <select value={form.funcionario_id} onChange={e=>set('funcionario_id',e.target.value)}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}>
+            <label className="acn-label">Funcionário *</label>
+            <select className="acn-input" value={form.funcionario_id} onChange={e=>set('funcionario_id',e.target.value)}>
               <option value="">Selecione...</option>
               {funcionarios.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Data *</label>
-            <input type="date" value={form.data} onChange={e=>set('data',e.target.value)}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+            <label className="acn-label">Data *</label>
+            <input type="date" className="acn-input" value={form.data} onChange={e=>set('data',e.target.value)} />
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Tipo *</label>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
-              {TIPOS_LANCAMENTO.map(t=>(
-                <button key={t.v} onClick={()=>set('tipo',t.v)}
-                  style={{ padding:'4px 10px', fontSize:10, fontWeight:700, borderRadius:12, cursor:'pointer', border:'none',
-                    background: form.tipo===t.v ? t.cor : '#f1f5f9',
-                    color: form.tipo===t.v ? '#fff' : '#374151' }}>
-                  {t.v}
-                </button>
-              ))}
-            </div>
+            <label className="acn-label">Tipo *</label>
+            <Chips ativo={form.tipo} onChange={v=>set('tipo',v)} itens={TIPOS_LANCAMENTO.map(t => ({ id: t.v, rotulo: t.v }))} />
             {tipoSelecionado && (
-              <div style={{ marginTop:4, fontSize:9, color: tipoSelecionado.cor, fontWeight:700 }}>
+              <div className="acn-ajuda" data-acn-familia={FAMILIA_LANCAMENTO[form.tipo] || 'neutro'}>
                 {tipoSelecionado.grupo === 'Crédito' ? '↑ Crédito no banco de horas' :
                  tipoSelecionado.grupo === 'Débito'  ? '↓ Débito no banco de horas' :
                  '— Sem efeito no banco de horas'}
@@ -519,45 +481,38 @@ function ModalLancamento({ funcionarios, onClose, onSaved, lancEdit }) {
           </div>
           {!semDuracao && (
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Duração</label>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                  <input type="number" min="0" max="23" value={form.horas} onChange={e=>set('horas',e.target.value)}
-                    style={{ width:55, padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:12, textAlign:'center' }} />
-                  <span style={{ fontSize:10, color:'#6b7280' }}>h</span>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                  <input type="number" min="0" max="59" value={form.minutos_rest} onChange={e=>set('minutos_rest',e.target.value)}
-                    style={{ width:55, padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:12, textAlign:'center' }} />
-                  <span style={{ fontSize:10, color:'#6b7280' }}>min</span>
-                </div>
-                {totalMin > 0 && <span style={{ fontSize:10, color:'#2563eb', fontWeight:700 }}>{fmtMin(sinalDoTipo(form.tipo)*totalMin)}</span>}
+              <label className="acn-label">Duração</label>
+              <div className="acn-duracao">
+                <input type="number" min="0" max="23" className="acn-input acn-input-curto" value={form.horas} onChange={e=>set('horas',e.target.value)} />
+                <span className="acn-fraco">h</span>
+                <input type="number" min="0" max="59" className="acn-input acn-input-curto" value={form.minutos_rest} onChange={e=>set('minutos_rest',e.target.value)} />
+                <span className="acn-fraco">min</span>
+                {totalMin > 0 && <span className="acn-duracao-total">{fmtMin(sinalDoTipo(form.tipo)*totalMin)}</span>}
               </div>
             </div>
           )}
           {semDuracao && (
-            <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:4, padding:'6px 10px', fontSize:10, color:'#6b7280' }}>
-              {form.tipo === 'Falta' ? '🔴 Será descontado 1 dia (8h47min) do banco de horas.' :
-               form.tipo === 'Atestado' ? '✅ Falta abonada — sem desconto no banco de horas.' :
-               '📅 Lançado como ausência programada — sem efeito no banco.'}
-            </div>
+            <Faixa tom={form.tipo === 'Falta' ? 'atencao' : form.tipo === 'Atestado' ? 'ok' : 'info'}>
+              {form.tipo === 'Falta' ? 'Será descontado 1 dia (8h47min) do banco de horas.' :
+               form.tipo === 'Atestado' ? 'Falta abonada — sem desconto no banco de horas.' :
+               'Lançado como ausência programada — sem efeito no banco.'}
+            </Faixa>
           )}
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Observação</label>
-            <textarea value={form.obs} onChange={e=>set('obs',e.target.value)} rows={2}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+            <label className="acn-label">Observação</label>
+            <textarea className="acn-input" value={form.obs} onChange={e=>set('obs',e.target.value)} rows={2} />
           </div>
         </div>
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? '...' : '✓ Salvar'}
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" icone={mdiCheck} onClick={salvar} disabled={salvando}>
+            {salvando ? '...' : 'Salvar'}
+          </Botao>
         </div>
       </div>
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -591,8 +546,8 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
 
   const isSaida = form.tipo.includes('Saída');
   const tituloModal = isTerceiro
-    ? '🖨️ Comunicação de Saída / Entrada'
-    : '🖨️ Autorização de Saída / Entrada';
+    ? 'Comunicação de Saída / Entrada'
+    : 'Autorização de Saída / Entrada';
   const labelAprovado = isTerceiro ? 'Ciente por (Gerente)' : 'Aprovado por (Gerente)';
 
   const salvarEImprimir = async () => {
@@ -607,85 +562,68 @@ function ModalAutorizacao({ funcionarios, onClose, onSaved }) {
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'#0008', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}
-      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:'#fff', borderRadius:8, width:'min(460px,95vw)', boxShadow:'0 8px 32px #0004' }}>
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between' }}>
-          <span>{tituloModal}</span>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
+    <div className="modal-overlay" onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-box acn-modal-cadastro menor">
+        <div className="acn-modal-cab">
+          <span className="modal-title">{tituloModal}</span>
+          <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={onClose} />
         </div>
-        {/* Badge indicador quando Terceiro */}
-        {isTerceiro && (
-          <div style={{ background:'#fef3c7', borderBottom:'1px solid #fde68a', padding:'5px 16px', fontSize:10, color:'#92400e', fontWeight:700 }}>
-            🤝 Terceiro — documento gerado como Comunicação (sem necessidade de assinatura de autorização)
-          </div>
-        )}
-        <div style={{ padding:16, display:'flex', flexDirection:'column', gap:10 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
+          {/* Badge indicador quando Terceiro */}
+          {isTerceiro && (
+            <Faixa tom="atencao">
+              Terceiro — documento gerado como Comunicação (sem necessidade de assinatura de autorização)
+            </Faixa>
+          )}
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Colaborador *</label>
-            <select value={form.funcionario_id} onChange={onChangeFuncionario}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }}>
+            <label className="acn-label">Colaborador *</label>
+            <select className="acn-input" value={form.funcionario_id} onChange={onChangeFuncionario}>
               <option value="">Selecione...</option>
               {funcionarios.map(f=><option key={f.id} value={f.id}>{f.nome} {f.tipo_colaborador==='Terceiro'?'(Terceiro)':''}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:4, textTransform:'uppercase' }}>Tipo</label>
-            <div style={{ display:'flex', gap:8 }}>
-              {tiposDisponiveis.map(t=>(
-                <button key={t} onClick={()=>set('tipo',t)}
-                  style={{ flex:1, padding:'6px', border:`1.5px solid ${form.tipo===t?'#2563eb':'#d1d5db'}`,
-                    background: form.tipo===t?'#eff6ff':'#fff',
-                    color: form.tipo===t?'#1d4ed8':'#374151',
-                    borderRadius:4, fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                  {t}
-                </button>
-              ))}
-            </div>
+            <label className="acn-label">Tipo</label>
+            <Chips ativo={form.tipo} onChange={v=>set('tipo',v)} itens={tiposDisponiveis.map(t => ({ id: t, rotulo: t }))} />
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Data</label>
-            <input type="date" value={form.data} onChange={e=>set('data',e.target.value)}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+            <label className="acn-label">Data</label>
+            <input type="date" className="acn-input" value={form.data} onChange={e=>set('data',e.target.value)} />
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div className="acn-grade-2">
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+              <label className="acn-label">
                 {isSaida ? 'Horário de Saída *' : 'Horário de Entrada *'}
               </label>
-              <input type="time" value={form.hora_saida} onChange={e=>set('hora_saida',e.target.value)}
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+              <input type="time" className="acn-input" value={form.hora_saida} onChange={e=>set('hora_saida',e.target.value)} />
             </div>
             <div>
-              <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>
+              <label className="acn-label">
                 {isSaida ? 'Horário de Retorno' : 'Horário de Saída Normal'}
               </label>
-              <input type="time" value={form.hora_retorno} onChange={e=>set('hora_retorno',e.target.value)}
-                style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+              <input type="time" className="acn-input" value={form.hora_retorno} onChange={e=>set('hora_retorno',e.target.value)} />
             </div>
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>Motivo *</label>
-            <textarea value={form.motivo} onChange={e=>set('motivo',e.target.value)} rows={2}
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, resize:'vertical', boxSizing:'border-box' }} />
+            <label className="acn-label">Motivo *</label>
+            <textarea className="acn-input" value={form.motivo} onChange={e=>set('motivo',e.target.value)} rows={2} />
           </div>
           <div>
-            <label style={{ fontSize:9, fontWeight:700, color:'#6b7280', display:'block', marginBottom:2, textTransform:'uppercase' }}>{labelAprovado}</label>
-            <input value={form.aprovado_por} onChange={e=>set('aprovado_por',e.target.value)}
-              placeholder="Nome do gerente responsável"
-              style={{ width:'100%', padding:'6px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:11, boxSizing:'border-box' }} />
+            <label className="acn-label">{labelAprovado}</label>
+            <input className="acn-input" value={form.aprovado_por} onChange={e=>set('aprovado_por',e.target.value)}
+              placeholder="Nome do gerente responsável" />
           </div>
         </div>
-        <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end' }}>
-          <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
-          <button onClick={salvarEImprimir} disabled={salvando}
-            style={{ padding:'7px 20px', background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? '...' : '🖨️ Salvar e Imprimir'}
-          </button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" icone={mdiPrinterOutline} onClick={salvarEImprimir} disabled={salvando}>
+            {salvando ? '...' : 'Salvar e Imprimir'}
+          </Botao>
         </div>
       </div>
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1131,19 +1069,16 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="sec-card">
-      <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
-        onClick={()=>setCollapsed(c=>!c)}>
-        <span>🖨️ Autorizações de Saída / Entrada ({autorizacoes.length})</span>
-        <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-          style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-          {collapsed?'▸':'▾'}
-        </button>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiPrinterOutline} size={16} /> Autorizações de Saída / Entrada ({autorizacoes.length})</span>
+        <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+          onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
       </div>
-      {!collapsed && <div className="sec-body" style={{ overflowX:'auto' }}>
+      {!collapsed && <div className="sec-body acn-rolagem">
         {autorizacoes.length === 0 ? (
           <div className="acn-empty">Nenhuma autorização registrada.</div>
         ) : (
-          <table>
+          <table className="acn-tabela acn-densa">
             <thead><tr>
               <th>Data</th><th>Funcionário</th><th>Tipo</th><th>Saída</th><th>Retorno</th><th>Motivo</th><th>Aprovado por</th><th></th>
             </tr></thead>
@@ -1152,20 +1087,15 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
                 const func = funcionarios.find(f=>f.id===a.funcionario_id);
                 return (
                   <tr key={a.id}>
-                    <td style={{whiteSpace:'nowrap'}}>{fmtDate(a.data)}</td>
+                    <td className="acn-num">{fmtDate(a.data)}</td>
                     <td>{func?.nome||'—'}</td>
-                    <td><span style={{ background: (a.tipo||'').includes('Saída')?'#fef2f2':'#eff6ff',
-                      color: (a.tipo||'').includes('Saída')?'#dc2626':'#2563eb',
-                      borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>{a.tipo}</span></td>
+                    <td><Selo familia={(a.tipo||'').includes('Saída') ? 'atencao' : 'info'} ponto={false}>{a.tipo}</Selo></td>
                     <td>{a.hora_saida||'—'}</td>
                     <td>{a.hora_retorno||'—'}</td>
-                    <td style={{ fontSize:10, color:'#6b7280', maxWidth:160, wordBreak:'break-word' }}>{a.motivo||'—'}</td>
-                    <td style={{fontSize:10}}>{a.aprovado_por||'—'}</td>
+                    <td className="acn-texto-longo acn-texto-medio acn-fraco">{a.motivo||'—'}</td>
+                    <td>{a.aprovado_por||'—'}</td>
                     <td>
-                      <button onClick={()=>onImprimir(a, func)}
-                        style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'3px 8px', fontSize:9, cursor:'pointer' }}>
-                        🖨️
-                      </button>
+                      <Botao pequeno icone={mdiPrinterOutline} title="Imprimir" aria-label={`Imprimir autorização de ${func?.nome || 'colaborador'}`} onClick={()=>onImprimir(a, func)} />
                     </td>
                   </tr>
                 );
@@ -1176,6 +1106,7 @@ function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
       </div>}
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
