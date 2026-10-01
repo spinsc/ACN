@@ -543,3 +543,28 @@ html body .acn-main:not(.acn-main-tv) table tr.acn-eng-info > td { padding-top: 
 .acn-modal-campo { margin: 8px 0; display: grid; gap: 8px; }
 .acn-modal-acoes { display: flex; gap: 8px; margin-top: 14px; }
 .acn-modal-acoes .cresce { flex: 1; }
+/* ── Histórico / Novo Registro da Logística (Etapa 12b2, 30/09/2026) — reutilizáveis nas outras telas ── */
+.acn-campo-largo { flex: 2; }
+.acn-quadro { margin: 8px 0; padding: 12px; display: grid; gap: 8px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-quadro-titulo { font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-muted); }
+.acn-check { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--acn-ink); cursor: pointer; }
+.acn-fotos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.acn-fotos-centro { justify-content: center; margin-bottom: 12px; }
+.acn-foto-mini { position: relative; }
+.acn-foto-mini img { display: block; width: 64px; height: 64px; object-fit: cover; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-foto-mini .acn-b { position: absolute; top: -7px; right: -7px; width: 20px; min-width: 20px; height: 20px; padding: 0; border-radius: 50%; }
+.acn-foto-grande { width: 120px; height: 90px; object-fit: cover; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-modal-media { max-width: 560px; }
+.acn-ficha-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.acn-ficha-id { margin-left: auto; font-size: 12px; }
+.acn-ficha-linha { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; padding: 6px 0; align-items: start; overflow-wrap: anywhere; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-ficha-linha > :first-child { font-size: 12px; font-weight: 600; }
+.acn-ficha-fotos { margin-top: 12px; }
+/* Etapa 12b2 (30/09/2026): a tabela do Histórico da Logística, com o dado real, passou a rolar a 1400 px (a antiga cabia: 1102 px
+   num quadro de 1130). Variante densa = recuo lateral menor; os botões da linha quebram de linha como antes; a coluna de texto
+   corta palavra sem espaço (um registro tem uma URL colada) mas nunca fica mais estreita que 130 px (as observações, 80 px), para não quebrar "Transformacao". */
+html body .acn-main table.acn-tabela.acn-densa th { padding: 0 7px !important; }
+html body .acn-main table.acn-tabela.acn-densa:not(.acn-tab-cartoes) td { padding: 6px 7px !important; }
+.acn-acoes-linha.quebra { flex-wrap: wrap; justify-content: flex-start; }
+.acn-texto-medio { min-width: 130px; overflow-wrap: anywhere; }
+.acn-texto-curto { min-width: 80px; overflow-wrap: anywhere; }

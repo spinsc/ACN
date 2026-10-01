@@ -9,7 +9,7 @@ import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
 import { creditarCompraRecebida, fmtQtd } from './Estoque';
 import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa } from './Interface';
-import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline } from '@mdi/js';
+import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
@@ -153,7 +153,7 @@ function RelatorioLogistica() {
           {carregando ? <div className="acn-empty">Carregando...</div> : dados.length === 0 ? (
             <div className="acn-empty">Nenhuma movimentação no período.</div>
           ) : (
-            <table className="acn-tabela">
+            <table className="acn-tabela acn-densa">
               <thead><tr><th>Data</th><th>Tipo</th><th>Remetente</th><th>Destinatário</th><th>Mercadoria</th><th>Qtd</th></tr></thead>
               <tbody>
                 {dados.map(m => (
@@ -162,7 +162,7 @@ function RelatorioLogistica() {
                     <td><SeloTipo tipo={m.tipo} /></td>
                     <td>{m.remetente}</td>
                     <td>{m.destinatario || '—'}</td>
-                    <td>{m.tipo_mercadoria}: {m.descricao}</td>
+                    <td className="acn-texto-longo acn-texto-medio">{m.tipo_mercadoria}: {m.descricao}</td>
                     <td className="acn-num">{m.quantidade || '—'}</td>
                   </tr>
                 ))}
@@ -1890,7 +1890,6 @@ export default function LogisticaTab({ currentUser }) {
   };
 
   const fmtDt = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';   // o dia do texto AAAA-MM-DD: new Date() jogava para o dia anterior (fuso)
-  const corTipo = (t) => ({ Recebimento:'#22c55e', Envio:'#3b82f6', Transferencia:'#f59e0b' })[t] || '#94a3b8';
 
   return (
     <div>
@@ -1906,75 +1905,75 @@ export default function LogisticaTab({ currentUser }) {
         <div className="sec-hdr">
           <span>Logistica — Controle de Envio e Recebimento de Mercadorias</span>
           {!showForm && (
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setForm(FORM_VAZIO);setFotos([]);setShowForm(true);}}>
-              + Novo Registro
-            </button>
+            <Botao variante="primario" icone={mdiPlus} onClick={()=>{setForm(FORM_VAZIO);setFotos([]);setShowForm(true);}}>
+              Novo Registro
+            </Botao>
           )}
         </div>
 
         {showForm && (
-          <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
+          <div className="sec-body acn-form-cheio">
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">Tipo</label>
-                <select className="acn-input" style={{width:'100%'}} value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})}>
+                <select className="acn-input" value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})}>
                   {TIPOS_MANIFESTO.map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="acn-label">Data</label>
-                <input type="date" className="acn-input" style={{width:'100%'}} value={form.data} onChange={e=>setForm({...form,data:e.target.value})} />
+                <input type="date" className="acn-input" value={form.data} onChange={e=>setForm({...form,data:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Remetente *</label>
-                <input className="acn-input" style={{width:'100%'}} placeholder="Quem enviou" value={form.remetente} onChange={e=>setForm({...form,remetente:e.target.value})} />
+                <input className="acn-input" placeholder="Quem enviou" value={form.remetente} onChange={e=>setForm({...form,remetente:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Destinatario</label>
-                <input className="acn-input" style={{width:'100%'}} placeholder="Quem recebe" value={form.destinatario} onChange={e=>setForm({...form,destinatario:e.target.value})} />
+                <input className="acn-input" placeholder="Quem recebe" value={form.destinatario} onChange={e=>setForm({...form,destinatario:e.target.value})} />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">Tipo de Mercadoria</label>
-                <select className="acn-input" style={{width:'100%'}} value={form.tipo_mercadoria} onChange={e=>setForm({...form,tipo_mercadoria:e.target.value})}>
+                <select className="acn-input" value={form.tipo_mercadoria} onChange={e=>setForm({...form,tipo_mercadoria:e.target.value})}>
                   {TIPOS_MERCADORIA.map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
-              <div className="form-group" style={{flex:2}}>
+              <div className="form-group acn-campo-largo">
                 <label className="acn-label">Descricao da Mercadoria *</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.descricao} onChange={e=>setForm({...form,descricao:e.target.value})} />
+                <input className="acn-input" value={form.descricao} onChange={e=>setForm({...form,descricao:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Quantidade</label>
-                <input type="number" className="acn-input" style={{width:'100%'}} value={form.quantidade} onChange={e=>setForm({...form,quantidade:e.target.value})} />
+                <input type="number" className="acn-input" value={form.quantidade} onChange={e=>setForm({...form,quantidade:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Peso (kg)</label>
-                <input type="number" step="0.1" className="acn-input" style={{width:'100%'}} value={form.peso} onChange={e=>setForm({...form,peso:e.target.value})} />
+                <input type="number" step="0.1" className="acn-input" value={form.peso} onChange={e=>setForm({...form,peso:e.target.value})} />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">NF Referencia</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.nf_referencia} onChange={e=>setForm({...form,nf_referencia:e.target.value})} />
+                <input className="acn-input" value={form.nf_referencia} onChange={e=>setForm({...form,nf_referencia:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Placa do Veiculo</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.veiculo_placa} onChange={e=>setForm({...form,veiculo_placa:e.target.value})} />
+                <input className="acn-input" value={form.veiculo_placa} onChange={e=>setForm({...form,veiculo_placa:e.target.value})} />
               </div>
-              <div style={{flex:2}}>
+              <div className="form-group acn-campo-largo">
                 <label className="acn-label">Observacoes</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})} />
+                <input className="acn-input" value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})} />
               </div>
             </div>
 
             {/* VINCULAR PEDIDO DE COMPRA — só para Recebimento */}
             {form.tipo === 'Recebimento' && pedidosCompra.length > 0 && (
-              <div className="form-row" style={{marginTop:4}}>
-                <div style={{flex:1}}>
+              <div className="form-row">
+                <div className="form-group">
                   <label className="acn-label">Vincular Pedido de Compra (opcional)</label>
-                  <select className="acn-input" style={{width:'100%'}} value={form.pedido_compra_id}
+                  <select className="acn-input" value={form.pedido_compra_id}
                     onChange={e => setForm({...form, pedido_compra_id: e.target.value})}>
                     <option value="">— Não vincular —</option>
                     {pedidosCompra.map(p => (
@@ -1990,59 +1989,57 @@ export default function LogisticaTab({ currentUser }) {
 
             {/* CONFERÊNCIA TÉCNICA — só quando há pedido de compra vinculado (Fase 3) */}
             {form.tipo === 'Recebimento' && form.pedido_compra_id && (
-              <div style={{marginTop:8,background:'#fff7ed',border:'1px solid #fdba74',borderRadius:6,padding:10}}>
-                <div style={{fontSize:10,fontWeight:700,color:'#9a3412',marginBottom:8}}>
-                  🔍 Conferência Técnica — necessária pra fechar a compra e liberar o pagamento da NF
-                </div>
+              <div className="acn-quadro">
+                <div className="acn-quadro-titulo">Conferência Técnica — necessária pra fechar a compra e liberar o pagamento da NF</div>
                 <div className="form-row">
-                  <div style={{flex:2}}>
+                  <div className="form-group acn-campo-largo">
                     <label className="acn-label">Números de Série Recebidos</label>
-                    <input className="acn-input" style={{width:'100%'}} value={form.seriais}
+                    <input className="acn-input" value={form.seriais}
                       placeholder="Ex: SN12345, SN12346..."
                       onChange={e=>setForm({...form,seriais:e.target.value})} />
                   </div>
-                  <div style={{flex:1}}>
+                  <div className="form-group">
                     <label className="acn-label">Volume (embalagens)</label>
-                    <input className="acn-input" type="number" style={{width:'100%'}} value={form.volume}
+                    <input className="acn-input" type="number" value={form.volume}
                       onChange={e=>setForm({...form,volume:e.target.value})} />
                   </div>
                 </div>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:11,fontWeight:700,marginTop:8,cursor:'pointer',color:form.nf_conferida?'#16a34a':'#78716c'}}>
+                <label className="acn-check">
                   <input type="checkbox" checked={form.nf_conferida} onChange={e=>setForm({...form,nf_conferida:e.target.checked})} />
-                  ✅ NF do fornecedor confere com o que chegou
+                  NF do fornecedor confere com o que chegou
                 </label>
                 {!form.nf_conferida && (
-                  <div style={{fontSize:9,color:'#92400e',marginTop:4}}>
+                  <Faixa tom="atencao">
                     Sem marcar isso, o registro fica salvo mas a compra continua "Comprado" — não fecha e não libera o pagamento.
-                  </div>
+                  </Faixa>
                 )}
               </div>
             )}
 
             {/* FOTOS */}
-            <div style={{marginTop:8}}>
+            <div className="form-group">
               <label className="acn-label">Fotos (max 6)</label>
-              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4,alignItems:'center'}}>
+              <div className="acn-fotos">
                 {fotos.map((f,i) => (
-                  <div key={i} style={{position:'relative'}}>
-                    <img src={URL.createObjectURL(f)} alt="foto" style={{width:64,height:64,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
-                    <button onClick={()=>removerFoto(i)} style={{position:'absolute',top:-4,right:-4,background:'#ef4444',color:'white',border:'none',borderRadius:'50%',width:16,height:16,fontSize:10,cursor:'pointer',padding:0,lineHeight:'16px'}}>x</button>
+                  <div key={i} className="acn-foto-mini">
+                    <img src={URL.createObjectURL(f)} alt="foto" />
+                    <Botao pequeno variante="perigo" icone={mdiClose} aria-label="Remover foto" title="Remover foto" onClick={()=>removerFoto(i)} />
                   </div>
                 ))}
                 {fotos.length < 6 && (
-                  <button className="acn-btn" style={{background:'#475569',height:44}} onClick={()=>fileRef.current?.click()}>
-                    + Foto
-                  </button>
+                  <Botao variante="secundario" icone={mdiImagePlusOutline} onClick={()=>fileRef.current?.click()}>
+                    Foto
+                  </Botao>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={handleFotos} />
+                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFotos} />
               </div>
             </div>
 
-            <div style={{display:'flex',gap:6,marginTop:10}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'7px',opacity:uploading?0.6:1}} onClick={salvar} disabled={uploading}>
+            <div className="acn-modal-acoes">
+              <Botao className="cresce" variante="primario" onClick={salvar} disabled={uploading}>
                 {uploading ? 'Salvando...' : 'Registrar'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setShowForm(false);setFotos([]);}}>Cancelar</button>
+              </Botao>
+              <Botao variante="secundario" onClick={()=>{setShowForm(false);setFotos([]);}}>Cancelar</Botao>
             </div>
           </div>
         )}
@@ -2051,11 +2048,11 @@ export default function LogisticaTab({ currentUser }) {
       {/* HISTORICO */}
       <div className="sec-card">
         <div className="sec-hdr"><span>Historico de Manifestos ({manifestos.length})</span></div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {loading ? <div className="acn-empty">Carregando...</div> : manifestos.length === 0 ? (
             <div className="acn-empty">Nenhum manifesto registrado.</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Data</th><th>Tipo</th><th>Remetente</th><th>Destinatario</th>
                 <th>Mercadoria</th><th>Qtd</th><th>NF Ref.</th><th>Placa</th><th>Fotos</th><th>Obs.</th><th>Acao</th>
@@ -2063,25 +2060,27 @@ export default function LogisticaTab({ currentUser }) {
               <tbody>
                 {manifestos.map(m => (
                   <tr key={m.id}>
-                    <td>{fmtDt(m.data)}</td>
-                    <td><span className="acn-badge" style={{background:corTipo(m.tipo)}}>{m.tipo}</span></td>
+                    <td className="acn-num">{fmtDt(m.data)}</td>
+                    <td><SeloTipo tipo={m.tipo} /></td>
                     <td>{m.remetente}</td>
                     <td>{m.destinatario || '—'}</td>
-                    <td style={{ maxWidth:140, wordBreak:'break-word' }}>{m.tipo_mercadoria}: {m.descricao}</td>
-                    <td>{m.quantidade || '—'}</td>
+                    <td className="acn-texto-longo acn-texto-medio">{m.tipo_mercadoria}: {m.descricao}</td>
+                    <td className="acn-num">{m.quantidade || '—'}</td>
                     <td>{m.nf_referencia || '—'}</td>
                     <td>{m.veiculo_placa || '—'}</td>
                     <td>
                       {m.fotos && m.fotos.length > 0 ? (
-                        <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>setModalVer(m)}>
+                        <Botao pequeno variante="secundario" onClick={()=>setModalVer(m)}>
                           {m.fotos.length} foto(s)
-                        </button>
+                        </Botao>
                       ) : '—'}
                     </td>
-                    <td style={{ maxWidth:120, fontSize:10, wordBreak:'break-word' }}>{m.observacoes || '—'}</td>
-                    <td style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                      <button className="acn-btn" style={{background:'#0369a1',fontSize:10}} onClick={()=>setModalDetalhes(m)}>👁 Ver</button>
-                      <button className="acn-btn" style={{background:'#1e293b',fontSize:10}} onClick={()=>gerarPDF(m)}>PDF</button>
+                    <td className="acn-texto-longo acn-texto-curto acn-fraco">{m.observacoes || '—'}</td>
+                    <td>
+                      <div className="acn-acoes-linha quebra">
+                        <Botao pequeno variante="secundario" icone={mdiEyeOutline} onClick={()=>setModalDetalhes(m)}>Ver</Botao>
+                        <Botao pequeno variante="secundario" icone={mdiFilePdfBox} onClick={()=>gerarPDF(m)}>PDF</Botao>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -2097,51 +2096,50 @@ export default function LogisticaTab({ currentUser }) {
       {/* MODAL DETALHES */}
       {modalDetalhes && (() => {
         const m = modalDetalhes;
-        const cor = corTipo(m.tipo);
-        const row = (label, val) => (
-          <div style={{display:'grid',gridTemplateColumns:'140px 1fr',gap:'6px 12px',padding:'6px 0',borderBottom:'1px solid #f1f5f9',alignItems:'start'}}>
-            <span style={{fontSize:11,color:'#64748b',fontWeight:600}}>{label}</span>
-            <span style={{fontSize:12,color:'#1e293b',wordBreak:'break-word'}}>{val || '—'}</span>
+        const linha = (rotulo, val) => (
+          <div className="acn-ficha-linha">
+            <span className="acn-fraco">{rotulo}</span>
+            <span>{val || '—'}</span>
           </div>
         );
         return (
           <div className="modal-overlay">
-            <div className="modal-box" style={{maxWidth:560,maxHeight:'90vh',overflowY:'auto'}}>
-              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-                <span className="acn-badge" style={{background:cor,fontSize:13,padding:'3px 12px'}}>{m.tipo}</span>
-                <span style={{fontWeight:700,fontSize:15,color:'#1e293b'}}>Detalhes do Manifesto</span>
-                <span style={{marginLeft:'auto',fontSize:11,color:'#94a3b8'}}>ID: {(m.id||'').slice(0,8).toUpperCase()}</span>
+            <div className="modal-box acn-modal-media">
+              <div className="acn-ficha-cab">
+                <SeloTipo tipo={m.tipo} />
+                <span className="modal-title">Detalhes do Manifesto</span>
+                <span className="acn-fraco acn-ficha-id">ID: {(m.id||'').slice(0,8).toUpperCase()}</span>
               </div>
 
-              {row('Data', fmtDt(m.data))}
-              {row('Remetente', m.remetente)}
-              {row('Destinatário', m.destinatario)}
-              {row('Tipo de Mercadoria', m.tipo_mercadoria)}
-              {row('Descrição', m.descricao)}
-              {row('Quantidade', m.quantidade ? `${m.quantidade} un.` : null)}
-              {row('Peso', m.peso ? `${m.peso} kg` : null)}
-              {row('NF Referência', m.nf_referencia)}
-              {row('Placa do Veículo', m.veiculo_placa)}
-              {row('Observações', m.observacoes)}
-              {row('Registrado por', m.criado_por_nome || m.criado_por)}
-              {m.pedido_compra_id && row('Pedido de Compra', `#${m.pedido_compra_id.slice(0,8).toUpperCase()}`)}
+              {linha('Data', fmtDt(m.data))}
+              {linha('Remetente', m.remetente)}
+              {linha('Destinatário', m.destinatario)}
+              {linha('Tipo de Mercadoria', m.tipo_mercadoria)}
+              {linha('Descrição', m.descricao)}
+              {linha('Quantidade', m.quantidade ? `${m.quantidade} un.` : null)}
+              {linha('Peso', m.peso ? `${m.peso} kg` : null)}
+              {linha('NF Referência', m.nf_referencia)}
+              {linha('Placa do Veículo', m.veiculo_placa)}
+              {linha('Observações', m.observacoes)}
+              {linha('Registrado por', m.criado_por_nome || m.criado_por)}
+              {m.pedido_compra_id && linha('Pedido de Compra', `#${m.pedido_compra_id.slice(0,8).toUpperCase()}`)}
 
               {m.fotos && m.fotos.length > 0 && (
-                <div style={{marginTop:12}}>
-                  <div style={{fontWeight:700,fontSize:11,color:'#475569',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}}>Fotos ({m.fotos.length})</div>
-                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <div className="acn-ficha-fotos">
+                  <div className="acn-quadro-titulo">Fotos ({m.fotos.length})</div>
+                  <div className="acn-fotos">
                     {m.fotos.map((url,i) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        <img src={url} alt={`foto ${i+1}`} style={{width:110,height:82,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
+                        <img src={url} alt={`foto ${i+1}`} className="acn-foto-grande" />
                       </a>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div style={{display:'flex',gap:8,marginTop:16}}>
-                <button className="acn-btn" style={{background:'#1e293b',flex:1}} onClick={()=>{setModalDetalhes(null);gerarPDF(m);}}>📄 Gerar PDF</button>
-                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalDetalhes(null)}>Fechar</button>
+              <div className="acn-modal-acoes">
+                <Botao className="cresce" variante="primario" icone={mdiFilePdfBox} onClick={()=>{setModalDetalhes(null);gerarPDF(m);}}>Gerar PDF</Botao>
+                <Botao variante="secundario" onClick={()=>setModalDetalhes(null)}>Fechar</Botao>
               </div>
             </div>
           </div>
@@ -2151,16 +2149,18 @@ export default function LogisticaTab({ currentUser }) {
       {/* MODAL FOTOS */}
       {modalVer && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:600}}>
+          <div className="modal-box acn-modal-media">
             <div className="modal-title">Fotos — {modalVer.tipo} {fmtDt(modalVer.data)}</div>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',marginBottom:12}}>
+            <div className="acn-fotos acn-fotos-centro">
               {(modalVer.fotos||[]).map((url,i) => (
                 <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                  <img src={url} alt={`foto ${i+1}`} style={{width:130,height:100,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
+                  <img src={url} alt={`foto ${i+1}`} className="acn-foto-grande" />
                 </a>
               ))}
             </div>
-            <button className="acn-btn" style={{background:'#94a3b8',width:'100%'}} onClick={()=>setModalVer(null)}>Fechar</button>
+            <div className="acn-modal-acoes">
+              <Botao className="cresce" variante="secundario" onClick={()=>setModalVer(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
