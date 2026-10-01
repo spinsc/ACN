@@ -12,9 +12,10 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { Abas, Botao, Selo, Chips, hojeISO } from './Interface';
+import { Abas, Botao, Selo, Chips, MenuAcoes, hojeISO } from './Interface';
 import Icone from './Icone';
-import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline } from '@mdi/js';
+import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
+  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -48,6 +49,16 @@ const STATUS_COR: Record<string, string> = {
   'Aguardando Envio Fiscal':       '#f59e0b',
   'Aguardando Emissão NF':         '#0891b2',
   'Faturada - Aguardando Entrega': '#166534',
+};
+
+// Etapa 12d3 (01/10/2026): na lista de OS a cor do status vem da FAMÍLIA do guia de interface (a mesma de todas as telas), não mais do hexadecimal acima — que segue valendo só para
+// as opções do filtro e para o PDF da OS. Regra: pedindo ação ou resposta de alguém = atenção; em andamento no laboratório/produção = marca; já tratado = ok; recusado = erro.
+const FAMILIA_STATUS_SAC: Record<string, string> = {
+  'Diagnóstico': 'info', 'Aberta': 'info', 'Orçamento Pronto': 'marca', 'Orç. Enviado': 'atencao', 'Aprovado': 'ok', 'Reprovado': 'erro',
+  'Em Execução': 'marca', 'Concluído': 'ok', 'Entregue': 'ok',
+  'Em Cotação': 'info', 'Aguardando Aprovação Cliente': 'atencao', 'Em Provisionamento': 'marca', 'Aguardando Aceite SAC': 'atencao', 'Provisionada': 'ok',
+  'Aguardando Início': 'atencao', 'Verificação e Orçamento': 'marca', 'Em Manutenção': 'marca', 'Manutenção Concluída': 'ok', 'Aguardando CQ': 'atencao',
+  'Aguardando Envio Fiscal': 'atencao', 'Aguardando Emissão NF': 'info', 'Faturada - Aguardando Entrega': 'ok',
 };
 
 // Etapa 7.21 (01/10/2026, R16): prazo_orcamento e data_prevista_pos_aprovacao são do tipo DATE ("2026-09-30"). new Date("2026-09-30") é meia-noite de Londres, que no
@@ -173,15 +184,13 @@ const FORM_VAZIO = {
 
 // Etiqueta ACN/DETECH na lista. Clique define/troca (OS antigas não têm).
 function EtiquetaEmpresaOS({ os, onTrocar }: { os: any; onTrocar: (os: any) => void }) {
-  const cor = COR_EMPRESA[os.empresa];
+  // Etapa 12d3: o mesmo botão de antes (clique troca a empresa), agora um Selo do guia — ACN verde-água da marca, DETECH azul, OS sem empresa cinza com "+ empresa"
+  const familia = os.empresa === 'ACN' ? 'marca' : os.empresa === 'DETECH' ? 'info' : 'neutro';
   return (
-    <button type="button" onClick={() => onTrocar(os)}
-      title={os.empresa ? 'Clique para trocar a empresa desta OS' : 'OS sem empresa — clique para definir'}
-      style={{ fontSize:8, fontWeight:800, padding:'1px 6px', borderRadius:8, cursor:'pointer', letterSpacing:.3,
-        border: cor ? 'none' : '1px dashed #94a3b8',
-        background: cor ? cor.bg : '#fff', color: cor ? cor.fg : '#64748b' }}>
+    <Selo familia={familia} ponto={false} onClick={() => onTrocar(os)}
+      title={COR_EMPRESA[os.empresa] ? 'Clique para trocar a empresa desta OS' : 'OS sem empresa — clique para definir'}>
       {os.empresa || '+ empresa'}
-    </button>
+    </Selo>
   );
 }
 
@@ -875,11 +884,14 @@ OK = ACN   |   Cancelar = DETECH`;
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits:2 })}` : '—';
 
   // ── AÇÕES POR STATUS ──────────────────────────────────────────────────────
+  // Etapa 12d3 (01/10/2026): só aparência. Os textos, a ordem e o que cada botão faz são os de antes; cada botão ganha ícone e a variante pela importância:
+  // o passo que a OS espera do SAC naquele status é o botão cheio (primário) e recusar é vermelho vazado. Escolha do usuário em 01/10/2026 (com a lista real medida: tudo à vista deixava
+  // a lista 60% mais alta, de 1.590 para 2.593 px): o que TODA OS tem — Resp., Financeiro, Anexar e PDF — vai para o menu ⋯ da linha, como no PCP, no Fiscal e na Produção; o Acomp. fica à vista.
   const renderAcoes = (os) => {
     const btns = [
       // Botão de acompanhamento — sempre visível em qualquer status
-      <button key="acomp" className="acn-btn" style={{background:'#6366f1',fontSize:9}}
-        onClick={()=>setModalAcomp(os)}>💬 ACOMP.</button>,
+      <Botao key="acomp" pequeno icone={mdiMessageTextOutline}
+        onClick={()=>setModalAcomp(os)}>Acomp.</Botao>,
     ];
     const eh = os.is_manutencao_veicular;
 
@@ -895,23 +907,23 @@ OK = ACN   |   Cancelar = DETECH`;
             ? os.itens_cotacao.map((i:any) => ({...i}))
             : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0}];
         btns.push(
-          <button key="revisao" className="acn-btn" style={{background:'#dc2626',fontSize:9,fontWeight:700}}
+          <Botao key="revisao" pequeno variante="perigo" icone={mdiRefresh}
             onClick={()=>{ setOrcProdItens(itensRevisao); setOrcProdModo('editar'); setModalOrcProd(os); }}>
-            🔁 Resolver Revisão ({fmtVal(os.valor_orcamento_revisado)})
-          </button>
+            Resolver Revisão ({fmtVal(os.valor_orcamento_revisado)})
+          </Botao>
         );
       }
       // Remota: Em Cotação → SAC insere itens e envia cotação
       if (os.status === 'Em Cotação') {
         btns.push(
-          <button key="itens" className="acn-btn" style={{background:'#0891b2',fontSize:9}}
+          <Botao key="itens" pequeno icone={mdiClipboardListOutline}
             onClick={()=>{ setLocalItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setHorasCobradas(os.horas_cobradas_cotacao!=null?String(os.horas_cobradas_cotacao):''); setModalItens(os); }}>
-            📋 Itens
-          </button>,
-          <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+            Itens
+          </Botao>,
+          <Botao key="enviar" pequeno variante="primario" icone={mdiSendOutline}
             onClick={()=>{ if(!(os.itens_cotacao?.length>0)){alert('Adicione os itens antes de enviar!');return;} enviarCotacaoCliente(os); }}>
-            📤 Enviar Cotação
-          </button>
+            Enviar Cotação
+          </Botao>
         );
       }
       // Aguardando Aprovação Cliente → SAC registra resposta do cliente
@@ -919,32 +931,32 @@ OK = ACN   |   Cancelar = DETECH`;
         if (os.tipo_avaliacao === 'Remota' && !os.data_chegada_veiculo) {
           // Remota: cotação aguardando → aprovação envia para Produção provisionar
           btns.push(
-            <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarCotacao(os)}>✅ Aprovado</button>,
-            <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
+            <Botao key="aprov" pequeno variante="primario" icone={mdiCheck} onClick={()=>aprovarCotacao(os)}>Aprovado</Botao>,
+            <Botao key="repr" pequeno variante="perigo-sec" icone={mdiClose} onClick={()=>recusarCotacao(os)}>Recusado</Botao>
           );
         } else {
           // Presencial: orçamento de verificação aguardando → aprovação inicia manutenção
           btns.push(
-            <button key="ver"   className="acn-btn" style={{background:'#0891b2',fontSize:9}}
+            <Botao key="ver" pequeno icone={mdiEyeOutline}
               onClick={()=>{ setOrcProdItens(Array.isArray(os.itens_cotacao)?os.itens_cotacao.map(i=>({...i})):[]); setOrcProdModo('ver'); setModalOrcProd(os); }}>
-              👁 Ver Orç.
-            </button>,
-            <button key="edit"  className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+              Ver Orç.
+            </Botao>,
+            <Botao key="edit" pequeno icone={mdiPencilOutline}
               onClick={()=>{ setOrcProdItens(Array.isArray(os.itens_cotacao)&&os.itens_cotacao.length>0?os.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setOrcProdModo('editar'); setModalOrcProd(os); }}>
-              ✏️ Editar
-            </button>,
-            <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>aprovarOrcamentoPresencial(os)}>✅ Aprovado</button>,
-            <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>recusarCotacao(os)}>❌ Recusado</button>
+              Editar
+            </Botao>,
+            <Botao key="aprov" pequeno variante="primario" icone={mdiCheck} onClick={()=>aprovarOrcamentoPresencial(os)}>Aprovado</Botao>,
+            <Botao key="repr" pequeno variante="perigo-sec" icone={mdiClose} onClick={()=>recusarCotacao(os)}>Recusado</Botao>
           );
         }
       }
       // Aguardando Aceite SAC → SAC confirma ou rejeita data definida pela Produção
       if (os.status === 'Aguardando Aceite SAC') {
         btns.push(
-          <button key="aceite" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+          <Botao key="aceite" pequeno variante="primario" icone={mdiClipboardCheckOutline}
             onClick={()=>setModalAceiteSAC(os)}>
-            📋 Aceite SAC
-          </button>
+            Aceite SAC
+          </Botao>
         );
       }
       // Manutenção Concluída → SAC faz entrega ou renegocia itens
@@ -955,50 +967,50 @@ OK = ACN   |   Cancelar = DETECH`;
             ? os.itens_cotacao.map((i:any) => ({...i}))
             : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0}];
         btns.push(
-          <button key="renegoc" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+          <Botao key="renegoc" pequeno icone={mdiPencilOutline}
             onClick={()=>{ setOrcProdItens(itensRenegoc); setOrcProdModo('editar'); setModalOrcProd(os); }}>
-            ✏️ Renegociar
-          </button>
+            Renegociar
+          </Botao>
         );
         btns.push(
-          <button key="entrega" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
+          <Botao key="entrega" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
         );
       }
       // Aguardando CQ → sem ação do SAC, Qualidade que audita
       if (os.status === 'Aguardando CQ') {
-        btns.push(<span key="cq" style={{fontSize:9,color:'#94a3b8',fontStyle:'italic'}}>Aguardando Qualidade</span>);
+        btns.push(<span key="cq" className="acn-fraco acn-sac-espera">Aguardando Qualidade</span>);
       }
       // Aguardando Envio Fiscal → SAC informa nº de série dos itens e envia ao Fiscal
       if (os.status === 'Aguardando Envio Fiscal') {
         btns.push(
-          <button key="envfiscal" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+          <Botao key="envfiscal" pequeno variante="primario" icone={mdiSendOutline}
             onClick={()=>{
               const itens = Array.isArray(os.materiais_utilizados) && os.materiais_utilizados.length > 0
                 ? os.materiais_utilizados.map((i:any) => ({...i}))
                 : [{codigo:'',descricao:'',quantidade:1,valor_unitario:0,numero_serie:''}];
               setFiscalItens(itens); setModalEnviarFiscal(os);
             }}>
-            📤 Enviar para Fiscal
-          </button>
+            Enviar para Fiscal
+          </Botao>
         );
       }
       // Aguardando Emissão NF → sem ação do SAC, Fiscal que emite
       if (os.status === 'Aguardando Emissão NF') {
-        btns.push(<span key="nf" style={{fontSize:9,color:'#94a3b8',fontStyle:'italic'}}>Aguardando Fiscal</span>);
+        btns.push(<span key="nf" className="acn-fraco acn-sac-espera">Aguardando Fiscal</span>);
       }
       // Faturada - Aguardando Entrega → SAC entrega o veículo
       if (os.status === 'Faturada - Aguardando Entrega') {
         btns.push(
-          <button key="entrega2" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>liberarEntregaVeicular(os)}>🚚 Entrega</button>
+          <Botao key="entrega2" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>liberarEntregaVeicular(os)}>Entrega</Botao>
         );
       }
       // Reprovado veicular → reavaliar
       if (os.status === 'Reprovado') {
         btns.push(
-          <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+          <Botao key="reaval" pequeno icone={mdiRefresh}
             onClick={async ()=>{ if(await confirmar(`Reabrir ${os.numero_os}?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + error.message); return; } fetchOrdens(); } }}>
-            🔄 Reavaliar
-          </button>
+            Reavaliar
+          </Botao>
         );
       }
     } else {
@@ -1006,43 +1018,44 @@ OK = ACN   |   Cancelar = DETECH`;
       // Orçamento finalizado pelo Lab → SAC envia ao cliente
       if (os.status === 'Orçamento Pronto')
         btns.push(
-          <button key="enviar" className="acn-btn" style={{background:'#7c3aed',fontSize:9}}
+          <Botao key="enviar" pequeno variante="primario" icone={mdiSendOutline}
             onClick={()=>{ setModalOrc(os); setOrcForm({ valor: os.valor_orcamento ? String(os.valor_orcamento) : '', condicoes: os.condicoes_pagamento || '' }); }}>
-            📤 Enviar
-          </button>
+            Enviar
+          </Botao>
         );
 
       // Cliente respondendo o orçamento enviado
       if (os.status === 'Orç. Enviado')
         btns.push(
-          <button key="aprov" className="acn-btn" style={{background:'#22c55e',fontSize:9}} onClick={()=>{setModalAprov(os);setAprovForm({nome:'',sig:null,data_entrega:''});}}>✅ Aprovar</button>,
-          <button key="repr"  className="acn-btn" style={{background:'#ef4444',fontSize:9}} onClick={()=>{setModalRepr(os);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});}}>❌ Reprovar</button>
+          <Botao key="aprov" pequeno variante="primario" icone={mdiCheck} onClick={()=>{setModalAprov(os);setAprovForm({nome:'',sig:null,data_entrega:''});}}>Aprovar</Botao>,
+          <Botao key="repr" pequeno variante="perigo-sec" icone={mdiClose} onClick={()=>{setModalRepr(os);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});}}>Reprovar</Botao>
         );
 
       // Reprovado — reagendar / reavaliar
       if (os.status === 'Reprovado')
         btns.push(
-          <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
+          <Botao key="reaval" pequeno icone={mdiRefresh}
             onClick={async ()=>{ if(await confirmar(`Reabrir OS ${os.numero_os} para novo orçamento?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + error.message); return; } fetchOrdens(); } }}>
-            🔄 Reavaliar
-          </button>
+            Reavaliar
+          </Botao>
         );
 
       // Lab concluiu o reparo → SAC faz a entrega
       if (os.status === 'Concluído')
         btns.push(
-          <button key="saida" className="acn-btn" style={{background:'#166534',fontSize:9}} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>🚚 Entrega</button>
+          <Botao key="saida" pequeno variante="primario" icone={mdiTruckDeliveryOutline} onClick={()=>{setModalSaida(os);setSaidaForm({nome:'',sig:null});setFotosSaidaFiles([]);}}>Entrega</Botao>
         );
     }
 
-    // Botão alterar responsável — disponível enquanto OS não estiver encerrada
-    if (!['Entregue','Cancelada'].includes(os.status)) {
-      btns.push(<button key="editresp" className="acn-btn" style={{background:'#6366f1',fontSize:9}}
-        onClick={()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); }}>✏️ Resp.</button>);
-    }
-    btns.push(<button key="financeiro" className="acn-btn" style={{background:'#059669',fontSize:9}} onClick={()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??'',data_faturamento:(os.data_faturamento||'').slice(0,10)});setModalFinanceiro(os);}}>💰 Financeiro</button>);
-    btns.push(<button key="anexar" className="acn-btn" style={{background:'#0369a1',fontSize:9}} onClick={()=>{setAnexarFiles([]);setModalAnexar(os);}}>📎 Anexar</button>);
-    btns.push(<button key="print" className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>gerarPdfOS(os)}>🖨️ PDF</button>);
+    // Menu ⋯ com o que toda OS tem. Alterar responsável: disponível enquanto a OS não estiver encerrada
+    btns.push(<MenuAcoes key="mais" rotulo="Mais ações da OS" itens={[
+      { rotulo: 'Resp.', titulo: 'Alterar o responsável da OS', icone: mdiAccountEditOutline, oculto: ['Entregue','Cancelada'].includes(os.status),
+        onClick: ()=>{ setEditRespOSNome(os.responsavel_nome||''); setModalEditRespOS(os); } },
+      { rotulo: 'Financeiro', titulo: 'Valor total, mão de obra e data de faturamento', icone: mdiCurrencyUsd,
+        onClick: ()=>{setFinanceiroForm({valor_total:os.valor_total??'',valor_mao_de_obra:os.valor_mao_de_obra??'',data_faturamento:(os.data_faturamento||'').slice(0,10)});setModalFinanceiro(os);} },
+      { rotulo: 'Anexar', titulo: 'Anexar arquivos à OS', icone: mdiPaperclip, onClick: ()=>{setAnexarFiles([]);setModalAnexar(os);} },
+      { rotulo: 'PDF', titulo: 'Gerar o PDF da OS', icone: mdiPrinterOutline, onClick: ()=>gerarPdfOS(os) },
+    ]} />);
     return btns;
   };
 
@@ -1599,99 +1612,94 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ── HEADER ── */}
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>SAC — Ordens de Serviço ({ordensFiltradas.length})</span>
-          <button className="acn-btn" style={{background:'#0f766e'}} onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
-            + Nova OS
-          </button>
+          <span className="acn-cab-titulo"><Icone path={mdiClipboardTextOutline} size={16} /> SAC — Ordens de Serviço ({ordensFiltradas.length})</span>
+          <Botao variante="primario" icone={mdiPlus} onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
+            Nova OS
+          </Botao>
         </div>
 
         {/* Legenda de fluxo */}
-        <div className="sec-body" style={{padding:'6px 12px',borderBottom:'1px solid #e2e8f0',background:'#f8fafc',display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
-          <span style={{fontSize:9,color:'#64748b',marginRight:4}}>Fluxo:</span>
+        <div className="sec-body acn-sac-legenda">
+          <span className="acn-fraco">Fluxo:</span>
           {['Diagnóstico','Orçamento Pronto','Orç. Enviado','Aprovado','Em Execução','Concluído','Entregue'].map((s,i,arr) => (
             <React.Fragment key={s}>
-              <span className="acn-badge" style={{background:STATUS_COR[s]||'#94a3b8',fontSize:8}}>{s}</span>
-              {i < arr.length-1 && <span style={{color:'#94a3b8',fontSize:9}}>→</span>}
+              <Selo familia={FAMILIA_STATUS_SAC[s] || 'neutro'}>{s}</Selo>
+              {i < arr.length-1 && <Icone path={mdiArrowRight} size={14} className="acn-fraco" />}
             </React.Fragment>
           ))}
-          <span style={{marginLeft:8,fontSize:9,color:'#94a3b8'}}>(Lab executa diagnóstico e reparo)</span>
+          <span className="acn-fraco acn-sac-legenda-nota">(Lab executa diagnóstico e reparo)</span>
         </div>
 
         {/* Filtros */}
-        <div className="sec-body" style={{display:'flex',gap:8,flexWrap:'wrap',padding:'8px 12px',borderBottom:'1px solid #e2e8f0'}}>
-          <input className="acn-input" style={{width:200}} placeholder="Buscar OS / cliente / equip."
+        <div className="sec-body acn-sac-filtros">
+          <input className="acn-input acn-sac-busca" aria-label="Buscar OS" placeholder="Buscar OS / cliente / equip."
             value={busca} onChange={e=>setBusca(e.target.value)} />
-          <select className="acn-input" style={{width:150}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+          <select className="acn-input" aria-label="Status da OS" value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
             <option value="">Todos os status</option>
             {Object.keys(STATUS_COR).map(s=><option key={s}>{s}</option>)}
           </select>
-          <select className="acn-input" style={{width:140}} value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
+          <select className="acn-input" aria-label="Tipo de serviço" value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
             <option value="">Todos os tipos</option>
             {['Orçamento','Conserto','Troca','Garantia'].map(t=><option key={t}>{t}</option>)}
           </select>
-          <select className="acn-input" style={{width:140}} value={filtroAvaliacao} onChange={e=>setFiltroAvaliacao(e.target.value)}>
+          <select className="acn-input" aria-label="Presencial ou remota" value={filtroAvaliacao} onChange={e=>setFiltroAvaliacao(e.target.value)}>
             <option value="">Presencial / Remota</option>
             <option value="Veicular">Veiculares</option>
             <option value="Presencial">Presencial</option>
             <option value="Remota">Remota</option>
           </select>
-          <select className="acn-input" style={{width:130}} value={filtroEmpresa} onChange={e=>setFiltroEmpresa(e.target.value)}>
+          <select className="acn-input" aria-label="Empresa da OS" value={filtroEmpresa} onChange={e=>setFiltroEmpresa(e.target.value)}>
             <option value="">Todas as empresas</option>
             {EMPRESAS_OS.map(e=><option key={e} value={e}>{e}</option>)}
             <option value="sem">Sem empresa</option>
           </select>
-          <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setBusca('');}}>Limpar</button>
+          <Botao pequeno onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setBusca('');}}>Limpar</Botao>
         </div>
 
         {/* ── TABELA ── */}
-        <div className="sec-body" style={{overflowX:'auto',padding:0}}>
+        <div className="sec-body acn-rolagem acn-sem-recuo">
           {loading ? <div className="acn-empty">Carregando...</div> : ordensFiltradas.length === 0 ? (
             <div className="acn-empty">Nenhuma OS encontrada.</div>
           ) : (
-            <table>
+            <table className="acn-tabela acn-densa">
               <thead><tr>
                 <th>Nº OS</th><th>Tipo</th><th>Atend.</th><th>Equipamento</th><th>Cliente</th>
-                <th>Abertura</th><th>Prazo Orç.</th><th>Valor</th>
+                <th>Abertura</th><th>Prazo Orç.</th><th className="acn-dir">Valor</th>
                 <th>KPI Orç.</th><th>KPI Exec.</th><th>Status</th><th>Ações</th>
               </tr></thead>
               <tbody>
-                {ordensFiltradas.map(o => (
-                  <tr key={o.id} style={
-                    ordensNaoLidas.has(String(o.id)) ? { background:'#fffdf0', borderLeft:'4px solid #eab308' } : {
-                      background: o.status==='Reprovado' ? '#fef2f2'
-                                : o.status==='Aprovado'  ? '#eff6ff'
-                                : o.status==='Entregue'  ? '#f0fdf4'
-                                : undefined
-                    }
-                  }>
+                {ordensFiltradas.map(o => {
+                  // horas cobradas na cotação × horas reais da execução (só OS remota): ▲ cobrou mais do que levou, ▼ cobrou menos
+                  const difHoras = o.tipo_avaliacao==='Remota' && o.horas_cobradas_cotacao!=null && o.kpi_execucao_horas!=null && Math.abs(Number(o.horas_cobradas_cotacao)-Number(o.kpi_execucao_horas))>0.01;
+                  const cobrouMais = Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas);
+                  return (
+                  <tr key={o.id} className={ordensNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : o.status==='Reprovado' ? 'acn-linha-alerta' : ''}>
                     <td>
-                      <strong style={{color:'#0f766e',whiteSpace:'nowrap'}}>{o.numero_os}</strong>
-                      <div style={{marginTop:2}}><EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} /></div>
+                      <div className="acn-duas acn-sac-id">
+                        <strong className="acn-forte">{o.numero_os}</strong>
+                        <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
+                      </div>
                     </td>
-                    <td><span className="acn-badge" style={{background:'#e2e8f0',color:'#1e293b',fontSize:9}}>{o.tipo_servico}</span></td>
-                    <td>{o.tipo_avaliacao==='Remota' ? <span style={{fontSize:9,fontWeight:700,color:'#0ea5e9',background:'#e0f2fe',borderRadius:10,padding:'2px 7px'}}>📡 Remota</span> : o.tipo_avaliacao==='Presencial' ? <span style={{fontSize:9,fontWeight:700,color:'#7c3aed',background:'#ede9fe',borderRadius:10,padding:'2px 7px'}}>📍 Presencial</span> : <span style={{color:'#cbd5e1',fontSize:9}}>—</span>}</td>
-                    <td style={{ maxWidth:140, wordBreak:'break-word' }}>
-                      {o.equipamento_nome}
-                      <div style={{fontSize:9,marginTop:1}}>
+                    <td className="acn-texto-curto">{o.tipo_servico}</td>
+                    <td>{o.tipo_avaliacao==='Remota' ? <Selo familia="neutro" ponto={false}><Icone path={mdiAccessPoint} size={13} /> Remota</Selo> : o.tipo_avaliacao==='Presencial' ? <Selo familia="neutro" ponto={false}><Icone path={mdiMapMarkerOutline} size={13} /> Presencial</Selo> : <span className="acn-fraco">—</span>}</td>
+                    <td className="acn-texto-longo acn-sac-equip">
+                      <div className="acn-duas">
+                        <span>{o.equipamento_nome}</span>
+                        <small>{o.modelo ? o.modelo : <span className="acn-txt-erro acn-sac-icone-texto"><Icone path={mdiAlertOutline} size={12} /> sem modelo</span>}</small>
                         {o.is_manutencao_veicular ? (
-                          <>
-                            <div>{o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}</div>
-                            <div>{o.chassi ? <span style={{color:'#64748b'}}>🔧 {o.chassi}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span>}</div>
-                          </>
+                          <small>{o.chassi ? <span className="acn-sac-icone-texto"><Icone path={mdiWrenchOutline} size={12} /> {o.chassi}</span> : <span className="acn-txt-erro acn-sac-icone-texto"><Icone path={mdiAlertOutline} size={12} /> sem chassi</span>}</small>
                         ) : (
-                          <>
-                            <div>{o.modelo ? <span style={{color:'#64748b'}}>{o.modelo}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span>}</div>
-                            <div>{o.numero_serie ? <span style={{color:'#64748b'}}>SN {o.numero_serie}</span> : <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem série</span>}</div>
-                          </>
+                          <small>{o.numero_serie ? `SN ${o.numero_serie}` : <span className="acn-txt-erro acn-sac-icone-texto"><Icone path={mdiAlertOutline} size={12} /> sem série</span>}</small>
                         )}
                       </div>
                     </td>
-                    <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome}</td>
-                    <td style={{fontSize:10}}>{fmtDt(o.data_abertura)}</td>
-                    <td style={{fontSize:10,color: o.prazo_orcamento && String(o.prazo_orcamento).slice(0,10) < hojeISO() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
-                      {fmtDt(o.prazo_orcamento)}
+                    <td className="acn-texto-longo">{o.cliente_nome}</td>
+                    <td className="acn-num">{fmtDt(o.data_abertura)}</td>
+                    <td className="acn-num">
+                      {/* a classe de cor vai no span: a regra das células da tabela vence a classe quando ela está no <td> */}
+                      <span className={o.prazo_orcamento && String(o.prazo_orcamento).slice(0,10) < hojeISO() && ['Diagnóstico','Aberta'].includes(o.status) ? 'acn-txt-erro' : ''}>{fmtDt(o.prazo_orcamento)}</span>
                     </td>
-                    <td style={{fontSize:10}}>{(() => {
+                    <td className="acn-num acn-dir acn-sac-valor">{(() => {
                       const v = Number(o.valor_orcamento) || 0;
                       const itensTotal = Array.isArray(o.itens_cotacao) && o.itens_cotacao.length
                         ? o.itens_cotacao.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0)
@@ -1699,30 +1707,28 @@ OK = ACN   |   Cancelar = DETECH`;
                       const total = v > 0 ? v : (itensTotal > 0 ? itensTotal : null);
                       return fmtVal(total);
                     })()}</td>
-                    <td style={{fontSize:10,color:'#0891b2',fontWeight:o.kpi_orcamento_horas?700:400}}>
-                      {o.kpi_orcamento_horas ? `${Number(o.kpi_orcamento_horas).toFixed(1)}h` : '—'}
+                    <td className="acn-num">
+                      <span className={o.kpi_orcamento_horas ? 'acn-txt-info' : 'acn-fraco'}>{o.kpi_orcamento_horas ? `${Number(o.kpi_orcamento_horas).toFixed(1)}h` : '—'}</span>
                     </td>
-                    <td style={{fontSize:10,color:'#8b5cf6',fontWeight:o.kpi_execucao_horas?700:400}}>
-                      {o.kpi_execucao_horas ? `${Number(o.kpi_execucao_horas).toFixed(1)}h` : '—'}
-                      {o.tipo_avaliacao==='Remota' && o.horas_cobradas_cotacao!=null && o.kpi_execucao_horas!=null && Math.abs(Number(o.horas_cobradas_cotacao)-Number(o.kpi_execucao_horas))>0.01 && (
-                        <span title={`Cobrado: ${Number(o.horas_cobradas_cotacao).toFixed(1)}h | Real: ${Number(o.kpi_execucao_horas).toFixed(1)}h`}
-                          style={{marginLeft:4,background:Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'#dcfce7':'#fef2f2',
-                            color:Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'#166534':'#dc2626',
-                            border:`1px solid ${Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'#86efac':'#fca5a5'}`,
-                            borderRadius:3,padding:'0 4px',fontSize:8,fontWeight:700,cursor:'help'}}>
-                          ⏱️{Number(o.horas_cobradas_cotacao)>Number(o.kpi_execucao_horas)?'▲':'▼'}
+                    <td className="acn-num">
+                      <span className={o.kpi_execucao_horas ? 'acn-forte' : 'acn-fraco'}>{o.kpi_execucao_horas ? `${Number(o.kpi_execucao_horas).toFixed(1)}h` : '—'}</span>
+                      {difHoras && (
+                        <span className={'acn-sac-horas ' + (cobrouMais ? 'acn-txt-ok' : 'acn-txt-erro')}
+                          title={`Cobrado: ${Number(o.horas_cobradas_cotacao).toFixed(1)}h | Real: ${Number(o.kpi_execucao_horas).toFixed(1)}h`}>
+                          <Icone path={mdiTimerOutline} size={12} /><Icone path={cobrouMais ? mdiMenuUp : mdiMenuDown} size={16} />
                         </span>
                       )}
                     </td>
                     <td>
-                      <span className="acn-badge" style={{background: STATUS_COR[o.status]||'#94a3b8'}}>{o.status}</span>
+                      <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
                       {o.revisao_pendente && (
-                        <div style={{fontSize:8,color:'#dc2626',fontWeight:700,marginTop:2}}>⚠️ Revisão pendente</div>
+                        <div><span className="acn-txt-erro acn-sac-icone-texto acn-sac-revisao"><Icone path={mdiAlertOutline} size={12} /> Revisão pendente</span></div>
                       )}
                     </td>
-                    <td><div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{renderAcoes(o)}</div></td>
+                    <td><div className="acn-acoes-linha quebra">{renderAcoes(o)}</div></td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

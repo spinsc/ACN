@@ -755,3 +755,19 @@ html body .acn-input.acn-cad-campo-fixo { width: 250px; max-width: 100%; }
 .acn-cad-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; padding: 6px 0; }
 /* linha de um cadastro desativado: esmaecida (antes opacity pintada à mão na linha) */
 html body .acn-main table.acn-tabela tr.acn-linha-inativa > td { opacity: .55; }
+/* ── SAC · lista de Ordens de Serviço (Etapa 12d3, 01/10/2026): só aparência ──────────────────────────────────── */
+html body .sec-body.acn-sac-legenda { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 14px; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-sac-legenda-nota { margin-left: 8px; font-size: 12px; }
+html body .sec-body.acn-sac-filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--acn-line); }
+html body .acn-sac-filtros .acn-input { flex: 0 1 170px; min-width: 140px; width: auto; }
+html body .acn-sac-filtros .acn-input.acn-sac-busca { flex-basis: 230px; }
+/* número da OS em cima, etiqueta da empresa embaixo, encostada à esquerda (sem isto o selo esticaria até a borda da célula) */
+.acn-sac-id { align-items: flex-start; white-space: nowrap; }
+.acn-sac-icone-texto { display: inline-flex; align-items: center; gap: 3px; }
+/* equipamento: o nome não pode ficar espremido a ponto de quebrar "ZZ Rádio / Base"; valor: "R$ 980,00" nunca quebra */
+.acn-sac-equip { min-width: 130px; }
+.acn-sac-valor { white-space: nowrap; }
+.acn-sac-revisao { margin-top: 3px; font-size: 12px; }
+.acn-sac-horas { display: inline-flex; align-items: center; margin-left: 4px; cursor: help; }
+.acn-sac-espera { font-size: 12px; font-style: italic; }
+@media (max-width: 480px) { html body .acn-sac-filtros .acn-input.acn-sac-busca { flex-basis: 100%; } }
