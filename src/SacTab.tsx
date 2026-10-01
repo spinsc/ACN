@@ -12,7 +12,7 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { Abas, Botao, Selo, Chips } from './Interface';
+import { Abas, Botao, Selo, Chips, hojeISO } from './Interface';
 import Icone from './Icone';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline } from '@mdi/js';
 
@@ -49,6 +49,11 @@ const STATUS_COR: Record<string, string> = {
   'Aguardando Emissão NF':         '#0891b2',
   'Faturada - Aguardando Entrega': '#166534',
 };
+
+// Etapa 7.21 (01/10/2026, R16): prazo_orcamento e data_prevista_pos_aprovacao são do tipo DATE ("2026-09-30"). new Date("2026-09-30") é meia-noite de Londres, que no
+// Brasil ainda é o dia anterior: a lista e o PDF mostravam essas datas um dia antes do real (9 das 19 OS reais têm prazo e todas apareciam um dia antes). Texto só com a data: o dia sai direto do texto.
+// Data com hora (data_abertura, data_aprovacao, data_saida...) continua pelo fuso de quem usa. Mesmo erro já corrigido na Logística (7.10) e no RH (7.15).
+const fmtDataSAC = (d: any) => !d ? '—' : /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d).split('-').reverse().join('/') : new Date(d).toLocaleDateString('pt-BR');
 
 // Detecta OS de manutenção veicular
 const isVeicular = (tp: string) => {
@@ -861,7 +866,7 @@ OK = ACN   |   Cancelar = DETECH`;
     return true;
   });
 
-  const fmtDt  = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmtDt  = fmtDataSAC;
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits:2 })}` : '—';
 
   // ── AÇÕES POR STATUS ──────────────────────────────────────────────────────
@@ -1066,7 +1071,7 @@ OK = ACN   |   Cancelar = DETECH`;
 
   // ── GERAR PDF DA OS ───────────────────────────────────────────────────────
   const gerarPdfOS = (os: any) => {
-    const fmtDt  = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+    const fmtDt  = fmtDataSAC;
     const fmtVal = (v: any) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
     const cor = (STATUS_COR as any)[os.status] || '#94a3b8';
 
@@ -1678,7 +1683,7 @@ OK = ACN   |   Cancelar = DETECH`;
                     </td>
                     <td style={{ maxWidth:120, wordBreak:'break-word' }}>{o.cliente_nome}</td>
                     <td style={{fontSize:10}}>{fmtDt(o.data_abertura)}</td>
-                    <td style={{fontSize:10,color: o.prazo_orcamento && new Date(o.prazo_orcamento)<new Date() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
+                    <td style={{fontSize:10,color: o.prazo_orcamento && String(o.prazo_orcamento).slice(0,10) < hojeISO() && ['Diagnóstico','Aberta'].includes(o.status) ? '#ef4444':'inherit'}}>
                       {fmtDt(o.prazo_orcamento)}
                     </td>
                     <td style={{fontSize:10}}>{(() => {
