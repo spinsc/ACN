@@ -1962,6 +1962,14 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **Fora / pendente:** **"Salvar o cliente no cadastro"** depois de abrir a OS (`salvarClienteAuto`) é feito **sem esperar e sem avisar** se falhar — é de propósito (a OS já abriu) e fica como está. As demais gravações das janelas do SAC que ignoram o erro seguem para as fatias **12d5 a 12d7**.
 
+### ✅ Etapa 7.24 — SAC, "Nova OS": o documento de uma abertura cancelada ia junto da OS seguinte
+
+**Feito em:** 01/10/2026. **Achado** ao montar o teste de comportamento da 12d4, logo depois da 7.23. **Causa:** ao abrir a janela "Nova OS" só as **fotos** escolhidas eram zeradas; **o documento escolhido numa abertura que foi cancelada ficava na memória**. Na abertura seguinte o campo aparecia vazio, mas o contador mostrava **"1 arquivo(s)"** e **o documento era enviado junto da OS nova** — um documento do cliente anterior anexado à OS do próximo.
+
+**O que foi feito** (`SacTab.tsx`, uma linha: o botão "Nova OS" da lista passa a zerar também os documentos; **nenhum dado foi alterado**). **Como foi testado** (`teste_48`, navegador, escrita simulada): anexar foto e documento, **cancelar**, abrir de novo — o contador some e **a OS nova não envia nada ao armazenamento e grava a lista de documentos vazia**; e o documento escolhido **na própria abertura** continua indo com a OS. **Antes 4/7; depois 7/7.** `teste_47` (7.23) 22/22; build ok.
+
+**Fora:** não foi possível saber se alguma OS **real** já recebeu um documento "emprestado" dessa forma: o banco não guarda de onde o anexo veio. Se alguém notar um anexo estranho numa OS, é por isso.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.

@@ -1627,7 +1627,8 @@ OK = ACN   |   Cancelar = DETECH`;
       <div className="sec-card">
         <div className="sec-hdr">
           <span className="acn-cab-titulo"><Icone path={mdiClipboardTextOutline} size={16} /> SAC — Ordens de Serviço ({ordensFiltradas.length})</span>
-          <Botao variante="primario" icone={mdiPlus} onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
+          <Botao variante="primario" icone={mdiPlus} // Etapa 7.24 (01/10/2026): só as fotos eram zeradas ao abrir; o documento escolhido numa abertura CANCELADA ficava na memória (o contador mostrava "1 arquivo(s)" com o campo vazio) e ia junto da OS seguinte
+            onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setArquivosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
             Nova OS
           </Botao>
         </div>
