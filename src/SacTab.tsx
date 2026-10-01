@@ -397,6 +397,9 @@ export default function SacTab({ currentUser }) {
   const criarOS = async () => {
     if (!form.cliente_nome.trim()) { alert('Nome do cliente obrigatório!'); return; }
     if (!form.equipamento_nome.trim()) { alert('Informe o equipamento!'); return; }
+    // Etapa 7.23 (resposta do usuário em 01/10/2026): o asterisco de "Defeito Reclamado *" sempre esteve na tela, mas a OS abria sem — 3 das 19 OS reais estão sem defeito. Agora é obrigatório, em cada equipamento da OS.
+    const semDefeito = equipLista.findIndex(e => !String(e.defeito || '').trim());
+    if (semDefeito >= 0) { alert(equipLista.length > 1 ? `Informe o defeito reclamado do equipamento ${semDefeito + 1}!` : 'Informe o defeito reclamado!'); return; }
     setSalvando(true);
     const agora = new Date().toISOString();
     const isGarantia = form.tipo_servico === 'Garantia';
@@ -405,14 +408,18 @@ export default function SacTab({ currentUser }) {
     // Gera primeiro número e faz upload de fotos (uma única vez)
     let numero = await gerarNumeroOS();
     const urlsFotos: string[] = [];
+    // Etapa 7.23: foto ou documento que não subiu era descartado em silêncio e a OS abria sem ele (a prova de como o equipamento chegou se perdia). Agora a OS NÃO abre: avisa qual arquivo falhou e
+    // deixa o formulário e os arquivos escolhidos como estão, para tentar de novo ou tirar o arquivo da lista. (Suposição minha, registrada no plano.)
     for (const f of fotosEntradaFiles) {
       const url = await uploadFoto(f, `os_${numero.replace('/','_')}/entrada`);
-      if (url) urlsFotos.push(url);
+      if (!url) { alert(`Não consegui enviar a foto "${f.name}". A OS NÃO foi aberta: tente de novo ou tire a foto da lista.`); setSalvando(false); return; }
+      urlsFotos.push(url);
     }
     const urlsArquivos: any[] = [];
     for (const f of arquivosEntradaFiles) {
       const result = await uploadArquivo(f, `os_${numero.replace('/','_')}/arquivos`);
-      if (result) urlsArquivos.push({ ...result, enviado_em: new Date().toISOString(), enviado_por: currentUser?.nome||'' });
+      if (!result) { alert(`Não consegui enviar o documento "${f.name}". A OS NÃO foi aberta: tente de novo ou tire o documento da lista.`); setSalvando(false); return; }
+      urlsArquivos.push({ ...result, enviado_em: new Date().toISOString(), enviado_por: currentUser?.nome||'' });
     }
 
     // Payload base sem numero_os (será preenchido em cada tentativa)
@@ -496,13 +503,17 @@ export default function SacTab({ currentUser }) {
       });
     }
 
+    // Etapa 7.23: a OS já existe a partir daqui; se uma das demandas não for criada o aviso diz qual, em vez de a OS ficar parada sem ninguém saber (o Laboratório só enxerga a OS pela demanda).
+    const falhasDemanda: string[] = [];
     // Auto-criar demanda para Laboratório (apenas OS não veiculares)
     if (!ehVeicular) {
       const sac_fase = isGarantia ? 'execucao' : 'diagnostico';
+      // Etapa 7.23 (resposta do usuário em 01/10/2026): a demanda dizia sempre "Ver OS" porque lia form.defeito_reclamado, que a tela nunca preenche (o defeito digitado fica em equipLista); só vale para OS novas
+      const defeitoDemanda = String(equipLista[0]?.defeito || '').trim() || form.defeito_reclamado || 'Ver OS';
       const descDemanda = isGarantia
-        ? `[SAC-EXEC] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`
-        : `[SAC-DIAG] ${numero} — ${form.equipamento_nome} | ${form.defeito_reclamado || 'Ver OS'}`;
-      await supabase.from('demandas_setoriais').insert([{
+        ? `[SAC-EXEC] ${numero} — ${form.equipamento_nome} | ${defeitoDemanda}`
+        : `[SAC-DIAG] ${numero} — ${form.equipamento_nome} | ${defeitoDemanda}`;
+      const { error: errLab } = await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Laboratorio',
         descricao: descDemanda,
         numero_opl: numero,
@@ -519,11 +530,12 @@ export default function SacTab({ currentUser }) {
           usuario: currentUser?.nome, hora: agora,
         }],
       }]);
+      if (errLab) falhasDemanda.push(`a demanda para o Laboratório não foi criada (${errLab.message})`);
     }
 
     // Se acompanhamento_engenharia: criar demanda para Engenharia
     if (form.acompanhamento_engenharia) {
-      await supabase.from('demandas_setoriais').insert([{
+      const { error: errEng } = await supabase.from('demandas_setoriais').insert([{
         setor_destino: 'Engenharia',
         descricao: `[SAC-ENG] ${numero} — ${form.equipamento_nome} | Acompanhamento de Engenharia`,
         numero_opl: numero,
@@ -535,7 +547,9 @@ export default function SacTab({ currentUser }) {
         sac_fase: 'acompanhamento',
         logs_demanda: [{ texto: 'OS aberta com acompanhamento de engenharia solicitado.', usuario: currentUser?.nome, hora: agora }],
       }]);
+      if (errEng) falhasDemanda.push(`a demanda para a Engenharia não foi criada (${errEng.message})`);
     }
+    if (falhasDemanda.length) alert(`A OS ${numero} foi aberta, mas ${falhasDemanda.join(' e ')}. Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
     notificarEvento('sac_os_aberta', `*Nova OS ${numero}*\nCliente: ${form.cliente_nome}\nEquip: ${form.equipamento_nome}\nTipo: ${form.tipo_servico}\nPor: ${currentUser?.nome}`);
 
