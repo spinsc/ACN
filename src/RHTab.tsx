@@ -6,7 +6,7 @@ import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import Icone from './Icone';
-import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline } from '@mdi/js';
+import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -2040,98 +2040,86 @@ function ComissoesRH({ funcionarios, currentUser }) {
 
   const jaAprovado = (tecId: string) => fechamentos.find((f:any) => f.tecnico_id === tecId && f.status === 'aprovado');
 
+  // Etapa 12c4 (01/10/2026): o quadro vira cartão como os outros do RH (a classe de recolhido segue o estado, regra da Etapa 7.16) e as peças pintadas
+  // à mão viram as do sistema. Só aparência: o cálculo, o período, os filtros, o "Aprovar" e a gravação são os de antes. O número, o selo de apoio / serralheria /
+  // lote e o valor de cada linha continuam saindo do mesmo dado; as cores vêm das famílias (OP verde, OS azul, apoio âmbar, serralheria na cor da marca).
   return (
-    <div style={{marginTop:20,border:'1px solid #e2e8f0',borderRadius:8,overflow:'hidden'}}>
-      <div className="sec-hdr" style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6,cursor:'pointer'}}
-        onClick={()=>setCollapsed(c=>!c)}>
-        <span>💰 Comissões de Técnicos</span>
-        <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
-          <button className={`acn-btn acn-tab-btn${abaComissao==='calculo'?' ativo':''}`}
-            style={{fontSize:10,padding:'4px 12px'}} onClick={()=>setAbaComissao('calculo')}>Cálculo</button>
-          <button className={`acn-btn acn-tab-btn${abaComissao==='relatorio'?' ativo':''}`}
-            style={{fontSize:10,padding:'4px 12px'}} onClick={()=>setAbaComissao('relatorio')}>Histórico</button>
-          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-            {collapsed?'▸':'▾'}
-          </button>
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiCashMultiple} size={16} /> Comissões de Técnicos</span>
+        <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
+          <Chips ativo={abaComissao} onChange={id=>setAbaComissao(id as any)} rotulo="Parte das comissões" itens={[
+            { id:'calculo',   rotulo:'Cálculo' },
+            { id:'relatorio', rotulo:'Histórico' },
+          ]} />
+          <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+            onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
         </div>
       </div>
 
       {!collapsed && abaComissao === 'calculo' && (
-        <div style={{padding:'10px 12px'}}>
-          <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
-            <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d1d5db'}}>
-              <button onClick={()=>setModoFatura('faturada')} title="OPs/OSs com NF emitida dentro do período" style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
-                background:modoFatura==='faturada'?'#16a34a':'#fff',color:modoFatura==='faturada'?'#fff':'#475569'}}>✅ Faturada</button>
-              <button onClick={()=>setModoFatura('a_faturar')} title="Produção concluída dentro do período, NF ainda não emitida" style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
-                background:modoFatura==='a_faturar'?'#d97706':'#fff',color:modoFatura==='a_faturar'?'#fff':'#475569'}}>⏳ A Faturar</button>
-            </div>
-            <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d1d5db'}}>
-              <button onClick={()=>setModoPeriodo('mes')} style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
-                background:modoPeriodo==='mes'?'#2563eb':'#fff',color:modoPeriodo==='mes'?'#fff':'#475569'}}>Mês/Ano</button>
-              <button onClick={()=>setModoPeriodo('intervalo')} style={{padding:'4px 10px',fontSize:10,fontWeight:700,border:'none',cursor:'pointer',
-                background:modoPeriodo==='intervalo'?'#2563eb':'#fff',color:modoPeriodo==='intervalo'?'#fff':'#475569'}}>Período (De/Até)</button>
-            </div>
+        <div className="sec-body">
+          <div className="acn-com-barra">
+            <Chips ativo={modoFatura} onChange={id=>setModoFatura(id as any)} rotulo="Situação da nota fiscal" itens={[
+              { id:'faturada',  rotulo:'Faturada',  icone:mdiCheckCircleOutline, titulo:'OPs/OSs com NF emitida dentro do período' },
+              { id:'a_faturar', rotulo:'A Faturar', icone:mdiClockOutline,       titulo:'Produção concluída dentro do período, NF ainda não emitida' },
+            ]} />
+            <Chips ativo={modoPeriodo} onChange={id=>setModoPeriodo(id as any)} rotulo="Tipo de período" itens={[
+              { id:'mes',       rotulo:'Mês/Ano' },
+              { id:'intervalo', rotulo:'Período (De/Até)' },
+            ]} />
             {modoPeriodo === 'mes' ? (
               <>
-                <select value={mes} onChange={e=>setMes(Number(e.target.value))}
-                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+                <select className="acn-input acn-select-mini" aria-label="Mês" value={mes} onChange={e=>setMes(Number(e.target.value))}>
                   {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
                 </select>
-                <select value={ano} onChange={e=>setAno(Number(e.target.value))}
-                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+                <select className="acn-input acn-select-mini" aria-label="Ano" value={ano} onChange={e=>setAno(Number(e.target.value))}>
                   {anos.map(y=><option key={y} value={y}>{y}</option>)}
                 </select>
               </>
             ) : (
               <>
-                <input type="date" value={dataDe} onChange={e=>setDataDe(e.target.value)}
-                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
-                <span style={{fontSize:10,color:'#94a3b8'}}>até</span>
-                <input type="date" value={dataAte} onChange={e=>setDataAte(e.target.value)}
-                  style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
+                <input type="date" className="acn-input acn-select-mini" aria-label="Data inicial" value={dataDe} onChange={e=>setDataDe(e.target.value)} />
+                <span className="acn-fraco">até</span>
+                <input type="date" className="acn-input acn-select-mini" aria-label="Data final" value={dataAte} onChange={e=>setDataAte(e.target.value)} />
               </>
             )}
-            <select value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value as any)}
-              style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+            <select className="acn-input acn-select-mini" aria-label="Origem" value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value as any)}>
               <option value="todos">Todas as origens</option>
               <option value="adaptacao">Só Adaptação (veículos)</option>
             </select>
-            <button onClick={calcular} disabled={loading}
-              style={{background:'#2563eb',color:'#fff',border:'none',borderRadius:4,padding:'4px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
-              {loading ? 'Calculando...' : '🔍 Calcular'}
-            </button>
+            <Botao variante="primario" pequeno icone={mdiMagnify} onClick={calcular} disabled={loading}>
+              {loading ? 'Calculando...' : 'Calcular'}
+            </Botao>
           </div>
-          <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>
+          <div className="acn-ajuda acn-com-resumo">
             Período: {modoPeriodo==='mes' ? `${mesNome(mes)}/${ano}` : `${dataDe||'—'} até ${dataAte||'—'}`} ·{' '}
             {modoFatura==='faturada'
               ? 'OPs/OSs com NF emitida no período'
               : 'OPs/OSs concluídas no período, NF ainda não emitida'}
-            {filtroOrigem==='adaptacao' && <> · 🚗 só OPs (transformação veicular) + OS de manutenção veicular</>}
+            {filtroOrigem==='adaptacao' && <> · só OPs (transformação veicular) + OS de manutenção veicular</>}
             {modoPeriodo==='intervalo' && <> · aprovação de fechamento fica disponível só no modo Mês/Ano</>}
             {modoFatura==='a_faturar' && <> · valores estimados — aprovação de fechamento fica disponível só em Faturada</>}
           </div>
 
           {grupos.length > 0 && (
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6,textTransform:'uppercase'}}>
-                📊 Pipeline — OP/OS por Técnico, Dupla e Equipe
-              </div>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <div className="acn-com-pipeline">
+              <div className="acn-quadro-titulo"><Icone path={mdiChartBoxOutline} size={14} /> Pipeline — OP/OS por Técnico, Dupla e Equipe</div>
+              <div className="acn-pipeline">
                 {grupos.map((g:any) => (
-                  <div key={g.chave} style={{minWidth:170,border:'1px solid #e2e8f0',borderRadius:6,padding:'8px 10px',
-                    background: g.tipo==='equipe' ? '#faf5ff' : g.tipo==='dupla' ? '#eff6ff' : '#f8fafc'}}>
-                    <div style={{fontSize:9,fontWeight:700,color: g.tipo==='equipe' ? '#7c3aed' : g.tipo==='dupla' ? '#2563eb' : '#475569',marginBottom:3}}>
-                      {g.tipo==='equipe' ? '🏷️ Equipe' : g.tipo==='dupla' ? '👥 Dupla' : '👤 Individual'}
-                    </div>
-                    <div style={{fontWeight:700,fontSize:12,color:'#1e293b',marginBottom:5}}>{g.label}</div>
-                    <div style={{fontSize:16,fontWeight:800,color:'#1e293b'}}>{g.qtdTotal} <span style={{fontSize:9,fontWeight:600,color:'#94a3b8'}}>OP/OS</span></div>
-                    <div style={{fontSize:9,color:'#64748b',marginBottom:4}}>
-                      {g.qtdComApoio>0 && <span style={{color:'#b45309',fontWeight:600}}>{g.qtdComApoio} c/ apoio</span>}
+                  <div key={g.chave} className="acn-pipe-card">
+                    <Selo familia={g.tipo==='equipe' ? 'marca' : g.tipo==='dupla' ? 'info' : 'neutro'} ponto={false}>
+                      <Icone path={g.tipo==='equipe' ? mdiAccountGroupOutline : g.tipo==='dupla' ? mdiAccountMultipleOutline : mdiAccountOutline} size={13} />
+                      {g.tipo==='equipe' ? 'Equipe' : g.tipo==='dupla' ? 'Dupla' : 'Individual'}
+                    </Selo>
+                    <div className="acn-pipe-nome">{g.label}</div>
+                    <div className="acn-pipe-qtd">{g.qtdTotal} <span>OP/OS</span></div>
+                    <div className="acn-pipe-apoio">
+                      {g.qtdComApoio>0 && <span className="acn-txt-atencao">{g.qtdComApoio} c/ apoio</span>}
                       {g.qtdComApoio>0 && g.qtdSemApoio>0 && ' · '}
                       {g.qtdSemApoio>0 && <span>{g.qtdSemApoio} sem apoio</span>}
                     </div>
-                    <div style={{fontSize:12,fontWeight:800,color:'#16a34a'}}>{fmtMoeda(g.totalComissao)}</div>
+                    <div className="acn-txt-ok">{fmtMoeda(g.totalComissao)}</div>
                   </div>
                 ))}
               </div>
@@ -2145,89 +2133,83 @@ function ComissoesRH({ funcionarios, currentUser }) {
             const aprov = jaAprovado(tec.tecnicoId);
             const allItems = [...tec.ops, ...tec.oss];
             return (
-              <div key={tec.tecnicoId} style={{marginBottom:10,border:`1px solid ${aprov?'#86efac':'#e2e8f0'}`,borderRadius:6,overflow:'hidden'}}>
+              <div key={tec.tecnicoId} className={'acn-com-tec' + (aprov ? ' aprovado' : '')}>
                 {/* Cabeçalho técnico */}
-                <div style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',
-                  background:aprov?'#f0fdf4':'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:12,color:'#1e293b'}}>{tec.tecnicoNome}</div>
-                    <div style={{fontSize:10,color:'#64748b'}}>
+                <div className="acn-com-cab">
+                  <div className="acn-com-id">
+                    <div className="acn-forte">{tec.tecnicoNome}</div>
+                    <div className="acn-ajuda">
                       Incide em: <strong>{tec.incideEm}</strong> ·
-                      Percentual: <strong style={{color:'#2563eb'}}>{tec.percentual}%</strong> ·
+                      Percentual: <strong className="acn-txt-info">{tec.percentual}%</strong> ·
                       {tec.ops.length > 0 && <> {tec.ops.length} OP</>}
                       {tec.oss.length > 0 && <> · {tec.oss.length} OS</>}
                     </div>
                   </div>
-                  <div style={{textAlign:'right'}}>
-                    <div style={{fontSize:11,color:'#475569'}}>Base: <strong>{fmtMoeda(tec.totalBase)}</strong></div>
-                    <div style={{fontSize:14,fontWeight:800,color:aprov?'#16a34a':'#2563eb'}}>
+                  <div className="acn-com-valores">
+                    <div>Base: <strong>{fmtMoeda(tec.totalBase)}</strong></div>
+                    <div className={'acn-com-total' + (aprov ? ' ok' : '')}>
                       Comissão: {fmtMoeda(tec.totalComissao)}
                     </div>
-                    {aprov && <div style={{fontSize:9,color:'#16a34a',fontWeight:600}}>✅ Aprovado por {aprov.aprovado_por}</div>}
+                    {aprov && <div className="acn-aprovado"><Icone path={mdiCheckCircleOutline} size={13} /> Aprovado por {aprov.aprovado_por}</div>}
                   </div>
                   {podeAutorizar && !aprov && modoPeriodo === 'mes' && modoFatura === 'faturada' && (
-                    <button onClick={()=>aprovar(tec)} disabled={aprovando===tec.tecnicoId}
-                      style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:4,padding:'5px 12px',fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}}>
+                    <Botao variante="primario" pequeno icone={mdiCheck} onClick={()=>aprovar(tec)} disabled={aprovando===tec.tecnicoId}>
                       {aprovando===tec.tecnicoId ? '...' : 'Aprovar'}
-                    </button>
+                    </Botao>
                   )}
                 </div>
                 {/* Lista de itens */}
-                <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
-                  <thead><tr style={{background:'#f1f5f9'}}>
-                    <th style={{padding:'4px 8px',textAlign:'left'}}>Tipo</th>
-                    <th style={{padding:'4px 8px',textAlign:'left'}}>Nº</th>
-                    <th style={{padding:'4px 8px',textAlign:'left'}}>Cliente</th>
-                    <th style={{padding:'4px 8px',textAlign:'right'}}>Valor Total</th>
-                    <th style={{padding:'4px 8px',textAlign:'right'}}>Mão de Obra</th>
-                    <th style={{padding:'4px 8px',textAlign:'right'}}>Base Cálculo</th>
-                    <th style={{padding:'4px 8px',textAlign:'right',color:'#2563eb'}}>Comissão</th>
-                    <th style={{padding:'4px 8px',textAlign:'center'}}>{modoFatura==='faturada' ? 'Fat.' : 'Concl.'}</th>
-                  </tr></thead>
-                  <tbody>
-                    {allItems.map((item: any, i: number) => (
-                      <tr key={i} style={{background:i%2===0?'white':'#f8fafc',borderBottom:'1px solid #f1f5f9'}}>
-                        <td style={{padding:'4px 8px'}}>
-                          <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
-                            background:item.tipo==='OP'?'#dcfce7':'#ede9fe',
-                            color:item.tipo==='OP'?'#166534':'#5b21b6'}}>{item.tipo}</span>
-                          {item.papel==='apoio' && (
-                            <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
-                              background:'#fef3c7',color:'#92400e',marginLeft:4}}>APOIO</span>
-                          )}
-                          {item.papel==='serralheria' && (
-                            <span style={{fontSize:9,padding:'1px 6px',borderRadius:8,fontWeight:700,
-                              background:'#ffedd5',color:'#9a3412',marginLeft:4}}>SERRALHERIA</span>
-                          )}
-                        </td>
-                        <td style={{padding:'4px 8px',fontWeight:700}}>
-                          {item.numero||'—'}
-                          {item.qtdVeiculosLote > 1 && (
-                            <span title={`Lote de ${item.qtdVeiculosLote} veículos — valor unitário (total do lote ÷ ${item.qtdVeiculosLote})`}
-                              style={{fontSize:8,padding:'1px 5px',borderRadius:8,fontWeight:700,background:'#e0e7ff',color:'#3730a3',marginLeft:4}}>
-                              lote/{item.qtdVeiculosLote}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{padding:'4px 8px'}}>{item.cliente||'—'}</td>
-                        <td style={{padding:'4px 8px',textAlign:'right'}}>{item.valor_total != null ? fmtMoeda(item.valor_total) : '—'}</td>
-                        <td style={{padding:'4px 8px',textAlign:'right'}}>{(item.papel==='serralheria' ? item.valor_mao_de_obra_serralheria : item.valor_mao_de_obra) != null ? fmtMoeda(item.papel==='serralheria' ? item.valor_mao_de_obra_serralheria : item.valor_mao_de_obra) : '—'}</td>
-                        <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700}}>{fmtMoeda(item.base)}</td>
-                        <td style={{padding:'4px 8px',textAlign:'right',fontWeight:700,color:'#2563eb'}}>
-                          {fmtMoeda(item.papel==='apoio' ? item.base * 0.001 : item.base * tec.percentual / 100)}
-                        </td>
-                        <td style={{padding:'4px 8px',textAlign:'center'}}>{fmtDt(item.data_faturamento)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="acn-rolagem">
+                  <table className="acn-tabela acn-compacta">
+                    <thead><tr>
+                      <th>Tipo</th>
+                      <th>Nº</th>
+                      <th>Cliente</th>
+                      <th className="acn-dir">Valor Total</th>
+                      <th className="acn-dir">Mão de Obra</th>
+                      <th className="acn-dir">Base Cálculo</th>
+                      <th className="acn-dir">Comissão</th>
+                      <th className="acn-centro">{modoFatura==='faturada' ? 'Fat.' : 'Concl.'}</th>
+                    </tr></thead>
+                    <tbody>
+                      {allItems.map((item: any, i: number) => {
+                        const mdo = item.papel==='serralheria' ? item.valor_mao_de_obra_serralheria : item.valor_mao_de_obra;
+                        return (
+                          <tr key={i}>
+                            <td>
+                              <Selo familia={item.tipo==='OP' ? 'ok' : 'info'} ponto={false}>{item.tipo}</Selo>
+                              {item.papel==='apoio' && <Selo familia="atencao" ponto={false}>APOIO</Selo>}
+                              {item.papel==='serralheria' && <Selo familia="marca" ponto={false}>SERRALHERIA</Selo>}
+                            </td>
+                            <td className="acn-forte">
+                              {item.numero||'—'}
+                              {item.qtdVeiculosLote > 1 && (
+                                <Selo familia="neutro" ponto={false} title={`Lote de ${item.qtdVeiculosLote} veículos — valor unitário (total do lote ÷ ${item.qtdVeiculosLote})`}>
+                                  lote/{item.qtdVeiculosLote}
+                                </Selo>
+                              )}
+                            </td>
+                            <td className="acn-texto-longo">{item.cliente||'—'}</td>
+                            <td className="acn-dir acn-num">{item.valor_total != null ? fmtMoeda(item.valor_total) : '—'}</td>
+                            <td className="acn-dir acn-num">{mdo != null ? fmtMoeda(mdo) : '—'}</td>
+                            <td className="acn-dir acn-num acn-forte">{fmtMoeda(item.base)}</td>
+                            <td className="acn-dir acn-num acn-txt-info">
+                              {fmtMoeda(item.papel==='apoio' ? item.base * 0.001 : item.base * tec.percentual / 100)}
+                            </td>
+                            <td className="acn-centro acn-num">{fmtDt(item.data_faturamento)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })}
         </div>
       )}
 
-      {!collapsed && abaComissao === 'relatorio' && <HistoricoComissoes funcionarios={funcionarios} />}
+      {!collapsed && abaComissao === 'relatorio' && <div className="sec-body"><HistoricoComissoes funcionarios={funcionarios} /></div>}
     </div>
   );
 }
@@ -2251,60 +2233,56 @@ function HistoricoComissoes({ funcionarios }) {
     setLoading(false);
   };
 
+  // Etapa 12c4 (01/10/2026): só aparência (o espaçamento de dentro vem do quadro que o contém). A busca e as colunas são as de antes.
   return (
-    <div style={{padding:'10px 12px'}}>
-      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
-        <select value={mes} onChange={e=>setMes(Number(e.target.value))}
-          style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+    <div>
+      <div className="acn-com-barra">
+        <select className="acn-input acn-select-mini" aria-label="Mês" value={mes} onChange={e=>setMes(Number(e.target.value))}>
           {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
         </select>
-        <select value={ano} onChange={e=>setAno(Number(e.target.value))}
-          style={{padding:'4px 8px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+        <select className="acn-input acn-select-mini" aria-label="Ano" value={ano} onChange={e=>setAno(Number(e.target.value))}>
           {anos.map(y=><option key={y} value={y}>{y}</option>)}
         </select>
-        <button onClick={buscar} disabled={loading}
-          style={{background:'#475569',color:'#fff',border:'none',borderRadius:4,padding:'4px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
-          {loading ? 'Buscando...' : '📋 Buscar'}
-        </button>
+        <Botao pequeno icone={mdiMagnify} onClick={buscar} disabled={loading}>
+          {loading ? 'Buscando...' : 'Buscar'}
+        </Botao>
       </div>
       {dados.length === 0 && !loading && <div className="acn-empty">Nenhum fechamento encontrado para o período.</div>}
       {dados.length > 0 && (
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
-          <thead><tr style={{background:'#1e293b',color:'#fff'}}>
-            <th style={{padding:'6px 8px',textAlign:'left'}}>Técnico</th>
-            <th style={{padding:'6px 8px',textAlign:'center'}}>Incide em</th>
-            <th style={{padding:'6px 8px',textAlign:'center'}}>%</th>
-            <th style={{padding:'6px 8px',textAlign:'right'}}>OPs</th>
-            <th style={{padding:'6px 8px',textAlign:'right'}}>OSs</th>
-            <th style={{padding:'6px 8px',textAlign:'right'}}>Base</th>
-            <th style={{padding:'6px 8px',textAlign:'right'}}>Comissão</th>
-            <th style={{padding:'6px 8px',textAlign:'center'}}>Status</th>
-            <th style={{padding:'6px 8px',textAlign:'left'}}>Aprovado por</th>
-            <th style={{padding:'6px 8px',textAlign:'left'}}>Data</th>
-          </tr></thead>
-          <tbody>
-            {dados.map((d:any,i:number) => (
-              <tr key={d.id} style={{background:i%2===0?'white':'#f8fafc',borderBottom:'1px solid #f1f5f9'}}>
-                <td style={{padding:'5px 8px',fontWeight:700}}>{d.tecnico_nome}</td>
-                <td style={{padding:'5px 8px',textAlign:'center'}}>{d.incide_em}</td>
-                <td style={{padding:'5px 8px',textAlign:'center'}}>{d.percentual}%</td>
-                <td style={{padding:'5px 8px',textAlign:'right'}}>{d.qtd_ops}</td>
-                <td style={{padding:'5px 8px',textAlign:'right'}}>{d.qtd_oss}</td>
-                <td style={{padding:'5px 8px',textAlign:'right'}}>{fmtMoeda(d.total_base)}</td>
-                <td style={{padding:'5px 8px',textAlign:'right',fontWeight:700,color:'#16a34a'}}>{fmtMoeda(d.total_comissao)}</td>
-                <td style={{padding:'5px 8px',textAlign:'center'}}>
-                  <span style={{fontSize:9,padding:'2px 7px',borderRadius:8,fontWeight:700,
-                    background:d.status==='aprovado'?'#dcfce7':'#fef3c7',
-                    color:d.status==='aprovado'?'#166534':'#92400e'}}>
-                    {d.status==='aprovado'?'✅ Aprovado':'Pendente'}
-                  </span>
-                </td>
-                <td style={{padding:'5px 8px'}}>{d.aprovado_por||'—'}</td>
-                <td style={{padding:'5px 8px'}}>{fmtDt(d.aprovado_em)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="acn-rolagem">
+          <table className="acn-tabela">
+            <thead><tr>
+              <th>Técnico</th>
+              <th className="acn-centro">Incide em</th>
+              <th className="acn-centro">%</th>
+              <th className="acn-dir">OPs</th>
+              <th className="acn-dir">OSs</th>
+              <th className="acn-dir">Base</th>
+              <th className="acn-dir">Comissão</th>
+              <th className="acn-centro">Status</th>
+              <th>Aprovado por</th>
+              <th>Data</th>
+            </tr></thead>
+            <tbody>
+              {dados.map((d:any) => (
+                <tr key={d.id}>
+                  <td className="acn-forte">{d.tecnico_nome}</td>
+                  <td className="acn-centro">{d.incide_em}</td>
+                  <td className="acn-centro acn-num">{d.percentual}%</td>
+                  <td className="acn-dir acn-num">{d.qtd_ops}</td>
+                  <td className="acn-dir acn-num">{d.qtd_oss}</td>
+                  <td className="acn-dir acn-num">{fmtMoeda(d.total_base)}</td>
+                  <td className="acn-dir acn-num acn-txt-ok">{fmtMoeda(d.total_comissao)}</td>
+                  <td className="acn-centro">
+                    <Selo familia={d.status==='aprovado' ? 'ok' : 'atencao'} ponto={false}>{d.status==='aprovado' ? 'Aprovado' : 'Pendente'}</Selo>
+                  </td>
+                  <td>{d.aprovado_por||'—'}</td>
+                  <td className="acn-num">{fmtDt(d.aprovado_em)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

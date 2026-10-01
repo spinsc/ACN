@@ -700,3 +700,28 @@ html body .acn-main table.acn-tabela.acn-compacta:not(.acn-tab-cartoes) td { hei
 html body .acn-main table.acn-tabela.acn-compacta th { height: 28px; padding: 0 8px !important; }
 /* o número da OS / da OP numa linha só: no celular ele quebrava em "OS-", "ZZ-", "1" e a tabela rola de lado */
 html body .acn-main table.acn-tabela.acn-compacta td:first-child { white-space: nowrap; }
+
+/* ── RH · Comissões de Técnicos e Histórico (Etapa 12c4, 01/10/2026): só aparência ─────────────────────────────── */
+.acn-com-barra { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.acn-com-resumo { margin-bottom: 12px; }
+.acn-com-pipeline { margin-bottom: 16px; }
+.acn-pipeline { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.acn-pipe-card { min-width: 170px; display: grid; gap: 3px; justify-items: start; padding: 8px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-pipe-nome { font-weight: 700; font-size: 13px; color: var(--acn-ink); }
+.acn-pipe-qtd { font-size: 16px; font-weight: 800; color: var(--acn-ink); }
+.acn-pipe-qtd span { font-size: 11px; font-weight: 600; color: var(--acn-muted); }
+.acn-pipe-apoio { font-size: 11px; color: var(--acn-muted); }
+/* cartão de um técnico: cabeçalho com nome, percentual, base e comissão, e a lista de OP/OS embaixo */
+.acn-com-tec { margin-bottom: 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r3); overflow: hidden; }
+.acn-com-tec.aprovado { border-color: color-mix(in srgb, var(--acn-ok) 45%, transparent); }
+.acn-com-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-com-tec.aprovado .acn-com-cab { background: var(--acn-ok-soft); }
+.acn-com-id { flex: 1; min-width: 180px; }
+.acn-com-valores { text-align: right; font-size: 12px; color: var(--acn-text); }
+.acn-com-total { font-size: 15px; font-weight: 800; color: var(--acn-info); }
+.acn-com-total.ok { color: var(--acn-ok); }
+.acn-aprovado { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--acn-ok); }
+.acn-txt-info { color: var(--acn-info); font-weight: 700; }
+.acn-txt-atencao { color: var(--acn-warn); font-weight: 600; }
+.acn-com-tec td .acn-selo + .acn-selo { margin-left: 4px; }
+.acn-com-pipeline .acn-quadro-titulo { display: flex; align-items: center; gap: 6px; }
