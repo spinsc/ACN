@@ -191,7 +191,8 @@ export default function SacTab({ currentUser }) {
   // Linhas/cards com alteração não vista por este usuário — mesmo padrão
   // usado nas telas de OP (ver AuditSystem.tsx).
   const { naoLidoSet: ordensNaoLidas } = useUnreadMap('sac_ordens_servico', ordens.map((o: any) => o.id), currentUser);
-  const [equipamentos, setEquipamentos] = useState([]);
+  const [equipamentos, setEquipamentos] = useState([]); // só os ATIVOS: é a lista do campo "Tipo de Equipamento" da Nova OS
+  const [equipamentosTodos, setEquipamentosTodos] = useState<any[]>([]); // ativos e desativados: é a lista da aba Cadastros
   const [categorias, setCategorias]     = useState<any[]>([]);
   const [loading, setLoading]           = useState(false);
   const [filtroStatus, setFiltroStatus]       = useState('');
@@ -352,9 +353,14 @@ export default function SacTab({ currentUser }) {
     return () => window.removeEventListener('acn:abrir-registro', tentarAbrir);
   }, []);
 
+  // Resposta do usuário em 01/10/2026: a aba Cadastros mostra TAMBÉM os equipamentos desativados, esmaecidos e com o botão "Ativar" (antes a lista só trazia
+  // os ativos e desativar era definitivo pela tela — o banco tinha 12 desativados que ninguém via). Uma só leitura traz todos; a Nova OS continua só com os ativos.
   const fetchEquipamentos = async () => {
-    const { data } = await supabase.from('sac_equipamentos').select('*').eq('ativo', true).order('nome');
-    setEquipamentos(data || []);
+    const { data } = await supabase.from('sac_equipamentos').select('*').order('nome');
+    const todos = data || [];
+    setEquipamentos(todos.filter((e: any) => e.ativo === true));
+    // ativos primeiro, desativados depois (cada grupo em ordem de nome)
+    setEquipamentosTodos([...todos].sort((a: any, b: any) => (b.ativo === true ? 1 : 0) - (a.ativo === true ? 1 : 0) || String(a.nome).localeCompare(String(b.nome), 'pt-BR')));
   };
 
   // ── Computados ────────────────────────────────────────────────────────────
@@ -1467,8 +1473,8 @@ OK = ACN   |   Cancelar = DETECH`;
                 <table className="acn-tabela">
                   <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
                   <tbody>
-                    {equipamentos.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum equipamento cadastrado.</div></td></tr>}
-                    {equipamentos.map((e: any) => (
+                    {equipamentosTodos.length === 0 && <tr><td colSpan={3}><div className="acn-empty">Nenhum equipamento cadastrado.</div></td></tr>}
+                    {equipamentosTodos.map((e: any) => (
                       <tr key={e.id} className={e.ativo ? '' : 'acn-linha-inativa'}>
                         <td className="acn-forte">{e.nome}</td>
                         <td><Selo familia={e.ativo ? 'ok' : 'neutro'} ponto={false}>{e.ativo?'Ativo':'Inativo'}</Selo></td>
