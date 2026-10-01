@@ -5,6 +5,8 @@ import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { hojeISO, diaISO, Botao, Selo } from './Interface';
+import Icone from './Icone';
+import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -34,6 +36,28 @@ const STATUS_COR: Record<string,string> = {
   'Afastado':   '#dc2626',
   'Desligado':  '#6b7280',
 };
+
+// ─── Peças visuais do RH (Etapa 12c1, 01/10/2026) ────────────────────────────
+// Só aparência: as contas, os filtros e o que cada quadro mostra são os de antes. A cor do status de presença e a do tipo de
+// lançamento vêm do `Selo` / da família (uma cor por família, igual às outras telas). Os hex de STATUS_COR e de TIPOS_LANCAMENTO
+// continuam valendo para as janelas e os relatórios que ainda não foram migrados (12c2 a 12c4).
+const FAMILIA_PRESENCA = { 'Ativo': 'ok', 'Em Viagem': 'info', 'Folga': 'info', 'Férias': 'marca', 'Afastado': 'erro', 'Desligado': 'neutro' };
+const FAMILIA_LANCAMENTO = {
+  'Hora Extra': 'ok', 'Entrada Antecipada': 'ok', 'Atraso': 'atencao', 'Saída Antecipada': 'atencao', 'Falta': 'erro',
+  'Declaração': 'atencao', 'Atestado': 'neutro', 'Férias': 'marca', 'Folga': 'info', 'Viagem': 'info',
+};
+function Indicadores({ itens, compacto = false }) {
+  return (
+    <div className={'acn-kpis' + (compacto ? ' acn-kpis-compactos' : '')}>
+      {itens.map(k => (
+        <div key={k.l} className="acn-kpi">
+          <span className="rot"><i data-acn-familia={k.tom || 'neutro'} />{k.l}</span>
+          <span className="val acn-num">{k.v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Efeito no banco de horas por tipo
 function sinalDoTipo(tipo: string): number {
@@ -685,76 +709,51 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, onDesligar, c
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
-        onClick={() => setCollapsed(c => !c)}>
-        <span>👥 Status dos Colaboradores ({ativos.length})</span>
-        <button onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }}
-          style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, color:'inherit', padding:'0 2px' }}>
-          {collapsed ? '▸' : '▾'}
-        </button>
+      <div className="sec-hdr no-collapse" onClick={() => setCollapsed(c => !c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiAccountGroupOutline} size={16} /> Status dos Colaboradores ({ativos.length})</span>
+        <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+          onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }} />
       </div>
-      {!collapsed && <div className="sec-body" style={{ overflowX:'auto', padding:0 }}>
+      {!collapsed && <div className="sec-body acn-rolagem acn-sem-recuo">
         {ativos.length === 0 ? (
           <div className="acn-empty">Nenhum colaborador cadastrado.</div>
         ) : (
-          <table>
+          <table className="acn-tabela">
             <thead>
               <tr>
                 <th>Nome</th>
                 <th>Tipo</th>
                 <th>Cargo / Depto.</th>
                 <th>Status</th>
-                <th style={{ width:80 }}>Ações</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {ativos.map(f => (
-                <tr key={f.id} style={naoLidoSet.has(String(f.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
-                  <td style={{ fontWeight:700, color:'#1f2937' }}>{f.nome}</td>
+                <tr key={f.id} className={naoLidoSet.has(String(f.id)) ? 'acn-linha-nova' : undefined}>
+                  <td className="acn-forte">{f.nome}</td>
                   <td>
-                    <span style={{
-                      fontSize:9, padding:'2px 7px', borderRadius:8, fontWeight:700,
-                      background: f.tipo_colaborador==='Terceiro' ? '#fef3c7' : '#eff6ff',
-                      color:      f.tipo_colaborador==='Terceiro' ? '#92400e' : '#1d4ed8',
-                      border:'1px solid',
-                      borderColor:f.tipo_colaborador==='Terceiro' ? '#fde68a' : '#bfdbfe',
-                      whiteSpace:'nowrap',
-                    }}>
+                    <Selo familia={f.tipo_colaborador==='Terceiro' ? 'atencao' : 'info'} ponto={false}>
                       {f.tipo_colaborador || 'Funcionário'}
-                    </span>
+                    </Selo>
                   </td>
-                  <td style={{ fontSize:11, color:'#374151' }}>
+                  <td>
                     {[f.cargo, f.departamento].filter(Boolean).join(' · ') || '—'}
                   </td>
                   <td>
-                    <select
+                    <select className="acn-sel-status" data-acn-familia={FAMILIA_PRESENCA[f.status_presenca] || 'neutro'}
+                      aria-label={`Status de ${f.nome}`}
                       value={f.status_presenca}
-                      onChange={e => alterarStatus(f, e.target.value)}
-                      style={{
-                        padding:'3px 6px',
-                        border:`1.5px solid ${STATUS_COR[f.status_presenca]||'#d1d5db'}`,
-                        borderRadius:4, fontSize:10, fontWeight:700,
-                        background: (STATUS_COR[f.status_presenca]||'#6b7280') + '15',
-                        color: STATUS_COR[f.status_presenca] || '#374151',
-                        cursor:'pointer',
-                      }}>
+                      onChange={e => alterarStatus(f, e.target.value)}>
                       {['Ativo','Em Viagem','Folga','Férias','Afastado','Desligado'].map(s => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
                   </td>
                   <td>
-                    <div style={{ display:'flex', gap:4 }}>
-                      <button onClick={() => onEdit(f)}
-                        style={{ padding:'3px 10px', fontSize:10, border:'1px solid #d1d5db',
-                          borderRadius:4, background:'#f9fafb', cursor:'pointer', color:'#374151' }}>
-                        ✏️
-                      </button>
-                      <button onClick={() => onDelete(f)}
-                        style={{ padding:'3px 8px', fontSize:10, border:'1px solid #fca5a5',
-                          borderRadius:4, background:'#fef2f2', cursor:'pointer', color:'#dc2626', fontWeight:700 }}>
-                        🗑️
-                      </button>
+                    <div className="acn-acoes-linha">
+                      <Botao pequeno icone={mdiPencilOutline} title="Editar" aria-label={`Editar ${f.nome}`} onClick={() => onEdit(f)} />
+                      <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} title="Excluir" aria-label={`Excluir ${f.nome}`} onClick={() => onDelete(f)} />
                     </div>
                   </td>
                 </tr>
@@ -765,6 +764,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, onDesligar, c
       </div>}
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -808,10 +808,10 @@ function ModalDesligar({ func, corrigindo, onClose, onSalvo, currentUser }) {
 
   return (
     <div className="modal-overlay" onClick={() => !salvando && onClose()}>
-      <div className="modal-box" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-title">{corrigindo ? '✏️ Corrigir desligamento' : '🚪 Desligar colaborador'} — {func.nome}</div>
+      <div className="modal-box acn-modal-estreita" onClick={e => e.stopPropagation()}>
+        <div className="modal-title">{corrigindo ? 'Corrigir desligamento' : 'Desligar colaborador'} — {func.nome}</div>
         {!corrigindo && (
-          <div style={{ fontSize: 11, color: '#64748b', margin: '6px 0 12px' }}>
+          <div className="acn-modal-sub">
             A pessoa sai das listas de trabalho (seletor de responsável, Lançar Horas, Autorização) e passa para
             "Desligados". O histórico, as horas e as comissões já calculadas continuam com o nome dela.
             O login do sistema não é alterado — se ela tinha acesso, desative em Admin › Usuários.
@@ -828,7 +828,7 @@ function ModalDesligar({ func, corrigindo, onClose, onSalvo, currentUser }) {
             {MOTIVOS_DESLIGAMENTO.map(m => <option key={m.v} value={m.v}>{m.rotulo}</option>)}
           </select>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <div className="acn-modal-acoes">
           <Botao variante="primario" disabled={salvando} onClick={salvar}>
             {salvando ? 'Salvando...' : corrigindo ? 'Salvar' : 'Confirmar desligamento'}
           </Botao>
@@ -837,34 +837,32 @@ function ModalDesligar({ func, corrigindo, onClose, onSalvo, currentUser }) {
       </div>
     </div>
   );
+
 }
 
 function PainelDesligados({ desligados, onCorrigir, onReativar }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
     <div className="sec-card" data-rh-desligados>
-      <div className="sec-hdr" style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        onClick={() => setCollapsed(c => !c)}>
-        <span>🚪 Desligados <Selo familia="neutro" ponto={false}>{desligados.length}</Selo></span>
-        <button onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'inherit', padding: '0 2px' }}>
-          {collapsed ? '▸' : '▾'}
-        </button>
+      <div className="sec-hdr no-collapse" onClick={() => setCollapsed(c => !c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiAccountOffOutline} size={16} /> Desligados <Selo familia="neutro" ponto={false}>{desligados.length}</Selo></span>
+        <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+          onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }} />
       </div>
-      {!collapsed && <div className="sec-body" style={{ overflowX: 'auto', padding: 0 }}>
+      {!collapsed && <div className="sec-body acn-rolagem acn-sem-recuo">
         {desligados.length === 0 ? (
           <div className="acn-empty">Nenhum colaborador desligado. Para desligar alguém, escolha "Desligado" no status dele, acima.</div>
         ) : (
           <table className="acn-tabela">
             <thead>
               <tr>
-                <th>Nome</th><th>Tipo</th><th>Cargo / Depto.</th><th>Desligado em</th><th>Motivo</th><th style={{ width: 170 }}>Ações</th>
+                <th>Nome</th><th>Tipo</th><th>Cargo / Depto.</th><th>Desligado em</th><th>Motivo</th><th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {desligados.map(f => (
                 <tr key={f.id}>
-                  <td style={{ fontWeight: 700 }}>{f.nome}</td>
+                  <td className="acn-forte">{f.nome}</td>
                   <td>{f.tipo_colaborador || 'Funcionário'}</td>
                   <td>{[f.cargo, f.departamento].filter(Boolean).join(' · ') || '—'}</td>
                   <td className="acn-num">{diaBR(f.data_desligamento)}</td>
@@ -883,6 +881,7 @@ function PainelDesligados({ desligados, onCorrigir, onReativar }) {
       </div>}
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -916,30 +915,26 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr" style={{ cursor:'pointer' }} onClick={()=>setCollapsed(c=>!c)}>
-        <span>⏱️ Banco de Horas</span>
-        <div style={{ display:'flex', gap:6, alignItems:'center' }} onClick={e=>e.stopPropagation()}>
-          <select value={mes} onChange={e=>setMes(Number(e.target.value))}
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiTimerOutline} size={16} /> Banco de Horas</span>
+        <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
+          <select className="acn-input acn-select-mini" aria-label="Mês" value={mes} onChange={e=>setMes(Number(e.target.value))}>
             {Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{mesNome(i+1)}</option>)}
           </select>
-          <select value={ano} onChange={e=>setAno(Number(e.target.value))}
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+          <select className="acn-input acn-select-mini" aria-label="Ano" value={ano} onChange={e=>setAno(Number(e.target.value))}>
             {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
           </select>
-          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-            {collapsed?'▸':'▾'}
-          </button>
+          <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+            onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
         </div>
       </div>
-      {!collapsed && <div className="sec-body" style={{ overflowX:'auto' }}>
-        <table>
+      {!collapsed && <div className="sec-body acn-rolagem">
+        <table className="acn-tabela">
           <thead><tr>
             <th>Funcionário</th><th>Cargo</th>
-            <th style={{textAlign:'right'}}>Hora Extra</th>
-            <th style={{textAlign:'right'}}>Atrasos/Débitos</th>
-            <th style={{textAlign:'right'}}>Saldo</th>
+            <th className="acn-dir">Hora Extra</th>
+            <th className="acn-dir">Atrasos/Débitos</th>
+            <th className="acn-dir">Saldo</th>
             <th>Fechar Mês</th>
           </tr></thead>
           <tbody>
@@ -950,18 +945,17 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
               const saldo   = credito - debito;
               return (
                 <tr key={f.id}>
-                  <td><strong>{f.nome}</strong></td>
-                  <td style={{color:'#6b7280',fontSize:10}}>{f.cargo||'—'}</td>
-                  <td style={{textAlign:'right',color:'#16a34a',fontWeight:700}}>{fmtMin(credito)}</td>
-                  <td style={{textAlign:'right',color:'#dc2626',fontWeight:700}}>{fmtMin(-debito)}</td>
-                  <td style={{textAlign:'right',fontWeight:700,color:saldo>=0?'#16a34a':'#dc2626'}}>
+                  <td className="acn-forte">{f.nome}</td>
+                  <td className="acn-fraco">{f.cargo||'—'}</td>
+                  <td className="acn-dir acn-txt-ok acn-num">{fmtMin(credito)}</td>
+                  <td className="acn-dir acn-txt-erro acn-num">{fmtMin(-debito)}</td>
+                  <td className={'acn-dir acn-num ' + (saldo>=0 ? 'acn-txt-ok' : 'acn-txt-erro')}>
                     {fmtMin(saldo)}
                   </td>
                   <td>
-                    <button onClick={()=>fecharMes(f.id, saldo)} disabled={fechando===f.id}
-                      style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:9, fontWeight:700, cursor:'pointer' }}>
+                    <Botao pequeno onClick={()=>fecharMes(f.id, saldo)} disabled={fechando===f.id}>
                       {fechando===f.id ? '...' : 'Fechar'}
-                    </button>
+                    </Botao>
                   </td>
                 </tr>
               );
@@ -971,6 +965,7 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
       </div>}
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1009,37 +1004,29 @@ function KpiRH({ funcionarios, lancamentos }) {
 
   const maxMin = Math.max(...porFunc.map(p=>Math.max(p.faltas+p.atestados+p.atrasos, p.extras)), 1);
 
-  const CORES = { faltas:'#dc2626', atestados:'#6b7280', atrasos:'#f59e0b', extras:'#16a34a' };
-
-  const BAR_H = 16;
+  // Etapa 12c1 (01/10/2026): as cores do gráfico vêm das classes acn-barra-seg (famílias do design system), não de hex na tela.
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr" style={{ cursor:'pointer' }} onClick={()=>setCollapsed(c=>!c)}>
-        <span>📊 KPI — Absenteísmo & Horas</span>
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }} onClick={e=>e.stopPropagation()}>
-          <select value={filtroFunc} onChange={e=>setFiltroFunc(e.target.value)}
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:9 }}>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiChartBoxOutline} size={16} /> KPI — Absenteísmo & Horas</span>
+        <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
+          <select className="acn-input acn-select-mini" aria-label="Funcionário" value={filtroFunc} onChange={e=>setFiltroFunc(e.target.value)}>
             <option value="">Todos os funcionários</option>
             {funcionarios.filter(f=>f.ativo).map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
           </select>
-          <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:9 }}>
+          <select className="acn-input acn-select-mini" aria-label="Tipo de lançamento" value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
             <option value="">Todos os tipos</option>
             {TIPOS_LANCAMENTO.map(t=><option key={t.v} value={t.v}>{t.v}</option>)}
           </select>
-          <select value={filtroMes} onChange={e=>setFiltroMes(Number(e.target.value))}
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:9 }}>
+          <select className="acn-input acn-select-mini" aria-label="Mês" value={filtroMes} onChange={e=>setFiltroMes(Number(e.target.value))}>
             {Array.from({length:12},(_,i)=><option key={i+1} value={i+1}>{mesNome(i+1)}</option>)}
           </select>
-          <select value={filtroAno} onChange={e=>setFiltroAno(Number(e.target.value))}
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:9 }}>
+          <select className="acn-input acn-select-mini" aria-label="Ano" value={filtroAno} onChange={e=>setFiltroAno(Number(e.target.value))}>
             {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
           </select>
-          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-            {collapsed?'▸':'▾'}
-          </button>
+          <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+            onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
         </div>
       </div>
 
@@ -1049,60 +1036,55 @@ function KpiRH({ funcionarios, lancamentos }) {
         const ausencia = soma('faltas') + soma('atestados');
         const base = MINUTOS_MES * (filtroFunc ? 1 : Math.max(1, porFunc.length));
         const cards = [
-          ['Faltas', fmtMin(soma('faltas')), CORES.faltas],
-          ['Atestados', fmtMin(soma('atestados')), CORES.atestados],
-          ['Atrasos', fmtMin(soma('atrasos')), CORES.atrasos],
-          ['Horas extras', fmtMin(soma('extras')), CORES.extras],
-          ['Absenteísmo', `${((ausencia / base) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`, '#7c3aed'],
+          ['Faltas', fmtMin(soma('faltas')), 'erro'],
+          ['Atestados', fmtMin(soma('atestados')), 'neutro'],
+          ['Atrasos', fmtMin(soma('atrasos')), 'atencao'],
+          ['Horas extras', fmtMin(soma('extras')), 'ok'],
+          ['Absenteísmo', `${((ausencia / base) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`, 'marca'],
         ];
         return (
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap', padding:'10px 16px', borderBottom:'1px solid #f1f5f9', alignItems:'center' }}>
-            {cards.map(([rot, val, cor]) => (
-              <div key={rot} style={{ borderLeft:`3px solid ${cor}`, background:'#fff', padding:'4px 10px', minWidth:100 }}>
-                <div style={{ fontSize:9, color:'#6b7280', textTransform:'uppercase', fontWeight:700 }}>{rot}</div>
-                <div style={{ fontSize:15, fontWeight:800, color:cor }}>{val || '0'}</div>
-              </div>
-            ))}
-            <button onClick={()=>setCollapsed(c=>!c)} style={{ marginLeft:'auto', fontSize:10, fontWeight:700, padding:'4px 10px', border:'1px solid #cbd5e1', background:'#f8fafc', borderRadius:5, cursor:'pointer', color:'#475569' }}>
-              {collapsed ? '▾ Ver gráfico e lançamentos' : '▴ Recolher detalhes'}
-            </button>
+          <div className="acn-kpi-faixa">
+            <Indicadores compacto itens={cards.map(([l, v, tom]) => ({ l, v: v || '0', tom }))} />
+            <Botao pequeno icone={collapsed ? mdiChevronDown : mdiChevronUp} onClick={()=>setCollapsed(c=>!c)}>
+              {collapsed ? 'Ver gráfico e lançamentos' : 'Recolher detalhes'}
+            </Botao>
           </div>
         );
       })()}
 
-      {/* Gráfico de barras simples em SVG */}
+      {/* Gráfico de barras simples (as larguras vêm do dado; as cores, das famílias do design system) */}
       {!collapsed && porFunc.length > 0 && (
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #f1f5f9' }}>
-          <div style={{ fontSize:9, fontWeight:700, color:'#6b7280', textTransform:'uppercase', marginBottom:8 }}>
+        <div className="acn-grafico">
+          <div className="acn-grafico-titulo">
             Gráfico — {mesNome(filtroMes)}/{filtroAno}
           </div>
-          <div style={{ display:'flex', gap:8, marginBottom:8, flexWrap:'wrap' }}>
-            {Object.entries(CORES).map(([k,c])=>(
-              <span key={k} style={{ fontSize:9, display:'flex', alignItems:'center', gap:3 }}>
-                <span style={{ width:10, height:10, background:c, borderRadius:2, display:'inline-block' }}></span>
+          <div className="acn-grafico-leg">
+            {['faltas', 'atestados', 'atrasos', 'extras'].map(k => (
+              <span key={k}>
+                <i className={'acn-barra-seg ' + k}></i>
                 {k.charAt(0).toUpperCase()+k.slice(1)}
               </span>
             ))}
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          <div className="acn-grafico-linhas">
             {porFunc.map(p=>(
-              <div key={p.nome} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ width:60, fontSize:9, color:'#374151', fontWeight:700, textAlign:'right', flexShrink:0 }}>{p.nome}</div>
-                <div style={{ flex:1, display:'flex', flexDirection:'column', gap:2 }}>
+              <div key={p.nome} className="acn-grafico-linha">
+                <div className="acn-grafico-nome">{p.nome}</div>
+                <div className="acn-grafico-barras">
                   {/* Débitos */}
-                  <div style={{ display:'flex', height:BAR_H, borderRadius:3, overflow:'hidden', background:'#f1f5f9' }}>
-                    {[['faltas','dc2626'],['atestados','6b7280'],['atrasos','f59e0b']].map(([k,c])=>(
-                      p[k]>0 ? <div key={k} style={{ width:`${(p[k]/maxMin)*100}%`, background:`#${c}`, transition:'width .3s' }} title={`${k}: ${fmtMin(p[k])}`}></div> : null
+                  <div className="acn-barra-trilho">
+                    {['faltas', 'atestados', 'atrasos'].map(k => (
+                      p[k]>0 ? <div key={k} className={'acn-barra-seg ' + k} style={{ width:`${(p[k]/maxMin)*100}%` }} title={`${k}: ${fmtMin(p[k])}`}></div> : null
                     ))}
                   </div>
                   {/* Extras */}
-                  <div style={{ display:'flex', height:BAR_H, borderRadius:3, overflow:'hidden', background:'#f1f5f9' }}>
-                    {p.extras > 0 && <div style={{ width:`${(p.extras/maxMin)*100}%`, background:'#16a34a', transition:'width .3s' }} title={`Hora Extra: ${fmtMin(p.extras)}`}></div>}
+                  <div className="acn-barra-trilho">
+                    {p.extras > 0 && <div className="acn-barra-seg extras" style={{ width:`${(p.extras/maxMin)*100}%` }} title={`Hora Extra: ${fmtMin(p.extras)}`}></div>}
                   </div>
                 </div>
-                <div style={{ width:80, fontSize:9, color:'#6b7280', flexShrink:0 }}>
-                  {p.faltas+p.atestados+p.atrasos > 0 && <div style={{color:'#dc2626'}}>↓ {fmtMin(p.faltas+p.atestados+p.atrasos)}</div>}
-                  {p.extras > 0 && <div style={{color:'#16a34a'}}>↑ {fmtMin(p.extras)}</div>}
+                <div className="acn-grafico-resumo">
+                  {p.faltas+p.atestados+p.atrasos > 0 && <div className="acn-txt-erro">↓ {fmtMin(p.faltas+p.atestados+p.atrasos)}</div>}
+                  {p.extras > 0 && <div className="acn-txt-ok">↑ {fmtMin(p.extras)}</div>}
                 </div>
               </div>
             ))}
@@ -1111,33 +1093,27 @@ function KpiRH({ funcionarios, lancamentos }) {
       )}
 
       {/* Tabela de lançamentos filtrados */}
-      {!collapsed && <div className="sec-body" style={{ overflowX:'auto' }}>
+      {!collapsed && <div className="sec-body acn-rolagem">
         {filtered.length === 0 ? (
           <div className="acn-empty">Nenhum lançamento encontrado.</div>
         ) : (
-          <table>
+          <table className="acn-tabela">
             <thead><tr>
-              <th>Data</th><th>Funcionário</th><th>Tipo</th><th style={{textAlign:'right'}}>Duração</th><th>Observação</th>
+              <th>Data</th><th>Funcionário</th><th>Tipo</th><th className="acn-dir">Duração</th><th>Observação</th>
             </tr></thead>
             <tbody>
               {filtered.map(l=>{
                 const func = funcionarios.find(f=>f.id===l.funcionario_id);
-                const tipo = TIPO_MAP[l.tipo];
                 const sinal = sinalDoTipo(l.tipo);
                 return (
                   <tr key={l.id}>
-                    <td style={{whiteSpace:'nowrap'}}>{fmtDate(l.data)}</td>
+                    <td className="acn-num">{fmtDate(l.data)}</td>
                     <td>{func?.nome||'—'}</td>
-                    <td>
-                      <span style={{ background:(tipo?.cor||'#6b7280')+'18', color:tipo?.cor||'#6b7280',
-                        border:`1px solid ${tipo?.cor||'#6b7280'}30`, borderRadius:10, padding:'1px 7px', fontSize:9, fontWeight:700 }}>
-                        {l.tipo}
-                      </span>
-                    </td>
-                    <td style={{ textAlign:'right', fontWeight:700, color: sinal>0?'#16a34a':sinal<0?'#dc2626':'#6b7280' }}>
+                    <td><Selo familia={FAMILIA_LANCAMENTO[l.tipo] || 'neutro'} ponto={false}>{l.tipo}</Selo></td>
+                    <td className={'acn-dir acn-num ' + (sinal>0 ? 'acn-txt-ok' : sinal<0 ? 'acn-txt-erro' : 'acn-fraco')}>
                       {sinal!==0 ? fmtMin(sinal*l.minutos) : '—'}
                     </td>
-                    <td style={{ fontSize:10, color:'#6b7280' }}>{l.obs||'—'}</td>
+                    <td className="acn-fraco">{l.obs||'—'}</td>
                   </tr>
                 );
               })}
@@ -1147,6 +1123,7 @@ function KpiRH({ funcionarios, lancamentos }) {
       </div>}
     </div>
   );
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2509,36 +2486,21 @@ export default function RHTab({ currentUser }) {
   return (
     <div>
       {/* ── Header / KPI cards ── */}
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>
-        {[
-          ['👥 Ativos',    resumo.ativos,    '#16a34a'],
-          ['✈️ Viagem',    resumo.viagem,    '#0891b2'],
-          ['🛋️ Folga',    resumo.folga,     '#2563eb'],
-          ['🌴 Férias',   resumo.ferias,    '#7c3aed'],
-          ['🏥 Afastados',resumo.afastados, '#dc2626'],
-        ].map(([l,v,c])=>(
-          <div key={String(l)} style={{ background:'#fff', border:`1px solid ${c}30`, borderLeft:`3px solid ${c}`,
-            borderRadius:6, padding:'8px 14px', minWidth:100, boxShadow:'0 1px 3px #0001' }}>
-            <div style={{ fontSize:9, color:'#6b7280', textTransform:'uppercase' }}>{l}</div>
-            <div style={{ fontSize:22, fontWeight:800, color:c as string, lineHeight:1.2 }}>{v}</div>
-          </div>
-        ))}
-        <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+      <div className="acn-rh-topo">
+        <Indicadores compacto itens={[
+          { l: 'Ativos',     v: resumo.ativos,    tom: 'ok' },
+          { l: 'Viagem',     v: resumo.viagem,    tom: 'info' },
+          { l: 'Folga',      v: resumo.folga,     tom: 'info' },
+          { l: 'Férias',     v: resumo.ferias,    tom: 'marca' },
+          { l: 'Afastados',  v: resumo.afastados, tom: 'erro' },
+        ]} />
+        <div className="acn-rh-acoes">
           {isAdmin && (
             <>
-              <button onClick={()=>setModalFunc('new')}
-                style={{ background:'#2563eb', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                + Colaborador
-              </button>
-              <button onClick={()=>setModalLanc(true)}
-                style={{ background:'#16a34a', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                📋 Lançar Horas
-              </button>
+              <Botao variante="primario" icone={mdiPlus} onClick={()=>setModalFunc('new')}>Colaborador</Botao>
+              <Botao icone={mdiClipboardTextOutline} onClick={()=>setModalLanc(true)}>Lançar Horas</Botao>
               {podeAutorizar && (
-                <button onClick={()=>setModalAut(true)}
-                  style={{ background:'#7c3aed', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:10, fontWeight:700, cursor:'pointer' }}>
-                  🖨️ Autorização
-                </button>
+                <Botao icone={mdiPrinterOutline} onClick={()=>setModalAut(true)}>Autorização</Botao>
               )}
             </>
           )}

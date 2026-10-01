@@ -615,3 +615,38 @@ html body .acn-quadro input[type=file] { padding: 0 !important; min-height: 0 !i
 .acn-nivel { padding: 8px 10px; font-size: 12px; color: var(--acn-text); border: 1px solid; border-radius: var(--acn-r3); }
 .acn-nivel.tom-ok { background: var(--acn-ok-soft); border-color: color-mix(in srgb, var(--acn-ok) 30%, transparent); }
 .acn-nivel.tom-erro { background: var(--acn-bad-soft); border-color: color-mix(in srgb, var(--acn-bad) 30%, transparent); }
+/* ── RH (Etapa 12c1, 01/10/2026): topo, KPI, status dos colaboradores, desligados e banco de horas ── */
+.acn-kpis-compactos { display: flex; flex-wrap: wrap; gap: 8px; }
+.acn-kpis-compactos .acn-kpi { padding: 8px 12px; min-width: 112px; }
+.acn-kpis-compactos .acn-kpi .val { font-size: 20px; }
+.acn-kpi .rot i[data-acn-familia] { background: var(--acn-f); }
+.acn-rh-topo { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.acn-rh-topo > .acn-kpis { margin-bottom: 0; flex: 0 1 auto; }
+.acn-rh-acoes { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.acn-cab-titulo { display: inline-flex; align-items: center; gap: 6px; }
+.acn-cab-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+html body .sec-body.acn-sem-recuo { padding: 0; }
+.acn-modal-estreita { max-width: 440px; }
+.acn-txt-ok { color: var(--acn-ok); font-weight: 600; }
+/* o !important é porque as regras globais de select (cor e fundo) ganham da família do status */
+html body select.acn-sel-status { min-height: 28px; padding: 2px 8px; font: 600 12px var(--acn-font); color: var(--acn-f) !important; background-color: var(--acn-f-soft) !important; border: 1px solid color-mix(in srgb, var(--acn-f) 40%, transparent) !important; border-radius: var(--acn-r2); cursor: pointer; }
+.acn-kpi-faixa { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-kpi-faixa > .acn-kpis { margin-bottom: 0; flex: 1 1 auto; }
+.acn-kpi-faixa > .acn-b { margin-left: auto; }
+.acn-grafico { padding: 12px 16px; border-bottom: 1px solid var(--acn-line-soft); }
+.acn-grafico-titulo { margin-bottom: 8px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--acn-muted); }
+.acn-grafico-leg { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; font-size: 12px; color: var(--acn-text); }
+.acn-grafico-leg span { display: inline-flex; align-items: center; gap: 4px; }
+.acn-grafico-linhas { display: flex; flex-direction: column; gap: 6px; }
+.acn-grafico-linha { display: flex; align-items: center; gap: 8px; }
+.acn-grafico-nome { width: 150px; flex-shrink: 0; text-align: right; font-size: 12px; font-weight: 600; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-grafico-barras { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.acn-barra-trilho { display: flex; height: 14px; overflow: hidden; border-radius: var(--acn-r1); background: var(--acn-neutral-soft); }
+.acn-barra-seg { display: block; height: 100%; transition: width .3s; }
+i.acn-barra-seg { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.acn-barra-seg.faltas { background: var(--acn-bad); }
+.acn-barra-seg.atestados { background: var(--acn-neutral); }
+.acn-barra-seg.atrasos { background: var(--acn-warn); }
+.acn-barra-seg.extras { background: var(--acn-ok); }
+.acn-grafico-resumo { width: 80px; flex-shrink: 0; font-size: 12px; }
+@media (max-width: 600px) { .acn-grafico-nome { width: 90px; } .acn-grafico-resumo { width: 64px; } }
