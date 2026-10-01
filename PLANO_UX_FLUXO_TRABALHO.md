@@ -2492,38 +2492,37 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 - **R21 — Tela morta em `ProducaoTab.tsx`** ("Aguardando Agendamento Manutenção" / "Manutenção Agendada", 0 registros): **deixar como está.** ⚪ (sai da lista de limpeza futura)
 - **R22 — Suposições "minhas, não confirmadas":** as **visuais** (cores por família, botões no menu ⋯, recolher blocos, linha compacta etc.) ficam **aceitas**. As de **regra de negócio** o `/ux-fluxo` **confirma com o usuário, uma por uma, ao tocar nelas**: 7.8 (apoio só na adaptação; caixinha de lote desmarcada por padrão — o percentual único já foi confirmado em R11), 7.9 (o login do sistema não é mexido ao desligar alguém), 7.11 e 7.12 (fretes antigos; não adivinhar região de CEP inválido), 7.13 (as quatro do R17), 7.17 (período inteiro), 8 (painel só para quem tem a permissão) e o tom dos avisos da Etapa 7 (recusa por permissão é vermelha).
 - **R23 — Ordem geral:** o usuário **delegou ao próximo `/ux-fluxo`**: decidir o momento de cada ajuste e **intercalar com as etapas que faltam**. ⚪
-- **R24 — Chamados NFC: quem consta como atendente (7.18).** *Resposta:* "**Só quem clicou Atender/Concluir.**" Em `atualizarStatusNfc` (`SacTab.tsx`), salvar só as notas **não** grava mais `atendido_por`; só Atender e Concluir gravam. 🟢 P
 - **R25 — Chamados NFC: filtro e contador.** *Resposta:* "Corrigir." Escolher o status **já filtra** a lista (hoje só vale ao clicar em "Carregar"), e o "N aberto(s)" mostra o **total real**, não só o carregado. **Atenção:** o teste de comportamento da 12d1 (`comport_sac1`) tratou "o filtro só vale ao clicar em Carregar" como comportamento **igual**; ele precisa mudar **de propósito**, e a fotografia ser refeita. 🟢 P
 
 ### Quadro de acompanhamento — o `/ux-fluxo` preenche "Momento" antes de começar
 
 | # | Assunto | Natureza | Tam. | Momento | Estado |
 |---|---|---|---|---|---|
-| R1 | OP automática: campos obrigatórios e "Devolvida Comercial" | 🔴 | G | ⬜ a decidir | ⬜ |
-| R2 | Selo "onde está" em qualquer coluna com OP | 🟢 | P | ⬜ a decidir | ⬜ |
-| R3 | OP devolvida: contador + notificar quem abriu e o gerente | 🔴 | M | ⬜ a decidir | ⬜ |
-| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | ⬜ a decidir | ⬜ |
-| R5 | Erro fica até fechar | 🟢 | P | ⬜ a decidir | ⬜ |
-| R6 | Painel de aprovação: contador no menu + alçadas | 🔴 | M | ⬜ a decidir | ⬜ |
-| R7 | `ver_valores` valendo (+ ligar a marca de Fernando e Luiz) | 🔴 + 🟠 | G | ⬜ a decidir | ⬜ |
-| R8 | Perguntas do carro respondidas na abertura da OP | 🔴 | G | ⬜ a decidir (junto de R1) | ⬜ |
-| R9 | 3 fichas para a equipe + desativar a "Toro" antiga | 🟠 | P | ⬜ a decidir | ⬜ |
-| R10 | Comercial também edita a ficha de veículo | 🟢 | P | ⬜ a decidir | ⬜ |
+| R1 | OP automática: campos obrigatórios e "Devolvida Comercial" | 🔴 | G | depois da Etapa 12, **desenhar com o usuário** (junto de R8 e R3: o "fluxo da OP até a Engenharia") | ⬜ |
+| R2 | Selo "onde está" em qualquer coluna com OP | 🟢 | P | rodada própria, depois (pequena, `CrmTab`) | ⬜ |
+| R3 | OP devolvida: contador + notificar quem abriu e o gerente | 🔴 | M | junto de R1 e R8 | ⬜ |
+| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | rodada própria, depois — **medir de novo antes** (dado real, 5 OPs) | ⬜ |
+| R5 | Erro fica até fechar | 🟢 | P | rodada própria, depois (pequena, `Feedback.tsx`) | ⬜ |
+| R6 | Painel de aprovação: contador no menu + alçadas | 🔴 | M | depois, **desenhar com o usuário** (confirmar quem aprova cada alçada) | ⬜ |
+| R7 | `ver_valores` valendo (+ ligar a marca de Fernando e Luiz) | 🔴 + 🟠 | G | depois, **desenhar com o usuário**; testar a sessão como o login a monta; **medir de novo** antes das 2 linhas do Admin | ⬜ |
+| R8 | Perguntas do carro respondidas na abertura da OP | 🔴 | G | junto de R1 | ⬜ |
+| R9 | 3 fichas para a equipe + desativar a "Toro" antiga | 🟠 | P | rodada própria, depois — **medir de novo antes** (dizer ao usuário que são 3 fichas) | ⬜ |
+| R10 | Comercial também edita a ficha de veículo | 🟢 | P | rodada própria, depois (pequena; conferir `temPoderDeGerente`) | ⬜ |
 | R11 | Percentual dos serralheiros (espera o RH) | ⚪ | — | — | ⬜ espera o RH |
 | R12 | 6 cadastros escondidos | ⚪ | — | — | ✅ nada a fazer |
-| R13 | Relatório de Técnicos conta todas as OPs | 🟢 | P | ⬜ a decidir | ⬜ |
-| R14 | Linha "Sem responsável" no mesmo relatório | 🟢 | P | ⬜ a decidir (junto de R13) | ⬜ |
-| R15 | Comissão Comercial em mês de 30 dias (Etapa 7.19) | 🟢 | P | ⬜ a decidir | ⬜ |
-| R16 | Datas um dia antes: corrigir os 52 lugares | 🟢 | M | ⬜ a decidir | ⬜ |
-| R17 | CEP validado em todo campo de CEP | 🔴 | G | ⬜ a decidir | ⬜ |
+| R13 | Relatório de Técnicos conta todas as OPs | 🟢 | P | rodada própria, depois (pequena); junto de R14 | ⬜ |
+| R14 | Linha "Sem responsável" no mesmo relatório | 🟢 | P | junto de R13 (confirmar a "leticia" sem sobrenome) | ⬜ |
+| R15 | Comissão Comercial em mês de 30 dias (Etapa 7.19) | 🟢 | P | **próxima rodada** (pequena, só leitura): Etapa 7.19 | ⬜ |
+| R16 | Datas um dia antes: corrigir os 52 lugares | 🟢 | M | etapa própria, um arquivo por vez; `SacTab` (3 lugares) **antes** da fatia 12d que contém cada linha; `RelatoriosTab` (3) qualquer momento | ⬜ |
+| R17 | CEP validado em todo campo de CEP | 🔴 | G | depois, **desenhar com o usuário** (confirmar as quatro suposições do CEP, R22) | ⬜ |
 | R18 | 4 fretes com CEP de zeros | ⚪ | — | — | ✅ nada a fazer |
-| R19 | Serviços fora da lista de separação | 🟢 | P | ⬜ a decidir | ⬜ |
-| R20 | Mensagem do Histórico de comissões só depois de buscar | 🟢 | P | ⬜ a decidir | ⬜ |
+| R19 | Serviços fora da lista de separação | 🟢 | P | rodada própria, depois (pequena, Almoxarifado/BOM) | ⬜ |
+| R20 | Mensagem do Histórico de comissões só depois de buscar | 🟢 | P | **próxima rodada** (pequena, `RHTab`), junto de R15 | ⬜ |
 | R21 | Tela morta do `ProducaoTab` | ⚪ | — | — | ✅ nada a fazer |
-| R22 | Suposições: visuais aceitas; regras confirmadas ao tocar | ⚪ | — | ao tocar em cada uma | ⬜ |
+| R22 | Suposições: visuais aceitas; regras confirmadas ao tocar | ⚪ | — | ao tocar em cada suposição de regra de negócio | ⬜ |
 | R23 | Ordem geral | ⚪ | — | — | ✅ delegada ao `/ux-fluxo` |
-| R24 | Atendente do chamado NFC | 🟢 | P | ⬜ a decidir | ⬜ |
-| R25 | Filtro e contador dos Chamados NFC | 🟢 | P | ⬜ a decidir | ⬜ |
+| R24 | Atendente do chamado NFC | 🟢 | P | **agora** (01/10/2026): mexe no mesmo arquivo da 12d | ✅ aplicada em 01/10/2026 |
+| R25 | Filtro e contador dos Chamados NFC | 🟢 | P | **agora** (01/10/2026), logo depois da R24: mesmo arquivo e mesmo quadro da 12d1 | ⬜ |
 
 *Agrupamento que eu sugeriria — o `/ux-fluxo` decide:* **pequenas e independentes, que cabem junto de qualquer etapa** (R2, R5, R10, R13, R14, R15, R19, R20, R24, R25); **as que mexem em dado real, já autorizadas, para fazer com contagem** (R4, R9, e as 2 linhas de R7); **as que tocam em tela que a Etapa 12 ainda vai migrar**, a fazer **antes** da migração visual dela (R24 e R25 no SAC; as partes de R16 em `SacTab` e `RelatoriosTab`); e **as regras grandes, que pedem desenho com o usuário** (R1 + R8 + R3, juntas, formam o "fluxo da OP até a Engenharia"; R6; R7; R17).
 
@@ -2607,3 +2606,4 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | 01/10/2026 | **Relatórios do RH (12c3):** Técnicos e Uniformes passam a **cartão** (como os outros quadros do RH); as abas de Horas viram `Chips`; contagens viram `Selo` pela família do tipo de lançamento; o status da OS segue o mesmo jeito de reconhecer de antes (pela primeira palavra) com **Em Execução azul, Manutenção Concluída verde, Aguardando Início âmbar, demais cinza**; "N OS" azul e "N OP" verde; tipo da avaliação "Remota" azul e os demais na cor da marca; "Imprimir" é o botão principal nas Horas e secundário nos cabeçalhos de Técnicos e Uniformes. **Tabelas longas dentro de quadro aberto (as OS/OP dos técnicos) usam a nova linha compacta de 32 px**; as de Horas e Uniformes ficam na linha de 44 px do sistema. Suposições minhas, não confirmadas. |
 | 01/10/2026 | **Comissões de Técnicos (12c4):** a lista de OP/OS de cada técnico usa a **linha compacta de 32 px** (como as de Técnicos, 12c3), porque o setembro real tem 123 linhas; OP verde, OS azul, APOIO âmbar, SERRALHERIA na cor da marca e "lote/N" cinza; técnico **já aprovado** com o cabeçalho verde; Equipe na cor da marca, Dupla azul e Individual cinza no Pipeline. O alinhamento das colunas entre os cartões **não foi forçado** (custava altura). Suposições minhas, não confirmadas. |
 | 01/10/2026 | **SAC dividido em oito fatias (12d1 a 12d8), por quadro da página, de cima para baixo.** Na 12d1 (Chamados NFC): as abas usam `Abas` com ícone (somem no celular); o status do chamado usa as famílias (**Aberto vermelho, Em Atendimento âmbar, Concluído verde, Cancelado cinza**); "Atender" e "Concluir" são o botão principal do cartão; o cabeçalho do quadro **não** usa `.sec-hdr` (o quadro nunca recolheu). Suposições minhas, não confirmadas. |
+| 01/10/2026 | **Chamados NFC — quem consta como atendente (R24, resposta do usuário):** **só quem clicou em Atender ou Concluir**; salvar apenas as notas **não** troca o atendente (`atualizarStatusNfc`, `SacTab.tsx`). Aplicada em 01/10/2026; `teste_39` 8/8 (antes 4/8). Nenhum dado alterado. |

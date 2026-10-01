@@ -1265,7 +1265,9 @@ OK = ACN   |   Cancelar = DETECH`;
 
   const atualizarStatusNfc = async (id, novoStatus, notas?) => {
     const payload: any = { status: novoStatus, atualizado_em: new Date().toISOString() };
-    if (novoStatus === 'Em Atendimento' || novoStatus === 'Concluído') {
+    // Regra definida com o usuário em 01/10/2026 (R24): consta como atendente SÓ quem clicou em Atender ou Concluir. Salvar apenas as notas
+    // (notas !== undefined) não troca o atendente — antes, quem editava as notas de um chamado já atendido passava a constar como o atendente.
+    if (notas === undefined && (novoStatus === 'Em Atendimento' || novoStatus === 'Concluído')) {
       payload.atendido_por = currentUser?.nome || currentUser?.email || 'Sistema';
     }
     if (notas !== undefined) payload.notas_atendimento = notas;
