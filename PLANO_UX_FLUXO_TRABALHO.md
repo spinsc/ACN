@@ -1825,6 +1825,18 @@ Respondeu três perguntas minhas: (1) **é o apontamento que já existe, feito p
 - **Um CEP "existente" não prova que a pessoa acertou o destino:** o BrasilAPI conhece até o 99999-999 (Sarandi / PR) e há CEP real de dígitos repetidos (44444-444), então **não** barrei número repetido.
 - A janela de embalagem **continua no visual antigo** (estilo na própria tela); migrá-la para o design system é outra etapa. O fim da gravação (OP, frete, acompanhamento) foi exercitado só por simulação.
 
+### ✅ Etapa 7.14 — Janela do colaborador (RH): dois pares de botões para "Recebe comissão?", um deles não fazia nada
+
+**Feito em:** 01/10/2026. **Achado** ao ler o código da janela "Novo / Editar Colaborador" para a Etapa 12c2.
+
+**Causa:** o bloco "Comissão" mostrava **dois pares de botões para a mesma pergunta**: "✅ Sim / ✗ Não", logo abaixo do rótulo "Recebe Comissão?", e "✅ Recebe Comissão / ✗ Sem Comissão", logo depois. Só o segundo liga a comissão (`recebe_comissao`). O primeiro gravava em `recebe_comissao_str`, um campo que **nenhum código lê**: clicar "Sim" **não fazia nada** — o campo do percentual não aparecia e a pessoa era salva **sem comissão**, sem aviso. (O autor chegou a deixar o comentário "Use separate boolean toggle" no meio.)
+
+**O que foi feito** (`RHTab.tsx`, o par morto foi tirado, o rótulo "Recebe Comissão?" ficou em cima do par que funciona; **nenhum dado foi alterado — 0 linhas**).
+
+**Testado** (`teste_34`, navegador, leitura simulada com gente inventada, gravação respondida dentro do navegador): **antes 4/5** — o bloco tinha **4 botões** (`sim, não, recebe comissão, sem comissão`); **depois 4/4** — só os 2 que funcionam, e ligar a comissão, preencher 5% e salvar grava `recebe_comissao = true`, o percentual **5** e a base **Faturamento**, sem campo estranho no corpo. Build ok.
+
+**Fora / não sei:** **não dá para saber se alguém já foi salvo sem comissão por causa disso** — o banco só guarda o resultado (comissão desligada), não o clique. Quem acha que cadastrou comissão e vê R$ 0,00 na tela de comissões pode ter caído nesta armadilha; vale conferir, pelo cadastro, **quem deveria receber** (ver também a pergunta sobre os serralheiros em "Perguntas em aberto").
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2288,4 +2300,5 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Aproveitamento de frete (7.12):** CEP só de zeros não vale como região — a comparação cai para o nome do destino; correção só de leitura, sem mexer nos CEPs gravados. Suposição minha, não confirmada: o sistema não deve tentar adivinhar a região de um CEP inválido. |
 | 01/10/2026 | **Fretes migrados para o design system (12b3):** o status do frete vira `Selo` por família (Cotação cinza, Aguardando aprovação âmbar, Em trânsito azul, Entregue verde, Cancelado vermelho); **"Aprovar" é o botão principal e "Rejeitar" é vermelho**; cancelar e remover cotação viram ícone com nome; o vínculo ao processo vira `Chips`. **Nome de classe novo se confere com `grep` em `src` inteiro antes de criar** (a `acn-busca` já era a busca do cabeçalho). Nas comparações antes/depois, **gravações disparadas sem esperar a resposta são comparadas como conjunto**. Suposições minhas, não confirmadas: as cores do status por família (o "Aguardando aprovação" era laranja forte), os botões de ação como ícone e o botão "Cotações" em destaque na linha. |
 | 01/10/2026 | **CEP na embalagem (7.13, decisão do usuário):** **CEP obrigatório e válido** e **cidade e UF preenchidas pelo CEP**, só na janela de embalagem do Almoxarifado. Suposições minhas: o CEP sobrescreve cidade e UF; "inexistente" só quando o ViaCEP e o BrasilAPI concordam; serviço fora do ar não barra a embalagem; CEP gravado como 00000-000. |
+| 01/10/2026 | **Janela do colaborador (7.14):** o par de botões "Sim / Não" sob "Recebe Comissão?" saiu (não gravava nada); ficou só "Recebe Comissão / Sem Comissão". Correção só de tela; nenhum dado mexido. |
 | 01/10/2026 | **RH migrado em quatro fatias (12c1 a 12c4), por quadro da página, de cima para baixo.** Na 12c1: o status de presença e o tipo de lançamento passam a usar as **famílias de cor** do design system (o `Selo` e a classe `acn-sel-status`), o recolher dos quadros mantém a lógica e perde a seta duplicada (`no-collapse`). Suposições minhas, não confirmadas: Férias na cor da marca, Folga e Viagem no mesmo azul, e os 10 tipos de lançamento em 6 famílias. |

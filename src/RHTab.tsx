@@ -377,11 +377,9 @@ function ModalFuncionario({ func, onClose, onSaved, currentUser }) {
           {/* COMISSÃO */}
           <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:6, padding:'10px 12px', display:'flex', flexDirection:'column', gap:8 }}>
             <div style={{ fontWeight:700, fontSize:10, color:'#92400e', marginBottom:2 }}>📈 Comissão</div>
-            <div>
-              {lbl('Recebe Comissão?')}
-              {toggle([['true','✅ Sim','#16a34a'],['false','✗ Não','#dc2626']], 'recebe_comissao_str')}
-            </div>
-            {/* Use separate boolean toggle */}
+            {/* Etapa 7.14 (01/10/2026): aqui havia um segundo par de botões "Sim / Não" que gravava em recebe_comissao_str, um campo que
+                ninguém lê — clicar "Sim" parecia ligar a comissão e não ligava (a pessoa era salva sem comissão). Ficou só o par que funciona. */}
+            {lbl('Recebe Comissão?')}
             <div style={{ display:'flex', gap:6, ...campoDestaque('recebe_comissao') }}>
               {[['Sim','#16a34a'],['Não','#94a3b8']].map(([label, cor]) => (
                 <button key={label} onClick={()=>set('recebe_comissao', label==='Sim')}
