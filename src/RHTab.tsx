@@ -6,7 +6,7 @@ import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import Icone from './Icone';
-import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline } from '@mdi/js';
+import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1224,45 +1224,49 @@ function somarTotais(linhas: any[]) {
 const TabelaPreview = ({ linhas }: { linhas: any[] }) => {
   if (linhas.length === 0) return <div className="acn-empty">Selecione os filtros acima.</div>;
   const totais = somarTotais(linhas);
+  // Etapa 12c3 (01/10/2026): só aparência. Contas, colunas e textos são os de antes. Cada contagem vira o selo da família do tipo de
+  // lançamento (a mesma de FAMILIA_LANCAMENTO: Faltas erro, Atestados neutro, Declarações e Saídas Ant. atenção, Entradas Ant. ok) e os
+  // valores em hora usam a cor de crédito/débito das outras tabelas do RH.
+  const contagem = (n: number, tipo: string) => n > 0 ? <Selo familia={FAMILIA_LANCAMENTO[tipo]} ponto={false}>{n}</Selo> : '—';
   return (
-    <div style={{overflowX:'auto'}}>
-      <table>
+    <div className="acn-rolagem">
+      <table className="acn-tabela acn-densa">
         <thead><tr>
           <th>Funcionário</th>
-          <th style={{textAlign:'center'}}>Créditos</th>
-          <th style={{textAlign:'center'}}>Débitos</th>
-          <th style={{textAlign:'center'}}>Saldo</th>
-          <th style={{textAlign:'center',color:'#fca5a5'}}>Faltas</th>
-          <th style={{textAlign:'center'}}>Atestados</th>
-          <th style={{textAlign:'center',color:'#fde68a'}}>Declarações</th>
-          <th style={{textAlign:'center'}}>Saídas Ant.</th>
-          <th style={{textAlign:'center'}}>Entradas Ant.</th>
+          <th className="acn-centro">Créditos</th>
+          <th className="acn-centro">Débitos</th>
+          <th className="acn-centro">Saldo</th>
+          <th className="acn-centro">Faltas</th>
+          <th className="acn-centro">Atestados</th>
+          <th className="acn-centro">Declarações</th>
+          <th className="acn-centro">Saídas Ant.</th>
+          <th className="acn-centro">Entradas Ant.</th>
         </tr></thead>
         <tbody>
           {linhas.map((l,i) => (
             <tr key={i}>
-              <td><strong>{l.nome}</strong></td>
-              <td style={{textAlign:'center',color:'#16a34a',fontWeight:700}}>{fmtMin(l.credito)}</td>
-              <td style={{textAlign:'center',color:'#dc2626',fontWeight:700}}>{l.debito>0?fmtMin(-l.debito):'—'}</td>
-              <td style={{textAlign:'center',fontWeight:800,color:l.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(l.saldo)}</td>
-              <td style={{textAlign:'center'}}>{l.faltas>0?<span style={{background:'#fde8e8',color:'#dc2626',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.faltas}</span>:'—'}</td>
-              <td style={{textAlign:'center'}}>{l.atestados>0?<span style={{background:'#f1f5f9',color:'#6b7280',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.atestados}</span>:'—'}</td>
-              <td style={{textAlign:'center'}}>{l.declaracoes>0?<span style={{background:'#fffbeb',color:'#d97706',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.declaracoes}</span>:'—'}</td>
-              <td style={{textAlign:'center'}}>{l.saidasAnt>0?<span style={{background:'#fef2f2',color:'#ef4444',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.saidasAnt}</span>:'—'}</td>
-              <td style={{textAlign:'center'}}>{l.entradasAnt>0?<span style={{background:'#f0fdf4',color:'#16a34a',borderRadius:10,padding:'1px 8px',fontWeight:700,fontSize:9}}>{l.entradasAnt}</span>:'—'}</td>
+              <td className="acn-forte">{l.nome}</td>
+              <td className="acn-centro acn-num acn-txt-ok">{fmtMin(l.credito)}</td>
+              <td className="acn-centro acn-num acn-txt-erro">{l.debito>0?fmtMin(-l.debito):'—'}</td>
+              <td className={'acn-centro acn-num ' + (l.saldo>=0 ? 'acn-txt-ok' : 'acn-txt-erro')}>{fmtMin(l.saldo)}</td>
+              <td className="acn-centro">{contagem(l.faltas, 'Falta')}</td>
+              <td className="acn-centro">{contagem(l.atestados, 'Atestado')}</td>
+              <td className="acn-centro">{contagem(l.declaracoes, 'Declaração')}</td>
+              <td className="acn-centro">{contagem(l.saidasAnt, 'Saída Antecipada')}</td>
+              <td className="acn-centro">{contagem(l.entradasAnt, 'Entrada Antecipada')}</td>
             </tr>
           ))}
           {linhas.length > 1 && (
-            <tr style={{background:'#f1f5f9',fontWeight:700}}>
+            <tr className="acn-linha-total">
               <td>TOTAL</td>
-              <td style={{textAlign:'center',color:'#16a34a'}}>{fmtMin(totais.credito)}</td>
-              <td style={{textAlign:'center',color:'#dc2626'}}>{totais.debito>0?fmtMin(-totais.debito):'—'}</td>
-              <td style={{textAlign:'center',color:totais.saldo>=0?'#16a34a':'#dc2626'}}>{fmtMin(totais.saldo)}</td>
-              <td style={{textAlign:'center'}}>{totais.faltas||'—'}</td>
-              <td style={{textAlign:'center'}}>{totais.atestados||'—'}</td>
-              <td style={{textAlign:'center'}}>{totais.declaracoes||'—'}</td>
-              <td style={{textAlign:'center'}}>{totais.saidasAnt||'—'}</td>
-              <td style={{textAlign:'center'}}>{totais.entradasAnt||'—'}</td>
+              <td className="acn-centro acn-num acn-txt-ok">{fmtMin(totais.credito)}</td>
+              <td className="acn-centro acn-num acn-txt-erro">{totais.debito>0?fmtMin(-totais.debito):'—'}</td>
+              <td className={'acn-centro acn-num ' + (totais.saldo>=0 ? 'acn-txt-ok' : 'acn-txt-erro')}>{fmtMin(totais.saldo)}</td>
+              <td className="acn-centro">{totais.faltas||'—'}</td>
+              <td className="acn-centro">{totais.atestados||'—'}</td>
+              <td className="acn-centro">{totais.declaracoes||'—'}</td>
+              <td className="acn-centro">{totais.saidasAnt||'—'}</td>
+              <td className="acn-centro">{totais.entradasAnt||'—'}</td>
             </tr>
           )}
         </tbody>
@@ -1323,47 +1327,42 @@ function RelatorioUniformes({ funcionarios }) {
     if (w) { w.document.write(html); w.document.close(); }
   };
 
+  // Etapa 12c3 (01/10/2026): o quadro vira cartão como os outros do RH (a classe de recolhido segue o estado, como na Etapa 7.16). Só aparência:
+  // o filtro, o resumo por tamanho, a lista e o HTML da impressão são os de antes.
   return (
-    <div style={{ marginTop:20, border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-      <div className="sec-hdr" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6, cursor:'pointer' }}
-        onClick={()=>setCollapsed(c=>!c)}>
-        <span>👕 Relatório de Uniformes</span>
-        <div style={{ display:'flex', gap:6 }} onClick={e=>e.stopPropagation()}>
-          <select value={tipo} onChange={e=>setTipo(e.target.value)} aria-label="Tipo de colaborador"
-            style={{ padding:'3px 6px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10 }}>
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiTshirtCrewOutline} size={16} /> Relatório de Uniformes</span>
+        <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
+          <select className="acn-input acn-select-mini" value={tipo} onChange={e=>setTipo(e.target.value)} aria-label="Tipo de colaborador">
             <option value="todos">Todos</option><option value="Funcionário">Funcionários</option><option value="Terceiro">Terceiros</option>
           </select>
-          <button onClick={imprimir}
-            style={{ background:'#1e293b', color:'#fff', border:'none', borderRadius:4, padding:'3px 12px', fontSize:10, cursor:'pointer' }}>
-            🖨️ Imprimir
-          </button>
-          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} aria-label={collapsed ? 'Expandir' : 'Recolher'}
-            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-            {collapsed?'▸':'▾'}
-          </button>
+          <Botao pequeno icone={mdiPrinterOutline} onClick={imprimir}>Imprimir</Botao>
+          <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+            onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
         </div>
       </div>
       {!collapsed && (
-        <div style={{ padding:12 }}>
+        <div className="sec-body">
           {/* resumo no topo: quantos de cada tamanho */}
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+          <div className="acn-pecas">
             {totais.map(([peca, t]) => (
-              <div key={peca} style={{ border:'1px solid #e2e8f0', borderRadius:6, padding:'6px 10px', fontSize:11, background:'#f8fafc' }}>
-                <strong style={{ color:'#0f766e' }}>{peca}</strong>{' '}
-                {t.length ? t.map(([tam, n]) => <span key={tam} style={{ marginLeft:6 }}>{tam}: <b>{n}</b></span>) : <span style={{ color:'#94a3b8' }}>—</span>}
+              <div key={peca} className="acn-peca">
+                <strong>{peca}</strong>{' '}
+                {t.length ? t.map(([tam, n]) => <span key={tam}>{tam}: <b>{n}</b></span>) : <span className="acn-fraco">—</span>}
               </div>
             ))}
             {semTamanho > 0 && (
-              <div style={{ fontSize:10, color:'#b45309', alignSelf:'center' }}>{semTamanho} sem tamanho cadastrado</div>
+              <span className="acn-ajuda atencao">{semTamanho} sem tamanho cadastrado</span>
             )}
           </div>
-          <div style={{ overflowX:'auto' }}>
-            <table>
+          <div className="acn-rolagem">
+            <table className="acn-tabela">
               <thead><tr><th>Nome</th><th>Cargo</th><th>Camiseta</th><th>Calça</th><th>Sapato</th></tr></thead>
               <tbody>
                 {lista.map(f => (
                   <tr key={f.id}>
-                    <td>{f.nome}</td><td>{f.cargo || '—'}</td>
+                    <td className="acn-forte">{f.nome}</td><td>{f.cargo || '—'}</td>
                     <td>{f.tamanho_camiseta || '—'}</td><td>{f.tamanho_calca || '—'}</td><td>{f.tamanho_sapato || '—'}</td>
                   </tr>
                 ))}
@@ -1419,30 +1418,21 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
 
   const linhasConsolidado = calcLinhas(funcionarios, lancsMenoAno);
 
-  const btnAba = (id: string, label: string) => (
-    <button key={id} onClick={()=>setAba(id as any)}
-      className={`acn-btn acn-tab-btn${aba===id?' ativo':''}`}
-      style={{fontSize:10,padding:'5px 14px'}}>
-      {label}
-    </button>
-  );
-
+  // Etapa 12c3 (01/10/2026): só aparência. As abas viram o seletor em pílulas do sistema, os filtros usam os campos padrão e o "Imprimir" é o
+  // botão principal da linha. As validações (funcionário / período) e o que cada impressão gera são os de antes.
   const selectMesAno = () => (
-    <div style={{display:'flex',gap:6,alignItems:'center'}}>
-      <select value={mes} onChange={e=>setMes(Number(e.target.value))}
-        style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+    <div className="acn-cab-filtros">
+      <select className="acn-input acn-select-mini" aria-label="Mês" value={mes} onChange={e=>setMes(Number(e.target.value))}>
         {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
       </select>
-      <select value={ano} onChange={e=>setAno(Number(e.target.value))}
-        style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+      <select className="acn-input acn-select-mini" aria-label="Ano" value={ano} onChange={e=>setAno(Number(e.target.value))}>
         {anos.map(y=><option key={y} value={y}>{y}</option>)}
       </select>
     </div>
   );
 
   const selectFuncionario = (label='Funcionário') => (
-    <select value={funcId} onChange={e=>setFuncId(e.target.value)}
-      style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}}>
+    <select className="acn-input acn-select-mini" aria-label="Funcionário" value={funcId} onChange={e=>setFuncId(e.target.value)}>
       <option value="">{label}</option>
       {funcionarios.filter(f=>f.ativo).map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
     </select>
@@ -1451,29 +1441,28 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
 
   return (
     <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
-      <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
-        onClick={()=>setCollapsed(c=>!c)}>
-        <span>📄 Relatórios de Horas</span>
-        <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-          style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-          {collapsed?'▸':'▾'}
-        </button>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiFileDocumentOutline} size={16} /> Relatórios de Horas</span>
+        <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+          onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
       </div>
       {!collapsed && <div className="sec-body">
         {/* Abas */}
-        <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
-          {btnAba('individual','👤 Individual')}
-          {btnAba('parcial','📅 Parcial por Período')}
-          {btnAba('consolidado','📊 Consolidado')}
+        <div className="acn-rel-abas">
+          <Chips ativo={aba} onChange={id=>setAba(id as any)} rotulo="Tipo de relatório" itens={[
+            { id:'individual',  rotulo:'Individual',          icone:mdiAccountOutline },
+            { id:'parcial',     rotulo:'Parcial por Período', icone:mdiCalendarRange },
+            { id:'consolidado', rotulo:'Consolidado',         icone:mdiChartBoxOutline },
+          ]} />
         </div>
 
         {/* ── INDIVIDUAL ── */}
         {aba === 'individual' && (
           <div>
-            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+            <div className="acn-rel-filtros">
               {selectFuncionario('Selecione o funcionário...')}
               {selectMesAno()}
-              <button
+              <Botao variante="primario" pequeno icone={mdiPrinterOutline}
                 onClick={() => {
                   if (!funcId) { alert('Selecione um funcionário!'); return; }
                   const f = funcionarios.find(f=>f.id===funcId);
@@ -1482,10 +1471,9 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
                     `${mesNome(mes)}/${ano}`,
                     linhasIndividual
                   );
-                }}
-                style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
-                🖨️ Imprimir
-              </button>
+                }}>
+                Imprimir
+              </Botao>
             </div>
             <TabelaPreview linhas={linhasIndividual} />
           </div>
@@ -1494,17 +1482,15 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
         {/* ── PARCIAL POR PERÍODO ── */}
         {aba === 'parcial' && (
           <div>
-            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+            <div className="acn-rel-filtros">
               {selectFuncionario('Todos os funcionários')}
-              <div style={{display:'flex',gap:4,alignItems:'center'}}>
-                <span style={{fontSize:10,color:'#6b7280'}}>De</span>
-                <input type="date" value={dtInicio} onChange={e=>setDtInicio(e.target.value)}
-                  style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
-                <span style={{fontSize:10,color:'#6b7280'}}>até</span>
-                <input type="date" value={dtFim} onChange={e=>setDtFim(e.target.value)}
-                  style={{padding:'3px 6px',border:'1px solid #d1d5db',borderRadius:4,fontSize:10}} />
+              <div className="acn-cab-filtros">
+                <span className="acn-fraco">De</span>
+                <input type="date" className="acn-input acn-select-mini" aria-label="Data inicial" value={dtInicio} onChange={e=>setDtInicio(e.target.value)} />
+                <span className="acn-fraco">até</span>
+                <input type="date" className="acn-input acn-select-mini" aria-label="Data final" value={dtFim} onChange={e=>setDtFim(e.target.value)} />
               </div>
-              <button
+              <Botao variante="primario" pequeno icone={mdiPrinterOutline}
                 onClick={() => {
                   if (!dtInicio || !dtFim) { alert('Selecione o período!'); return; }
                   const f = funcId ? funcionarios.find(f=>f.id===funcId) : null;
@@ -1513,10 +1499,9 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
                     `${fmtDate(dtInicio)} a ${fmtDate(dtFim)}`,
                     linhasParcial
                   );
-                }}
-                style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
-                🖨️ Imprimir
-              </button>
+                }}>
+                Imprimir
+              </Botao>
             </div>
             <TabelaPreview linhas={linhasParcial} />
           </div>
@@ -1525,17 +1510,16 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
         {/* ── CONSOLIDADO ── */}
         {aba === 'consolidado' && (
           <div>
-            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+            <div className="acn-rel-filtros">
               {selectMesAno()}
-              <button
+              <Botao variante="primario" pequeno icone={mdiPrinterOutline}
                 onClick={() => imprimirRelatorio(
                   'Fechamento Consolidado — Todos os Funcionários',
                   `${mesNome(mes)}/${ano}`,
                   linhasConsolidado
-                )}
-                style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:6,padding:'5px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>
-                🖨️ Imprimir
-              </button>
+                )}>
+                Imprimir
+              </Botao>
             </div>
             <TabelaPreview linhas={linhasConsolidado} />
           </div>
@@ -1625,8 +1609,9 @@ function RelatorioTecnicos({ funcionarios }) {
   // ainda é o dia anterior: as 200 OPs do relatório (e o HTML da impressão) mostravam um dia a menos. Texto só com a data: o dia sai direto
   // do texto. Data com hora (as OS têm) continua pelo fuso de quem usa. Mesmo erro já corrigido na Logística (Etapa 7.10).
   const fmtDt = (d) => !d ? '—' : /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d).split('-').reverse().join('/') : new Date(d).toLocaleDateString('pt-BR');
-  const STC = { 'Em Execucao':'#8b5cf6','Manutencao Concluida':'#0d9488','Aguardando Inicio':'#f59e0b' };
-  const stcOf = (s) => { for (const k of Object.keys(STC)) if (s && s.includes(k.split(' ')[0])) return STC[k]; return '#94a3b8'; };
+  // Etapa 12c3 (01/10/2026): a cor do status da OS vem da família do selo. O jeito de reconhecer o status (pela primeira palavra) é o de antes.
+  const FAMILIA_STATUS_OS = { 'Em Execucao':'info', 'Manutencao Concluida':'ok', 'Aguardando Inicio':'atencao' };
+  const familiaStatusOS = (s) => { for (const k of Object.keys(FAMILIA_STATUS_OS)) if (s && s.includes(k.split(' ')[0])) return FAMILIA_STATUS_OS[k]; return 'neutro'; };
 
   const filtrado = dados.filter(t => combinaBusca(t.nome, filtroNome));
 
@@ -1657,132 +1642,108 @@ function RelatorioTecnicos({ funcionarios }) {
     const w = window.open('','_blank'); w.document.write(html); w.document.close();
   };
 
+  // Etapa 12c3 (01/10/2026): o quadro vira cartão como os outros do RH (a classe de recolhido segue o estado, como na Etapa 7.16). Só aparência:
+  // a busca, o que cada técnico mostra, as tabelas de OS e de OP e o HTML da impressão são os de antes. Cada cor feita à mão virou o selo da família.
   return (
-    <div style={{ marginTop:20, border:'1px solid #e2e8f0', borderRadius:8, overflow:'hidden' }}>
-      <div className="sec-hdr" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6, cursor:'pointer' }}
-        onClick={()=>setCollapsed(c=>!c)}>
-        <span>📊 Relatório de Técnicos</span>
-        <div style={{ display:'flex', gap:6 }} onClick={e=>e.stopPropagation()}>
-          <input value={filtroNome} onChange={e=>setFiltroNome(e.target.value)}
-            placeholder="Filtrar por nome..."
-            style={{ padding:'3px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, width:150 }} />
-          <button onClick={imprimir}
-            style={{ background:'#1e293b', color:'#fff', border:'none', borderRadius:4, padding:'3px 12px', fontSize:10, cursor:'pointer' }}>
-            🖨️ Imprimir
-          </button>
-          <button onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}}
-            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,color:'#94a3b8',lineHeight:1,padding:'0 2px'}}>
-            {collapsed?'▸':'▾'}
-          </button>
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
+      <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
+        <span className="acn-cab-titulo"><Icone path={mdiAccountWrenchOutline} size={16} /> Relatório de Técnicos</span>
+        <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
+          <input className="acn-input acn-input-filtro" value={filtroNome} onChange={e=>setFiltroNome(e.target.value)}
+            placeholder="Filtrar por nome..." aria-label="Filtrar técnicos por nome" />
+          <Botao pequeno icone={mdiPrinterOutline} onClick={imprimir}>Imprimir</Botao>
+          <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
+            onClick={e=>{e.stopPropagation();setCollapsed(c=>!c);}} />
         </div>
       </div>
-      {!collapsed && (loading ? (
-        <div className="acn-empty">Carregando...</div>
-      ) : filtrado.length === 0 ? (
-        <div className="acn-empty">Nenhum técnico designado encontrado.</div>
-      ) : (
-        <div style={{ padding:10 }}>
-          {filtrado.map(tec => (
-            <div key={tec.nome} style={{ marginBottom:8, border:'1px solid #e2e8f0', borderRadius:6, overflow:'hidden' }}>
-              <div onClick={()=>setExpandido(expandido===tec.nome?null:tec.nome)}
-                style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
-                  background: tec.func ? '#f0f9ff' : '#fafafa', cursor:'pointer',
-                  borderBottom: expandido===tec.nome ? '1px solid #bfdbfe' : 'none' }}>
-                <div style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center',
-                  justifyContent:'center', fontWeight:800, fontSize:13,
-                  background: tec.func ? '#2563eb' : '#94a3b8', color:'white' }}>
-                  {tec.nome[0].toUpperCase()}
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:12, color:'#1e293b' }}>{tec.nome}</div>
-                  {tec.func && (
-                    <div style={{ fontSize:10, color:'#64748b' }}>
-                      {tec.func.cargo||'—'} · {tec.func.departamento||'—'}
-                      <span style={{ marginLeft:6, fontSize:9, padding:'1px 5px', borderRadius:8,
-                        background: tec.func.tipo_colaborador==='Terceiro'?'#fef3c7':'#eff6ff',
-                        color: tec.func.tipo_colaborador==='Terceiro'?'#92400e':'#1d4ed8',
-                        fontWeight:700, border:'1px solid currentColor' }}>
-                        {tec.func.tipo_colaborador||'Funcionário'}
-                      </span>
-                    </div>
-                  )}
-                  {!tec.func && <div style={{ fontSize:10, color:'#f59e0b', fontWeight:600 }}>Nao cadastrado no RH</div>}
-                </div>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  {tec.totalOS > 0 && <span style={{ background:'#ede9fe', color:'#5b21b6', borderRadius:12, padding:'2px 8px', fontSize:10, fontWeight:700 }}>{tec.totalOS} OS</span>}
-                  {tec.totalOP > 0 && <span style={{ background:'#dcfce7', color:'#166534', borderRadius:12, padding:'2px 8px', fontSize:10, fontWeight:700 }}>{tec.totalOP} OP</span>}
-                  <span style={{ fontSize:12, color:'#94a3b8' }}>{expandido===tec.nome?'▲':'▼'}</span>
-                </div>
+      {!collapsed && <div className="sec-body">
+        {loading ? (
+          <div className="acn-empty">Carregando...</div>
+        ) : filtrado.length === 0 ? (
+          <div className="acn-empty">Nenhum técnico designado encontrado.</div>
+        ) : filtrado.map(tec => (
+          <div key={tec.nome} className="acn-tec">
+            <div className={'acn-tec-cab' + (tec.func ? '' : ' sem-cadastro') + (expandido===tec.nome ? ' aberto' : '')}
+              role="button" aria-expanded={expandido===tec.nome}
+              onClick={()=>setExpandido(expandido===tec.nome?null:tec.nome)}>
+              <div className="acn-tec-avatar">{tec.nome[0].toUpperCase()}</div>
+              <div className="acn-tec-info">
+                <div className="acn-forte">{tec.nome}</div>
+                {tec.func && (
+                  <div className="acn-tec-sub">
+                    {tec.func.cargo||'—'} · {tec.func.departamento||'—'}
+                    <Selo familia={tec.func.tipo_colaborador==='Terceiro' ? 'atencao' : 'info'} ponto={false}>{tec.func.tipo_colaborador||'Funcionário'}</Selo>
+                  </div>
+                )}
+                {!tec.func && <div className="acn-ajuda atencao">Nao cadastrado no RH</div>}
               </div>
-              {expandido === tec.nome && (
-                <div style={{ padding:'8px 12px', background:'#fafafa' }}>
-                  {tec.os.length > 0 && (
-                    <>
-                      <div style={{ fontSize:10, fontWeight:700, color:'#5b21b6', marginBottom:4, textTransform:'uppercase' }}>Ordens de Serviço</div>
-                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10, marginBottom:8 }}>
-                        <thead><tr style={{ background:'#ede9fe' }}>
-                          <th style={{ padding:'4px 6px' }}>OS</th>
-                          <th style={{ padding:'4px 6px' }}>Cliente / Veículo</th>
-                          <th style={{ padding:'4px 6px' }}>Tipo</th>
-                          <th style={{ padding:'4px 6px' }}>Status</th>
-                          <th style={{ padding:'4px 6px' }}>Início</th>
-                          <th style={{ padding:'4px 6px' }}>Conclusão</th>
+              <div className="acn-tec-contagem">
+                {tec.totalOS > 0 && <Selo familia="info" ponto={false}>{tec.totalOS} OS</Selo>}
+                {tec.totalOP > 0 && <Selo familia="ok" ponto={false}>{tec.totalOP} OP</Selo>}
+                <Icone path={expandido===tec.nome ? mdiChevronUp : mdiChevronDown} size={16} />
+              </div>
+            </div>
+            {expandido === tec.nome && (
+              <div className="acn-tec-corpo">
+                {tec.os.length > 0 && (
+                  <>
+                    <div className="acn-quadro-titulo">Ordens de Serviço</div>
+                    <div className="acn-rolagem">
+                      <table className="acn-tabela acn-compacta">
+                        <thead><tr>
+                          <th>OS</th>
+                          <th>Cliente / Veículo</th>
+                          <th>Tipo</th>
+                          <th>Status</th>
+                          <th>Início</th>
+                          <th>Conclusão</th>
                         </tr></thead>
                         <tbody>
                           {tec.os.map((o,i)=>(
-                            <tr key={i} style={{ background:i%2===0?'white':'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
-                              <td style={{ padding:'4px 6px', fontWeight:700, color:'#5b21b6' }}>{o.numero}</td>
-                              <td style={{ padding:'4px 6px' }}>{o.cliente}{o.veiculo ? ' — '+o.veiculo : ''}</td>
-                              <td style={{ padding:'4px 6px' }}>
-                                <span style={{ fontSize:9, padding:'1px 5px', borderRadius:8,
-                                  background:o.avaliacao==='Remota'?'#e0f2fe':'#ede9fe',
-                                  color:o.avaliacao==='Remota'?'#0369a1':'#5b21b6', fontWeight:700 }}>
-                                  {o.avaliacao||'—'}
-                                </span>
-                              </td>
-                              <td style={{ padding:'4px 6px' }}>
-                                <span style={{ fontSize:9, padding:'1px 5px', borderRadius:8, fontWeight:700,
-                                  background:(stcOf(o.status))+'22', color:stcOf(o.status) }}>
-                                  {o.status}
-                                </span>
-                              </td>
-                              <td style={{ padding:'4px 6px' }}>{fmtDt(o.inicio)}</td>
-                              <td style={{ padding:'4px 6px' }}>{fmtDt(o.fim)}</td>
+                            <tr key={i}>
+                              <td className="acn-forte">{o.numero}</td>
+                              <td>{o.cliente}{o.veiculo ? ' — '+o.veiculo : ''}</td>
+                              <td><Selo familia={o.avaliacao==='Remota' ? 'info' : 'marca'} ponto={false}>{o.avaliacao||'—'}</Selo></td>
+                              <td>{o.status ? <Selo familia={familiaStatusOS(o.status)} ponto={false}>{o.status}</Selo> : ''}</td>
+                              <td className="acn-num">{fmtDt(o.inicio)}</td>
+                              <td className="acn-num">{fmtDt(o.fim)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </>
-                  )}
-                  {tec.op.length > 0 && (
-                    <>
-                      <div style={{ fontSize:10, fontWeight:700, color:'#166534', marginBottom:4, textTransform:'uppercase' }}>Ordens de Produção</div>
-                      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:10 }}>
-                        <thead><tr style={{ background:'#dcfce7' }}>
-                          <th style={{ padding:'4px 6px' }}>OP</th>
-                          <th style={{ padding:'4px 6px' }}>Cliente</th>
-                          <th style={{ padding:'4px 6px' }}>Status</th>
-                          <th style={{ padding:'4px 6px' }}>Data</th>
+                    </div>
+                  </>
+                )}
+                {tec.op.length > 0 && (
+                  <>
+                    <div className="acn-quadro-titulo">Ordens de Produção</div>
+                    <div className="acn-rolagem">
+                      <table className="acn-tabela acn-compacta">
+                        <thead><tr>
+                          <th>OP</th>
+                          <th>Cliente</th>
+                          <th>Status</th>
+                          <th>Data</th>
                         </tr></thead>
                         <tbody>
                           {tec.op.map((o,i)=>(
-                            <tr key={i} style={{ background:i%2===0?'white':'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
-                              <td style={{ padding:'4px 6px', fontWeight:700, color:'#166534' }}>{o.numero||'—'}</td>
-                              <td style={{ padding:'4px 6px' }}>{o.cliente||'—'}</td>
-                              <td style={{ padding:'4px 6px' }}>{o.status||'—'}</td>
-                              <td style={{ padding:'4px 6px' }}>{fmtDt(o.inicio)}</td>
+                            <tr key={i}>
+                              <td className="acn-forte">{o.numero||'—'}</td>
+                              <td>{o.cliente||'—'}</td>
+                              <td>{o.status||'—'}</td>
+                              <td className="acn-num">{fmtDt(o.inicio)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>}
     </div>
   );
 }

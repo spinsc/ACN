@@ -669,3 +669,34 @@ html body .modal-box.acn-modal-cadastro.menor { width: min(460px, 95vw); }
 .acn-duracao { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 html body .acn-input.acn-input-curto { width: 64px; text-align: center; }
 .acn-duracao-total { font-weight: 600; color: var(--acn-info); }
+
+/* ── RH · Relatórios de Horas, de Técnicos e de Uniformes (Etapa 12c3, 01/10/2026): só aparência ──────────────── */
+.acn-rel-abas { margin-bottom: 14px; }
+.acn-rel-filtros { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+html body .acn-input.acn-input-filtro { width: 170px; }
+/* linha de TOTAL de uma tabela: fundo suave e letra em negrito (antes #f1f5f9 pintado à mão) */
+html body .acn-main table.acn-tabela tr.acn-linha-total > td { background: var(--acn-neutral-soft) !important; font-weight: 700; color: var(--acn-ink); }
+/* resumo por tamanho de uniforme */
+.acn-pecas { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.acn-peca { padding: 6px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); font-size: 13px; }
+.acn-peca strong { color: var(--acn-brand-ink); }
+.acn-peca span { margin-left: 6px; }
+/* cartão de um técnico no Relatório de Técnicos */
+.acn-tec { margin-bottom: 8px; border: 1px solid var(--acn-line); border-radius: var(--acn-r3); overflow: hidden; }
+.acn-tec-cab { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--acn-info-soft); cursor: pointer; }
+.acn-tec-cab.sem-cadastro { background: var(--acn-surface-2); }
+.acn-tec-cab.aberto { border-bottom: 1px solid var(--acn-line); }
+.acn-tec-avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font-weight: 700; font-size: 13px; color: #fff; background: var(--acn-info); }
+.sem-cadastro .acn-tec-avatar { background: var(--acn-neutral); }
+body.dark .acn-tec-avatar { color: #0f172a; }
+.acn-tec-info { flex: 1; min-width: 0; }
+.acn-tec-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--acn-muted); }
+.acn-tec-contagem { display: flex; gap: 6px; align-items: center; flex-shrink: 0; color: var(--acn-muted); }
+.acn-tec-corpo { padding: 8px 12px 12px; background: var(--acn-surface-2); }
+.acn-tec-corpo .acn-quadro-titulo { margin: 8px 0 4px; }
+.acn-tec-corpo .acn-quadro-titulo:first-child { margin-top: 0; }
+/* tabela de dezenas de linhas dentro de um quadro aberto (as OPs de um técnico chegam a mais de cem): linha de 32px em vez de 44px */
+html body .acn-main table.acn-tabela.acn-compacta:not(.acn-tab-cartoes) td { height: 32px; padding: 4px 8px !important; }
+html body .acn-main table.acn-tabela.acn-compacta th { height: 28px; padding: 0 8px !important; }
+/* o número da OS / da OP numa linha só: no celular ele quebrava em "OS-", "ZZ-", "1" e a tabela rola de lado */
+html body .acn-main table.acn-tabela.acn-compacta td:first-child { white-space: nowrap; }
