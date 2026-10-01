@@ -11,18 +11,26 @@
 /** Região de comparação. Preferimos os 3 primeiros dígitos do CEP (mesorregião
  *  dos Correios) porque é bem mais preciso que o nome da cidade digitado à mão;
  *  sem CEP, cai pra cidade+UF normalizados. */
-export function regiaoDe(frete: any): string | null {
+/** CEP que serve para comparar: pelo menos 3 dígitos e não só zeros. Achado em 30/09/2026 (Etapa 7.12): 4 das 5 solicitações reais
+ *  tinham como CEP "0000000", "000", "0000" e "000000000" (a pessoa digitou zeros por não saber o CEP); todas viravam a região "000"
+ *  e o sistema sugeria juntar envios para SC, RO e ES numa carga só. CEP assim não diz nada: cai para o nome do destino. */
+function cepDeComparacao(frete: any): string {
   const cep = (frete?.cep_destino || '').replace(/\D/g, '');
-  if (cep.length >= 3) return 'cep:' + cep.slice(0, 3);
+  return cep.length >= 3 && !/^0+$/.test(cep) ? cep : '';
+}
+
+export function regiaoDe(frete: any): string | null {
+  const cep = cepDeComparacao(frete);
+  if (cep) return 'cep:' + cep.slice(0, 3);
   const destino = (frete?.destino || '').trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return destino ? 'destino:' + destino : null;
 }
 
 export function rotuloRegiao(frete: any): string {
-  const cep = (frete?.cep_destino || '').replace(/\D/g, '');
-  if (cep.length >= 3 && frete?.destino) return `${frete.destino} (CEP ${cep.slice(0,3)}xx)`;
-  if (cep.length >= 3) return `CEP ${cep.slice(0,3)}xx`;
+  const cep = cepDeComparacao(frete);
+  if (cep && frete?.destino) return `${frete.destino} (CEP ${cep.slice(0,3)}xx)`;
+  if (cep) return `CEP ${cep.slice(0,3)}xx`;
   return frete?.destino || 'Destino não informado';
 }
 

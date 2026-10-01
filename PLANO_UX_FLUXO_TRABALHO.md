@@ -1785,6 +1785,18 @@ Respondeu três perguntas minhas: (1) **é o apontamento que já existe, feito p
 
 **Fora:** a Etapa 1 continua válida para o que ela provou (o caminho novo, com `'op_os'`). Esta 7.11 só fecha o buraco dos 5 fretes antigos.
 
+### ✅ Etapa 7.12 — O "Aproveitamento de frete" sugeria juntar envios para destinos que nada têm a ver
+
+**Feito em:** 30/09/2026. **Achado** pela fotografia dos Fretes (12b3), com dado real: o cartão "Aproveitamento de frete" aparecia com **"NAI SEI / RO (CEP 000xx) — 4 envios, entregas entre 17/09 e 23/09, 1,92 kg"**, sugerindo **"Juntar numa carga"** quatro envios para **SC, RO e ES**.
+
+**Causa:** `AproveitamentoFrete.ts` compara a **região** pelos 3 primeiros dígitos do CEP de destino. Quatro das cinco solicitações reais têm como CEP **"0000000", "000", "0000" e "000000000"** — zeros que a pessoa digitou na tela de embalagem do Almoxarifado por não saber o CEP. Todos viravam a região "000" e entravam no mesmo grupo (as quatro com data prevista na mesma semana).
+
+**O que foi feito** (`AproveitamentoFrete.ts`, só a leitura; **nenhum dado foi alterado — 0 linhas**): CEP só de zeros (ou com menos de 3 dígitos) **deixa de contar como região** e a comparação cai para o **nome do destino**, que é o que o código já fazia para quem não tinha CEP. Vale para a região e para o rótulo do cartão. Quem **tem** CEP de verdade continua agrupando pelo CEP.
+
+**Testado** (`teste_31`, só leitura; dado real mais um cenário simulado só na leitura): **antes 2/5, depois 5/5.** Dado real: o cartão **deixa de aparecer** (as 5 solicitações têm destinos diferentes). Simulado: Curitiba (CEP 800xx, 2 envios na mesma semana) **continua sendo sugerido**; 2 envios para Itajaí/SC com CEP de zeros e o mesmo destino **são sugeridos pelo nome do destino**, sem "CEP 000xx"; o envio de Lages/SC (CEP de zeros, outro destino) **não entra** no grupo.
+
+**Fora / pendente:** (1) **a tela de embalagem do Almoxarifado continua aceitando CEP de zeros** (e cidade "NAI SEI", "NAO TEM"): a causa de origem é uma validação que não existe — decisão do usuário (ver "Perguntas em aberto"); (2) os CEPs dos 4 fretes reais **não foram corrigidos**.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2108,6 +2120,7 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **Os 6 cadastros já escondidos pela lixeira (7.9):** ADRIAN GABRIEL BATISTUTA, ALDO FABIAN BATISTUTA, ARILSON EUGENIO VIEIRA FILHO, JAIRO BORGES, LUCIANO SPINELLI e LUIZ CLAUDIO. Quais deles são desligados (e com que data e motivo)? Os outros voltam para a lista ou ficam escondidos?
 - **Valores ocultos que não estão ocultos (achado da correção da aprovação):** `ver_valores` está desligado no Admin para JAIRO BORGES, SERGIO DANIEL HAMANN, LUIZ ALBANEZ, MARLON DE AMORIM, MURIEL DOS REIS GOBEL e FERNANDO WAECHTER, mas a marca **nunca chega à sessão**, então **todos veem os valores**. Ligar a regra passa a **esconder valores** dessas 6 pessoas (inclui o Luiz Albanez, do Compras, que lida com cotação). Ligo? (`pode_deletar_anexos` tem o mesmo vício, mas ninguém está marcado.)
 - **Datas que podem estar um dia antes em outras telas (7.10):** 52 lugares usam `new Date(x).toLocaleDateString` sem hora; só os que recebem coluna **date** erram. Quer uma auditoria (só leitura, com a lista do que erra e do que está certo) antes de corrigir?
+- **CEP e cidade na embalagem (7.12):** a tela de embalagem do Almoxarifado aceita **CEP de zeros** e cidades como "NAI SEI" / "NAO TEM" quando a pessoa não sabe o destino (4 das 5 solicitações de frete reais). Quer que ela **exija um CEP válido** (8 dígitos, não zero) para a OP seguir para a cotação do frete, ou prefere deixar livre e só o aproveitamento ignorar? Hoje só o aproveitamento ignora.
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
@@ -2169,3 +2182,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Etapa 12b (Logística) dividida em três fatias** — 12b1 (abas + Aguardando Recebimento + Relatório IN/OUT + janela "Receber Pedido"), 12b2 (Histórico / Novo Registro) e 12b3 (Fretes) — porque a tela tem 2.174 linhas e 31 pontos de gravação (22 só nos Fretes); cada uma sobe sozinha. **Tela que grava é provada comparando o corpo do que seria gravado, nas duas versões.** A janela "Receber Pedido" é **compartilhada com o Compras**: migrar uma migra a outra. Suposições minhas, não confirmadas: o tipo do manifesto passa a usar o `Selo` por família; os números por tipo deixam de ser coloridos. |
 | 30/09/2026 | **Largura das tabelas é critério de aceite da migração (achado na 12b2):** com o dado real, a 1400 px, a tabela migrada tem de **caber no quadro (1.102 px úteis) como a antiga cabia**; o design system engorda células e botões, e uma linha com texto sem espaço (uma URL colada) trava a coluna. A solução é classe opt-in no `design.css` (`acn-densa`, `acn-texto-medio` / `acn-texto-curto`, `acn-acoes-linha quebra`), não estilo solto na tela. A 12b1, já publicada, tinha o mesmo defeito no Relatório IN/OUT e foi corrigida junto. Suposições minhas, não confirmadas: recuo lateral de 7 px e botão "N foto(s)" sem ícone, só nas tabelas da Logística. |
 | 30/09/2026 | **Fretes antigos (7.11):** a entrega do frete reconhece o vínculo de OP pelos **dois nomes** (`op_os`, o atual, e `opl`, o de antes da Etapa 1), **sem migrar as 5 linhas reais** — correção só de código, no espírito do princípio 4 (o código tolera as duas grafias). Suposição minha, não confirmada: não é preciso mexer no dado. |
+| 30/09/2026 | **Aproveitamento de frete (7.12):** CEP só de zeros não vale como região — a comparação cai para o nome do destino; correção só de leitura, sem mexer nos CEPs gravados. Suposição minha, não confirmada: o sistema não deve tentar adivinhar a região de um CEP inválido. |
