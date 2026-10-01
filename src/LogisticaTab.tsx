@@ -8,8 +8,9 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
 import { creditarCompraRecebida, fmtQtd } from './Estoque';
-import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa } from './Interface';
-import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose } from '@mdi/js';
+import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa, Tag } from './Interface';
+import Icone from './Icone';
+import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline, mdiPlus, mdiEyeOutline, mdiFilePdfBox, mdiImagePlusOutline, mdiClose, mdiTrashCanOutline, mdiContentSaveOutline, mdiLinkVariant, mdiLightbulbOnOutline, mdiMapMarkerOutline, mdiTruckFastOutline, mdiTrayArrowUp, mdiTagOutline, mdiPaperclip, mdiClockOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
@@ -198,11 +199,8 @@ async function uploadArquivoFrete(file: File, pasta: string): Promise<{ url: str
   return { url: pub.publicUrl, nome: file.name };
 }
 
-const btn: React.CSSProperties = {padding:'5px 9px',border:'none',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer'};
-
-const COR_FRETE: Record<string,string> = {
-  'Cotação':'#94a3b8', 'Aguardando Aprovação':'#ea580c', 'Em Trânsito':'#3b82f6', 'Entregue':'#22c55e', 'Cancelado':'#ef4444',
-};
+// Etapa 12b3 (01/10/2026): a cor do status do frete vem do Selo (uma cor por família, igual às outras telas); o objeto de cores
+// à mão e o estilo dos botões da tabela saíram.
 
 // ─── Autocomplete de OP/OS — vínculo do frete a um processo (mesmo padrão de
 // OplAutocomplete em FormacaoPrecosTab.tsx) ──────────────────────────────────
@@ -239,22 +237,20 @@ function OplAutocompleteFrete({ value, onSelect }: any) {
   };
 
   return (
-    <div style={{ position:'relative' }}>
-      <input className="acn-input" style={{ width:'100%' }}
+    <div className="acn-sugestao">
+      <input className="acn-input"
         placeholder="Buscar OP/OS por número ou cliente..."
         value={query}
         onChange={e => buscar(e.target.value)}
         onFocus={() => resultados.length > 0 && setAberto(true)}
         onBlur={() => setTimeout(() => setAberto(false), 180)} />
       {aberto && (
-        <div style={{ position:'absolute', zIndex:20, top:'100%', left:0, right:0, background:'#fff',
-          border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 4px 12px #0002', maxHeight:220, overflowY:'auto' }}>
-          {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Buscando...</div>}
-          {!buscando && resultados.length === 0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Nada encontrado.</div>}
+        <div className="acn-sugestao-lista">
+          {buscando && <div className="acn-sugestao-vazio">Buscando...</div>}
+          {!buscando && resultados.length === 0 && <div className="acn-sugestao-vazio">Nada encontrado.</div>}
           {resultados.map(o => (
-            <div key={o.id} onMouseDown={() => selecionar(o)}
-              style={{ padding:'6px 10px', fontSize:10, cursor:'pointer', borderBottom:'1px solid #f1f5f9' }}>
-              <strong>{o.opl}</strong> — {o.cliente_nome} <span style={{ color:'#94a3b8' }}>({o.status_geral})</span>
+            <div key={o.id} className="acn-sugestao-item" onMouseDown={() => selecionar(o)}>
+              <strong>{o.opl}</strong> — {o.cliente_nome} <span className="acn-fraco">({o.status_geral})</span>
             </div>
           ))}
         </div>
@@ -297,22 +293,20 @@ function LicitacaoAutocompleteFrete({ value, onSelect }: any) {
   };
 
   return (
-    <div style={{ position:'relative' }}>
-      <input className="acn-input" style={{ width:'100%' }}
+    <div className="acn-sugestao">
+      <input className="acn-input"
         placeholder="Buscar licitação por número ou nome do projeto..."
         value={query}
         onChange={e => buscar(e.target.value)}
         onFocus={() => resultados.length > 0 && setAberto(true)}
         onBlur={() => setTimeout(() => setAberto(false), 180)} />
       {aberto && (
-        <div style={{ position:'absolute', zIndex:20, top:'100%', left:0, right:0, background:'#fff',
-          border:'1px solid #e2e8f0', borderRadius:6, boxShadow:'0 4px 12px #0002', maxHeight:220, overflowY:'auto' }}>
-          {buscando && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Buscando...</div>}
-          {!buscando && resultados.length === 0 && <div style={{ padding:8, fontSize:10, color:'#94a3b8' }}>Nada encontrado.</div>}
+        <div className="acn-sugestao-lista">
+          {buscando && <div className="acn-sugestao-vazio">Buscando...</div>}
+          {!buscando && resultados.length === 0 && <div className="acn-sugestao-vazio">Nada encontrado.</div>}
           {resultados.map(l => (
-            <div key={l.id} onMouseDown={() => selecionar(l)}
-              style={{ padding:'6px 10px', fontSize:10, cursor:'pointer', borderBottom:'1px solid #f1f5f9' }}>
-              <strong>{l.numero}</strong> — {l.nome_projeto} <span style={{ color:'#94a3b8' }}>({l.orgao})</span>
+            <div key={l.id} className="acn-sugestao-item" onMouseDown={() => selecionar(l)}>
+              <strong>{l.numero}</strong> — {l.nome_projeto} <span className="acn-fraco">({l.orgao})</span>
             </div>
           ))}
         </div>
@@ -830,42 +824,40 @@ function FretesPanel({ currentUser }: any) {
         de fora de propósito: sem data não dá pra afirmar que é o mesmo período,
         e sugerir junção errada sai mais caro que não sugerir. */}
     {aproveitamentos.length > 0 && (
-      <div className="sec-card" style={{ border:'2px solid #f59e0b', marginBottom:12 }}>
-        <div className="sec-hdr" style={{ background:'#fffbeb', borderBottom:'2px solid #f59e0b' }}>
-          <span style={{ color:'#78350f', fontWeight:800 }}>
-            💡 Aproveitamento de frete — {aproveitamentos.length} oportunidade(s)
+      <div className="sec-card acn-aprov">
+        <div className="sec-hdr">
+          <span className="acn-aprov-titulo-cab">
+            <Icone path={mdiLightbulbOnOutline} size={16} /> Aproveitamento de frete — {aproveitamentos.length} oportunidade(s)
           </span>
-          <span style={{ fontSize:10, color:'#92400e' }}>
+          <span className="acn-aprov-janela">
             Mesma região, entrega em até{' '}
-            <select value={janelaDias} onChange={e=>setJanelaDias(Number(e.target.value))}
-              style={{ fontSize:10, padding:'1px 4px', borderRadius:4, border:'1px solid #fcd34d' }}>
+            <select className="acn-input acn-select-mini" value={janelaDias} onChange={e=>setJanelaDias(Number(e.target.value))}>
               <option value={7}>7 dias (mesma semana)</option>
               <option value={15}>15 dias</option>
               <option value={30}>30 dias</option>
             </select>
           </span>
         </div>
-        <div className="sec-body" style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        <div className="sec-body acn-aprov-corpo">
           {aproveitamentos.map(g => (
-            <div key={g.chave} style={{ background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:6, padding:'8px 12px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+            <div key={g.chave} className="acn-aprov-grupo">
+              <div className="acn-aprov-topo">
                 <div>
-                  <div style={{ fontWeight:800, fontSize:12, color:'#78350f' }}>
-                    📍 {g.regiao} — {g.fretes.length} envios
+                  <div className="acn-aprov-titulo">
+                    <Icone path={mdiMapMarkerOutline} size={16} /> {g.regiao} — {g.fretes.length} envios
                   </div>
-                  <div style={{ fontSize:10, color:'#92400e', marginTop:2 }}>
+                  <div className="acn-aprov-sub">
                     Entregas entre {fmtBR(g.dataMin)} e {fmtBR(g.dataMax)} · {g.pesoTotal} kg · {g.volumesTotal} volume(s)
                   </div>
                 </div>
-                <button className="acn-btn" style={{ background:'#d97706' }}
+                <Botao variante="primario" pequeno icone={mdiTruckFastOutline}
                   disabled={juntando === g.chave} onClick={()=>juntarGrupo(g)}>
-                  {juntando === g.chave ? 'Agrupando...' : '🚛 Juntar numa carga'}
-                </button>
+                  {juntando === g.chave ? 'Agrupando...' : 'Juntar numa carga'}
+                </Botao>
               </div>
-              <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:3 }}>
+              <div className="acn-aprov-itens">
                 {g.fretes.map((f:any) => (
-                  <div key={f.id} style={{ fontSize:10, color:'#78350f', background:'#fff',
-                    border:'1px solid #fde68a', borderRadius:4, padding:'3px 8px' }}>
+                  <div key={f.id} className="acn-aprov-item">
                     {f.descricao} · prev. {fmtBR(f.data_prevista)}
                     {f.peso_total ? ` · ${f.peso_total} kg` : ''}
                   </div>
@@ -879,53 +871,53 @@ function FretesPanel({ currentUser }: any) {
 
     <div className="sec-card">
       <div className="sec-hdr">
-        <span>🚚 Fretes — Cotação de Transportadoras e Acompanhamento até Entrega</span>
+        <span>Fretes — Cotação de Transportadoras e Acompanhamento até Entrega</span>
         {!showForm && (
-          <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setForm({...VAZIO_FRETE});setShowForm(true);}}>
-            + Novo Frete
-          </button>
+          <Botao variante="primario" icone={mdiPlus} onClick={()=>{setForm({...VAZIO_FRETE});setShowForm(true);}}>
+            Novo Frete
+          </Botao>
         )}
       </div>
 
       {showForm && (
-        <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,margin:'10px 0'}}>
+        <div className="sec-body acn-form-cheio">
           <div className="form-row">
             <div className="form-group">
               <label className="acn-label">Direção</label>
-              <select className="acn-input" style={{width:'100%'}} value={form.direcao}
+              <select className="acn-input" value={form.direcao}
                 onChange={e=>setForm({...form,direcao:e.target.value})}>
                 <option value="inbound">Inbound (chegando na ACN)</option>
                 <option value="outbound">Outbound (saindo da ACN)</option>
               </select>
             </div>
-            <div style={{flex:2}}>
+            <div className="form-group acn-campo-largo">
               <label className="acn-label">Descrição *</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.descricao}
+              <input className="acn-input" value={form.descricao}
                 onChange={e=>setForm({...form,descricao:e.target.value})} placeholder="O que está sendo transportado" />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="acn-label">Origem</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.origem}
+              <input className="acn-input" value={form.origem}
                 onChange={e=>setForm({...form,origem:e.target.value})} />
             </div>
             <div className="form-group">
               <label className="acn-label">Destino</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.destino}
+              <input className="acn-input" value={form.destino}
                 onChange={e=>setForm({...form,destino:e.target.value})} />
             </div>
             <div className="form-group">
               <label className="acn-label">Data Prevista</label>
-              <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_prevista}
+              <input type="date" className="acn-input" value={form.data_prevista}
                 onChange={e=>setForm({...form,data_prevista:e.target.value})} />
             </div>
           </div>
           {pedidosCompra.length > 0 && (
             <div className="form-row">
-              <div style={{flex:1}}>
+              <div className="form-group">
                 <label className="acn-label">Vincular Pedido de Compra (opcional)</label>
-                <select className="acn-input" style={{width:'100%'}} value={form.pedido_compra_id}
+                <select className="acn-input" value={form.pedido_compra_id}
                   onChange={e=>setForm({...form,pedido_compra_id:e.target.value})}>
                   <option value="">— Não vincular —</option>
                   {pedidosCompra.map((p:any) => (
@@ -939,24 +931,15 @@ function FretesPanel({ currentUser }: any) {
           )}
 
           {/* ── MOTIVO DA COTAÇÃO — texto livre (Descrição acima) ou vínculo a um processo ── */}
-          <div style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:6,padding:10,marginTop:8}}>
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>🔗 Motivo da Cotação — vincular a um processo (opcional)</div>
-            <div style={{display:'flex',gap:6,marginBottom:8}}>
-              {[
-                {v:null,        label:'Só texto livre'},
-                {v:'op_os',     label:'🔗 Vincular a OP/OS'},
-                {v:'licitacao', label:'🔗 Vincular a Licitação'},
-              ].map(opt => (
-                <button key={String(opt.v)} type="button"
-                  onClick={()=>setForm({...form, vinculo_tipo: opt.v, vinculo_id:null, vinculo_desc:''})}
-                  style={{padding:'4px 10px',fontSize:10,fontWeight:700,borderRadius:20,cursor:'pointer',
-                    border: form.vinculo_tipo===opt.v ? '1.5px solid #1e293b' : '1px solid #e2e8f0',
-                    background: form.vinculo_tipo===opt.v ? '#1e293b' : '#f8fafc',
-                    color: form.vinculo_tipo===opt.v ? '#fff' : '#64748b'}}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">Motivo da Cotação — vincular a um processo (opcional)</div>
+            <Chips rotulo="Vínculo da cotação" ativo={form.vinculo_tipo || 'livre'}
+              onChange={id => setForm({...form, vinculo_tipo: id === 'livre' ? null : id, vinculo_id:null, vinculo_desc:''})}
+              itens={[
+                { id: 'livre',     rotulo: 'Só texto livre' },
+                { id: 'op_os',     rotulo: 'Vincular a OP/OS',       icone: mdiLinkVariant },
+                { id: 'licitacao', rotulo: 'Vincular a Licitação',   icone: mdiLinkVariant },
+              ]} />
             {form.vinculo_tipo === 'op_os' && (
               <OplAutocompleteFrete value={form.vinculo_desc}
                 onSelect={(o:any)=> o
@@ -970,147 +953,145 @@ function FretesPanel({ currentUser }: any) {
                   : setForm({...form, vinculo_id:null, vinculo_desc:''})} />
             )}
             {form.vinculo_id && (
-              <div style={{fontSize:9,color:'#16a34a',marginTop:4}}>✓ Vinculado: {form.vinculo_desc}</div>
+              <div className="acn-vinculado"><Icone path={mdiCheck} size={14} /> Vinculado: {form.vinculo_desc}</div>
             )}
           </div>
 
           {/* ── DADOS DO TRANSPORTE ── */}
-          <div style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:6,padding:10,marginTop:8}}>
-            <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6}}>📋 Dados do Transporte</div>
+          <div className="acn-quadro">
+            <div className="acn-quadro-titulo">Dados do Transporte</div>
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">CNPJ/CPF Pagador</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.cnpj_cpf_pagador}
+                <input className="acn-input" value={form.cnpj_cpf_pagador}
                   onChange={e=>setForm({...form,cnpj_cpf_pagador:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">CEP Origem</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.cep_origem}
+                <input className="acn-input" value={form.cep_origem}
                   onChange={e=>setForm({...form,cep_origem:e.target.value})} placeholder="00000-000" />
               </div>
               <div className="form-group">
                 <label className="acn-label">CEP Destino</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.cep_destino}
+                <input className="acn-input" value={form.cep_destino}
                   onChange={e=>setForm({...form,cep_destino:e.target.value})} placeholder="00000-000" />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">CNPJ/CPF Remetente</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.cnpj_cpf_remetente}
+                <input className="acn-input" value={form.cnpj_cpf_remetente}
                   onChange={e=>setForm({...form,cnpj_cpf_remetente:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">CNPJ/CPF Destinatário</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.cnpj_cpf_destinatario}
+                <input className="acn-input" value={form.cnpj_cpf_destinatario}
                   onChange={e=>setForm({...form,cnpj_cpf_destinatario:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Valor da Nota (R$)</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.valor_nota}
+                <input className="acn-input" value={form.valor_nota}
                   onChange={e=>setForm({...form,valor_nota:e.target.value})} placeholder="Ex: 1500,00" />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">Quant. de Volumes</label>
-                <input type="number" className="acn-input" style={{width:'100%'}} value={form.quantidade_volumes}
+                <input type="number" className="acn-input" value={form.quantidade_volumes}
                   onChange={e=>setForm({...form,quantidade_volumes:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Peso Total (kg)</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.peso_total}
+                <input className="acn-input" value={form.peso_total}
                   onChange={e=>setForm({...form,peso_total:e.target.value})} placeholder="Ex: 12,5" />
               </div>
               <div className="form-group">
                 <label className="acn-label">Altura (m)</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.medida_altura}
+                <input className="acn-input" value={form.medida_altura}
                   onChange={e=>setForm({...form,medida_altura:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Largura (m)</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.medida_largura}
+                <input className="acn-input" value={form.medida_largura}
                   onChange={e=>setForm({...form,medida_largura:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Comprimento (m)</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.medida_comprimento}
+                <input className="acn-input" value={form.medida_comprimento}
                   onChange={e=>setForm({...form,medida_comprimento:e.target.value})} />
               </div>
             </div>
           </div>
 
-          <div style={{display:'flex',gap:8,marginTop:8}}>
-            <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={criarFrete} disabled={salvandoFrete}>
-              {salvandoFrete?'Salvando...':'💾 Registrar Frete'}
-            </button>
-            <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setShowForm(false)}>Cancelar</button>
+          <div className="acn-modal-acoes">
+            <Botao variante="primario" className="cresce" icone={mdiContentSaveOutline} onClick={criarFrete} disabled={salvandoFrete}>
+              {salvandoFrete?'Salvando...':'Registrar Frete'}
+            </Botao>
+            <Botao onClick={()=>setShowForm(false)}>Cancelar</Botao>
           </div>
         </div>
       )}
 
-      {loading ? <div style={{textAlign:'center',padding:30,color:'#9ca3af'}}>Carregando...</div>
-        : fretes.length===0 ? <div style={{textAlign:'center',padding:30,color:'#9ca3af',fontSize:12}}>Nenhum frete registrado.</div>
+      {loading ? <div className="acn-empty">Carregando...</div>
+        : fretes.length===0 ? <div className="acn-empty">Nenhum frete registrado.</div>
         : (
-        <div style={{overflowX:'auto',marginTop:10}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+        <div className="sec-body acn-rolagem">
+          <table className="acn-tabela acn-densa">
             <thead>
-              <tr style={{background:'#f1f5f9',borderBottom:'2px solid #e2e8f0'}}>
+              <tr>
                 {['Direção','Descrição','Transportadora','Valor','Status','Datas','Ações'].map(h=>(
-                  <th key={h} style={{padding:'8px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:'#475569'}}>{h}</th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {fretes.map((f:any) => (
-                <tr key={f.id} style={fretesNaoLidos.has(String(f.id))
-                  ? {borderBottom:'1px solid #f1f5f9',background:'#fffdf0',boxShadow:'inset 3px 0 0 #eab308'}
-                  : {borderBottom:'1px solid #f1f5f9'}}>
-                  <td style={{padding:'9px 10px'}}>{f.direcao==='outbound' ? '📤 Outbound' : '📥 Inbound'}</td>
-                  <td style={{ padding:'9px 10px', maxWidth:160, wordBreak:'break-word' }}>
+                <tr key={f.id} className={fretesNaoLidos.has(String(f.id)) ? 'acn-linha-nova' : undefined}>
+                  <td>
+                    <span className="acn-direcao">
+                      <Icone path={f.direcao==='outbound' ? mdiTrayArrowUp : mdiTrayArrowDown} size={15} />
+                      {f.direcao==='outbound' ? 'Outbound' : 'Inbound'}
+                    </span>
+                  </td>
+                  <td className="acn-texto-longo acn-texto-medio">
                     {f.descricao}
                     {/* quem for cotar precisa saber que este envio vai junto com outros */}
                     {f.grupo_envio_id && (
-                      <div style={{ marginTop:3, display:'flex', alignItems:'center', gap:4, flexWrap:'wrap' }}>
-                        <span title={f.grupo_envio_obs || 'Agrupado com outros envios'}
-                          style={{ fontSize:8, fontWeight:800, background:'#fef3c7', color:'#92400e',
-                            border:'1px solid #fcd34d', borderRadius:3, padding:'1px 5px' }}>
-                          🚛 CARGA AGRUPADA
-                        </span>
-                        <button onClick={()=>desfazerGrupo(f.grupo_envio_id)}
-                          title="Desfazer agrupamento"
-                          style={{ fontSize:8, background:'none', border:'none', color:'#92400e', cursor:'pointer', textDecoration:'underline', padding:0 }}>
+                      <div className="acn-selos acn-agrupado">
+                        <Tag title={f.grupo_envio_obs || 'Agrupado com outros envios'}>Carga agrupada</Tag>
+                        <Botao pequeno variante="discreto" title="Desfazer agrupamento" onClick={()=>desfazerGrupo(f.grupo_envio_id)}>
                           desfazer
-                        </button>
+                        </Botao>
                       </div>
                     )}
                   </td>
-                  <td style={{padding:'9px 10px'}}>
+                  <td>
                     {f.transportadora || '—'}
                     {f.transportadora && (f.numero_cte || f.codigo_rastreio) && (
-                      <div style={{fontSize:9,color:'#0891b2',marginTop:1}}>
-                        {f.numero_cte && '📄 CT-e'}{f.numero_cte && f.codigo_rastreio && ' · '}{f.codigo_rastreio && '📦 rastreio'}
+                      <div className="acn-sub-info">
+                        {f.numero_cte && 'CT-e'}{f.numero_cte && f.codigo_rastreio && ' · '}{f.codigo_rastreio && 'rastreio'}
                       </div>
                     )}
                   </td>
-                  <td style={{padding:'9px 10px'}}>{fmt(f.valor_frete)}</td>
-                  <td style={{padding:'9px 10px'}}>
-                    <span style={{padding:'3px 9px',borderRadius:4,color:'#fff',fontSize:10,fontWeight:700,background:COR_FRETE[f.status]||'#9ca3af'}}>
-                      {f.status}
-                    </span>
-                  </td>
-                  <td style={{padding:'9px 10px',fontSize:10,color:'#64748b'}}>
+                  <td className="acn-num">{fmt(f.valor_frete)}</td>
+                  <td><Selo status={f.status} /></td>
+                  <td className="acn-fraco">
                     {f.data_prevista && <div>Prev: {fmtDt(f.data_prevista)}</div>}
                     {f.data_coleta && <div>Coleta: {fmtDtHr(f.data_coleta)}</div>}
                     {f.data_entrega && <div>Entrega: {fmtDtHr(f.data_entrega)}</div>}
                   </td>
-                  <td style={{padding:'9px 10px',whiteSpace:'nowrap'}}>
-                    <button onClick={()=>abrirModalFrete(f)} style={{...btn,background:'#0891b2',marginRight:3}}>
-                      {f.status==='Cotação' ? '🏷️ Cotações' : f.status==='Em Trânsito' ? '📎 Canhoto' : '👁️ Ver'}
-                    </button>
-                    {(f.status==='Cotação' || f.status==='Em Trânsito') && (
-                      <button onClick={()=>cancelarFrete(f)} style={{...btn,background:'#ef4444'}}>✕</button>
-                    )}
+                  <td>
+                    <div className="acn-acoes-linha quebra">
+                      <Botao pequeno variante={f.status==='Cotação' ? 'primario' : 'secundario'}
+                        icone={f.status==='Cotação' ? mdiTagOutline : f.status==='Em Trânsito' ? mdiPaperclip : mdiEyeOutline}
+                        onClick={()=>abrirModalFrete(f)}>
+                        {f.status==='Cotação' ? 'Cotações' : f.status==='Em Trânsito' ? 'Canhoto' : 'Ver'}
+                      </Botao>
+                      {(f.status==='Cotação' || f.status==='Em Trânsito') && (
+                        <Botao pequeno variante="perigo-sec" icone={mdiClose} title="Cancelar frete" aria-label="Cancelar frete"
+                          onClick={()=>cancelarFrete(f)} />
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1122,23 +1103,23 @@ function FretesPanel({ currentUser }: any) {
       {/* MODAL GERENCIAR FRETE */}
       {modalFrete && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)fecharModalFrete();}}>
-          <div className="modal-box" style={{maxWidth:640}}>
-            <div className="modal-title">🚚 Frete — {modalFrete.descricao}</div>
-            <div style={{fontSize:10,color:'#64748b',marginBottom:8}}>
+          <div className="modal-box acn-modal-frete acn-form-cheio">
+            <div className="modal-title">Frete — {modalFrete.descricao}</div>
+            <div className="acn-modal-sub">
               {modalFrete.origem || '—'} → {modalFrete.destino || '—'}
               {modalFrete.status==='Cotação' && ' · recomendado 3 cotações, mas pode confirmar com menos quando não houver 3 transportadoras disponíveis.'}
             </div>
 
             {modalFrete.vinculo_desc && (
-              <div style={{fontSize:9,color:'#1e40af',background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:4,padding:'4px 8px',marginBottom:8}}>
-                🔗 Vinculado a {modalFrete.vinculo_tipo==='licitacao'?'Licitação':'OP/OS'}: {modalFrete.vinculo_desc}
-              </div>
+              <Faixa tom="info" icone={mdiLinkVariant}>
+                Vinculado a {modalFrete.vinculo_tipo==='licitacao'?'Licitação':'OP/OS'}: {modalFrete.vinculo_desc}
+              </Faixa>
             )}
 
             {(modalFrete.cnpj_cpf_pagador || modalFrete.cep_origem || modalFrete.cep_destino || modalFrete.cnpj_cpf_remetente ||
               modalFrete.cnpj_cpf_destinatario || modalFrete.valor_nota || modalFrete.quantidade_volumes || modalFrete.peso_total ||
               modalFrete.medida_altura || modalFrete.medida_largura || modalFrete.medida_comprimento) && (
-              <div style={{fontSize:9,color:'#475569',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:'6px 8px',marginBottom:12,display:'grid',gridTemplateColumns:'1fr 1fr',gap:'2px 10px'}}>
+              <div className="acn-quadro acn-dados-grade">
                 {modalFrete.cnpj_cpf_pagador && <div><strong>Pagador:</strong> {modalFrete.cnpj_cpf_pagador}</div>}
                 {(modalFrete.cep_origem || modalFrete.cep_destino) && <div><strong>CEP:</strong> {modalFrete.cep_origem||'—'} → {modalFrete.cep_destino||'—'}</div>}
                 {modalFrete.cnpj_cpf_remetente && <div><strong>Remetente:</strong> {modalFrete.cnpj_cpf_remetente}</div>}
@@ -1154,90 +1135,86 @@ function FretesPanel({ currentUser }: any) {
 
             {modalFrete.status === 'Cotação' && (<>
               {loadingCotacoes ? (
-                <div style={{textAlign:'center',padding:20,color:'#9ca3af',fontSize:11}}>Carregando...</div>
+                <div className="acn-empty">Carregando...</div>
               ) : (
-                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14,maxHeight:220,overflowY:'auto'}}>
+                <div className="acn-cotacoes">
                   {cotacoes.length===0 && (
-                    <div style={{textAlign:'center',color:'#9ca3af',fontSize:11,padding:14}}>Nenhuma cotação registrada ainda.</div>
+                    <div className="acn-empty">Nenhuma cotação registrada ainda.</div>
                   )}
                   {cotacoes.map((c:any) => (
-                    <label key={c.id} style={{
-                      display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:6,cursor:'pointer',
-                      border: vencedoraId===c.id ? '2px solid #16a34a' : '1.5px solid #e2e8f0',
-                      background: vencedoraId===c.id ? '#f0fdf4' : '#fff',
-                    }}>
+                    <label key={c.id} className={'acn-cotacao' + (vencedoraId===c.id ? ' on' : '')}>
                       <input type="radio" name="vencedoraFrete" checked={vencedoraId===c.id} onChange={()=>setVencedoraId(c.id)} />
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:11,fontWeight:700,color:'#1e293b'}}>
+                      <div className="acn-cotacao-corpo">
+                        <div className="acn-cotacao-nome">
                           {c.transportadora_nome}
-                          {vencedoraId===c.id && <span style={{marginLeft:6,color:'#16a34a',fontSize:9,fontWeight:700}}>✓ VENCEDORA</span>}
+                          {vencedoraId===c.id && <Selo familia="ok" ponto={false}>Vencedora</Selo>}
                         </div>
-                        <div style={{fontSize:9,color:'#64748b',marginTop:2}}>
+                        <div className="acn-cotacao-sub">
                           {c.valor ? fmt(c.valor) : '—'}
                           {c.condicao_pagamento ? ` · ${c.condicao_pagamento}` : ''}
                           {c.prazo_entrega ? ` · prazo: ${c.prazo_entrega}` : ''}
                         </div>
                         {c.anexo_url && (
-                          <a href={c.anexo_url} target="_blank" rel="noreferrer" style={{fontSize:9,color:'#2563eb'}}>📎 {c.anexo_nome}</a>
+                          <a className="acn-link-icone" href={c.anexo_url} target="_blank" rel="noreferrer"><Icone path={mdiPaperclip} size={13} /> {c.anexo_nome}</a>
                         )}
                       </div>
-                      <button onClick={(e)=>{e.preventDefault();excluirCotacao(c.id);}} title="Remover"
-                        style={{...btn,background:'#ef4444',padding:'2px 7px',fontSize:9}}>🗑️</button>
+                      <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} title="Remover" aria-label="Remover cotação"
+                        onClick={(e)=>{e.preventDefault();excluirCotacao(c.id);}} />
                     </label>
                   ))}
                 </div>
               )}
 
-              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>+ Nova Cotação de Transportadora</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+              <div className="acn-quadro">
+                <div className="acn-quadro-titulo">Nova Cotação de Transportadora</div>
+                <div className="acn-grade-2">
                   <div>
                     <label className="acn-label">Transportadora *</label>
-                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.transportadora_nome}
+                    <input className="acn-input" value={novaCotacao.transportadora_nome}
                       onChange={e=>setNovaCotacao(f=>({...f,transportadora_nome:e.target.value}))} />
                   </div>
                   <div>
                     <label className="acn-label">Valor (R$) *</label>
-                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.valor}
+                    <input className="acn-input" value={novaCotacao.valor}
                       placeholder="Ex: 350,00"
                       onChange={e=>setNovaCotacao(f=>({...f,valor:e.target.value}))} />
                   </div>
                   <div>
                     <label className="acn-label">Condição de Pagamento</label>
-                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.condicao_pagamento}
+                    <input className="acn-input" value={novaCotacao.condicao_pagamento}
                       onChange={e=>setNovaCotacao(f=>({...f,condicao_pagamento:e.target.value}))} />
                   </div>
                   <div>
                     <label className="acn-label">Prazo de Entrega</label>
-                    <input className="acn-input" style={{width:'100%'}} value={novaCotacao.prazo_entrega}
+                    <input className="acn-input" value={novaCotacao.prazo_entrega}
                       placeholder="Ex: 3 dias úteis"
                       onChange={e=>setNovaCotacao(f=>({...f,prazo_entrega:e.target.value}))} />
                   </div>
                 </div>
-                <div style={{marginBottom:8}}>
+                <div>
                   <label className="acn-label">Anexo (PDF ou imagem)</label>
                   <input type="file" accept=".pdf,.png,.jpg,.jpeg"
                     onChange={e=>setNovoAnexoCotacao(e.target.files?.[0]||null)} />
                 </div>
-                <button className="acn-btn" style={{background:'#d97706',width:'100%'}} onClick={adicionarCotacao} disabled={enviandoCotacao}>
-                  {enviandoCotacao?'Enviando...':'+ Adicionar Cotação'}
-                </button>
+                <Botao variante="primario" icone={mdiPlus} className="acn-botao-cheio" onClick={adicionarCotacao} disabled={enviandoCotacao}>
+                  {enviandoCotacao?'Enviando...':'Adicionar Cotação'}
+                </Botao>
               </div>
 
               {cotacoes.length >= 1 && (
-                <div style={{marginBottom:14}}>
+                <div className="acn-modal-campo">
                   <label className="acn-label">Justificativa da cotação vencedora *</label>
-                  <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}}
+                  <textarea className="acn-input" rows={2}
                     value={justificativa} onChange={e=>setJustificativa(e.target.value)}
                     placeholder="Ex: Melhor prazo, apesar de não ser o menor valor..." />
                 </div>
               )}
 
-              <div style={{display:'flex',gap:8}}>
-                <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={confirmarFreteComVencedora} disabled={confirmando}>
-                  {confirmando?'Confirmando...':'✅ Confirmar Transportadora'}
-                </button>
-                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>fecharModalFrete()}>Fechar</button>
+              <div className="acn-modal-acoes">
+                <Botao variante="primario" className="cresce" icone={mdiCheck} onClick={confirmarFreteComVencedora} disabled={confirmando}>
+                  {confirmando?'Confirmando...':'Confirmar Transportadora'}
+                </Botao>
+                <Botao onClick={()=>fecharModalFrete()}>Fechar</Botao>
               </div>
             </>)}
 
@@ -1245,105 +1222,103 @@ function FretesPanel({ currentUser }: any) {
               const nivelAtivo = aprovacoesFrete.find(a => a.status === 'pendente');
               const historico  = aprovacoesFrete.filter(a => a.status !== 'pendente');
               return (<>
-                <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>
+                <div className="acn-quadro tom-atencao acn-resumo">
                   <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
                   <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
                   <div><strong>Justificativa:</strong> {modalFrete.justificativa_vencedora}</div>
                 </div>
-                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>✅ Níveis de Aprovação</div>
-                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:14}}>
+                <div className="acn-quadro-titulo acn-titulo-solto">Níveis de Aprovação</div>
+                <div className="acn-lista-niveis">
                   {historico.map(a => (
-                    <div key={a.id} style={{padding:'8px 10px',borderRadius:6,fontSize:10,
-                      background: a.status==='aprovado' ? '#f0fdf4' : '#fef2f2',
-                      border: `1px solid ${a.status==='aprovado' ? '#86efac' : '#fca5a5'}`}}>
-                      <strong>Nível {a.nivel} — {a.nivel_nome}</strong>: {a.status==='aprovado' ? '✅ Aprovado' : a.status==='rejeitado' ? '❌ Rejeitado' : a.status}
-                      {a.respondido_por_nome && <span style={{color:'#64748b'}}> por {a.respondido_por_nome}</span>}
-                      {a.resposta && <div style={{color:'#64748b',marginTop:2}}>Motivo: {a.resposta}</div>}
+                    <div key={a.id} className={'acn-nivel ' + (a.status==='aprovado' ? 'tom-ok' : 'tom-erro')}>
+                      <strong>Nível {a.nivel} — {a.nivel_nome}</strong>: {a.status==='aprovado' ? <Selo familia="ok">Aprovado</Selo> : a.status==='rejeitado' ? <Selo familia="erro">Rejeitado</Selo> : a.status}
+                      {a.respondido_por_nome && <span className="acn-fraco"> por {a.respondido_por_nome}</span>}
+                      {a.resposta && <div className="acn-fraco">Motivo: {a.resposta}</div>}
                     </div>
                   ))}
                   {nivelAtivo && (
-                    <div style={{padding:'8px 10px',borderRadius:6,fontSize:10,background:'#fff7ed',border:'1.5px solid #f59e0b'}}>
-                      <strong>Nível {nivelAtivo.nivel} — {nivelAtivo.nivel_nome}</strong>: ⏳ Aguardando aprovação de{' '}
+                    <Faixa tom="atencao" icone={mdiClockOutline}>
+                      <strong>Nível {nivelAtivo.nivel} — {nivelAtivo.nivel_nome}</strong>: Aguardando aprovação de{' '}
                       {(alcadasFrete.find(a=>a.nivel===nivelAtivo.nivel)?.perfis_aprovadores||[]).join(', ') || '—'}
-                    </div>
+                    </Faixa>
                   )}
                 </div>
                 {nivelAtivo && (
-                  <div style={{display:'flex',gap:8}}>
-                    <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={aprovarNivelFreteAtivo} disabled={respondendoAprovacao}>
-                      {respondendoAprovacao?'Processando...':'✅ Aprovar'}
-                    </button>
-                    <button className="acn-btn" style={{background:'#dc2626',flex:1}} onClick={rejeitarNivelFreteAtivo} disabled={respondendoAprovacao}>
-                      ❌ Rejeitar
-                    </button>
-                    <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>fecharModalFrete()}>Fechar</button>
+                  <div className="acn-modal-acoes">
+                    <Botao variante="primario" className="cresce" icone={mdiCheck} onClick={aprovarNivelFreteAtivo} disabled={respondendoAprovacao}>
+                      {respondendoAprovacao?'Processando...':'Aprovar'}
+                    </Botao>
+                    <Botao variante="perigo" className="cresce" icone={mdiClose} onClick={rejeitarNivelFreteAtivo} disabled={respondendoAprovacao}>
+                      Rejeitar
+                    </Botao>
+                    <Botao onClick={()=>fecharModalFrete()}>Fechar</Botao>
                   </div>
                 )}
               </>);
             })()}
 
             {modalFrete.status === 'Em Trânsito' && (<>
-              <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:8,padding:12,marginBottom:14,fontSize:11}}>
+              <div className="acn-quadro tom-info acn-resumo">
                 <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
                 <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
                 <div><strong>Coletado em:</strong> {fmtDtHr(modalFrete.data_coleta)}</div>
               </div>
-              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:12,marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:8}}>🚚 CT-e e Rastreio</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+              <div className="acn-quadro">
+                <div className="acn-quadro-titulo">CT-e e Rastreio</div>
+                <div className="acn-grade-2">
                   <div>
                     <label className="acn-label">Número do CT-e</label>
-                    <input className="acn-input" style={{width:'100%'}} value={numeroCte}
+                    <input className="acn-input" value={numeroCte}
                       onChange={e=>setNumeroCte(e.target.value)} placeholder="Ex: 35260812345678000199570010000012341234567890" />
                   </div>
                   <div>
                     <label className="acn-label">Código de Rastreio</label>
-                    <input className="acn-input" style={{width:'100%'}} value={codigoRastreio}
+                    <input className="acn-input" value={codigoRastreio}
                       onChange={e=>setCodigoRastreio(e.target.value)} placeholder="Ex: BR123456789BR" />
                   </div>
                 </div>
-                <label className="acn-label">Link de Rastreio</label>
-                <input className="acn-input" style={{width:'100%',marginBottom:8}} value={urlRastreio}
-                  onChange={e=>setUrlRastreio(e.target.value)} placeholder="https://..." />
-                <button className="acn-btn" style={{background:'#0891b2',fontSize:10}} onClick={salvarRastreio} disabled={salvandoRastreio}>
-                  {salvandoRastreio?'Salvando...':'💾 Salvar CT-e/Rastreio'}
-                </button>
-              </div>
-              <div style={{background:'#fff7ed',border:'1px solid #fdba74',borderRadius:8,padding:12,marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:700,color:'#9a3412',marginBottom:8}}>
-                  📎 Canhoto obrigatório pra marcar como Entregue
+                <div>
+                  <label className="acn-label">Link de Rastreio</label>
+                  <input className="acn-input" value={urlRastreio}
+                    onChange={e=>setUrlRastreio(e.target.value)} placeholder="https://..." />
                 </div>
+                <Botao icone={mdiContentSaveOutline} onClick={salvarRastreio} disabled={salvandoRastreio}>
+                  {salvandoRastreio?'Salvando...':'Salvar CT-e/Rastreio'}
+                </Botao>
+              </div>
+              <div className="acn-quadro tom-atencao">
+                <div className="acn-quadro-titulo">Canhoto obrigatório pra marcar como Entregue</div>
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e=>setCanhotoFile(e.target.files?.[0]||null)} />
               </div>
-              <div style={{display:'flex',gap:8}}>
-                <button className="acn-btn" style={{background:'#16a34a',flex:1}} onClick={marcarEntregue} disabled={!canhotoFile || enviandoCanhoto}>
-                  {enviandoCanhoto?'Enviando...':!canhotoFile?'✅ Marcar como Entregue (anexe o canhoto)':'✅ Marcar como Entregue'}
-                </button>
-                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>fecharModalFrete()}>Fechar</button>
+              <div className="acn-modal-acoes">
+                <Botao variante="primario" className="cresce" icone={mdiCheck} onClick={marcarEntregue} disabled={!canhotoFile || enviandoCanhoto}>
+                  {enviandoCanhoto?'Enviando...':!canhotoFile?'Marcar como Entregue (anexe o canhoto)':'Marcar como Entregue'}
+                </Botao>
+                <Botao onClick={()=>fecharModalFrete()}>Fechar</Botao>
               </div>
             </>)}
 
             {modalFrete.status === 'Entregue' && (
-              <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:8,padding:12,fontSize:11}}>
+              <div className="acn-quadro tom-ok acn-resumo">
                 <div><strong>Transportadora:</strong> {modalFrete.transportadora}</div>
                 <div><strong>Valor:</strong> {fmt(modalFrete.valor_frete)}</div>
                 <div><strong>Entregue em:</strong> {fmtDtHr(modalFrete.data_entrega)}</div>
                 {modalFrete.numero_cte && <div><strong>CT-e:</strong> {modalFrete.numero_cte}</div>}
                 {modalFrete.codigo_rastreio && <div><strong>Rastreio:</strong> {modalFrete.codigo_rastreio}</div>}
                 {modalFrete.url_rastreio && (
-                  <div><a href={modalFrete.url_rastreio} target="_blank" rel="noreferrer">🔗 Ver rastreio</a></div>
+                  <div><a className="acn-link-icone" href={modalFrete.url_rastreio} target="_blank" rel="noreferrer"><Icone path={mdiLinkVariant} size={14} /> Ver rastreio</a></div>
                 )}
                 {modalFrete.canhoto_url && (
-                  <div style={{marginTop:6}}><a href={modalFrete.canhoto_url} target="_blank" rel="noreferrer">📎 Ver canhoto ({modalFrete.canhoto_nome})</a></div>
+                  <div><a className="acn-link-icone" href={modalFrete.canhoto_url} target="_blank" rel="noreferrer"><Icone path={mdiPaperclip} size={14} /> Ver canhoto ({modalFrete.canhoto_nome})</a></div>
                 )}
-                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>fecharModalFrete()}>Fechar</button>
+                <Botao className="acn-botao-cheio" onClick={()=>fecharModalFrete()}>Fechar</Botao>
               </div>
             )}
 
             {modalFrete.status === 'Cancelado' && (
-              <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:12,fontSize:11}}>
+              <div className="acn-quadro tom-erro acn-resumo">
                 <div>{modalFrete.observacoes || 'Frete cancelado.'}</div>
-                <button className="acn-btn" style={{background:'#94a3b8',width:'100%',marginTop:10}} onClick={()=>fecharModalFrete()}>Fechar</button>
+                <Botao className="acn-botao-cheio" onClick={()=>fecharModalFrete()}>Fechar</Botao>
               </div>
             )}
           </div>

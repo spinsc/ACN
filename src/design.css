@@ -561,10 +561,57 @@ html body .acn-main:not(.acn-main-tv) table tr.acn-eng-info > td { padding-top: 
 .acn-ficha-linha > :first-child { font-size: 12px; font-weight: 600; }
 .acn-ficha-fotos { margin-top: 12px; }
 /* Etapa 12b2 (30/09/2026): a tabela do Histórico da Logística, com o dado real, passou a rolar a 1400 px (a antiga cabia: 1102 px
-   num quadro de 1130). Variante densa = recuo lateral menor; os botões da linha quebram de linha como antes; a coluna de texto
+   num quadro de 1130). Variante densa = recuo lateral menor (7 px; 6 px desde a 12b3, 01/10/2026, para os Fretes caberem a 1100 px); os botões da linha quebram de linha como antes; a coluna de texto
    corta palavra sem espaço (um registro tem uma URL colada) mas nunca fica mais estreita que 130 px (as observações, 80 px), para não quebrar "Transformacao". */
-html body .acn-main table.acn-tabela.acn-densa th { padding: 0 7px !important; }
-html body .acn-main table.acn-tabela.acn-densa:not(.acn-tab-cartoes) td { padding: 6px 7px !important; }
+html body .acn-main table.acn-tabela.acn-densa th { padding: 0 6px !important; }
+html body .acn-main table.acn-tabela.acn-densa:not(.acn-tab-cartoes) td { padding: 6px 6px !important; }
 .acn-acoes-linha.quebra { flex-wrap: wrap; justify-content: flex-start; }
 .acn-texto-medio { min-width: 130px; overflow-wrap: anywhere; }
 .acn-texto-curto { min-width: 80px; overflow-wrap: anywhere; }
+/* ── Fretes da Logística (Etapa 12b3, 01/10/2026) — a busca de OP/licitação, o cartão de aproveitamento, as cotações e as janelas do frete ── */
+.acn-sugestao { position: relative; }
+.acn-sugestao-lista { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin-top: 2px; max-height: 220px; overflow-y: auto; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); box-shadow: var(--acn-shadow-2); }
+.acn-sugestao-item { padding: 7px 10px; font-size: 12px; cursor: pointer; color: var(--acn-text); border-bottom: 1px solid var(--acn-line-soft); }
+.acn-sugestao-item:hover { background: var(--acn-surface-2); }
+.acn-sugestao-item strong { color: var(--acn-ink); }
+.acn-sugestao-vazio { padding: 8px 10px; font-size: 12px; color: var(--acn-muted); }
+.acn-aprov { margin-bottom: 12px; border-left: 3px solid var(--acn-warn) !important; }
+.acn-aprov-titulo-cab { display: inline-flex; align-items: center; gap: 6px; }
+.acn-aprov-janela { font-size: 12px; font-weight: 400; color: var(--acn-muted); }
+.acn-select-mini { width: auto !important; min-width: 0; padding: 2px 6px; font-size: 12px; }
+.acn-aprov-corpo { display: flex; flex-direction: column; gap: 8px; }
+.acn-aprov-grupo { padding: 8px 12px; background: var(--acn-warn-soft); border: 1px solid color-mix(in srgb, var(--acn-warn) 30%, transparent); border-radius: var(--acn-r3); }
+.acn-aprov-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acn-aprov-titulo { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--acn-ink); }
+.acn-aprov-sub { margin-top: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-aprov-itens { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.acn-aprov-item { padding: 3px 8px; font-size: 12px; color: var(--acn-text); background: var(--acn-surface); border: 1px solid var(--acn-line-soft); border-radius: var(--acn-r1); }
+.acn-vinculado { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-ok); }
+.acn-direcao { display: inline-flex; align-items: center; gap: 5px; }
+.acn-sub-info { margin-top: 1px; font-size: 11px; color: var(--acn-info); }
+.acn-agrupado { margin-top: 3px; align-items: center; }
+.acn-modal-frete { max-width: 640px; }
+.acn-form-cheio textarea.acn-input { resize: vertical; }
+.acn-grade-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acn-dados-grade { grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 12px; }
+.acn-resumo { gap: 2px; font-size: 13px; }
+.acn-quadro.tom-info { background: var(--acn-info-soft); border-color: color-mix(in srgb, var(--acn-info) 30%, transparent); }
+.acn-quadro.tom-ok { background: var(--acn-ok-soft); border-color: color-mix(in srgb, var(--acn-ok) 30%, transparent); }
+.acn-quadro.tom-atencao { background: var(--acn-warn-soft); border-color: color-mix(in srgb, var(--acn-warn) 30%, transparent); }
+.acn-quadro.tom-erro { background: var(--acn-bad-soft); border-color: color-mix(in srgb, var(--acn-bad) 30%, transparent); }
+html body .acn-quadro input[type=file] { padding: 0 !important; min-height: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.acn-quadro > .acn-b { justify-self: start; }
+.acn-quadro > .acn-b.acn-botao-cheio, .acn-botao-cheio { justify-self: stretch; width: 100%; }
+.acn-titulo-solto { margin: 4px 0 8px; }
+.acn-cotacoes { display: flex; flex-direction: column; gap: 6px; max-height: 220px; margin-bottom: 14px; overflow-y: auto; }
+.acn-cotacao { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-cotacao.on { background: var(--acn-ok-soft); border-color: var(--acn-ok); box-shadow: 0 0 0 1px var(--acn-ok); }
+.acn-cotacao-corpo { flex: 1; min-width: 0; }
+.acn-cotacao-nome { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--acn-ink); }
+.acn-cotacao-sub { margin-top: 2px; font-size: 12px; color: var(--acn-muted); }
+.acn-link-icone { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.acn-lista-niveis { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.acn-lista-niveis .acn-faixa { margin: 0; }
+.acn-nivel { padding: 8px 10px; font-size: 12px; color: var(--acn-text); border: 1px solid; border-radius: var(--acn-r3); }
+.acn-nivel.tom-ok { background: var(--acn-ok-soft); border-color: color-mix(in srgb, var(--acn-ok) 30%, transparent); }
+.acn-nivel.tom-erro { background: var(--acn-bad-soft); border-color: color-mix(in srgb, var(--acn-bad) 30%, transparent); }
