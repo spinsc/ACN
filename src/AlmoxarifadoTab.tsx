@@ -14,6 +14,8 @@ import { ModalKitingLoteEnvio } from './KitingLoteEnvio';
 import { ConferenciaKit, conferenciaInicial, validarConferencia, divergencias, resumoDivergencias, registroConferencia } from './OpItens';
 import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, ChecklistPendencias } from './OpPendencias';
 import { confirmar, mostrarAviso } from './Feedback';
+import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
+import { normalizarBusca } from './SearchUtils';
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -176,6 +178,10 @@ export default function AlmoxarifadoTab({ currentUser }) {
   const [modalEmbalagem, setModalEmbalagem] = useState<any|null>(null);
   const [embForm, setEmbForm] = useState<any>({});
   const [salvandoEmb, setSalvandoEmb] = useState(false);
+  // CEP da embalagem (Etapa 7.13, pedido do usuário em 01/10/2026): o que a conferência do CEP respondeu, e um contador para
+  // descartar a resposta de uma consulta antiga quando a pessoa já digitou outro CEP
+  const [cepInfo, setCepInfo] = useState<{ estado: string; texto: string }>({ estado: 'ocioso', texto: '' });
+  const cepSeq = useRef(0);
 
   // Venda para Envio: seriais ACN produto a produto, linha a linha (decidido
   // com o usuário em 13/09). Não conclui sem pelo menos um serial por unidade
@@ -209,6 +215,36 @@ export default function AlmoxarifadoTab({ currentUser }) {
     });
   };
 
+  // O CEP manda na cidade e na UF (pedido do usuário em 01/10/2026, Etapa 7.13): ao digitar — ou ao abrir a janela com um CEP de formato
+  // válido que veio da OP — consulta e preenche. A pessoa ainda pode corrigir à mão depois; o que o sistema não deixa mais é embalar sem
+  // um CEP válido (4 das 5 solicitações de frete reais tinham CEP de zeros e cidade "NAI SEI" / "NAO TEM").
+  const aplicarCep = async (valor, cidadeAntes, ufAntes, aoAbrir = false) => {
+    const seq = ++cepSeq.current;
+    const d = soDigitosCep(valor);
+    if (!d) { setCepInfo({ estado: 'ocioso', texto: '' }); return; }
+    if (!cepComFormatoValido(valor)) {
+      // enquanto digita (menos de 8 dígitos) fica quieto; reclama quando já são 8 dígitos ou quando a OP já veio com um CEP assim
+      setCepInfo(d.length === 8 || aoAbrir
+        ? { estado: 'invalido', texto: 'CEP inválido — informe os 8 dígitos do CEP de entrega (não vale só zeros).' }
+        : { estado: 'ocioso', texto: '' });
+      return;
+    }
+    setCepInfo({ estado: 'buscando', texto: 'Consultando o CEP…' });
+    const r = await consultarCep(valor);
+    if (seq !== cepSeq.current) return;   // a pessoa já digitou outro CEP
+    if (r.status === 'ok') {
+      const tinhaAlgo = !!(String(cidadeAntes || '').trim() || ufAntes);
+      const mudou = tinhaAlgo && (normalizarBusca(cidadeAntes) !== normalizarBusca(r.cidade) || String(ufAntes || '') !== r.uf);
+      setEmbForm(f => ({ ...f, destino_cidade: r.cidade, destino_uf: r.uf }));
+      const rua = [r.logradouro, r.bairro].filter(Boolean).join(', ');
+      setCepInfo({ estado: 'ok', texto: `CEP encontrado — cidade e UF preenchidas: ${r.cidade} / ${r.uf}` + (rua ? ` (${rua})` : '') + (mudou ? ` · antes: ${[cidadeAntes, ufAntes].filter(Boolean).join(' / ')}` : '') });
+    } else if (r.status === 'inexistente') {
+      setCepInfo({ estado: 'inexistente', texto: 'CEP não encontrado — confira os números.' });
+    } else {
+      setCepInfo({ estado: 'indisponivel', texto: 'Não consegui consultar o CEP agora. Digite a cidade e a UF; o CEP segue válido pelo formato.' });
+    }
+  };
+
   const abrirModalEmbalagem = async (opl) => {
     // se o kit já foi conferido (kiting em lote), não pede de novo
     const linhas = opl.kit_conferencia ? [] : conferenciaInicial(opl);
@@ -222,7 +258,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
       altura: '', largura: '', comprimento: '',
       destino_cidade: opl.destino_cidade || '',
       destino_uf: opl.destino_uf || '',
-      destino_cep: opl.destino_cep || '',
+      destino_cep: formatarCep(opl.destino_cep),
       // CIF/FOB decide se esta OP abre cotação de frete ou vai direto para o
       // Comercial. Quando a OP chega aqui sem resposta, é aqui que ela é dada
       // — antes seguia calada como CIF (regra do usuário em 24/09/2026).
@@ -230,6 +266,7 @@ export default function AlmoxarifadoTab({ currentUser }) {
       observacoes: '',
     });
     setModalEmbalagem(opl);
+    aplicarCep(opl.destino_cep, opl.destino_cidade, opl.destino_uf, true);
   };
 
   const confirmarEmbalagem = async () => {
@@ -250,6 +287,23 @@ export default function AlmoxarifadoTab({ currentUser }) {
     const erroConf = validarConferencia(conferencia);
     // texto montado na hora, sempre uma pendência de preenchimento: tom explícito (29/09/2026)
     if (erroConf) { mostrarAviso(erroConf, 'atencao'); return; }
+    // CEP obrigatório e válido (pedido do usuário em 01/10/2026, Etapa 7.13). Texto montado aqui = pendência de preenchimento: tom explícito.
+    if (!soDigitosCep(f.destino_cep)) {
+      mostrarAviso('Informe o CEP de entrega. É por ele que a cidade e a UF são preenchidas e que a Logística cota o frete.', 'atencao'); return;
+    }
+    if (!cepComFormatoValido(f.destino_cep)) {
+      mostrarAviso('CEP inválido: informe os 8 dígitos do CEP de entrega (não vale só zeros).', 'atencao'); return;
+    }
+    setSalvandoEmb(true);
+    const cepConferido = await consultarCep(f.destino_cep);
+    setSalvandoEmb(false);
+    if (cepConferido.status === 'inexistente') {
+      mostrarAviso('CEP não encontrado: confira os números do CEP de entrega.', 'atencao'); return;
+    }
+    // serviço de terceiro fora do ar não pode parar a embalagem: segue com o CEP de formato válido e deixa dito
+    if (cepConferido.status === 'indisponivel') {
+      mostrarAviso('Não consegui conferir o CEP agora; segui com o CEP informado. Confira a cidade e a UF.', 'atencao');
+    }
     if (!f.destino_cidade?.trim() || !f.destino_uf) {
       alert('Informe a cidade e a UF de entrega.'); return;
     }
@@ -297,7 +351,7 @@ Embalar e enviar assim mesmo?`)) return;
       ...(vendaEnvio ? { seriais_itens: itensSeriais } : {}),
       destino_cidade: f.destino_cidade.trim(),
       destino_uf: f.destino_uf,
-      destino_cep: f.destino_cep?.trim() || null,
+      destino_cep: formatarCep(f.destino_cep),
       // a resposta dada (ou corrigida) aqui fica na OP: da próxima vez que
       // alguém abrir esta OP, o selo mostra quem paga o frete
       frete_responsavel: f.frete_responsavel,
@@ -309,7 +363,7 @@ Embalar e enviar assim mesmo?`)) return;
       direcao: 'outbound',
       descricao: `OP ${opl.opl} — ${opl.cliente_nome || ''} (${fluxoLabel(opl.fluxo_entrega)})`.trim(),
       destino: [f.destino_cidade.trim(), f.destino_uf].filter(Boolean).join(' / '),
-      cep_destino: f.destino_cep?.trim() || null,
+      cep_destino: formatarCep(f.destino_cep),
       data_prevista: opl.data_prevista_entrega || null,
       quantidade_volumes: f.volumes === '' ? null : parseInt(f.volumes, 10),
       peso_total:         num(f.peso_total),
@@ -1021,7 +1075,12 @@ Embalar e enviar assim mesmo?`)) return;
             <div style={{ fontWeight:700, fontSize:9, color:'#0f766e', textTransform:'uppercase', marginBottom:6, borderBottom:'2px solid #0f766e', paddingBottom:3 }}>
               Destino da entrega
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8, marginBottom:10 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(112px,1fr) 2fr minmax(64px,1fr)', gap:8, marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>CEP *</div>
+                <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cep||''} inputMode="numeric" maxLength={9}
+                  onChange={e=>{ const v = formatarCep(e.target.value); setEmbForm(f=>({...f, destino_cep:v})); aplicarCep(v, embForm.destino_cidade, embForm.destino_uf); }} placeholder="00000-000" />
+              </div>
               <div>
                 <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>Cidade *</div>
                 <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cidade||''}
@@ -1035,11 +1094,12 @@ Embalar e enviar assim mesmo?`)) return;
                   {UFS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
-              <div>
-                <div style={{ fontSize:9, color:'#475569', marginBottom:3 }}>CEP</div>
-                <input className="acn-input" style={{width:'100%'}} value={embForm.destino_cep||''}
-                  onChange={e=>setEmbForm(f=>({...f, destino_cep:e.target.value}))} placeholder="00000-000" />
-              </div>
+              {cepInfo.texto && (
+                <div style={{ gridColumn:'1 / -1', fontSize:10, fontWeight:600,
+                  color: cepInfo.estado === 'ok' ? '#15803d' : cepInfo.estado === 'buscando' ? '#64748b' : cepInfo.estado === 'indisponivel' ? '#b45309' : '#b91c1c' }}>
+                  {cepInfo.texto}
+                </div>
+              )}
             </div>
 
             <ConferenciaKit linhas={conferencia} onChange={setConferencia} saldos={saldosKit} />
