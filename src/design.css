@@ -725,3 +725,23 @@ html body .acn-main table.acn-tabela.acn-compacta td:first-child { white-space: 
 .acn-txt-atencao { color: var(--acn-warn); font-weight: 600; }
 .acn-com-tec td .acn-selo + .acn-selo { margin-left: 4px; }
 .acn-com-pipeline .acn-quadro-titulo { display: flex; align-items: center; gap: 6px; }
+
+/* ── SAC · seletor de abas e Chamados NFC (Etapa 12d1, 01/10/2026): só aparência ───────────────────────────────── */
+.acn-sac-abas { margin-bottom: 10px; }
+/* no celular os ícones das três abas somem para o nome inteiro caber sem rolar a faixa */
+/* (!important porque o Icone escreve display:block direto no elemento) */
+@media (max-width: 480px) { .acn-sac-abas .acn-aba svg { display: none !important; } }
+/* cabeçalho do quadro dos chamados (não usa .sec-hdr: o clique global do cabeçalho recolheria o quadro) */
+.acn-nfc-cab { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--acn-line); }
+.acn-nfc-lista { display: flex; flex-direction: column; gap: 8px; }
+/* cartão de um chamado: a cor da lateral é a da família do status (data-acn-familia no próprio cartão) */
+.acn-nfc-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-left: 4px solid var(--acn-f); border-radius: var(--acn-r3); }
+.acn-nfc-info { flex: 1; min-width: 0; display: grid; gap: 4px; font-size: 13px; }
+.acn-nfc-linha1 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.acn-nfc-tel, .acn-nfc-orgao { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--acn-info); text-decoration: none; }
+.acn-nfc-orgao { font-weight: 600; }
+.acn-nfc-desc { font-size: 12px; color: var(--acn-text); background: var(--acn-surface-2); border: 1px solid var(--acn-line-soft); border-radius: var(--acn-r2); padding: 6px 10px; overflow-wrap: anywhere; }
+.acn-nfc-data { font-size: 11px; }
+.acn-nfc-acoes { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+/* título de janela com ícone: o ícone fica ao lado do texto (o Icone é display:block) */
+.acn-modal-cab .modal-title { display: inline-flex; align-items: center; gap: 6px; }

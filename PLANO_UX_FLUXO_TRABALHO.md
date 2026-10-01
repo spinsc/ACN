@@ -2088,7 +2088,14 @@ com o usuário no fim da Etapa 11; medido em 30/09/2026):
 | 12c2 | **RH — janelas de cadastro (Colaborador, Lançamento, Autorização) e a lista de Autorizações** | (do arquivo de 2.580) | 317 → 212 (arquivo todo) | 3 → 3 | 373 → 241 | 5 (colaborador: criar e editar; lançamento; autorização) | ✅ 01/10/2026 |
 | 12c3 | **RH — Relatórios (Horas, Técnicos, Uniformes); só leitura** | (do trecho de 570 linhas) | 212 → 98 (arquivo todo); trecho 114 → 0 | 9 → 0 (trecho) | 241 → 154 (arquivo todo); trecho 99 → 12 (todos no HTML da impressão) | 0 (35 fotografias + 20 comportamentos, nenhuma gravação) | ✅ 01/10/2026 |
 | 12c4 | **RH — Comissões de Técnicos e o Histórico de comissões** | (do trecho de 566 linhas) | 98 → 2 (arquivo todo); trecho 96 → 0 | 10 → 0 | 154 → 69 (arquivo todo; todos fora de tela); trecho 85 → 0 | 1 (aprovar; 45 fotografias + 10 comportamentos, gravação só simulada) | ✅ 01/10/2026 |
-| 12d | SAC | 3.025 | 570 | 79 | 552 | 33 | ⬜ |
+| 12d1 | **SAC — seletor de abas e Chamados NFC** | (do trecho de 183 linhas) | 570 → 527 (arquivo todo); trecho 43 → 0 | 79 → 79 (nenhum no trecho) | 570 → 511 (arquivo todo); trecho 59 → 0 | 1 (a do chamado; 26 fotografias + 13 comportamentos) | ✅ 01/10/2026 |
+| 12d2 | SAC — aba Cadastros (equipamentos, categorias, tipos de serviço) | 147 | 34 | 10 | 25 | a contar na fatia | ⬜ |
+| 12d3 | SAC — aba Ordens de Serviço: cabeçalho, filtros e tabela (com as ações por status) | 137 | 40 | 2 | 41 | a contar na fatia | ⬜ |
+| 12d4 | SAC — janela "Nova OS" | 407 | 114 | 3 | 62 | a contar na fatia (criar a OS) | ⬜ |
+| 12d5 | SAC — janelas de orçamento, aprovação, reprovação, saída/entrega e anexar | 207 | 61 | 17 | 38 | a contar na fatia | ⬜ |
+| 12d6 | SAC — janelas do fluxo de manutenção veicular | 273 | 111 | 12 | 74 | a contar na fatia | ⬜ |
+| 12d7 | SAC — janelas de novo equipamento, responsável, financeiro e PDF | 82 | 25 | 8 | 9 | a contar na fatia | ⬜ |
+| 12d8 | SAC — janela "Acompanhamento da OS" | 301 | 103 | 0 | 115 | a contar na fatia | ⬜ |
 
 #### ✅ 12a — Relatórios
 
@@ -2379,6 +2386,40 @@ guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequênc
 
 **O que a 12c4 ensinou para a 12d (SAC, 3.025 linhas, 33 gravações):** (1) **ler o código de uma tela que calcula dinheiro achou um defeito de dado (7.17) que a comparação "antes × depois" jamais acharia**, porque os dois lados contam igual — para o SAC, conferir os números contra o banco antes de comparar; (2) **teste antigo escrito com seletor de estilo inline quebra na migração**: adaptar o seletor para aceitar os dois jeitos já na fatia, e **refazer a fotografia guardada** quando um achado mudar o número de propósito; (3) **fixar largura de coluna para alinhar tabelas de cartões diferentes custou altura e não valeu**; (4) para dividir o SAC, usar o mesmo critério do RH: **uma fatia por quadro da página, de cima para baixo, com as gravações juntas na fatia delas**.
 
+#### ✅ 12d1 — SAC: seletor de abas e Chamados NFC
+
+**Feito em:** 01/10/2026. **Por que dividi a 12d em oito:** o SAC é **uma página só, de 3.029 linhas, num componente único**, com três abas (Ordens de Serviço, Chamados NFC, Cadastros) e **18 janelas** (cada uma com seu estado: Nova OS, orçamento, aprovação, reprovação, saída, anexar, fluxo de manutenção veicular, acompanhamento…). Mesmo critério do RH: **uma fatia por quadro da página, de cima para baixo**, cada uma com as gravações dela junto. A **ordem de cima para baixo** é: 12d1 abas + Chamados NFC, 12d2 Cadastros, 12d3 lista de OS, 12d4 "Nova OS", 12d5 janelas de orçamento/aprovação/reprovação/saída/anexar, 12d6 janelas do fluxo veicular, 12d7 novo equipamento/responsável/financeiro/PDF, 12d8 acompanhamento da OS. A **impressão da OS** (`PrintOS`, outro documento) e o **widget da Agenda** (componente à parte) ficam de fora de todas.
+
+**Antes da migração, um achado de comportamento** (Etapa 7.18, commit à parte): a tela dizia "Notas salvas!" mesmo com a gravação recusada. Corrigido **antes** de tirar o "antes" desta fatia.
+
+**O que foi feito** (`SacTab.tsx`, só a parte visual do seletor e dos Chamados NFC; `design.css`; **nenhuma consulta, regra, texto de aviso ou gravação foi mexida**):
+
+- **As três abas** (Ordens de Serviço, Chamados NFC, Cadastros) viram o `Abas` do sistema, com ícone; **no celular os ícones somem** para o nome inteiro caber sem rolar a faixa. Quem carrega os chamados continua sendo o clique em "Chamados NFC".
+- **Chamados NFC:** o quadro vira cartão, com o cabeçalho (módulo, título, "N chamado(s) · N aberto(s)"), o filtro de status e o "Carregar" como `Botao`. Cada chamado é um cartão com a **lateral e o selo na cor da família do status** (Aberto vermelho, Em Atendimento âmbar, Concluído verde, Cancelado cinza), telefone e órgão com ícone, a descrição numa caixa suave e os botões **Atender / Concluir** (principal) e **Notas**.
+- **A janela de notas** vira a `modal-overlay` do sistema (cabeçalho com "×", corpo, rodapé "Fechar" / "Salvar Notas"); clicar no fundo continua fechando; o texto das notas continua sendo lido do mesmo campo.
+- **O cabeçalho do quadro não é `.sec-hdr` de propósito:** o clique global do cabeçalho (`DashboardTab.tsx`) recolhe qualquer cartão, e este quadro **nunca recolheu**.
+- **Emojis decorativos** tirados dos botões, títulos e do telefone/órgão; as cores feitas à mão saem.
+- **Classes novas no `design.css`**, conferidas com `grep` em `src` inteiro antes de criar: `acn-sac-abas`, `acn-nfc-cab`, `acn-nfc-lista`, `acn-nfc-card` (e `-info`, `-linha1`, `-tel`, `-orgao`, `-desc`, `-data`, `-acoes`) e uma regra de `.acn-modal-cab .modal-title` para título de janela com ícone.
+
+**Resultado no código (arquivo inteiro; as outras fatias ainda não foram migradas):** `style` inline **570 → 527**, cores hex **570 → 511**, `<button>` cru **99 → 89**, `acn-btn` 79 → 79, 3.029 → 2.988 linhas (as contagens usam o mesmo método de hoje; o plano anterior dizia 552 hex). **Só no trecho desta fatia:** inline **43 → 0**, hex **59 → 0**, `<button>` **10 → 0**, 183 → 139 linhas.
+
+**Como foi testado** (gravações bloqueadas; a única gravação, no chamado, respondida de mentira no navegador): o banco real tem **4 chamados (3 Concluído e 1 Em Atendimento; nenhum Aberto nem Cancelado)**, então os outros estados foram **simulados só na leitura, com gente inventada (ZZ …)**: 5 chamados em 4 status, um anônimo, uma descrição de mais de 180 caracteres, notas já preenchidas.
+
+- **Fotografia comparada** (`snap_sac1.cjs`, igual para a tela velha e a nova): **26 blocos iguais** — real: as abas, a lista, cada filtro de status (Aberto e Cancelado voltam vazios), **o filtro que só vale ao clicar em "Carregar"**, a janela de notas aberta e fechada, e as abas Cadastros e Ordens de Serviço de volta; simulado: o mesmo, mais **a janela de notas de cada um dos 5 chamados**. Duas rodadas da tela antiga entre si: iguais.
+- **Comportamento comparado** (`comport_sac1.cjs`, o que a pessoa vê **e o corpo do que seria gravado**, hora mascarada): **13 blocos iguais** — abrir a aba (a leitura que ela faz), **Atender**, **Concluir**, abrir as notas, **salvar notas** em chamado Concluído, Cancelado (em branco) e Em Atendimento, o filtro sem e com "Carregar" (as leituras pedidas), e **a gravação recusada** em Atender e em Salvar Notas (o aviso de erro da 7.18). Duas rodadas da tela antiga entre si: iguais.
+- **Uma equivalência declarada, por escrito, no comparador** (`compara_sac1.cjs`): a **lista de elementos `.acn-empty`** não é comparada — a mensagem "Nenhum chamado encontrado…" passou a ser um desses elementos (antes era texto solto); **o texto dela continua comparado por inteiro**.
+- **Largura (a lição da 12b2):** a 1400, 1100 e 390 px o quadro e os cartões **cabem sem transbordar** e a **página nunca rola de lado** (0 px); a janela de notas tem 460 px (390 px no celular) e **nenhum campo fica fora da caixa**. **Duas coisas pioram em altura:** o cartão de chamado passa de **132 para 144 px** (1400 px) e, no celular, o quadro real de 4 chamados passa de **780 para 993 px**.
+- **Capturas** em claro, escuro e celular (390 px) do seletor com o quadro, da janela de notas e da aba Cadastros por trás. Três correções saíram **das capturas**: no celular a aba "Cadastros" ficava cortada (os ícones somem agora); o `Icone` escreve `display:block` direto no elemento, então esconder por CSS pede `!important`; e o ícone do título da janela ficava numa linha acima do texto.
+- **Regressão:** `teste_38` (7.18) 9/9, `teste_36` 45/45, `teste_37` 17/17, `teste_20` 24/24, `teste_30` 7/7, `teste_31` 5/5, `teste_32` 19/19; build ok.
+
+**O que ficou de fora / limites:**
+
+- **As outras duas abas e todas as janelas do SAC** (12d2 a 12d8), que continuam com o visual antigo. A faixa de abas já é a nova, mas **a aba "Ordens de Serviço" e a "Cadastros" por baixo dela são as de antes**.
+- **Achados já registrados** (Etapa 7.18): "Salvar Notas" troca o atendente (pergunta aberta), o filtro só vale ao clicar em "Carregar" e o "N aberto(s)" conta só o que está carregado.
+- A comparação não vê **proporções e cores**: isso foi conferido por captura nos três modos.
+
+**O que a 12d1 ensinou para a 12d2 a 12d8:** (1) **incluir "a gravação recusada" em todo teste de comportamento do SAC** — foi assim que o defeito da 7.18 apareceu; (2) **nunca usar `.sec-hdr` num quadro que não recolhia**: o clique global recolhe sozinho; (3) `Icone` escreve `display:block` direto no elemento (esconder pede `!important`; título com ícone pede `inline-flex`); (4) as janelas do SAC são **`position: fixed` com cabeçalhos coloridos escritos à mão**: usar de uma vez o molde da 12c2 (`modal-overlay` + `acn-modal-cab/corpo/rodape`) e a regra do título; (5) **a tela só tem um estado real** (4 chamados): simular tudo o que o banco ainda não tem, como no RH.
+
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex
 Só depois que a migração acima cobrir o suficiente — os dois remendos
 deixam de ser necessários quando não sobrar `style` inline pra adivinhar.
@@ -2483,3 +2524,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 01/10/2026 | **Janelas de cadastro do RH (12c2):** as fileiras de botões coloridos viram `Chips` (mesmas opções, mesmo valor gravado); a janela passa a ser a `modal-overlay` do sistema. Suposições minhas, não confirmadas: o aviso de "sem duração" do lançamento usa Falta âmbar, Atestado verde e os demais azul; Saída âmbar e Entrada azul na lista de autorizações. |
 | 01/10/2026 | **Relatórios do RH (12c3):** Técnicos e Uniformes passam a **cartão** (como os outros quadros do RH); as abas de Horas viram `Chips`; contagens viram `Selo` pela família do tipo de lançamento; o status da OS segue o mesmo jeito de reconhecer de antes (pela primeira palavra) com **Em Execução azul, Manutenção Concluída verde, Aguardando Início âmbar, demais cinza**; "N OS" azul e "N OP" verde; tipo da avaliação "Remota" azul e os demais na cor da marca; "Imprimir" é o botão principal nas Horas e secundário nos cabeçalhos de Técnicos e Uniformes. **Tabelas longas dentro de quadro aberto (as OS/OP dos técnicos) usam a nova linha compacta de 32 px**; as de Horas e Uniformes ficam na linha de 44 px do sistema. Suposições minhas, não confirmadas. |
 | 01/10/2026 | **Comissões de Técnicos (12c4):** a lista de OP/OS de cada técnico usa a **linha compacta de 32 px** (como as de Técnicos, 12c3), porque o setembro real tem 123 linhas; OP verde, OS azul, APOIO âmbar, SERRALHERIA na cor da marca e "lote/N" cinza; técnico **já aprovado** com o cabeçalho verde; Equipe na cor da marca, Dupla azul e Individual cinza no Pipeline. O alinhamento das colunas entre os cartões **não foi forçado** (custava altura). Suposições minhas, não confirmadas. |
+| 01/10/2026 | **SAC dividido em oito fatias (12d1 a 12d8), por quadro da página, de cima para baixo.** Na 12d1 (Chamados NFC): as abas usam `Abas` com ícone (somem no celular); o status do chamado usa as famílias (**Aberto vermelho, Em Atendimento âmbar, Concluído verde, Cancelado cinza**); "Atender" e "Concluir" são o botão principal do cartão; o cabeçalho do quadro **não** usa `.sec-hdr` (o quadro nunca recolheu). Suposições minhas, não confirmadas. |
