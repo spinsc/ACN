@@ -14,6 +14,19 @@ com outras tarefas. O estado **não está na sua memória** — está no arquivo
 1. **Leia `PLANO_UX_FLUXO_TRABALHO.md` inteiro** antes de qualquer coisa. Ele
    traz o mapa do fluxo, os achados (A a F), as 14 etapas e quais já estão ✅.
 
+1b. **Leia a seção "Respostas a aplicar" do plano** (rodada de perguntas de
+   01/10/2026: o usuário respondeu todas as perguntas que estavam em aberto,
+   e nada foi aplicado ainda). Antes de escolher a etapa, **decida para cada
+   resposta o momento de aplicar** — agora, junto de uma etapa que mexe nos
+   mesmos arquivos, ou depois — e escreva na coluna "Momento" do quadro da
+   própria seção. **Comece a aplicar junto com a finalização das etapas que
+   faltam**, sem esperar acabar todas; uma resposta por vez, cada uma com seu
+   teste, seu plano atualizado e sua autorização de publicação. Resposta que
+   mexe em dado real só depois de medir de novo, só no que ela autoriza e
+   relatando a contagem. O que a seção marca "a confirmar" é pergunta nova:
+   faça ao usuário antes de construir. Ao aplicar, a resposta vira linha de
+   "Decisões tomadas" e sai da seção.
+
 2. **Escolha a etapa.** Se o usuário deu um número (`/ux-fluxo 3`), é essa.
    Sem número, é a primeira que não estiver ✅. A ordem do plano é uma
    sugestão do usuário aceita em 29/09/2026: bug funcional primeiro, depois

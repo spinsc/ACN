@@ -2429,33 +2429,115 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 
 ---
 
+## Respostas a aplicar — rodada de perguntas de 01/10/2026
+
+Em 01/10/2026 o usuário respondeu, numa conversa só para isso (perguntas clicáveis, com a opção recomendada primeiro), **todas as perguntas que estavam em aberto neste plano**: as da seção "Perguntas em aberto" mais as que estavam escondidas dentro dos blocos das etapas. Foram **30 perguntas, 25 assuntos** (R1 a R25). **Nada foi aplicado ainda**: esta seção é o registro. As perguntas respondidas saíram da seção "Perguntas em aberto".
+
+> **Instrução para o próximo `/ux-fluxo` (pedido do usuário em 01/10/2026):**
+>
+> 1. **Leia esta seção inteira** antes de escolher a etapa.
+> 2. **Decida, para cada resposta, em que momento aplicar** — agora, junto de uma etapa que mexe nos mesmos arquivos, ou depois — e escreva na coluna **Momento** do quadro abaixo **antes de começar**.
+> 3. **Comece a aplicar junto com a finalização do `/ux-fluxo`** (o que falta: 12d2 a 12d8 do SAC, 13 e 14; a 5.1c espera dados). Não deixe as respostas para depois de acabar todas as etapas.
+> 4. **Uma resposta por vez**, cada uma com seu teste, seu plano atualizado e sua autorização de publicação (a regra de "uma etapa por vez" vale aqui também).
+> 5. **Dado real:** o banco anda. Meça de novo antes, mexa **só no que a resposta autoriza** e relate quantas linhas mudaram (regra 4 do CLAUDE.md).
+> 6. Ao aplicar, a resposta vira **uma linha em "Decisões tomadas"** e sai daqui (marque ✅ no quadro até lá). O que estiver marcado **a confirmar** é pergunta nova: faça ao usuário antes de construir.
+
+**Natureza:** 🟢 só código/tela · 🟠 mexe em dado real (já autorizado pela resposta, com contagem) · 🔴 regra de negócio nova ou grande · ⚪ nada a fazer, só registro. **Tamanho:** P (um arquivo) · M · G (várias telas ou desenho com o usuário).
+
+### O fluxo da OP até a Engenharia — como o usuário descreveu (R1 e R8)
+
+Palavras dele, resumidas por mim sem mudar o sentido:
+
+1. **Quem abre a OP** preenche os **itens vendidos** e seleciona o **carro**; conforme os itens vendidos, **responde as perguntas configuradas para aquele item** (ex.: "tem hack?").
+2. **Na Engenharia:** se o item vendido **já foi adaptado naquele carro do catálogo** e já estão cadastrados os itens que compõem o Conjunto Elétrico (suporte, chicote, parafusos, porcas etc.), **só pede a aprovação da Engenharia** para passar ao PCP.
+3. Se **algum item nunca foi adaptado naquele modelo** e não foi configurado o que entra no Conjunto Elétrico para aquele carro, **pede à Engenharia que informe os itens usados na adaptação** daquele item.
+4. **Quando o item vendido não está configurado para o modelo selecionado, abre um modal para configurar**; se o item tem perguntas e respostas dadas pelo Comercial, **a configuração é feita por resposta**.
+5. **Exemplo, Slimled:** a quantidade instalada na frente e na traseira muda o chicote — é um **chicote principal** e um **chicote de derivação** para as luzes frontais já com a quantidade, ou seja, **um chicote para cada quantidade frontal e um para cada quantidade traseira**.
+
+**A conferir pelo `/ux-fluxo` (não foi conferido nesta conversa):** o que o sistema já faz disso (Etapas 7.4 e 7.5, `AplicarEstrutura.tsx`, `ConfigEstruturaTela.tsx`, o painel da estrutura na Engenharia) e o que falta — em especial o **item 4** (o modal de configurar na hora, por resposta) e o **item 5** (se uma pergunta de quantidade, com um chicote por quantidade, cabe no modelo de pergunta com opções de hoje, ou se é uma lacuna). Listar a diferença para o usuário antes de construir.
+
+### As respostas
+
+**Fluxo da OP e CRM**
+
+- **R1 — OP criada sozinha quando o card vira Vencido** (`criarOpAutomatica`, `CrmTab.tsx`). *Resposta:* "Libera para criar OP, porém só segue para a Engenharia e o fluxo normal depois de preencher os campos obrigatórios". **Campos obrigatórios escolhidos:** fluxo de entrega; itens vendidos (pelo menos 1); veículo, quando o tipo de venda exige (a mesma regra do `NovaOpOsModal`, configurada no Admin); origem da venda (Licitação ou Venda direta) e quem paga o frete (CIF/FOB, quando termina em envio). Prazo e responsável já vêm do card. **Onde a OP fica parada:** reaproveitar **"Devolvida Comercial"** — a OP nasce já devolvida ao Comercial com o motivo "faltam: …", e ele completa e reenvia pela tela de reenvio da Etapa 3.1 (o contador e o aviso de R3 já servem). *Ponto de partida (Etapa 4):* de 199 OPs automáticas, 167 sem fluxo de entrega e 179 sem itens vendidos. *A confirmar:* se as **perguntas do carro** também entram nos obrigatórios (R8 sugere que sim); e **o que fazer com as OPs automáticas que já existem sem esses campos** — não mexer em massa (princípio 4), propor ao usuário. 🔴 G
+- **R2 — Selo "onde está" no card do CRM:** mostrar em **qualquer coluna em que o card tenha OP** (hoje só em "Vencido"; há 2 cards em "Faturado" e 1 em "Enviado" em que ele mostraria um descompasso real). Tirar a restrição de coluna da 6.3. 🟢 P
+- **R3 — OP devolvida ao Comercial sem aviso.** *Resposta:* "Contador na tela porém notificando os envolvidos naquele card, quem abriu e o seu gerente." Fazer o contador "N devolvidas ao Comercial" no topo do CRM e da aba "OPs em aberto" **e** notificar quem abriu o card/a OP e o gerente dessa pessoa quando a OP é devolvida. *A confirmar:* **como o sistema sabe quem é o gerente de quem abriu** (ver se há vínculo no cadastro de usuários; se não houver, perguntar) e **por qual canal** (usar o que já existe: avisos do sistema e `whatsappHelper.ts`). 🔴 M
+- **R4 — Cinco OPs com defeito de digitação.** *Resposta:* "Corrigir os 5 óbvios". **Medido em 01/10/2026 (só leitura):** a OP `1516.2608` está com `data_prevista_entrega = 62026-10-20` → corrigir para **2026-10-20**; quatro números de OP com espaço sobrando nas pontas (`" A 1453.2607 - ESL AUTO CENTER"`, `" A 1470.2607 - PREMIUM AUTOMOTIVE"`, `" D 710.2607 - COMANDO MILITAR DO SUL"` e `"OPL A1436.2707 "`). **Ficam de fora (o usuário ainda confirma):** `" A 1470.2607"` com `prazo_entrega_producao = 0001-01-01` e `" D 710.2607"` com `data_prevista_entrega = 2027-07-14` (parece digitação, a OP é de 07/2026). **Cuidado:** o número da OP (`oples.opl`) é lido como texto em outras tabelas (histórico, CQ, frete, menções, anexos): **antes de aparar os espaços, conferir se alguma guarda o número com o espaço** — aparar só de um lado quebra o vínculo. Relatar a contagem. 🟠 P
+
+**Avisos, compras e permissões**
+
+- **R5 — Aviso de erro fica até fechar.** Em `Feedback.tsx`, a mensagem de **erro** (vermelha) só some quando a pessoa fecha; **atenção (7 s) e sucesso seguem como hoje**. Muda o comportamento de mais de 240 mensagens: conferir que todas têm botão de fechar visível e que erros empilhados não cobrem a tela. 🟢 P
+- **R6 — Painel "Esperando a sua aprovação" (Etapa 8).** Acrescentar: **contador no menu** ("Compras (N)") para quem aprova, e **as alçadas por valor/departamento** (`pcp_aprovacoes`), que hoje só se resolvem dentro da Mesa de Cotações. **Sem alerta de cor por prazo** (ele não escolheu). *A confirmar ao construir:* quem aprova cada alçada — a regra de "qualquer aprovador resolve" (24/09) vale para a etapa de aprovação, mas a alçada pode ter aprovador próprio. 🔴 M
+- **R7 — Valores ocultos que não estão ocultos.** *Resposta:* "Ligar exceto Fernando e Luiz" e, na confirmação, **ligar a marca dos dois no Admin**. Fazer a marca `ver_valores` **chegar à sessão** (login, "ver como" e atualização — como se fez com `pode_aprovar_compra` na correção da Etapa 8) e **esconder valores de JAIRO BORGES, SERGIO DANIEL HAMANN, MARLON DE AMORIM e MURIEL DOS REIS GOBEL**. **FERNANDO WAECHTER e LUIZ ALBANEZ continuam vendo**: para isso **ligar a marca "ver valores" dos dois no Admin (2 linhas; autorizado)**, relatando a contagem — **sem abrir exceção por nome no código**. Mapear todas as telas que mostram valor, porque hoje nenhuma lê a marca. **Testar a sessão como o login a monta**, sem injetar permissão à mão (decisão de 30/09). `pode_deletar_anexos` tem o mesmo vício e ninguém está marcado: corrigir junto, sem efeito hoje. 🔴 + 🟠 G
+- **R8 — Perguntas do carro em OP já aberta (7.5).** O usuário **não** quer restringir quem responde por perfil: **quem abre a OP é quem sabe a resposta, e a Engenharia deve receber tudo preenchido** (fluxo acima). Consequência: a tela de resposta em lote da Engenharia passa a servir **só para OP antiga** (as 39 Renegade e as abertas antes de a pergunta existir); para a OP nova, as perguntas são respondidas na abertura e **entram nos obrigatórios** (ver R1). 🔴 (faz parte do fluxo acima)
+
+**Cadastros e RH**
+
+- **R9 — As 4 fichas de veículo (7.6/7.7).** *Resposta:* "Equipe corrige pela tela, mas 2 desses 4 modelos já foram corrigidos, certo?" **Medido em 01/10/2026: só 1 de 4.** A do **Toro** foi resolvida: o Thiago criou a ficha "Toro Freedom" em 30/09 às 18h e a OP D0778.2609 aponta para ela. **Seguem com o nome curto:** **Renegade 4x4** (39 OPs, lote 1673.2609), **Titano 4x4** (1 OP, A1678.2609; a observação da ficha diz "TITANO VOLCANO MULTIJET TURBODIESEL 4X4 DIESEL 26/26 AUTO") e **C3** (2 OPs, 1669.25609/01 e /02, que dizem "C3 YOU"). *A fazer:* **dizer ao usuário que são 3, não 2** (ele pode ter corrigido de um jeito que não enxergo) e que a equipe corrige pela tela "Editar veículo"; e **desativar a ficha antiga "Toro"** (ativa, 0 OPs) — **autorizado** —, **só se não tiver estrutura de material ligada** (`veiculo_item_materiais`); conferir, desativar e relatar. Nada apagado. 🟠 P
+- **R10 — Quem edita a ficha (7.7):** **Admin, Gerente e Comercial/CRM.** Trocar a regra `ehAdminOuGerente` por uma que inclua o Comercial (o plano da 7.7 sugeria `temPoderDeGerente` — **conferir se esse inclui o Comercial/CRM** antes de usar). Sem botão de excluir. 🟢 P
+- **R11 — Percentual de comissão dos serralheiros (7.8).** *Resposta:* "**RH define pessoa a pessoa**" e **um percentual por pessoa** (sem segundo percentual para a adaptação). **Pendente do RH:** o percentual de JORGE FERREIRA, MARLON PAULO, SALOMÃO e WESLEI (hoje "não recebe comissão"; só o MURIEL tem, 0,5%). Até lá, comissão R$ 0,00 com o selo "sem percentual no RH" (já é assim). **Nenhum código a fazer**; quando o RH informar, ligar "recebe comissão" e o percentual na tela do RH. ⚪
+- **R12 — Os 6 cadastros escondidos pela lixeira (7.9):** **todos continuam escondidos**; nada a fazer. ⚪
+- **R13 — Relatório de Técnicos (12c3): contar todas as OPs.** Tirar o corte das 200 mais recentes (hoje Tatiana aparece com 114 e tem 228; Thiago 52 e tem 75; Letícia 30 e tem 41; Rute 4 e tem 11). **Cuidado:** o servidor devolve no máximo 1.000 linhas por consulta (achados A8 e A9) — hoje são 369, mas vão passar; usar paginação por `.range` ou a conta feita no banco. 🟢 P
+- **R14 — OPs sem responsável no mesmo relatório.** *Resposta:* "Linha sem responsável **porém indicando que precisa informar o responsável**." **Não mexer no cadastro.** São 13 OPs em branco e 1 com "leticia" sem sobrenome (*a confirmar:* essa entra na mesma linha, com o mesmo aviso). 🟢 P
+- **R15 — Relatório de Comissão Comercial em mês de 30 dias:** **corrigir agora**, como **Etapa 7.19** (o número 7.18 já foi usado pelo SAC). A aba Relatórios pede "AAAA-MM-31" e o banco recusa em setembro, abril, junho, novembro e fevereiro. Só leitura; período certo, como na 7.17. 🟢 P
+
+**Datas, CEP, BOM e pequenos achados**
+
+- **R16 — Datas que aparecem um dia antes (7.10).** *Resposta:* "Corrigir direto os que erram." São **52 lugares em 25 arquivos** com `new Date(x).toLocaleDateString` sem hora (maiores: `FormacaoPrecosTab` 7, `AcnTabShared` 5, `VistoriasPatio` 3, `SacTab` 3, `RelatoriosTab` 3, `HorasTarefasTab` 3, `CotacoesTab` 3). **Só erra quem recebe coluna do tipo *date*** — a maioria é data-e-hora, que está certa: **separar antes de mexer**. O dia vem **do texto AAAA-MM-DD**, nunca de `new Date(texto)` (decisão da 7.10). **Um arquivo por vez, relatando cada um**, com teste de data real. Em tela que a Etapa 12 ainda vai migrar, corrigir **antes** da migração visual (como na 7.10). Etapa própria. 🟢 M
+- **R17 — CEP.** *Resposta:* "**Tudo que pede CEP deve se comportar assim.**" Levantar (por busca no código) **todos os campos de CEP do sistema** — criação e edição da OP, "Novo Frete", cadastros de cliente, fornecedor, transportadora, colaborador, SAC… — e aplicar a regra da 7.13 (CEP válido; cidade e UF preenchidas pelo CEP; ViaCEP e BrasilAPI), **reaproveitando o que a 7.13 criou, sem copiar**. As suposições da 7.13 (o CEP sobrescreve cidade e UF; "inexistente" só quando os dois serviços concordam; serviço fora do ar não barra; CEP gravado como 00000-000) são regra de negócio: **confirmar com o usuário** (R22). 🔴 G
+- **R18 — Os 4 fretes reais com CEP de zeros:** **deixar como estão** (1654.2609, 0756.2609, 1560.2608/02 e 1650.2609). A correção do aproveitamento (7.12) já evita o estrago. ⚪
+- **R19 — Serviços na BOM sugerida (7.4):** **tirar da lista de separação do Almoxarifado** a película, a instalação do kit e a garantia estendida; continuam na venda e na proposta. 🟢 P
+- **R20 — Histórico das Comissões de Técnicos (12c4):** a mensagem "Nenhum fechamento encontrado para o período." só aparece **depois de buscar**; antes, a tela pede o período. 🟢 P
+- **R21 — Tela morta em `ProducaoTab.tsx`** ("Aguardando Agendamento Manutenção" / "Manutenção Agendada", 0 registros): **deixar como está.** ⚪ (sai da lista de limpeza futura)
+- **R22 — Suposições "minhas, não confirmadas":** as **visuais** (cores por família, botões no menu ⋯, recolher blocos, linha compacta etc.) ficam **aceitas**. As de **regra de negócio** o `/ux-fluxo` **confirma com o usuário, uma por uma, ao tocar nelas**: 7.8 (apoio só na adaptação; caixinha de lote desmarcada por padrão — o percentual único já foi confirmado em R11), 7.9 (o login do sistema não é mexido ao desligar alguém), 7.11 e 7.12 (fretes antigos; não adivinhar região de CEP inválido), 7.13 (as quatro do R17), 7.17 (período inteiro), 8 (painel só para quem tem a permissão) e o tom dos avisos da Etapa 7 (recusa por permissão é vermelha).
+- **R23 — Ordem geral:** o usuário **delegou ao próximo `/ux-fluxo`**: decidir o momento de cada ajuste e **intercalar com as etapas que faltam**. ⚪
+- **R24 — Chamados NFC: quem consta como atendente (7.18).** *Resposta:* "**Só quem clicou Atender/Concluir.**" Em `atualizarStatusNfc` (`SacTab.tsx`), salvar só as notas **não** grava mais `atendido_por`; só Atender e Concluir gravam. 🟢 P
+- **R25 — Chamados NFC: filtro e contador.** *Resposta:* "Corrigir." Escolher o status **já filtra** a lista (hoje só vale ao clicar em "Carregar"), e o "N aberto(s)" mostra o **total real**, não só o carregado. **Atenção:** o teste de comportamento da 12d1 (`comport_sac1`) tratou "o filtro só vale ao clicar em Carregar" como comportamento **igual**; ele precisa mudar **de propósito**, e a fotografia ser refeita. 🟢 P
+
+### Quadro de acompanhamento — o `/ux-fluxo` preenche "Momento" antes de começar
+
+| # | Assunto | Natureza | Tam. | Momento | Estado |
+|---|---|---|---|---|---|
+| R1 | OP automática: campos obrigatórios e "Devolvida Comercial" | 🔴 | G | ⬜ a decidir | ⬜ |
+| R2 | Selo "onde está" em qualquer coluna com OP | 🟢 | P | ⬜ a decidir | ⬜ |
+| R3 | OP devolvida: contador + notificar quem abriu e o gerente | 🔴 | M | ⬜ a decidir | ⬜ |
+| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | ⬜ a decidir | ⬜ |
+| R5 | Erro fica até fechar | 🟢 | P | ⬜ a decidir | ⬜ |
+| R6 | Painel de aprovação: contador no menu + alçadas | 🔴 | M | ⬜ a decidir | ⬜ |
+| R7 | `ver_valores` valendo (+ ligar a marca de Fernando e Luiz) | 🔴 + 🟠 | G | ⬜ a decidir | ⬜ |
+| R8 | Perguntas do carro respondidas na abertura da OP | 🔴 | G | ⬜ a decidir (junto de R1) | ⬜ |
+| R9 | 3 fichas para a equipe + desativar a "Toro" antiga | 🟠 | P | ⬜ a decidir | ⬜ |
+| R10 | Comercial também edita a ficha de veículo | 🟢 | P | ⬜ a decidir | ⬜ |
+| R11 | Percentual dos serralheiros (espera o RH) | ⚪ | — | — | ⬜ espera o RH |
+| R12 | 6 cadastros escondidos | ⚪ | — | — | ✅ nada a fazer |
+| R13 | Relatório de Técnicos conta todas as OPs | 🟢 | P | ⬜ a decidir | ⬜ |
+| R14 | Linha "Sem responsável" no mesmo relatório | 🟢 | P | ⬜ a decidir (junto de R13) | ⬜ |
+| R15 | Comissão Comercial em mês de 30 dias (Etapa 7.19) | 🟢 | P | ⬜ a decidir | ⬜ |
+| R16 | Datas um dia antes: corrigir os 52 lugares | 🟢 | M | ⬜ a decidir | ⬜ |
+| R17 | CEP validado em todo campo de CEP | 🔴 | G | ⬜ a decidir | ⬜ |
+| R18 | 4 fretes com CEP de zeros | ⚪ | — | — | ✅ nada a fazer |
+| R19 | Serviços fora da lista de separação | 🟢 | P | ⬜ a decidir | ⬜ |
+| R20 | Mensagem do Histórico de comissões só depois de buscar | 🟢 | P | ⬜ a decidir | ⬜ |
+| R21 | Tela morta do `ProducaoTab` | ⚪ | — | — | ✅ nada a fazer |
+| R22 | Suposições: visuais aceitas; regras confirmadas ao tocar | ⚪ | — | ao tocar em cada uma | ⬜ |
+| R23 | Ordem geral | ⚪ | — | — | ✅ delegada ao `/ux-fluxo` |
+| R24 | Atendente do chamado NFC | 🟢 | P | ⬜ a decidir | ⬜ |
+| R25 | Filtro e contador dos Chamados NFC | 🟢 | P | ⬜ a decidir | ⬜ |
+
+*Agrupamento que eu sugeriria — o `/ux-fluxo` decide:* **pequenas e independentes, que cabem junto de qualquer etapa** (R2, R5, R10, R13, R14, R15, R19, R20, R24, R25); **as que mexem em dado real, já autorizadas, para fazer com contagem** (R4, R9, e as 2 linhas de R7); **as que tocam em tela que a Etapa 12 ainda vai migrar**, a fazer **antes** da migração visual dela (R24 e R25 no SAC; as partes de R16 em `SacTab` e `RelatoriosTab`); e **as regras grandes, que pedem desenho com o usuário** (R1 + R8 + R3, juntas, formam o "fluxo da OP até a Engenharia"; R6; R7; R17).
+
+---
+
 ## Perguntas em aberto
 
-- **Criação automática de OP (pós-Etapa 4):** ao ganhar o card, a OP nasce sem
-  os gates do `NovaOpOsModal`. Exigimos/avisamos o fluxo de entrega nesse
-  momento? Qual regra?
-- **Selo "onde está" nos cards fora de "Vencido" (6.3):** hoje só aparece na coluna "Vencido".
-  Há 2 cards em "Faturado" com a OP ainda esperando a liberação comercial e 1 em "Enviado" com a
-  OP na fila da produção. Mostrar o selo em qualquer coluna em que o card tenha OP?
-- **Quanto tempo o aviso fica na tela (Etapa 7):** hoje erro some em 9 s e atenção em 7 s.
-  Para uma falha ao gravar (a pessoa pode estar olhando outra coisa), vale o erro **ficar até ser
-  fechado**? Muda o comportamento de mais de 240 mensagens, por isso não mexi.
-- **As 4 fichas de veículo já cadastradas (7.6/7.7)** ("Renegade 4x4", "Toro", "Titano 4x4", "C3", com 43 OPs ligadas) continuam com o nome curto de antes; a tela "Editar veículo" (7.7) já permite corrigir. **Falta o modelo exato de cada uma:**
-  Toro (PV D 778, 1 unidade — Freedom? Volcano? Endurance?), Renegade 4x4 (lote 1673.2609, 39 unidades — qual versão?), Titano 4x4 (a observação da ficha diz "Volcano": "Titano Volcano 4x4"?) e C3 (as OPs dizem "C3 YOU": "C3 You!"?).
-  Posso aplicar pelo banco, com a contagem das OPs mexidas, ou a equipe corrige pela tela — decisão do usuário.
-- **Quem edita a ficha (7.7):** hoje só Admin e Gerente; a equipe de Comercial/CRM (quem cadastra) também deve poder?
-- **Percentual de comissão dos serralheiros (7.8):** JORGE FERREIRA, MARLON PAULO, SALOMÃO e WESLEI estão no RH como "não recebe comissão"; só o MURIEL tem percentual (0,5%). Quem é apontado na serralheria sem percentual sai com comissão R$ 0,00. Qual percentual cada um recebe em cima da MO de serralheria? E o serralheiro pode ter **dois** percentuais (um na serralheria, outro na adaptação)?
-- **Os 6 cadastros já escondidos pela lixeira (7.9):** ADRIAN GABRIEL BATISTUTA, ALDO FABIAN BATISTUTA, ARILSON EUGENIO VIEIRA FILHO, JAIRO BORGES, LUCIANO SPINELLI e LUIZ CLAUDIO. Quais deles são desligados (e com que data e motivo)? Os outros voltam para a lista ou ficam escondidos?
-- **Valores ocultos que não estão ocultos (achado da correção da aprovação):** `ver_valores` está desligado no Admin para JAIRO BORGES, SERGIO DANIEL HAMANN, LUIZ ALBANEZ, MARLON DE AMORIM, MURIEL DOS REIS GOBEL e FERNANDO WAECHTER, mas a marca **nunca chega à sessão**, então **todos veem os valores**. Ligar a regra passa a **esconder valores** dessas 6 pessoas (inclui o Luiz Albanez, do Compras, que lida com cotação). Ligo? (`pode_deletar_anexos` tem o mesmo vício, mas ninguém está marcado.)
-- **Datas que podem estar um dia antes em outras telas (7.10):** 52 lugares usam `new Date(x).toLocaleDateString` sem hora; só os que recebem coluna **date** erram. Quer uma auditoria (só leitura, com a lista do que erra e do que está certo) antes de corrigir?
-- **CEP nas outras entradas (7.13):** a regra "CEP válido e cidade/UF preenchidas pelo CEP" vale hoje **só na janela de embalagem do Almoxarifado**. Quer a mesma coisa na **criação da OP** (`NovaOpOsModal`), na **edição da OP** (CRM e Admin) e no **formulário manual "Novo Frete"**? E os **4 fretes reais com CEP de zeros**: alguém do Comercial passa o destino verdadeiro de cada OP (1654.2609, 0756.2609, 1560.2608/02 e 1650.2609) para eu corrigir, com a contagem das linhas?
-- **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
-- **Quantas OPs o Relatório de Técnicos deve contar (12c3):** hoje só entram as **200 OPs mais recentes** (de 369 com responsável comercial), então Tatiana aparece com 114 (tem 228), Thiago 52 (tem 75), Letícia 30 (tem 41) e Rute 4 (tem 11), **sem aviso na tela**. Quer **todas as OPs**, um **filtro de período** (mês/ano) ou manter as 200 e **avisar na tela**? E as **13 OPs com o responsável em branco** e a **"leticia" sem sobrenome** (1 OP): ficam de fora, ou corrijo o cadastro delas (com a contagem)?
-- **Relatório de Comissão Comercial em mês de 30 dias (7.17):** a aba Relatórios pede "AAAA-MM-31" e o banco recusa em setembro, abril, junho, novembro e fevereiro (relatório vazio, sem aviso). Corrijo agora (período certo, como na 7.17), como Etapa 7.19 à parte? É só leitura, não muda dado.
-- **Quem consta como atendente do chamado NFC (7.18):** ao salvar as **notas** de um chamado "Em Atendimento" ou "Concluído", o sistema grava quem está salvando como `atendido_por` (hoje os 4 chamados são todos de LUCIANO SPINELLI, então ainda não deu diferença). Deve valer **o último a mexer** (como está) ou **só quem clicou em Atender / Concluir**, sem trocar ao editar as notas?
-- **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
-- **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
-  primeiro é decisão do usuário.
+**Nenhuma em 01/10/2026:** todas as perguntas anteriores foram respondidas pelo usuário — ver **"Respostas a aplicar"**, logo acima. Perguntas que surgirem ao aplicar entram aqui. As que já se sabe que vão surgir (nasceram das respostas):
+
+- **Perguntas do carro na OP automática (R1/R8):** a OP que nasce sozinha só segue para a Engenharia com as perguntas do carro respondidas também? Provável que sim; confirmar ao construir.
+- **Quem é o "gerente de quem abriu" (R3):** existe esse vínculo no cadastro de usuários? Se não, quem o define?
+- **A OP da "leticia" sem sobrenome (R14):** entra na linha "Sem responsável"?
+- **Quem aprova cada alçada (R6):** a alçada por valor/departamento tem aprovador próprio, ou vale "qualquer aprovador resolve"?
+- **As duas datas suspeitas (R4):** o prazo de produção `0001-01-01` da OP `A 1470.2607` e a previsão `2027-07-14` da `D 710.2607` — quais são as datas certas?
 
 ---
 
