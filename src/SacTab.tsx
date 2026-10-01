@@ -313,13 +313,18 @@ export default function SacTab({ currentUser }) {
 
   const salvarTipoServico = async () => {
     if (!novoTipoServico.trim()) return;
-    await supabase.from('sac_tipos_servico').insert([{ nome: novoTipoServico.trim() }]);
+    // Etapa 7.20 (01/10/2026): as gravações desta aba ignoravam o resultado — com a gravação recusada, o nome digitado sumia sem aviso (tipo de serviço),
+    // a edição da categoria fechava e perdia o que foi digitado, e desativar/ativar falhava em silêncio. Agora avisa o erro e mantém o que foi digitado
+    // (o mesmo aviso "Erro: …" que adicionar equipamento e adicionar categoria já mostravam).
+    const { error } = await supabase.from('sac_tipos_servico').insert([{ nome: novoTipoServico.trim() }]);
+    if (error) { alert('Erro: ' + error.message); return; }
     setNovoTipoServico('');
     fetchTiposServico();
   };
 
   const toggleTipoServico = async (t: any) => {
-    await supabase.from('sac_tipos_servico').update({ ativo: !t.ativo }).eq('id', t.id);
+    const { error } = await supabase.from('sac_tipos_servico').update({ ativo: !t.ativo }).eq('id', t.id);
+    if (error) { alert('Erro: ' + error.message); return; }
     fetchTiposServico();
   };
 
@@ -1230,7 +1235,8 @@ OK = ACN   |   Cancelar = DETECH`;
   };
 
   const toggleEquipamento = async (e) => {
-    await supabase.from('sac_equipamentos').update({ ativo: !e.ativo }).eq('id', e.id);
+    const { error } = await supabase.from('sac_equipamentos').update({ ativo: !e.ativo }).eq('id', e.id);
+    if (error) { alert('Erro: ' + error.message); return; }
     fetchEquipamentos();
   };
 
@@ -1244,13 +1250,15 @@ OK = ACN   |   Cancelar = DETECH`;
 
   const salvarEdicaoCategoria = async () => {
     if (!editCat?.nome?.trim()) return;
-    await supabase.from('sac_categorias').update({ nome: editCat.nome.trim(), tem_despesas: editCat.tem_despesas }).eq('id', editCat.id);
+    const { error } = await supabase.from('sac_categorias').update({ nome: editCat.nome.trim(), tem_despesas: editCat.tem_despesas }).eq('id', editCat.id);
+    if (error) { alert('Erro: ' + error.message); return; }
     setEditCat(null);
     fetchCategorias();
   };
 
   const toggleCategoria = async (c) => {
-    await supabase.from('sac_categorias').update({ ativo: !c.ativo }).eq('id', c.id);
+    const { error } = await supabase.from('sac_categorias').update({ ativo: !c.ativo }).eq('id', c.id);
+    if (error) { alert('Erro: ' + error.message); return; }
     fetchCategorias();
   };
 

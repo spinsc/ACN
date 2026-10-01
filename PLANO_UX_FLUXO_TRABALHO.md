@@ -1905,6 +1905,24 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 - **Achado, não corrigido — "Salvar Notas" troca o atendente.** A mesma função, quando o chamado está "Em Atendimento" ou "Concluído", grava **`atendido_por` = a pessoa que está salvando** — então quem apenas edita as notas de um chamado já atendido passa a constar como o atendente. **Com o banco de hoje não dá para saber se já aconteceu:** os 4 chamados foram todos atendidos por LUCIANO SPINELLI. Pode ser a regra desejada ("o último a mexer") ou um efeito colateral; não mexi. Ver "Perguntas em aberto".
 - **O filtro de status só vale ao clicar em "Carregar"** (escolher o status não recarrega a lista), e o "N aberto(s)" do cabeçalho conta só o que está carregado — por exemplo, filtrando "Concluído" ele mostra "0 aberto(s)". Não mexi.
 
+### ✅ Etapa 7.20 — SAC, aba Cadastros: gravação recusada falhava em silêncio e perdia o que foi digitado
+
+**Feito em:** 01/10/2026. **Achado** ao montar o teste de comportamento da Etapa 12d2 (a lição da 12d1: incluir "gravação recusada" em todo teste do SAC). O número 7.19 segue reservado para a R15 (Relatório de Comissão Comercial).
+
+**Causa:** das sete gravações da aba **Cadastros** (equipamentos, categorias, tipos de serviço), **só duas conferiam o erro** (adicionar equipamento e adicionar categoria). As outras **ignoravam o resultado**: com a gravação recusada,
+
+- **adicionar tipo de serviço** **apagava o nome digitado** e não avisava nada;
+- **"Salvar" a edição de uma categoria** **fechava a edição e perdia o que foi digitado**, sem aviso;
+- **desativar / ativar** equipamento, categoria e tipo de serviço **não fazia nada e não dizia nada** (a pessoa via a lista igual e não sabia por quê).
+
+**O que foi feito** (`SacTab.tsx`, só essas cinco funções; **nenhum dado foi alterado**): cada uma passa a **conferir o erro**, **avisar "Erro: …"** (o mesmo aviso das duas que já faziam isso) e **manter o que a pessoa digitou** (o campo do tipo continua com o nome; a edição da categoria continua aberta). Com a gravação aceita **o corpo gravado é o mesmo de antes**.
+
+**Como foi testado** (`teste_42`, navegador, leitura e gravação **simuladas**, nada chega ao banco): gravação aceita (o tipo entra na lista e o campo esvazia); gravação recusada ao **adicionar tipo** (avisa e **mantém o nome**), **desativar tipo**, **salvar a edição da categoria** (avisa e **a edição continua aberta com o texto**), **desativar categoria** e **desativar equipamento**; e a gravação voltando a funcionar. **Antes 2/9; depois 9/9.** Build ok.
+
+**Fora / pendente:**
+
+- **Achado, não corrigido — equipamentos desativados somem da tela e não dá para reativar:** a lista da aba **só mostra os ativos** (`fetchEquipamentos` filtra `ativo = true`), então o botão **"Ativar"** e a marca "Inativo" **nunca aparecem**: desativar é, na prática, **definitivo pela tela**. **O banco tem 12 equipamentos inativos que ninguém vê** (e 4 ativos). Ver "Perguntas em aberto".
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2536,6 +2554,7 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 - **A OP da "leticia" sem sobrenome (R14):** entra na linha "Sem responsável"?
 - **Quem aprova cada alçada (R6):** a alçada por valor/departamento tem aprovador próprio, ou vale "qualquer aprovador resolve"?
 - **As duas datas suspeitas (R4):** o prazo de produção `0001-01-01` da OP `A 1470.2607` e a previsão `2027-07-14` da `D 710.2607` — quais são as datas certas?
+- **Equipamentos desativados no SAC (7.20):** a aba Cadastros só lista os equipamentos **ativos**; ao desativar um, ele some e **não há como reativar pela tela** (o botão "Ativar" nunca aparece). O banco tem **12 inativos** que ninguém vê. Quer **mostrar os inativos** na lista (esmaecidos, com "Ativar"), ou desativar é de propósito e **definitivo**?
 
 ---
 
