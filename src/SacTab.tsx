@@ -647,12 +647,15 @@ export default function SacTab({ currentUser }) {
   const enviarCotacaoCliente = async (os: any) => {
     const agora = new Date().toISOString();
     const total = (os.itens_cotacao||[]).reduce((s,i)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
-    await supabase.from('sac_ordens_servico').update({
+    // Etapa 7.22 (01/10/2026): as ações da lista que gravam direto ignoravam o resultado — com a gravação recusada elas seguiam como se tivesse dado certo e esta
+    // ainda mandava o aviso de WhatsApp de uma cotação que não foi enviada. Agora a falha avisa o erro e NADA mais acontece (nem o aviso, nem a atualização da lista).
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Aguardando Aprovação Cliente',
       valor_orcamento: total,
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao enviar a cotação: ' + error.message); return; }
     notificarEvento('sac_cotacao_enviada', `*Cotação enviada — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nTotal: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}`);
     fetchOrdens();
   };
@@ -688,12 +691,13 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     const motivo = await pedirTexto('Motivo da recusa (opcional):');
     if (motivo === null) return;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Reprovado',
       aprovado: false,
       motivo_reprovacao: motivo,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao registrar a recusa: ' + error.message); return; }
     fetchOrdens();
   };
 
@@ -729,12 +733,13 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   const aprovarOrcamentoPresencial = async (os: any) => {
     if (!await confirmar(`Confirmar aprovação do orçamento de manutenção pelo cliente — ${os.numero_os}?`)) return;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Aguardando Início',
       aprovado: true,
       data_aprovacao: agora,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao registrar a aprovação: ' + error.message); return; }
     fetchOrdens();
   };
 
@@ -991,7 +996,7 @@ OK = ACN   |   Cancelar = DETECH`;
       if (os.status === 'Reprovado') {
         btns.push(
           <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
-            onClick={async ()=>{ if(await confirmar(`Reabrir ${os.numero_os}?`)) supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+            onClick={async ()=>{ if(await confirmar(`Reabrir ${os.numero_os}?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:os.tipo_avaliacao==='Remota'?'Em Cotação':'Em Provisionamento',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + error.message); return; } fetchOrdens(); } }}>
             🔄 Reavaliar
           </button>
         );
@@ -1018,7 +1023,7 @@ OK = ACN   |   Cancelar = DETECH`;
       if (os.status === 'Reprovado')
         btns.push(
           <button key="reaval" className="acn-btn" style={{background:'#f59e0b',fontSize:9}}
-            onClick={async ()=>{ if(await confirmar(`Reabrir OS ${os.numero_os} para novo orçamento?`)) supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id).then(()=>fetchOrdens()); }}>
+            onClick={async ()=>{ if(await confirmar(`Reabrir OS ${os.numero_os} para novo orçamento?`)) { const { error } = await supabase.from('sac_ordens_servico').update({status:'Diagnóstico',aprovado:null,motivo_reprovacao:null,atualizado_em:new Date().toISOString()}).eq('id',os.id); if (error) { alert('Erro ao reabrir a OS: ' + error.message); return; } fetchOrdens(); } }}>
             🔄 Reavaliar
           </button>
         );
