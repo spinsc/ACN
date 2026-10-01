@@ -8,7 +8,8 @@ import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { resolverMencoesRespondidas } from './MencaoTextarea';
 import { confirmar, pedirTexto } from './Feedback';
 import { creditarCompraRecebida, fmtQtd } from './Estoque';
-import { hojeISO, diaISO } from './Interface';
+import { hojeISO, diaISO, Botao, Abas, Chips, Selo, Faixa } from './Interface';
+import { mdiPackageDown, mdiClipboardTextClockOutline, mdiChartBar, mdiTruckOutline, mdiTrayArrowDown, mdiCheck, mdiAlertOutline } from '@mdi/js';
 import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL } from './FluxoEntrega';
 
 
@@ -22,6 +23,26 @@ const FORM_VAZIO = {
   pedido_compra_id: '',
   seriais: '', volume: '', nf_conferida: false,
 };
+
+// ─── Peças visuais da Logística (Etapa 12b1, 30/09/2026) ─────────────────────
+// Só aparência: o filtro, as contas e o que cada tabela mostra são os de antes. Os cartões de resumo viram `acn-kpi` e o
+// tipo do manifesto vira `Selo` (uma cor por família, igual às outras telas: recebimento verde, envio azul, transferência âmbar).
+const TOM_KPI = { neutro: 'var(--acn-neutral)', atencao: 'var(--acn-warn)', info: 'var(--acn-info)', ok: 'var(--acn-ok)', erro: 'var(--acn-bad)' };
+function Indicadores({ itens, carregando = false }) {
+  return (
+    <div className="acn-kpis">
+      {itens.map(k => (
+        <div key={k.l} className="acn-kpi">
+          <span className="rot"><i style={{ background: TOM_KPI[k.tom || 'neutro'] }} />{k.l}</span>
+          <span className="val acn-num">{carregando ? '...' : k.v}</span>
+          {k.sub && <span className="sub">{k.sub}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+const FAMILIA_TIPO = { Recebimento: 'ok', Envio: 'info', Transferencia: 'atencao' };
+const SeloTipo = ({ tipo }) => <Selo familia={FAMILIA_TIPO[tipo] || 'neutro'} ponto={false}>{tipo}</Selo>;
 
 // ─── Relatório de Movimentação (IN/OUT) por Período e Tipo ───────────────────
 function RelatorioLogistica() {
@@ -44,7 +65,6 @@ function RelatorioLogistica() {
   };
 
   const fmtDt = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';   // o dia do texto AAAA-MM-DD: new Date() jogava para o dia anterior (fuso)
-  const corTipo = (t) => ({ Recebimento:'#22c55e', Envio:'#3b82f6', Transferencia:'#f59e0b' })[t] || '#94a3b8';
 
   const recebimentos   = dados.filter(m => m.tipo === 'Recebimento');
   const envios         = dados.filter(m => m.tipo === 'Envio');
@@ -68,25 +88,23 @@ function RelatorioLogistica() {
       <div className="sec-card">
         <div className="sec-hdr"><span>Filtros do Relatório</span></div>
         <div className="sec-body">
-          <div className="form-row">
+          <div className="acn-filtros acn-filtros-campos">
             <div className="form-group">
               <label className="acn-label">De</label>
-              <input type="date" className="acn-input" style={{width:'100%'}} value={de} onChange={e=>setDe(e.target.value)} />
+              <input type="date" className="acn-input" value={de} onChange={e=>setDe(e.target.value)} />
             </div>
             <div className="form-group">
               <label className="acn-label">Até</label>
-              <input type="date" className="acn-input" style={{width:'100%'}} value={ate} onChange={e=>setAte(e.target.value)} />
+              <input type="date" className="acn-input" value={ate} onChange={e=>setAte(e.target.value)} />
             </div>
             <div className="form-group">
               <label className="acn-label">Tipo</label>
-              <select className="acn-input" style={{width:'100%'}} value={tipo} onChange={e=>setTipo(e.target.value)}>
+              <select className="acn-input" value={tipo} onChange={e=>setTipo(e.target.value)}>
                 <option value="Todos">Todos</option>
                 {TIPOS_MANIFESTO.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div style={{display:'flex',alignItems:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#1e293b'}} onClick={buscar}>Filtrar</button>
-            </div>
+            <Botao variante="primario" onClick={buscar}>Filtrar</Botao>
           </div>
         </div>
       </div>
@@ -94,41 +112,33 @@ function RelatorioLogistica() {
       <div className="sec-card">
         <div className="sec-hdr"><span>Totais do Período</span></div>
         <div className="sec-body">
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {[
-              {label:'Recebimentos (IN)',    val:recebimentos.length,   sub:`${somaQtd(recebimentos)} un. · ${somaPeso(recebimentos).toFixed(1)} kg`, cor:'#22c55e'},
-              {label:'Envios (OUT)',         val:envios.length,         sub:`${somaQtd(envios)} un. · ${somaPeso(envios).toFixed(1)} kg`,             cor:'#3b82f6'},
-              {label:'Transferências',       val:transferencias.length, sub:`${somaQtd(transferencias)} un.`,                                          cor:'#f59e0b'},
-              {label:'Saldo (IN − OUT)',     val:`${saldoQtd>=0?'+':''}${saldoQtd}`, sub:'unidades',                                                    cor:saldoQtd>=0?'#16a34a':'#dc2626'},
-              {label:'Total de Movimentos',  val:dados.length,          sub:`${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}`, cor:'#1e293b'},
-            ].map(c => (
-              <div key={c.label} style={{flex:'1 1 160px',minWidth:140,background:'white',border:'1px solid #e2e8f0',borderTop:`3px solid ${c.cor}`,borderRadius:4,padding:'8px 10px'}}>
-                <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>{c.label}</div>
-                <div style={{fontSize:20,fontWeight:700,color:c.cor}}>{carregando?'...':c.val}</div>
-                <div style={{fontSize:9,color:'#94a3b8',marginTop:2}}>{c.sub}</div>
-              </div>
-            ))}
-          </div>
+          <Indicadores carregando={carregando} itens={[
+            { l: 'Recebimentos (IN)',   v: recebimentos.length,   sub: `${somaQtd(recebimentos)} un. · ${somaPeso(recebimentos).toFixed(1)} kg`, tom: 'ok' },
+            { l: 'Envios (OUT)',        v: envios.length,         sub: `${somaQtd(envios)} un. · ${somaPeso(envios).toFixed(1)} kg`,             tom: 'info' },
+            { l: 'Transferências',      v: transferencias.length, sub: `${somaQtd(transferencias)} un.`,                                         tom: 'atencao' },
+            { l: 'Saldo (IN − OUT)',    v: `${saldoQtd>=0?'+':''}${saldoQtd}`, sub: 'unidades',                                                 tom: saldoQtd>=0 ? 'ok' : 'erro' },
+            { l: 'Total de Movimentos', v: dados.length,          sub: `${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}`, tom: 'neutro' },
+          ]} />
         </div>
       </div>
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Por Tipo de Mercadoria</span></div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando ? <div className="acn-empty">Carregando...</div> : Object.keys(porMercadoria).length === 0 ? (
             <div className="acn-empty">Nenhuma movimentação no período.</div>
           ) : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr><th>Mercadoria</th><th>Recebimentos</th><th>Qtd. Recebida</th><th>Envios</th><th>Qtd. Enviada</th><th>Transferências</th></tr></thead>
               <tbody>
                 {Object.entries(porMercadoria).map(([k,v]) => (
                   <tr key={k}>
                     <td>{k}</td>
-                    <td style={{color:'#22c55e',fontWeight:700}}>{v.in}</td>
-                    <td>{v.qtdIn} un.</td>
-                    <td style={{color:'#3b82f6',fontWeight:700}}>{v.out}</td>
-                    <td>{v.qtdOut} un.</td>
-                    <td style={{color:'#f59e0b',fontWeight:700}}>{v.transf}</td>
+                    <td className="acn-num acn-forte">{v.in}</td>
+                    <td className="acn-num">{v.qtdIn} un.</td>
+                    <td className="acn-num acn-forte">{v.out}</td>
+                    <td className="acn-num">{v.qtdOut} un.</td>
+                    <td className="acn-num acn-forte">{v.transf}</td>
                   </tr>
                 ))}
               </tbody>
@@ -139,21 +149,21 @@ function RelatorioLogistica() {
 
       <div className="sec-card">
         <div className="sec-hdr"><span>Movimentos do Período ({dados.length})</span></div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body acn-rolagem">
           {carregando ? <div className="acn-empty">Carregando...</div> : dados.length === 0 ? (
             <div className="acn-empty">Nenhuma movimentação no período.</div>
           ) : (
-            <table>
+            <table className="acn-tabela">
               <thead><tr><th>Data</th><th>Tipo</th><th>Remetente</th><th>Destinatário</th><th>Mercadoria</th><th>Qtd</th></tr></thead>
               <tbody>
                 {dados.map(m => (
                   <tr key={m.id}>
-                    <td>{fmtDt(m.data)}</td>
-                    <td><span className="acn-badge" style={{background:corTipo(m.tipo)}}>{m.tipo}</span></td>
+                    <td className="acn-num">{fmtDt(m.data)}</td>
+                    <td><SeloTipo tipo={m.tipo} /></td>
                     <td>{m.remetente}</td>
                     <td>{m.destinatario || '—'}</td>
                     <td>{m.tipo_mercadoria}: {m.descricao}</td>
-                    <td>{m.quantidade || '—'}</td>
+                    <td className="acn-num">{m.quantidade || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1493,92 +1503,81 @@ export function ModalReceberPedido({ pedido: pedidoRecebido, currentUser, onClos
 
 
   return (
-      <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
-        <div className="modal-box" style={{ maxWidth: 980 }}>
-          <div className="modal-title">📥 Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}</div>
-          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-            {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}
-            {pedido.quantidade_comprada != null && Number(pedido.quantidade_comprada) !== Number(pedido.quantidade) && (
-              <> · <b style={{ color: '#0f766e' }}>comprada: {pedido.quantidade_comprada}</b></>
-            )}
-          </div>
-          {/* reposição de estoque: a quantidade abaixo vira saldo na prateleira,
-              então vale avisar antes de digitar (ver Estoque.tsx) */}
-          {pedido.vinculo_tipo === 'estoque' && (
-            <div style={{ fontSize: 10, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0',
-              borderRadius: 6, padding: '7px 10px', marginBottom: 10 }}>
-              📦 <b>Reposição de estoque</b> — {pedido.vinculo_descricao || ''}. A quantidade recebida informada abaixo
-              entra no saldo do item. Se chegou menos do que foi pedido, informe o que realmente chegou:
-              o sistema pede o restante sozinho.
-            </div>
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
+      <div className="modal-box acn-modal-larga acn-form-cheio">
+        <div className="modal-title">Receber Pedido — {pedido.numero_pedido || pedido.numero_oc || '—'}</div>
+        <p className="acn-modal-sub">
+          {pedido.descricao_material || '—'} · Fornecedor: {pedido.fornecedor || '—'} · Qtd pedida: {pedido.quantidade ?? '—'}
+          {pedido.quantidade_comprada != null && Number(pedido.quantidade_comprada) !== Number(pedido.quantidade) && (
+            <> · <strong className="acn-forte">comprada: {pedido.quantidade_comprada}</strong></>
           )}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="acn-label">Número da NF *</label>
-              <input className="acn-input" style={{ width: '100%' }} value={form.numero_nf}
-                onChange={e => setForm(f => ({ ...f, numero_nf: e.target.value }))} placeholder="Ex: 004821" />
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Data de Recebimento</label>
-              <input type="date" className="acn-input" style={{ width: '100%' }} value={form.data_recebimento_real}
-                onChange={e => setForm(f => ({ ...f, data_recebimento_real: e.target.value }))} />
-            </div>
+        </p>
+        {/* reposição de estoque: a quantidade abaixo vira saldo na prateleira,
+            então vale avisar antes de digitar (ver Estoque.tsx) */}
+        {pedido.vinculo_tipo === 'estoque' && (
+          <Faixa tom="ok">
+            <strong>Reposição de estoque</strong> — {pedido.vinculo_descricao || ''}. A quantidade recebida informada abaixo
+            entra no saldo do item. Se chegou menos do que foi pedido, informe o que realmente chegou:
+            o sistema pede o restante sozinho.
+          </Faixa>
+        )}
+        <div className="form-row">
+          <div className="form-group">
+            <label className="acn-label">Número da NF *</label>
+            <input className="acn-input" value={form.numero_nf}
+              onChange={e => setForm(f => ({ ...f, numero_nf: e.target.value }))} placeholder="Ex: 004821" />
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="acn-label">Quantidade Recebida</label>
-              <input type="number" className="acn-input" style={{ width: '100%' }} value={form.quantidade_recebida}
-                onChange={e => { tocouQtd.current = true; setForm(f => ({ ...f, quantidade_recebida: e.target.value })); }} />
-            </div>
-            <div className="form-group">
-              <label className="acn-label">Volume (embalagens)</label>
-              <input type="number" className="acn-input" style={{ width: '100%' }} value={form.volume}
-                onChange={e => setForm(f => ({ ...f, volume: e.target.value }))} />
-            </div>
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <label className="acn-label">Números de Série (opcional)</label>
-            <input className="acn-input" style={{ width: '100%' }} value={form.seriais}
-              placeholder="Ex: SN12345, SN12346..."
-              onChange={e => setForm(f => ({ ...f, seriais: e.target.value }))} />
-          </div>
-
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 10, marginBottom: 10 }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button type="button" onClick={() => setForm(f => ({ ...f, confere: true }))}
-                style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                  border: form.confere ? '2px solid #16a34a' : '1px solid #e2e8f0',
-                  background: form.confere ? '#f0fdf4' : '#fff', color: form.confere ? '#16a34a' : '#64748b' }}>
-                ✅ Confere com o pedido
-              </button>
-              <button type="button" onClick={() => setForm(f => ({ ...f, confere: false }))}
-                style={{ flex: 1, padding: '6px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                  border: !form.confere ? '2px solid #dc2626' : '1px solid #e2e8f0',
-                  background: !form.confere ? '#fef2f2' : '#fff', color: !form.confere ? '#dc2626' : '#64748b' }}>
-                ⚠️ Tem divergência
-              </button>
-            </div>
-            {!form.confere && (
-              <textarea className="acn-input" rows={2} style={{ width: '100%', marginTop: 8, resize: 'vertical' }}
-                value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
-                placeholder="Descreva a divergência (qtd errada, item trocado, avaria...)" />
-            )}
-          </div>
-          {!form.confere && (
-            <div style={{ fontSize: 9, color: '#92400e', marginBottom: 8 }}>
-              Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="acn-btn" style={{ background: form.confere ? '#16a34a' : '#dc2626', flex: 1 }} onClick={confirmarRecebimento} disabled={salvando}>
-              {salvando ? 'Salvando...' : form.confere ? '✅ Confirmar Recebimento' : '⚠️ Registrar Divergência'}
-            </button>
-            <button className="acn-btn" style={{ background: '#94a3b8' }} onClick={() => onClose()} disabled={salvando}>Cancelar</button>
+          <div className="form-group">
+            <label className="acn-label">Data de Recebimento</label>
+            <input type="date" className="acn-input" value={form.data_recebimento_real}
+              onChange={e => setForm(f => ({ ...f, data_recebimento_real: e.target.value }))} />
           </div>
         </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="acn-label">Quantidade Recebida</label>
+            <input type="number" className="acn-input" value={form.quantidade_recebida}
+              onChange={e => { tocouQtd.current = true; setForm(f => ({ ...f, quantidade_recebida: e.target.value })); }} />
+          </div>
+          <div className="form-group">
+            <label className="acn-label">Volume (embalagens)</label>
+            <input type="number" className="acn-input" value={form.volume}
+              onChange={e => setForm(f => ({ ...f, volume: e.target.value }))} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="acn-label">Números de Série (opcional)</label>
+          <input className="acn-input" value={form.seriais}
+            placeholder="Ex: SN12345, SN12346..."
+            onChange={e => setForm(f => ({ ...f, seriais: e.target.value }))} />
+        </div>
+
+        <Chips rotulo="Conferência do recebimento" ativo={form.confere ? 'confere' : 'diverge'}
+          onChange={id => setForm(f => ({ ...f, confere: id === 'confere' }))}
+          itens={[
+            { id: 'confere', rotulo: 'Confere com o pedido', icone: mdiCheck },
+            { id: 'diverge', rotulo: 'Tem divergência', icone: mdiAlertOutline },
+          ]} />
+        {!form.confere && (
+          <div className="acn-modal-campo">
+            <textarea className="acn-input" rows={2}
+              value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+              placeholder="Descreva a divergência (qtd errada, item trocado, avaria...)" />
+            <Faixa tom="atencao">
+              Com divergência, o pedido continua "Comprado" e uma pendência é aberta para o Comprador resolver.
+            </Faixa>
+          </div>
+        )}
+
+        <div className="acn-modal-acoes">
+          <Botao className="cresce" variante={form.confere ? 'primario' : 'perigo'} icone={form.confere ? mdiCheck : mdiAlertOutline}
+            onClick={confirmarRecebimento} disabled={salvando}>
+            {salvando ? 'Salvando...' : form.confere ? 'Confirmar Recebimento' : 'Registrar Divergência'}
+          </Botao>
+          <Botao variante="secundario" onClick={() => onClose()} disabled={salvando}>Cancelar</Botao>
+        </div>
       </div>
-    
+    </div>
   );
 }
 
@@ -1609,23 +1608,23 @@ function PainelRecebimento({ currentUser }: any) {
 
   return (
     <div className="sec-card">
-      <div className="sec-hdr"><span>📦 Pedidos Aguardando Recebimento ({pedidos.length})</span></div>
-      <div className="sec-body" style={{ overflowX: 'auto' }}>
+      <div className="sec-hdr"><span>Pedidos Aguardando Recebimento ({pedidos.length})</span></div>
+      <div className="sec-body acn-rolagem">
         {loading ? <div className="acn-empty">Carregando...</div> : pedidos.length === 0 ? (
           <div className="acn-empty">Nenhum pedido comprado aguardando recebimento.</div>
         ) : (
-          <table>
+          <table className="acn-tabela">
             <thead><tr><th>Pedido / OC</th><th>Material</th><th>Fornecedor</th><th>Qtd</th><th>Valor</th><th>Previsão</th><th>Ação</th></tr></thead>
             <tbody>
               {pedidos.map(p => (
-                <tr key={p.id} style={atrasado(p) ? { background: '#fef2f2' } : undefined}>
-                  <td>{p.numero_pedido || '—'}{p.numero_oc ? <div style={{ fontSize: 9, color: '#64748b' }}>{p.numero_oc}</div> : null}</td>
-                  <td style={{ maxWidth: 220, wordBreak:'break-word' }}>{p.descricao_material || '—'}</td>
+                <tr key={p.id} className={atrasado(p) ? 'acn-linha-alerta' : undefined}>
+                  <td>{p.numero_pedido || '—'}{p.numero_oc ? <div className="acn-fraco">{p.numero_oc}</div> : null}</td>
+                  <td className="acn-texto-longo">{p.descricao_material || '—'}</td>
                   <td>{p.fornecedor || '—'}</td>
-                  <td>{p.quantidade ?? '—'}</td>
-                  <td>{fmt(p.valor_compra)}</td>
-                  <td>{fmtDt(p.data_prevista_recebimento)}{atrasado(p) && <span style={{ color: '#dc2626', fontWeight: 700 }}> ⚠ atrasado</span>}</td>
-                  <td><button className="acn-btn" style={{ background: '#16a34a', fontSize: 10 }} onClick={() => abrirReceber(p)}>📥 Receber</button></td>
+                  <td className="acn-num">{p.quantidade ?? '—'}</td>
+                  <td className="acn-num">{fmt(p.valor_compra)}</td>
+                  <td>{fmtDt(p.data_prevista_recebimento)}{atrasado(p) && <> <Selo familia="erro" ponto={false}>atrasado</Selo></>}</td>
+                  <td><Botao pequeno variante="primario" icone={mdiTrayArrowDown} onClick={() => abrirReceber(p)}>Receber</Botao></td>
                 </tr>
               ))}
             </tbody>
@@ -1895,16 +1894,12 @@ export default function LogisticaTab({ currentUser }) {
 
   return (
     <div>
-      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #1e293b'}}>
-        <button style={{flex:1,padding:'8px',background:abaLog==='recebimento'?'#1e293b':'white',color:abaLog==='recebimento'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaLog('recebimento')}>📦 Aguardando Recebimento</button>
-        <button style={{flex:1,padding:'8px',background:abaLog==='historico'?'#1e293b':'white',color:abaLog==='historico'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaLog('historico')}>📋 Histórico / Novo Registro</button>
-        <button style={{flex:1,padding:'8px',background:abaLog==='relatorio'?'#1e293b':'white',color:abaLog==='relatorio'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaLog('relatorio')}>📊 Relatório IN/OUT</button>
-        <button style={{flex:1,padding:'8px',background:abaLog==='fretes'?'#1e293b':'white',color:abaLog==='fretes'?'white':'#1e293b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAbaLog('fretes')}>🚚 Fretes</button>
-      </div>
+      <Abas ativa={abaLog} onChange={setAbaLog} itens={[
+        { id: 'recebimento', rotulo: 'Aguardando Recebimento', icone: mdiPackageDown },
+        { id: 'historico',   rotulo: 'Histórico / Novo Registro', icone: mdiClipboardTextClockOutline },
+        { id: 'relatorio',   rotulo: 'Relatório IN/OUT', icone: mdiChartBar },
+        { id: 'fretes',      rotulo: 'Fretes', icone: mdiTruckOutline },
+      ]} />
 
       {abaLog === 'recebimento' ? <PainelRecebimento currentUser={currentUser} /> : abaLog === 'relatorio' ? <RelatorioLogistica /> : abaLog === 'fretes' ? <FretesPanel currentUser={currentUser} /> : <>
       <div className="sec-card">

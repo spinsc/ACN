@@ -761,6 +761,8 @@ Aprovações no CQ desde o deploy: **0** (a última continua sendo a de 25/09, d
 FELIPE OLIVEIRA); OPs com o nome antigo agora: **0**. O zero segue sem provar nada, pelo
 mesmo motivo: não houve aprovação para testar. Voltar a medir quando o CQ voltar a aprovar.
 
+**Medido de novo em 30/09/2026 (~21h UTC, ao abrir a Etapa 12): ainda não cumpre, 5.1c segue adiada.** Aprovações no CQ depois do deploy do nome oficial: **7, todas com o nome oficial e 0 com o antigo** (OPs com o nome antigo agora: **0**; com o oficial: 194). Mas as 7 são **de um dia só (30/09) e de uma pessoa só (FELIPE OLIVEIRA)**: não prova que as abas antigas de **outros** usuários foram renovadas, e o critério pede ~10 e alguns dias úteis. Voltar a medir em 2 ou 3 dias úteis.
+
 #### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
 
 **Feito em:** 29/09/2026 (código; **nenhum dado foi alterado**).
@@ -1824,7 +1826,7 @@ não vê valores), falha de consulta (500) sem quebrar a tela. **Nenhuma gravaç
 
 **Testado:** `teste_26` (navegador, dado real, gravações bloqueadas, senha **simulada**) **15/15**: a sessão do Weber recebe a marca; o painel aparece com os 2 pedidos; a Mesa do PC-DEBMAA mostra "Aprovação — Nível 1" com "Não aprovar" e o "✅ Aprovar" na ATLASMAQ; aprovar grava a aprovação do nível 1 em nome dele e passa o pedido para **Aprovado** com histórico, **sem** criar linha nova; o pedido sem vencedora (PC-N40GWU) segue com "Aprovar esta cotação como vencedora" nas duas cotações; **quem não aprova** (Luiz, do Compras) continua sem painel e sem botão e vê "Aguardando aprovação de: BRUNA, LUCIANO SPINELLI, RAFAEL NUNES, RAPHAEL WEBER MELLO". **O mesmo teste no código que estava no ar falha** (marca `undefined`, sem painel, sem botão). `teste_17` (painel da Etapa 8) 24/24. Build ok.
 
-**O PC-DEBMAA continua pendente no banco** — não aprovei em nome de ninguém; quem aprova decide, depois de atualizar a tela.
+**Confirmado em produção (30/09/2026, 17h14):** o PC-DEBMAA foi **aprovado por RAFAEL NUNES** logo depois da publicação — histórico "Aprovações concluídas", **uma única** linha de aprovação, sem duplicar. Não aprovei em nome de ninguém. **O `teste_26` não se repete mais com dado real**, porque parte desse pedido pendente; o PC-N40GWU (sem vencedora) segue esperando.
 
 **Fora / limites:**
 
@@ -1944,7 +1946,9 @@ com o usuário no fim da Etapa 11; medido em 30/09/2026):
 | Fatia | Tela | Linhas | `style` inline | `acn-btn` | cores hex | Gravações no código | Estado |
 |---|---|---|---|---|---|---|---|
 | 12a | **Relatórios** | 1.582 | 273 | 18 | 241 | **0** (só leitura + planilha) | ✅ 30/09/2026 |
-| 12b | Logística | 2.174 | 243 | 29 | 197 | 31 | ⬜ |
+| 12b1 | **Logística — abas, Aguardando Recebimento, Relatório IN/OUT e janela "Receber Pedido"** | (do arquivo de 2.174) | 243 → 199 (arquivo todo) | 29 → 25 | 208 → 155 | 5 (todas na janela de recebimento) | ✅ 30/09/2026 |
+| 12b2 | Logística — Histórico / Novo Registro (formulário de manifesto, janela "Ver", fotos, PDF) | — | — | — | — | 4 | ⬜ |
+| 12b3 | Logística — Fretes (`FretesPanel`, ~1.000 linhas) | — | — | — | — | 22 | ⬜ |
 | 12c | RH | 2.443 | 381 | 0 | 391 | 9 | ⬜ |
 | 12d | SAC | 3.025 | 570 | 79 | 552 | 33 | ⬜ |
 
@@ -1987,6 +1991,38 @@ com o usuário no fim da Etapa 11; medido em 30/09/2026):
 **O que a fatia 12a ensinou para as próximas** (além da receita do piloto): (1) **fotografia antes/depois** é o teste certo para tela sem gravação, mas **o banco de produção anda** — na primeira tentativa 3 linhas diferiam porque uma OP mudou de etapa no meio; a solução foi
 guardar a tela nova com `git stash`, refazer a "antes" e devolver, **em sequência**; (2) o normalizador do teste precisa conhecer os rótulos curtos do design system (`Aguardando inicio producao` → `Aguardando início`); (3) **procure o nome da classe antes de criar**:
 `acn-quebra` já existia no `responsivo.css` e nas telas de cadastro, com outro sentido — a minha virou `acn-texto-longo`; (4) `overflow-wrap: anywhere` encolhe a coluna e quebra "Transformacao" ao meio, `break-word` não; (5) script com regex e barra invertida via heredoc perde a barra — use o `Edit`.
+
+#### ✅ 12b1 — Logística: abas, Aguardando Recebimento, Relatório IN/OUT e a janela "Receber Pedido"
+
+**Feito em:** 30/09/2026. **Por que dividi a 12b em três:** a Logística tem 4 abas e 2.174 linhas, e só o painel de Fretes passa de mil linhas e tem 22 dos 31 pontos de gravação (a janela de recebimento tem 5; o Histórico, 4). Cada fatia sobe e funciona sozinha: **12b1** = barra de abas + Aguardando Recebimento + Relatório IN/OUT (leitura) + a janela "Receber Pedido" (a única que grava aqui); **12b2** = Histórico / Novo Registro; **12b3** = Fretes.
+
+**Antes da migração, um bug achado pela própria fotografia:** as datas dos manifestos apareciam **um dia antes** do real (Etapa 7.10, corrigida em passo e commit à parte, **antes** de tirar o "antes" desta fatia, para a comparação partir de uma tela certa).
+
+**O que foi feito** (`LogisticaTab.tsx`, só a parte visual; `design.css`; **nenhuma consulta, conta, validação, texto de aviso ou gravação foi mexida**):
+
+- **Barra de 4 abas → `Abas`** (ícone + rótulo; em tela estreita ela rola dentro da própria barra, a página não rola).
+- **Relatório IN/OUT:** filtros em `acn-filtros` com `Botao`; **cartões de resumo em `acn-kpi`** (peça local `Indicadores`, com a linha de baixo "N un. · X kg") com um tom por tipo (recebimento verde, envio azul, transferência âmbar, saldo verde ou vermelho); tabelas em `acn-tabela`; o **tipo do manifesto vira `Selo`** (uma cor por família, igual às outras telas). A cor dos números por tipo na tabela "Por Tipo de Mercadoria" saiu — os cabeçalhos já dizem qual é qual.
+- **Aguardando Recebimento:** `acn-tabela`; pedido atrasado em `acn-linha-alerta` mais o `Selo` "atrasado" (no lugar do ⚠ dentro do texto); "Receber" é `Botao` primário.
+- **Janela "Receber Pedido":** a reposição de estoque virou `Faixa` verde; **a escolha "Confere com o pedido / Tem divergência" virou `Chips`** (era um quadro com dois botões); o aviso da divergência é `Faixa` âmbar; o botão principal é `Botao` verde ao conferir e **vermelho** ao registrar divergência. **Essa janela é compartilhada com o Compras** (mover o pedido de "Comprado" para "Recebido"): agora é igual nas duas telas.
+- **Classes novas no `design.css`**, reutilizáveis nas 12b2/12b3: `acn-modal-larga`, `acn-modal-sub`, `acn-form-cheio`, `acn-modal-campo`, `acn-modal-acoes`. Emojis decorativos tirados dos títulos, botões e avisos.
+
+**Resultado no código (medido no arquivo inteiro; as outras fatias ainda não foram migradas):** `style` inline **243 → 199**, `acn-btn` **29 → 25**, cores hex **208 → 155** (o plano registrou 197 com outra contagem; a de hoje usa `#rrggbb` e `#rgb`), `<button>` cru **41 → 31**, 2.174 → 2.169 linhas.
+
+**Como foi testado (gravações bloqueadas; respostas de gravação simuladas dentro do navegador):**
+
+- **Fotografia comparada** (`snap_log1.cjs`, igual para a tela velha e a nova): **12 cenários, 501 linhas de tabela, 12/12 iguais** — Aguardando Recebimento com dado real (4 pedidos), vazio e 3 pedidos simulados (atrasado, sem número/valor/fornecedor, e de **reposição de estoque**); Relatório IN/OUT em 2 períodos × 4 tipos e um cenário simulado com **Transferência** e quantidade/peso vazios. Estável entre duas rodadas.
+- **Comportamento comparado** (`comport_log1.cjs`, grava o que a pessoa vê **e o que seria gravado** nas duas versões): **11 blocos iguais** — cada aba mostra o seu painel; a janela abre com os mesmos campos e valores; "Tem divergência"; NF obrigatória e observação obrigatória; cancelar; **confirmar o recebimento grava exatamente os mesmos 3 comandos com os mesmos corpos** (manifesto, pedido e liberação do faturamento); **registrar divergência grava os mesmos 3** (manifesto, pedido, demanda para o Compras); a reposição de estoque mostra o aviso e abre com a quantidade **comprada** (12); "Filtrar" manda o período e o tipo digitados para a consulta.
+- **Entrada pelo Compras** (`teste_29`): **4/4** — mover um pedido "Comprado" para "Recebido" abre a mesma janela nova.
+- **Capturas** em claro, escuro e celular (390 px): sem rolagem lateral da página. **Regressão:** `teste_20` (Fiscal, que compartilha o `design.css`) 29/29, `teste_21` (Relatórios) 13/13, `teste_17` (painel de aprovação) 24/24, `teste_18` 29/29, `teste_63` 23/23, `teste_28` (datas da Logística) 6/6, `teste_5x` 11/11 (na primeira passada, dentro da fila longa, uma checagem de tempo do banner da OP falhou; sozinho, duas vezes, deu 11/11); build ok.
+
+**O que ficou de fora / limites:**
+
+- **Histórico / Novo Registro e Fretes** (12b2 e 12b3), inclusive a janela "Ver", a de fotos e o **PDF do comprovante** (só a correção de data entrou, na 7.10).
+- Os **tipos do manifesto** perdem as cores vivas de antes (verde/azul/âmbar chapados) e ficam no `Selo` suave; os **números por tipo** deixam de ser coloridos.
+- A janela de recebimento **nunca foi confirmada com um pedido de reposição de estoque real** (hoje nenhum "Comprado" é de estoque): o aviso e a quantidade foram vistos com pedido **simulado**; o crédito no estoque não é tocado por esta fatia.
+- A comparação não vê **proporções e cores**: isso foi conferido por captura nos três modos.
+
+**O que a 12b1 ensinou para as próximas:** (1) a **fotografia achou um bug** que a tela velha escondia (as datas); **uma comparação "igual à de antes" também compara os erros de antes** — bug é etapa própria, e se corrige **antes** de tirar o "antes"; (2) para tela que **grava**, comparar o **corpo do que seria gravado** nas duas versões é a prova mais forte (mascarar só as horas); (3) o toast de um cenário **fica na tela** no seguinte — o teste precisa tratar isso igual nas duas rodadas; (4) mensagem com hífen e ponto ("PC-CRM-632632") precisa do **mesmo normalizador** no navegador e no teste, senão o teste não acha a linha; (5) um teste que "pendurou" por 10 minutos era só uma execução simultânea — rode **uma de cada vez** no mesmo servidor.
 
 ### ⬜ Etapa 13 — Aposentar `TonsVisuais.ts` e o dark mode hex-a-hex
 Só depois que a migração acima cobrir o suficiente — os dois remendos
@@ -2074,3 +2110,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **OP 1450 duplicada unificada (correção de dado, pedido do usuário):** existiam `OPL A 1450.2607` (13/07, chassi HJ023180, modelo RANGER, CQ 12/12 OK) e `1450.2608` (27/08, R$ 20.000, ligada ao CRM, equipe apontada). **Ficou a 1450.2608**, que recebeu da antiga só o que estava **vazio** nela (chassi, previsão de entrega, observação comercial, tipo de projeto, anotações da engenharia); **onde as duas tinham valor, valeu o da mais nova** (inclusive cliente e modelo, que na nova são a descrição da OP, e não "RANGER"). Histórico (10), CQ (1), menções (4) e acompanhamentos (2) da antiga **passaram para a que ficou** — a OP passou a ter **2 CQs** (um com 12/12 OK, outro aprovado com os 12 itens pendentes). A antiga foi para a **Lixeira do Admin** (24 h) e há cópia completa fora do sistema. Nada mais foi tocado: o **card do CRM "OPL A 1450.2607 — POMERODE"** continua lá, sem OP ligada. |
 | 30/09/2026 | **Aprovação de compra travada (correção da Etapa 8):** a marca `pode_aprovar_compra` **passa a fazer parte da sessão** (login, "ver como" e atualização), e a cotação vencedora ganha o botão **"✅ Aprovar"** para a alçada já pendente. **Teste de sessão deve usar a sessão como o login a monta**, sem injetar permissão à mão (o `teste_17` injetava e escondeu o erro). O PC-DEBMAA **não foi aprovado por mim**: segue pendente para quem aprova. |
 | 30/09/2026 | **Datas da Logística (7.10):** o dia de uma coluna *date* vem **do texto AAAA-MM-DD**, nunca de `new Date(texto)` (que cai no dia anterior no Brasil). Bug funcional corrigido em passo próprio, **antes** da migração visual da Logística (12b), para a comparação "tela velha × nova" partir de uma tela certa. |
+| 30/09/2026 | **Etapa 12b (Logística) dividida em três fatias** — 12b1 (abas + Aguardando Recebimento + Relatório IN/OUT + janela "Receber Pedido"), 12b2 (Histórico / Novo Registro) e 12b3 (Fretes) — porque a tela tem 2.174 linhas e 31 pontos de gravação (22 só nos Fretes); cada uma sobe sozinha. **Tela que grava é provada comparando o corpo do que seria gravado, nas duas versões.** A janela "Receber Pedido" é **compartilhada com o Compras**: migrar uma migra a outra. Suposições minhas, não confirmadas: o tipo do manifesto passa a usar o `Selo` por família; os números por tipo deixam de ser coloridos. |

@@ -536,3 +536,10 @@ html body .acn-main:not(.acn-main-tv) table tr.acn-eng-info > td { padding-top: 
 .acn-equipe-lote { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 8px 10px; font-size: 11px; color: var(--acn-text); border: 1px dashed var(--acn-line); border-radius: var(--acn-r2); cursor: pointer; }
 .acn-equipe-lote input { margin-top: 2px; }
 .acn-equipe-lote em { display: block; margin-top: 2px; color: var(--acn-warn); font-style: normal; }
+/* ── Janelas de formulário da Logística (Etapa 12b1, 30/09/2026) — reutilizáveis nas outras fatias ── */
+.acn-modal-larga { max-width: 980px; }
+.acn-modal-sub { margin: 0 0 10px; font-size: 12px; color: var(--acn-muted); }
+.acn-form-cheio .acn-input { width: 100%; box-sizing: border-box; }
+.acn-modal-campo { margin: 8px 0; display: grid; gap: 8px; }
+.acn-modal-acoes { display: flex; gap: 8px; margin-top: 14px; }
+.acn-modal-acoes .cresce { flex: 1; }
