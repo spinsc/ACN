@@ -59,6 +59,9 @@ function Indicadores({ itens, compacto = false }) {
   );
 }
 
+// Quadros recolhíveis (Etapa 7.16, 01/10/2026): o sistema tem um clique GLOBAL no cabeçalho que alterna a classe `sec-collapsed` do cartão (DashboardTab),
+// e estes quadros têm também o estado próprio (`collapsed`). Os dois começavam fora de sincronia (o KPI nasce recolhido, sem a classe): clicar no
+// cabeçalho "abria" pelo estado e a classe escondia o corpo ao mesmo tempo. A classe agora segue o estado do quadro, nos dois caminhos (cabeçalho e seta).
 // Efeito no banco de horas por tipo
 function sinalDoTipo(tipo: string): number {
   const t = TIPO_MAP[tipo];
@@ -644,7 +647,7 @@ function PainelStatus({ funcionarios, onRefresh, onEdit, onDelete, onDesligar, c
   };
 
   return (
-    <div className="sec-card">
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
       <div className="sec-hdr no-collapse" onClick={() => setCollapsed(c => !c)}>
         <span className="acn-cab-titulo"><Icone path={mdiAccountGroupOutline} size={16} /> Status dos Colaboradores ({ativos.length})</span>
         <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
@@ -779,7 +782,7 @@ function ModalDesligar({ func, corrigindo, onClose, onSalvo, currentUser }) {
 function PainelDesligados({ desligados, onCorrigir, onReativar }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
-    <div className="sec-card" data-rh-desligados>
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')} data-rh-desligados>
       <div className="sec-hdr no-collapse" onClick={() => setCollapsed(c => !c)}>
         <span className="acn-cab-titulo"><Icone path={mdiAccountOffOutline} size={16} /> Desligados <Selo familia="neutro" ponto={false}>{desligados.length}</Selo></span>
         <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
@@ -850,7 +853,7 @@ function BancoHoras({ funcionarios, lancamentos, currentUser, onRefresh }) {
   };
 
   return (
-    <div className="sec-card">
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
       <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
         <span className="acn-cab-titulo"><Icone path={mdiTimerOutline} size={16} /> Banco de Horas</span>
         <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
@@ -943,7 +946,7 @@ function KpiRH({ funcionarios, lancamentos }) {
   // Etapa 12c1 (01/10/2026): as cores do gráfico vêm das classes acn-barra-seg (famílias do design system), não de hex na tela.
 
   return (
-    <div className="sec-card">
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
       <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
         <span className="acn-cab-titulo"><Icone path={mdiChartBoxOutline} size={16} /> KPI — Absenteísmo & Horas</span>
         <div className="acn-cab-filtros" onClick={e=>e.stopPropagation()}>
@@ -1068,7 +1071,7 @@ function KpiRH({ funcionarios, lancamentos }) {
 function ListaAutorizacoes({ funcionarios, autorizacoes, onImprimir }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
-    <div className="sec-card">
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
       <div className="sec-hdr no-collapse" onClick={()=>setCollapsed(c=>!c)}>
         <span className="acn-cab-titulo"><Icone path={mdiPrinterOutline} size={16} /> Autorizações de Saída / Entrada ({autorizacoes.length})</span>
         <Botao pequeno variante="discreto" icone={collapsed ? mdiChevronRight : mdiChevronDown} aria-label={collapsed ? 'Abrir' : 'Recolher'}
@@ -1447,7 +1450,7 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
 
 
   return (
-    <div className="sec-card">
+    <div className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}>
       <div className="sec-hdr" style={{ cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
         onClick={()=>setCollapsed(c=>!c)}>
         <span>📄 Relatórios de Horas</span>

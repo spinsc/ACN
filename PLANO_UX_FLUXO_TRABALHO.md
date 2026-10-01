@@ -1851,6 +1851,23 @@ Respondeu três perguntas minhas: (1) **é o apontamento que já existe, feito p
 
 **Fora / pendente:** o **Histórico de comissões** (`HistoricoComissoes`) tem a mesma forma de formatador (`new Date(d)`) — será conferido com dado real na **12c4**, antes da comparação. Continuam valendo as **52 ocorrências** da pergunta sobre datas em outras telas.
 
+### ✅ Etapa 7.16 — Quadros recolhíveis do RH: clicar no cabeçalho e usar a seta se desencontravam
+
+**Feito em:** 01/10/2026. **Achado** ao preparar a Etapa 12c3 (que migra dois quadros recolhíveis): olhei como o recolher funciona no RH e testei na tela.
+
+**Causa:** o sistema tem um **clique global no cabeçalho** (`DashboardTab.tsx`) que alterna a classe `sec-collapsed` do cartão — e essa classe **esconde o corpo por CSS**. Os quadros do RH têm **também um estado próprio** (`collapsed`) que decide se o corpo é desenhado, e uma seta que só mexe nesse estado. Os dois **começavam fora de sincronia** e nunca se acertavam:
+
+- o **KPI nasce recolhido** (sem a classe): clicar no cabeçalho **abria pelo estado e a classe escondia o corpo ao mesmo tempo** — o quadro **nunca abria pelo cabeçalho** (só pelo botão "Ver gráfico e lançamentos" e pela seta);
+- nos outros quadros, **recolher pelo cabeçalho e tentar abrir pela seta** deixava o corpo **escondido** (a classe continuava ligada), e **recolher pela seta e abrir pelo cabeçalho** idem.
+
+Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
+
+**O que foi feito** (`RHTab.tsx`; **nenhum dado alterado**): nos **6 quadros** do RH que já eram cartões com estado próprio (KPI, Status dos Colaboradores, Desligados, Banco de Horas, Autorizações e Relatórios de Horas) a classe `sec-collapsed` passa a **seguir o estado do quadro**; assim o cabeçalho e a seta dão sempre o mesmo resultado. O clique global continua funcionando para os demais cartões do sistema.
+
+**Testado** (`teste_36`, navegador, leitura simulada, nenhuma gravação): para cada quadro — nascer aberto ou recolhido, **clicar no cabeçalho, usar a seta, e clicar no cabeçalho de novo** (o corpo tem de estar visível ou não conforme o estado). **Antes 24/30** (o KPI não abria pelo cabeçalho; nos outros 5, a seta não reabria depois de recolher pelo cabeçalho), **depois 30/30**. Build ok.
+
+**Fora / pendente:** os quadros **Técnicos e Uniformes** (que não eram cartões) levam a mesma regra desde a **12c3**; **Comissões** e o **Histórico** serão conferidos na **12c4**. Outras telas com recolher próprio (fora do RH) **não foram auditadas**.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2351,5 +2368,6 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 01/10/2026 | **CEP na embalagem (7.13, decisão do usuário):** **CEP obrigatório e válido** e **cidade e UF preenchidas pelo CEP**, só na janela de embalagem do Almoxarifado. Suposições minhas: o CEP sobrescreve cidade e UF; "inexistente" só quando o ViaCEP e o BrasilAPI concordam; serviço fora do ar não barra a embalagem; CEP gravado como 00000-000. |
 | 01/10/2026 | **Janela do colaborador (7.14):** o par de botões "Sim / Não" sob "Recebe Comissão?" saiu (não gravava nada); ficou só "Recebe Comissão / Sem Comissão". Correção só de tela; nenhum dado mexido. |
 | 01/10/2026 | **Datas do Relatório de Técnicos (7.15):** coluna *date* nunca passa por `new Date(texto)`; o relatório tira o dia do texto (como na 7.10). Correção só de formatação; nenhum dado mexido. |
+| 01/10/2026 | **Recolher dos quadros do RH (7.16):** quadro com estado próprio de recolher leva a classe global `sec-collapsed` conforme esse estado (`className={'sec-card' + (collapsed ? ' sec-collapsed' : '')}`); o clique global do cabeçalho segue valendo para os outros cartões. Não auditei outras telas com o mesmo padrão. |
 | 01/10/2026 | **RH migrado em quatro fatias (12c1 a 12c4), por quadro da página, de cima para baixo.** Na 12c1: o status de presença e o tipo de lançamento passam a usar as **famílias de cor** do design system (o `Selo` e a classe `acn-sel-status`), o recolher dos quadros mantém a lógica e perde a seta duplicada (`no-collapse`). Suposições minhas, não confirmadas: Férias na cor da marca, Folga e Viagem no mesmo azul, e os 10 tipos de lançamento em 6 famílias. |
 | 01/10/2026 | **Janelas de cadastro do RH (12c2):** as fileiras de botões coloridos viram `Chips` (mesmas opções, mesmo valor gravado); a janela passa a ser a `modal-overlay` do sistema. Suposições minhas, não confirmadas: o aviso de "sem duração" do lançamento usa Falta âmbar, Atestado verde e os demais azul; Saída âmbar e Entrada azul na lista de autorizações. |
