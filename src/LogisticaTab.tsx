@@ -43,7 +43,7 @@ function RelatorioLogistica() {
     setCarregando(false);
   };
 
-  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmtDt = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';   // o dia do texto AAAA-MM-DD: new Date() jogava para o dia anterior (fuso)
   const corTipo = (t) => ({ Recebimento:'#22c55e', Envio:'#3b82f6', Transferencia:'#f59e0b' })[t] || '#94a3b8';
 
   const recebimentos   = dados.filter(m => m.tipo === 'Recebimento');
@@ -1670,7 +1670,7 @@ export default function LogisticaTab({ currentUser }) {
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+    const fmtDt = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';   // o dia do texto AAAA-MM-DD: new Date() jogava para o dia anterior (fuso)
     const fmtDtHr = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
 
     // Cor do tipo
@@ -1890,7 +1890,7 @@ export default function LogisticaTab({ currentUser }) {
     setUploading(false);
   };
 
-  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmtDt = (d) => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—';   // o dia do texto AAAA-MM-DD: new Date() jogava para o dia anterior (fuso)
   const corTipo = (t) => ({ Recebimento:'#22c55e', Envio:'#3b82f6', Transferencia:'#f59e0b' })[t] || '#94a3b8';
 
   return (
