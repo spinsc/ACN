@@ -739,7 +739,11 @@ function FretesPanel({ currentUser }: any) {
       ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(frete.valor_frete) : '—';
     const texto = `🚚 Frete entregue — ${frete.descricao}\nTransportadora: ${frete.transportadora || '—'} · Valor: ${valorFmt}\nEntregue em: ${new Date().toLocaleString('pt-BR')}`;
     try {
-      if (frete.vinculo_tipo === 'op_os') {
+      // Achado em 30/09/2026 (Etapa 7.11): os 5 fretes que já estavam em cotação foram criados ANTES da Etapa 1, quando o
+      // Almoxarifado gravava 'opl' em vez de 'op_os'. Sem aceitar o valor antigo, a entrega deles seguiria sem avisar a OP
+      // nem tirá-la de "Aguardando Cotacao Frete" — o mesmo travamento que a Etapa 1 corrigiu para os fretes novos.
+      // Nenhum dado foi alterado: a leitura é que passou a reconhecer os dois nomes.
+      if (frete.vinculo_tipo === 'op_os' || frete.vinculo_tipo === 'opl') {
         const { data: opl } = await supabase.from('oples').select('id,opl,status_geral').eq('id', frete.vinculo_id).maybeSingle();
         // referencia_id do acompanhamento é o NÚMERO da OP (numero_opl), não o
         // UUID — é assim que OplAcompModal.tsx busca (AcnTabShared.tsx:1612,

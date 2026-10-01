@@ -353,6 +353,7 @@ mexer — nenhum frete ligado a uma OP (por `'opl'` ou `'op_os'`) já tinha
 sido marcado "Entregue" alguma vez, então não havia OP presa pra corrigir
 retroativamente. O bug existia no código mas ainda não tinha travado
 ninguém de verdade.
+**Correção posterior (30/09/2026, Etapa 7.11):** essa conclusão olhou só os fretes **já entregues**. Os **5 fretes que estavam em cotação** tinham sido criados antes da correção, com o vínculo `'opl'`, e a entrega **não** os liberaria. Corrigido na 7.11 (a leitura passou a aceitar os dois nomes).
 
 **Testado** com OP e frete sintéticos (`ZZT-9999`): criado o cenário (OP em
 `Aguardando Cotacao Frete`, frete `Cotação` → confirmado → `Em Trânsito`
@@ -762,6 +763,8 @@ FELIPE OLIVEIRA); OPs com o nome antigo agora: **0**. O zero segue sem provar na
 mesmo motivo: não houve aprovação para testar. Voltar a medir quando o CQ voltar a aprovar.
 
 **Medido de novo em 30/09/2026 (~21h UTC, ao abrir a Etapa 12): ainda não cumpre, 5.1c segue adiada.** Aprovações no CQ depois do deploy do nome oficial: **7, todas com o nome oficial e 0 com o antigo** (OPs com o nome antigo agora: **0**; com o oficial: 194). Mas as 7 são **de um dia só (30/09) e de uma pessoa só (FELIPE OLIVEIRA)**: não prova que as abas antigas de **outros** usuários foram renovadas, e o critério pede ~10 e alguns dias úteis. Voltar a medir em 2 ou 3 dias úteis.
+
+**Medido de novo em 30/09/2026 (~23h30 no horário de Brasília, ao abrir a 12b3): idêntico, 5.1c segue adiada.** Aprovações no CQ depois do deploy: **7**, todas com o nome oficial, **0** com o antigo, de **uma pessoa e um dia** (30/09, entre 17h12 e 17h15 no horário de Brasília); OPs com o nome antigo agora: **0** (oficial: **194**). Nenhuma aprovação nova desde a medição anterior. Voltar a medir em 2 ou 3 dias úteis.
 
 #### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
 
@@ -1770,6 +1773,18 @@ Respondeu três perguntas minhas: (1) **é o apontamento que já existe, feito p
 
 **Fora / pendente:** uma busca por `new Date(...).toLocaleDateString` sem sufixo de hora encontrou **52 lugares** em 25 arquivos (os maiores: `FormacaoPrecosTab` 7, `AcnTabShared` 5, `VistoriasPatio` 3, `SacTab` 3, `RelatoriosTab` 3, `HorasTarefasTab` 3, `CotacoesTab` 3). **A maioria deve ser horário (timestamp), que está certo**: só coluna do tipo *date* sofre. Não auditei nem mexi — ver "Perguntas em aberto".
 
+### ✅ Etapa 7.11 — Os 5 fretes já em cotação não liberariam a OP ao serem entregues (resto da Etapa 1)
+
+**Feito em:** 30/09/2026. **Achado** ao ler os dados reais dos Fretes para a Etapa 12b3: as **5 solicitações de frete que existem hoje** (todas em "Cotação", de 18 e 21/09) estão com `vinculo_tipo = 'opl'` — o valor **antigo**, de antes da Etapa 1 (29/09), quando o Almoxarifado ainda gravava `'opl'` em vez de `'op_os'`.
+
+**Causa:** a Etapa 1 consertou o Almoxarifado **daqui para frente** e fez a entrega do frete (`postarAndamentoVinculo`, `LogisticaTab.tsx`) liberar a OP — mas só quando o vínculo é `'op_os'`. O levantamento da Etapa 1 conferiu que nenhum frete **entregue** tinha OP presa e concluiu "nenhuma OP travada"; **não olhou os fretes ainda em cotação**, que são os próximos a serem entregues. Resultado: as **5 OPs** (`1638.2609`, `1654.2609`, `0756.2609`, `1560.2608/02`, `1650.2609`, **todas em "Aguardando Cotacao Frete"**) ficariam presas, do mesmo jeito que o achado A2 descreve, quando o frete delas fosse entregue.
+
+**O que foi feito** (`LogisticaTab.tsx`, **uma condição**; **nenhum dado foi alterado — 0 linhas**): `postarAndamentoVinculo` passa a reconhecer **os dois nomes** (`'op_os'` e `'opl'`). Quem consulta "o que está ligado à OP" (`OpVinculos.ts`) já lia só por `vinculo_id`, então não precisou mudar. Escolhi **não migrar as 5 linhas** (mexer em dado real exige pedido): se o usuário preferir deixar o dado também no nome novo, são 5 linhas e a leitura continua tolerando os dois.
+
+**Testado** (`teste_30`, navegador, dado **real** na leitura — as 5 solicitações e as OPs delas — com o frete da OP 1638.2609 simulado como "Em Trânsito" e **toda gravação respondida dentro do navegador**): **antes 4/7** — marcar como entregue gravava só o frete; **não** gravava a nota no acompanhamento, **não** tirava a OP de "Aguardando Cotacao Frete" e **não** registrava o movimento; **depois 7/7**, com o frete **`'opl'` e com `'op_os'`**: nota com o **número** da OP (`1638.2609`), `status_geral` → `Aguardando Liberacao Comercial`, movimento no histórico. A entrega **de verdade** (canhoto indo para o armazenamento) não foi feita: a resposta do armazenamento é simulada.
+
+**Fora:** a Etapa 1 continua válida para o que ela provou (o caminho novo, com `'op_os'`). Esta 7.11 só fecha o buraco dos 5 fretes antigos.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2153,3 +2168,4 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 | 30/09/2026 | **Datas da Logística (7.10):** o dia de uma coluna *date* vem **do texto AAAA-MM-DD**, nunca de `new Date(texto)` (que cai no dia anterior no Brasil). Bug funcional corrigido em passo próprio, **antes** da migração visual da Logística (12b), para a comparação "tela velha × nova" partir de uma tela certa. |
 | 30/09/2026 | **Etapa 12b (Logística) dividida em três fatias** — 12b1 (abas + Aguardando Recebimento + Relatório IN/OUT + janela "Receber Pedido"), 12b2 (Histórico / Novo Registro) e 12b3 (Fretes) — porque a tela tem 2.174 linhas e 31 pontos de gravação (22 só nos Fretes); cada uma sobe sozinha. **Tela que grava é provada comparando o corpo do que seria gravado, nas duas versões.** A janela "Receber Pedido" é **compartilhada com o Compras**: migrar uma migra a outra. Suposições minhas, não confirmadas: o tipo do manifesto passa a usar o `Selo` por família; os números por tipo deixam de ser coloridos. |
 | 30/09/2026 | **Largura das tabelas é critério de aceite da migração (achado na 12b2):** com o dado real, a 1400 px, a tabela migrada tem de **caber no quadro (1.102 px úteis) como a antiga cabia**; o design system engorda células e botões, e uma linha com texto sem espaço (uma URL colada) trava a coluna. A solução é classe opt-in no `design.css` (`acn-densa`, `acn-texto-medio` / `acn-texto-curto`, `acn-acoes-linha quebra`), não estilo solto na tela. A 12b1, já publicada, tinha o mesmo defeito no Relatório IN/OUT e foi corrigida junto. Suposições minhas, não confirmadas: recuo lateral de 7 px e botão "N foto(s)" sem ícone, só nas tabelas da Logística. |
+| 30/09/2026 | **Fretes antigos (7.11):** a entrega do frete reconhece o vínculo de OP pelos **dois nomes** (`op_os`, o atual, e `opl`, o de antes da Etapa 1), **sem migrar as 5 linhas reais** — correção só de código, no espírito do princípio 4 (o código tolera as duas grafias). Suposição minha, não confirmada: não é preciso mexer no dado. |
