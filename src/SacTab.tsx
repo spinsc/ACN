@@ -1266,9 +1266,13 @@ OK = ACN   |   Cancelar = DETECH`;
       payload.atendido_por = currentUser?.nome || currentUser?.email || 'Sistema';
     }
     if (notas !== undefined) payload.notas_atendimento = notas;
-    await supabase.from('chamados_suporte').update(payload).eq('id', id);
+    // Etapa 7.18 (01/10/2026): antes o resultado da gravação era ignorado — "Salvar Notas" dizia "Notas salvas!" mesmo com a gravação recusada, e
+    // "Atender" / "Concluir" falhavam em silêncio (a pessoa achava que tinha gravado). Agora o erro aparece e a função devolve se gravou.
+    const { error } = await supabase.from('chamados_suporte').update(payload).eq('id', id);
+    if (error) { alert('Erro ao gravar o chamado: ' + error.message); return false; }
     carregarChamadosNfc();
     if (modalNfc?.id === id) setModalNfc(prev => ({ ...prev, status: novoStatus, ...payload }));
+    return true;
   };
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -1446,8 +1450,7 @@ OK = ACN   |   Cancelar = DETECH`;
                     </button>
                     <button onClick={async()=>{
                       const notas=(document.getElementById('nfc-notas-input') as HTMLTextAreaElement)?.value||'';
-                      await atualizarStatusNfc(modalNfc.id, modalNfc.status, notas);
-                      alert('Notas salvas!');
+                      if (await atualizarStatusNfc(modalNfc.id, modalNfc.status, notas)) alert('Notas salvas!');
                     }}
                       style={{background:'#16a34a',color:'#fff',border:'none',borderRadius:5,
                         padding:'6px 14px',fontSize:10,fontWeight:700,cursor:'pointer'}}>

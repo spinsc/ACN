@@ -1890,6 +1890,21 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 - **Não conferi** os demais relatórios que usam "`fim + T23:59:59`" (vários em `RelatoriosTab.tsx`): como a hora sem fuso é lida em UTC, provavelmente perdem as 3 últimas horas do último dia (erro menor que o das comissões). Entra na auditoria das datas já listada.
 - Quem usa a tela já viu valores menores do que os certos — só importa se alguém **já pagou** com base neles; o banco não registra nenhum fechamento aprovado por esta tela.
 
+### ✅ Etapa 7.18 — Chamados NFC (SAC): "Notas salvas!" aparecia mesmo quando a gravação falhava
+
+**Feito em:** 01/10/2026. **Achado** ao montar o teste de comportamento da Etapa 12d1: simulei uma gravação recusada e a tela agiu como se tivesse dado certo.
+
+**Causa:** a função que grava o chamado (`atualizarStatusNfc`, `SacTab.tsx`) **não olhava o resultado** da gravação em `chamados_suporte`. O botão **"Salvar Notas"** sempre mostrava "Notas salvas!" logo depois — **inclusive com a gravação recusada** — e **"Atender" / "Concluir"** não mostravam nada se falhasse (a lista era recarregada como se tudo tivesse dado certo). Quem digitou as notas achava que estavam guardadas.
+
+**O que foi feito** (`SacTab.tsx`, só essa função e o botão **"Salvar Notas"**; **nenhum dado foi alterado**): a gravação passa a **conferir o erro**, avisar **"Erro ao gravar o chamado: …"** (com a mensagem do banco) e devolver se gravou; **"Notas salvas!" só aparece se gravou**; com erro a **janela de notas continua aberta com o texto digitado** (não se perde). Quando a gravação dá certo, **o corpo gravado é o mesmo de antes**.
+
+**Como foi testado** (`teste_38`, navegador, leitura e gravação **simuladas**, nada chega ao banco): gravação aceita (aviso de sempre); gravação recusada ao **salvar notas** (tentou gravar, mostra o erro com a mensagem do banco, **não** diz "Notas salvas!", janela aberta com o texto), ao **Atender** e ao **Concluir** (mostra o erro, o chamado continua como estava); e a gravação **voltando a funcionar**. **Antes 5/9; depois 9/9.** Build ok; `teste_20` 24/24, `teste_36` 45/45 e `teste_37` 17/17.
+
+**Fora / pendente:**
+
+- **Achado, não corrigido — "Salvar Notas" troca o atendente.** A mesma função, quando o chamado está "Em Atendimento" ou "Concluído", grava **`atendido_por` = a pessoa que está salvando** — então quem apenas edita as notas de um chamado já atendido passa a constar como o atendente. **Com o banco de hoje não dá para saber se já aconteceu:** os 4 chamados foram todos atendidos por LUCIANO SPINELLI. Pode ser a regra desejada ("o último a mexer") ou um efeito colateral; não mexi. Ver "Perguntas em aberto".
+- **O filtro de status só vale ao clicar em "Carregar"** (escolher o status não recarrega a lista), e o "N aberto(s)" do cabeçalho conta só o que está carregado — por exemplo, filtrando "Concluído" ele mostra "0 aberto(s)". Não mexi.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -2395,7 +2410,8 @@ Separar "Administrativo" (12 itens) em grupos menores e mais previsíveis.
 - **CEP nas outras entradas (7.13):** a regra "CEP válido e cidade/UF preenchidas pelo CEP" vale hoje **só na janela de embalagem do Almoxarifado**. Quer a mesma coisa na **criação da OP** (`NovaOpOsModal`), na **edição da OP** (CRM e Admin) e no **formulário manual "Novo Frete"**? E os **4 fretes reais com CEP de zeros**: alguém do Comercial passa o destino verdadeiro de cada OP (1654.2609, 0756.2609, 1560.2608/02 e 1650.2609) para eu corrigir, com a contagem das linhas?
 - **Quem pode responder as perguntas de OP já aberta (7.5):** hoje quem abre a liberação da BOM responde (fica registrado quem e quando). Vale restringir a Engenharia/PCP/Admin?
 - **Quantas OPs o Relatório de Técnicos deve contar (12c3):** hoje só entram as **200 OPs mais recentes** (de 369 com responsável comercial), então Tatiana aparece com 114 (tem 228), Thiago 52 (tem 75), Letícia 30 (tem 41) e Rute 4 (tem 11), **sem aviso na tela**. Quer **todas as OPs**, um **filtro de período** (mês/ano) ou manter as 200 e **avisar na tela**? E as **13 OPs com o responsável em branco** e a **"leticia" sem sobrenome** (1 OP): ficam de fora, ou corrijo o cadastro delas (com a contagem)?
-- **Relatório de Comissão Comercial em mês de 30 dias (7.17):** a aba Relatórios pede "AAAA-MM-31" e o banco recusa em setembro, abril, junho, novembro e fevereiro (relatório vazio, sem aviso). Corrijo agora (período certo, como na 7.17), como Etapa 7.18 à parte? É só leitura, não muda dado.
+- **Relatório de Comissão Comercial em mês de 30 dias (7.17):** a aba Relatórios pede "AAAA-MM-31" e o banco recusa em setembro, abril, junho, novembro e fevereiro (relatório vazio, sem aviso). Corrijo agora (período certo, como na 7.17), como Etapa 7.19 à parte? É só leitura, não muda dado.
+- **Quem consta como atendente do chamado NFC (7.18):** ao salvar as **notas** de um chamado "Em Atendimento" ou "Concluído", o sistema grava quem está salvando como `atendido_por` (hoje os 4 chamados são todos de LUCIANO SPINELLI, então ainda não deu diferença). Deve valer **o último a mexer** (como está) ou **só quem clicou em Atender / Concluir**, sem trocar ao editar as notas?
 - **Serviços na BOM sugerida (7.4):** película, instalação do kit e garantia continuam como linhas de separação na sugestão da Engenharia; tirar é decisão do usuário.
 - **Ordem geral:** a sequência acima é uma sugestão — qual etapa começar
   primeiro é decisão do usuário.
