@@ -185,6 +185,7 @@ export default function SacTab({ currentUser }) {
   const [chamadosNfc,  setChamadosNfc]  = useState<any[]>([]);
   const [loadNfc,      setLoadNfc]      = useState(false);
   const [nfcStatus,    setNfcStatus]    = useState('');
+  const [nfcAbertos,   setNfcAbertos]   = useState(0); // total REAL de chamados "Aberto" (R25): não depende do filtro nem do que está carregado
   const [modalNfc,     setModalNfc]     = useState<any>(null);
   const [ordens, setOrdens]             = useState([]);
   // Linhas/cards com alteração não vista por este usuário — mesmo padrão
@@ -1254,12 +1255,16 @@ OK = ACN   |   Cancelar = DETECH`;
   };
 
   // ── Chamados NFC ──────────────────────────────────────────────────────────
-  const carregarChamadosNfc = async () => {
+  // R25 (01/10/2026, resposta do usuário): escolher o status no filtro JÁ recarrega a lista (antes só valia ao clicar em "Carregar") e o "N aberto(s)" do
+  // cabeçalho é o total real de chamados abertos — antes contava só os carregados e, filtrando "Concluído", dizia "0 aberto(s)". O parâmetro tem padrão para
+  // quem chama sem argumento (abrir a aba, depois de gravar); o botão "Carregar" chama sem argumento de propósito (o clique não pode virar o filtro).
+  const carregarChamadosNfc = async (statusFiltro: string = nfcStatus) => {
     setLoadNfc(true);
     let q = supabase.from('chamados_suporte').select('*').order('created_at', { ascending: false });
-    if (nfcStatus) q = q.eq('status', nfcStatus);
-    const { data } = await q;
+    if (statusFiltro) q = q.eq('status', statusFiltro);
+    const [{ data }, { data: abertos }] = await Promise.all([q, supabase.from('chamados_suporte').select('id').eq('status', 'Aberto')]);
     setChamadosNfc(data || []);
+    setNfcAbertos((abertos || []).length);
     setLoadNfc(false);
   };
 
@@ -1304,18 +1309,18 @@ OK = ACN   |   Cancelar = DETECH`;
               <div className="acn-quadro-titulo">Módulo NFC</div>
               <div className="acn-cab-titulo acn-forte"><Icone path={mdiCellphoneNfc} size={16} /> Chamados de Suporte (NFC)</div>
               <div className="acn-ajuda">
-                {chamadosNfc.length} chamado(s) · {chamadosNfc.filter(c=>c.status==='Aberto').length} aberto(s)
+                {chamadosNfc.length} chamado(s) · {nfcAbertos} aberto(s)
               </div>
             </div>
             <div className="acn-cab-filtros">
-              <select className="acn-input acn-select-mini" aria-label="Status do chamado" value={nfcStatus} onChange={e=>{setNfcStatus(e.target.value);}}>
+              <select className="acn-input acn-select-mini" aria-label="Status do chamado" value={nfcStatus} onChange={e=>{setNfcStatus(e.target.value); carregarChamadosNfc(e.target.value);}}>
                 <option value="">Todos os status</option>
                 <option value="Aberto">Aberto</option>
                 <option value="Em Atendimento">Em Atendimento</option>
                 <option value="Concluído">Concluído</option>
                 <option value="Cancelado">Cancelado</option>
               </select>
-              <Botao pequeno icone={mdiRefresh} onClick={carregarChamadosNfc}>Carregar</Botao>
+              <Botao pequeno icone={mdiRefresh} onClick={()=>carregarChamadosNfc()}>Carregar</Botao>
             </div>
           </div>
 
