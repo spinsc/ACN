@@ -46,6 +46,7 @@ import {
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo } from './Interface';
 import { telaInicialDoUsuario } from './utils/telaInicial';
+import { gruposParaRecolher } from './utils/menuLateral';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
@@ -85,11 +86,14 @@ const METRICAS_CONFIG = [
 ];
 
 const SIDEBAR_GROUPS = [
+  // Etapa 14b (decidido com o usuário em 02/10/2026): nenhum grupo com mais de 7 itens. O "Administrativo" de 12 itens foi repartido em "Preços e cadastros", "Logística" e um "Administrativo" enxuto;
+  // "Compras" foi para o Controle de produção e "Demandas gerais" para o grupo do início. Nenhuma tela mudou de permissão: só de lugar no menu.
   {
     section: 'Dashboard',
     items: [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'calendario', label: 'Calendário' },
+      { id: 'ajustes',    label: 'Demandas gerais' },
     ],
   },
   {
@@ -103,11 +107,20 @@ const SIDEBAR_GROUPS = [
     ],
   },
   {
+    section: 'Preços e cadastros',
+    items: [
+      { id: 'formacao_precos',   label: 'Formação de preços' },
+      { id: 'cadastro_itens',    label: 'Cadastro de itens' },
+      { id: 'cadastro_produtos', label: 'Produtos e mercadorias' },
+    ],
+  },
+  {
     section: 'Controle de produção',
     items: [
       { id: 'engenharia',   label: 'Engenharia' },
       { id: 'pcp',          label: 'PCP' },
       { id: 'almoxarifado', label: 'Almoxarifado' },
+      { id: 'compras',      label: 'Compras' },
     ],
   },
   {
@@ -123,20 +136,20 @@ const SIDEBAR_GROUPS = [
     ],
   },
   {
-    section: 'Administrativo',
+    section: 'Logística',
     items: [
       { id: 'logistica',  label: 'Logística In/Out' },
       { id: 'vistorias',  label: 'Vistorias de pátio' },
-      { id: 'ajustes',    label: 'Demandas gerais' },
-      { id: 'compras',         label: 'Compras' },
-      { id: 'financeiro',      label: 'Financeiro' },
-      { id: 'cadastro_itens',    label: 'Cadastro de itens' },
-      { id: 'cadastro_produtos', label: 'Produtos e mercadorias' },
-      { id: 'rh',                label: 'RH' },
+    ],
+  },
+  {
+    section: 'Administrativo',
+    items: [
+      { id: 'financeiro',         label: 'Financeiro' },
+      { id: 'fiscal',             label: 'Fiscal' },
+      { id: 'rh',                 label: 'RH' },
       { id: 'comissoes_tecnicos', label: 'Comissões' },
-      { id: 'fiscal',     label: 'Fiscal' },
-      { id: 'relatorios',      label: 'Relatórios' },
-      { id: 'formacao_precos', label: 'Formação de preços' },
+      { id: 'relatorios',         label: 'Relatórios' },
     ],
   },
   {
@@ -211,10 +224,11 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 /* o logo é um botão (leva à tela inicial): sem a cara de botão, só o cursor e o foco de teclado */
 .acn-logo-botao { display:flex; align-items:center; padding:0; border:none; background:transparent; cursor:pointer; flex-shrink:0; border-radius:6px; }
 .acn-logo-botao:focus-visible { outline:2px solid #0f766e; outline-offset:2px; }
-.acn-nav-lista { flex:1; overflow-y:auto; padding:8px 8px 12px; display:flex; flex-direction:column; gap:1px; }
-.sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 10px 4px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
+/* Etapa 14b (02/10/2026): menu um pouco mais denso no computador (item de 32 para 30 px, título dos grupos 14/4 → 8/3 px, sem folga entre itens) para a lista, com o maior grupo aberto, caber sem rolar em notebook de tela 768; o celular tem os seus tamanhos no responsivo.css */
+.acn-nav-lista { flex:1; overflow-y:auto; padding:8px 8px 8px; display:flex; flex-direction:column; gap:0; }
+.sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px 10px 3px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
 .sidebar-section:hover { color:#3b4856; }
-.sidebar-item { display:flex; align-items:center; gap:10px; width:100%; min-height:32px; padding:0 10px; border:none; background:none; border-radius:6px; font-size:13px; color:#3b4856; cursor:pointer; text-align:left; user-select:none; transition:background .1s, color .1s; white-space:nowrap; }
+.sidebar-item { display:flex; align-items:center; gap:10px; width:100%; min-height:30px; padding:0 10px; border:none; background:none; border-radius:6px; font-size:13px; color:#3b4856; cursor:pointer; text-align:left; user-select:none; transition:background .1s, color .1s; white-space:nowrap; }
 .sidebar-item .sidebar-icone { color:#8a96a3; }
 .sidebar-item:hover { background:#f3f5f7; color:#17212b; }
 .sidebar-item.active { background:#e3f2ef; color:#0a544e; font-weight:600; }
@@ -1298,10 +1312,10 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
         <div className="acn-coluna">
         {/* ── CABEÇALHO ── */}
         <header className={`acn-header${buscaMobile ? ' acn-busca-aberta' : ''}`}>
-          {/* Botão do menu (todas as telas): abre/fecha a gaveta; com o menu fechado leva a soma dos avisos dos itens */}
+          {/* Botão do menu (todas as telas): abre/fecha a gaveta; com o menu fechado leva a soma dos avisos dos itens. Etapa 14b: ao ABRIR, só o grupo da tela atual vem aberto (a lista cabe em tela baixa) */}
           <button
             className="acn-hamburger"
-            onClick={() => setSidebarOpen(o => !o)}
+            onClick={() => { if (!sidebarOpen) setSectionsCollapsed(gruposParaRecolher(SIDEBAR_GROUPS, activeTab)); setSidebarOpen(o => !o); }}
             aria-label="Menu" aria-expanded={sidebarOpen} aria-controls="acn-menu-principal"
             title={totalAvisosMenu > 0 ? `Menu — ${totalAvisosMenu} aviso(s) nos itens` : 'Menu'}>
             <Icone path={sidebarOpen ? mdiClose : mdiMenu} size={22} />
