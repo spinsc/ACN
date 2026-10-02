@@ -17,7 +17,15 @@ const SETORES_DEMANDA = ['Chicotes','Serralheria','Laboratorio','Compras'];
 const semDado = (v) => !v || !String(v).trim();
 
 function fmtDt(d) { return d ? new Date(d).toLocaleString('pt-BR') : '—'; }
-function fmtData(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'; }
+// Etapa 7.33 (R16, resposta do usuário em 01/10/2026): new Date("2026-10-02") é meia-noite de Londres, que no Brasil ainda é o dia 1 — a data de entrada e a previsão de entrega das OPs
+// (colunas do tipo DATE) e a previsão de recebimento das compras (guardada como meia-noite UTC) saíam UM DIA ANTES, em todos os relatórios. O dia sai direto do texto; só a data com hora
+// de verdade (data_abertura, data_entrega…) continua pelo fuso de quem usa. Mesma regra já aplicada na Logística (7.10) e no RH (7.15).
+function fmtData(d) {
+  if (!d) return '—';
+  const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ]00:00(?::00(?:\.0+)?)?(?:Z|\+00(?::?00)?)?)?$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return new Date(d).toLocaleDateString('pt-BR');
+}
 function fmtH(h) { return h != null ? Number(h).toFixed(1)+'h' : '—'; }
 function iniPeriodo() {
   const d = new Date(); d.setDate(d.getDate()-30);
