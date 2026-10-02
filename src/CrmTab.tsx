@@ -2178,8 +2178,8 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
           </div>
         )}
 
-        {/* OP já lançada — quem olha o card vê que não precisa lançar de novo */}
-        {col?.tipo === 'ganho' && opsDoCard.length > 0 && (
+        {/* OP já lançada — quem olha o card vê que não precisa lançar de novo. Regra definida com o usuário em 01/10/2026 (R2): aparece em QUALQUER coluna em que o card tenha OP (antes só em "Vencido"; há cards em Faturado e Enviado em que o selo mostra a situação real da OP) */}
+        {opsDoCard.length > 0 && (
           <div className="acn-kmeta">
             <Selo familia="ok" title={`OP(s) lançada(s) a partir deste card: ${opsDoCard.join(', ')}`}
               onClick={resumoOps ? abrirOpDoCard : undefined}>
