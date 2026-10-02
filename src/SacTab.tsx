@@ -2264,22 +2264,31 @@ OK = ACN   |   Cancelar = DETECH`;
 
       {/* ════════ MODAL SAÍDA / ENTREGA ════════ */}
       {/* ════════ MODAL ENTREGA VEICULAR ════════ */}
+      {/* Etapa 12d6 (02/10/2026): só aparência das janelas do fluxo de manutenção veicular — campos, textos, ordem e lógica são os de antes, no molde das janelas do RH (cabeçalho, corpo que rola, rodapé fixo com o botão principal à direita). */}
       {modalEntregaVeic && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:400}}>
-            <div className="modal-title">🚚 Entrega de Veículo — {modalEntregaVeic.numero_os}</div>
-            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:8,marginBottom:12,fontSize:11}}>
-              <strong>Cliente:</strong> {modalEntregaVeic.cliente_nome}<br/>
-              {modalEntregaVeic.veiculo_modelo && <><strong>Veículo:</strong> {modalEntregaVeic.veiculo_modelo} — {modalEntregaVeic.veiculo_placa}</>}
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiTruckDeliveryOutline} size={18} /> Entrega de Veículo — {modalEntregaVeic.numero_os}</span>
             </div>
-            <label className="acn-label">Nome de quem recebeu o veículo *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
-              placeholder="Nome completo do receptor"
-              value={nomeRecebeuVeic} onChange={e=>setNomeRecebeuVeic(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&confirmarEntregaVeicular()} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#166534',flex:1}} onClick={confirmarEntregaVeicular}>✅ Confirmar Entrega</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEntregaVeic(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <Faixa tom="ok">
+                <div>
+                  <strong>Cliente:</strong> {modalEntregaVeic.cliente_nome}<br/>
+                  {modalEntregaVeic.veiculo_modelo && <><strong>Veículo:</strong> {modalEntregaVeic.veiculo_modelo} — {modalEntregaVeic.veiculo_placa}</>}
+                </div>
+              </Faixa>
+              <div className="form-group">
+                <label className="acn-label">Nome de quem recebeu o veículo *</label>
+                <input className="acn-input" autoFocus
+                  placeholder="Nome completo do receptor"
+                  value={nomeRecebeuVeic} onChange={e=>setNomeRecebeuVeic(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&confirmarEntregaVeicular()} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={confirmarEntregaVeicular}>Confirmar Entrega</Botao>
+              <Botao onClick={()=>setModalEntregaVeic(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2347,20 +2356,28 @@ OK = ACN   |   Cancelar = DETECH`;
 
       {modalAprovCotacao && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">✅ Aprovação de Cotação — {modalAprovCotacao.numero_os}</div>
-            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:8,marginBottom:12,fontSize:11}}>
-              <strong>Cliente:</strong> {modalAprovCotacao.cliente_nome}<br/>
-              <strong>Valor:</strong> {fmtVal(modalAprovCotacao.valor_orcamento || (modalAprovCotacao.itens_cotacao||[]).reduce((s:number,i:any)=>s+(i.quantidade||1)*(i.valor_unitario||0),0))}
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCheckCircleOutline} size={18} /> Aprovação de Cotação — {modalAprovCotacao.numero_os}</span>
             </div>
-            <label className="acn-label">Nome de quem aprovou *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:14}} autoFocus
-              placeholder="Nome completo do aprovador"
-              value={aprovCotacaoNome} onChange={e=>setAprovCotacaoNome(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&confirmarAprovCotacao()} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={confirmarAprovCotacao}>✅ Confirmar Aprovação</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAprovCotacao(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <Faixa tom="ok">
+                <div>
+                  <strong>Cliente:</strong> {modalAprovCotacao.cliente_nome}<br/>
+                  <strong>Valor:</strong> {fmtVal(modalAprovCotacao.valor_orcamento || (modalAprovCotacao.itens_cotacao||[]).reduce((s:number,i:any)=>s+(i.quantidade||1)*(i.valor_unitario||0),0))}
+                </div>
+              </Faixa>
+              <div className="form-group">
+                <label className="acn-label">Nome de quem aprovou *</label>
+                <input className="acn-input" autoFocus
+                  placeholder="Nome completo do aprovador"
+                  value={aprovCotacaoNome} onChange={e=>setAprovCotacaoNome(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&confirmarAprovCotacao()} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={confirmarAprovCotacao}>Confirmar Aprovação</Botao>
+              <Botao onClick={()=>setModalAprovCotacao(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2406,79 +2423,87 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* Modal: Itens da Cotação */}
       {modalItens && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">📋 Itens da Cotação — {modalItens.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalItens.cliente_nome}</div>
-            {/* Tabela de itens */}
-            <>
-              <table style={{width:'100%',borderCollapse:'collapse',marginBottom:8}}>
-                <thead>
-                  <tr style={{background:'#f1f5f9'}}>
-                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0',width:90}}>Código</th>
-                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0'}}>Descrição</th>
-                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'center',borderBottom:'2px solid #e2e8f0',width:60}}>Qtd</th>
-                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Vl. Unit. (R$)</th>
-                    <th style={{padding:'6px 8px',fontSize:10,textAlign:'right',borderBottom:'2px solid #e2e8f0',width:100}}>Total</th>
-                    <th style={{width:30,borderBottom:'2px solid #e2e8f0'}}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {localItens.map((item, idx) => (
-                    <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-                      <td style={{padding:'4px 6px'}}>
-                        <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo}
-                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,codigo:e.target.value}:x))} placeholder="Cód." />
-                      </td>
-                      <td style={{padding:'4px 6px'}}>
-                        <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao}
-                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,descricao:e.target.value}:x))} placeholder="Descrição do item..." />
-                      </td>
-                      <td style={{padding:'4px 6px'}}>
-                        <input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade}
-                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
-                      </td>
-                      <td style={{padding:'4px 6px'}}>
-                        <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario}
-                          onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
-                      </td>
-                      <td style={{padding:'4px 8px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>
-                        {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                      </td>
-                      <td style={{padding:'4px'}}>
-                        <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14,lineHeight:1}}
-                          onClick={()=>setLocalItens(p=>p.filter((_,i)=>i!==idx))}>×</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{background:'#f0fdf4'}}>
-                    <td colSpan={4} style={{padding:'8px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
-                    <td style={{padding:'8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
-                      R$ {localItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-              <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}}
-                onClick={()=>setLocalItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>+ Adicionar Linha</button>
-              {/* Horas cobradas na cotação remota */}
-              <div style={{background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:6,padding:'10px 12px',marginBottom:12}}>
-                <label className="acn-label" style={{color:'#c2410c'}}>⏱️ Horas Cobradas na Cotação (h)</label>
-                <input type="number" min={0} step="0.5" className="acn-input" style={{width:140}}
-                  placeholder="Ex: 2.5"
-                  value={horasCobradas}
-                  onChange={e=>setHorasCobradas(e.target.value)} />
-                <div style={{fontSize:9,color:'#9a3412',marginTop:4}}>
-                  Será comparado com as horas reais apontadas na Produção (KPI).
+          <div className="modal-box acn-modal-cadastro acn-sac-jan acn-sac-jan-larga">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiClipboardListOutline} size={18} /> Itens da Cotação — {modalItens.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalItens.cliente_nome}</div>
+              {/* Tabela de itens */}
+              <>
+                <div className="acn-rolagem">
+                  <table className="acn-tabela acn-densa acn-sac-tab-itens">
+                    <thead>
+                      <tr>
+                        <th className="acn-sac-col-cod">Código</th>
+                        <th>Descrição</th>
+                        <th className="acn-centro acn-sac-col-qtd">Qtd</th>
+                        <th className="acn-dir acn-sac-col-valor">Vl. Unit. (R$)</th>
+                        <th className="acn-dir acn-sac-col-valor">Total</th>
+                        <th className="acn-sac-col-x"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {localItens.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <input className="acn-input" value={item.codigo}
+                              onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,codigo:e.target.value}:x))} placeholder="Cód." />
+                          </td>
+                          <td>
+                            <input className="acn-input" value={item.descricao}
+                              onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,descricao:e.target.value}:x))} placeholder="Descrição do item..." />
+                          </td>
+                          <td>
+                            <input type="number" min={1} className="acn-input acn-sac-in-centro" value={item.quantidade}
+                              onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
+                          </td>
+                          <td>
+                            <input type="number" min={0} step="0.01" className="acn-input acn-sac-in-dir" value={item.valor_unitario}
+                              onChange={e=>setLocalItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
+                          </td>
+                          <td className="acn-dir acn-num acn-forte">
+                            {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                          </td>
+                          <td>
+                            <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item"
+                              onClick={()=>setLocalItens(p=>p.filter((_,i)=>i!==idx))} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="acn-linha-total">
+                        <td colSpan={4} className="acn-dir">TOTAL:</td>
+                        <td className="acn-dir acn-num">
+                          R$ {localItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
-              </div>
-              <div style={{display:'flex',gap:8}}>
-                <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={async ()=>{ if (await salvarItensOS(modalItens.id, localItens, horasCobradas)) setModalItens(null); }}>✓ Salvar Itens</button>
-                <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
-              </div>
-            </>
+                <div>
+                  <Botao pequeno icone={mdiPlus}
+                    onClick={()=>setLocalItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>Adicionar Linha</Botao>
+                </div>
+                {/* Horas cobradas na cotação remota */}
+                <div className="acn-quadro tom-atencao">
+                  <label className="acn-label"><Icone path={mdiTimerOutline} size={14} /> Horas Cobradas na Cotação (h)</label>
+                  <input type="number" min={0} step="0.5" className="acn-input acn-sac-horas-campo"
+                    placeholder="Ex: 2.5"
+                    value={horasCobradas}
+                    onChange={e=>setHorasCobradas(e.target.value)} />
+                  <div className="acn-ajuda">
+                    Será comparado com as horas reais apontadas na Produção (KPI).
+                  </div>
+                </div>
+              </>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={async ()=>{ if (await salvarItensOS(modalItens.id, localItens, horasCobradas)) setModalItens(null); }}>Salvar Itens</Botao>
+              <Botao onClick={()=>setModalItens(null)}>Fechar</Botao>
+            </div>
           </div>
         </div>
       )}
@@ -2486,37 +2511,43 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* MODAL: Enviar para Fiscal — captura nº de série dos itens instalados */}
       {modalEnviarFiscal && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">📤 Enviar para Fiscal — {modalEnviarFiscal.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalEnviarFiscal.cliente_nome}</div>
-            <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-              ⚠️ Informe o nº de série de cada item instalado antes de enviar — o Fiscal precisa dessa informação para emitir a NF-e.
+          <div className="modal-box acn-modal-cadastro acn-sac-jan acn-sac-jan-larga">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiSendOutline} size={18} /> Enviar para Fiscal — {modalEnviarFiscal.numero_os}</span>
             </div>
-            <table style={{width:'100%',borderCollapse:'collapse',marginBottom:12}}>
-              <thead>
-                <tr style={{background:'#f1f5f9'}}>
-                  <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0'}}>Descrição</th>
-                  <th style={{padding:'6px 8px',fontSize:10,textAlign:'center',borderBottom:'2px solid #e2e8f0',width:60}}>Qtd</th>
-                  <th style={{padding:'6px 8px',fontSize:10,textAlign:'left',borderBottom:'2px solid #e2e8f0',width:180}}>Nº de Série</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fiscalItens.map((item, idx) => (
-                  <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-                    <td style={{padding:'4px 6px',fontSize:11}}>{item.descricao || '—'}</td>
-                    <td style={{padding:'4px 6px',fontSize:11,textAlign:'center'}}>{item.quantidade || 1}</td>
-                    <td style={{padding:'4px 6px'}}>
-                      <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.numero_serie || ''}
-                        placeholder="Nº de série..."
-                        onChange={e=>setFiscalItens(p=>p.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#f59e0b',flex:1}} onClick={enviarParaFiscal}>📤 Enviar para Fiscal</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{ setModalEnviarFiscal(null); setFiscalItens([]); }}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalEnviarFiscal.cliente_nome}</div>
+              <Faixa tom="atencao">
+                Informe o nº de série de cada item instalado antes de enviar — o Fiscal precisa dessa informação para emitir a NF-e.
+              </Faixa>
+              <div className="acn-rolagem">
+                <table className="acn-tabela acn-densa">
+                  <thead>
+                    <tr>
+                      <th>Descrição</th>
+                      <th className="acn-centro acn-sac-col-qtd">Qtd</th>
+                      <th className="acn-sac-col-serie">Nº de Série</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fiscalItens.map((item, idx) => (
+                      <tr key={idx}>
+                        <td>{item.descricao || '—'}</td>
+                        <td className="acn-centro acn-num">{item.quantidade || 1}</td>
+                        <td>
+                          <input className="acn-input" value={item.numero_serie || ''}
+                            placeholder="Nº de série..."
+                            onChange={e=>setFiscalItens(p=>p.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiSendOutline} onClick={enviarParaFiscal}>Enviar para Fiscal</Botao>
+              <Botao onClick={()=>{ setModalEnviarFiscal(null); setFiscalItens([]); }}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2525,123 +2556,125 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* Modal: Ver / Editar Orçamento da Produção (Presencial) */}
       {modalOrcProd && (
         <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget){setModalOrcProd(null);setOrcProdItens([]);}}}>
-          <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">
-              {orcProdModo==='ver' ? '👁 Orçamento da Produção' : '✏️ Editar Orçamento'} — {modalOrcProd.numero_os}
+          <div className="modal-box acn-modal-cadastro acn-sac-jan acn-sac-jan-larga">
+            <div className="acn-modal-cab">
+              <span className="modal-title">
+                <Icone path={orcProdModo==='ver' ? mdiEyeOutline : mdiPencilOutline} size={18} /> {orcProdModo==='ver' ? 'Orçamento da Produção' : 'Editar Orçamento'} — {modalOrcProd.numero_os}
+              </span>
             </div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Cliente: <strong>{modalOrcProd.cliente_nome}</strong>
-              {modalOrcProd.valor_orcamento && (
-                <span style={{marginLeft:12,background:'#f0fdf4',border:'1px solid #86efac',padding:'2px 10px',borderRadius:20,fontWeight:700,color:'#166534'}}>
-                  Total atual: R$ {Number(modalOrcProd.valor_orcamento).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                </span>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Cliente: <strong>{modalOrcProd.cliente_nome}</strong>
+                {modalOrcProd.valor_orcamento && (
+                  <> <Selo familia="ok" ponto={false}>Total atual: R$ {Number(modalOrcProd.valor_orcamento).toLocaleString('pt-BR',{minimumFractionDigits:2})}</Selo></>
+                )}
+              </div>
+
+              {/* Tabs Ver / Editar */}
+              <Chips ativo={orcProdModo} rotulo="Modo do orçamento"
+                onChange={id=>{ if (id==='ver') { setOrcProdModo('ver'); return; } if(orcProdModo==='ver') setOrcProdItens(Array.isArray(modalOrcProd.itens_cotacao)&&modalOrcProd.itens_cotacao.length>0?modalOrcProd.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setOrcProdModo('editar'); }}
+                itens={[{ id:'ver', rotulo:'Visualizar', icone:mdiEyeOutline }, { id:'editar', rotulo:'Editar', icone:mdiPencilOutline }]} />
+
+              {orcProdModo === 'ver' ? (
+                /* MODO VER — somente leitura */
+                (!orcProdItens || orcProdItens.length === 0) ? (
+                  <div className="acn-empty">Nenhum item inserido pela Produção ainda.</div>
+                ) : (
+                  <div className="acn-rolagem">
+                    <table className="acn-tabela acn-densa">
+                      <thead><tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th className="acn-centro acn-sac-col-qtd">Qtd</th>
+                        <th className="acn-dir acn-sac-col-valor">Vl. Unit.</th>
+                        <th className="acn-dir acn-sac-col-valor">Total</th>
+                      </tr></thead>
+                      <tbody>
+                        {orcProdItens.map((item,i)=>(
+                          <tr key={i}>
+                            <td className="acn-fraco">{item.codigo||'—'}</td>
+                            <td className="acn-forte">{item.descricao||'—'}</td>
+                            <td className="acn-centro acn-num">{item.quantidade||1}</td>
+                            <td className="acn-dir acn-num">R$ {Number(item.valor_unitario||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                            <td className="acn-dir acn-num acn-forte">R$ {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot><tr className="acn-linha-total">
+                        <td colSpan={4} className="acn-dir">TOTAL:</td>
+                        <td className="acn-dir acn-num">
+                          R$ {orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </td>
+                      </tr></tfoot>
+                    </table>
+                  </div>
+                )
+              ) : (
+                /* MODO EDITAR */
+                <>
+                  <Faixa tom="atencao">
+                    Editar o orçamento não altera a aprovação — use para corrigir valores antes de comunicar o cliente.
+                  </Faixa>
+                  <div className="acn-rolagem">
+                    <table className="acn-tabela acn-densa acn-sac-tab-itens">
+                      <thead><tr>
+                        <th className="acn-sac-col-cod">Código</th>
+                        <th>Descrição</th>
+                        <th className="acn-centro acn-sac-col-qtd">Qtd</th>
+                        <th className="acn-dir acn-sac-col-valor">Vl. Unit.</th>
+                        <th className="acn-dir acn-sac-col-valor">Total</th>
+                        <th className="acn-sac-col-x"></th>
+                      </tr></thead>
+                      <tbody>
+                        {orcProdItens.map((item,idx)=>(
+                          <tr key={idx}>
+                            <td>
+                              <input className="acn-input" value={item.codigo||''} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,codigo:e.target.value}:x))} />
+                            </td>
+                            <td>
+                              <input className="acn-input" value={item.descricao||''} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,descricao:e.target.value}:x))} placeholder="Peça / serviço..." />
+                            </td>
+                            <td>
+                              <input type="number" min={1} className="acn-input acn-sac-in-centro" value={item.quantidade||1} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
+                            </td>
+                            <td>
+                              <input type="number" min={0} step="0.01" className="acn-input acn-sac-in-dir" value={item.valor_unitario||0} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
+                            </td>
+                            <td className="acn-dir acn-num acn-forte">
+                              {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                            </td>
+                            <td>
+                              <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover item" onClick={()=>setOrcProdItens(p=>p.filter((_,i)=>i!==idx))} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot><tr className="acn-linha-total">
+                        <td colSpan={4} className="acn-dir">TOTAL:</td>
+                        <td className="acn-dir acn-num">
+                          R$ {orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+                        </td>
+                        <td></td>
+                      </tr></tfoot>
+                    </table>
+                  </div>
+                  <div>
+                    <Botao pequeno icone={mdiPlus}
+                      onClick={()=>setOrcProdItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>
+                      Adicionar Item
+                    </Botao>
+                  </div>
+                </>
               )}
             </div>
-
-            {/* Tabs Ver / Editar */}
-            <div style={{display:'flex',gap:0,marginBottom:12,borderRadius:6,overflow:'hidden',border:'1px solid #e2e8f0'}}>
-              <button style={{flex:1,padding:'7px',background:orcProdModo==='ver'?'#0891b2':'white',color:orcProdModo==='ver'?'white':'#64748b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-                onClick={()=>setOrcProdModo('ver')}>👁 Visualizar</button>
-              <button style={{flex:1,padding:'7px',background:orcProdModo==='editar'?'#7c3aed':'white',color:orcProdModo==='editar'?'white':'#64748b',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-                onClick={()=>{ if(orcProdModo==='ver') setOrcProdItens(Array.isArray(modalOrcProd.itens_cotacao)&&modalOrcProd.itens_cotacao.length>0?modalOrcProd.itens_cotacao.map(i=>({...i})):[{codigo:'',descricao:'',quantidade:1,valor_unitario:0}]); setOrcProdModo('editar'); }}>
-                ✏️ Editar
-              </button>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              {orcProdModo === 'ver' ? (
+                <Botao onClick={()=>{setModalOrcProd(null);setOrcProdItens([])}}>Fechar</Botao>
+              ) : (<>
+                <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarEdicaoOrcProd}>Salvar Alterações</Botao>
+                <Botao onClick={()=>{setModalOrcProd(null);setOrcProdItens([])}}>Cancelar</Botao>
+              </>)}
             </div>
-
-            {orcProdModo === 'ver' ? (
-              /* MODO VER — somente leitura */
-              <div>
-                {(!orcProdItens || orcProdItens.length === 0) ? (
-                  <div style={{textAlign:'center',color:'#94a3b8',padding:24,fontSize:12}}>Nenhum item inserido pela Produção ainda.</div>
-                ) : (
-                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
-                    <thead><tr style={{background:'#f1f5f9'}}>
-                      <th style={{padding:'6px 8px',textAlign:'left',fontSize:10}}>Código</th>
-                      <th style={{padding:'6px 8px',textAlign:'left',fontSize:10}}>Descrição</th>
-                      <th style={{padding:'6px 8px',textAlign:'center',fontSize:10,width:55}}>Qtd</th>
-                      <th style={{padding:'6px 8px',textAlign:'right',fontSize:10,width:100}}>Vl. Unit.</th>
-                      <th style={{padding:'6px 8px',textAlign:'right',fontSize:10,width:100}}>Total</th>
-                    </tr></thead>
-                    <tbody>
-                      {orcProdItens.map((item,i)=>(
-                        <tr key={i} style={{borderBottom:'1px solid #f1f5f9'}}>
-                          <td style={{padding:'6px 8px',color:'#64748b'}}>{item.codigo||'—'}</td>
-                          <td style={{padding:'6px 8px',fontWeight:600}}>{item.descricao||'—'}</td>
-                          <td style={{padding:'6px 8px',textAlign:'center'}}>{item.quantidade||1}</td>
-                          <td style={{padding:'6px 8px',textAlign:'right'}}>R$ {Number(item.valor_unitario||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-                          <td style={{padding:'6px 8px',textAlign:'right',fontWeight:700,color:'#0f766e'}}>R$ {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot><tr style={{background:'#f0fdf4'}}>
-                      <td colSpan={4} style={{padding:'8px',fontWeight:700,textAlign:'right',color:'#166534'}}>TOTAL:</td>
-                      <td style={{padding:'8px',fontWeight:800,fontSize:13,textAlign:'right',color:'#166534'}}>
-                        R$ {orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                      </td>
-                    </tr></tfoot>
-                  </table>
-                )}
-                <div style={{display:'flex',gap:8,marginTop:14}}>
-                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalOrcProd(null);setOrcProdItens([])}}>Fechar</button>
-                </div>
-              </div>
-            ) : (
-              /* MODO EDITAR */
-              <div>
-                <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px',marginBottom:10,fontSize:10}}>
-                  ⚠️ Editar o orçamento não altera a aprovação — use para corrigir valores antes de comunicar o cliente.
-                </div>
-                <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}>
-                  <thead><tr style={{background:'#f1f5f9'}}>
-                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'left',width:80}}>Código</th>
-                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'left'}}>Descrição</th>
-                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'center',width:55}}>Qtd</th>
-                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',width:95}}>Vl. Unit.</th>
-                    <th style={{padding:'5px 7px',fontSize:10,textAlign:'right',width:95}}>Total</th>
-                    <th style={{width:28}}></th>
-                  </tr></thead>
-                  <tbody>
-                    {orcProdItens.map((item,idx)=>(
-                      <tr key={idx} style={{borderBottom:'1px solid #f1f5f9'}}>
-                        <td style={{padding:'3px 5px'}}>
-                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.codigo||''} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,codigo:e.target.value}:x))} />
-                        </td>
-                        <td style={{padding:'3px 5px'}}>
-                          <input className="acn-input" style={{width:'100%',fontSize:10}} value={item.descricao||''} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,descricao:e.target.value}:x))} placeholder="Peça / serviço..." />
-                        </td>
-                        <td style={{padding:'3px 5px'}}>
-                          <input type="number" min={1} className="acn-input" style={{width:'100%',fontSize:10,textAlign:'center'}} value={item.quantidade||1} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,quantidade:Number(e.target.value)||1}:x))} />
-                        </td>
-                        <td style={{padding:'3px 5px'}}>
-                          <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%',fontSize:10,textAlign:'right'}} value={item.valor_unitario||0} onChange={e=>setOrcProdItens(p=>p.map((x,i)=>i===idx?{...x,valor_unitario:Number(e.target.value)||0}:x))} />
-                        </td>
-                        <td style={{padding:'3px 7px',fontSize:10,textAlign:'right',fontWeight:700,color:'#0f766e'}}>
-                          {((Number(item.quantidade)||1)*(Number(item.valor_unitario)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                        </td>
-                        <td>
-                          <button style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}} onClick={()=>setOrcProdItens(p=>p.filter((_,i)=>i!==idx))}>×</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot><tr style={{background:'#f0fdf4'}}>
-                    <td colSpan={4} style={{padding:'6px',fontWeight:700,fontSize:11,textAlign:'right',color:'#166534'}}>TOTAL:</td>
-                    <td style={{padding:'6px',fontWeight:800,fontSize:12,textAlign:'right',color:'#166534'}}>
-                      R$ {orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    </td>
-                    <td></td>
-                  </tr></tfoot>
-                </table>
-                <button className="acn-btn" style={{background:'#e2e8f0',color:'#1e293b',fontSize:10,marginBottom:12}}
-                  onClick={()=>setOrcProdItens(p=>[...p,{codigo:'',descricao:'',quantidade:1,valor_unitario:0}])}>
-                  + Adicionar Item
-                </button>
-                <div style={{display:'flex',gap:8}}>
-                  <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={salvarEdicaoOrcProd}>💾 Salvar Alterações</button>
-                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setModalOrcProd(null);setOrcProdItens([])}}>Cancelar</button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2649,25 +2682,29 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* Modal: Aceite SAC — confirma data definida pela Produção com o cliente */}
       {modalAceiteSAC && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">📋 Aceite SAC — {modalAceiteSAC.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: {modalAceiteSAC.cliente_nome}</div>
-            <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,padding:'10px 12px',marginBottom:14,fontSize:11}}>
-              <div style={{fontWeight:700,color:'#0369a1',marginBottom:4}}>📅 Data definida pela Produção:</div>
-              <div style={{fontSize:13,fontWeight:700,color:'#1e293b'}}>
-                {modalAceiteSAC.data_provisionamento
-                  ? new Date(modalAceiteSAC.data_provisionamento+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
-                  : '—'}
-                {modalAceiteSAC.periodo_provisionamento ? ` — ${modalAceiteSAC.periodo_provisionamento}` : ''}
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiClipboardCheckOutline} size={18} /> Aceite SAC — {modalAceiteSAC.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo">
+              <div className="acn-ajuda">Cliente: {modalAceiteSAC.cliente_nome}</div>
+              <div className="acn-quadro tom-info">
+                <div className="acn-quadro-titulo">Data definida pela Produção:</div>
+                <div className="acn-forte acn-sac-data-grande">
+                  {modalAceiteSAC.data_provisionamento
+                    ? new Date(modalAceiteSAC.data_provisionamento+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
+                    : '—'}
+                  {modalAceiteSAC.periodo_provisionamento ? ` — ${modalAceiteSAC.periodo_provisionamento}` : ''}
+                </div>
               </div>
+              <Faixa tom="info">
+                Confirme se o cliente aceitou esta data para entrega/chegada do veículo.
+              </Faixa>
             </div>
-            <div style={{fontSize:11,color:'#374151',marginBottom:14,background:'#fefce8',border:'1px solid #fde68a',borderRadius:4,padding:'8px 10px'}}>
-              ℹ️ Confirme se o cliente aceitou esta data para entrega/chegada do veículo.
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={()=>confirmarAceiteSAC(modalAceiteSAC)}>✅ Cliente Confirmou</button>
-              <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>rejeitarAceiteSAC(modalAceiteSAC)}>❌ Não Confirmou</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAceiteSAC(null)}>Fechar</button>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={()=>confirmarAceiteSAC(modalAceiteSAC)}>Cliente Confirmou</Botao>
+              <Botao variante="perigo-sec" icone={mdiClose} onClick={()=>rejeitarAceiteSAC(modalAceiteSAC)}>Não Confirmou</Botao>
+              <Botao onClick={()=>setModalAceiteSAC(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
