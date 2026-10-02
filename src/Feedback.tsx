@@ -49,17 +49,31 @@ export function tomDe(texto: string): Tom {
   return 'info';
 }
 
+// Etapa 7.31 (R5, resposta do usuário em 01/10/2026): o aviso de ERRO (vermelho) só some quando a pessoa fecha — antes saía sozinho em 9 s e dava para perder
+// o que falhou. Atenção (7 s) e sucesso/informação seguem como antes. Para o erro parado não cobrir a tela: o MESMO erro repetido (clicou duas vezes) aparece uma vez só,
+// ficam no máximo os 3 erros mais recentes, e com 2 ou mais avisos aparece o "Fechar todos".
+const MAX_ERROS = 3;
 export function mostrarAviso(mensagem: any, tom?: Tom) {
   const texto = String(mensagem ?? '').trim();
   if (!texto) return;
   const aviso: Aviso = { id: ++seq, texto, tom: tom || tomDe(texto) };
+  if (aviso.tom === 'erro') {
+    if (avisos.some(a => a.tom === 'erro' && a.texto === texto)) return;
+    const erros = avisos.filter(a => a.tom === 'erro');
+    if (erros.length >= MAX_ERROS) avisos = avisos.filter(a => a.id !== erros[0].id);
+  }
   avisos = [...avisos, aviso].slice(-5);
   avisar();
-  const duracao = aviso.tom === 'erro' ? 9000 : aviso.tom === 'atencao' ? 7000 : Math.min(9000, 4000 + texto.length * 25);
+  if (aviso.tom === 'erro') return; // só fecha pelo ✕ (ou por "Fechar todos")
+  const duracao = aviso.tom === 'atencao' ? 7000 : Math.min(9000, 4000 + texto.length * 25);
   setTimeout(() => fecharAviso(aviso.id), duracao);
 }
 function fecharAviso(id: number) {
   avisos = avisos.filter(a => a.id !== id);
+  avisar();
+}
+function fecharTodosOsAvisos() {
+  avisos = [];
   avisar();
 }
 
@@ -172,6 +186,9 @@ export function FeedbackRaiz() {
   return (
     <>
       <div className="acn-avisos" aria-live="polite">
+        {avisos.length > 1 && (
+          <button type="button" className="acn-avisos-limpar" onClick={fecharTodosOsAvisos}>Fechar todos ({avisos.length})</button>
+        )}
         {avisos.map(a => (
           <div key={a.id} className={`acn-aviso tom-${a.tom}`} role={a.tom === 'erro' ? 'alert' : 'status'}>
             <span className="acn-aviso-icone"><Svg d={ICONE[a.tom]} /></span>

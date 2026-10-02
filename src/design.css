@@ -847,3 +847,8 @@ html body .acn-sac-jan .acn-quadro > label.acn-label { display: flex; align-item
 /* ── SAC · janelas de Novo equipamento, Responsável e Valores Financeiros (Etapa 12d7, 02/10/2026): só aparência ───────────── */
 /* o campo do colaborador é um componente compartilhado (ColaboradorSelect) com o estilo escrito dentro do próprio elemento: aqui ele só se alinha aos demais campos, sem mexer no componente (trocá-lo é assunto da Etapa 13) */
 html body .acn-sac-jan .acn-input.acn-sac-colab { padding: 6px 9px !important; font-size: 13px !important; border: 1px solid var(--acn-line) !important; border-radius: var(--acn-r2) !important; background: var(--acn-surface) !important; }
+/* ── Avisos de erro que ficam até fechar (Etapa 7.31, R5, 02/10/2026) ─────────────────────────────────────── */
+/* erro parado não pode cobrir a tela: o texto comprido rola dentro do próprio aviso (3 erros no máximo) */
+.acn-aviso.tom-erro .acn-aviso-texto { max-height: 14vh; }
+.acn-avisos-limpar { pointer-events: auto; border: 1px solid var(--acn-line); background: var(--acn-surface); color: var(--acn-muted); font: inherit; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer; box-shadow: var(--acn-sombra, 0 1px 3px rgba(0, 0, 0, .12)); }
+.acn-avisos-limpar:hover { color: var(--acn-ink); background: var(--acn-neutral-soft); }
