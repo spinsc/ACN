@@ -6,6 +6,7 @@ import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { statusAposCqAprovado, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { Faixa } from './Interface';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -62,6 +63,8 @@ export default function QualidadeTab({ currentUser }) {
   const [obsAudit, setObsAudit] = useState('');
   const [signData, setSignData] = useState(null);
   const [uploading, setUploading] = useState(false);
+  // Etapa 7.35 (02/10/2026): leitura que falha avisa em vez de parecer "Nenhuma OP aguardando auditoria"
+  const [erroLeitura, setErroLeitura] = useState('');
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
@@ -72,9 +75,16 @@ export default function QualidadeTab({ currentUser }) {
       supabase.from('sac_ordens_servico').select('*').eq('status','Aguardando CQ').eq('is_manutencao_veicular',true).order('data_abertura',{ascending:false}),
       supabase.from('cq_checklist_itens').select('*').eq('ativo',true).order('ordem',{ascending:true}),
     ]);
-    setOpls((oplsRes.data || []).map(o => ({ ...o, _tipo: 'op' })));
-    setOrdensOS((osRes.data || []).map(o => ({ ...o, _tipo: 'os' })));
-    setChecklist(ckRes.data || []);
+    // com a leitura falhando a lista anterior fica (e a faixa avisa), em vez de esvaziar a fila de auditoria
+    const falha = oplsRes.error || osRes.error || ckRes.error;
+    if (falha) {
+      setErroLeitura('Não foi possível ler a fila do CQ (' + falha.message + '). A lista abaixo pode estar desatualizada.');
+    } else {
+      setErroLeitura('');
+      setOpls((oplsRes.data || []).map(o => ({ ...o, _tipo: 'op' })));
+      setOrdensOS((osRes.data || []).map(o => ({ ...o, _tipo: 'os' })));
+      setChecklist(ckRes.data || []);
+    }
     if (!silent) setLoading(false);
   };
 
@@ -88,6 +98,10 @@ export default function QualidadeTab({ currentUser }) {
     setModalAudit(row);
   };
 
+  // Etapa 7.35 (02/10/2026): aprovar e reprovar passam a conferir o erro do banco em CADA gravação e a parar na que falha. Antes, com qualquer uma recusada, a tela seguia como se tivesse dado
+  // certo: a OP podia ficar "Aguardando CQ" no banco enquanto o WhatsApp dizia "aprovada" e a janela fechava; a assinatura que não subia era descartada e a auditoria ficava sem ela.
+  // A ordem é a de antes (assinatura, auditoria, OP/OS, histórico, WhatsApp). Falhou a assinatura ou a auditoria: nada mudou, tente de novo. Falhou a gravação da OP/OS: a auditoria já
+  // existe (uma nova será registrada na repetição) e o aviso diz isso. Falhou só o histórico de movimentação: a OP JÁ foi aprovada, então avisa e segue.
   const aprovar = async () => {
     if (!signData) { alert('Assine o checklist antes de aprovar!'); return; }
     setUploading(true);
@@ -95,20 +109,23 @@ export default function QualidadeTab({ currentUser }) {
     const ehOS = row._tipo === 'os';
     const numero = ehOS ? row.numero_os : row.opl;
     const agora = new Date().toISOString();
-    // Upload assinatura
+    // Upload assinatura: a que não sobe IMPEDE a aprovação (mesma regra da 7.27 no SAC; suposição minha, não confirmada)
     let sigUrl = null;
     try {
       const blob = await (await fetch(signData)).blob();
       const path = `assinaturas/cq_${numero}_${Date.now()}.png`;
-      const { data: up } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
-      if (up) {
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        sigUrl = pub?.publicUrl;
-      }
-    } catch(e) { console.warn('Signature upload failed', e); }
+      const { data: up, error: errUp } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
+      if (errUp || !up) throw (errUp || new Error('o armazenamento não respondeu'));
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      sigUrl = pub?.publicUrl;
+    } catch(e) {
+      console.warn('Signature upload failed', e);
+      alert('Erro ao enviar a assinatura: ' + (e?.message || e) + '\nA aprovação não foi registrada: tente de novo.');
+      setUploading(false); return;
+    }
 
     // Salvar auditoria
-    await supabase.from('cq_auditorias').insert([{
+    const { error: errAud } = await supabase.from('cq_auditorias').insert([{
       ...(ehOS ? { os_id: row.id, numero_os: numero } : { opl_id: row.id, numero_opl: numero }),
       resultado: 'Aprovado',
       itens_checklist: Object.entries(checkStates).map(([id,val]) => ({
@@ -121,6 +138,7 @@ export default function QualidadeTab({ currentUser }) {
       auditor_nome: currentUser?.nome,
       data_auditoria: agora,
     }]);
+    if (errAud) { alert('Erro ao registrar a auditoria: ' + errAud.message + '\nNada foi aprovado: tente de novo.'); setUploading(false); return; }
 
     if (ehOS) {
       const novoRow = {
@@ -130,7 +148,8 @@ export default function QualidadeTab({ currentUser }) {
         data_cq: agora,
         atualizado_em: agora,
       };
-      await supabase.from('sac_ordens_servico').update(novoRow).eq('id', row.id);
+      const { error } = await supabase.from('sac_ordens_servico').update(novoRow).eq('id', row.id);
+      if (error) { alert('Erro ao aprovar a OS: ' + error.message + '\nA auditoria foi registrada, mas a OS continua aguardando o CQ: tente de novo (uma nova auditoria será registrada).'); setUploading(false); return; }
       logChange({ module: 'qualidade', entityType: 'sac_ordens_servico', entityId: row.id, changeType: 'UPDATE',
         oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
     } else {
@@ -145,17 +164,19 @@ export default function QualidadeTab({ currentUser }) {
         cq_auditor: currentUser?.nome,
         ...(tempoCq != null ? { tempo_qualidade_horas: tempoCq } : {}),
       };
-      await supabase.from('oples').update(novoRow).eq('id', row.id);
+      const { error } = await supabase.from('oples').update(novoRow).eq('id', row.id);
+      if (error) { alert('Erro ao aprovar a OP: ' + error.message + '\nA auditoria foi registrada, mas a OP continua aguardando o CQ: tente de novo (uma nova auditoria será registrada).'); setUploading(false); return; }
       logChange({ module: 'qualidade', entityType: 'oples', entityId: row.id, changeType: 'UPDATE',
         oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
 
-      await supabase.from('logs_movimentacao_opl').insert([{
+      const { error: errLog } = await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
         evento: `Auditoria CQ APROVADA. Auditor: ${currentUser?.nome}` +
           (!aguardaLiberacaoComercial(statusNovo) ? ' — segue para embalagem e cotação de frete.' : ''),
         status_anterior: 'Aguardando CQ', status_novo: statusNovo,
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
+      if (errLog) alert('Erro ao registrar o histórico de movimentação (a OP foi aprovada mesmo assim): ' + errLog.message);
     }
 
     notificarEvento('cq_aprovado', msg.cqAprovado(numero, currentUser?.nome));
@@ -168,7 +189,7 @@ export default function QualidadeTab({ currentUser }) {
     const ehOS = row._tipo === 'os';
     const numero = ehOS ? row.numero_os : row.opl;
     const agora = new Date().toISOString();
-    await supabase.from('cq_auditorias').insert([{
+    const { error: errAud } = await supabase.from('cq_auditorias').insert([{
       ...(ehOS ? { os_id: row.id, numero_os: numero } : { opl_id: row.id, numero_opl: numero }),
       resultado: 'Reprovado',
       itens_checklist: Object.entries(checkStates).map(([id,val]) => ({
@@ -177,6 +198,7 @@ export default function QualidadeTab({ currentUser }) {
       })),
       observacoes: obsAudit, auditor_nome: currentUser?.nome, data_auditoria: agora,
     }]);
+    if (errAud) { alert('Erro ao registrar a auditoria: ' + errAud.message + '\nNada foi reprovado: tente de novo.'); return; }
 
     if (ehOS) {
       // OS não tem um status de "Retrabalho" separado — volta direto pra
@@ -189,7 +211,8 @@ export default function QualidadeTab({ currentUser }) {
         data_cq: agora,
         atualizado_em: agora,
       };
-      await supabase.from('sac_ordens_servico').update(novoRow).eq('id', row.id);
+      const { error } = await supabase.from('sac_ordens_servico').update(novoRow).eq('id', row.id);
+      if (error) { alert('Erro ao reprovar a OS: ' + error.message + '\nA auditoria foi registrada, mas a OS continua aguardando o CQ: tente de novo (uma nova auditoria será registrada).'); return; }
       logChange({ module: 'qualidade', entityType: 'sac_ordens_servico', entityId: row.id, changeType: 'UPDATE',
         oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
     } else {
@@ -200,15 +223,17 @@ export default function QualidadeTab({ currentUser }) {
         cq_auditor: currentUser?.nome,
         data_cq: agora,
       };
-      await supabase.from('oples').update(novoRow).eq('id', row.id);
+      const { error } = await supabase.from('oples').update(novoRow).eq('id', row.id);
+      if (error) { alert('Erro ao reprovar a OP: ' + error.message + '\nA auditoria foi registrada, mas a OP continua aguardando o CQ: tente de novo (uma nova auditoria será registrada).'); return; }
       logChange({ module: 'qualidade', entityType: 'oples', entityId: row.id, changeType: 'UPDATE',
         oldRow: row, newRow: { ...row, ...novoRow }, user: currentUser });
-      await supabase.from('logs_movimentacao_opl').insert([{
+      const { error: errLog } = await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: row.id, numero_opl: numero, setor: 'CQ',
         evento: `Auditoria CQ REPROVADA. Motivo: ${obsAudit}`,
         status_anterior: 'Aguardando CQ', status_novo: 'Retrabalho',
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
+      if (errLog) alert('Erro ao registrar o histórico de movimentação (a OP foi reprovada mesmo assim): ' + errLog.message);
     }
 
     notificarEvento('cq_reprovado', msg.cqReprovado(numero, obsAudit, currentUser?.nome));
@@ -228,8 +253,9 @@ export default function QualidadeTab({ currentUser }) {
         <div className="sec-hdr"><span>Controle de Qualidade — OPs para Auditoria ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
         <div className="sec-body" style={{overflowX:'auto'}}>
+          {erroLeitura && <Faixa tom="erro">{erroLeitura}</Faixa>}
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
-            <div className="acn-empty">Nenhuma OP aguardando auditoria de qualidade.</div>
+            erroLeitura ? null : <div className="acn-empty">Nenhuma OP aguardando auditoria de qualidade.</div>
           ) : (
             <table>
               <thead><tr>
@@ -269,7 +295,7 @@ export default function QualidadeTab({ currentUser }) {
         </div>
         <div className="sec-body" style={{overflowX:'auto'}}>
           {ordensOS.length === 0 ? (
-            <div className="acn-empty">Nenhuma OS veicular aguardando auditoria de qualidade.</div>
+            erroLeitura ? null : <div className="acn-empty">Nenhuma OS veicular aguardando auditoria de qualidade.</div>
           ) : (
             <table>
               <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
