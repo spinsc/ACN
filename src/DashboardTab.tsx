@@ -45,6 +45,7 @@ import {
   mdiChevronDown, mdiWeatherNight, mdiWhiteBalanceSunny, mdiKeyOutline, mdiLogout, mdiRefresh,
 } from '@mdi/js';
 import { CabecalhoTela, Botao, Selo } from './Interface';
+import { telaInicialDoUsuario } from './utils/telaInicial';
 
 // Ícone de cada aba do menu lateral
 const ICONE_ABA: Record<string, string> = {
@@ -207,6 +208,9 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-mob-overlay.mob-open { display:block; }
 /* o logo foi do menu para o cabeçalho, ao lado do botão */
 .acn-logo-topo { height:32px; width:auto; margin:0 4px 0 2px; display:block; flex-shrink:0; }
+/* o logo é um botão (leva à tela inicial): sem a cara de botão, só o cursor e o foco de teclado */
+.acn-logo-botao { display:flex; align-items:center; padding:0; border:none; background:transparent; cursor:pointer; flex-shrink:0; border-radius:6px; }
+.acn-logo-botao:focus-visible { outline:2px solid #0f766e; outline-offset:2px; }
 .acn-nav-lista { flex:1; overflow-y:auto; padding:8px 8px 12px; display:flex; flex-direction:column; gap:1px; }
 .sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 10px 4px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
 .sidebar-section:hover { color:#3b4856; }
@@ -377,7 +381,7 @@ body.dark .acn-footer-setor strong { color:#7fd8cc !important; }
 
 @media (max-width:700px) {
   /* cabeçalho enxuto (o menu em gaveta é o mesmo de todas as telas, definido acima) */
-  .acn-logo-topo { display:none; }
+  .acn-logo-topo, .acn-logo-botao { display:none; }
   .acn-header { padding:0 8px; gap:8px; }
   .acn-trilha-secao, .acn-trilha-sep, .acn-rotulo, .acn-kbd { display:none; }
   .acn-busca { min-width:110px; }
@@ -1303,7 +1307,11 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             <Icone path={sidebarOpen ? mdiClose : mdiMenu} size={22} />
             {!sidebarOpen && totalAvisosMenu > 0 && <span className="acn-hamburger-aviso">{totalAvisosMenu > 9 ? '9+' : totalAvisosMenu}</span>}
           </button>
-          <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.svg'} alt="ACN Sinal Verde" />
+          {/* Pedido do usuário em 02/10/2026: clicar no logo leva à tela inicial (Dashboard; sem acesso a ele, a primeira tela liberada no menu da pessoa) */}
+          <button type="button" className="acn-logo-botao" title="Ir para a tela inicial" aria-label="Ir para a tela inicial"
+            onClick={() => { setActiveTab(telaInicialDoUsuario(SIDEBAR_GROUPS, isVisible)); setSidebarOpen(false); }}>
+            <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.svg'} alt="ACN Sinal Verde" />
+          </button>
 
           {/* Caminho da tela: seção › aba */}
           {(() => {
