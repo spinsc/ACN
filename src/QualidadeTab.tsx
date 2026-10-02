@@ -1,12 +1,14 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
-import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
+import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoCompacto } from './AcnTabShared';
 import { notificarEvento, msg } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { statusAposCqAprovado, aguardaLiberacaoComercial } from './FluxoEntrega';
-import { Faixa } from './Interface';
+import { Botao, Faixa } from './Interface';
+import Icone from './Icone';
+import { mdiClipboardCheckOutline, mdiWrenchOutline, mdiEyeOutline, mdiCheck, mdiClose } from '@mdi/js';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -38,14 +40,13 @@ function SignatureCanvas({ onSave }) {
   }, []);
 
   return (
-    <div style={{textAlign:'center'}}>
-      <canvas ref={ref} width={460} height={130}
-        style={{border:'2px dashed #94a3b8',borderRadius:4,cursor:'crosshair',background:'white',display:'block',margin:'0 auto'}}
+    <div className="acn-sac-assinar">
+      <canvas ref={ref} width={460} height={130} className="acn-sac-canvas"
         onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
         onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
-      <div style={{display:'flex',gap:6,justifyContent:'center',marginTop:6}}>
-        <button className="acn-btn" style={{background:'#94a3b8'}} onClick={clear}>Limpar</button>
-        <button className="acn-btn" style={{background:'#22c55e',opacity: hasStrokes?1:0.5}} onClick={save} disabled={!hasStrokes}>Salvar Assinatura</button>
+      <div className="acn-sac-assinar-acoes">
+        <Botao pequeno onClick={clear}>Limpar</Botao>
+        <Botao pequeno variante="primario" onClick={save} disabled={!hasStrokes}>Salvar Assinatura</Botao>
       </div>
     </div>
   );
@@ -247,73 +248,71 @@ export default function QualidadeTab({ currentUser }) {
   const allChecked = checklist.length > 0 && checklist.every(it => checkStates[it.id] !== null && checkStates[it.id] !== undefined);
   const hasNok = checklist.some(it => checkStates[it.id] === false);
 
+  // Etapa 12e2 (02/10/2026): só a aparência — no molde das telas já migradas (quadros, tabela do guia, botões, faixas e janela do sistema). Textos, colunas, ordem dos botões e lógica são os de antes.
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr"><span>Controle de Qualidade — OPs para Auditoria ({filtrarOpls(opls, busca).length})</span></div>
+        <div className="sec-hdr"><span className="acn-cab-titulo"><Icone path={mdiClipboardCheckOutline} size={16} /> Controle de Qualidade — OPs para Auditoria ({filtrarOpls(opls, busca).length})</span></div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body">
           {erroLeitura && <Faixa tom="erro">{erroLeitura}</Faixa>}
           {loading ? <div className="acn-empty">Carregando...</div> : opls.length === 0 ? (
             erroLeitura ? null : <div className="acn-empty">Nenhuma OP aguardando auditoria de qualidade.</div>
           ) : (
-            <table>
-              <thead><tr>
-                <th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Producao por</th><th>Tempo Producao</th><th>Acao</th>
-              </tr></thead>
-              <tbody>
-                {filtrarOpls(opls, busca).map(o => (
-                  <tr key={o.id} style={oplsNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
-                    <td><LinkOpl opl={o} currentUser={currentUser} /></td>
-                    <td style={{fontSize:10}}>
-                      <VeiculoOuEnvio o={o} />
-                    </td>
-                    <td><span style={{fontWeight:700,color:(o.quantidade||1)>1?'#2563eb':'#94a3b8'}}>{o.quantidade||1}</span></td>
-                    <td style={{ maxWidth:130, wordBreak:'break-word' }}>{o.tipo_projeto}</td>
-                    <td>{o.responsavel_producao || '—'}</td>
-                    <td>{o.tempo_producao_horas ? Number(o.tempo_producao_horas).toFixed(1)+'h' : '—'}</td>
-                    <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#7c3aed'}} onClick={()=>abrirAuditoria(o)}>
-                          EXECUTAR AUDITORIA
-                        </button>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:9}} onClick={()=>setModalVer(o)}>👁 Ver</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead><tr>
+                  <th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo Projeto</th><th>Producao por</th><th>Tempo Producao</th><th>Acao</th>
+                </tr></thead>
+                <tbody>
+                  {filtrarOpls(opls, busca).map(o => (
+                    <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : ''}>
+                      <td><LinkOpl opl={o} currentUser={currentUser} /></td>
+                      <td><VeiculoCompacto o={o} /></td>
+                      <td><span className={(o.quantidade||1)>1 ? 'acn-txt-info' : 'acn-fraco acn-forte'}>{o.quantidade||1}</span></td>
+                      <td className="acn-texto-longo">{o.tipo_projeto}</td>
+                      <td>{o.responsavel_producao || '—'}</td>
+                      <td>{o.tempo_producao_horas ? Number(o.tempo_producao_horas).toFixed(1)+'h' : '—'}</td>
+                      <td>
+                        <div className="acn-acoes-linha quebra">
+                          <Botao variante="primario" pequeno onClick={()=>abrirAuditoria(o)}>EXECUTAR AUDITORIA</Botao>
+                          <Botao pequeno icone={mdiEyeOutline} onClick={()=>setModalVer(o)}>Ver</Botao>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
 
       {/* OS DE MANUTENÇÃO VEICULAR AGUARDANDO CQ */}
       <div className="sec-card">
-        <div className="sec-hdr" style={{background:'#fef2f2',borderBottom:'2px solid #dc2626'}}>
-          <span style={{color:'#991b1b'}}>🔧 OS de Manutenção Veicular — Aguardando CQ ({ordensOS.length})</span>
+        <div className="sec-hdr">
+          <span className="acn-cab-titulo"><Icone path={mdiWrenchOutline} size={16} /> OS de Manutenção Veicular — Aguardando CQ ({ordensOS.length})</span>
         </div>
-        <div className="sec-body" style={{overflowX:'auto'}}>
+        <div className="sec-body">
           {ordensOS.length === 0 ? (
             erroLeitura ? null : <div className="acn-empty">Nenhuma OS veicular aguardando auditoria de qualidade.</div>
           ) : (
-            <table>
-              <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
-              <tbody>
-                {ordensOS.map(o => (
-                  <tr key={o.id} style={osNaoLidas.has(String(o.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
-                    <td><strong style={{color:'#0f766e'}}>{o.numero_os}</strong></td>
-                    <td>{o.cliente_nome || '—'}</td>
-                    <td style={{fontSize:10}}>
-                      <div>{semDado(o.veiculo_modelo) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem modelo</span> : o.veiculo_modelo}</div>
-                      <div style={{color:'#94a3b8'}}>{semDado(o.chassi) ? <span style={{color:'#dc2626',fontWeight:700}}>⚠️ sem chassi</span> : `🔧 ${o.chassi}`}</div>
-                    </td>
-                    <td>{o.tecnico_responsavel || '—'}</td>
-                    <td><button className="acn-btn" style={{background:'#7c3aed'}} onClick={()=>abrirAuditoria(o)}>EXECUTAR AUDITORIA</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead><tr><th>Nº OS</th><th>Cliente</th><th>Veículo</th><th>Técnico</th><th>Ação</th></tr></thead>
+                <tbody>
+                  {ordensOS.map(o => (
+                    <tr key={o.id} className={osNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : ''}>
+                      <td><strong className="acn-forte">{o.numero_os}</strong></td>
+                      <td>{o.cliente_nome || '—'}</td>
+                      <td><VeiculoCompacto semPlaca o={{ modelo: o.veiculo_modelo, chassi: o.chassi }} /></td>
+                      <td>{o.tecnico_responsavel || '—'}</td>
+                      <td><Botao variante="primario" pequeno onClick={()=>abrirAuditoria(o)}>EXECUTAR AUDITORIA</Botao></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -326,84 +325,77 @@ export default function QualidadeTab({ currentUser }) {
       {/* MODAL AUDITORIA */}
       {modalAudit && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:560,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">
-              Auditoria CQ — {modalAudit._tipo === 'os' ? `OS ${modalAudit.numero_os}` : `OP ${modalAudit.opl}`}
+          <div className="modal-box acn-modal-cadastro acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiClipboardCheckOutline} size={18} /> Auditoria CQ — {modalAudit._tipo === 'os' ? `OS ${modalAudit.numero_os}` : `OP ${modalAudit.opl}`}</span>
             </div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>
-              {modalAudit._tipo === 'os'
-                ? <>Cliente: {modalAudit.cliente_nome || '—'} | Veículo: {modalAudit.veiculo_modelo || '—'}</>
-                : <>Chassi: {modalAudit.chassi || '—'} | Tipo: {modalAudit.tipo_projeto}</>}
-            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                {modalAudit._tipo === 'os'
+                  ? <>Cliente: {modalAudit.cliente_nome || '—'} | Veículo: {modalAudit.veiculo_modelo || '—'}</>
+                  : <>Chassi: {modalAudit.chassi || '—'} | Tipo: {modalAudit.tipo_projeto}</>}
+              </div>
 
-            {/* CHECKLIST */}
-            <div style={{fontWeight:700,fontSize:11,color:'#1e293b',marginBottom:6}}>Checklist de Auditoria</div>
-            <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:4,padding:8,marginBottom:12,maxHeight:220,overflowY:'auto'}}>
-              {checklist.length === 0 ? (
-                <div style={{fontSize:11,color:'#94a3b8'}}>Nenhum item de checklist configurado. Configure no Admin.</div>
-              ) : checklist.map(it => {
-                const val = checkStates[it.id];
-                return (
-                  <div key={it.id} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 0',borderBottom:'1px solid #e2e8f0',fontSize:11}}>
-                    <span style={{flex:1,color: val===null?'#94a3b8':val===false?'#ef4444':val===true?'#15803d':'#6b7280'}}>{it.item_texto}</span>
-                    <div style={{display:'flex',gap:3,flexShrink:0}}>
-                      <button onClick={()=>setCheckStates(s=>({...s,[it.id]:val===true?null:true}))}
-                        style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',fontWeight:700,
-                          background:val===true?'#22c55e':'transparent',
-                          borderColor:val===true?'#22c55e':'#d1d5db',
-                          color:val===true?'white':'#6b7280'}}>✓ OK</button>
-                      <button onClick={()=>setCheckStates(s=>({...s,[it.id]:val===false?null:false}))}
-                        style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',fontWeight:700,
-                          background:val===false?'#ef4444':'transparent',
-                          borderColor:val===false?'#ef4444':'#d1d5db',
-                          color:val===false?'white':'#6b7280'}}>✗ NOK</button>
-                      <button onClick={()=>setCheckStates(s=>({...s,[it.id]:val==='na'?null:'na'}))}
-                        style={{fontSize:9,padding:'2px 7px',border:'1px solid',borderRadius:3,cursor:'pointer',fontWeight:700,
-                          background:val==='na'?'#94a3b8':'transparent',
-                          borderColor:val==='na'?'#94a3b8':'#d1d5db',
-                          color:val==='na'?'white':'#6b7280'}}>N/A</button>
-                    </div>
+              {/* CHECKLIST */}
+              <div className="form-group">
+                <label className="acn-label">Checklist de Auditoria</label>
+                <div className="acn-quadro acn-cq-lista">
+                  {checklist.length === 0 ? (
+                    <div className="acn-ajuda">Nenhum item de checklist configurado. Configure no Admin.</div>
+                  ) : checklist.map(it => {
+                    const val = checkStates[it.id];
+                    return (
+                      <div key={it.id} className="acn-cq-item">
+                        <span className={val===false ? 'acn-txt-erro' : val===true ? 'acn-txt-ok' : 'acn-fraco'}>{it.item_texto}</span>
+                        <div className="acn-cq-escolhas">
+                          <Botao pequeno variante={val===true ? 'primario' : 'secundario'} icone={mdiCheck} aria-pressed={val===true}
+                            onClick={()=>setCheckStates(s=>({...s,[it.id]:val===true?null:true}))}>OK</Botao>
+                          <Botao pequeno variante={val===false ? 'perigo' : 'secundario'} icone={mdiClose} aria-pressed={val===false}
+                            onClick={()=>setCheckStates(s=>({...s,[it.id]:val===false?null:false}))}>NOK</Botao>
+                          <Botao pequeno variante="secundario" className="acn-cq-na" aria-pressed={val==='na'}
+                            onClick={()=>setCheckStates(s=>({...s,[it.id]:val==='na'?null:'na'}))}>N/A</Botao>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* OBSERVACOES */}
+              <div className="form-group">
+                <label className="acn-label">Observacoes / Nao conformidades</label>
+                <textarea className="acn-input" rows={3}
+                  placeholder="Descreva qualquer nao conformidade encontrada..."
+                  value={obsAudit} onChange={e=>setObsAudit(e.target.value)} />
+              </div>
+
+              {/* ASSINATURA */}
+              <div className="form-group">
+                <label className="acn-label">Assinatura do Auditor</label>
+                {signData ? (
+                  <div className="acn-sac-assinatura">
+                    <img src={signData} alt="Assinatura" />
+                    <Botao pequeno variante="discreto" onClick={()=>setSignData(null)}>Limpar Assinatura</Botao>
                   </div>
-                );
-              })}
+                ) : (
+                  <SignatureCanvas onSave={setSignData} />
+                )}
+              </div>
+
+              {!allChecked && checklist.length > 0 && (
+                <Faixa tom="atencao">Atencao: ha itens pendentes (sem OK, NOK ou N/A).</Faixa>
+              )}
+              {hasNok && (
+                <Faixa tom="erro">{checklist.filter(it=>checkStates[it.id]===false).length} item(s) NOK — descreva nas observacoes.</Faixa>
+              )}
             </div>
 
-            {/* OBSERVACOES */}
-            <label className="acn-label">Observacoes / Nao conformidades</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:12}}
-              placeholder="Descreva qualquer nao conformidade encontrada..."
-              value={obsAudit} onChange={e=>setObsAudit(e.target.value)} />
-
-            {/* ASSINATURA */}
-            <div style={{fontWeight:700,fontSize:11,color:'#1e293b',marginBottom:6}}>Assinatura do Auditor</div>
-            {signData ? (
-              <div style={{textAlign:'center',marginBottom:10}}>
-                <img src={signData} alt="Assinatura" style={{border:'1px solid #e2e8f0',borderRadius:4,maxWidth:460,height:100,objectFit:'contain',background:'white'}} />
-                <div><button className="acn-btn" style={{background:'#94a3b8',marginTop:4}} onClick={()=>setSignData(null)}>Limpar Assinatura</button></div>
-              </div>
-            ) : (
-              <SignatureCanvas onSave={setSignData} />
-            )}
-
-            {!allChecked && checklist.length > 0 && (
-              <div style={{fontSize:10,color:'#f59e0b',background:'#fef3c7',padding:'6px 8px',borderRadius:4,marginTop:8,marginBottom:4}}>
-                Atencao: ha itens pendentes (sem OK, NOK ou N/A).
-              </div>
-            )}
-            {hasNok && (
-              <div style={{fontSize:10,color:'#dc2626',background:'#fef2f2',padding:'6px 8px',borderRadius:4,marginBottom:4,fontWeight:700}}>
-                ✗ {checklist.filter(it=>checkStates[it.id]===false).length} item(s) NOK — descreva nas observacoes.
-              </div>
-            )}
-
-            <div style={{display:'flex',gap:8,marginTop:12}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px',opacity:uploading?0.6:1}} onClick={aprovar} disabled={uploading}>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiCheck} onClick={aprovar} disabled={uploading}>
                 {uploading ? 'Salvando...' : 'APROVADO'}
-              </button>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1,padding:'9px'}} onClick={reprovar}>
-                REPROVAR
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8',padding:'9px'}} onClick={()=>setModalAudit(null)}>Cancelar</button>
+              </Botao>
+              <Botao variante="perigo" icone={mdiClose} onClick={reprovar}>REPROVAR</Botao>
+              <Botao onClick={()=>setModalAudit(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>

@@ -863,3 +863,13 @@ html body .acn-sac-jan .acn-input.acn-sac-colab { padding: 6px 9px !important; f
 .acn-dg-log { padding-bottom: 6px; border-bottom: 1px solid var(--acn-line); }
 .acn-dg-log:last-child { padding-bottom: 0; border-bottom: 0; }
 .acn-dg-log > div { margin-top: 2px; }
+/* ── Controle de Qualidade (Etapa 12e2, 02/10/2026): só aparência ───────────────────────────────────────────── */
+/* o checklist da janela de auditoria: lista que rola, cada item com o texto e as três escolhas (OK, NOK, N/A) */
+.acn-cq-lista { max-height: 220px; overflow-y: auto; gap: 0; padding-top: 4px; padding-bottom: 4px; }
+.acn-cq-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-cq-item:last-child { border-bottom: 0; }
+.acn-cq-item > span { flex: 1; min-width: 0; }
+.acn-cq-escolhas { display: flex; gap: 4px; flex-shrink: 0; }
+/* "N/A" escolhido: cinza cheio (OK escolhido é o botão principal; NOK escolhido, o vermelho) */
+html body .acn-b.acn-cq-na[aria-pressed="true"] { background: var(--acn-neutral); border-color: var(--acn-neutral); color: #fff; }
+@media (max-width: 480px) { .acn-cq-item { flex-wrap: wrap; } .acn-cq-item > span { flex-basis: 100%; } }
