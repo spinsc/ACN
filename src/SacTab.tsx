@@ -1118,13 +1118,21 @@ OK = ACN   |   Cancelar = DETECH`;
   // ── SALVAR FINANCEIRO DA OS ───────────────────────────────────────────────
   const salvarFinanceiroOS = async () => {
     if (!modalFinanceiro) return;
+    // Etapa 7.29 (02/10/2026): só o campo em BRANCO vira vazio. Antes, um valor 0 que já estava gravado (o número 0 é "falso" no JavaScript) voltava como vazio ao abrir e salvar sem mexer em nada.
+    const numeroOuVazio = (v: any) => { if (v === '' || v == null) return null; const n = parseFloat(String(v).replace(',','.')); return Number.isNaN(n) ? null : n; };
     const payload: any = {
-      valor_total: financeiroForm.valor_total ? parseFloat(String(financeiroForm.valor_total).replace(',','.')) : null,
-      valor_mao_de_obra: financeiroForm.valor_mao_de_obra ? parseFloat(String(financeiroForm.valor_mao_de_obra).replace(',','.')) : null,
+      valor_total: numeroOuVazio(financeiroForm.valor_total),
+      valor_mao_de_obra: numeroOuVazio(financeiroForm.valor_mao_de_obra),
       data_faturamento: financeiroForm.data_faturamento || null,
     };
     const { error } = await supabase.from('sac_ordens_servico').update(payload).eq('id', modalFinanceiro.id);
     if (error) { alert('Erro ao salvar: ' + error.message); return; }
+    // Etapa 7.29 (pedido do usuário em 02/10/2026): valor e data de faturamento também entram no histórico de alterações, como o responsável — antes mudavam sem deixar rastro.
+    // O histórico só grava o que realmente mudou (e nada se nada mudou); a data do banco vem como DATA (o corte em 10 letras evita acusar mudança só por vir com hora).
+    const dinheiro = (v: any) => v == null ? '—' : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalFinanceiro.id, changeType: 'UPDATE',
+      oldRow: { valor_total: modalFinanceiro.valor_total ?? null, valor_mao_de_obra: modalFinanceiro.valor_mao_de_obra ?? null, data_faturamento: (modalFinanceiro.data_faturamento || '').slice(0, 10) || null },
+      newRow: payload, formatters: { valor_total: dinheiro, valor_mao_de_obra: dinheiro, data_faturamento: fmtDataSAC }, user: currentUser });
     setModalFinanceiro(null);
     fetchOrdens();
   };
