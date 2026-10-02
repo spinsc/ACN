@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import Icone from './Icone';
 import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
@@ -1840,28 +1841,10 @@ function ComissoesRH({ funcionarios, currentUser }) {
     const oss: any[] = (osRes.data || []).filter((os: any) => filtroOrigem === 'todos' || os.is_manutencao_veicular === true);
     setFechamentos(fechRes.data || []);
 
-    // OP "mãe" com vários veículos (ex.: OPL A1419.2607/01..90, 90 carros):
-    // cada veículo vira um registro em `oples` (opl = "BASE" ou "BASE/NN"),
-    // mas o valor_total/valor_mao_de_obra lançado é o do LOTE inteiro,
-    // repetido igual em todos os registros — não o valor unitário. Buscamos
-    // a tabela toda (só id/opl/valores, ~poucas centenas de linhas) pra
-    // detectar esses lotes (mesma base, >1 veículo, mesmo valor repetido) e
-    // dividir pelo nº de veículos antes de usar como base de comissão.
-    const { data: todasOpsRaw } = await supabase.from('oples')
-      .select('id,opl,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria');
-    const baseOplDe = (opl: string) => String(opl || '').replace(/\/\d+$/, '');
-    const gruposBase: Record<string, any[]> = {};
-    (todasOpsRaw || []).forEach((o: any) => { (gruposBase[baseOplDe(o.opl)] ||= []).push(o); });
-    const divisorPorBase: Record<string, number> = {};
-    Object.entries(gruposBase).forEach(([base, itens]) => {
-      if (itens.length <= 1) return;
-      const mdoVals = new Set(itens.map((i: any) => i.valor_mao_de_obra).filter((v: any) => v != null));
-      const totVals = new Set(itens.map((i: any) => i.valor_total).filter((v: any) => v != null));
-      // Só divide quando TODOS os veículos do lote compartilham exatamente o
-      // mesmo valor (indício claro de lançamento único pro lote inteiro) —
-      // se já vierem com valores distintos por veículo, respeita como está.
-      if (mdoVals.size <= 1 && totVals.size <= 1) divisorPorBase[base] = itens.length;
-    });
+    // OP "mãe" com vários veículos (ex.: OPL A1419.2607/01..90, 90 carros): o valor lançado em cada veículo é o do LOTE inteiro, então divide
+    // pelo nº de veículos antes de usar como base de comissão. Desde a Etapa 7.25 (01/10/2026) a regra mora em OpLotes.ts, que o relatório de
+    // Comissão Comercial também usa (a conta é a mesma que estava aqui, sem mudança).
+    const divisorPorBase = await lerDivisorPorBaseDeLote();
 
     // Mapa auxiliar id -> dados do item (OP ou OS), pra resolver cada linha de
     // responsaveis_producao de volta pro item de onde ela veio.

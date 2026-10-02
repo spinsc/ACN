@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
+import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
 import { VeiculoOuEnvio } from './AcnTabShared';
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
@@ -1091,6 +1092,7 @@ function RelComissoes() {
   const [ops, setOps] = useState([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [divisorLote, setDivisorLote] = useState<Record<string, number>>({});
 
   const fmtR = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
 
@@ -1106,27 +1108,34 @@ function RelComissoes() {
       // qualquer situação — o mesmo critério da Comissão de Técnicos. (3) O erro do banco passa a ser avisado em vez de virar um relatório vazio.
       const [anoM, mesM] = mes.split('-').map(Number);
       const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
-      const [resFuncs, resOps] = await Promise.all([
+      const [resFuncs, resOps, divisores] = await Promise.all([
         supabase.from('rh_funcionarios').select('id,nome,cargo,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
         supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf')
           .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
           .lt('data_emissao_nf', `${proximoMes}-01T00:00:00-03:00`),
+        lerDivisorPorBaseDeLote(),
       ]);
       const falha = resFuncs.error || resOps.error;
       if (falha) setErro(falha.message);
       setFuncionarios(resFuncs.data || []);
       setOps(resOps.data || []);
+      setDivisorLote(divisores);
       setLoading(false);
     };
     carregar();
   }, [mes]);
+
+  // Etapa 7.25 (01/10/2026, pedido do usuário): OP de lote (vários veículos) guarda em cada veículo o valor do LOTE inteiro — a base da comissão é o valor de UM veículo, como na
+  // Comissão de Técnicos do RH (OpLotes.ts). Exemplo real: o lote 1560.2608 tem 16 veículos de R$ 46.636,32 e só o /15 foi faturado: a base é R$ 2.914,77, não os R$ 46.636,32.
+  const divisorDe = (o) => divisorLote[baseOplDe(o.opl)] || 1;
+  const valorDe = (o) => o.valor_total != null ? Number(o.valor_total) / divisorDe(o) : o.valor_total;
 
   // Calcular comissão por vendedor
   const comissoes = funcionarios.map(f => {
     const opsVendedor = ops.filter(o =>
       (o.responsavel_comercial || '').toLowerCase().trim() === (f.nome || '').toLowerCase().trim()
     );
-    const baseTotal = opsVendedor.reduce((s, o) => s + (Number(o.valor_total) || 0), 0);
+    const baseTotal = opsVendedor.reduce((s, o) => s + (Number(valorDe(o)) || 0), 0);
     const comissao  = baseTotal * ((Number(f.percentual_comissao) || 0) / 100);
     return { ...f, opsVendedor, baseTotal, comissao };
   });
@@ -1220,12 +1229,17 @@ function RelComissoes() {
                       </thead>
                       <tbody>
                         {c.opsVendedor.map((o) => {
-                          const comOp = (Number(o.valor_total)||0) * ((Number(c.percentual_comissao)||0)/100);
+                          const comOp = (Number(valorDe(o))||0) * ((Number(c.percentual_comissao)||0)/100);
                           return (
                             <tr key={o.id}>
                               <td className="acn-forte">{o.opl}</td>
                               <td>{o.cliente_nome || '—'}</td>
-                              <td className="acn-dir acn-num">{fmtR(o.valor_total)}</td>
+                              <td className="acn-dir acn-num">
+                                {fmtR(valorDe(o))}
+                                {divisorDe(o) > 1 && (
+                                  <Selo familia="neutro" ponto={false} title={`Lote de ${divisorDe(o)} veículos — valor unitário (total do lote ÷ ${divisorDe(o)})`}>lote/{divisorDe(o)}</Selo>
+                                )}
+                              </td>
                               <td className="acn-dir acn-num acn-forte">{fmtR(comOp)}</td>
                               <td className="acn-fraco">
                                 {o.data_emissao_nf ? new Date(o.data_emissao_nf).toLocaleDateString('pt-BR') : '—'}
@@ -1274,7 +1288,7 @@ function obsResumoOs(o) {
 
 // Agrupa OPs/OSs desmembradas (mesmo número base, sufixos /02, /03...) numa única linha —
 // mesma convenção de baseOplDe() usada em Engenharia/PCP/Almoxarifado/Produção.
-const baseOplDe = (numero) => (numero || '').replace(/\/\d+$/, '');
+// (a função baseOplDe vem de OpLotes.ts, importada no topo — a mesma conta que havia aqui)
 
 function agruparLinhas(registros) {
   const grupos = {};
