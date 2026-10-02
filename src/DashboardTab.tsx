@@ -1303,7 +1303,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
             <Icone path={sidebarOpen ? mdiClose : mdiMenu} size={22} />
             {!sidebarOpen && totalAvisosMenu > 0 && <span className="acn-hamburger-aviso">{totalAvisosMenu > 9 ? '9+' : totalAvisosMenu}</span>}
           </button>
-          <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.png'} alt="ACN Sinal Verde" />
+          <img className="acn-logo-topo" src={import.meta.env.BASE_URL + 'logo.svg'} alt="ACN Sinal Verde" />
 
           {/* Caminho da tela: seção › aba */}
           {(() => {

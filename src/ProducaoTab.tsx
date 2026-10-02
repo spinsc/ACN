@@ -1470,7 +1470,7 @@ function VoucherServicos({ currentUser }) {
       @media print { body { padding: 16px; } }
     </style></head><body>
     <div class="header">
-      <img src="${window.location.origin}${base}logo.png" class="logo" alt="ACN" onerror="this.style.display='none'" />
+      <img src="${window.location.origin}${base}logo.svg" class="logo" alt="ACN" onerror="this.style.display='none'" />
       <div class="title">
         <div style="font-size:11px;color:#64748b;letter-spacing:1px;text-transform:uppercase">Voucher de Serviço</div>
         <div style="font-size:20px;font-weight:800;color:#1e293b">${v.numero_pvop}</div>

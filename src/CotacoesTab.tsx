@@ -172,7 +172,7 @@ function gerarPropostaHTML(cotacao, proposta, { orgaoCliente, validade, refPv, f
   <!-- HEADER -->
   <div class="header">
     <div class="logos">
-      <img src="${apl}logo.png" alt="${empresa}" onerror="this.style.display='none'" />
+      <img src="${apl}logo.svg" alt="${empresa}" onerror="this.style.display='none'" />
     </div>
     <div class="header-info">
       <h1>PROPOSTA COMERCIAL</h1>
