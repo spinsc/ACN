@@ -3,7 +3,8 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
-import { criadoEmLabel } from './AvisoSistemaWidget';
+import { criadoEmLabel, paraCampoDataHora } from './AvisoSistemaWidget';
+import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
 import { CentrosCustoManager } from './CentroCustoShared';
 import { confirmar } from './Feedback';
 import PainelFeriados from './FeriadosAdmin';
@@ -260,6 +261,7 @@ function PainelUsuarios() {
         recebe_alerta_analise: u.recebe_alerta_analise || false,
         pode_enviar_avisos: u.pode_enviar_avisos || false,
         pode_aprovar_compra: u.pode_aprovar_compra || false,
+        eh_dev: u.eh_dev || false,
         ultimo_login_anterior: null,
       }));
     } catch (e: any) { alert('Erro: ' + e.message); return; }
@@ -456,16 +458,7 @@ function PainelUsuarios() {
                   <span>🔔 Recebe alertas de Análise Orçamentária</span>
                 </label>
               </div>
-              {/* Avisos do Sistema */}
-              <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #e2e8f0'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                  <input type="checkbox"
-                    checked={editForm.pode_enviar_avisos}
-                    onChange={e=>setEditForm(f=>({...f,pode_enviar_avisos:e.target.checked}))}
-                    style={{accentColor:'#dc2626'}} />
-                  <span>📢 Pode publicar Avisos do Sistema</span>
-                </label>
-              </div>
+              {/* Avisos do Sistema: só Admin publica (02/10/2026, pedido do usuário) — a caixa "Pode publicar Avisos do Sistema" saiu; a coluna pode_enviar_avisos não vale mais */}
               {/* Aprovação de compra — por pessoa, não por perfil. Regra do
                   usuário em 24/09/2026: aprovam Rafael Nunes, Luciano Spinelli,
                   Bruna e Raphael Weber Mello, e mais ninguém. É aqui que se
@@ -599,13 +592,6 @@ function PainelUsuarios() {
                   onChange={e=>setForm(f=>({...f,pode_autorizar_rh:e.target.checked}))}
                   style={{accentColor:'#7c3aed'}} />
                 <span>🖨️ Pode emitir Autorizações de Saída/Entrada (RH)</span>
-              </label>
-              <label style={{display:'flex',alignItems:'center',gap:6,fontSize:10,cursor:'pointer'}}>
-                <input type="checkbox"
-                  checked={form.pode_enviar_avisos}
-                  onChange={e=>setForm(f=>({...f,pode_enviar_avisos:e.target.checked}))}
-                  style={{accentColor:'#dc2626'}} />
-                <span>📢 Pode publicar Avisos do Sistema</span>
               </label>
             </div>
             <button className="acn-btn" style={{background:'#22c55e',width:'100%',padding:'7px',marginTop:10}} onClick={salvar}>
@@ -3283,7 +3269,8 @@ function PainelMarkupCfg() {
 // ─────────────────────────────────────────────────────────────────────────────
 function PainelAvisos() {
   const currentUser                = JSON.parse(localStorage.getItem('user') || '{}');
-  const podeGerenciar              = !!(currentUser?.pode_enviar_avisos) || currentUser?.perfil === 'Admin';
+  // Só Admin publica (02/10/2026, pedido do usuário). Editar, pausar e excluir: só o autor do aviso ou quem tem a marca DEV (podeMexerNoAviso). A caixa "Pode publicar Avisos do Sistema" do cadastro de usuário saiu.
+  const podeGerenciar              = podePublicarAviso(currentUser);
 
   const [avisos, setAvisos]       = useState<any[]>([]);
   const [form, setForm]           = useState<any>({ ...VAZIO_AVISO });
@@ -3299,6 +3286,8 @@ function PainelAvisos() {
 
   const salvar = async () => {
     if (!form.titulo?.trim() || !form.mensagem?.trim()) return;
+    const alvo = editId ? avisos.find((x: any) => x.id === editId) : null;
+    if (editId ? !(alvo && podeMexerNoAviso(currentUser, alvo)) : !podePublicarAviso(currentUser)) { alert('Você não tem permissão para fazer isso com este aviso.'); return; }
     setSalvando(true);
     const payload: any = {
       titulo:      form.titulo.trim(),
@@ -3308,39 +3297,47 @@ function PainelAvisos() {
       permanente:  !!form.permanente,
       data_expiracao: (!form.permanente && form.data_expiracao) ? new Date(form.data_expiracao).toISOString() : null,
     };
+    let erro: any = null;
     if (editId) {
       // editar NÃO mexe em "ativo": antes o payload forçava ativo:true e editar um aviso desativado o reativava
-      await supabase.from('avisos_sistema').update(payload).eq('id', editId);
-      setEditId(null);
+      ({ error: erro } = await supabase.from('avisos_sistema').update(payload).eq('id', editId));
     } else {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       payload.ativo = true;
       payload.criado_por      = user.email || '';
       payload.criado_por_nome = user.nome  || '';
-      await supabase.from('avisos_sistema').insert([payload]);
+      ({ error: erro } = await supabase.from('avisos_sistema').insert([payload]));
     }
-    setForm({ ...VAZIO_AVISO });
     setSalvando(false);
+    // Etapa de 02/10/2026: a gravação recusada limpava o formulário como se tivesse dado certo. Agora avisa e mantém o que foi digitado.
+    if (erro) { alert('Erro ao salvar o aviso: ' + erro.message); return; }
+    if (editId) setEditId(null);
+    setForm({ ...VAZIO_AVISO });
     await carregar();
   };
 
-  const excluir = async (id: string) => {
-    if (!await confirmar('Excluir este aviso?')) return;
-    await supabase.from('avisos_sistema').delete().eq('id', id);
+  const excluir = async (av: any) => {
+    if (!podeMexerNoAviso(currentUser, av)) return;
+    if (!await confirmar(`Excluir o aviso "${av.titulo}"?`)) return;
+    const { error } = await supabase.from('avisos_sistema').delete().eq('id', av.id);
+    if (error) { alert('Erro ao excluir o aviso: ' + error.message); return; }
     await carregar();
   };
 
   const toggleAtivo = async (av: any) => {
-    await supabase.from('avisos_sistema').update({ ativo: !av.ativo }).eq('id', av.id);
+    if (!podeMexerNoAviso(currentUser, av)) return;
+    const { error } = await supabase.from('avisos_sistema').update({ ativo: !av.ativo }).eq('id', av.id);
+    if (error) { alert('Erro ao ' + (av.ativo ? 'desativar' : 'reativar') + ' o aviso: ' + error.message); return; }
     await carregar();
   };
 
   const iniciarEdicao = (av: any) => {
+    if (!podeMexerNoAviso(currentUser, av)) return;
     setEditId(av.id);
     setForm({
       titulo: av.titulo, mensagem: av.mensagem, tipo: av.tipo,
       criticidade: av.criticidade, permanente: av.permanente,
-      data_expiracao: av.data_expiracao ? av.data_expiracao.slice(0, 16) : '',
+      data_expiracao: paraCampoDataHora(av.data_expiracao),
     });
   };
 
@@ -3476,7 +3473,7 @@ function PainelAvisos() {
                       <span>{av.permanente ? '📌 Permanente' : av.data_expiracao ? `⏱ Até ${new Date(av.data_expiracao).toLocaleString('pt-BR')}` : ''}</span>
                     </div>
                   </div>
-                  {podeGerenciar && (
+                  {podeMexerNoAviso(currentUser, av) && (
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     <button onClick={() => iniciarEdicao(av)}
                       style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1',
@@ -3489,7 +3486,7 @@ function PainelAvisos() {
                         color: av.ativo ? '#854d0e' : '#15803d', borderRadius: 4, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
                       {av.ativo ? '⏸' : '▶️'}
                     </button>
-                    <button onClick={() => excluir(av.id)}
+                    <button onClick={() => excluir(av)}
                       style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626',
                         borderRadius: 4, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
                       🗑

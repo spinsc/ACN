@@ -143,7 +143,8 @@ a tela em branco e o teste engana.
   cotação e aprovação. Diferença é só o selo "Demanda de OP" ou "Demanda geral".
 - **Serralheria com pintura:** quem abre a demanda descreve o tipo em texto livre;
   ao concluir a peça, a requisição de pintura nasce sozinha para o Compras.
-- **Avisos de atualização** (`avisos_sistema`) expiram em 48h e saem em nome do Matheus.
+- **Avisos de atualização** (`avisos_sistema`) expiram em 48h e saem em nome do Matheus. **Uma nota por dia trabalhado**, com o horário do último commit do dia, mostrada a ele antes de publicar.
+- **Avisos do sistema — quem pode o quê** (decidido em 02/10/2026): **só Admin publica**; **editar, pausar e excluir** só o **autor** da nota ou quem tem a marca **DEV** (`auth_usuarios.eh_dev`: Matheus e Luciano Spinelli, que também são Admin). A marca é do cadastro, não do código; `utils/permissoes.ts` (`podePublicarAviso`, `podeMexerNoAviso`). A caixa antiga "Pode publicar Avisos do Sistema" saiu.
 
 ---
 

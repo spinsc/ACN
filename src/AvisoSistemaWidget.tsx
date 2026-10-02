@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
+import { confirmar } from './Feedback';
+import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
 
 // ─── paleta por criticidade ───────────────────────────────────────────────────
 const COR: Record<string, { bg: string; border: string; text: string; dot: string }> = {
@@ -34,6 +36,15 @@ export function criadoEmLabel(av: any): string {
   return `🕐 ${d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// "2026-10-04T13:19:45+00:00" → "2026-10-04T10:19": a hora de quem usa, no formato do campo de data e hora. Antes a edição cortava o texto em UTC e a validade abria 3 h adiantada.
+export function paraCampoDataHora(iso: any): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 // ─── componente ──────────────────────────────────────────────────────────────
 export default function AvisoSistemaWidget({ currentUser }: any) {
   const [avisos, setAvisos]           = useState<any[]>([]);
@@ -48,37 +59,38 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
   const [salvando, setSalvando]       = useState(false);
   const [pos, setPos]                 = useState<{ x: number; y: number } | null>(null);
   const [podePublicar, setPodePublicar] = useState(false);
+  const [ehDev, setEhDev]             = useState(false);
+  const [editId, setEditId]           = useState<string|null>(null);
   const drag        = useRef<any>({ on: false });
   const dragMoved   = useRef(false);
 
   const user = currentUser || JSON.parse(localStorage.getItem('user') || '{}')
 
-  // ── verifica permissão direto no banco (resolve usuários já logados antes da coluna existir) ──
+  // ── quem pode o quê (02/10/2026, pedido do usuário) ──
+  // Só Admin publica um aviso (antes a caixa "pode publicar" do cadastro também liberava gerentes e o RH). Editar e excluir: só o autor do aviso ou quem tem a marca DEV.
+  // A leitura fresca no banco resolve a sessão guardada antes de a marca DEV existir.
   useEffect(() => {
     if (!user?.id) return;
-    // parte rápida: checa localStorage primeiro
-    if (user?.pode_enviar_avisos || user?.perfil === 'Admin') {
-      setPodePublicar(true);
-      return;
-    }
-    // busca fresca no banco para não depender de sessão antiga
+    setPodePublicar(podePublicarAviso(user));
+    setEhDev(user?.eh_dev === true);
     supabase
       .from('auth_usuarios')
-      .select('pode_enviar_avisos, perfil')
+      .select('perfil, eh_dev')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
-        const pode = !!(data.pode_enviar_avisos) || data.perfil === 'Admin';
-        setPodePublicar(pode);
-        // atualiza localStorage para que próximos renders não precisem consultar
+        setPodePublicar(podePublicarAviso(data));
+        setEhDev(data.eh_dev === true);
         try {
           const stored = JSON.parse(localStorage.getItem('user') || '{}');
-          stored.pode_enviar_avisos = data.pode_enviar_avisos || false;
+          stored.eh_dev = data.eh_dev || false;
           localStorage.setItem('user', JSON.stringify(stored));
         } catch (_) {}
       });
   }, [user?.id]);
+  // o usuário com o que vale AGORA (perfil e marca lidos do banco), para decidir o que cada aviso permite
+  const eu = { ...user, perfil: podePublicar ? 'Admin' : user?.perfil, eh_dev: ehDev };
 
   // ── load ──────────────────────────────────────────────────────────────────
   const carregar = useCallback(async () => {
@@ -177,24 +189,48 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
     document.addEventListener('mouseup', up);
   }, [pos]);
 
-  // ── salvar novo aviso ─────────────────────────────────────────────────────
+  // ── salvar (novo aviso ou edição) ─────────────────────────────────────────────────────
   const salvar = async () => {
     if (!form.titulo?.trim() || !form.mensagem?.trim()) return;
+    const alvo = editId ? avisos.find((a: any) => a.id === editId) : null;
+    if (editId ? !(alvo && podeMexerNoAviso(eu, alvo)) : !podePublicar) { alert('Você não tem permissão para fazer isso com este aviso.'); return; }
     setSalvando(true);
-    await supabase.from('avisos_sistema').insert([{
+    const campos = {
       titulo:         form.titulo.trim(),
       mensagem:       form.mensagem.trim(),
       tipo:           form.tipo,
       criticidade:    form.criticidade,
       permanente:     !!form.permanente,
       data_expiracao: (!form.permanente && form.data_expiracao) ? new Date(form.data_expiracao).toISOString() : null,
-      ativo:          true,
-      criado_por:      user?.email || '',
-      criado_por_nome: user?.nome  || '',
-    }]);
-    setForm({ ...VAZIO_FORM });
-    setMostraForm(false);
+    };
+    // editar NÃO mexe em "ativo" nem no autor (antes o painel só sabia publicar)
+    const { error } = editId
+      ? await supabase.from('avisos_sistema').update(campos).eq('id', editId)
+      : await supabase.from('avisos_sistema').insert([{ ...campos, ativo: true, criado_por: user?.email || '', criado_por_nome: user?.nome || '' }]);
     setSalvando(false);
+    if (error) { alert('Erro ao salvar o aviso: ' + error.message); return; }
+    setForm({ ...VAZIO_FORM });
+    setEditId(null);
+    setMostraForm(false);
+    await carregar();
+  };
+
+  const iniciarEdicao = (av: any) => {
+    if (!podeMexerNoAviso(eu, av)) return;
+    setEditId(av.id);
+    setForm({
+      titulo: av.titulo, mensagem: av.mensagem, tipo: av.tipo, criticidade: av.criticidade,
+      permanente: !!av.permanente, data_expiracao: paraCampoDataHora(av.data_expiracao),
+    });
+    setMostraForm(true);
+  };
+
+  const excluir = async (av: any) => {
+    if (!podeMexerNoAviso(eu, av)) return;
+    if (!await confirmar(`Excluir o aviso "${av.titulo}"?`)) return;
+    const { error } = await supabase.from('avisos_sistema').delete().eq('id', av.id);
+    if (error) { alert('Erro ao excluir o aviso: ' + error.message); return; }
+    if (editId === av.id) { setEditId(null); setForm({ ...VAZIO_FORM }); setMostraForm(false); }
     await carregar();
   };
 
@@ -276,8 +312,8 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                 {podePublicar && (
                   <button
                     onMouseDown={e => e.stopPropagation()}
-                    onClick={() => { setMostraForm(f => !f); }}
-                    title="Novo Aviso"
+                    onClick={() => { if (mostraForm) { setEditId(null); setForm({ ...VAZIO_FORM }); } setMostraForm(f => !f); }}
+                    title={editId ? 'Cancelar a edição' : 'Novo Aviso'}
                     style={{
                       background: mostraForm ? '#dc2626' : '#16a34a',
                       border: 'none', borderRadius: 4, color: '#fff',
@@ -290,7 +326,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                 )}
                 <button
                   onMouseDown={e => e.stopPropagation()}
-                  onClick={() => { setMinimizado(true); setMostraForm(false); setPos(POS_MINIMIZADO()); }}
+                  onClick={() => { setMinimizado(true); setMostraForm(false); setEditId(null); setPos(POS_MINIMIZADO()); }}
                   title="Minimizar"
                   style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 15, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}
                 >
@@ -303,7 +339,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
             {mostraForm && (
               <div style={{ background: '#0f172a', padding: '10px 12px', borderBottom: '2px solid #334155' }}>
                 <div style={{ fontSize: 9, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 8 }}>
-                  📢 Novo Aviso
+                  {editId ? '✏️ Editar Aviso' : '📢 Novo Aviso'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <input
@@ -357,7 +393,7 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                       opacity: (!form.titulo?.trim() || !form.mensagem?.trim()) ? .4 : 1,
                     }}
                   >
-                    {salvando ? 'Publicando...' : '📢 Publicar Aviso'}
+                    {salvando ? (editId ? 'Salvando...' : 'Publicando...') : (editId ? '💾 Salvar alterações' : '📢 Publicar Aviso')}
                   </button>
                 </div>
               </div>
@@ -398,6 +434,19 @@ export default function AvisoSistemaWidget({ currentUser }: any) {
                       <span>✍️ {av.criado_por_nome || '—'}{criadoEmLabel(av) ? ` · ${criadoEmLabel(av)}` : ''}</span>
                       <span>{prazoLabel(av)}</span>
                     </div>
+                    {/* editar e excluir: só o autor do aviso ou quem tem a marca DEV (02/10/2026) */}
+                    {podeMexerNoAviso(eu, av) && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+                        <button onClick={() => iniciarEdicao(av)} title="Editar este aviso"
+                          style={{ background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+                          ✏️ Editar
+                        </button>
+                        <button onClick={() => excluir(av)} title="Excluir este aviso"
+                          style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+                          🗑 Excluir
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

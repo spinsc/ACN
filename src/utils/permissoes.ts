@@ -155,3 +155,22 @@ export function escopoDeDemandas(usuarioAtual: any): { modo: 'todas' | 'setor' |
   // trabalho — melhor faltar gente na lista do que abrir demais sem querer
   return { modo: 'proprias' };
 }
+
+// ── Avisos do sistema (02/10/2026, pedido do usuário) ───────────────────────────────────────────────────────────────────
+// Só Admin publica. Editar, pausar e excluir uma nota: só o AUTOR dela ou quem tem a marca DEV (auth_usuarios.eh_dev: Matheus e Luciano Spinelli, que são Admin e
+// DEV). A marca é do cadastro e não um nome escrito aqui: assim a regra aparece no banco e muda por lá. Como o resto do sistema, é regra de tela (a tabela não tem
+// como saber quem está logado: o login é próprio, não o do Supabase).
+export function podePublicarAviso(usuarioAtual: any): boolean {
+  return usuarioAtual?.perfil === 'Admin';
+}
+export function ehDev(usuarioAtual: any): boolean {
+  return usuarioAtual?.eh_dev === true;
+}
+export function ehAutorDoAviso(usuarioAtual: any, aviso: any): boolean {
+  const eu = String(usuarioAtual?.email || '').trim().toLowerCase();
+  const autor = String(aviso?.criado_por || '').trim().toLowerCase();
+  return !!eu && !!autor && eu === autor;
+}
+export function podeMexerNoAviso(usuarioAtual: any, aviso: any): boolean {
+  return podePublicarAviso(usuarioAtual) && (ehDev(usuarioAtual) || ehAutorDoAviso(usuarioAtual, aviso));
+}

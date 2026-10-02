@@ -76,6 +76,8 @@ export default function LoginTab() {
         // Quem aprova compra (30/09/2026): sem isto a marca nunca chegava ao navegador, e desde a regra de
         // 24/09 o sistema tratava TODO MUNDO como não-aprovador — inclusive os quatro marcados no Admin.
         pode_aprovar_compra:   usuario.pode_aprovar_compra   || false,
+        // Marca DEV (02/10/2026): quem pode mexer em qualquer aviso do sistema. Mesma lição da pode_aprovar_compra: se não entrar aqui, a marca nunca chega ao navegador.
+        eh_dev:                usuario.eh_dev                || false,
         ultimo_login_anterior: ultimoLoginAnterior,
       }));
 

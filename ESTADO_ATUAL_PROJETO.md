@@ -284,6 +284,12 @@ git push
 - `CrmTab.tsx` é o tab "Comercial/CRM" no sidebar (id: 'crm')
 - `ComercialTab.tsx` estava fora do menu desde 23/07/2026 e foi **apagado em 29/09/2026** (Etapa 3.1 do `PLANO_UX_FLUXO_TRABALHO.md`). O que só ele fazia — reenviar OP devolvida ao Comercial — agora está na aba "OPLs em aberto" do CRM.
 
+### 7.17 Avisos do sistema: quem publica, edita e exclui (02/10/2026)
+- **Só Admin publica** (`podePublicarAviso`). A caixa "Pode publicar Avisos do Sistema" do cadastro de usuário saiu e a coluna `auth_usuarios.pode_enviar_avisos` **não vale mais** (6 pessoas que não são Admin tinham a caixa marcada e perderam a permissão).
+- **Editar, pausar e excluir** uma nota: só o **autor** (compara `criado_por` com o e-mail de quem está logado) **ou DEV** (`auth_usuarios.eh_dev`, só Matheus e Luciano Spinelli), e sempre sendo Admin (`podeMexerNoAviso`). Vale no **painel flutuante** (botões "Editar" e "Excluir" em cada aviso) e em **Admin > Avisos**.
+- **Marca DEV:** migração `auth_usuarios_eh_dev`. **Não há caixa para marcá-la no Admin de propósito** (qualquer Admin se daria o poder): muda por SQL. A marca precisa chegar à sessão (login, "ver como", atualização do `DashboardTab` e a leitura do painel): é a mesma lição da `pode_aprovar_compra`.
+- É **regra de tela**, como o resto do sistema: o login é próprio, a tabela não sabe quem está logado.
+
 ### 7.16 SQLs desta sessão ainda não rodados
 Antes de qualquer deploy, rodar no Supabase SQL Editor (na ordem):
 1. `sql/migrations.sql` — ALTER TABLE/CREATE TABLE para tasks #74-#80
