@@ -5,6 +5,7 @@ import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { NovaDemandaModal } from './DemandaAvulsaPanel';
 import { escopoDeDemandas } from './utils/permissoes';
+import { Faixa } from './Interface';
 
 // Ajustes registrados ANTES desta unificação vivem em demandas_setoriais
 // com descricao prefixada [AJUSTE] — a tabela abaixo ("Ajustes em Aberto" /
@@ -28,6 +29,9 @@ export default function AjustesProjetoTab({ currentUser }) {
   const [modalObs, setModalObs] = useState(null);
   const [novaObs, setNovaObs] = useState('');
   const [tick, setTick] = useState(0);
+  // Etapa 7.34 (02/10/2026): leitura que falha avisa em vez de parecer "Nenhuma demanda em aberto" (antes só ia para o console, ou nem isso)
+  const [erroMinhas, setErroMinhas] = useState('');
+  const [erroAjustes, setErroAjustes] = useState('');
 
   // ── MINHAS DEMANDAS (28/09/2026) ───────────────────────────────────────────
   // Quem abria uma demanda aqui não tinha como acompanhá-la: ela caía na tela
@@ -56,7 +60,9 @@ export default function AjustesProjetoTab({ currentUser }) {
     const alcance = emailsVisiveis();
     if (filtroUsuario) q = q.eq('criado_por', filtroUsuario);
     else if (alcance) q = q.in('criado_por', alcance.length ? alcance : ['—sem—']);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) { setErroMinhas('Não foi possível ler as demandas (' + error.message + '). A lista abaixo pode estar desatualizada.'); return; }
+    setErroMinhas('');
     setMinhas(data || []);
   };
 
@@ -88,17 +94,19 @@ export default function AjustesProjetoTab({ currentUser }) {
       .select('*')
       .ilike('descricao', '[AJUSTE]%')
       .order('data_abertura', { ascending: false });
-    if (error) console.error('AjustesProjetoTab fetchAll:', error);
-    setAjustes(data || []);
+    if (error) { console.error('AjustesProjetoTab fetchAll:', error); setErroAjustes('Não foi possível ler os ajustes (' + error.message + '). A lista abaixo pode estar desatualizada.'); }
+    else { setErroAjustes(''); setAjustes(data || []); }
     setLoading(false);
   };
 
   const addObs = async () => {
     if (!novaObs.trim()) return;
     const a = modalObs;
-    const logs = a.logs_demanda || [];
-    logs.push({ texto: novaObs, usuario: currentUser?.nome || currentUser?.email, hora: new Date().toISOString() });
-    await supabase.from('demandas_setoriais').update({ logs_demanda: logs }).eq('id', a.id);
+    // Etapa 7.34 (02/10/2026): o histórico novo é uma CÓPIA (antes o push mexia na lista da própria janela, e a observação aparecia mesmo sem gravar) e o erro do banco é avisado:
+    // com a gravação recusada a janela continua aberta com o texto, e nada vai para o histórico de alterações.
+    const logs = [...(a.logs_demanda || []), { texto: novaObs, usuario: currentUser?.nome || currentUser?.email, hora: new Date().toISOString() }];
+    const { error } = await supabase.from('demandas_setoriais').update({ logs_demanda: logs }).eq('id', a.id);
+    if (error) { alert('Erro ao salvar a observação: ' + error.message); return; }
     logChange({ module: 'demandas_gerais', entityType: 'demandas_setoriais', entityId: a.id, changeType: 'UPDATE',
       oldRow: { observacao: null }, newRow: { observacao: novaObs.slice(0, 120) }, user: currentUser });
     setNovaObs(''); fecharModalObs(); fetchAll();
@@ -188,8 +196,9 @@ export default function AjustesProjetoTab({ currentUser }) {
           </div>
         </div>
         <div className="sec-body" style={{ overflowX: 'auto' }}>
+          {erroMinhas && <Faixa tom="erro">{erroMinhas}</Faixa>}
           {minhasVisiveis.length === 0 ? (
-            <div className="acn-empty">
+            erroMinhas ? null : <div className="acn-empty">
               {filtroUsuario ? 'Esta pessoa não tem demandas em aberto.' : 'Nenhuma demanda em aberto.'}
             </div>
           ) : (
@@ -221,8 +230,9 @@ export default function AjustesProjetoTab({ currentUser }) {
       <div className="sec-card">
         <div className="sec-hdr"><span>Ajustes em Aberto (histórico) ({abertos.length})</span></div>
         <div className="sec-body" style={{ overflowX: 'auto' }}>
+          {erroAjustes && <Faixa tom="erro">{erroAjustes}</Faixa>}
           {loading ? <div className="acn-empty">Carregando...</div> : abertos.length === 0 ? (
-            <div className="acn-empty">Nenhum ajuste em aberto.</div>
+            erroAjustes ? null : <div className="acn-empty">Nenhum ajuste em aberto.</div>
           ) : (
             <table>
               <thead><tr>
