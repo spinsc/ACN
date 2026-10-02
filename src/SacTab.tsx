@@ -12,10 +12,10 @@ import { ColaboradorSelect } from './ColaboradorSelect';
 import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
-import { Abas, Botao, Selo, Chips, MenuAcoes, hojeISO } from './Interface';
+import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import Icone from './Icone';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
-  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline } from '@mdi/js';
+  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -1751,64 +1751,48 @@ OK = ACN   |   Cancelar = DETECH`;
       </div>
 
       {/* ════════ MODAL NOVA OS ════════ */}
+      {/* Etapa 12d4 (01/10/2026): só aparência — mesmos campos, textos, ordem e lógica; seções em quadros, no molde das janelas do RH (cabeçalho, corpo que rola, rodapé fixo). Fecha só pelo ✕ ou pelo Cancelar, como antes. */}
       {modalNova && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:700,width:'95vw',maxHeight:'92vh',overflowY:'auto',padding:0}}>
+          <div className="modal-box acn-modal-cadastro acn-sac-nova">
 
             {/* Header */}
-            <div style={{background:'#0f766e',padding:'14px 20px',borderRadius:'8px 8px 0 0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div className="acn-modal-cab">
               <div>
-                <div style={{fontWeight:700,fontSize:14,color:'white',letterSpacing:.3}}>📋 Nova Ordem de Serviço</div>
-                <div style={{fontSize:10,color:'rgba(255,255,255,.7)',marginTop:2}}>Preencha os dados para abertura da OS</div>
+                <span className="modal-title"><Icone path={mdiClipboardTextOutline} size={18} /> Nova Ordem de Serviço</span>
+                <div className="acn-ajuda">Preencha os dados para abertura da OS</div>
               </div>
-              <button style={{background:'rgba(255,255,255,.15)',border:'none',color:'white',borderRadius:4,cursor:'pointer',padding:'4px 10px',fontSize:12}} onClick={()=>setModalNova(false)}>✕</button>
+              <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Fechar" onClick={()=>setModalNova(false)} />
             </div>
 
-            <div style={{padding:'16px 20px 20px'}}>
+            <div className="acn-modal-corpo acn-form-cheio">
 
             {/* CLASSIFICAÇÃO */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Classificação</div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Classificação</div>
 
               {/* Toggle: OS de Veículo */}
-              <div style={{marginBottom:10}}>
-                <label style={{display:'inline-flex',alignItems:'center',gap:8,cursor:'pointer',
-                  padding:'8px 14px',border:`2px solid ${form.is_veiculo?'#dc2626':'#e2e8f0'}`,
-                  borderRadius:6,background:form.is_veiculo?'#fff5f5':'#f8fafc',userSelect:'none',
-                  transition:'all .15s'}}>
-                  <input type="checkbox" checked={form.is_veiculo}
-                    onChange={e=>setForm(f=>({...f,is_veiculo:e.target.checked}))}
-                    style={{accentColor:'#dc2626',width:14,height:14}} />
-                  <span style={{fontWeight:700,fontSize:11,color:form.is_veiculo?'#dc2626':'#64748b'}}>
-                    🚗 OS de Veículo / Manutenção Veicular
-                  </span>
-                  <span style={{fontSize:9,color:'#94a3b8'}}>
-                    {form.is_veiculo
-                      ? '→ Fluxo de manutenção veicular habilitado'
-                      : '(marque se for manutenção de veículo)'}
-                  </span>
-                </label>
-              </div>
+              <label className={'acn-sac-opcao' + (form.is_veiculo ? ' on' : '')}>
+                <input type="checkbox" checked={form.is_veiculo}
+                  onChange={e=>setForm(f=>({...f,is_veiculo:e.target.checked}))} />
+                <span className="acn-forte acn-sac-icone-texto"><Icone path={mdiCarOutline} size={16} /> OS de Veículo / Manutenção Veicular</span>
+                <span className="acn-fraco">
+                  {form.is_veiculo
+                    ? '→ Fluxo de manutenção veicular habilitado'
+                    : '(marque se for manutenção de veículo)'}
+                </span>
+              </label>
 
-              <div className="form-group" style={{marginBottom:8}}>
+              <div className="form-group">
                 <label className="acn-label">Empresa *</label>
-                <div style={{display:'flex',gap:6}}>
-                  {EMPRESAS_OS.map(emp => (
-                    <button key={emp} type="button" onClick={()=>setForm(f=>({...f,empresa:emp}))}
-                      style={{padding:'5px 18px',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',
-                        border:`2px solid ${COR_EMPRESA[emp].bg}`,
-                        background: form.empresa===emp ? COR_EMPRESA[emp].bg : '#fff',
-                        color: form.empresa===emp ? COR_EMPRESA[emp].fg : COR_EMPRESA[emp].bg}}>
-                      {emp}
-                    </button>
-                  ))}
-                </div>
+                <Chips ativo={form.empresa} rotulo="Empresa da OS" onChange={emp=>setForm(f=>({...f,empresa:emp}))}
+                  itens={EMPRESAS_OS.map(emp => ({ id: emp, rotulo: emp }))} />
               </div>
 
               <div className="form-row">
                 <div className="form-group">
                   <label className="acn-label">Tipo de Serviço *</label>
-                  <select className="acn-input" style={{width:'100%'}} value={form.tipo_servico} onChange={e=>setForm(f=>({...f,tipo_servico:e.target.value}))}>
+                  <select className="acn-input" value={form.tipo_servico} onChange={e=>setForm(f=>({...f,tipo_servico:e.target.value}))}>
                     {tiposServico.filter(t=>t.ativo).map(t=>(
                       <option key={t.id} value={t.nome}>{t.nome}</option>
                     ))}
@@ -1819,72 +1803,71 @@ OK = ACN   |   Cancelar = DETECH`;
                 </div>
                 <div className="form-group">
                   <label className="acn-label">Categoria (Tipo Projeto)</label>
-                  <select className="acn-input" style={{width:'100%'}} value={form.tipo_projeto}
+                  <select className="acn-input" value={form.tipo_projeto}
                     onChange={e=>setForm(f=>({...f,tipo_projeto:e.target.value}))}>
                     <option value="">Selecione...</option>
                     {tiposProjeto.map(t=><option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="acn-label">Tipo de Equipamento *
-                    <button type="button" style={{marginLeft:6,fontSize:9,padding:'1px 6px',background:'#0f766e',color:'white',border:'none',borderRadius:3,cursor:'pointer'}}
-                      onClick={()=>setModalNovoEquip(true)}>+ novo</button>
+                <div className="form-group acn-sac-equip-campo">
+                  <label className="acn-label acn-sac-rotulo-acao">Tipo de Equipamento *{' '}
+                    <Botao pequeno variante="discreto" icone={mdiPlus} onClick={()=>setModalNovoEquip(true)}>novo</Botao>
                   </label>
-                  <select className="acn-input" style={{width:'100%'}} value={form.equipamento_nome}
+                  <select className="acn-input" value={form.equipamento_nome}
                     onChange={e=>setForm(f=>({...f,equipamento_nome:e.target.value}))}>
                     <option value="">Selecione...</option>
                     {equipamentos.map(e=><option key={e.id} value={e.nome}>{e.nome}</option>)}
                   </select>
                 </div>
-                <div className="form-group" style={{maxWidth:90}}>
+                <div className="form-group acn-sac-qtd">
                   <label className="acn-label">Qtd</label>
-                  <input type="number" min={1} max={20} className="acn-input" style={{width:'100%'}} value={form.quantidade}
+                  <input type="number" min={1} max={20} className="acn-input" value={form.quantidade}
                     onChange={e=>handleQtdChange(Number(e.target.value))} />
                 </div>
               </div>
             </div>
 
             {/* EQUIPAMENTOS — um card por unidade */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">
                 Dados do{equipLista.length > 1 ? 's' : ''} Equipamento{equipLista.length > 1 ? 's' : ''} ({equipLista.length})
               </div>
               {equipLista.map((eq, idx) => (
-                <div key={idx} style={{border:'1px solid var(--border)',borderRadius:6,padding:'10px 12px',marginBottom:8}}>
+                <div key={idx} className="acn-sac-unid">
                   {equipLista.length > 1 && (
-                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
-                      <span style={{background:'#0f766e',color:'white',fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:10}}>#{idx+1}</span>
-                      <span style={{fontSize:10,opacity:.6}}>Equipamento {idx+1} de {equipLista.length}</span>
+                    <div className="acn-sac-unid-cab">
+                      <Selo familia="marca" ponto={false}>#{idx+1}</Selo>
+                      <span className="acn-ajuda">Equipamento {idx+1} de {equipLista.length}</span>
                     </div>
                   )}
                   <div className="form-row">
                     <div className="form-group">
                       <label className="acn-label">Marca</label>
-                      <input className="acn-input" style={{width:'100%'}} value={eq.marca}
+                      <input className="acn-input" value={eq.marca}
                         onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,marca:e.target.value}:x))} />
                     </div>
                     <div className="form-group">
                       <label className="acn-label">Modelo</label>
-                      <input className="acn-input" style={{width:'100%'}} value={eq.modelo}
+                      <input className="acn-input" value={eq.modelo}
                         onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,modelo:e.target.value}:x))} />
                     </div>
                     {(form.is_veiculo || isVeicular(form.tipo_projeto)) ? (
                       <div className="form-group">
                         <label className="acn-label">Chassi</label>
-                        <input className="acn-input" style={{width:'100%'}} value={eq.chassi}
+                        <input className="acn-input" value={eq.chassi}
                           onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,chassi:e.target.value}:x))} />
                       </div>
                     ) : (
                       <div className="form-group">
                         <label className="acn-label">Nº de Série</label>
-                        <input className="acn-input" style={{width:'100%'}} value={eq.numero_serie}
+                        <input className="acn-input" value={eq.numero_serie}
                           onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,numero_serie:e.target.value}:x))} />
                       </div>
                     )}
                   </div>
-                  <div className="form-group" style={{marginTop:4}}>
+                  <div className="form-group">
                     <label className="acn-label">Defeito Reclamado *</label>
-                    <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical'}} value={eq.defeito}
+                    <textarea className="acn-input" rows={2} value={eq.defeito}
                       onChange={e=>setEquipLista(l=>l.map((x,i)=>i===idx?{...x,defeito:e.target.value}:x))} />
                   </div>
                 </div>
@@ -1892,50 +1875,50 @@ OK = ACN   |   Cancelar = DETECH`;
             </div>
 
             {/* OBSERVAÇÕES GERAIS */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Observações Gerais</div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Observações Gerais</div>
               <MencaoTextarea value={form.observacoes||''} rows={2}
                 placeholder="Observações adicionais... @Nome para mencionar alguém"
                 onChange={v=>setForm(f=>({...f,observacoes:v}))} />
             </div>
 
             {/* DADOS DO CLIENTE */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Dados do Cliente</div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Dados do Cliente</div>
               <div className="form-row">
-                <div className="form-group" style={{flex:2}}><label className="acn-label">Nome do Cliente *</label>
+                <div className="form-group acn-sac-dobro"><label className="acn-label">Nome do Cliente *</label>
                   <ClienteAutocomplete
                     value={form.cliente_nome}
                     onChange={v=>setForm(f=>({...f,cliente_nome:v.toUpperCase(),_cliente_id:null,_cliente_obj:null}))}
                     onSelect={c=>{ const d=clienteToForm(c); setForm(f=>({...f,cliente_nome:d.cliente_nome,empresa_orgao:d.empresa_orgao,cpf_cnpj:d.cpf_cnpj,telefone:d.telefone,email:d.email,endereco:d.endereco,_cliente_id:d._cliente_id,_cliente_obj:d._cliente_obj})); }}
                   /></div>
                 <div className="form-group"><label className="acn-label">Empresa / Órgão</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.empresa_orgao} onChange={e=>setForm(f=>({...f,empresa_orgao:e.target.value}))} /></div>
+                  <input className="acn-input" value={form.empresa_orgao} onChange={e=>setForm(f=>({...f,empresa_orgao:e.target.value}))} /></div>
                 <div className="form-group"><label className="acn-label">CPF / CNPJ</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.cpf_cnpj} onChange={e=>setForm(f=>({...f,cpf_cnpj:e.target.value}))} /></div>
+                  <input className="acn-input" value={form.cpf_cnpj} onChange={e=>setForm(f=>({...f,cpf_cnpj:e.target.value}))} /></div>
               </div>
               <div className="form-row">
-                <div className="form-group" style={{flex:2}}><label className="acn-label">Endereço</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.endereco} onChange={e=>setForm(f=>({...f,endereco:e.target.value}))} /></div>
+                <div className="form-group acn-sac-dobro"><label className="acn-label">Endereço</label>
+                  <input className="acn-input" value={form.endereco} onChange={e=>setForm(f=>({...f,endereco:e.target.value}))} /></div>
                 <div className="form-group"><label className="acn-label">Telefone</label>
-                  <input className="acn-input" style={{width:'100%'}} value={form.telefone} onChange={e=>setForm(f=>({...f,telefone:e.target.value}))} /></div>
+                  <input className="acn-input" value={form.telefone} onChange={e=>setForm(f=>({...f,telefone:e.target.value}))} /></div>
                 <div className="form-group"><label className="acn-label">E-mail</label>
-                  <input type="email" className="acn-input" style={{width:'100%'}} value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} /></div>
+                  <input type="email" className="acn-input" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} /></div>
               </div>
             </div>
 
             {/* PRAZOS */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Prazos</div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Prazos</div>
               <div className="form-row">
                 {form.tipo_servico !== 'Garantia' && (
                   <div className="form-group"><label className="acn-label">Prazo para Orçamento</label>
-                    <input type="date" className="acn-input" style={{width:'100%'}} value={form.prazo_orcamento}
+                    <input type="date" className="acn-input" value={form.prazo_orcamento}
                       onChange={e=>setForm(f=>({...f,prazo_orcamento:e.target.value}))} /></div>
                 )}
                 {form.tipo_servico === 'Garantia' && (
                   <div className="form-group"><label className="acn-label">Data Prevista de Entrega</label>
-                    <input type="date" className="acn-input" style={{width:'100%'}} value={form.data_prevista_entrega}
+                    <input type="date" className="acn-input" value={form.data_prevista_entrega}
                       onChange={e=>setForm(f=>({...f,data_prevista_entrega:e.target.value}))} /></div>
                 )}
               </div>
@@ -1943,51 +1926,51 @@ OK = ACN   |   Cancelar = DETECH`;
 
             {/* Despesas — Serviço Externo */}
             {hasDespesas && (
-              <div style={{border:'1px solid rgba(245,158,11,.35)',borderRadius:6,padding:'10px 12px',marginBottom:12,background:'rgba(245,158,11,.06)'}}>
-                <div style={{fontWeight:700,fontSize:9,color:'#b45309',letterSpacing:1,textTransform:'uppercase',marginBottom:8}}>🚗 Despesas de Campo</div>
+              <div className="acn-quadro tom-atencao">
+                <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCarOutline} size={14} /> Despesas de Campo</span></div>
                 <div className="form-row">
                   <div className="form-group"><label className="acn-label">Deslocamento (R$)</label>
-                    <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                    <input className="acn-input" placeholder="0,00"
                       value={form.despesa_deslocamento} onChange={e=>setForm(f=>({...f,despesa_deslocamento:e.target.value}))} /></div>
                   <div className="form-group"><label className="acn-label">Hospedagem (R$)</label>
-                    <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                    <input className="acn-input" placeholder="0,00"
                       value={form.despesa_hospedagem} onChange={e=>setForm(f=>({...f,despesa_hospedagem:e.target.value}))} /></div>
                   <div className="form-group"><label className="acn-label">Alimentação (R$)</label>
-                    <input className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                    <input className="acn-input" placeholder="0,00"
                       value={form.despesa_alimentacao} onChange={e=>setForm(f=>({...f,despesa_alimentacao:e.target.value}))} /></div>
-                  <div className="form-group" style={{alignSelf:'flex-end'}}>
-                    <div style={{fontSize:10,fontWeight:700,color:'#b45309',padding:'4px 8px',background:'rgba(245,158,11,.15)',borderRadius:4,border:'1px solid rgba(245,158,11,.3)'}}>
+                  <div className="form-group acn-sac-total">
+                    <Selo familia="atencao" ponto={false}>
                       Total: R$ {(
                         (parseFloat(form.despesa_deslocamento.replace(',','.')||'0')||0) +
                         (parseFloat(form.despesa_hospedagem.replace(',','.')||'0')||0) +
                         (parseFloat(form.despesa_alimentacao.replace(',','.')||'0')||0)
                       ).toLocaleString('pt-BR',{minimumFractionDigits:2})}
-                    </div>
+                    </Selo>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Acessórios */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Checklist de Acessórios</div>
-              <div style={{display:'flex',gap:6,marginBottom:8}}>
-                <input className="acn-input" style={{flex:1}} placeholder="Ex: Carregador, Manual, Cabo USB..."
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Checklist de Acessórios</div>
+              <div className="acn-sac-add">
+                <input className="acn-input" placeholder="Ex: Carregador, Manual, Cabo USB..."
                   value={acessInput} onChange={e=>setAcessInput(e.target.value)}
                   onKeyDown={e=>{ if(e.key==='Enter'&&acessInput.trim()){ setForm(f=>({...f,acessorios:[...f.acessorios,{descricao:acessInput.trim(),presente:true}]})); setAcessInput(''); }}} />
-                <button className="acn-btn" style={{background:'#0f766e',fontSize:10}} onClick={()=>{ if(acessInput.trim()){ setForm(f=>({...f,acessorios:[...f.acessorios,{descricao:acessInput.trim(),presente:true}]})); setAcessInput(''); }}}>+ Add</button>
+                <Botao variante="primario" icone={mdiPlus} onClick={()=>{ if(acessInput.trim()){ setForm(f=>({...f,acessorios:[...f.acessorios,{descricao:acessInput.trim(),presente:true}]})); setAcessInput(''); }}}>Add</Botao>
               </div>
               {form.acessorios.length === 0 ? (
-                <div style={{fontSize:10,opacity:.5}}>Nenhum acessório adicionado.</div>
+                <div className="acn-ajuda">Nenhum acessório adicionado.</div>
               ) : (
-                <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                <div className="acn-selos">
                   {form.acessorios.map((a,i) => (
-                    <label key={i} style={{display:'flex',alignItems:'center',gap:4,border:'1px solid var(--border)',borderRadius:4,padding:'3px 8px',fontSize:10,cursor:'pointer'}}>
+                    <label key={i} className="acn-sac-acess">
                       <input type="checkbox" checked={a.presente}
                         onChange={()=>setForm(f=>({...f,acessorios:f.acessorios.map((x,j)=>j===i?{...x,presente:!x.presente}:x)}))} />
                       {a.descricao}
-                      <button type="button" style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:11,lineHeight:1,padding:'0 2px'}}
-                        onClick={()=>setForm(f=>({...f,acessorios:f.acessorios.filter((_,j)=>j!==i)}))}>×</button>
+                      <Botao pequeno variante="discreto" icone={mdiClose} aria-label="Remover acessório"
+                        onClick={()=>setForm(f=>({...f,acessorios:f.acessorios.filter((_,j)=>j!==i)}))} />
                     </label>
                   ))}
                 </div>
@@ -1995,120 +1978,113 @@ OK = ACN   |   Cancelar = DETECH`;
             </div>
 
             {/* Fotos / Arquivos entrada */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Fotos e Arquivos de Entrada</div>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Fotos e Arquivos de Entrada</div>
+              <div className="acn-sac-arquivos">
                 <div>
-                  <div style={{fontSize:9,color:'#6b7280',marginBottom:3}}>Fotos (imagens)</div>
+                  <div className="acn-ajuda">Fotos (imagens)</div>
                   <input type="file" accept="image/*" multiple
                     onChange={e=>setFotosEntradaFiles(Array.from(e.target.files||[]))} />
-                  {fotosEntradaFiles.length > 0 && <div style={{fontSize:10,color:'#22c55e',marginTop:2}}>{fotosEntradaFiles.length} foto(s)</div>}
+                  {fotosEntradaFiles.length > 0 && <div className="acn-txt-ok acn-sac-contagem">{fotosEntradaFiles.length} foto(s)</div>}
                 </div>
                 <div>
-                  <div style={{fontSize:9,color:'#6b7280',marginBottom:3}}>Documentos (PDF, Word, etc.)</div>
+                  <div className="acn-ajuda">Documentos (PDF, Word, etc.)</div>
                   <input type="file" multiple
                     onChange={e=>setArquivosEntradaFiles(Array.from(e.target.files||[]))} />
-                  {arquivosEntradaFiles.length > 0 && <div style={{fontSize:10,color:'#22c55e',marginTop:2}}>{arquivosEntradaFiles.length} arquivo(s)</div>}
+                  {arquivosEntradaFiles.length > 0 && <div className="acn-txt-ok acn-sac-contagem">{arquivosEntradaFiles.length} arquivo(s)</div>}
                 </div>
               </div>
             </div>
 
             {/* Manutenção Veicular — campos específicos */}
             {form.is_veiculo && (
-              <div style={{border:'2px solid #dc2626',borderRadius:6,padding:'12px',marginBottom:12,background:'#fff5f5'}}>
-                <div style={{fontWeight:700,fontSize:9,color:'#dc2626',letterSpacing:1,textTransform:'uppercase',marginBottom:10}}>🚗 Manutenção Veicular</div>
-                <div className="form-row" style={{marginBottom:8}}>
+              <div className="acn-quadro tom-info">
+                <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCarOutline} size={14} /> Manutenção Veicular</span></div>
+                <div className="form-row">
                   <div className="form-group">
                     <label className="acn-label">Tipo de Avaliação *</label>
-                    <div style={{display:'flex',gap:8}}>
+                    <div className="acn-sac-avaliacao">
                       {['Presencial','Remota'].map(v=>(
-                        <label key={v} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,cursor:'pointer',
-                          padding:'5px 12px',border:`2px solid ${form.tipo_avaliacao===v?'#dc2626':'#d1d5db'}`,
-                          borderRadius:4,background:form.tipo_avaliacao===v?'#fee2e2':'white',fontWeight:form.tipo_avaliacao===v?700:400}}>
+                        <label key={v} className={'acn-sac-opcao' + (form.tipo_avaliacao===v ? ' on' : '')}>
                           <input type="radio" name="tipo_avaliacao" value={v}
                             checked={form.tipo_avaliacao===v}
-                            onChange={()=>setForm(f=>({...f,tipo_avaliacao:v as any}))} style={{display:'none'}} />
-                          {v==='Presencial'?'🔧':'📡'} {v}
+                            onChange={()=>setForm(f=>({...f,tipo_avaliacao:v as any}))} />
+                          <Icone path={v==='Presencial'?mdiWrenchOutline:mdiAccessPoint} size={15} /> {v}
                         </label>
                       ))}
                     </div>
-                    <div style={{fontSize:9,color:'#6b7280',marginTop:4}}>
+                    <div className="acn-ajuda">
                       {form.tipo_avaliacao==='Presencial'
                         ? '→ SAC define data de entrega do veículo (Provisionamento)'
                         : '→ SAC insere itens e envia cotação ao cliente para aprovação'}
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="acn-label" style={{display:'flex',alignItems:'center',gap:6}}>
+                    <label className="acn-check">
                       <input type="checkbox" checked={form.acompanhamento_engenharia}
-                        onChange={e=>setForm(f=>({...f,acompanhamento_engenharia:e.target.checked}))}
-                        style={{accentColor:'#2563eb'}} />
-                      <span>⚙️ Acompanhamento de Engenharia</span>
+                        onChange={e=>setForm(f=>({...f,acompanhamento_engenharia:e.target.checked}))} />
+                      <span className="acn-sac-icone-texto"><Icone path={mdiCogOutline} size={15} /> Acompanhamento de Engenharia</span>
                     </label>
-                    <div style={{fontSize:9,color:'#6b7280',marginTop:2}}>Cria demanda adicional para a Engenharia acompanhar.</div>
+                    <div className="acn-ajuda">Cria demanda adicional para a Engenharia acompanhar.</div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Dados de Faturamento */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#0f766e',letterSpacing:1,textTransform:'uppercase',marginBottom:6,paddingBottom:4,borderBottom:'2px solid #0f766e'}}>Dados de Faturamento (Fiscal / NF)</div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo">Dados de Faturamento (Fiscal / NF)</div>
               <div className="form-row">
                 <div className="form-group"><label className="acn-label">CNPJ / CPF Faturamento</label>
-                  <input className="acn-input" style={{width:'100%'}} placeholder="Pode ser diferente do cliente"
+                  <input className="acn-input" placeholder="Pode ser diferente do cliente"
                     value={form.cnpj_faturamento} onChange={e=>setForm(f=>({...f,cnpj_faturamento:e.target.value}))} /></div>
-                <div className="form-group" style={{flex:2}}><label className="acn-label">Razão Social / Nome Faturamento</label>
-                  <input className="acn-input" style={{width:'100%'}}
+                <div className="form-group acn-sac-dobro"><label className="acn-label">Razão Social / Nome Faturamento</label>
+                  <input className="acn-input"
                     value={form.razao_social_faturamento} onChange={e=>setForm(f=>({...f,razao_social_faturamento:e.target.value}))} /></div>
               </div>
               <div className="form-group"><label className="acn-label">Endereço Faturamento</label>
-                <input className="acn-input" style={{width:'100%'}}
+                <input className="acn-input"
                   value={form.endereco_faturamento} onChange={e=>setForm(f=>({...f,endereco_faturamento:e.target.value}))} /></div>
             </div>
 
             {/* Financeiro / Comissões */}
-            <div style={{border:'1px solid rgba(16,185,129,.3)',borderRadius:6,padding:'10px 14px',marginBottom:12,background:'rgba(16,185,129,.04)'}}>
-              <div style={{fontSize:11,fontWeight:700,color:'#059669',marginBottom:8}}>💰 Valores Financeiros (Comissões)</div>
+            <div className="acn-quadro tom-ok">
+              <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiCurrencyUsd} size={14} /> Valores Financeiros (Comissões)</span></div>
               <div className="form-row">
-                <div className="form-group" style={{maxWidth:160}}><label className="acn-label">Valor Total (R$)</label>
-                  <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                <div className="form-group acn-sac-valor-campo"><label className="acn-label">Valor Total (R$)</label>
+                  <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
                     value={form.valor_total||''} onChange={e=>setForm(f=>({...f,valor_total:e.target.value}))} /></div>
-                <div className="form-group" style={{maxWidth:160}}><label className="acn-label">Mão de Obra (R$)</label>
-                  <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
+                <div className="form-group acn-sac-valor-campo"><label className="acn-label">Mão de Obra (R$)</label>
+                  <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
                     value={form.valor_mao_de_obra||''} onChange={e=>setForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
-                <div className="form-group" style={{maxWidth:160}}><label className="acn-label">Data Faturamento</label>
-                  <input type="date" className="acn-input" style={{width:'100%'}}
+                <div className="form-group acn-sac-valor-campo"><label className="acn-label">Data Faturamento</label>
+                  <input type="date" className="acn-input"
                     value={form.data_faturamento||''} onChange={e=>setForm(f=>({...f,data_faturamento:e.target.value}))} /></div>
               </div>
             </div>
 
             {/* Info */}
             {!form.is_veiculo && form.tipo_servico !== 'Garantia' && (
-              <div style={{border:'1px solid rgba(59,130,246,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(59,130,246,.06)'}}>
-                ℹ️ A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.
-              </div>
+              <Faixa tom="info">A OS será encaminhada automaticamente para o <strong>Laboratório</strong> para diagnóstico e elaboração do orçamento.</Faixa>
             )}
             {!form.is_veiculo && form.tipo_servico === 'Garantia' && (
-              <div style={{border:'1px solid rgba(34,197,94,.3)',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,background:'rgba(34,197,94,.06)'}}>
-                ✅ Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.
-              </div>
+              <Faixa tom="ok">Garantia é <strong>aprovada automaticamente</strong>. O Laboratório receberá a OS para execução direta.</Faixa>
             )}
 
             {/* ── Vínculo CRM (opcional) ── */}
-            <div style={{marginBottom:12,background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:6,padding:'10px 12px'}}>
-              <div style={{fontWeight:700,fontSize:9,color:'#7c3aed',marginBottom:6,letterSpacing:.5,textTransform:'uppercase'}}>🔗 Vínculo Comercial/CRM (opcional)</div>
+            <div className="acn-quadro">
+              <div className="acn-quadro-titulo"><span className="acn-sac-icone-texto"><Icone path={mdiLinkVariant} size={14} /> Vínculo Comercial/CRM (opcional)</span></div>
               {form.crm_oportunidade_id ? (
-                <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{flex:1,fontSize:10,color:'#5b21b6',fontWeight:600}}>✓ {form._crm_titulo}</span>
-                  <button type="button" style={{fontSize:9,padding:'2px 8px',background:'#e9d5ff',color:'#7c3aed',border:'none',borderRadius:3,cursor:'pointer'}}
+                <div className="acn-sac-crm-escolhido">
+                  <span className="acn-txt-ok acn-sac-icone-texto"><Icone path={mdiCheck} size={15} /> {form._crm_titulo}</span>
+                  <Botao pequeno variante="discreto" icone={mdiClose}
                     onClick={()=>{setForm(f=>({...f,crm_oportunidade_id:null,_crm_titulo:''}));setCrmBusca('');setCrmSugestoes([]);}}>
-                    ✕ remover
-                  </button>
+                    Remover
+                  </Botao>
                 </div>
               ) : (
-                <div style={{position:'relative'}}>
-                  <input className="acn-input" style={{width:'100%'}} placeholder="Buscar oportunidade CRM para vincular..."
+                <div className="acn-sugestao">
+                  <input className="acn-input" placeholder="Buscar oportunidade CRM para vincular..."
                     value={crmBusca}
                     onChange={async e => {
                       const q = e.target.value;
@@ -2124,19 +2100,15 @@ OK = ACN   |   Cancelar = DETECH`;
                       setCrmBuscando(false);
                     }}
                   />
-                  {crmBuscando && <span style={{position:'absolute',right:8,top:6,fontSize:9,color:'#94a3b8'}}>...</span>}
+                  {crmBuscando && <span className="acn-fraco acn-sac-crm-buscando">...</span>}
                   {crmSugestoes.length > 0 && (
-                    <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:999,background:'white',border:'1px solid #ddd6fe',borderRadius:4,boxShadow:'0 4px 12px #0002',maxHeight:160,overflowY:'auto'}}>
+                    <div className="acn-sugestao-lista">
                       {crmSugestoes.map(c => (
-                        <div key={c.id} style={{padding:'6px 10px',cursor:'pointer',fontSize:10,borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:6}}
-                          onMouseEnter={e=>(e.currentTarget.style.background='#f5f3ff')}
-                          onMouseLeave={e=>(e.currentTarget.style.background='white')}
+                        <div key={c.id} className="acn-sugestao-item acn-sac-crm-item"
                           onClick={()=>{setForm(f=>({...f,crm_oportunidade_id:c.id,_crm_titulo:c.titulo||c.orgao||'—'}));setCrmBusca('');setCrmSugestoes([]);}}>
-                          <span style={{fontSize:8,color:c.funil==='licitacao'?'#7c3aed':'#0e7490',fontWeight:700,flexShrink:0}}>
-                            {c.funil==='licitacao'?'🏛️':'💼'}
-                          </span>
-                          <span style={{flex:1}}>{c.titulo||'—'}</span>
-                          {c.orgao && <span style={{fontSize:8,color:'#94a3b8',flexShrink:0}}>{c.orgao}</span>}
+                          <Icone path={c.funil==='licitacao'?mdiBankOutline:mdiBriefcaseOutline} size={14} />
+                          <span>{c.titulo||'—'}</span>
+                          {c.orgao && <span className="acn-fraco">{c.orgao}</span>}
                         </div>
                       ))}
                     </div>
@@ -2145,13 +2117,12 @@ OK = ACN   |   Cancelar = DETECH`;
               )}
             </div>
 
-            <div style={{display:'flex',gap:8,marginTop:4}}>
-              <button className="acn-btn" style={{background:'#0f766e',flex:1,padding:'10px',fontSize:11,opacity:salvando?0.6:1}}
-                onClick={criarOS} disabled={salvando}>{salvando?'Salvando...':'ABRIR OS'}</button>
-              <button className="acn-btn" style={{background:'#64748b',padding:'10px'}} onClick={()=>setModalNova(false)}>Cancelar</button>
             </div>
 
-            </div>{/* fim padding wrapper */}
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={criarOS} disabled={salvando}>{salvando?'Salvando...':'ABRIR OS'}</Botao>
+              <Botao onClick={()=>setModalNova(false)}>Cancelar</Botao>
+            </div>
           </div>
         </div>
       )}

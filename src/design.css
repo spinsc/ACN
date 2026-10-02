@@ -771,3 +771,45 @@ html body .acn-sac-filtros .acn-input.acn-sac-busca { flex-basis: 230px; }
 .acn-sac-horas { display: inline-flex; align-items: center; margin-left: 4px; cursor: help; }
 .acn-sac-espera { font-size: 12px; font-style: italic; }
 @media (max-width: 480px) { html body .acn-sac-filtros .acn-input.acn-sac-busca { flex-basis: 100%; } }
+/* ── SAC · janela "Nova OS" (Etapa 12d4, 01/10/2026): só aparência ──────────────────────────────────────────────── */
+html body .modal-box.acn-modal-cadastro.acn-sac-nova { width: min(760px, 95vw); }
+.acn-sac-nova .form-row, .acn-sac-nova .form-group { margin-bottom: 0; }
+/* caixinha/botão de opção em pílula (OS de veículo e tipo de avaliação): a caixa real continua na tela e acesa pelo teclado */
+.acn-sac-opcao { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); font-size: 13px; cursor: pointer; user-select: none; }
+.acn-sac-opcao.on { border-color: var(--acn-brand); background: var(--acn-brand-soft); }
+.acn-sac-opcao input { accent-color: var(--acn-brand); margin: 0; }
+.acn-sac-avaliacao { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.acn-sac-avaliacao .acn-sac-opcao { padding: 5px 12px; }
+.acn-sac-unid { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); }
+.acn-sac-unid-cab { display: flex; align-items: center; gap: 8px; }
+.acn-sac-add { display: flex; gap: 6px; }
+html body .acn-sac-add .acn-input { flex: 1; width: auto; min-width: 0; }
+.acn-sac-acess { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 8px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); font-size: 12px; cursor: pointer; }
+.acn-sac-arquivos { display: flex; gap: 16px; flex-wrap: wrap; }
+.acn-sac-contagem { margin-top: 2px; font-size: 12px; }
+/* larguras dos campos: base de 150 px para todos; nome/endereço/razão social valem o dobro; o tipo de equipamento cabe o "+ novo" ao lado do rótulo; a quantidade e os valores são curtos */
+html body .acn-sac-nova .form-row > .form-group { flex: 1 1 150px; min-width: 0; }
+html body .acn-sac-nova .form-row > .form-group.acn-sac-dobro { flex: 2 1 150px; }
+html body .acn-sac-nova .form-row > .form-group.acn-sac-qtd { flex: 0 1 90px; max-width: 90px; }
+html body .acn-sac-nova .form-row > .form-group.acn-sac-equip-campo { flex: 1.4 1 235px; }
+/* rótulo com um botão ao lado ("+ novo"): texto à esquerda, botão à direita, e só quebra se não couber */
+.acn-sac-nova .acn-sac-rotulo-acao { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+/* o botão do rótulo é baixo, para o campo não descer em relação aos vizinhos */
+.acn-sac-nova .acn-sac-rotulo-acao .acn-b { height: 20px; padding: 0 6px; font-size: 11px; }
+/* botão "Escolher arquivos" do navegador com a cara dos botões do sistema */
+.acn-sac-arquivos input[type=file]::file-selector-button { margin-right: 8px; padding: 4px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); color: var(--acn-ink); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+html body .acn-sac-nova .form-row > .form-group.acn-sac-valor-campo { flex: 0 1 160px; max-width: 160px; }
+.acn-sac-total { align-self: flex-end; }
+.acn-sac-crm-escolhido { display: flex; align-items: center; gap: 8px; }
+.acn-sac-crm-item { display: flex; align-items: center; gap: 6px; }
+.acn-sac-crm-buscando { position: absolute; right: 8px; top: 6px; font-size: 12px; }
+/* o botão principal vem primeiro no HTML (como antes), mas fica à direita, com o Cancelar à esquerda */
+.acn-modal-rodape.acn-sac-rodape { flex-direction: row-reverse; justify-content: flex-start; }
+/* celular: duas colunas em vez de três ou quatro espremidas; nome, endereço e razão social ocupam a linha toda */
+@media (max-width: 480px) {
+  html body .acn-sac-nova .form-row > .form-group,
+  html body .acn-sac-nova .form-row > .form-group.acn-sac-qtd,
+  html body .acn-sac-nova .form-row > .form-group.acn-sac-equip-campo,
+  html body .acn-sac-nova .form-row > .form-group.acn-sac-valor-campo { flex: 1 1 calc(50% - 8px); max-width: none; }
+  html body .acn-sac-nova .form-row > .form-group.acn-sac-dobro { flex: 1 1 100%; }
+}
