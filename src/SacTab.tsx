@@ -15,7 +15,7 @@ import { confirmar, pedirTexto } from './Feedback';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
 import Icone from './Icone';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
-  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant } from '@mdi/js';
+  mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
 
 // Fallback enquanto categorias não carregam do banco
 const TIPOS_PROJETO_FALLBACK = [
@@ -98,14 +98,13 @@ function SignCanvas({ onSave }) {
   }, []);
 
   return (
-    <div style={{textAlign:'center'}}>
-      <canvas ref={ref} width={460} height={120}
-        style={{border:'2px dashed #94a3b8',borderRadius:4,cursor:'crosshair',background:'white',display:'block',margin:'0 auto',maxWidth:'100%'}}
+    <div className="acn-sac-assinar">
+      <canvas ref={ref} width={460} height={120} className="acn-sac-canvas"
         onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
         onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
-      <div style={{display:'flex',gap:6,justifyContent:'center',marginTop:5}}>
-        <button className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={clear}>Limpar</button>
-        <button className="acn-btn" style={{background:'#22c55e',fontSize:10,opacity:has?1:0.5}} onClick={()=>has&&onSave(ref.current.toDataURL())} disabled={!has}>Confirmar Assinatura</button>
+      <div className="acn-sac-assinar-acoes">
+        <Botao pequeno onClick={clear}>Limpar</Botao>
+        <Botao pequeno variante="primario" onClick={()=>has&&onSave(ref.current.toDataURL())} disabled={!has}>Confirmar Assinatura</Botao>
       </div>
     </div>
   );
@@ -2147,26 +2146,34 @@ OK = ACN   |   Cancelar = DETECH`;
       )}
 
       {/* ════════ MODAL ORÇAMENTO (confirmar/editar antes de enviar) ════════ */}
+      {/* Etapa 12d5 (01/10/2026): só aparência das janelas de orçamento, aprovação, reprovação, entrega e anexar — campos, textos, ordem e lógica são os de antes, no molde das janelas do RH
+          (cabeçalho, corpo que rola, rodapé fixo com o botão principal à direita). Continuam fechando só pelo Cancelar/Fechar, como antes. */}
       {modalOrc && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420}}>
-            <div className="modal-title">📤 Enviar Orçamento ao Cliente — {modalOrc.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>Cliente: {modalOrc.cliente_nome} | {modalOrc.equipamento_nome}</div>
-            {modalOrc.observacoes_lab && (
-              <div style={{background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:4,padding:'8px 10px',marginBottom:12,fontSize:11}}>
-                <strong>Diagnóstico do Lab:</strong> {modalOrc.observacoes_lab}
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiSendOutline} size={18} /> Enviar Orçamento ao Cliente — {modalOrc.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">Cliente: {modalOrc.cliente_nome} | {modalOrc.equipamento_nome}</div>
+              {modalOrc.observacoes_lab && (
+                <Faixa tom="info"><strong>Diagnóstico do Lab:</strong> {modalOrc.observacoes_lab}</Faixa>
+              )}
+              <div className="form-group">
+                <label className="acn-label">Valor do Orçamento (R$) *</label>
+                <input className="acn-input" placeholder="Ex: 1.500,00"
+                  value={orcForm.valor} onChange={e=>setOrcForm(f=>({...f,valor:e.target.value}))} />
               </div>
-            )}
-            <label className="acn-label">Valor do Orçamento (R$) *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:10}} placeholder="Ex: 1.500,00"
-              value={orcForm.valor} onChange={e=>setOrcForm(f=>({...f,valor:e.target.value}))} />
-            <label className="acn-label">Condições de Pagamento</label>
-            <textarea className="acn-input" rows={2} style={{width:'100%',marginBottom:12,resize:'vertical'}}
-              placeholder="Ex: 50% entrada + 50% na retirada"
-              value={orcForm.condicoes} onChange={e=>setOrcForm(f=>({...f,condicoes:e.target.value}))} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#7c3aed',flex:1}} onClick={enviarOrcamento}>ENVIAR AO CLIENTE</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalOrc(null)}>Cancelar</button>
+              <div className="form-group">
+                <label className="acn-label">Condições de Pagamento</label>
+                <textarea className="acn-input" rows={2}
+                  placeholder="Ex: 50% entrada + 50% na retirada"
+                  value={orcForm.condicoes} onChange={e=>setOrcForm(f=>({...f,condicoes:e.target.value}))} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={enviarOrcamento}>ENVIAR AO CLIENTE</Botao>
+              <Botao onClick={()=>setModalOrc(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2175,29 +2182,39 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ════════ MODAL APROVAÇÃO ════════ */}
       {modalAprov && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">✅ Aprovação de Orçamento — {modalAprov.numero_os}</div>
-            <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:4,padding:8,marginBottom:12,fontSize:11}}>
-              <strong>Valor:</strong> {fmtVal(modalAprov.valor_orcamento)} &nbsp;|&nbsp;
-              <strong>Condições:</strong> {modalAprov.condicoes_pagamento || '—'}
+          <div className="modal-box acn-modal-cadastro acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCheckCircleOutline} size={18} /> Aprovação de Orçamento — {modalAprov.numero_os}</span>
             </div>
-            <label className="acn-label">Nome do Aprovador *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={aprovForm.nome} onChange={e=>setAprovForm(f=>({...f,nome:e.target.value}))} />
-            <label className="acn-label">Data Prevista de Entrega</label>
-            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={aprovForm.data_entrega} onChange={e=>setAprovForm(f=>({...f,data_entrega:e.target.value}))} />
-            <label className="acn-label">Assinatura do Aprovador *</label>
-            {aprovForm.sig ? (
-              <div style={{textAlign:'center',marginBottom:8}}>
-                <img src={aprovForm.sig} alt="Assinatura" style={{border:'1px solid #e2e8f0',borderRadius:4,maxWidth:'100%',height:90,objectFit:'contain',background:'white'}} />
-                <button className="acn-btn" style={{background:'#94a3b8',marginTop:4,fontSize:10}} onClick={()=>setAprovForm(f=>({...f,sig:null}))}>Limpar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <Faixa tom="ok">
+                <strong>Valor:</strong> {fmtVal(modalAprov.valor_orcamento)} &nbsp;|&nbsp;
+                <strong>Condições:</strong> {modalAprov.condicoes_pagamento || '—'}
+              </Faixa>
+              <div className="form-group">
+                <label className="acn-label">Nome do Aprovador *</label>
+                <input className="acn-input"
+                  value={aprovForm.nome} onChange={e=>setAprovForm(f=>({...f,nome:e.target.value}))} />
               </div>
-            ) : <SignCanvas onSave={(d)=>setAprovForm(f=>({...f,sig:d}))} />}
-            <div style={{display:'flex',gap:8,marginTop:12}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1}} onClick={salvarAprovacao}>CONFIRMAR APROVAÇÃO</button>
-              <button className="acn-btn" style={{background:'#ef4444'}} onClick={()=>{setModalRepr(modalAprov);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});setModalAprov(null);}}>REPROVAR</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAprov(null)}>Cancelar</button>
+              <div className="form-group">
+                <label className="acn-label">Data Prevista de Entrega</label>
+                <input type="date" className="acn-input"
+                  value={aprovForm.data_entrega} onChange={e=>setAprovForm(f=>({...f,data_entrega:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Assinatura do Aprovador *</label>
+                {aprovForm.sig ? (
+                  <div className="acn-sac-assinatura">
+                    <img src={aprovForm.sig} alt="Assinatura" />
+                    <Botao pequeno variante="discreto" onClick={()=>setAprovForm(f=>({...f,sig:null}))}>Limpar</Botao>
+                  </div>
+                ) : <SignCanvas onSave={(d)=>setAprovForm(f=>({...f,sig:d}))} />}
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={salvarAprovacao}>CONFIRMAR APROVAÇÃO</Botao>
+              <Botao variante="perigo-sec" onClick={()=>{setModalRepr(modalAprov);setReprForm({motivo:'',data_retirada:'',nome_retirada:''});setModalAprov(null);}}>REPROVAR</Botao>
+              <Botao onClick={()=>setModalAprov(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2206,20 +2223,30 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ════════ MODAL REPROVAÇÃO ════════ */}
       {modalRepr && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:400}}>
-            <div className="modal-title">❌ Reprovação — {modalRepr.numero_os}</div>
-            <label className="acn-label">Motivo da Reprovação *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              value={reprForm.motivo} onChange={e=>setReprForm(f=>({...f,motivo:e.target.value}))} />
-            <label className="acn-label">Data de Retirada do Equipamento</label>
-            <input type="date" className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={reprForm.data_retirada} onChange={e=>setReprForm(f=>({...f,data_retirada:e.target.value}))} />
-            <label className="acn-label">Nome de Quem Retirou</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:12}}
-              value={reprForm.nome_retirada} onChange={e=>setReprForm(f=>({...f,nome_retirada:e.target.value}))} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#ef4444',flex:1}} onClick={reprovar}>CONFIRMAR REPROVAÇÃO</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalRepr(null)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCloseCircleOutline} size={18} /> Reprovação — {modalRepr.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label">Motivo da Reprovação *</label>
+                <textarea className="acn-input" rows={3}
+                  value={reprForm.motivo} onChange={e=>setReprForm(f=>({...f,motivo:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Data de Retirada do Equipamento</label>
+                <input type="date" className="acn-input"
+                  value={reprForm.data_retirada} onChange={e=>setReprForm(f=>({...f,data_retirada:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Nome de Quem Retirou</label>
+                <input className="acn-input"
+                  value={reprForm.nome_retirada} onChange={e=>setReprForm(f=>({...f,nome_retirada:e.target.value}))} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="perigo" onClick={reprovar}>CONFIRMAR REPROVAÇÃO</Botao>
+              <Botao onClick={()=>setModalRepr(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2251,45 +2278,47 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ════════ MODAL ANEXAR ════════ */}
       {modalAnexar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">📎 Anexar Arquivos — {modalAnexar.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>Cliente: <strong>{modalAnexar.cliente_nome}</strong></div>
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiPaperclip} size={18} /> Anexar Arquivos — {modalAnexar.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo">
+              <div className="acn-ajuda">Cliente: <strong>{modalAnexar.cliente_nome}</strong></div>
 
-            {/* Anexos existentes */}
-            {Array.isArray(modalAnexar.arquivos_os) && modalAnexar.arquivos_os.length > 0 && (
-              <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:700,color:'#475569',marginBottom:6,textTransform:'uppercase',letterSpacing:.5}}>Arquivos já anexados</div>
-                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-                  {modalAnexar.arquivos_os.map((a:any,i:number)=>{
-                    const isImg = a.tipo&&a.tipo.startsWith('image/');
-                    return isImg ? (
-                      <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.nome}>
-                        <img src={a.url} alt={a.nome} style={{height:52,width:52,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
-                      </a>
-                    ) : (
-                      <a key={i} href={a.url} target="_blank" rel="noreferrer"
-                        style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', border:'1px solid #e2e8f0', borderRadius:4, fontSize:10, color:'#0f766e', textDecoration:'none', background:'#f8fafc', maxWidth:180, wordBreak:'break-word' }}>
-                        📄 {a.nome}
-                      </a>
-                    );
-                  })}
+              {/* Anexos existentes */}
+              {Array.isArray(modalAnexar.arquivos_os) && modalAnexar.arquivos_os.length > 0 && (
+                <div className="acn-quadro">
+                  <div className="acn-quadro-titulo">Arquivos já anexados</div>
+                  <div className="acn-selos">
+                    {modalAnexar.arquivos_os.map((a:any,i:number)=>{
+                      const isImg = a.tipo&&a.tipo.startsWith('image/');
+                      return isImg ? (
+                        <a key={i} href={a.url} target="_blank" rel="noreferrer" title={a.nome}>
+                          <img className="acn-sac-miniatura" src={a.url} alt={a.nome} />
+                        </a>
+                      ) : (
+                        <a key={i} href={a.url} target="_blank" rel="noreferrer" className="acn-sac-anexo-doc">
+                          <Icone path={mdiFileDocumentOutline} size={14} /> {a.nome}
+                        </a>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Upload novos */}
-            <div style={{border:'2px dashed #cbd5e1',borderRadius:6,padding:'14px',textAlign:'center',marginBottom:14,background:'#f8fafc'}}>
-              <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>Imagens, PDFs, Word, Excel…</div>
-              <input type="file" multiple accept={`image/*,.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.zip`}
-                onChange={e=>setAnexarFiles(Array.from(e.target.files||[]))}
-                style={{fontSize:11}} />
-              {anexarFiles.length > 0 && (
-                <div style={{marginTop:8,fontSize:11,color:'#22c55e',fontWeight:700}}>{anexarFiles.length} arquivo(s) selecionado(s)</div>
               )}
+
+              {/* Upload novos */}
+              <div className="acn-sac-envio">
+                <div className="acn-ajuda">Imagens, PDFs, Word, Excel…</div>
+                <input type="file" multiple accept={`image/*,.pdf,.doc,.docx,${EXT_PLANILHAS},.txt,.zip`}
+                  onChange={e=>setAnexarFiles(Array.from(e.target.files||[]))} />
+                {anexarFiles.length > 0 && (
+                  <div className="acn-txt-ok acn-sac-contagem">{anexarFiles.length} arquivo(s) selecionado(s)</div>
+                )}
+              </div>
             </div>
 
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0369a1',flex:1}}
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiUpload}
                 disabled={!anexarFiles.length||anexosSendoUpload}
                 onClick={async()=>{
                   if (!(await anexarArquivos(modalAnexar,anexarFiles))) return;
@@ -2298,9 +2327,9 @@ OK = ACN   |   Cancelar = DETECH`;
                   const {data} = await supabase.from('sac_ordens_servico').select('*').eq('id',modalAnexar.id).single();
                   if(data) setModalAnexar(data);
                 }}>
-                {anexosSendoUpload ? '⏳ Enviando...' : '⬆️ Enviar Arquivos'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalAnexar(null)}>Fechar</button>
+                {anexosSendoUpload ? 'Enviando...' : 'Enviar Arquivos'}
+              </Botao>
+              <Botao onClick={()=>setModalAnexar(null)}>Fechar</Botao>
             </div>
           </div>
         </div>
@@ -2329,24 +2358,34 @@ OK = ACN   |   Cancelar = DETECH`;
 
       {modalSaida && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
-            <div className="modal-title">🚚 Entrega — {modalSaida.numero_os}</div>
-            <label className="acn-label">Nome de Quem Retirou *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:10}}
-              value={saidaForm.nome} onChange={e=>setSaidaForm(f=>({...f,nome:e.target.value}))} />
-            <label className="acn-label">Fotos de Saída</label>
-            <input type="file" accept="image/*" multiple style={{marginBottom:10}}
-              onChange={e=>setFotosSaidaFiles(Array.from(e.target.files||[]))} />
-            <label className="acn-label">Assinatura de Retirada *</label>
-            {saidaForm.sig ? (
-              <div style={{textAlign:'center',marginBottom:8}}>
-                <img src={saidaForm.sig} alt="Assinatura" style={{border:'1px solid #e2e8f0',borderRadius:4,maxWidth:'100%',height:90,objectFit:'contain',background:'white'}} />
-                <button className="acn-btn" style={{background:'#94a3b8',marginTop:4,fontSize:10}} onClick={()=>setSaidaForm(f=>({...f,sig:null}))}>Limpar</button>
+          <div className="modal-box acn-modal-cadastro acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiTruckDeliveryOutline} size={18} /> Entrega — {modalSaida.numero_os}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label">Nome de Quem Retirou *</label>
+                <input className="acn-input"
+                  value={saidaForm.nome} onChange={e=>setSaidaForm(f=>({...f,nome:e.target.value}))} />
               </div>
-            ) : <SignCanvas onSave={(d)=>setSaidaForm(f=>({...f,sig:d}))} />}
-            <div style={{display:'flex',gap:8,marginTop:12}}>
-              <button className="acn-btn" style={{background:'#166534',flex:1}} onClick={salvarSaida}>CONFIRMAR ENTREGA</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalSaida(null)}>Cancelar</button>
+              <div className="form-group">
+                <label className="acn-label">Fotos de Saída</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e=>setFotosSaidaFiles(Array.from(e.target.files||[]))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Assinatura de Retirada *</label>
+                {saidaForm.sig ? (
+                  <div className="acn-sac-assinatura">
+                    <img src={saidaForm.sig} alt="Assinatura" />
+                    <Botao pequeno variante="discreto" onClick={()=>setSaidaForm(f=>({...f,sig:null}))}>Limpar</Botao>
+                  </div>
+                ) : <SignCanvas onSave={(d)=>setSaidaForm(f=>({...f,sig:d}))} />}
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={salvarSaida}>CONFIRMAR ENTREGA</Botao>
+              <Botao onClick={()=>setModalSaida(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
