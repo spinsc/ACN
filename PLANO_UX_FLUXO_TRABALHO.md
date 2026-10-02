@@ -1886,7 +1886,7 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **Fora / pendente:**
 
-- **Achado, não corrigido — Relatório de Comissão Comercial (aba Relatórios, `RelatoriosTab.tsx`):** pede "`AAAA-MM-31`" como último dia; em mês com menos de 31 dias o banco **recusa o pedido** (erro 400: "`2026-09-31`" não existe) e o relatório aparece **vazio**. Conferido direto no banco: setembro e fevereiro dão erro; julho e agosto funcionam. Vale para abril, junho, setembro, novembro e fevereiro. Ver "Perguntas em aberto".
+- **Achado — Relatório de Comissão Comercial (aba Relatórios, `RelatoriosTab.tsx`) — resolvido na Etapa 7.19:** pede "`AAAA-MM-31`" como último dia; em mês com menos de 31 dias o banco **recusa o pedido** (erro 400: "`2026-09-31`" não existe) e o relatório aparece **vazio**. Conferido direto no banco: setembro e fevereiro dão erro; julho e agosto funcionam. Vale para abril, junho, setembro, novembro e fevereiro. Ver "Perguntas em aberto".
 - **Não conferi** os demais relatórios que usam "`fim + T23:59:59`" (vários em `RelatoriosTab.tsx`): como a hora sem fuso é lida em UTC, provavelmente perdem as 3 últimas horas do último dia (erro menor que o das comissões). Entra na auditoria das datas já listada.
 - Quem usa a tela já viu valores menores do que os certos — só importa se alguém **já pagou** com base neles; o banco não registra nenhum fechamento aprovado por esta tela.
 
@@ -1904,6 +1904,26 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 - **Achado, não corrigido — "Salvar Notas" troca o atendente.** A mesma função, quando o chamado está "Em Atendimento" ou "Concluído", grava **`atendido_por` = a pessoa que está salvando** — então quem apenas edita as notas de um chamado já atendido passa a constar como o atendente. **Com o banco de hoje não dá para saber se já aconteceu:** os 4 chamados foram todos atendidos por LUCIANO SPINELLI. Pode ser a regra desejada ("o último a mexer") ou um efeito colateral; não mexi. Ver "Perguntas em aberto".
 - **O filtro de status só vale ao clicar em "Carregar"** (escolher o status não recarrega a lista), e o "N aberto(s)" do cabeçalho conta só o que está carregado — por exemplo, filtrando "Concluído" ele mostra "0 aberto(s)". Não mexi.
+
+### ✅ Etapa 7.19 — Relatório de Comissão Comercial: mês de 30 dias vinha vazio e só contava a OP "Faturado" (R15)
+
+**Feito em:** 01/10/2026. **Resposta R15 aplicada** (a de "corrigir agora") e, ao medir, **uma pergunta nova ao usuário** sobre quais OPs contam (resposta abaixo). Só leitura: **nenhum dado foi alterado.**
+
+**Causa (três coisas no `RelComissoes`, aba Relatórios > Comissões, `RelatoriosTab.tsx`):**
+
+1. **O fim do mês era pedido como "AAAA-MM-31".** Em mês de **30 dias e em fevereiro o banco recusava o pedido** (data que não existe, erro 400) e o relatório aparecia **vazio, sem aviso**. Em mês de 31 dias, `data_emissao_nf` é data-e-hora e "até o dia 31" vira meia-noite UTC: **o dia 31 depois das 21h de Brasília ficava de fora** (a mesma causa da Etapa 7.17).
+2. **Só contava a OP na situação exatamente "Faturado".** A OP **sai do relatório ao avançar** para "Faturado e Disponível para Entrega": em **setembro, 3 OPs têm NF emitida e nenhuma aparecia** (duas do THIAGO MEDEIROS: R$ 46.636,32 e R$ 5.130,50; só as 2 de julho ainda estão em "Faturado"). **Pergunta clicável ao usuário → "Toda OP com NF emitida no mês", em qualquer situação** (o mesmo critério da Comissão de Técnicos).
+3. **O erro do banco virava um relatório vazio** como se fosse verdade.
+
+**O que foi feito** (`RelatoriosTab.tsx`, só a consulta do `RelComissoes`; **nenhuma conta de comissão, texto ou gravação foi mexida**): o período passa a ser **[dia 1 às 00h, dia 1 do mês seguinte às 00h) em horário de Brasília** (`-03:00`, `gte` + `lt`, como na 7.17); **sai o filtro de situação**; e, se o banco recusar, a tela **avisa** ("Não consegui ler as OPs faturadas de Out/2026: …") **em vez de mostrar números**. O campo de mês apagado deixa de gerar pedido.
+
+**Como foi testado** (`teste_49`, navegador, **dado real, nenhuma gravação**): para seis meses (setembro, abril, novembro e **fevereiro**, de 30 e 28 dias; julho e agosto, de 31) o teste **calcula por fora, direto do banco, as OPs com NF emitida no mês em horário de Brasília** e exige que a tela mostre **a mesma quantidade** e que o **pedido seja aceito**; confere que **setembro mostra as duas OPs do THIAGO** (1560.2608/15 e A1664.2609); e **simula o banco recusando** o pedido (a tela avisa, sem números, e **volta ao normal** quando o banco volta). **Antes 9/22; depois 18/18.** Build ok. **Efeito nos números reais:** setembro passa de **0 para 3 OPs (base R$ 51.766,82)**; **a comissão continua R$ 0,00**, porque o THIAGO MEDEIROS **não tem percentual cadastrado** no RH.
+
+**Fora / pendente:**
+
+- **Valor de lote:** a base de setembro **inclui o lote 1560.2608 inteiro** (a OP /15 guarda os R$ 46.636,32 **do lote de 16 veículos**). A Comissão de Técnicos divide o valor pelo número de veículos; **o relatório comercial não divide** — **o usuário pediu para dividir como no RH (Etapa 7.25, logo depois)**.
+- **"% sobre Faturamento":** quem não tem percentual cadastrado (o THIAGO e a THALLITA) aparece com "**%** sobre Faturamento", sem o número. **Achado, não corrigido** (só aparência; conta R$ 0,00 de qualquer jeito).
+- **Os demais relatórios que usam "fim + T23:59:59"** (vários em `RelatoriosTab.tsx`) seguem sem conferir: entram na auditoria das datas (R16).
 
 ### ✅ Etapa 7.20 — SAC, aba Cadastros: gravação recusada falhava em silêncio e perdia o que foi digitado
 
@@ -2679,7 +2699,6 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 - **R12 — Os 6 cadastros escondidos pela lixeira (7.9):** **todos continuam escondidos**; nada a fazer. ⚪
 - **R13 — Relatório de Técnicos (12c3): contar todas as OPs.** Tirar o corte das 200 mais recentes (hoje Tatiana aparece com 114 e tem 228; Thiago 52 e tem 75; Letícia 30 e tem 41; Rute 4 e tem 11). **Cuidado:** o servidor devolve no máximo 1.000 linhas por consulta (achados A8 e A9) — hoje são 369, mas vão passar; usar paginação por `.range` ou a conta feita no banco. 🟢 P
 - **R14 — OPs sem responsável no mesmo relatório.** *Resposta:* "Linha sem responsável **porém indicando que precisa informar o responsável**." **Não mexer no cadastro.** São 13 OPs em branco e 1 com "leticia" sem sobrenome (*a confirmar:* essa entra na mesma linha, com o mesmo aviso). 🟢 P
-- **R15 — Relatório de Comissão Comercial em mês de 30 dias:** **corrigir agora**, como **Etapa 7.19** (o número 7.18 já foi usado pelo SAC). A aba Relatórios pede "AAAA-MM-31" e o banco recusa em setembro, abril, junho, novembro e fevereiro. Só leitura; período certo, como na 7.17. 🟢 P
 
 **Datas, CEP, BOM e pequenos achados**
 
@@ -2710,7 +2729,7 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | R12 | 6 cadastros escondidos | ⚪ | — | — | ✅ nada a fazer |
 | R13 | Relatório de Técnicos conta todas as OPs | 🟢 | P | rodada própria, depois (pequena); junto de R14 | ⬜ |
 | R14 | Linha "Sem responsável" no mesmo relatório | 🟢 | P | junto de R13 (confirmar a "leticia" sem sobrenome) | ⬜ |
-| R15 | Comissão Comercial em mês de 30 dias (Etapa 7.19) | 🟢 | P | **próxima rodada** (pequena, só leitura): Etapa 7.19 | ⬜ |
+| R15 | Comissão Comercial em mês de 30 dias (Etapa 7.19) | 🟢 | P | **agora** (01/10/2026) | ✅ aplicada em 01/10/2026 (Etapa 7.19) |
 | R16 | Datas um dia antes: corrigir os 52 lugares | 🟢 | M | etapa própria, um arquivo por vez; `SacTab` ✅ **feito na Etapa 7.21** (2 lugares reais; o 3º era do `PrintOS` apagado); restam **48 lugares em 24 arquivos**, um arquivo por vez — próximo: `RelatoriosTab` (3) | ⬜ |
 | R17 | CEP validado em todo campo de CEP | 🔴 | G | depois, **desenhar com o usuário** (confirmar as quatro suposições do CEP, R22) | ⬜ |
 | R18 | 4 fretes com CEP de zeros | ⚪ | — | — | ✅ nada a fazer |
@@ -2815,5 +2834,6 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | 01/10/2026 | **Gravação recusada no SAC (7.18, 7.20 e 7.22):** toda gravação do SAC que ignorava o resultado passa a **avisar o erro e parar** (o aviso de WhatsApp, a atualização da lista e o fechar da janela só acontecem **se gravou**); a janela com o que a pessoa digitou **continua aberta**. Feito **fatia por fatia**, cada uma com o seu teste de "gravação recusada" — a 7.22 cobriu as cinco ações da lista; as das janelas entram nas fatias 12d4 a 12d7. |
 | 01/10/2026 | **Nova OS do SAC (7.23, resposta do usuário em pergunta clicável):** (1) **"Defeito Reclamado" passa a ser obrigatório** em cada equipamento da OS (o asterisco já estava na tela; 3 das 19 OS reais estão sem defeito); (2) a **demanda do Laboratório traz o defeito digitado**, só nas OS novas (10 das 12 demandas de hoje dizem "Ver OS"; nenhuma existente foi alterada). **Suposições minhas, não confirmadas:** foto ou documento que não sobe **impede abrir a OS** (a alternativa seria abrir a OS sem o arquivo e avisar); e demanda do Laboratório/Engenharia recusada **avisa e a OS fica** (a outra saída seria apagar a OS recém-criada, que não fiz). |
 | 01/10/2026 | **Janela "Nova OS" do SAC (12d4):** migrada para a moldura das janelas do RH, **sem mudar campos, textos, ordem ou gravação**. **Suposições visuais minhas (aceitas pela regra R22):** os quadros por seção; **Manutenção Veicular em azul** (era vermelho), Despesas de Campo âmbar e Valores Financeiros verde; Presencial/Remota em pílulas; **no celular, dois campos por linha** (a janela fica 17% mais alta, para os campos não ficarem espremidos); o campo "Nome do Cliente" e o das Observações **ficam como estão** (componentes compartilhados). |
+| 01/10/2026 | **Comissão Comercial (R15, Etapa 7.19):** corrigido o fim do mês (mês de 30 dias vinha **vazio sem aviso**; o dia 31 depois das 21h ficava de fora) e o relatório passa a contar **toda OP com NF emitida no mês, em qualquer situação** (**resposta do usuário**, pergunta clicável): antes só a OP exatamente em "Faturado", e ela saía do relatório ao avançar para "Faturado e Disponível para Entrega" (setembro: 3 OPs, nenhuma aparecia). O mesmo critério da Comissão de Técnicos. O erro do banco passa a ser avisado. **Setembro: de 0 para 3 OPs (base R$ 51.766,82), comissão R$ 0,00** (o THIAGO MEDEIROS não tem percentual no RH). O **valor de lote** é a Etapa 7.25 (pedido do usuário: dividir como no RH). |
 | 01/10/2026 | **Tipos de serviço do SAC vazios (resposta do usuário ao achado da 12d2):** **nada a fazer** — a lista está vazia só porque o SAC começou a ser usado de fato hoje e ainda vai ser preenchida. Os 4 tipos "de mentira" mostrados quando a tabela vem vazia ficam como estão. |
 | 01/10/2026 | **Como perguntar (pedido do usuário):** as perguntas que forem necessárias durante o trabalho são feitas **na hora em que surgem**, não em lote no fim. |

@@ -1090,21 +1090,32 @@ function RelComissoes() {
   const [funcionarios, setFuncionarios] = useState([]);
   const [ops, setOps] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
 
   const fmtR = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
 
   useEffect(() => {
     const carregar = async () => {
+      setErro('');
+      if (!/^\d{4}-\d{2}$/.test(mes)) { setFuncionarios([]); setOps([]); return; }   // campo de mês apagado: nada a consultar
       setLoading(true);
-      const [{ data: funcs }, { data: opsData }] = await Promise.all([
+      // Etapa 7.19 (01/10/2026, R15): (1) o fim do mês era pedido como "AAAA-MM-31": em mês de 30 dias (e fevereiro) o banco RECUSAVA o pedido (data que não existe) e o relatório aparecia vazio,
+      // sem aviso; em mês de 31 dias, data_emissao_nf é data-e-hora e "até o dia 31" vira meia-noite UTC — o dia 31 depois das 21h de Brasília ficava de fora. Agora o período é
+      // [dia 1 às 00h, dia 1 do mês seguinte às 00h) em Brasília (-03:00, sem horário de verão desde 2019), como na Etapa 7.17. (2) Só contava a OP na situação exatamente "Faturado", e ela sai do
+      // relatório ao avançar para "Faturado e Disponivel para Entrega" (em setembro, 3 OPs com NF emitida e nenhuma aparecia): por decisão do usuário, conta TODA OP com NF emitida no mês, em
+      // qualquer situação — o mesmo critério da Comissão de Técnicos. (3) O erro do banco passa a ser avisado em vez de virar um relatório vazio.
+      const [anoM, mesM] = mes.split('-').map(Number);
+      const proximoMes = mesM === 12 ? `${anoM + 1}-01` : `${anoM}-${String(mesM + 1).padStart(2, '0')}`;
+      const [resFuncs, resOps] = await Promise.all([
         supabase.from('rh_funcionarios').select('id,nome,cargo,percentual_comissao,incide_em,recebe_comissao').eq('recebe_comissao', true),
         supabase.from('oples').select('id,opl,responsavel_comercial,valor_total,cliente_nome,status_geral,data_emissao_nf')
-          .eq('status_geral','Faturado')
-          .gte('data_emissao_nf', `${mes}-01`)
-          .lte('data_emissao_nf', `${mes}-31`),
+          .gte('data_emissao_nf', `${mes}-01T00:00:00-03:00`)
+          .lt('data_emissao_nf', `${proximoMes}-01T00:00:00-03:00`),
       ]);
-      setFuncionarios(funcs || []);
-      setOps(opsData || []);
+      const falha = resFuncs.error || resOps.error;
+      if (falha) setErro(falha.message);
+      setFuncionarios(resFuncs.data || []);
+      setOps(resOps.data || []);
       setLoading(false);
     };
     carregar();
@@ -1143,7 +1154,7 @@ function RelComissoes() {
             <label className="acn-label">Mês de Referência</label>
             <input type="month" className="acn-input" value={mes} onChange={e=>setMes(e.target.value)} />
           </div>
-          {!loading && (
+          {!loading && !erro && (
             <span className="acn-fraco">
               {ops.length} OP(s) faturada(s) em {labelMes} · {funcionarios.length} vendedor(es) com comissão cadastrada
             </span>
@@ -1153,6 +1164,8 @@ function RelComissoes() {
 
       {loading ? (
         <div className="acn-empty">Carregando...</div>
+      ) : erro ? (
+        <Faixa tom="erro">Não consegui ler as OPs faturadas de {labelMes}: {erro}</Faixa>
       ) : (
         <>
           {/* Cards de resumo */}
