@@ -5,7 +5,9 @@ import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import { NovaDemandaModal } from './DemandaAvulsaPanel';
 import { escopoDeDemandas } from './utils/permissoes';
-import { Faixa } from './Interface';
+import { Botao, Selo, Faixa } from './Interface';
+import Icone from './Icone';
+import { mdiClipboardTextOutline, mdiPlus, mdiContentSaveOutline, mdiHistory } from '@mdi/js';
 
 // Ajustes registrados ANTES desta unificação vivem em demandas_setoriais
 // com descricao prefixada [AJUSTE] — a tabela abaixo ("Ajustes em Aberto" /
@@ -123,20 +125,21 @@ export default function AjustesProjetoTab({ currentUser }) {
     return `${hh}:${mm}:${ss}`;
   };
 
-  const corDoStatus = (s) => {
+  // as mesmas faixas de cor de antes (concluída verde, cancelada cinza, em andamento azul, o resto âmbar; prioridade alta vermelha, média âmbar, baixa verde), agora pela família do selo
+  const familiaDoStatus = (s) => {
     const t = String(s || '').toLowerCase();
-    if (/conclu/.test(t)) return '#16a34a';
-    if (/cancel/.test(t)) return '#94a3b8';
-    if (/andamento|execu/.test(t)) return '#2563eb';
-    return '#f59e0b';
+    if (/conclu/.test(t)) return 'ok';
+    if (/cancel/.test(t)) return 'neutro';
+    if (/andamento|execu/.test(t)) return 'info';
+    return 'atencao';
   };
 
-  const corPrioridade = (logs) => {
+  const familiaPrioridade = (logs) => {
     const txt = (logs?.[0]?.texto || '').toLowerCase();
-    if (txt.includes('prioridade: alta')) return '#ef4444';
-    if (txt.includes('prioridade: media')) return '#f59e0b';
-    if (txt.includes('prioridade: baixa')) return '#22c55e';
-    return '#94a3b8';
+    if (txt.includes('prioridade: alta')) return 'erro';
+    if (txt.includes('prioridade: media')) return 'atencao';
+    if (txt.includes('prioridade: baixa')) return 'ok';
+    return 'neutro';
   };
 
   const getPrioridade = (logs) => {
@@ -151,18 +154,19 @@ export default function AjustesProjetoTab({ currentUser }) {
   const marcarAjusteLido = useMarkAsRead('demandas_setoriais', modalObs?.id, currentUser);
   const fecharModalObs = () => { marcarAjusteLido(); if (modalObs?.id) marcarAjusteLidoLocal(modalObs.id); setModalObs(null); };
 
+  // Etapa 12e1 (02/10/2026): só a aparência — no molde das telas já migradas (quadros, tabela do guia, selos por família, botões e janela do sistema). Textos, colunas, ordem dos botões e lógica são os de antes.
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr" style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b' }}>
-          <span style={{ color: '#92400e' }}>Demandas Gerais</span>
-          <button className="acn-btn" style={{ background: '#1e293b' }} onClick={() => setModalNova(true)}>
-            + Nova Demanda
-          </button>
+        <div className="sec-hdr">
+          <span className="acn-cab-titulo"><Icone path={mdiClipboardTextOutline} size={16} /> Demandas Gerais</span>
+          <Botao variante="primario" pequeno icone={mdiPlus} onClick={() => setModalNova(true)}>Nova Demanda</Botao>
         </div>
-        <div className="sec-body" style={{ fontSize: 10, color: '#92400e' }}>
-          Vincule a uma OP/OS/PV/Compra/OFI se for o caso, escolha o setor de destino e a demanda já cai
-          direto na tela daquele setor — mesmo formulário rico usado em Engenharia/Almoxarifado/PCP/Compras.
+        <div className="sec-body">
+          <div className="acn-ajuda">
+            Vincule a uma OP/OS/PV/Compra/OFI se for o caso, escolha o setor de destino e a demanda já cai
+            direto na tela daquele setor — mesmo formulário rico usado em Engenharia/Almoxarifado/PCP/Compras.
+          </div>
         </div>
       </div>
 
@@ -180,48 +184,49 @@ export default function AjustesProjetoTab({ currentUser }) {
              escopo.modo === 'setor' ? 'Demandas do meu setor' : 'Demandas que eu abri'}
             {' '}({minhasVisiveis.length})
           </span>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div className="acn-cab-filtros">
             {usuariosDoFiltro.length > 1 && (
-              <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}
-                aria-label="Filtrar por quem abriu"
-                style={{ fontSize: 10, padding: '3px 6px', border: '1px solid #cbd5e1', borderRadius: 4 }}>
+              <select className="acn-input acn-input-filtro" value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}
+                aria-label="Filtrar por quem abriu">
                 <option value="">Quem abriu: todos</option>
                 {usuariosDoFiltro.map(u => <option key={u.email} value={u.email}>{u.nome}</option>)}
               </select>
             )}
-            <button className="acn-btn" style={{ background: verConcluidas ? '#0f766e' : '#94a3b8', fontSize: 10 }}
+            <Botao pequeno variante={verConcluidas ? 'primario' : 'secundario'}
               onClick={() => setVerConcluidas(v => !v)}>
               {verConcluidas ? 'Escondendo nada' : 'Ver concluídas'}
-            </button>
+            </Botao>
           </div>
         </div>
-        <div className="sec-body" style={{ overflowX: 'auto' }}>
+        <div className="sec-body">
           {erroMinhas && <Faixa tom="erro">{erroMinhas}</Faixa>}
           {minhasVisiveis.length === 0 ? (
             erroMinhas ? null : <div className="acn-empty">
               {filtroUsuario ? 'Esta pessoa não tem demandas em aberto.' : 'Nenhuma demanda em aberto.'}
             </div>
           ) : (
-            <table>
-              <thead><tr>
-                <th>Aberta em</th><th>Quem abriu</th><th>Demanda</th><th>Setor</th>
-                <th>Vínculo</th><th>Responsável</th><th>Prazo</th><th>Status</th>
-              </tr></thead>
-              <tbody>
-                {minhasVisiveis.map(d => (
-                  <tr key={d.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmtDt(d.criado_em)}</td>
-                    <td>{d.criado_por_nome || '—'}</td>
-                    <td style={{ maxWidth: 220, wordBreak: 'break-word' }}>{d.titulo || '—'}</td>
-                    <td>{d.setor || '—'}</td>
-                    <td style={{ fontSize: 9, color: '#64748b' }}>{d.vinculo_descricao || '—'}</td>
-                    <td>{d.responsavel_nome || '—'}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{d.prazo ? fmtDt(d.prazo) : '—'}</td>
-                    <td><span className="acn-badge" style={{ background: corDoStatus(d.status) }}>{d.status || '—'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead><tr>
+                  <th>Aberta em</th><th>Quem abriu</th><th>Demanda</th><th>Setor</th>
+                  <th>Vínculo</th><th>Responsável</th><th>Prazo</th><th>Status</th>
+                </tr></thead>
+                <tbody>
+                  {minhasVisiveis.map(d => (
+                    <tr key={d.id}>
+                      <td className="acn-nowrap">{fmtDt(d.criado_em)}</td>
+                      <td>{d.criado_por_nome || '—'}</td>
+                      <td className="acn-texto-longo acn-dg-texto">{d.titulo || '—'}</td>
+                      <td>{d.setor || '—'}</td>
+                      <td className="acn-fraco">{d.vinculo_descricao || '—'}</td>
+                      <td>{d.responsavel_nome || '—'}</td>
+                      <td className="acn-nowrap">{d.prazo ? fmtDt(d.prazo) : '—'}</td>
+                      <td><Selo familia={familiaDoStatus(d.status)} ponto={false}>{d.status || '—'}</Selo></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -229,61 +234,56 @@ export default function AjustesProjetoTab({ currentUser }) {
       {/* AJUSTES ABERTOS — histórico do sistema antigo, registrado antes desta unificação */}
       <div className="sec-card">
         <div className="sec-hdr"><span>Ajustes em Aberto (histórico) ({abertos.length})</span></div>
-        <div className="sec-body" style={{ overflowX: 'auto' }}>
+        <div className="sec-body">
           {erroAjustes && <Faixa tom="erro">{erroAjustes}</Faixa>}
           {loading ? <div className="acn-empty">Carregando...</div> : abertos.length === 0 ? (
             erroAjustes ? null : <div className="acn-empty">Nenhum ajuste em aberto.</div>
           ) : (
-            <table>
-              <thead><tr>
-                <th>Data</th><th>OP Ref.</th><th>Requerente</th><th>Descricao</th>
-                <th>Setor</th><th>Prioridade</th><th>Status</th><th>Responsavel</th><th>Tempo</th><th>Acoes</th>
-              </tr></thead>
-              <tbody>
-                {abertos.map(a => {
-                  const desc = a.descricao?.replace('[AJUSTE] ', '') || '—';
-                  const prio = getPrioridade(a.logs_demanda);
-                  const naoLida = ajustesNaoLidos.has(String(a.id));
-                  return (
-                    <tr key={a.id} style={naoLida
-                      ? { background:'#fffdf0', boxShadow:'inset 3px 0 0 #eab308' }
-                      : { background: a.status === 'Em Andamento' ? '#fefce8' : '#fffbeb' }}>
-                      <td>{fmtDt(a.data_abertura)}</td>
-                      <td>{a.numero_opl || '—'}</td>
-                      <td>{a.criado_por_nome || '—'}</td>
-                      <td style={{ maxWidth: 180, wordBreak:'break-word' }} title={desc}>{desc}</td>
-                      <td>
-                        {a.setor_destino || '—'}
-                        {a.setor_destino === 'Compras' && a.tipo_solicitacao && (
-                          <div style={{ fontSize: 8, fontWeight: 700, color: a.tipo_solicitacao === 'cotacao' ? '#7c3aed' : '#0891b2', marginTop: 1 }}>
-                            {a.tipo_solicitacao === 'cotacao' ? '📋 Cotação' : '🛒 Compra'}
-                          </div>
-                        )}
-                      </td>
-                      <td><span className="acn-badge" style={{ background: corPrioridade(a.logs_demanda) }}>{prio}</span></td>
-                      <td>
-                        <span className="acn-badge" style={{ background: a.status === 'Em Andamento' ? '#3b82f6' : '#f59e0b' }}>
-                          {a.status}
-                        </span>
-                      </td>
-                      <td>{a.responsavel_nome || '—'}</td>
-                      <td>
-                        {a.status === 'Em Andamento' && a.data_inicio
-                          ? <span style={{ fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color: '#2563eb', fontWeight: 700 }}>{tempoDecorrido(a.data_inicio)}</span>
-                          : fmtH(a.tempo_execucao_horas)
-                        }
-                      </td>
-                      <td>
-                        <button className="acn-btn" style={{ background: '#475569', fontSize: 10 }}
-                          onClick={() => { setModalObs(a); setNovaObs(''); }}>
-                          VER / OBS
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead><tr>
+                  <th>Data</th><th>OP Ref.</th><th>Requerente</th><th>Descricao</th>
+                  <th>Setor</th><th>Prioridade</th><th>Status</th><th>Responsavel</th><th>Tempo</th><th>Acoes</th>
+                </tr></thead>
+                <tbody>
+                  {abertos.map(a => {
+                    const desc = a.descricao?.replace('[AJUSTE] ', '') || '—';
+                    const prio = getPrioridade(a.logs_demanda);
+                    const naoLida = ajustesNaoLidos.has(String(a.id));
+                    return (
+                      <tr key={a.id} className={naoLida ? 'acn-linha-nova' : ''}>
+                        <td className="acn-nowrap">{fmtDt(a.data_abertura)}</td>
+                        <td className="acn-nowrap">{a.numero_opl || '—'}</td>
+                        <td>{a.criado_por_nome || '—'}</td>
+                        <td className="acn-texto-longo acn-dg-texto" title={desc}>{desc}</td>
+                        <td>
+                          {a.setor_destino || '—'}
+                          {a.setor_destino === 'Compras' && a.tipo_solicitacao && (
+                            <div>
+                              <Selo familia={a.tipo_solicitacao === 'cotacao' ? 'marca' : 'info'} ponto={false}>
+                                {a.tipo_solicitacao === 'cotacao' ? 'Cotação' : 'Compra'}
+                              </Selo>
+                            </div>
+                          )}
+                        </td>
+                        <td><Selo familia={familiaPrioridade(a.logs_demanda)} ponto={false}>{prio}</Selo></td>
+                        <td><Selo familia={a.status === 'Em Andamento' ? 'info' : 'atencao'} ponto={false}>{a.status}</Selo></td>
+                        <td>{a.responsavel_nome || '—'}</td>
+                        <td className="acn-nowrap">
+                          {a.status === 'Em Andamento' && a.data_inicio
+                            ? <span className="acn-num acn-forte">{tempoDecorrido(a.data_inicio)}</span>
+                            : fmtH(a.tempo_execucao_horas)
+                          }
+                        </td>
+                        <td>
+                          <Botao pequeno onClick={() => { setModalObs(a); setNovaObs(''); }}>VER / OBS</Botao>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -292,63 +292,71 @@ export default function AjustesProjetoTab({ currentUser }) {
       {concluidos.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr"><span>Historico de Ajustes Concluidos ({concluidos.length})</span></div>
-          <div className="sec-body" style={{ overflowX: 'auto' }}>
-          <table>
-            <thead><tr>
-              <th>Data</th><th>OP Ref.</th><th>Requerente</th><th>Descricao</th>
-              <th>Setor</th><th>Responsavel</th><th>Conclusao</th><th>Tempo</th>
-            </tr></thead>
-            <tbody>
-              {concluidos.map(a => {
-                const desc = a.descricao?.replace('[AJUSTE] ', '') || '—';
-                return (
-                  <tr key={a.id}>
-                    <td>{fmtDt(a.data_abertura)}</td>
-                    <td>{a.numero_opl || '—'}</td>
-                    <td>{a.criado_por_nome || '—'}</td>
-                    <td style={{ maxWidth:200, wordBreak:'break-word' }} title={desc}>{desc}</td>
-                    <td>{a.setor_destino || '—'}</td>
-                    <td>{a.responsavel_nome || '—'}</td>
-                    <td>{fmtDt(a.data_conclusao)}</td>
-                    <td>{fmtH(a.tempo_execucao_horas)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )}
-
-    {/* MODAL OBS */}
-    {modalObs && (
-      <div className="modal-overlay">
-        <div className="modal-box" style={{maxWidth:500}}>
-          <div className="modal-title">Historico — {modalObs.descricao?.replace('[AJUSTE] ','')}</div>
-          <div style={{maxHeight:180,overflowY:'auto',marginBottom:12,background:'#f8fafc',borderRadius:4,padding:'8px 10px',border:'1px solid #e2e8f0'}}>
-            {(modalObs.logs_demanda||[]).length === 0
-              ? <div style={{fontSize:10,color:'#94a3b8'}}>Sem historico de logs.</div>
-              : (modalObs.logs_demanda||[]).map((l,i) => (
-                <div key={i} style={{marginBottom:6,fontSize:10,borderBottom:'1px solid #e2e8f0',paddingBottom:4}}>
-                  <span style={{color:'#94a3b8',fontSize:9}}>{l.hora ? new Date(l.hora).toLocaleString('pt-BR') : ''} · {l.usuario||''}</span>
-                  <div style={{color:'#374151',marginTop:2}}>{l.texto}</div>
-                </div>
-              ))
-            }
-          </div>
-          <label className="acn-label">Nova Observacao</label>
-          <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:8}}
-            placeholder="Adicione uma observacao..." value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
-          <div style={{display:'flex',gap:8}}>
-            <button className="acn-btn" style={{background:'#1e293b',flex:1}} onClick={addObs}>SALVAR</button>
-            <button className="acn-btn" style={{background:'#94a3b8'}} onClick={fecharModalObs}>Fechar</button>
+          <div className="sec-body">
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead><tr>
+                  <th>Data</th><th>OP Ref.</th><th>Requerente</th><th>Descricao</th>
+                  <th>Setor</th><th>Responsavel</th><th>Conclusao</th><th>Tempo</th>
+                </tr></thead>
+                <tbody>
+                  {concluidos.map(a => {
+                    const desc = a.descricao?.replace('[AJUSTE] ', '') || '—';
+                    return (
+                      <tr key={a.id}>
+                        <td className="acn-nowrap">{fmtDt(a.data_abertura)}</td>
+                        <td className="acn-nowrap">{a.numero_opl || '—'}</td>
+                        <td>{a.criado_por_nome || '—'}</td>
+                        <td className="acn-texto-longo acn-dg-texto" title={desc}>{desc}</td>
+                        <td>{a.setor_destino || '—'}</td>
+                        <td>{a.responsavel_nome || '—'}</td>
+                        <td className="acn-nowrap">{fmtDt(a.data_conclusao)}</td>
+                        <td>{fmtH(a.tempo_execucao_horas)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
-    <OplMovimentadas setor="Ajustes" />
-    <DemandaFooter setor="Ajustes de Projeto" />
-  </div>
-);
+      {/* MODAL OBS */}
+      {modalObs && (
+        <div className="modal-overlay">
+          <div className="modal-box acn-modal-cadastro acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiHistory} size={18} /> Historico — {modalObs.descricao?.replace('[AJUSTE] ','')}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-quadro acn-dg-historico">
+                {(modalObs.logs_demanda||[]).length === 0
+                  ? <div className="acn-ajuda">Sem historico de logs.</div>
+                  : (modalObs.logs_demanda||[]).map((l,i) => (
+                    <div key={i} className="acn-dg-log">
+                      <span className="acn-ajuda">{l.hora ? new Date(l.hora).toLocaleString('pt-BR') : ''} · {l.usuario||''}</span>
+                      <div>{l.texto}</div>
+                    </div>
+                  ))
+                }
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Nova Observacao</label>
+                <textarea className="acn-input" rows={3}
+                  placeholder="Adicione uma observacao..." value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={addObs}>SALVAR</Botao>
+              <Botao onClick={fecharModalObs}>Fechar</Botao>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <OplMovimentadas setor="Ajustes" />
+      <DemandaFooter setor="Ajustes de Projeto" />
+    </div>
+  );
 }

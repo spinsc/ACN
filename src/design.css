@@ -854,3 +854,12 @@ html body .acn-sac-jan .acn-input.acn-sac-colab { padding: 6px 9px !important; f
 .acn-avisos-limpar:hover { color: var(--acn-ink); background: var(--acn-neutral-soft); }
 /* Relatório de Técnicos — linha "Sem responsável" (Etapa 7.32, R14, 02/10/2026): o círculo da pessoa fica âmbar, a cor de "atenção" */
 .acn-tec-cab.sem-responsavel .acn-tec-avatar { background: var(--acn-warn); }
+/* ── Demandas gerais (Etapa 12e1, 02/10/2026): só aparência ───────────────────────────────────────────────── */
+.acn-nowrap { white-space: nowrap; }
+/* a coluna de texto longo (demanda, descrição) não encolhe até uma palavra por linha no celular: a tabela rola para o lado dentro do quadro */
+.acn-dg-texto { min-width: 220px; }
+/* o histórico de observações da janela: lista que rola, com uma linha separando cada observação */
+.acn-dg-historico { max-height: 180px; overflow-y: auto; }
+.acn-dg-log { padding-bottom: 6px; border-bottom: 1px solid var(--acn-line); }
+.acn-dg-log:last-child { padding-bottom: 0; border-bottom: 0; }
+.acn-dg-log > div { margin-top: 2px; }
