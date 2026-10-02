@@ -2711,17 +2711,24 @@ OK = ACN   |   Cancelar = DETECH`;
       )}
 
       {/* ════════ MODAL NOVO EQUIPAMENTO ════════ */}
+      {/* Etapa 12d7 (02/10/2026): só aparência das janelas de novo equipamento, responsável e valores financeiros — campos, textos, ordem e lógica são os de antes, no molde das janelas do RH. */}
       {modalNovoEquip && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:360}}>
-            <div className="modal-title">+ Novo Tipo de Equipamento</div>
-            <label className="acn-label">Nome do Equipamento *</label>
-            <input className="acn-input" style={{width:'100%',marginBottom:12}} value={novoEquip}
-              onChange={e=>setNovoEquip(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&salvarEquipamento()} />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={salvarEquipamento}>SALVAR</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalNovoEquip(false)}>Cancelar</button>
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiPlus} size={18} /> Novo Tipo de Equipamento</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label">Nome do Equipamento *</label>
+                <input className="acn-input" value={novoEquip}
+                  onChange={e=>setNovoEquip(e.target.value)}
+                  onKeyDown={e=>e.key==='Enter'&&salvarEquipamento()} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarEquipamento}>SALVAR</Botao>
+              <Botao onClick={()=>setModalNovoEquip(false)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2730,22 +2737,27 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ════════ MODAL EDITAR RESPONSÁVEL OS ════════ */}
       {modalEditRespOS && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:380,width:'95vw'}}>
-            <div className="modal-title">✏️ Responsável — {modalEditRespOS.numero_os}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Atual: <strong>{modalEditRespOS.responsavel_nome || '—'}</strong>
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiAccountEditOutline} size={18} /> Responsável — {modalEditRespOS.numero_os}</span>
             </div>
-            <label className="acn-label">Novo Responsável</label>
-            <ColaboradorSelect
-              value={editRespOSNome}
-              onChange={v => setEditRespOSNome(v)}
-              placeholder="Selecione o responsável..."
-              className="acn-input"
-              style={{width:'100%',marginBottom:16}}
-            />
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#6366f1',flex:1}} onClick={salvarRespOS}>✏️ SALVAR</button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalEditRespOS(null)}>Cancelar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Atual: <strong>{modalEditRespOS.responsavel_nome || '—'}</strong>
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Novo Responsável</label>
+                <ColaboradorSelect
+                  value={editRespOSNome}
+                  onChange={v => setEditRespOSNome(v)}
+                  placeholder="Selecione o responsável..."
+                  className="acn-input acn-sac-colab"
+                />
+              </div>
+            </div>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarRespOS}>SALVAR</Botao>
+              <Botao onClick={()=>setModalEditRespOS(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
@@ -2754,22 +2766,31 @@ OK = ACN   |   Cancelar = DETECH`;
       {/* ════════ MODAL FINANCEIRO ════════ */}
       {modalFinanceiro && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:420,width:'95vw'}}>
-            <div className="modal-title">💰 Valores Financeiros — {modalFinanceiro.numero_os}</div>
-            <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0 16px'}}>
-              <div><label className="acn-label">Valor Total (R$)</label>
-                <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
-                  value={financeiroForm.valor_total} onChange={e=>setFinanceiroForm(f=>({...f,valor_total:e.target.value}))} /></div>
-              <div><label className="acn-label">Mão de Obra (R$)</label>
-                <input type="number" min={0} step="0.01" className="acn-input" style={{width:'100%'}} placeholder="0,00"
-                  value={financeiroForm.valor_mao_de_obra} onChange={e=>setFinanceiroForm(f=>({...f,valor_mao_de_obra:e.target.value}))} /></div>
-              <div><label className="acn-label">Data Faturamento</label>
-                <input type="date" className="acn-input" style={{width:'100%'}}
-                  value={financeiroForm.data_faturamento} onChange={e=>setFinanceiroForm(f=>({...f,data_faturamento:e.target.value}))} /></div>
+          <div className="modal-box acn-modal-cadastro menor acn-sac-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title"><Icone path={mdiCurrencyUsd} size={18} /> Valores Financeiros — {modalFinanceiro.numero_os}</span>
             </div>
-            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalFinanceiro(null)}>Cancelar</button>
-              <button className="acn-btn" style={{background:'#059669'}} onClick={salvarFinanceiroOS}>Salvar</button>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label">Valor Total (R$)</label>
+                <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
+                  value={financeiroForm.valor_total} onChange={e=>setFinanceiroForm(f=>({...f,valor_total:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Mão de Obra (R$)</label>
+                <input type="number" min={0} step="0.01" className="acn-input" placeholder="0,00"
+                  value={financeiroForm.valor_mao_de_obra} onChange={e=>setFinanceiroForm(f=>({...f,valor_mao_de_obra:e.target.value}))} />
+              </div>
+              <div className="form-group">
+                <label className="acn-label">Data Faturamento</label>
+                <input type="date" className="acn-input"
+                  value={financeiroForm.data_faturamento} onChange={e=>setFinanceiroForm(f=>({...f,data_faturamento:e.target.value}))} />
+              </div>
+            </div>
+            {/* aqui o Cancelar vinha antes do Salvar no HTML: a ordem se mantém, então o rodapé é o comum (sem o "principal primeiro") */}
+            <div className="acn-modal-rodape">
+              <Botao onClick={()=>setModalFinanceiro(null)}>Cancelar</Botao>
+              <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvarFinanceiroOS}>Salvar</Botao>
             </div>
           </div>
         </div>

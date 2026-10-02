@@ -844,3 +844,6 @@ html body .acn-sac-jan table.acn-tabela.acn-sac-tab-itens { min-width: 520px; }
 html body .acn-sac-jan .acn-quadro > .acn-input.acn-sac-horas-campo { width: 140px; justify-self: start; }
 html body .acn-sac-jan .acn-quadro > label.acn-label { display: flex; align-items: center; gap: 6px; margin-bottom: 0; }
 .acn-sac-data-grande { font-size: 15px; }
+/* ── SAC · janelas de Novo equipamento, Responsável e Valores Financeiros (Etapa 12d7, 02/10/2026): só aparência ───────────── */
+/* o campo do colaborador é um componente compartilhado (ColaboradorSelect) com o estilo escrito dentro do próprio elemento: aqui ele só se alinha aos demais campos, sem mexer no componente (trocá-lo é assunto da Etapa 13) */
+html body .acn-sac-jan .acn-input.acn-sac-colab { padding: 6px 9px !important; font-size: 13px !important; border: 1px solid var(--acn-line) !important; border-radius: var(--acn-r2) !important; background: var(--acn-surface) !important; }
