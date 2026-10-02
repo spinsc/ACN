@@ -1536,6 +1536,7 @@ function RelatoriosRH({ funcionarios, lancamentos }) {
 function RelatorioTecnicos({ funcionarios }) {
   const [dados, setDados] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
   const [filtroNome, setFiltroNome] = useState('');
   const [expandido, setExpandido] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -1564,17 +1565,29 @@ function RelatorioTecnicos({ funcionarios }) {
         }
       } catch { osData = []; }
 
-      // OPs com responsável comercial ordenadas por data_entrada (sempre existe)
+      // R13 (resposta do usuário em 01/10/2026): TODAS as OPs, sem o corte de 200 (o relatório mostrava, por exemplo, 119 das 234 da Tatiana). O servidor devolve no máximo 1.000 linhas
+      // por consulta, então a leitura é em páginas (.range) até acabar; a ordem leva o id como desempate — sem ele a mesma linha pode cair em duas páginas ou em nenhuma.
+      // R14: as OPs sem responsável (nulo, vazio ou só espaços) não ficam mais de fora: entram numa linha "Sem responsável" que pede para informar o responsável (o cadastro não é mexido).
       let opData: any[] = [];
+      setErro('');
       try {
-        const { data: opD } = await supabase
-          .from('oples')
-          .select('id,opl,cliente_nome,status_geral,responsavel_comercial,data_entrada')
-          .not('responsavel_comercial','is',null)
-          .order('data_entrada', { ascending: false })
-          .limit(200);
-        opData = opD || [];
-      } catch { opData = []; }
+        const PAGINA = 1000;
+        for (let de = 0; ; de += PAGINA) {
+          const { data: opD, error: opErr } = await supabase
+            .from('oples')
+            .select('id,opl,cliente_nome,status_geral,responsavel_comercial,data_entrada')
+            .order('data_entrada', { ascending: false })
+            .order('id', { ascending: false })
+            .range(de, de + PAGINA - 1);
+          if (opErr) throw opErr;
+          opData = opData.concat(opD || []);
+          if (!opD || opD.length < PAGINA) break;
+        }
+      } catch (e: any) {
+        // sem as OPs o relatório sairia incompleto sem ninguém saber: a leitura que falhou é avisada, e as OPs não aparecem pela metade
+        opData = [];
+        setErro('Não foi possível ler as OPs' + (e?.message ? ' (' + e.message + ')' : '') + '. Só as OS aparecem no relatório até a leitura funcionar.');
+      }
 
       const mapa = {};
       const addEntry = (nome, entry) => {
@@ -1590,16 +1603,20 @@ function RelatorioTecnicos({ funcionarios }) {
         status:os.status, inicio:os.data_inicio_manutencao, fim:os.data_conclusao_manutencao,
         avaliacao:os.tipo_avaliacao, veiculo:os.veiculo_modelo,
       }));
-      opData.forEach(op => addEntry(op.responsavel_comercial, {
-        tipo:'op', id:op.id, numero:op.opl,
-        cliente:op.cliente_nome, status:op.status_geral, inicio:op.data_entrada,
-      }));
+      const opsSemResponsavel: any[] = [];
+      opData.forEach(op => {
+        const entrada = { tipo:'op', id:op.id, numero:op.opl, cliente:op.cliente_nome, status:op.status_geral, inicio:op.data_entrada };
+        if (!String(op.responsavel_comercial ?? '').trim()) opsSemResponsavel.push(entrada);
+        else addEntry(op.responsavel_comercial, entrada);
+      });
 
       const result = Object.values(mapa).map((tec) => {
         const func = funcionarios.find(f => f.nome.trim().toLowerCase() === tec.nome.toLowerCase());
         return { ...tec, func, totalOS: tec.os.length, totalOP: tec.op.length };
       });
       result.sort((a,b) => (b.totalOS+b.totalOP) - (a.totalOS+a.totalOP));
+      // a linha "Sem responsável" vem primeiro: é a que pede ação
+      if (opsSemResponsavel.length) result.unshift({ nome: 'Sem responsável', semResp: true, os: [], op: opsSemResponsavel, func: null, totalOS: 0, totalOP: opsSemResponsavel.length });
       setDados(result);
       setLoading(false);
     };
@@ -1619,7 +1636,7 @@ function RelatorioTecnicos({ funcionarios }) {
   const imprimir = () => {
     const rows = filtrado.map(tec =>
       `<tr style="background:#f0f9ff"><td colspan="5" style="padding:8px 10px;font-weight:700;font-size:12px;border-top:2px solid #bfdbfe">` +
-      `${tec.nome} ${tec.func ? '— ' + (tec.func.cargo||'') : '(nao cadastrado)'}` +
+      `${tec.semResp ? 'SEM RESPONSÁVEL — informar o responsável nestas OPs' : tec.nome + ' ' + (tec.func ? '— ' + (tec.func.cargo||'') : '(nao cadastrado)')}` +
       ` <span style="font-size:10px;color:#64748b">${tec.totalOS} OS · ${tec.totalOP} OP</span></td></tr>` +
       tec.os.map(o =>
         `<tr><td style="padding:4px 10px 4px 24px">${o.numero}</td><td>OS</td>` +
@@ -1658,16 +1675,17 @@ function RelatorioTecnicos({ funcionarios }) {
         </div>
       </div>
       {!collapsed && <div className="sec-body">
+        {erro && <Faixa tom="erro">{erro}</Faixa>}
         {loading ? (
           <div className="acn-empty">Carregando...</div>
         ) : filtrado.length === 0 ? (
           <div className="acn-empty">Nenhum técnico designado encontrado.</div>
         ) : filtrado.map(tec => (
           <div key={tec.nome} className="acn-tec">
-            <div className={'acn-tec-cab' + (tec.func ? '' : ' sem-cadastro') + (expandido===tec.nome ? ' aberto' : '')}
+            <div className={'acn-tec-cab' + (tec.func ? '' : ' sem-cadastro') + (tec.semResp ? ' sem-responsavel' : '') + (expandido===tec.nome ? ' aberto' : '')}
               role="button" aria-expanded={expandido===tec.nome}
               onClick={()=>setExpandido(expandido===tec.nome?null:tec.nome)}>
-              <div className="acn-tec-avatar">{tec.nome[0].toUpperCase()}</div>
+              <div className="acn-tec-avatar">{tec.semResp ? '!' : tec.nome[0].toUpperCase()}</div>
               <div className="acn-tec-info">
                 <div className="acn-forte">{tec.nome}</div>
                 {tec.func && (
@@ -1676,16 +1694,19 @@ function RelatorioTecnicos({ funcionarios }) {
                     <Selo familia={tec.func.tipo_colaborador==='Terceiro' ? 'atencao' : 'info'} ponto={false}>{tec.func.tipo_colaborador||'Funcionário'}</Selo>
                   </div>
                 )}
-                {!tec.func && <div className="acn-ajuda atencao">Nao cadastrado no RH</div>}
+                {!tec.func && <div className="acn-ajuda atencao">{tec.semResp ? 'Informar o responsável nestas OPs' : 'Nao cadastrado no RH'}</div>}
               </div>
               <div className="acn-tec-contagem">
                 {tec.totalOS > 0 && <Selo familia="info" ponto={false}>{tec.totalOS} OS</Selo>}
-                {tec.totalOP > 0 && <Selo familia="ok" ponto={false}>{tec.totalOP} OP</Selo>}
+                {tec.totalOP > 0 && <Selo familia={tec.semResp ? 'atencao' : 'ok'} ponto={false}>{tec.totalOP} OP</Selo>}
                 <Icone path={expandido===tec.nome ? mdiChevronUp : mdiChevronDown} size={16} />
               </div>
             </div>
             {expandido === tec.nome && (
               <div className="acn-tec-corpo">
+                {tec.semResp && (
+                  <Faixa tom="atencao">Estas OPs estão sem responsável comercial. Abra cada OP e informe quem é o responsável; o cadastro de pessoas não foi alterado.</Faixa>
+                )}
                 {tec.os.length > 0 && (
                   <>
                     <div className="acn-quadro-titulo">Ordens de Serviço</div>
