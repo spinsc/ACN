@@ -669,15 +669,19 @@ export default function SacTab({ currentUser }) {
 
   // ── FLUXO MANUTENÇÃO VEICULAR ─────────────────────────────────────────────
 
-  const salvarItensOS = async (osId: string, itens: any[], horasCobradasVal?: string) => {
+  // Etapa 7.28 (02/10/2026): as janelas do fluxo veicular ignoravam o resultado da gravação — com a gravação recusada elas fechavam, o que foi digitado se perdia e o aviso de WhatsApp / o histórico
+  // saía de algo que não aconteceu. Agora a falha avisa o erro e NADA mais acontece (a janela fica aberta com o que a pessoa digitou). Devolve true se gravou.
+  const salvarItensOS = async (osId: string, itens: any[], horasCobradasVal?: string): Promise<boolean> => {
     const agora = new Date().toISOString();
     const hc = horasCobradasVal !== undefined && horasCobradasVal !== '' ? Number(horasCobradasVal) : null;
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       itens_cotacao: itens,
       horas_cobradas_cotacao: hc,
       atualizado_em: agora,
     }).eq('id', osId);
+    if (error) { alert('Erro ao salvar os itens da cotação: ' + error.message); return false; }
     fetchOrdens();
+    return true;
   };
 
   const enviarCotacaoCliente = async (os: any) => {
@@ -706,13 +710,14 @@ export default function SacTab({ currentUser }) {
     const os = modalAprovCotacao;
     const agora = new Date().toISOString();
     const total = (os.itens_cotacao||[]).reduce((s:number,i:any)=>s+(i.quantidade||1)*(i.valor_unitario||0),0);
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Em Provisionamento',
       aprovado: true,
       data_aprovacao: agora,
       aprovador_nome: aprovCotacaoNome.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao registrar a aprovação: ' + error.message); return; }
     const msg2 = `✅ *Cotação APROVADA — ${os.numero_os}*
 Cliente: ${os.cliente_nome}
 Aprovado por: ${aprovCotacaoNome.trim()}
@@ -740,10 +745,11 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   // SAC recebe OS de volta depois que Produção definiu data → confirma com cliente
   const confirmarAceiteSAC = async (os: any) => {
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: os.tipo_avaliacao === 'Remota' ? 'Aguardando Início' : 'Provisionada',
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao registrar o aceite: ' + error.message); return; }
     notificarEvento('sac_aceite_data', `*SAC confirmou data — ${os.numero_os}*\nCliente: ${os.cliente_nome}\nData: ${os.data_provisionamento ? new Date(os.data_provisionamento+'T12:00').toLocaleDateString('pt-BR') : '—'} (${os.periodo_provisionamento||''})`);
     setModalAceiteSAC(null);
     fetchOrdens();
@@ -753,12 +759,13 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
   const rejeitarAceiteSAC = async (os: any) => {
     if (!await confirmar('Confirmar: cliente não aceitou a data e OS voltará para Produção redefinir?')) return;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Em Provisionamento',
       data_provisionamento: null,
       periodo_provisionamento: null,
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao devolver a OS para a Produção: ' + error.message); return; }
     setModalAceiteSAC(null);
     fetchOrdens();
   };
@@ -788,7 +795,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     if (!orcProdItens.length) { alert('Adicione ao menos um item!'); return; }
     const total = orcProdItens.reduce((s,i)=>s+(Number(i.quantidade)||1)*(Number(i.valor_unitario)||0), 0);
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       itens_cotacao: orcProdItens,
       valor_orcamento: total,
       revisao_pendente: false,
@@ -796,6 +803,7 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
       itens_revisados: null,
       atualizado_em: agora,
     }).eq('id', modalOrcProd.id);
+    if (error) { alert('Erro ao salvar o orçamento: ' + error.message); return; }
     setModalOrcProd(null); setOrcProdItens([]);
     fetchOrdens();
   };
@@ -807,11 +815,12 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     const os = modalEnviarFiscal;
     if (!os) return;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       materiais_utilizados: fiscalItens,
       status: 'Aguardando Emissão NF',
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao enviar para o Fiscal: ' + error.message); return; }
     notificarEvento('sac_enviado_fiscal', `*Enviado para o Fiscal — ${os.numero_os}*\nCliente: ${os.cliente_nome}`);
     setModalEnviarFiscal(null); setFiscalItens([]);
     fetchOrdens();
@@ -826,12 +835,13 @@ Total: R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}
     if (!nomeRecebeuVeic.trim()) { alert('Informe o nome de quem recebeu o veículo!'); return; }
     const os = modalEntregaVeic;
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Entregue',
       data_saida: agora,
       nome_retirada_saida: nomeRecebeuVeic.trim(),
       atualizado_em: agora,
     }).eq('id', os.id);
+    if (error) { alert('Erro ao registrar a entrega do veículo: ' + error.message); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: { status: os.status }, newRow: { status: 'Entregue' }, user: currentUser });
     notificarEvento('sac_os_entregue', `*Veículo entregue — ${os.numero_os}*
@@ -2465,7 +2475,7 @@ OK = ACN   |   Cancelar = DETECH`;
                 </div>
               </div>
               <div style={{display:'flex',gap:8}}>
-                <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={()=>{ salvarItensOS(modalItens.id, localItens, horasCobradas); setModalItens(null); }}>✓ Salvar Itens</button>
+                <button className="acn-btn" style={{background:'#0f766e',flex:1}} onClick={async ()=>{ if (await salvarItensOS(modalItens.id, localItens, horasCobradas)) setModalItens(null); }}>✓ Salvar Itens</button>
                 <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalItens(null)}>Fechar</button>
               </div>
             </>
