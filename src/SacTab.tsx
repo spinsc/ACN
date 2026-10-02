@@ -565,13 +565,15 @@ export default function SacTab({ currentUser }) {
   const enviarOrcamento = async () => {
     if (!orcForm.valor) { alert('Informe o valor do orçamento!'); return; }
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    // Etapa 7.27 (01/10/2026): a gravação recusada seguia como se tivesse dado certo — fechava a janela, perdia o valor digitado e ainda mandava o aviso de WhatsApp de um orçamento que não foi enviado. Agora avisa o erro e para.
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Orç. Enviado',
       valor_orcamento: parseFloat(orcForm.valor.replace(',','.')),
       condicoes_pagamento: orcForm.condicoes || null,
       data_envio_orcamento: agora,
       atualizado_em: agora,
     }).eq('id', modalOrc.id);
+    if (error) { alert('Erro ao enviar o orçamento: ' + error.message); return; }
     notificarEvento('sac_orcamento_enviado', `*Orçamento enviado — ${modalOrc.numero_os}*\nCliente: ${modalOrc.cliente_nome}\nValor: R$ ${orcForm.valor}\nPor: ${currentUser?.nome}`);
     setModalOrc(null); setOrcForm({ valor:'', condicoes:'' }); fetchOrdens();
   };
@@ -581,22 +583,26 @@ export default function SacTab({ currentUser }) {
     if (!aprovForm.nome.trim()) { alert('Informe o nome do aprovador!'); return; }
     if (!aprovForm.sig) { alert('Assinatura obrigatória!'); return; }
     const url = await uploadAssinatura(aprovForm.sig, `os_${modalAprov.numero_os.replace('/','_')}`);
+    // Etapa 7.27: a assinatura que não subia era trocada por vazio ("assinatura_aprovacao_url: ''") e a aprovação seguia sem ela, mesmo a assinatura sendo obrigatória; a gravação recusada também seguia como se
+    // tivesse dado certo (e criava a demanda do Laboratório e mandava o WhatsApp de uma aprovação que não foi gravada). Agora avisa e para; o que foi digitado e a assinatura desenhada continuam na janela.
+    if (!url) { alert('Não consegui enviar a assinatura. A aprovação NÃO foi registrada: tente de novo.'); return; }
     const agora = new Date().toISOString();
 
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Aprovado',
       aprovado: true,
       aprovador_nome: aprovForm.nome,
       data_aprovacao: agora,
-      assinatura_aprovacao_url: url || '',
+      assinatura_aprovacao_url: url,
       data_prevista_pos_aprovacao: aprovForm.data_entrega || null,
       atualizado_em: agora,
     }).eq('id', modalAprov.id);
+    if (error) { alert('Erro ao registrar a aprovação: ' + error.message); return; }
     logChange({ module: 'sac', entityType: 'sac_ordens_servico', entityId: modalAprov.id, changeType: 'UPDATE',
       oldRow: { status: modalAprov.status }, newRow: { status: 'Aprovado' }, user: currentUser });
 
-    // Auto-criar demanda de EXECUÇÃO para Laboratório
-    await supabase.from('demandas_setoriais').insert([{
+    // Auto-criar demanda de EXECUÇÃO para Laboratório (Etapa 7.27: a OS já está aprovada; se a demanda não nascer, o aviso diz — o Laboratório só enxerga a OS por ela)
+    const { error: errDem } = await supabase.from('demandas_setoriais').insert([{
       setor_destino: 'Laboratorio',
       descricao: `[SAC-EXEC] ${modalAprov.numero_os} — ${modalAprov.equipamento_nome} | Aguarda execução do reparo`,
       numero_opl: modalAprov.numero_os,
@@ -611,6 +617,7 @@ export default function SacTab({ currentUser }) {
         usuario: currentUser?.nome, hora: agora,
       }],
     }]);
+    if (errDem) alert(`A OS ${modalAprov.numero_os} foi aprovada, mas a demanda de execução para o Laboratório não foi criada (${errDem.message}). Avise o PCP ou a TI: a OS existe e precisa dessa demanda para seguir.`);
 
     notificarEvento('sac_os_aprovada', `*OS ${modalAprov.numero_os} APROVADA*\nCliente: ${modalAprov.cliente_nome}\nAprovador: ${aprovForm.nome}\nPor: ${currentUser?.nome}`);
     setModalAprov(null); setAprovForm({ nome:'', sig:null, data_entrega:'' }); fetchOrdens();
@@ -620,13 +627,15 @@ export default function SacTab({ currentUser }) {
   const reprovar = async () => {
     if (!reprForm.motivo.trim()) { alert('Informe o motivo!'); return; }
     const agora = new Date().toISOString();
-    await supabase.from('sac_ordens_servico').update({
+    // Etapa 7.27: a gravação recusada fechava a janela, perdia o motivo digitado e mandava o WhatsApp de uma reprovação que não foi gravada.
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Reprovado', aprovado: false,
       motivo_reprovacao: reprForm.motivo,
       data_retirada_reprovacao: reprForm.data_retirada || null,
       nome_retirada_reprovacao: reprForm.nome_retirada || null,
       atualizado_em: agora,
     }).eq('id', modalRepr.id);
+    if (error) { alert('Erro ao registrar a reprovação: ' + error.message); return; }
     notificarEvento('sac_os_reprovada', `*OS ${modalRepr.numero_os} REPROVADA*\nCliente: ${modalRepr.cliente_nome}\nMotivo: ${reprForm.motivo}`);
     setModalRepr(null); setReprForm({ motivo:'', data_retirada:'', nome_retirada:'' }); fetchOrdens();
   };
@@ -636,20 +645,25 @@ export default function SacTab({ currentUser }) {
     if (!saidaForm.nome.trim()) { alert('Informe o nome de quem retirou!'); return; }
     if (!saidaForm.sig) { alert('Assinatura obrigatória!'); return; }
     const url = await uploadAssinatura(saidaForm.sig, `os_${modalSaida.numero_os.replace('/','_')}_saida`);
+    // Etapa 7.27: assinatura ou foto de saída que não subia era descartada em silêncio (a OS ficava "Entregue" sem a prova da retirada) e a gravação recusada seguia como se tivesse dado certo, com o
+    // WhatsApp de "OS entregue". Agora avisa e para; o formulário, a assinatura desenhada e as fotos escolhidas continuam como estão para tentar de novo.
+    if (!url) { alert('Não consegui enviar a assinatura. A entrega NÃO foi registrada: tente de novo.'); return; }
     const agora = new Date().toISOString();
     const urlsFotos: string[] = [];
     for (const f of fotosSaidaFiles) {
       const u = await uploadFoto(f, `os_${modalSaida.numero_os.replace('/','_')}/saida`);
-      if (u) urlsFotos.push(u);
+      if (!u) { alert(`Não consegui enviar a foto "${f.name}". A entrega NÃO foi registrada: tente de novo ou tire a foto da lista.`); return; }
+      urlsFotos.push(u);
     }
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       status: 'Entregue',
       nome_retirada_saida: saidaForm.nome,
-      assinatura_saida_url: url || '',
+      assinatura_saida_url: url,
       data_saida: agora,
       fotos_saida: urlsFotos,
       atualizado_em: agora,
     }).eq('id', modalSaida.id);
+    if (error) { alert('Erro ao registrar a entrega: ' + error.message); return; }
     notificarEvento('sac_os_entregue', `*OS ${modalSaida.numero_os} ENTREGUE*\nCliente: ${modalSaida.cliente_nome}\nRetirado por: ${saidaForm.nome}`);
     setModalSaida(null); setSaidaForm({ nome:'', sig:null }); setFotosSaidaFiles([]); fetchOrdens();
   };
@@ -837,21 +851,26 @@ Recebido por: ${nomeRecebeuVeic.trim()}`);
     return { nome: file.name, url: pub?.publicUrl||'', tipo: file.type };
   };
 
-  const anexarArquivos = async (os: any, files: File[]) => {
-    if (!files.length) return;
+  // Etapa 7.27 (01/10/2026): devolve true se anexou. Arquivo que não subia era descartado em silêncio e a gravação recusada seguia como se tivesse dado certo (a janela limpava a seleção e dizia que
+  // tinha enviado). Agora, se um arquivo não sobe ou a gravação é recusada, avisa e NADA é anexado: a seleção fica como está para tentar de novo.
+  const anexarArquivos = async (os: any, files: File[]): Promise<boolean> => {
+    if (!files.length) return false;
     setAnexosSendoUpload(true);
     const existentes: any[] = Array.isArray(os.arquivos_os) ? os.arquivos_os : [];
     const novos: any[] = [];
     for (const f of files) {
       const result = await uploadArquivo(f, `os_${os.numero_os.replace('/','_')}/arquivos`);
-      if (result) novos.push(result);
+      if (!result) { alert(`Não consegui enviar o arquivo "${f.name}". Nenhum arquivo foi anexado: tente de novo ou tire o arquivo da lista.`); setAnexosSendoUpload(false); return false; }
+      novos.push(result);
     }
-    await supabase.from('sac_ordens_servico').update({
+    const { error } = await supabase.from('sac_ordens_servico').update({
       arquivos_os: [...existentes, ...novos],
       atualizado_em: new Date().toISOString(),
     }).eq('id', os.id);
     setAnexosSendoUpload(false);
+    if (error) { alert('Erro ao anexar os arquivos: ' + error.message); return false; }
     fetchOrdens();
+    return true;
   };
 
   // ── NOVO EQUIPAMENTO ──────────────────────────────────────────────────────
@@ -2273,7 +2292,7 @@ OK = ACN   |   Cancelar = DETECH`;
               <button className="acn-btn" style={{background:'#0369a1',flex:1}}
                 disabled={!anexarFiles.length||anexosSendoUpload}
                 onClick={async()=>{
-                  await anexarArquivos(modalAnexar,anexarFiles);
+                  if (!(await anexarArquivos(modalAnexar,anexarFiles))) return;
                   setAnexarFiles([]);
                   // Refresh modalAnexar with updated data
                   const {data} = await supabase.from('sac_ordens_servico').select('*').eq('id',modalAnexar.id).single();
