@@ -2204,6 +2204,9 @@ function HistoricoComissoes({ funcionarios }) {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [dados, setDados] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  // Etapa 7.26 (R20, 01/10/2026): a mensagem "Nenhum fechamento encontrado para o período." aparecia ao abrir, antes de a pessoa buscar. Agora só depois do Buscar; antes, a tela pede o período.
+  // Trocar o mês ou o ano volta a "ainda não busquei" (a mensagem de uma busca vazia era do período ANTERIOR); a tabela de uma busca com resultado continua na tela, como sempre.
+  const [buscou, setBuscou] = useState(false);
   const meses = [1,2,3,4,5,6,7,8,9,10,11,12];
   const anos = [hoje.getFullYear()-1, hoje.getFullYear(), hoje.getFullYear()+1];
   const fmtMoeda = (v: number) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}` : '—';
@@ -2213,6 +2216,7 @@ function HistoricoComissoes({ funcionarios }) {
     setLoading(true);
     const { data } = await supabase.from('rh_comissoes_fechamento').select('*').eq('mes', mes).eq('ano', ano).order('tecnico_nome');
     setDados(data || []);
+    setBuscou(true);
     setLoading(false);
   };
 
@@ -2220,17 +2224,19 @@ function HistoricoComissoes({ funcionarios }) {
   return (
     <div>
       <div className="acn-com-barra">
-        <select className="acn-input acn-select-mini" aria-label="Mês" value={mes} onChange={e=>setMes(Number(e.target.value))}>
+        <select className="acn-input acn-select-mini" aria-label="Mês" value={mes} onChange={e=>{ setMes(Number(e.target.value)); setBuscou(false); }}>
           {meses.map(m=><option key={m} value={m}>{mesNome(m)}</option>)}
         </select>
-        <select className="acn-input acn-select-mini" aria-label="Ano" value={ano} onChange={e=>setAno(Number(e.target.value))}>
+        <select className="acn-input acn-select-mini" aria-label="Ano" value={ano} onChange={e=>{ setAno(Number(e.target.value)); setBuscou(false); }}>
           {anos.map(y=><option key={y} value={y}>{y}</option>)}
         </select>
         <Botao pequeno icone={mdiMagnify} onClick={buscar} disabled={loading}>
           {loading ? 'Buscando...' : 'Buscar'}
         </Botao>
       </div>
-      {dados.length === 0 && !loading && <div className="acn-empty">Nenhum fechamento encontrado para o período.</div>}
+      {dados.length === 0 && !loading && (buscou
+        ? <div className="acn-empty">Nenhum fechamento encontrado para o período.</div>
+        : <div className="acn-empty">Escolha o mês e o ano e clique em Buscar.</div>)}
       {dados.length > 0 && (
         <div className="acn-rolagem">
           <table className="acn-tabela">
