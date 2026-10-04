@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { confirmar } from './Feedback';
+import { Faixa } from './Interface';
+import { ehAdminOuGerente } from './utils/permissoes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -47,7 +49,7 @@ const fmtDiaLongo = (d: Date) => d.toLocaleDateString('pt-BR', {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL: DETALHE DO DIA + NOVO COMPROMISSO
 // ─────────────────────────────────────────────────────────────────────────────
-function ModalDia({ data, horaInicial, eventos, currentUser, onClose, onChanged }: any) {
+function ModalDia({ data, horaInicial, eventos, leituraFalhou, currentUser, onClose, onChanged }: any) {
   const [criando, setCriando] = useState(eventos.length === 0);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [titulo, setTitulo] = useState('');
@@ -62,21 +64,23 @@ function ModalDia({ data, horaInicial, eventos, currentUser, onClose, onChanged 
     if (!titulo.trim() || !hora) return;
     setSalvando(true);
     const dataHoraISO = new Date(`${isoDate(data)}T${hora}:00`).toISOString();
-    if (editandoId) {
-      await supabase.from('agenda_compromissos').update({
-        titulo: titulo.trim(), descricao: descricao.trim() || null,
-        setor, data_hora: dataHoraISO,
-      }).eq('id', editandoId);
-    } else {
-      await supabase.from('agenda_compromissos').insert([{
-        setor,
-        usuario_email: currentUser?.email,
-        usuario_nome:  currentUser?.nome || currentUser?.email,
-        titulo:        titulo.trim(),
-        descricao:     descricao.trim() || null,
-        data_hora:     dataHoraISO,
-      }]);
-    }
+    // Etapa 7.39 (04/10/2026): o resultado da gravação não era conferido. Com ela recusada, o formulário fechava, o que foi
+    // digitado se perdia e o calendário recarregava como se o compromisso tivesse sido salvo. Agora avisa o erro e o formulário
+    // continua aberto com o texto.
+    const { error } = editandoId
+      ? await supabase.from('agenda_compromissos').update({
+          titulo: titulo.trim(), descricao: descricao.trim() || null,
+          setor, data_hora: dataHoraISO,
+        }).eq('id', editandoId)
+      : await supabase.from('agenda_compromissos').insert([{
+          setor,
+          usuario_email: currentUser?.email,
+          usuario_nome:  currentUser?.nome || currentUser?.email,
+          titulo:        titulo.trim(),
+          descricao:     descricao.trim() || null,
+          data_hora:     dataHoraISO,
+        }]);
+    if (error) { alert('Não foi possível salvar o compromisso: ' + error.message); setSalvando(false); return; }
     setSalvando(false);
     limparForm();
     setCriando(false);
@@ -94,15 +98,17 @@ function ModalDia({ data, horaInicial, eventos, currentUser, onClose, onChanged 
 
   const concluir = async (id: string) => {
     if (!await confirmar('Marcar este compromisso como concluído?')) return;
-    await supabase.from('agenda_compromissos').update({
+    const { error } = await supabase.from('agenda_compromissos').update({
       concluido: true, concluido_em: new Date().toISOString(),
     }).eq('id', id);
+    if (error) { alert('Não foi possível concluir o compromisso: ' + error.message); return; }
     onChanged();
   };
 
   const excluir = async (id: string) => {
     if (!await confirmar('Excluir este compromisso?')) return;
-    await supabase.from('agenda_compromissos').delete().eq('id', id);
+    const { error } = await supabase.from('agenda_compromissos').delete().eq('id', id);
+    if (error) { alert('Não foi possível excluir o compromisso: ' + error.message); return; }
     onChanged();
   };
 
@@ -126,7 +132,7 @@ function ModalDia({ data, horaInicial, eventos, currentUser, onClose, onChanged 
         <div style={{ padding: 14, overflowY: 'auto' }}>
           {eventos.length === 0 && !criando && (
             <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', padding: '10px 0' }}>
-              Nenhum evento neste dia.
+              {leituraFalhou ? 'Não foi possível ler os eventos deste período (veja o aviso na tela).' : 'Nenhum evento neste dia.'}
             </div>
           )}
 
@@ -221,8 +227,14 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
   const [loading, setLoading]     = useState(true);
   const [diaAberto, setDiaAberto] = useState<{ data: Date; hora?: string } | null>(null);
 
-  // Compromissos de todos: só gerentes; os demais veem só os próprios
-  const isGerente = ['Admin', 'Gerente', 'Gerente Comercial'].includes(currentUser?.perfil);
+  // O que a tela não conseguiu ler (Etapa 7.39, 04/10/2026): mensagem do banco por lista; vazio = leu.
+  const [falhas, setFalhas] = useState({ comp: '', crm: '' });
+
+  // Compromissos de todos: só gerentes; os demais veem só os próprios.
+  // Regra do usuário em 04/10/2026 (Etapa 7.39): Admin e qualquer perfil "Gerente …". A lista antiga tinha só 'Admin',
+  // 'Gerente' (nome que nenhum cadastro tem) e 'Gerente Comercial': os gerentes de Administrativo (2), Produção e Licitações
+  // ficavam sem o botão "Todos os usuários" (o setor de Licitações tem 17 dos 21 compromissos do banco).
+  const isGerente = ehAdminOuGerente(currentUser);
 
   const dias = useMemo(() => (modo === 'mes' ? getMonthGrid(cursor) : getWeekDays(cursor)), [modo, cursor]);
   const rangeInicio = dias[0];
@@ -250,8 +262,12 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
     const incluirCrm = setorFiltro === 'todos' || setorFiltro === 'comercial';
 
     const [rComp, rCrm] = await Promise.all([qComp.limit(500), incluirCrm ? qCrm.limit(500) : Promise.resolve({ data: [] })]);
-    setCompromissos(rComp.data || []);
-    setContatosCrm(rCrm.data || []);
+    // Leitura que falha não pode virar "calendário vazio" (Etapa 7.39): antes o erro era ignorado e o mês aparecia sem nenhum
+    // evento, sem aviso. Os eventos dependem do período mostrado, então os da leitura que falhou saem da grade (não ficam os
+    // de outro mês) e uma faixa vermelha diz o que não foi lido.
+    setCompromissos(rComp.error ? [] : (rComp.data || []));
+    setContatosCrm(rCrm.error ? [] : (rCrm.data || []));
+    setFalhas({ comp: rComp.error?.message || '', crm: rCrm.error?.message || '' });
     setLoading(false);
   }, [rangeInicio.getTime(), rangeFim.getTime(), setorFiltro, verTodos, isGerente, currentUser?.email, currentUser?.nome]);
 
@@ -319,6 +335,11 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
       </div>
 
       <div className="sec-body">
+        {(falhas.comp || falhas.crm) && (
+          <Faixa tom="erro">
+            Não foi possível ler {[falhas.comp && `os compromissos (${falhas.comp})`, falhas.crm && `os contatos do CRM (${falhas.crm})`].filter(Boolean).join('; ')}. O calendário abaixo pode estar incompleto.
+          </Faixa>
+        )}
         {/* Filtro de setor */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
           <button onClick={() => setSetorFiltro('todos')} style={btnFiltro(setorFiltro === 'todos')}>Todos</button>
@@ -358,6 +379,7 @@ export default function CalendarioTab({ currentUser }: { currentUser: any }) {
           data={diaAberto.data}
           horaInicial={diaAberto.hora}
           eventos={eventosPorDia[isoDate(diaAberto.data)] || []}
+          leituraFalhou={!!(falhas.comp || falhas.crm)}
           currentUser={currentUser}
           onClose={() => setDiaAberto(null)}
           onChanged={() => { carregar(); }}
