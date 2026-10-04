@@ -920,3 +920,52 @@ html body select.acn-conc-sel { width: auto; min-width: 220px; padding: 4px 8px 
 .acn-mkt-form .form-row { margin: 0; }
 /* a observação do pedido pode vir como uma sequência colada, sem espaço: quebra em qualquer ponto em vez de esticar a tabela */
 .acn-mkt-obs { min-width: 120px; max-width: 240px; overflow-wrap: anywhere; }
+/* ── Calendário (Etapa 12e5, 04/10/2026): só aparência ──────────────────────────────────────────────────── */
+/* a cor de cada setor vem da família do design system (data-acn-familia no próprio evento, no ponto do filtro e na lista do dia) */
+.acn-cal-setores { margin-bottom: 10px; }
+.acn-cal-ponto { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--acn-f); }
+.acn-cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.acn-cal-nav-esq { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-cal-titulo { margin-left: 6px; font-size: 15px; font-weight: 600; color: var(--acn-ink); text-transform: capitalize; }
+/* grade do mês: minmax(0, 1fr) para um título comprido não esticar a coluna (o texto do evento é cortado com reticências) */
+.acn-cal-mes { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.acn-cal-mes-cab { margin-bottom: 3px; }
+.acn-cal-cab { padding: 3px 0; text-align: center; font-size: 12px; font-weight: 600; color: var(--acn-muted); }
+.acn-cal-dia { min-height: 100px; padding: 4px 6px; cursor: pointer; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-cal-dia:hover { border-color: var(--acn-brand); }
+.acn-cal-dia.hoje { background: var(--acn-brand-soft); border: 1.5px solid var(--acn-brand); }
+.acn-cal-dia.fora { background: var(--acn-surface-2); opacity: .5; }
+.acn-cal-num { margin-bottom: 3px; font-size: 12px; font-weight: 500; color: var(--acn-text); }
+.acn-cal-dia.hoje .acn-cal-num { font-weight: 700; color: var(--acn-brand-ink); }
+.acn-cal-ev { margin-bottom: 2px; padding: 1px 5px; overflow: hidden; border-radius: 3px; background: var(--acn-f); color: #fff; font-size: 11px; line-height: 1.45; white-space: nowrap; text-overflow: ellipsis; }
+.acn-cal-ev.feito, .acn-cal-evsem.feito { text-decoration: line-through; opacity: .6; }
+.acn-cal-mais { font-size: 11px; font-weight: 600; color: var(--acn-muted); }
+/* grade da semana: a altura de uma hora (32 px) é a mesma do ROW_H em CalendarioTab.tsx */
+.acn-cal-sem { overflow: hidden; border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-cal-sem-linha { display: grid; grid-template-columns: 46px repeat(7, minmax(0, 1fr)); }
+.acn-cal-sem-cab { background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-cal-sem-dia { padding: 5px 2px; text-align: center; border-left: 1px solid var(--acn-line); }
+.acn-cal-sem-nome { font-size: 11px; font-weight: 600; color: var(--acn-muted); }
+.acn-cal-sem-num { font-size: 14px; font-weight: 600; color: var(--acn-ink); }
+.acn-cal-sem-dia.hoje .acn-cal-sem-num { color: var(--acn-brand-ink); }
+.acn-cal-sem-diainteiro { border-bottom: 1px solid var(--acn-line); }
+.acn-cal-sem-rotulo { padding: 3px 4px 0 0; text-align: right; font-size: 11px; color: var(--acn-muted); }
+.acn-cal-sem-celula { min-height: 24px; padding: 3px; cursor: pointer; border-left: 1px solid var(--acn-line); }
+.acn-cal-sem-grade { position: relative; max-height: 480px; overflow-y: auto; }
+.acn-cal-hora { height: 32px; padding-right: 4px; text-align: right; font-size: 11px; color: var(--acn-muted); border-top: 1px solid var(--acn-line-soft); }
+.acn-cal-col { position: relative; border-left: 1px solid var(--acn-line); }
+.acn-cal-slot { height: 32px; cursor: pointer; border-top: 1px solid var(--acn-line-soft); }
+.acn-cal-slot:hover { background: var(--acn-neutral-soft); }
+.acn-cal-evsem { position: absolute; left: 2px; right: 2px; padding: 1px 4px; overflow: hidden; cursor: pointer; border-radius: 3px; background: var(--acn-f); color: #fff; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; box-shadow: var(--acn-shadow-1); }
+/* janela do dia: cada evento com a faixa na cor do setor, e a linha do formulário (setor e hora) */
+.acn-cal-item { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-left: 4px solid var(--acn-f); border-radius: 6px; }
+.acn-cal-item-corpo { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.acn-cal-item-titulo { font-weight: 600; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-cal-item-titulo.feito { color: var(--acn-muted); text-decoration: line-through; }
+.acn-cal-item-hora { margin-right: 5px; color: var(--acn-f); font-weight: 600; }
+.acn-cal-linha-form { display: flex; gap: 8px; }
+.acn-cal-linha-form select { flex: 1; }
+html body .acn-form-cheio .acn-input.acn-cal-hora-campo { flex: none; width: 120px; }
+.acn-cal-novo { justify-content: center; width: 100%; }
+/* celular: sete colunas estreitas; letra um pouco menor e a célula mais baixa */
+@media (max-width: 480px) { .acn-cal-dia { min-height: 64px; padding: 2px 3px; } .acn-cal-ev, .acn-cal-evsem, .acn-cal-mais { font-size: 10px; } .acn-cal-titulo { font-size: 13px; } }
