@@ -2197,6 +2197,23 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 - **`fetchCentrosCusto`** (compartilhado, em `CentroCustoShared.tsx`) também engole o erro de leitura: se falhar, o nome do centro de custo some da coluna "Conciliado com" sem aviso. Fora desta fatia (mexe em todas as telas de centro de custo).
 - **Nenhum extrato real foi importado**: a leitura de OFX/CSV foi testada com arquivos inventados no formato padrão (OFX de banco brasileiro costuma ter diferenças; o primeiro extrato real é o teste de verdade).
 
+### ✅ Etapa 7.37 — Marketing: o status do pedido seguia como se tivesse mudado e a atualização de 60 s apagava a lista quando a leitura falhava
+
+**Feito em:** 04/10/2026. **Achado** ao ler a tela `MarketingTab` para migrá-la (a lição de 7.18 a 7.36), **corrigido antes** do "antes" da migração visual (12e4). **Nenhum dado foi alterado.**
+
+**Causa e o que mudou** (`MarketingTab.tsx`, só a função de mudar o status e a de ler):
+
+- **Botões REALIZADO / CANCELAR / REABRIR do pedido de registro:** o resultado da gravação **não era conferido**. Com a gravação recusada a tela **registrava a mudança no histórico de alterações** (uma mudança que não aconteceu) e **recarregava a lista como se o pedido tivesse mudado**, sem avisar nada. Agora **avisa o erro do banco** ("Não foi possível mudar o status do pedido: …"), **não registra nada no histórico** e não recarrega.
+- **Leituras que falham:** se a leitura das OPs liberadas, a das intervenções ou a dos pedidos falhasse, a tela **trocava a lista por vazia** e dizia **"Nenhuma OP liberada para divulgacao…"**, **"Nenhum pedido de registro criado."** ou **"Nenhuma intervenção registrada ainda."** — e a **atualização automática, que roda sozinha a cada 60 segundos, repetia isso sem ninguém perceber**: uma oscilação do banco apagava a lista da tela do pessoal do Marketing até a próxima leitura que desse certo. Agora **a lista anterior fica na tela**, uma **faixa vermelha** diz o que não foi lido ("Não foi possível ler as OPs liberadas (motivo); … A lista abaixo pode estar desatualizada") e as mensagens de "nenhum" **só aparecem quando a leitura deu certo**. A faixa some na leitura seguinte que der certo.
+
+**Como foi testado** (`teste_737` sobre 29 cenários + 3 com dado real, navegador, leitura e gravação **simuladas** com dados inventados ZZ; **a tela tem dado real: 16 OPs liberadas, 3 intervenções e 2 pedidos**, que foi lido só em leitura): **24/24 depois; 14/24 antes** — medido contra uma **cópia separada da versão antiga**: falhavam exatamente os 10 pontos do status recusado (aviso, histórico, recarga), das leituras que falham e da **atualização automática** (no teste o relógio de 60 s foi encurtado para 3 s: antes, a lista de 8 OPs virava **"OPs Liberadas (0)"**; depois, ela fica e a faixa aparece; ao voltar a leitura, a faixa some). Comparando **a versão antiga e a nova**: **23 cenários idênticos** (inclusive todos os que gravam: registrar intervenção, criar pedido, as três mudanças de status, os recusados e o "marcar como visto") e **só 6 diferem — os do defeito**; com o **dado real** (as OPs, os quatro filtros, o cartão e os pedidos), **3 de 3 idênticos**. 0 erros de console.
+
+**O que ficou de fora / limites:**
+
+- **Criar pedido e registrar intervenção já avisavam o erro** (e mantinham o que foi digitado): não foram mexidos. O **"marcar como visto"** (gravação silenciosa de leitura) segue sem conferir o resultado — só afeta o destaque amarelo.
+- A **atualização automática** continua a cada 60 s e silenciosa; só deixou de apagar a lista.
+- Nenhum dado foi tocado.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -3289,4 +3306,5 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | 01/10/2026 | **Como perguntar (pedido do usuário):** as perguntas que forem necessárias durante o trabalho são feitas **na hora em que surgem**, não em lote no fim. |
 | 04/10/2026 | **Conciliação bancária — gravação e leitura que falham (Etapa 7.36):** "Desfazer" passa a **avisar o erro do banco e não recarregar** a lista como se tivesse desfeito; a leitura dos lançamentos que falha mostra uma **faixa vermelha** (e não "Nenhum lançamento neste mês" nem "tudo conciliado"); as leituras de apoio que falham dizem **o que não foi lido** e o painel de conciliar deixa de afirmar "Nada no sistema com este valor". Correção **minha**, achada ao ler a tela (nenhum dado foi alterado; a tela ainda não tem dado real). |
 | 04/10/2026 | **Conciliação bancária migrada (12e3):** a tela e a janela de importação no molde das telas já migradas, **sem mudar textos, colunas, botões, consultas ou gravação** (41 cenários iguais nas duas versões; a tela não tem dado real). **Suposições visuais minhas (aceitas pela regra R22):** os números dos cartões deixam de ser coloridos (a cor fica no ponto do rótulo), "Conciliar" é o botão principal da linha e do painel, a situação vira selo por família (Ignorado cinza), o painel de conciliar vira quadro do sistema, a janela tem 500 px (era 520), e o 📥 e o 🏷️ viram ícones (o ✨ e o 🔍 ficam). A barra de abas do Financeiro **não** foi mexida (é do `FinanceiroTab`). |
+| 04/10/2026 | **Marketing — gravação e leitura que falham (Etapa 7.37):** os botões REALIZADO / CANCELAR / REABRIR do pedido de registro passam a **avisar o erro do banco, não registrar no histórico e não recarregar** quando a gravação é recusada; a leitura que falha **mantém a lista na tela** e mostra uma **faixa vermelha** (e não "Nenhuma OP liberada" / "Nenhum pedido"); a atualização automática de 60 s deixa de **apagar a lista** numa falha. Correção **minha**, achada ao ler a tela (nenhum dado foi alterado). |
 | 04/10/2026 | **5.1c medida de novo:** segue adiada (7 aprovações, 1 pessoa, 1 dia; nenhuma desde 30/09). Sem aprovação nova não há como provar que as abas antigas foram renovadas. |

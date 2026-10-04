@@ -5,6 +5,7 @@ import { LinkOpl, VeiculoOuEnvio } from './AcnTabShared';
 import { aguardaLiberacaoComercial } from './FluxoEntrega';
 import Linkify from './Linkify';
 import { logChange, useFieldHighlight, useUnreadMap, useMarkAsRead } from './AuditSystem';
+import { Faixa } from './Interface';
 
 
 const semDado = (v) => !v || !String(v).trim();
@@ -117,7 +118,7 @@ function LinhaPedido({ p, fmtDtHr, corStatusPedido, atualizarStatusPedido, naoLi
 }
 
 // Card de uma OPL com intervenções
-function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
+function OplCard({ opl, currentUser, intervencoes, leituraFalhou, onAddIntervencao }) {
   const [expanded, setExpanded] = useState(false);
   const [novaObs, setNovaObs] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -198,7 +199,9 @@ function OplCard({ opl, currentUser, intervencoes, onAddIntervencao }) {
           {/* Historico */}
           <div style={{fontWeight:700,fontSize:11,color:'#1e293b',marginBottom:6}}>Histórico de Intervenções MKT</div>
           {minhas.length === 0 ? (
-            <div style={{fontSize:11,color:'#94a3b8',fontStyle:'italic',marginBottom:8}}>Nenhuma intervenção registrada ainda.</div>
+            leituraFalhou
+              ? <div style={{fontSize:11,color:'#94a3b8',fontStyle:'italic',marginBottom:8}}>Não foi possível ler as intervenções (veja o aviso no topo da tela).</div>
+              : <div style={{fontSize:11,color:'#94a3b8',fontStyle:'italic',marginBottom:8}}>Nenhuma intervenção registrada ainda.</div>
           ) : (
             <div style={{maxHeight:180,overflowY:'auto',marginBottom:8}}>
               {minhas.map(v => (
@@ -240,6 +243,8 @@ export default function MarketingTab({ currentUser }) {
   const [pedidoForm, setPedidoForm] = useState(PEDIDO_VAZIO);
   const [salvandoPedido, setSalvandoPedido] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState('Todos');
+  // Etapa 7.37 (04/10/2026): o que a tela não conseguiu ler (mensagem do banco, por lista; vazio = leu).
+  const [falhas, setFalhas] = useState({ opls: '', interv: '', pedidos: '' });
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true), 60000); return () => clearInterval(t); }, []);
 
@@ -250,9 +255,13 @@ export default function MarketingTab({ currentUser }) {
       supabase.from('mkt_intervencoes').select('*').order('created_at', { ascending: false }),
       supabase.from('mkt_pedidos_registro').select('*').order('created_at', { ascending: false }),
     ]);
-    setOpls(oplsRes.data || []);
-    setIntervencoes(intRes.data || []);
-    setPedidos(pedRes.data || []);
+    // Leitura que falha não pode virar "nenhuma OP" / "nenhum pedido". Antes o erro era ignorado e a lista era trocada
+    // por vazia, e a atualização automática de 60 s repetia isso sozinha. Agora a lista anterior fica na tela e uma faixa
+    // diz o que não foi lido (a faixa some na leitura seguinte que der certo).
+    if (!oplsRes.error) setOpls(oplsRes.data || []);
+    if (!intRes.error) setIntervencoes(intRes.data || []);
+    if (!pedRes.error) setPedidos(pedRes.data || []);
+    setFalhas({ opls: oplsRes.error?.message || '', interv: intRes.error?.message || '', pedidos: pedRes.error?.message || '' });
     if (!silent) setLoading(false);
   };
 
@@ -273,7 +282,10 @@ export default function MarketingTab({ currentUser }) {
   };
 
   const atualizarStatusPedido = async (p, status) => {
-    await supabase.from('mkt_pedidos_registro').update({ status }).eq('id', p.id);
+    const { error } = await supabase.from('mkt_pedidos_registro').update({ status }).eq('id', p.id);
+    // Etapa 7.37 (04/10/2026): antes o resultado não era conferido: com a gravação recusada a tela registrava a mudança no
+    // histórico de alterações e recarregava a lista como se o pedido tivesse mudado de status.
+    if (error) { alert('Não foi possível mudar o status do pedido: ' + error.message); return; }
     logChange({ module: 'marketing', entityType: 'mkt_pedidos_registro', entityId: p.id, changeType: 'UPDATE',
       oldRow: p, newRow: { ...p, status }, user: currentUser });
     fetchAll();
@@ -288,6 +300,7 @@ export default function MarketingTab({ currentUser }) {
     : filtroStatus === 'Concluidas' ? opls.filter(o => (o.status_geral||'').includes('Faturado') || (o.status_geral||'').includes('Aprovado CQ') || aguardaLiberacaoComercial(o.status_geral))
     : opls.filter(o => !((o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('Faturado')));
 
+  const itensFalha = [falhas.opls && `as OPs liberadas (${falhas.opls})`, falhas.interv && `as intervenções (${falhas.interv})`, falhas.pedidos && `os pedidos de registro (${falhas.pedidos})`].filter(Boolean);
   const pedidosPendentes = pedidos.filter(p => p.status === 'Pendente').length;
   const { naoLidoSet: pedidosNaoLidos, marcarLidoLocal: marcarPedidoLidoLocal } = useUnreadMap('mkt_pedidos_registro', pedidos.map(p => p.id), currentUser);
 
@@ -304,6 +317,8 @@ export default function MarketingTab({ currentUser }) {
           🎬 Pedidos de Registro {pedidosPendentes>0 ? `(${pedidosPendentes} pendente${pedidosPendentes>1?'s':''})` : ''}
         </button>
       </div>
+
+      {itensFalha.length > 0 && <Faixa tom="erro">Não foi possível ler {itensFalha.join('; ')}. A lista abaixo pode estar desatualizada.</Faixa>}
 
       {/* ABA OPLs */}
       {aba === 'opls' && (
@@ -323,7 +338,7 @@ export default function MarketingTab({ currentUser }) {
               {loading ? (
                 <div className="acn-empty">Carregando...</div>
               ) : oplsFiltradas.length === 0 ? (
-                <div className="acn-empty">
+                falhas.opls ? null : <div className="acn-empty">
                   {opls.length === 0
                     ? 'Nenhuma OP liberada para divulgacao. Marque "Liberado para Divulgacao" ao cadastrar a OP no Comercial.'
                     : 'Nenhuma OP neste filtro.'}
@@ -336,6 +351,7 @@ export default function MarketingTab({ currentUser }) {
                       opl={opl}
                       currentUser={currentUser}
                       intervencoes={intervencoes}
+                      leituraFalhou={!!falhas.interv}
                       onAddIntervencao={fetchAll}
                     />
                   ))}
@@ -411,7 +427,7 @@ export default function MarketingTab({ currentUser }) {
             {/* LISTA PEDIDOS */}
             <div className="sec-body" style={{overflowX:'auto'}}>
               {pedidos.length === 0 ? (
-                <div className="acn-empty">Nenhum pedido de registro criado.</div>
+                falhas.pedidos ? null : <div className="acn-empty">Nenhum pedido de registro criado.</div>
               ) : (
                 <table>
                   <thead><tr>
