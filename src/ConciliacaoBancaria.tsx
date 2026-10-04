@@ -17,7 +17,13 @@ import { supabase } from './supabaseClient';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
-import { diaISO, Faixa } from './Interface';
+import { diaISO, Faixa, Botao, Selo } from './Interface';
+import Icone from './Icone';
+import { mdiTrayArrowDown, mdiTagOutline } from '@mdi/js';
+
+// Etapa 12e3 (04/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, Faixa e as
+// classes acn-kpi / acn-filtros / acn-tabela / acn-quadro), no lugar do estilo pintado à mão em cada elemento. Só aparência:
+// os cliques, as gravações, as leituras, os textos e as regras são os de antes.
 
 const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dataBr = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
@@ -150,6 +156,17 @@ function sugestoes(l: any, candidatos: any[], jaUsados: Set<string>) {
     .slice(0, 5);
 }
 
+// Cartão de resumo do topo: a cor mora no ponto do rótulo (família do design system); o número fica na cor do texto.
+function Kpi({ rotulo, valor, tom, sub = '' }) {
+  return (
+    <div className="acn-kpi">
+      <span className="rot"><i data-acn-familia={tom} />{rotulo}</span>
+      <span className="val acn-num">{valor}</span>
+      {sub && <span className="sub">{sub}</span>}
+    </div>
+  );
+}
+
 // ── Importação ──────────────────────────────────────────────────────────────
 function ModalImportar({ currentUser, contaPadrao, onClose, onImportado }) {
   const [lido, setLido] = useState<any>(null);
@@ -190,39 +207,42 @@ function ModalImportar({ currentUser, contaPadrao, onClose, onImportado }) {
   const saidas = lido ? lido.lancamentos.filter((l: any) => l.valor < 0).reduce((s: number, l: any) => s + l.valor, 0) : 0;
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 520 }}>
-        <div className="modal-title">📥 Importar extrato bancário</div>
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-          OFX (no internet banking: "exportar extrato" → OFX/Money) ou planilha CSV com colunas de data, histórico e valor
-          (ou crédito e débito). Lançamentos já importados não se repetem.
+      <div className="modal-box acn-modal-cadastro acn-sac-jan">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiTrayArrowDown} size={18} /> Importar extrato bancário</span>
         </div>
-        <input type="file" accept=".ofx,.OFX,.csv,.txt" aria-label="Arquivo do extrato"
-          onChange={e => { const f = e.target.files?.[0]; if (f) ler(f); }} style={{ marginBottom: 10 }} />
-        {lido && (
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', fontSize: 11, marginBottom: 10 }}>
-            {lido.lancamentos.length === 0 ? (
-              <span style={{ color: '#b91c1c' }}>Nenhum lançamento reconhecido neste arquivo. Confira se é OFX ou CSV com data e valor.</span>
-            ) : (
-              <>
-                <strong>{lido.formato}: {lido.lancamentos.length} lançamentos</strong>
-                {' · '}{dataBr(lido.lancamentos.map((l: any) => l.data).sort()[0])} a {dataBr(lido.lancamentos.map((l: any) => l.data).sort().pop())}
-                <div style={{ marginTop: 4 }}>
-                  <span style={{ color: '#15803d' }}>Entradas {brl(entradas)}</span> · <span style={{ color: '#b91c1c' }}>Saídas {brl(saidas)}</span>
-                  {lido.saldoFinal != null && <> · Saldo final {brl(lido.saldoFinal)}</>}
-                </div>
-              </>
-            )}
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-ajuda">
+            OFX (no internet banking: "exportar extrato" → OFX/Money) ou planilha CSV com colunas de data, histórico e valor
+            (ou crédito e débito). Lançamentos já importados não se repetem.
           </div>
-        )}
-        <label className="acn-label">Conta *</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 12 }} value={conta} onChange={e => setConta(e.target.value)}
-          placeholder="Ex.: Banco do Brasil 12345-6" aria-label="Conta" />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="acn-btn" style={{ background: '#0f766e', flex: 1, opacity: salvando || !lido?.lancamentos?.length ? .6 : 1 }}
-            disabled={salvando || !lido?.lancamentos?.length} onClick={importar}>
+          <input type="file" accept=".ofx,.OFX,.csv,.txt" aria-label="Arquivo do extrato"
+            onChange={e => { const f = e.target.files?.[0]; if (f) ler(f); }} />
+          {lido && (lido.lancamentos.length === 0 ? (
+            <Faixa tom="erro">Nenhum lançamento reconhecido neste arquivo. Confira se é OFX ou CSV com data e valor.</Faixa>
+          ) : (
+            <div className="acn-quadro">
+              <div>
+                <strong className="acn-forte">{lido.formato}: {lido.lancamentos.length} lançamentos</strong>
+                {' · '}{dataBr(lido.lancamentos.map((l: any) => l.data).sort()[0])} a {dataBr(lido.lancamentos.map((l: any) => l.data).sort().pop())}
+              </div>
+              <div>
+                <span className="acn-txt-ok">Entradas {brl(entradas)}</span> · <span className="acn-txt-erro">Saídas {brl(saidas)}</span>
+                {lido.saldoFinal != null && <> · Saldo final {brl(lido.saldoFinal)}</>}
+              </div>
+            </div>
+          ))}
+          <div className="form-group">
+            <label className="acn-label">Conta *</label>
+            <input className="acn-input" value={conta} onChange={e => setConta(e.target.value)}
+              placeholder="Ex.: Banco do Brasil 12345-6" aria-label="Conta" />
+          </div>
+        </div>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" disabled={salvando || !lido?.lancamentos?.length} onClick={importar}>
             {salvando ? 'Importando...' : 'Importar'}
-          </button>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
+          </Botao>
+          <Botao disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -247,41 +267,41 @@ function PainelConciliar({ l, candidatos, jaUsados, leituraFalhou, currentUser, 
   };
   const vincular = (c: any) => gravar({ status: 'conciliado', vinculo_tipo: c.tipo, vinculo_id: c.id, vinculo_descricao: c.descricao, centro_custo_id: centro });
   const Linha = ({ c }) => (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 8px', borderBottom: '1px solid #f1f5f9', fontSize: 11 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, color: '#475569', minWidth: 110 }}>{ROTULO_TIPO[c.tipo]}</span>
-      <span style={{ flex: 1 }}>{c.descricao}</span>
-      <span style={{ color: '#64748b', fontSize: 10 }}>{c.data ? dataBr(c.data) : ''}</span>
-      <strong style={{ minWidth: 90, textAlign: 'right' }}>{brl(c.valor)}</strong>
-      <button className="acn-btn" style={{ background: '#16a34a', fontSize: 9 }} onClick={() => vincular(c)}>Conciliar</button>
+    <div className="acn-conc-linha">
+      <span className="acn-conc-tipo">{ROTULO_TIPO[c.tipo]}</span>
+      <span className="acn-conc-registro">{c.descricao}</span>
+      <span className="acn-fraco acn-nowrap">{c.data ? dataBr(c.data) : ''}</span>
+      <strong className="acn-conc-valor acn-num">{brl(c.valor)}</strong>
+      <Botao pequeno variante="primario" onClick={() => vincular(c)}>Conciliar</Botao>
     </div>
   );
   return (
-    <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 6, padding: 10, margin: '4px 0 8px' }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: '#334155', marginBottom: 4 }}>Sugestões pelo valor e pela data</div>
+    <div className="acn-quadro acn-conc-painel">
+      <div className="acn-quadro-titulo">Sugestões pelo valor e pela data</div>
       {sug.length ? sug.map(c => <Linha key={c.tipo + c.id} c={c} />) : leituraFalhou ? (
-        <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 8px' }}>Não foi possível ler os registros do sistema para sugerir (veja o aviso no topo da tela). Tente de novo mais tarde ou classifique por centro de custo.</div>
+        <div className="acn-ajuda">Não foi possível ler os registros do sistema para sugerir (veja o aviso no topo da tela). Tente de novo mais tarde ou classifique por centro de custo.</div>
       ) : (
-        <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 8px' }}>Nada no sistema com este valor. Procure abaixo ou classifique por centro de custo.</div>
+        <div className="acn-ajuda">Nada no sistema com este valor. Procure abaixo ou classifique por centro de custo.</div>
       )}
-      <input className="acn-input" style={{ width: '100%', margin: '8px 0 4px' }} value={busca} onChange={e => setBusca(e.target.value)}
+      <input className="acn-input" value={busca} onChange={e => setBusca(e.target.value)}
         placeholder={sentido > 0 ? 'Procurar OP, cliente, NF...' : 'Procurar fornecedor, OC, NF, despesa...'} aria-label="Procurar registro para conciliar" />
       {achados.map(c => <Linha key={'b' + c.tipo + c.id} c={c} />)}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#475569' }}>Centro de custo</span>
-        <CentroCustoSelect value={centro} onChange={setCentro} style={{ minWidth: 220, fontSize: 11 }} />
-        <input className="acn-input" style={{ flex: 1, minWidth: 160 }} value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" aria-label="Observação" />
+      <div className="acn-conc-centro">
+        <span className="acn-label">Centro de custo</span>
+        <CentroCustoSelect value={centro} onChange={setCentro} className="acn-input acn-conc-sel" />
+        <input className="acn-input acn-conc-obs" value={obs} onChange={e => setObs(e.target.value)} placeholder="Observação (opcional)" aria-label="Observação" />
       </div>
-      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-        <button className="acn-btn" style={{ background: '#0369a1', fontSize: 10 }} disabled={!centro}
+      <div className="acn-acoes-linha quebra">
+        <Botao pequeno variante="primario" disabled={!centro}
           title={centro ? '' : 'Escolha o centro de custo'}
           onClick={() => gravar({ status: 'conciliado', vinculo_tipo: 'centro_custo', vinculo_id: centro, vinculo_descricao: null, centro_custo_id: centro })}>
           Conciliar só com o centro de custo
-        </button>
-        <button className="acn-btn" style={{ background: '#64748b', fontSize: 10 }}
+        </Botao>
+        <Botao pequeno
           onClick={() => gravar({ status: 'ignorado', vinculo_tipo: null, vinculo_id: null, vinculo_descricao: null, centro_custo_id: centro })}>
           Ignorar (tarifa, transferência entre contas...)
-        </button>
-        <button className="acn-btn" style={{ background: '#94a3b8', fontSize: 10 }} onClick={onFechar}>Fechar</button>
+        </Botao>
+        <Botao pequeno variante="discreto" onClick={onFechar}>Fechar</Botao>
       </div>
     </div>
   );
@@ -353,104 +373,104 @@ export default function ConciliacaoBancaria({ currentUser }) {
   const nomeCentro = (id: string) => { const c = centros.find((x: any) => x.id === id); return c ? `${c.codigo} — ${c.nome}` : ''; };
   const lista = lancs.filter(l => (!status || l.status === status) && (!busca.trim() || combinaBusca(`${l.descricao} ${l.documento || ''} ${l.valor} ${l.vinculo_descricao || ''}`, busca)));
   const anos = Array.from({ length: 4 }, (_, i) => String(hoje.getFullYear() - i));
-  const Kpi = ({ rotulo, valor, cor, sub = '' }) => (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderLeft: `3px solid ${cor}`, borderRadius: 6, padding: '8px 12px', minWidth: 140, flex: 1 }}>
-      <div style={{ fontSize: 9, color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>{rotulo}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: cor, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
-      {sub && <div style={{ fontSize: 10, color: '#64748b' }}>{sub}</div>}
-    </div>
-  );
 
   return (
     <div>
       {/* Resumo no topo */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <Kpi rotulo="Entradas" valor={brl(entradas)} cor="#15803d" />
-        <Kpi rotulo="Saídas" valor={brl(Math.abs(saidas))} cor="#b91c1c" />
-        <Kpi rotulo="Resultado do mês" valor={brl(entradas + saidas)} cor={entradas + saidas >= 0 ? '#0f766e' : '#b91c1c'} />
-        <Kpi rotulo="Pendentes" valor={String(pendentes.length)} cor="#b45309" sub={erroLista ? 'leitura falhou' : pendentes.length ? brl(pendentes.reduce((s, l) => s + Math.abs(Number(l.valor)), 0)) + ' a conciliar' : 'tudo conciliado'} />
-        <Kpi rotulo="Conciliados" valor={lancs.length ? `${Math.round(resolvidos / lancs.length * 100)}%` : '—'} cor="#2563eb" sub={`${resolvidos} de ${lancs.length}`} />
+      <div className="acn-kpis">
+        <Kpi rotulo="Entradas" valor={brl(entradas)} tom="ok" />
+        <Kpi rotulo="Saídas" valor={brl(Math.abs(saidas))} tom="erro" />
+        <Kpi rotulo="Resultado do mês" valor={brl(entradas + saidas)} tom={entradas + saidas >= 0 ? 'marca' : 'erro'} />
+        <Kpi rotulo="Pendentes" valor={String(pendentes.length)} tom="atencao" sub={erroLista ? 'leitura falhou' : pendentes.length ? brl(pendentes.reduce((s, l) => s + Math.abs(Number(l.valor)), 0)) + ' a conciliar' : 'tudo conciliado'} />
+        <Kpi rotulo="Conciliados" valor={lancs.length ? `${Math.round(resolvidos / lancs.length * 100)}%` : '—'} tom="info" sub={`${resolvidos} de ${lancs.length}`} />
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={mes} onChange={e => setMes(e.target.value)} aria-label="Mês" style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
-            <option key={m} value={m}>{new Date(2000, Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long' })}</option>
-          ))}
-        </select>
-        <select value={ano} onChange={e => setAno(e.target.value)} aria-label="Ano" style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          {anos.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={conta} onChange={e => setConta(e.target.value)} aria-label="Conta" style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          <option value="">Todas as contas</option>
-          {contas.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={status} onChange={e => setStatus(e.target.value)} aria-label="Situação" style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          <option value="pendente">Pendentes</option>
-          <option value="conciliado">Conciliados</option>
-          <option value="ignorado">Ignorados</option>
-          <option value="">Todos</option>
-        </select>
-        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar no extrato..." aria-label="Buscar no extrato"
-          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, minWidth: 180 }} />
-        <button className="acn-btn" style={{ background: '#0f766e', marginLeft: 'auto' }} onClick={() => setImportar(true)}>📥 Importar extrato</button>
-      </div>
+      <div className="sec-card">
+        <div className="acn-filtros">
+          <select className="acn-input acn-select-mini" value={mes} onChange={e => setMes(e.target.value)} aria-label="Mês">
+            {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
+              <option key={m} value={m}>{new Date(2000, Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long' })}</option>
+            ))}
+          </select>
+          <select className="acn-input acn-select-mini" value={ano} onChange={e => setAno(e.target.value)} aria-label="Ano">
+            {anos.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select className="acn-input acn-select-mini" value={conta} onChange={e => setConta(e.target.value)} aria-label="Conta">
+            <option value="">Todas as contas</option>
+            {contas.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="acn-input acn-select-mini" value={status} onChange={e => setStatus(e.target.value)} aria-label="Situação">
+            <option value="pendente">Pendentes</option>
+            <option value="conciliado">Conciliados</option>
+            <option value="ignorado">Ignorados</option>
+            <option value="">Todos</option>
+          </select>
+          <input className="acn-input acn-input-filtro" value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar no extrato..." aria-label="Buscar no extrato" />
+          <Botao variante="primario" icone={mdiTrayArrowDown} className="acn-filtros-dir" onClick={() => setImportar(true)}>Importar extrato</Botao>
+        </div>
 
-      {erroLista && <Faixa tom="erro">{erroLista}</Faixa>}
-      {erroApoio && <Faixa tom="erro">{erroApoio}</Faixa>}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto' }}>
-        {carregando ? <div className="acn-empty">Carregando...</div> : lista.length === 0 ? (
-          erroLista ? null : <div className="acn-empty">
-            {lancs.length === 0 ? 'Nenhum lançamento neste mês. Importe o extrato do banco (OFX ou CSV).' : 'Nada nesta situação.'}
-          </div>
-        ) : (
-          <table style={{ width: '100%' }}>
-            <thead><tr><th>Data</th><th>Descrição</th><th style={{ textAlign: 'right' }}>Valor</th><th>Situação</th><th>Conciliado com</th><th></th></tr></thead>
-            <tbody>
-              {lista.map(l => (
-                <React.Fragment key={l.id}>
-                  <tr>
-                    <td style={{ whiteSpace: 'nowrap' }}>{dataBr(l.data)}</td>
-                    <td style={{ maxWidth: 340, wordBreak: 'break-word' }}>
-                      {l.descricao || '—'}
-                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{l.conta}{l.documento ? ` · doc ${l.documento}` : ''}</div>
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: l.valor >= 0 ? '#15803d' : '#b91c1c', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{brl(l.valor)}</td>
-                    <td>
-                      <span className="acn-badge" style={{ background: l.status === 'conciliado' ? '#16a34a' : l.status === 'ignorado' ? '#94a3b8' : '#d97706' }}>
-                        {l.status === 'conciliado' ? 'Conciliado' : l.status === 'ignorado' ? 'Ignorado' : 'Pendente'}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 10, maxWidth: 280 }}>
-                      {l.vinculo_tipo && l.vinculo_tipo !== 'centro_custo' && <div><strong>{ROTULO_TIPO[l.vinculo_tipo]}:</strong> {l.vinculo_descricao}</div>}
-                      {l.centro_custo_id && <div style={{ color: '#0369a1' }}>🏷️ {nomeCentro(l.centro_custo_id)}</div>}
-                      {l.observacao && <div style={{ color: '#64748b' }}>{l.observacao}</div>}
-                      {l.conciliado_por && <div style={{ color: '#94a3b8' }}>{l.conciliado_por}</div>}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {l.status === 'pendente' ? (
-                        <button className="acn-btn" style={{ background: aberto === l.id ? '#64748b' : '#2563eb', fontSize: 10 }}
-                          onClick={() => setAberto(a => a === l.id ? null : l.id)}>
-                          {aberto === l.id ? 'Fechar' : `Conciliar${sugestoes(l, candidatos, usados).length ? ' ✨' : ''}`}
-                        </button>
-                      ) : (
-                        <button className="acn-btn" style={{ background: '#94a3b8', fontSize: 10 }} onClick={() => desfazer(l)}>Desfazer</button>
+        <div className="sec-body">
+          {erroLista && <Faixa tom="erro">{erroLista}</Faixa>}
+          {erroApoio && <Faixa tom="erro">{erroApoio}</Faixa>}
+          {carregando ? <div className="acn-empty">Carregando...</div> : lista.length === 0 ? (
+            erroLista ? null : <div className="acn-empty">
+              {lancs.length === 0 ? 'Nenhum lançamento neste mês. Importe o extrato do banco (OFX ou CSV).' : 'Nada nesta situação.'}
+            </div>
+          ) : (
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead><tr><th>Data</th><th>Descrição</th><th className="acn-dir">Valor</th><th>Situação</th><th>Conciliado com</th><th></th></tr></thead>
+                <tbody>
+                  {lista.map(l => (
+                    <React.Fragment key={l.id}>
+                      <tr>
+                        <td className="acn-nowrap">{dataBr(l.data)}</td>
+                        <td className="acn-conc-descricao">
+                          <div className="acn-duas">
+                            <span>{l.descricao || '—'}</span>
+                            <small>{l.conta}{l.documento ? ` · doc ${l.documento}` : ''}</small>
+                          </div>
+                        </td>
+                        <td className="acn-dir acn-nowrap acn-num"><span className={l.valor >= 0 ? 'acn-txt-ok' : 'acn-txt-erro'}>{brl(l.valor)}</span></td>
+                        <td>
+                          <Selo familia={l.status === 'conciliado' ? 'ok' : l.status === 'ignorado' ? 'neutro' : 'atencao'}>
+                            {l.status === 'conciliado' ? 'Conciliado' : l.status === 'ignorado' ? 'Ignorado' : 'Pendente'}
+                          </Selo>
+                        </td>
+                        <td className="acn-conc-vinculo">
+                          {l.vinculo_tipo && l.vinculo_tipo !== 'centro_custo' && <div><strong className="acn-forte">{ROTULO_TIPO[l.vinculo_tipo]}:</strong> {l.vinculo_descricao}</div>}
+                          {l.centro_custo_id && <div className="acn-conc-centro-nome"><Icone path={mdiTagOutline} size={14} /> {nomeCentro(l.centro_custo_id)}</div>}
+                          {l.observacao && <div className="acn-fraco">{l.observacao}</div>}
+                          {l.conciliado_por && <div className="acn-fraco">{l.conciliado_por}</div>}
+                        </td>
+                        <td>
+                          <div className="acn-acoes-linha">
+                            {l.status === 'pendente' ? (
+                              <Botao pequeno variante={aberto === l.id ? 'secundario' : 'primario'}
+                                onClick={() => setAberto(a => a === l.id ? null : l.id)}>
+                                {aberto === l.id ? 'Fechar' : `Conciliar${sugestoes(l, candidatos, usados).length ? ' ✨' : ''}`}
+                              </Botao>
+                            ) : (
+                              <Botao pequeno onClick={() => desfazer(l)}>Desfazer</Botao>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {aberto === l.id && (
+                        <tr><td colSpan={6}>
+                          <PainelConciliar l={l} candidatos={candidatos} jaUsados={usados} leituraFalhou={sugestoesIncompletas} currentUser={currentUser}
+                            onFeito={() => { setAberto(null); carregar(); }} onFechar={() => setAberto(null)} />
+                        </td></tr>
                       )}
-                    </td>
-                  </tr>
-                  {aberto === l.id && (
-                    <tr><td colSpan={6} style={{ padding: 0 }}>
-                      <PainelConciliar l={l} candidatos={candidatos} jaUsados={usados} leituraFalhou={sugestoesIncompletas} currentUser={currentUser}
-                        onFeito={() => { setAberto(null); carregar(); }} onFechar={() => setAberto(null)} />
-                    </td></tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 6 }}>
+      <div className="acn-ajuda acn-conc-nota">
         ✨ = o sistema achou registro com o mesmo valor. Entradas são comparadas com OPs faturadas; saídas com faturamento de compras, pedidos de compra e despesas.
       </div>
 

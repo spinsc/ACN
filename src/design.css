@@ -873,3 +873,21 @@ html body .acn-sac-jan .acn-input.acn-sac-colab { padding: 6px 9px !important; f
 /* "N/A" escolhido: cinza cheio (OK escolhido é o botão principal; NOK escolhido, o vermelho) */
 html body .acn-b.acn-cq-na[aria-pressed="true"] { background: var(--acn-neutral); border-color: var(--acn-neutral); color: #fff; }
 @media (max-width: 480px) { .acn-cq-item { flex-wrap: wrap; } .acn-cq-item > span { flex-basis: 100%; } }
+/* ── Conciliação bancária (Etapa 12e3, 04/10/2026): só aparência ──────────────────────────────────────────── */
+/* a descrição do extrato pode vir como uma sequência colada, sem espaço: quebra em qualquer ponto em vez de esticar a tabela */
+.acn-conc-descricao { min-width: 200px; max-width: 340px; overflow-wrap: anywhere; }
+.acn-conc-vinculo { max-width: 280px; font-size: 12px; overflow-wrap: anywhere; }
+.acn-conc-centro-nome { display: inline-flex; align-items: center; gap: 4px; color: var(--acn-info); }
+/* o painel de conciliar que abre embaixo da linha: sugestões, busca, centro de custo e os três botões */
+.acn-conc-painel { margin: 4px 0 8px; }
+.acn-conc-linha { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--acn-line); }
+.acn-conc-tipo { flex: 0 0 160px; font-weight: 600; color: var(--acn-ink); }
+.acn-conc-registro { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.acn-conc-valor { min-width: 96px; text-align: right; }
+.acn-conc-centro { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-conc-centro .acn-label { margin: 0; }
+/* o CentroCustoSelect é compartilhado e leva estilo próprio inline: a classe sobrepõe só aqui, sem mexer no componente (Etapa 13) */
+html body select.acn-conc-sel { width: auto; min-width: 220px; padding: 4px 8px !important; font-size: 12px !important; border: 1px solid var(--acn-line) !important; border-radius: var(--acn-r2) !important; }
+.acn-conc-obs { flex: 1; min-width: 160px; }
+.acn-conc-nota { margin-top: 6px; }
+@media (max-width: 480px) { .acn-conc-linha { flex-wrap: wrap; } .acn-conc-registro { flex-basis: 100%; } }
