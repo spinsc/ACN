@@ -5,7 +5,16 @@ import { LinkOpl, VeiculoOuEnvio } from './AcnTabShared';
 import { aguardaLiberacaoComercial } from './FluxoEntrega';
 import Linkify from './Linkify';
 import { logChange, useFieldHighlight, useUnreadMap, useMarkAsRead } from './AuditSystem';
-import { Faixa } from './Interface';
+import { Faixa, Botao, Selo, Chips, Abas } from './Interface';
+import Icone from './Icone';
+import { mdiCameraOutline, mdiVideoOutline, mdiChevronDown, mdiChevronUp, mdiTruckFastOutline } from '@mdi/js';
+
+// Etapa 12e4 (04/10/2026): a parte visual desta tela passou para as peças do design system (Abas, Chips, Botao, Selo, Faixa e as
+// classes acn-tabela / acn-quadro / acn-mkt-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os cliques, as
+// gravações, as leituras, os textos, as regras de cada etapa do pipeline e os filtros são os de antes. A cor roxa da tela (a "cor
+// do Marketing") saiu: as telas do sistema usam a cor da marca e as famílias de status.
+const FAMILIA_PEDIDO = { Pendente: 'atencao', Realizado: 'ok', Cancelado: 'erro' };
+const FAMILIA_TIPO = { Foto: 'ok', Video: 'info', 'Foto e Video': 'marca' };
 
 
 const semDado = (v) => !v || !String(v).trim();
@@ -46,20 +55,13 @@ function PipelineStatus({ opl }) {
   ];
 
   return (
-    <div className="acn-faixa-rolavel" style={{display:'flex',alignItems:'center',gap:0,margin:'4px 0'}}>
+    <div className="acn-faixa-rolavel acn-mkt-pipe">
       {etapas.map((e, i) => (
         <React.Fragment key={e.label}>
-          <div style={{
-            fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10, whiteSpace:'nowrap',
-            background: e.ok ? '#dcfce7' : e.atual ? '#dbeafe' : '#f1f5f9',
-            color: e.ok ? '#166534' : e.atual ? '#1d4ed8' : '#94a3b8',
-            border: `1px solid ${e.ok ? '#86efac' : e.atual ? '#93c5fd' : '#e2e8f0'}`,
-          }}>
+          <Selo familia={e.ok ? 'ok' : e.atual ? 'info' : 'neutro'} ponto={false}>
             {e.ok ? '✓ ' : e.atual ? '▶ ' : '○ '}{e.label}
-          </div>
-          {i < etapas.length - 1 && (
-            <div style={{width:12,height:1,background: e.ok?'#86efac':'#e2e8f0'}} />
-          )}
+          </Selo>
+          {i < etapas.length - 1 && <span className={'acn-mkt-elo' + (e.ok ? ' ok' : '')} />}
         </React.Fragment>
       ))}
     </div>
@@ -70,46 +72,37 @@ function PipelineStatus({ opl }) {
 // só pra poder chamar useMarkAsRead por linha, igual ao padrão já usado em
 // FinanceiroTab.tsx pra Faturamento de Compras (também sem tela de detalhe:
 // "visto" aqui é clicar em qualquer lugar da linha).
-function LinhaPedido({ p, fmtDtHr, corStatusPedido, atualizarStatusPedido, naoLido, marcarLidoLocal, currentUser }) {
+function LinhaPedido({ p, fmtDtHr, atualizarStatusPedido, naoLido, marcarLidoLocal, currentUser }) {
   const marcarComoLido = useMarkAsRead('mkt_pedidos_registro', p.id, currentUser);
   const marcarVisto = () => { if (naoLido) { marcarComoLido(); marcarLidoLocal?.(p.id); } };
+  // O fundo colorido da linha por status saiu (o status já está no selo); só a linha "não vista" ganha o filete amarelo do sistema.
   return (
-    <tr onClick={marcarVisto} style={naoLido
-      ? { background:'#fffdf0', boxShadow:'inset 3px 0 0 #eab308' }
-      : { background: p.status==='Pendente'?'#faf5ff': p.status==='Realizado'?'#f0fdf4':'white' }}>
-      <td style={{whiteSpace:'nowrap'}}>{fmtDtHr(p.created_at)}</td>
+    <tr onClick={marcarVisto} className={naoLido ? 'acn-linha-nova' : undefined}>
+      <td className="acn-texto-curto">{fmtDtHr(p.created_at)}</td>
       <td>{p.numero_opl || '—'}</td>
-      <td style={{ maxWidth:120, wordBreak:'break-word' }}>{p.local_registro || '—'}</td>
-      <td style={{whiteSpace:'nowrap'}}>{p.hora_turno || '—'}</td>
+      <td className="acn-texto-medio">{p.local_registro || '—'}</td>
+      <td className="acn-texto-curto">{p.hora_turno || '—'}</td>
       <td>
-        <span style={{fontSize:10,fontWeight:700,background: p.tipo==='Video'?'#dbeafe': p.tipo==='Foto e Video'?'#fae8ff':'#dcfce7',
-          color: p.tipo==='Video'?'#1d4ed8': p.tipo==='Foto e Video'?'#7c3aed':'#166534',
-          padding:'1px 6px',borderRadius:10}}>
+        <Selo familia={FAMILIA_TIPO[p.tipo] || 'neutro'} ponto={false}>
           {p.tipo==='Foto'?'📷':p.tipo==='Video'?'🎬':'📷🎬'} {p.tipo}
-        </span>
+        </Selo>
       </td>
       <td>{p.categoria || '—'}</td>
-      <td style={{ maxWidth:160, fontSize:10, wordBreak:'break-word' }}>{p.observacoes || '—'}</td>
-      <td style={{fontSize:10}}>{p.criado_por_nome || '—'}</td>
+      <td className="acn-mkt-obs">{p.observacoes || '—'}</td>
+      <td>{p.criado_por_nome || '—'}</td>
       <td>
-        <span className="acn-badge" style={{background:corStatusPedido(p.status)}}>{p.status}</span>
+        <Selo familia={FAMILIA_PEDIDO[p.status] || 'neutro'}>{p.status}</Selo>
       </td>
       <td>
-        <div style={{display:'flex',gap:3}}>
+        <div className="acn-acoes-linha quebra">
           {p.status === 'Pendente' && (
-            <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>atualizarStatusPedido(p,'Realizado')}>
-              REALIZADO
-            </button>
+            <Botao pequeno variante="primario" onClick={()=>atualizarStatusPedido(p,'Realizado')}>REALIZADO</Botao>
           )}
           {p.status === 'Pendente' && (
-            <button className="acn-btn" style={{background:'#ef4444',fontSize:10}} onClick={()=>atualizarStatusPedido(p,'Cancelado')}>
-              CANCELAR
-            </button>
+            <Botao pequeno variante="perigo-sec" onClick={()=>atualizarStatusPedido(p,'Cancelado')}>CANCELAR</Botao>
           )}
           {p.status !== 'Pendente' && (
-            <button className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={()=>atualizarStatusPedido(p,'Pendente')}>
-              REABRIR
-            </button>
+            <Botao pequeno onClick={()=>atualizarStatusPedido(p,'Pendente')}>REABRIR</Botao>
           )}
         </div>
       </td>
@@ -155,77 +148,69 @@ function OplCard({ opl, currentUser, intervencoes, leituraFalhou, onAddIntervenc
     setSalvando(false);
   };
 
-  const corStatus = (s) => {
-    if (!s) return '#94a3b8';
-    if (s.includes('Faturado') || s.includes('Aprovado CQ') || aguardaLiberacaoComercial(s)) return '#22c55e';
-    if (s.includes('Producao') || s.includes('CQ')) return '#3b82f6';
-    if (s.includes('PCP') || s.includes('Almox')) return '#f59e0b';
-    return '#94a3b8';
+  // As mesmas faixas de cor de antes (verde, azul, âmbar e cinza), agora pelas famílias do design system.
+  const familiaDaOp = (s) => {
+    if (!s) return 'neutro';
+    if (s.includes('Faturado') || s.includes('Aprovado CQ') || aguardaLiberacaoComercial(s)) return 'ok';
+    if (s.includes('Producao') || s.includes('CQ')) return 'info';
+    if (s.includes('PCP') || s.includes('Almox')) return 'atencao';
+    return 'neutro';
   };
 
   return (
-    <div style={{border:`1px solid ${temNaoLidos?'#fde047':'#e2e8f0'}`,
-      borderLeft: temNaoLidos ? '3px solid #eab308' : '1px solid #e2e8f0',
-      borderRadius:6,marginBottom:8,overflow:'hidden',background: temNaoLidos?'#fffdf0':'white'}}>
+    <div className={'acn-mkt-cartao' + (temNaoLidos ? ' nova' : '')}>
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background: temNaoLidos?'#fef9c3':'#f8fafc',cursor:'pointer',borderBottom: expanded?'1px solid #e2e8f0':'none'}}
-        onClick={toggleExpand}>
-        <div className="acn-min0" style={{flex:1}}>
-          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+      <div className={'acn-mkt-cab' + (expanded ? ' aberto' : '')} onClick={toggleExpand}>
+        <div className="acn-min0 acn-mkt-info">
+          <div className="acn-mkt-linha1">
             <LinkOpl opl={opl} currentUser={currentUser} />
-            <span style={{fontSize:10,color:'#64748b'}}>{opl.cliente_nome || '—'}</span>
-            <span style={{fontSize:9,background:corStatus(opl.status_geral),color:'white',padding:'1px 6px',borderRadius:10,fontWeight:700}}>
-              {opl.status_geral}
-            </span>
-            {opl.item_envio && <span style={{fontSize:9,background:'#f59e0b',color:'#78350f',padding:'1px 6px',borderRadius:10,fontWeight:700}}>📤 ENVIO DIRETO</span>}
+            <span className="acn-fraco">{opl.cliente_nome || '—'}</span>
+            <Selo familia={familiaDaOp(opl.status_geral)} ponto={false}>{opl.status_geral}</Selo>
+            {opl.item_envio && <Selo familia="atencao" ponto={false}><Icone path={mdiTruckFastOutline} size={14} /> ENVIO DIRETO</Selo>}
           </div>
-          <div style={{marginTop:3}}><PipelineStatus opl={opl} /></div>
-          <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{opl.tipo_projeto}</div>
-          <div style={{fontSize:10,marginTop:2}}>
+          <PipelineStatus opl={opl} />
+          <div className="acn-fraco">{opl.tipo_projeto}</div>
+          <div>
             <VeiculoOuEnvio o={opl} />
           </div>
         </div>
-        <div style={{textAlign:'right',minWidth:80}}>
-          <div style={{fontSize:11,fontWeight:700,color: minhas.length>0?'#7c3aed':'#94a3b8'}}>
+        <div className="acn-mkt-lado">
+          <div className={minhas.length>0 ? 'acn-forte' : 'acn-fraco'}>
             {minhas.length} registro{minhas.length!==1?'s':''}
           </div>
-          <div style={{fontSize:16,color:'#94a3b8'}}>{expanded ? '▲' : '▼'}</div>
+          <Icone path={expanded ? mdiChevronUp : mdiChevronDown} size={20} />
         </div>
       </div>
 
       {/* Expanded */}
       {expanded && (
-        <div style={{padding:'10px 12px'}}>
+        <div className="acn-mkt-corpo">
           {/* Historico */}
-          <div style={{fontWeight:700,fontSize:11,color:'#1e293b',marginBottom:6}}>Histórico de Intervenções MKT</div>
+          <div className="acn-forte">Histórico de Intervenções MKT</div>
           {minhas.length === 0 ? (
             leituraFalhou
-              ? <div style={{fontSize:11,color:'#94a3b8',fontStyle:'italic',marginBottom:8}}>Não foi possível ler as intervenções (veja o aviso no topo da tela).</div>
-              : <div style={{fontSize:11,color:'#94a3b8',fontStyle:'italic',marginBottom:8}}>Nenhuma intervenção registrada ainda.</div>
+              ? <div className="acn-ajuda">Não foi possível ler as intervenções (veja o aviso no topo da tela).</div>
+              : <div className="acn-ajuda">Nenhuma intervenção registrada ainda.</div>
           ) : (
-            <div style={{maxHeight:180,overflowY:'auto',marginBottom:8}}>
+            <div className="acn-mkt-historico">
               {minhas.map(v => (
-                <div key={v.id} style={{borderLeft:`3px solid ${itemNaoLido(v.id)?'#eab308':'#7c3aed'}`,padding:'5px 8px',marginBottom:5,
-                  background: itemNaoLido(v.id)?'#fefce8':'#faf5ff',borderRadius:'0 4px 4px 0'}}>
-                  <div style={{fontSize:9,color:'#94a3b8',marginBottom:2}}>
-                    <strong style={{color:'#7c3aed'}}>{v.criado_por_nome || v.criado_por}</strong> — {fmtDtHr(v.created_at)}
+                <div key={v.id} className={'acn-mkt-interv' + (itemNaoLido(v.id) ? ' nova' : '')}>
+                  <div className="acn-fraco">
+                    <strong className="acn-forte">{v.criado_por_nome || v.criado_por}</strong> — {fmtDtHr(v.created_at)}
                   </div>
-                  <div style={{fontSize:11,color:'#1e293b'}}><Linkify text={v.observacoes} /></div>
+                  <div><Linkify text={v.observacoes} /></div>
                 </div>
               ))}
             </div>
           )}
           {/* Nova intervencao */}
-          <div style={{display:'flex',gap:6,alignItems:'flex-end'}}>
-            <textarea
-              style={{flex:1,border:'1px solid #e2e8f0',borderRadius:4,padding:'5px 8px',fontSize:11,resize:'none',outline:'none'}}
+          <div className="acn-mkt-nova">
+            <textarea className="acn-input"
               rows={2} placeholder="Descreva a intervencao / material criado / observacao..."
               value={novaObs} onChange={e=>setNovaObs(e.target.value)} />
-            <button
-              style={{background:'#7c3aed',color:'white',border:'none',borderRadius:4,padding:'8px 12px',fontSize:11,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',opacity:salvando?0.6:1}}
-              onClick={salvarIntervencao} disabled={salvando}>
+            <Botao variante="primario" onClick={salvarIntervencao} disabled={salvando}>
               + Registrar
-            </button>
+            </Botao>
           </div>
         </div>
       )}
@@ -293,8 +278,6 @@ export default function MarketingTab({ currentUser }) {
 
   const fmtDtHr = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
 
-  const corStatusPedido = (s) => ({ Pendente:'#f59e0b', Realizado:'#22c55e', Cancelado:'#ef4444' })[s] || '#94a3b8';
-
   const oplsFiltradas = filtroStatus === 'Todos' ? opls
     : filtroStatus === 'Em Producao' ? opls.filter(o => (o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('CQ'))
     : filtroStatus === 'Concluidas' ? opls.filter(o => (o.status_geral||'').includes('Faturado') || (o.status_geral||'').includes('Aprovado CQ') || aguardaLiberacaoComercial(o.status_geral))
@@ -307,16 +290,10 @@ export default function MarketingTab({ currentUser }) {
   return (
     <div>
       {/* ABAS */}
-      <div style={{display:'flex',gap:0,marginBottom:10,borderRadius:6,overflow:'hidden',border:'2px solid #7c3aed'}}>
-        <button style={{flex:1,padding:'8px',background:aba==='opls'?'#7c3aed':'white',color:aba==='opls'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAba('opls')}>
-          📸 OPs Liberadas para Divulgação ({opls.length})
-        </button>
-        <button style={{flex:1,padding:'8px',background:aba==='pedidos'?'#7c3aed':'white',color:aba==='pedidos'?'white':'#7c3aed',border:'none',fontWeight:700,fontSize:11,cursor:'pointer'}}
-          onClick={()=>setAba('pedidos')}>
-          🎬 Pedidos de Registro {pedidosPendentes>0 ? `(${pedidosPendentes} pendente${pedidosPendentes>1?'s':''})` : ''}
-        </button>
-      </div>
+      <Abas className="acn-mkt-abas" ativa={aba} onChange={setAba} itens={[
+        { id: 'opls', icone: mdiCameraOutline, rotulo: `OPs Liberadas para Divulgação (${opls.length})` },
+        { id: 'pedidos', icone: mdiVideoOutline, rotulo: `Pedidos de Registro ${pedidosPendentes>0 ? `(${pedidosPendentes} pendente${pedidosPendentes>1?'s':''})` : ''}` },
+      ]} />
 
       {itensFalha.length > 0 && <Faixa tom="erro">Não foi possível ler {itensFalha.join('; ')}. A lista abaixo pode estar desatualizada.</Faixa>}
 
@@ -324,15 +301,10 @@ export default function MarketingTab({ currentUser }) {
       {aba === 'opls' && (
         <div>
           <div className="sec-card">
-            <div className="sec-hdr" style={{background:'#7c3aed'}}>
-              <span style={{color:'white'}}>OPs Autorizadas para Divulgação</span>
-              <div style={{display:'flex',gap:6}}>
-                {['Todos','Em Andamento','Em Producao','Concluidas'].map(f => (
-                  <button key={f} className="acn-btn"
-                    style={{background: filtroStatus===f?'white':'rgba(255,255,255,0.2)', color: filtroStatus===f?'#7c3aed':'white', fontSize:10, padding:'3px 8px'}}
-                    onClick={()=>setFiltroStatus(f)}>{f}</button>
-                ))}
-              </div>
+            <div className="sec-hdr">
+              <span>OPs Autorizadas para Divulgação</span>
+              <Chips rotulo="Situação" ativo={filtroStatus} onChange={setFiltroStatus}
+                itens={['Todos','Em Andamento','Em Producao','Concluidas'].map(f => ({ id: f, rotulo: f }))} />
             </div>
             <div className="sec-body">
               {loading ? (
@@ -366,33 +338,33 @@ export default function MarketingTab({ currentUser }) {
       {aba === 'pedidos' && (
         <div>
           <div className="sec-card">
-            <div className="sec-hdr" style={{background:'#7c3aed'}}>
-              <span style={{color:'white'}}>Pedidos de Registro — Foto / Video</span>
-              <button className="acn-btn" style={{background:'white',color:'#7c3aed',fontWeight:700}}
+            <div className="sec-hdr">
+              <span>Pedidos de Registro — Foto / Video</span>
+              <Botao variante="primario" pequeno
                 onClick={()=>{setPedidoForm(PEDIDO_VAZIO);setShowFormPedido(!showFormPedido);}}>
                 + Novo Pedido
-              </button>
+              </Botao>
             </div>
 
             {/* FORM NOVO PEDIDO */}
             {showFormPedido && (
-              <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0',background:'#faf5ff'}}>
-                <div style={{fontWeight:700,fontSize:11,color:'#7c3aed',marginBottom:8}}>Novo Pedido de Registro</div>
+              <div className="sec-body acn-form-cheio acn-mkt-form">
+                <div className="acn-forte">Novo Pedido de Registro</div>
                 <div className="form-row">
-                  <div className="form-group" style={{flex:2}}>
+                  <div className="form-group acn-campo-largo">
                     <label className="acn-label">Local dos Registros *</label>
-                    <input className="acn-input" style={{width:'100%'}} placeholder="Ex: Linha de producao, Patio, Sala de montagem..."
+                    <input className="acn-input" placeholder="Ex: Linha de producao, Patio, Sala de montagem..."
                       value={pedidoForm.local_registro} onChange={e=>setPedidoForm({...pedidoForm,local_registro:e.target.value})} />
                   </div>
                   <div className="form-group">
                     <label className="acn-label">Horario / Turno</label>
-                    <select className="acn-input" style={{width:'100%'}} value={pedidoForm.hora_turno} onChange={e=>setPedidoForm({...pedidoForm,hora_turno:e.target.value})}>
+                    <select className="acn-input" value={pedidoForm.hora_turno} onChange={e=>setPedidoForm({...pedidoForm,hora_turno:e.target.value})}>
                       {TURNOS.map(t=><option key={t}>{t}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
                     <label className="acn-label">Tipo de Registro</label>
-                    <select className="acn-input" style={{width:'100%'}} value={pedidoForm.tipo} onChange={e=>setPedidoForm({...pedidoForm,tipo:e.target.value})}>
+                    <select className="acn-input" value={pedidoForm.tipo} onChange={e=>setPedidoForm({...pedidoForm,tipo:e.target.value})}>
                       {TIPOS_REG.map(t=><option key={t}>{t}</option>)}
                     </select>
                   </div>
@@ -400,48 +372,50 @@ export default function MarketingTab({ currentUser }) {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="acn-label">Categoria *</label>
-                    <select className="acn-input" style={{width:'100%'}} value={pedidoForm.categoria} onChange={e=>setPedidoForm({...pedidoForm,categoria:e.target.value})}>
+                    <select className="acn-input" value={pedidoForm.categoria} onChange={e=>setPedidoForm({...pedidoForm,categoria:e.target.value})}>
                       {CATEGORIAS.map(c=><option key={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
                     <label className="acn-label">OP Vinculada (opcional)</label>
-                    <input className="acn-input" style={{width:'100%'}} placeholder="Numero da OPL ou OPD..."
+                    <input className="acn-input" placeholder="Numero da OPL ou OPD..."
                       value={pedidoForm.numero_opl} onChange={e=>setPedidoForm({...pedidoForm,numero_opl:e.target.value})} />
                   </div>
-                  <div className="form-group" style={{flex:2}}>
+                  <div className="form-group acn-campo-largo">
                     <label className="acn-label">Observacoes / Instrucoes</label>
-                    <input className="acn-input" style={{width:'100%'}} placeholder="Detalhe o que deve ser registrado..."
+                    <input className="acn-input" placeholder="Detalhe o que deve ser registrado..."
                       value={pedidoForm.observacoes} onChange={e=>setPedidoForm({...pedidoForm,observacoes:e.target.value})} />
                   </div>
                 </div>
-                <div style={{display:'flex',gap:6,marginTop:8}}>
-                  <button className="acn-btn" style={{background:'#7c3aed',flex:1,padding:'7px',opacity:salvandoPedido?0.6:1}} onClick={salvarPedido} disabled={salvandoPedido}>
+                <div className="acn-acoes-linha quebra">
+                  <Botao variante="primario" onClick={salvarPedido} disabled={salvandoPedido}>
                     {salvandoPedido ? 'Salvando...' : 'CRIAR PEDIDO'}
-                  </button>
-                  <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setShowFormPedido(false)}>Cancelar</button>
+                  </Botao>
+                  <Botao onClick={()=>setShowFormPedido(false)}>Cancelar</Botao>
                 </div>
               </div>
             )}
 
             {/* LISTA PEDIDOS */}
-            <div className="sec-body" style={{overflowX:'auto'}}>
+            <div className="sec-body">
               {pedidos.length === 0 ? (
                 falhas.pedidos ? null : <div className="acn-empty">Nenhum pedido de registro criado.</div>
               ) : (
-                <table>
-                  <thead><tr>
-                    <th>Data</th><th>OP</th><th>Local</th><th>Horario/Turno</th>
-                    <th>Tipo</th><th>Categoria</th><th>Observacoes</th><th>Solicitante</th><th>Status</th><th>Acao</th>
-                  </tr></thead>
-                  <tbody>
-                    {pedidos.map(p => (
-                      <LinhaPedido key={p.id} p={p} fmtDtHr={fmtDtHr} corStatusPedido={corStatusPedido}
-                        atualizarStatusPedido={atualizarStatusPedido} currentUser={currentUser}
-                        naoLido={pedidosNaoLidos.has(String(p.id))} marcarLidoLocal={marcarPedidoLidoLocal} />
-                    ))}
-                  </tbody>
-                </table>
+                <div className="acn-rolagem">
+                  <table className="acn-tabela acn-compacta">
+                    <thead><tr>
+                      <th>Data</th><th>OP</th><th>Local</th><th>Horario/Turno</th>
+                      <th>Tipo</th><th>Categoria</th><th>Observacoes</th><th>Solicitante</th><th>Status</th><th>Acao</th>
+                    </tr></thead>
+                    <tbody>
+                      {pedidos.map(p => (
+                        <LinhaPedido key={p.id} p={p} fmtDtHr={fmtDtHr}
+                          atualizarStatusPedido={atualizarStatusPedido} currentUser={currentUser}
+                          naoLido={pedidosNaoLidos.has(String(p.id))} marcarLidoLocal={marcarPedidoLidoLocal} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

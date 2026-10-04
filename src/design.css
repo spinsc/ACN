@@ -891,3 +891,32 @@ html body select.acn-conc-sel { width: auto; min-width: 220px; padding: 4px 8px 
 .acn-conc-obs { flex: 1; min-width: 160px; }
 .acn-conc-nota { margin-top: 6px; }
 @media (max-width: 480px) { .acn-conc-linha { flex-wrap: wrap; } .acn-conc-registro { flex-basis: 100%; } }
+/* ── Marketing (Etapa 12e4, 04/10/2026): só aparência ───────────────────────────────────────────────────── */
+.acn-mkt-abas { margin-bottom: 10px; }
+/* o cartão de cada OP: cabeçalho que abre/fecha e, aberto, o histórico de intervenções e o campo de uma nova */
+.acn-mkt-cartao { margin-bottom: 8px; overflow: hidden; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r3); }
+.acn-mkt-cab { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; background: var(--acn-surface-2); }
+.acn-mkt-cab.aberto { border-bottom: 1px solid var(--acn-line); }
+.acn-mkt-info { flex: 1; display: grid; gap: 3px; }
+.acn-mkt-linha1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-mkt-lado { display: grid; justify-items: end; gap: 2px; min-width: 80px; text-align: right; color: var(--acn-muted); }
+/* alteração que a pessoa ainda não viu: o mesmo filete amarelo das linhas "não vistas" das tabelas */
+.acn-mkt-cartao.nova { box-shadow: inset 3px 0 0 #d4a106; background: color-mix(in srgb, #d4a106 8%, var(--acn-surface)); }
+.acn-mkt-cartao.nova .acn-mkt-cab { background: color-mix(in srgb, #d4a106 14%, var(--acn-surface)); }
+/* as quatro etapas (Engenharia, PCP/Almox, Produção, CQ) ligadas por um fio */
+.acn-mkt-pipe { display: flex; align-items: center; gap: 0; margin: 2px 0; }
+.acn-mkt-elo { width: 12px; height: 1px; background: var(--acn-line); flex-shrink: 0; }
+.acn-mkt-elo.ok { background: var(--acn-ok); }
+.acn-mkt-corpo { display: grid; gap: 8px; padding: 10px 12px; }
+.acn-mkt-historico { display: grid; gap: 5px; max-height: 180px; overflow-y: auto; }
+.acn-mkt-interv { padding: 5px 8px; background: var(--acn-surface-2); border-left: 3px solid var(--acn-brand); border-radius: 0 var(--acn-r2) var(--acn-r2) 0; }
+.acn-mkt-interv.nova { border-left-color: #d4a106; background: color-mix(in srgb, #d4a106 10%, var(--acn-surface)); }
+.acn-mkt-nova { display: flex; align-items: flex-end; gap: 6px; }
+.acn-mkt-nova textarea { flex: 1; resize: none; }
+/* em tela estreita a caixa de texto ocupa a linha e o botão vai embaixo (ao lado dele a caixa ficava com 3 linhas de dica cortadas) */
+@media (max-width: 480px) { .acn-mkt-nova { flex-wrap: wrap; } .acn-mkt-nova textarea { flex-basis: 100%; } }
+/* o formulário "Novo Pedido de Registro" abre dentro do quadro, acima da lista */
+.acn-mkt-form { display: grid; gap: 8px; background: var(--acn-surface-2); border-bottom: 1px solid var(--acn-line); }
+.acn-mkt-form .form-row { margin: 0; }
+/* a observação do pedido pode vir como uma sequência colada, sem espaço: quebra em qualquer ponto em vez de esticar a tabela */
+.acn-mkt-obs { min-width: 120px; max-width: 240px; overflow-wrap: anywhere; }
