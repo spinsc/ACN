@@ -16,7 +16,7 @@ import { normalizarBusca, combinaBusca } from './SearchUtils';
 import { SelectBusca, Botao, Faixa, Selo } from './Interface';
 import { confirmar } from './Feedback';
 import { logChange } from './AuditSystem';
-import { ehAdminOuGerente } from './utils/permissoes';
+import { temPoderDeGerente } from './utils/permissoes';
 import { TIPOS_VEICULO, anosDoModelo, anosDoGrupo, carregarVeiculos, textoVeiculo, faixaDeAnos } from './Veiculos';
 
 const ANO_CORTE = 2010;   // de 2010 pra frente aparece direto; antes, sob pedido
@@ -469,9 +469,11 @@ export function SelectVeiculo({ valor, onChange, currentUser, style, compacto = 
   useEffect(() => { recarregar(); }, [recarregarEm]);
 
   // Corrigir a ficha escolhida sem sair da OP (30/09/2026): quem vê o modelo errado na OP está
-  // olhando para este campo. Só Admin e Gerente, como a atualização da FIPE.
+  // olhando para este campo. Quem corrige: Admin, gerente e a equipe de Comercial/CRM (e de Licitações, que a regra do
+  // sistema trata igual) — resposta do usuário em 01/10/2026, aplicada em 04/10/2026 (Etapa 7.38). Antes só Admin e
+  // Gerente, e a equipe que cadastra as fichas (Comercial/CRM) via o erro na OP e não podia corrigir.
   const fichaAtual = valor ? veiculos.find(v => v.id === valor) : null;
-  const podeEditarFicha = !compacto && !!fichaAtual && ehAdminOuGerente(currentUser);
+  const podeEditarFicha = !compacto && !!fichaAtual && temPoderDeGerente(currentUser);
 
   return (
     <>
@@ -543,7 +545,8 @@ export function VeiculoDaOp({ veiculoId, onChange, currentUser, compacto = false
  * A lista mostra quem cadastrou, quando e quantas OPs usam cada ficha — o que o usuário perguntou
  * ao pedir a correção.
  *
- * Só Admin e Gerente editam. Não há "excluir": ficha em uso por OP não sai do catálogo, e a regra
+ * Editam Admin, gerentes e a equipe de Comercial/CRM e Licitações (mesma regra do "✏️ Editar" dentro da OP;
+ * decisão de 04/10/2026, Etapa 7.38). Não há "excluir": ficha em uso por OP não sai do catálogo, e a regra
  * do projeto é não apagar dado do usuário.
  */
 export function PainelFichasVeiculos({ currentUser }) {
@@ -551,7 +554,7 @@ export function PainelFichasVeiculos({ currentUser }) {
   const [usos, setUsos] = useState({});
   const [busca, setBusca] = useState('');
   const [editando, setEditando] = useState(null);
-  const pode = ehAdminOuGerente(currentUser);
+  const pode = temPoderDeGerente(currentUser);
 
   const recarregar = async () => {
     const lista = await carregarVeiculos();

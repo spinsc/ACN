@@ -1685,7 +1685,7 @@ C3: a caixinha vem **desmarcada**, salvar só o ano não toca nas OPs, marcada p
 **O que ficou de fora / limites:**
 
 - **Nenhuma das 4 fichas foi corrigida ainda** — falta o **modelo exato** de cada uma (ver "Perguntas em aberto"); quem souber corrige pela tela, ou eu aplico pelo banco com a contagem.
-- **Quem edita:** só Admin e Gerente (`ehAdminOuGerente`, a mesma regra da edição completa da OP). A equipe de Comercial/CRM, que cadastrou as fichas, **não** edita; dar a ela o poder é trocar por `temPoderDeGerente` numa linha — decisão do usuário.
+- **Quem edita:** só Admin e Gerente (`ehAdminOuGerente`, a mesma regra da edição completa da OP). A equipe de Comercial/CRM, que cadastrou as fichas, **não** edita; dar a ela o poder é trocar por `temPoderDeGerente` numa linha — decisão do usuário. **(Mudado em 04/10/2026, Etapa 7.38: passam a editar também Comercial, CRM e Licitações.)**
 - **Desativar ficha** (tirar da lista sem apagar) não entrou: não foi pedido.
 - Só as OPs ligadas à ficha por `veiculo_id` têm o "Modelo" trocado; OP sem ficha (texto digitado à mão) segue como está.
 - O caminho de gravação foi exercitado **por simulação**; nada foi gravado na produção.
@@ -2213,6 +2213,23 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 - **Criar pedido e registrar intervenção já avisavam o erro** (e mantinham o que foi digitado): não foram mexidos. O **"marcar como visto"** (gravação silenciosa de leitura) segue sem conferir o resultado — só afeta o destaque amarelo.
 - A **atualização automática** continua a cada 60 s e silenciosa; só deixou de apagar a lista.
 - Nenhum dado foi tocado.
+
+### ✅ Etapa 7.38 — Comercial, CRM e Licitações também corrigem a ficha de veículo (R10)
+
+**Feito em:** 04/10/2026, aplicando a resposta **R10** da rodada de 01/10/2026 ("Admin, Gerente e Comercial/CRM"). **Nenhum dado foi alterado.**
+
+**Pergunta feita ao usuário na hora** (a resposta dizia "Comercial/CRM", mas a regra pronta do sistema, `temPoderDeGerente`, **também inclui a equipe de Licitações**, 2 pessoas ativas): ele escolheu **usar a regra do sistema, com Licitações** (a de 17/09/2026: a equipe do setor tem os poderes do gerente do setor; e a Licitações também gera OP com veículo).
+
+**O que mudou** (`VeiculoCadastro.tsx`, duas linhas de regra e os comentários; **nenhuma tabela, coluna, gatilho nem regra do banco** — conferido: a tabela `veiculos` só tem uma política aberta e nenhum gatilho): quem vê o **"✏️ Editar"** ao lado do campo de veículo, dentro da criação e da edição da OP, e o **botão "Editar" da lista de fichas do Admin** passam de `ehAdminOuGerente` para **`temPoderDeGerente`**: **Admin, qualquer "Gerente …", Comercial, CRM e Licitações**. Quem **ganha** o poder: **só** Comercial, CRM e Licitações (conferido rodando a regra para os 17 perfis do banco). Continua **sem botão de excluir**, e o resto do que se faz na janela (trocar o "Modelo" das OPs ligadas só com a confirmação, o histórico) é o de antes.
+
+**Como foi testado** (`teste_738`): **15/15 depois; 10/15 antes** (cópia separada da versão antiga). **Regra:** a função de verdade, executada para os 17 perfis, mostra que **só Comercial, Licitações e CRM mudam**. **Na tela:** uma sessão de cada perfil (12 perfis) abre o CRM → "Nova OP / OS", **escolhe um veículo do catálogo real (só leitura)** e olha se o "✏️ Editar" aparece: **Admin, os quatro Gerentes, Comercial, CRM e Licitações veem; Engenharia, Almoxarifado, Compras e RH não veem**; antes da escolha do veículo ninguém vê. **Fluxo do Comercial:** abre a janela "Editar veículo", salva e a gravação chega à ficha (`veiculos`) e ao histórico de alterações — **só registradas, bloqueadas** (nada foi gravado no banco). 0 erros de console. Build e typecheck ok.
+
+**O que ficou de fora / limites:**
+
+- **A lista de fichas do Admin** fica dentro da aba Admin: só Admin chega a ela; o ganho real do Comercial é o "✏️ Editar" **dentro da OP**.
+- **A atualização do espelho da FIPE** (`PainelFipeSync`) **segue só Admin e Gerente**: não faz parte da R10.
+- As sessões do teste são **simuladas** (o perfil foi escrito na sessão): a regra é por perfil, que o login monta a partir do cadastro; **os perfis reais do cadastro foram usados só como nomes**.
+- **R9** (corrigir as 3 fichas com nome curto e desativar a "Toro" antiga) **continua pendente**: agora o Comercial também pode corrigir pela tela.
 
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
@@ -3180,7 +3197,6 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 **Cadastros e RH**
 
 - **R9 — As 4 fichas de veículo (7.6/7.7).** *Resposta:* "Equipe corrige pela tela, mas 2 desses 4 modelos já foram corrigidos, certo?" **Medido em 01/10/2026: só 1 de 4.** A do **Toro** foi resolvida: o Thiago criou a ficha "Toro Freedom" em 30/09 às 18h e a OP D0778.2609 aponta para ela. **Seguem com o nome curto:** **Renegade 4x4** (39 OPs, lote 1673.2609), **Titano 4x4** (1 OP, A1678.2609; a observação da ficha diz "TITANO VOLCANO MULTIJET TURBODIESEL 4X4 DIESEL 26/26 AUTO") e **C3** (2 OPs, 1669.25609/01 e /02, que dizem "C3 YOU"). *A fazer:* **dizer ao usuário que são 3, não 2** (ele pode ter corrigido de um jeito que não enxergo) e que a equipe corrige pela tela "Editar veículo"; e **desativar a ficha antiga "Toro"** (ativa, 0 OPs) — **autorizado** —, **só se não tiver estrutura de material ligada** (`veiculo_item_materiais`); conferir, desativar e relatar. Nada apagado. 🟠 P
-- **R10 — Quem edita a ficha (7.7):** **Admin, Gerente e Comercial/CRM.** Trocar a regra `ehAdminOuGerente` por uma que inclua o Comercial (o plano da 7.7 sugeria `temPoderDeGerente` — **conferir se esse inclui o Comercial/CRM** antes de usar). Sem botão de excluir. 🟢 P
 - **R11 — Percentual de comissão dos serralheiros (7.8).** *Resposta:* "**RH define pessoa a pessoa**" e **um percentual por pessoa** (sem segundo percentual para a adaptação). **Pendente do RH:** o percentual de JORGE FERREIRA, MARLON PAULO, SALOMÃO e WESLEI (hoje "não recebe comissão"; só o MURIEL tem, 0,5%). Até lá, comissão R$ 0,00 com o selo "sem percentual no RH" (já é assim). **Nenhum código a fazer**; quando o RH informar, ligar "recebe comissão" e o percentual na tela do RH. ⚪
 - **R12 — Os 6 cadastros escondidos pela lixeira (7.9):** **todos continuam escondidos**; nada a fazer. ⚪
 
@@ -3207,7 +3223,7 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | R7 | `ver_valores` valendo (+ ligar a marca de Fernando e Luiz) | 🔴 + 🟠 | G | depois, **desenhar com o usuário**; testar a sessão como o login a monta; **medir de novo** antes das 2 linhas do Admin | ⬜ |
 | R8 | Perguntas do carro respondidas na abertura da OP | 🔴 | G | junto de R1 | ⬜ |
 | R9 | 3 fichas para a equipe + desativar a "Toro" antiga | 🟠 | P | rodada própria, **depois da 12e3 e da 12e4** (04/10/2026) — **medir de novo antes** (dizer ao usuário que são 3 fichas) | ⬜ |
-| R10 | Comercial também edita a ficha de veículo | 🟢 | P | **junto da 12e4** (04/10/2026): pequena, uma por sessão entre as fatias; conferir `temPoderDeGerente` antes | ⬜ |
+| R10 | Comercial também edita a ficha de veículo | 🟢 | P | **agora** (04/10/2026): pequena, entre a 12e4 e a 12e5 | ✅ aplicada em 04/10/2026 (Etapa 7.38) |
 | R11 | Percentual dos serralheiros (espera o RH) | ⚪ | — | — | ⬜ espera o RH |
 | R12 | 6 cadastros escondidos | ⚪ | — | — | ✅ nada a fazer |
 | R13 | Relatório de Técnicos conta todas as OPs | 🟢 | P | **agora** (02/10/2026): pedido do usuário de seguir com as respostas pequenas | ✅ aplicada em 02/10/2026 (Etapa 7.32) |
@@ -3342,4 +3358,5 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | 04/10/2026 | **Conciliação bancária migrada (12e3):** a tela e a janela de importação no molde das telas já migradas, **sem mudar textos, colunas, botões, consultas ou gravação** (41 cenários iguais nas duas versões; a tela não tem dado real). **Suposições visuais minhas (aceitas pela regra R22):** os números dos cartões deixam de ser coloridos (a cor fica no ponto do rótulo), "Conciliar" é o botão principal da linha e do painel, a situação vira selo por família (Ignorado cinza), o painel de conciliar vira quadro do sistema, a janela tem 500 px (era 520), e o 📥 e o 🏷️ viram ícones (o ✨ e o 🔍 ficam). A barra de abas do Financeiro **não** foi mexida (é do `FinanceiroTab`). |
 | 04/10/2026 | **Marketing — gravação e leitura que falham (Etapa 7.37):** os botões REALIZADO / CANCELAR / REABRIR do pedido de registro passam a **avisar o erro do banco, não registrar no histórico e não recarregar** quando a gravação é recusada; a leitura que falha **mantém a lista na tela** e mostra uma **faixa vermelha** (e não "Nenhuma OP liberada" / "Nenhum pedido"); a atualização automática de 60 s deixa de **apagar a lista** numa falha. Correção **minha**, achada ao ler a tela (nenhum dado foi alterado). |
 | 04/10/2026 | **Marketing migrada (12e4):** a tela no molde das telas já migradas, **sem mudar textos, colunas, botões, filtros, regras do pipeline, consultas ou gravação** (29 cenários iguais nas duas versões e 3 de 3 iguais com o dado real). **Suposições visuais minhas (aceitas pela regra R22):** a **cor roxa do Marketing sai** (a cor da marca e as famílias de status entram no lugar); as quatro etapas do cartão viram selos ligados por um fio; "REALIZADO" é o botão principal, "CANCELAR" o vermelho vazado; o fundo colorido da linha por status do pedido sai (o status está no selo); a data e o horário/turno da tabela de pedidos podem quebrar em duas linhas quando falta espaço; o 📸, o 🎬 das abas, o 📤 e a seta ▲▼ viram ícones. |
+| 04/10/2026 | **Quem corrige a ficha de veículo (R10, Etapa 7.38, resposta do usuário em pergunta clicável):** **Admin, qualquer "Gerente …", Comercial, CRM e Licitações** (a regra `temPoderDeGerente` do sistema, de 17/09/2026; a Licitações entra porque a regra a trata igual e ela também gera OP com veículo). Sem botão de excluir. Ganham o poder **só** Comercial, CRM e Licitações. |
 | 04/10/2026 | **5.1c medida de novo:** segue adiada (7 aprovações, 1 pessoa, 1 dia; nenhuma desde 30/09). Sem aprovação nova não há como provar que as abas antigas foram renovadas. |
