@@ -766,6 +766,8 @@ mesmo motivo: não houve aprovação para testar. Voltar a medir quando o CQ vol
 
 **Medido de novo em 30/09/2026 (~23h30 no horário de Brasília, ao abrir a 12b3): idêntico, 5.1c segue adiada.** Aprovações no CQ depois do deploy: **7**, todas com o nome oficial, **0** com o antigo, de **uma pessoa e um dia** (30/09, entre 17h12 e 17h15 no horário de Brasília); OPs com o nome antigo agora: **0** (oficial: **194**). Nenhuma aprovação nova desde a medição anterior. Voltar a medir em 2 ou 3 dias úteis.
 
+**Medido de novo em 04/10/2026 (domingo): idêntico, 5.1c segue adiada.** Aprovações no CQ depois do deploy do nome oficial: **7**, todas com o nome oficial, **0** com o antigo, de **uma pessoa e um dia** (30/09); OPs com o nome antigo agora: **0** (oficial: **194**). **Nenhuma aprovação nova desde 30/09** (a de 1º e a de 2/10 não existem: o CQ não aprovou nada nesses dias). Voltar a medir quando houver aprovações de outras pessoas.
+
 #### ✅ 5.2 — Vocabulário sem dado: `Sanado` e o Financeiro
 
 **Feito em:** 29/09/2026 (código; **nenhum dado foi alterado**).
@@ -2177,6 +2179,24 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 - O envio do WhatsApp **não confirma** a entrega (`notificarEvento` registra o erro no console, sem aviso na tela): fora desta fatia.
 - Os componentes compartilhados da tela (`LinkOpl`, `BuscaOplInput`, `VeiculoOuEnvio`, `OplDetalheModal`, `OplMovimentadas`, `DemandaFooter`) **não foram mexidos**.
 
+### ✅ Etapa 7.36 — Conciliação bancária: "Desfazer" seguia como se tivesse desfeito e as leituras que falhavam pareciam "nenhum lançamento"
+
+**Feito em:** 04/10/2026. **Achado** ao ler a tela `ConciliacaoBancaria` para migrá-la (a lição de 7.18 a 7.35), **corrigido antes** do "antes" da migração visual (12e3). **Nenhum dado foi alterado.**
+
+**Causa e o que mudou** (`ConciliacaoBancaria.tsx`, só as funções de desfazer e de ler):
+
+- **"Desfazer"** (volta um lançamento conciliado para pendente): o resultado da gravação **não era conferido**. Com a gravação recusada a tela **recarregava a lista como se tivesse desfeito** e não avisava nada. Agora **avisa o erro do banco** ("Não foi possível desfazer a conciliação: …"), **não recarrega** e o lançamento continua conciliado, com o "Desfazer".
+- **Leitura dos lançamentos do mês que falha:** a tela dizia **"Nenhum lançamento neste mês. Importe o extrato do banco"** e o cartão "Pendentes" dizia **"tudo conciliado"**, como se o mês estivesse vazio. Agora uma **faixa vermelha** diz "Não foi possível ler os lançamentos do extrato (motivo)", o cartão diz "leitura falhou" e a mensagem de "nenhum lançamento" **não aparece**.
+- **Leituras de apoio que falham** (a lista de contas, o que já foi conciliado e os registros do sistema que servem de sugestão — OPs faturadas, faturamentos e pedidos de compra, despesas): antes ficavam **em silêncio** e o painel de conciliar dizia **"Nada no sistema com este valor"**. Agora a faixa diz **o que não foi lido** ("As sugestões de conciliação podem estar incompletas") e o painel diz que **não conseguiu ler para sugerir**, em vez de afirmar que não há nada.
+
+**Como foi testado** (`teste_736` sobre 41 cenários, navegador, leitura e gravação **simuladas**; dados inventados ZZ; a tela **não tem nenhum dado real**: 0 extratos e 0 lançamentos em 04/10/2026): **19/19 depois; 10/19 antes** — medido contra uma **cópia separada da versão antiga**: falhavam exatamente os 9 pontos do desfazer recusado e das leituras que falham. Comparando os **41 cenários** entre a versão antiga e a nova, **37 saem idênticos** (fotografia do que a tela mostra, o que seria gravado, os avisos e as janelas) e **só 4 diferem — os 4 do defeito**. 0 erros de console.
+
+**O que ficou de fora / limites:**
+
+- **Importar com a segunda gravação recusada** (os lançamentos) **deixa o cabeçalho do extrato gravado** (a tela avisa "Erro ao gravar os lançamentos"): não apago nada para desfazer; já era assim e não foi mexido.
+- **`fetchCentrosCusto`** (compartilhado, em `CentroCustoShared.tsx`) também engole o erro de leitura: se falhar, o nome do centro de custo some da coluna "Conciliado com" sem aviso. Fora desta fatia (mexe em todas as telas de centro de custo).
+- **Nenhum extrato real foi importado**: a leitura de OFX/CSV foi testada com arquivos inventados no formato padrão (OFX de banco brasileiro costuma ter diferenças; o primeiro extrato real é o teste de verdade).
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.
@@ -3091,16 +3111,16 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 
 | # | Assunto | Natureza | Tam. | Momento | Estado |
 |---|---|---|---|---|---|
-| R1 | OP automática: campos obrigatórios e "Devolvida Comercial" | 🔴 | G | depois da Etapa 12, **desenhar com o usuário** (junto de R8 e R3: o "fluxo da OP até a Engenharia") | ⬜ |
+| R1 | OP automática: campos obrigatórios e "Devolvida Comercial" | 🔴 | G | **a Etapa 12 acabou em 02/10: pronto para desenhar com o usuário** (junto de R8 e R3: o "fluxo da OP até a Engenharia"); perguntado ao fim da sessão de 04/10/2026 | ⬜ |
 | R2 | Selo "onde está" em qualquer coluna com OP | 🟢 | P | **agora** (02/10/2026): pedido do usuário de seguir com as respostas pequenas | ✅ aplicada em 02/10/2026 (Etapa 7.30) |
 | R3 | OP devolvida: contador + notificar quem abriu e o gerente | 🔴 | M | junto de R1 e R8 | ⬜ |
-| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | rodada própria, depois — **medir de novo antes** (dado real, 5 OPs) | ⬜ |
+| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | rodada própria, **depois da 12e3 e da 12e4** (04/10/2026) — **medir de novo antes** (dado real, 5 OPs) | ⬜ |
 | R5 | Erro fica até fechar | 🟢 | P | **agora** (02/10/2026): pedido do usuário de seguir com as respostas pequenas | ✅ aplicada em 02/10/2026 (Etapa 7.31) |
 | R6 | Painel de aprovação: contador no menu + alçadas | 🔴 | M | depois, **desenhar com o usuário** (confirmar quem aprova cada alçada) | ⬜ |
 | R7 | `ver_valores` valendo (+ ligar a marca de Fernando e Luiz) | 🔴 + 🟠 | G | depois, **desenhar com o usuário**; testar a sessão como o login a monta; **medir de novo** antes das 2 linhas do Admin | ⬜ |
 | R8 | Perguntas do carro respondidas na abertura da OP | 🔴 | G | junto de R1 | ⬜ |
-| R9 | 3 fichas para a equipe + desativar a "Toro" antiga | 🟠 | P | rodada própria, depois — **medir de novo antes** (dizer ao usuário que são 3 fichas) | ⬜ |
-| R10 | Comercial também edita a ficha de veículo | 🟢 | P | rodada própria, depois (pequena; conferir `temPoderDeGerente`) | ⬜ |
+| R9 | 3 fichas para a equipe + desativar a "Toro" antiga | 🟠 | P | rodada própria, **depois da 12e3 e da 12e4** (04/10/2026) — **medir de novo antes** (dizer ao usuário que são 3 fichas) | ⬜ |
+| R10 | Comercial também edita a ficha de veículo | 🟢 | P | **junto da 12e4** (04/10/2026): pequena, uma por sessão entre as fatias; conferir `temPoderDeGerente` antes | ⬜ |
 | R11 | Percentual dos serralheiros (espera o RH) | ⚪ | — | — | ⬜ espera o RH |
 | R12 | 6 cadastros escondidos | ⚪ | — | — | ✅ nada a fazer |
 | R13 | Relatório de Técnicos conta todas as OPs | 🟢 | P | **agora** (02/10/2026): pedido do usuário de seguir com as respostas pequenas | ✅ aplicada em 02/10/2026 (Etapa 7.32) |
@@ -3109,7 +3129,7 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | R16 | Datas um dia antes: corrigir os 52 lugares | 🟢 | M | etapa própria, um arquivo por vez; `SacTab` ✅ **feito na Etapa 7.21**; **`RelatoriosTab` ✅ feito na Etapa 7.33** (02/10/2026: o formatador servia 14 colunas e saía um dia antes em 1.159 de 1.159 datas); restam **45 lugares em 23 arquivos pela contagem do plano** (recontar ao tocar em cada arquivo: a separação "data pura × data com hora" é por coluna) — próximo: `FormacaoPrecosTab` (7), depois `AcnTabShared` (5) | ⬜ |
 | R17 | CEP validado em todo campo de CEP | 🔴 | G | depois, **desenhar com o usuário** (confirmar as quatro suposições do CEP, R22) | ⬜ |
 | R18 | 4 fretes com CEP de zeros | ⚪ | — | — | ✅ nada a fazer |
-| R19 | Serviços fora da lista de separação | 🟢 | P | rodada própria, depois (pequena, Almoxarifado/BOM) | ⬜ |
+| R19 | Serviços fora da lista de separação | 🟢 | P | **depois da R10, junto da 12e4 ou da migração do Almoxarifado** (04/10/2026; pequena, Almoxarifado/BOM) | ⬜ |
 | R20 | Mensagem do Histórico de comissões só depois de buscar | 🟢 | P | **agora** (01/10/2026), logo depois da R15 | ✅ aplicada em 01/10/2026 (Etapa 7.26) |
 | R21 | Tela morta do `ProducaoTab` | ⚪ | — | — | ✅ nada a fazer |
 | R22 | Suposições: visuais aceitas; regras confirmadas ao tocar | ⚪ | — | ao tocar em cada suposição de regra de negócio | ⬜ |
@@ -3231,3 +3251,5 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | 01/10/2026 | **Histórico das comissões (R20, Etapa 7.26):** "Nenhum fechamento encontrado para o período." só aparece **depois do Buscar**; antes a tela pede o período, e **trocar o mês ou o ano volta a pedir a busca** (a mensagem de uma busca vazia era do período anterior). A tabela de uma busca com resultado continua na tela quando se troca o mês, como sempre. O texto do pedido ("Escolha o mês e o ano e clique em Buscar.") é meu. |
 | 01/10/2026 | **Tipos de serviço do SAC vazios (resposta do usuário ao achado da 12d2):** **nada a fazer** — a lista está vazia só porque o SAC começou a ser usado de fato hoje e ainda vai ser preenchida. Os 4 tipos "de mentira" mostrados quando a tabela vem vazia ficam como estão. |
 | 01/10/2026 | **Como perguntar (pedido do usuário):** as perguntas que forem necessárias durante o trabalho são feitas **na hora em que surgem**, não em lote no fim. |
+| 04/10/2026 | **Conciliação bancária — gravação e leitura que falham (Etapa 7.36):** "Desfazer" passa a **avisar o erro do banco e não recarregar** a lista como se tivesse desfeito; a leitura dos lançamentos que falha mostra uma **faixa vermelha** (e não "Nenhum lançamento neste mês" nem "tudo conciliado"); as leituras de apoio que falham dizem **o que não foi lido** e o painel de conciliar deixa de afirmar "Nada no sistema com este valor". Correção **minha**, achada ao ler a tela (nenhum dado foi alterado; a tela ainda não tem dado real). |
+| 04/10/2026 | **5.1c medida de novo:** segue adiada (7 aprovações, 1 pessoa, 1 dia; nenhuma desde 30/09). Sem aprovação nova não há como provar que as abas antigas foram renovadas. |

@@ -17,7 +17,7 @@ import { supabase } from './supabaseClient';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
-import { diaISO } from './Interface';
+import { diaISO, Faixa } from './Interface';
 
 const brl = (v: number) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dataBr = (d: string) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
@@ -121,7 +121,11 @@ async function carregarCandidatos() {
     supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,fornecedor,valor_compra,data_prevista_recebimento,data_criacao,status_compra').not('valor_compra', 'is', null),
     supabase.from('centro_custo_despesas').select('id,descricao,valor,data'),
   ]);
-  return [
+  // Etapa 7.36 (04/10/2026): leitura que falha não pode virar "nada no sistema com este valor". Antes o erro era
+  // ignorado e a lista de candidatos saía vazia, sem nenhum aviso; agora a tela diz o que não conseguiu ler.
+  const falhas = [['as OPs faturadas', ops], ['os faturamentos de compra', fats], ['os pedidos de compra', compras], ['as despesas', despesas]]
+    .filter(([, r]: any) => r.error).map(([nome, r]: any) => `${nome} (${r.error.message})`);
+  const lista = [
     ...(ops.data || []).map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: diaDoRegistro(o.data_emissao_nf || o.data_nf),
       descricao: `OP ${o.opl} — ${o.cliente_nome || ''}${o.numero_nf ? ` · NF ${o.numero_nf}` : ''}` })),
     ...(fats.data || []).map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: diaDoRegistro(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em),
@@ -131,6 +135,7 @@ async function carregarCandidatos() {
     ...(despesas.data || []).map((d: any) => ({ sentido: -1, tipo: 'despesa', id: String(d.id), valor: Number(d.valor), data: diaDoRegistro(d.data),
       descricao: `Despesa — ${d.descricao || ''}` })),
   ].filter(c => Number.isFinite(c.valor) && c.valor > 0);
+  return { lista, erro: falhas.length ? `Não foi possível ler ${falhas.join('; ')}. As sugestões de conciliação podem estar incompletas.` : '' };
 }
 const ROTULO_TIPO = { opl: 'OP faturada', faturamento_compra: 'Faturamento de compra', compra: 'Pedido de compra', despesa: 'Despesa', centro_custo: 'Centro de custo' };
 
@@ -225,7 +230,7 @@ function ModalImportar({ currentUser, contaPadrao, onClose, onImportado }) {
 }
 
 // ── Conciliar um lançamento ─────────────────────────────────────────────────
-function PainelConciliar({ l, candidatos, jaUsados, currentUser, onFeito, onFechar }) {
+function PainelConciliar({ l, candidatos, jaUsados, leituraFalhou, currentUser, onFeito, onFechar }) {
   const [busca, setBusca] = useState('');
   const [centro, setCentro] = useState<string | null>(l.centro_custo_id || null);
   const [obs, setObs] = useState(l.observacao || '');
@@ -253,7 +258,9 @@ function PainelConciliar({ l, candidatos, jaUsados, currentUser, onFeito, onFech
   return (
     <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 6, padding: 10, margin: '4px 0 8px' }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: '#334155', marginBottom: 4 }}>Sugestões pelo valor e pela data</div>
-      {sug.length ? sug.map(c => <Linha key={c.tipo + c.id} c={c} />) : (
+      {sug.length ? sug.map(c => <Linha key={c.tipo + c.id} c={c} />) : leituraFalhou ? (
+        <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 8px' }}>Não foi possível ler os registros do sistema para sugerir (veja o aviso no topo da tela). Tente de novo mais tarde ou classifique por centro de custo.</div>
+      ) : (
         <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 8px' }}>Nada no sistema com este valor. Procure abaixo ou classifique por centro de custo.</div>
       )}
       <input className="acn-input" style={{ width: '100%', margin: '8px 0 4px' }} value={busca} onChange={e => setBusca(e.target.value)}
@@ -296,6 +303,12 @@ export default function ConciliacaoBancaria({ currentUser }) {
   const [carregando, setCarregando] = useState(true);
   const [importar, setImportar] = useState(false);
   const [aberto, setAberto] = useState<string | null>(null);
+  // Etapa 7.36 (04/10/2026): o que a tela não conseguiu ler. `erroLista` é a leitura dos lançamentos do mês (sem ela a
+  // tela não pode dizer "nenhum lançamento"); `erroApoio` são as leituras de apoio (contas, o que já foi conciliado e os
+  // registros do sistema para sugerir), que deixam as sugestões incompletas.
+  const [erroLista, setErroLista] = useState('');
+  const [erroApoio, setErroApoio] = useState('');
+  const [sugestoesIncompletas, setSugestoesIncompletas] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -303,7 +316,7 @@ export default function ConciliacaoBancaria({ currentUser }) {
     const fim = diaISO(new Date(Number(ano), Number(mes), 0));
     let q = supabase.from('conciliacao_lancamentos').select('*').gte('data', ini).lte('data', fim).order('data', { ascending: false });
     if (conta) q = q.eq('conta', conta);
-    const [{ data }, { data: todasContas }, { data: conciliados }, cand] = await Promise.all([
+    const [{ data, error: errLanc }, { data: todasContas, error: errContas }, { data: conciliados, error: errUsados }, cand] = await Promise.all([
       q,
       supabase.from('conciliacao_extratos').select('conta').order('importado_em', { ascending: false }),
       supabase.from('conciliacao_lancamentos').select('vinculo_tipo,vinculo_id').eq('status', 'conciliado').not('vinculo_id', 'is', null),
@@ -312,7 +325,14 @@ export default function ConciliacaoBancaria({ currentUser }) {
     setLancs(data || []);
     setContas([...new Set((todasContas || []).map((x: any) => x.conta))]);
     setUsados(new Set((conciliados || []).filter((x: any) => x.vinculo_tipo !== 'centro_custo').map((x: any) => x.vinculo_tipo + ':' + x.vinculo_id)));
-    setCandidatos(cand);
+    setCandidatos(cand.lista);
+    setErroLista(errLanc ? 'Não foi possível ler os lançamentos do extrato: ' + errLanc.message : '');
+    setErroApoio([
+      errContas && 'Não foi possível ler a lista de contas: ' + errContas.message,
+      errUsados && 'Não foi possível ler o que já foi conciliado (a sugestão pode repetir um registro já usado): ' + errUsados.message,
+      cand.erro,
+    ].filter(Boolean).join(' · '));
+    setSugestoesIncompletas(!!(errUsados || cand.erro));
     setCarregando(false);
   }, [mes, ano, conta]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -320,7 +340,9 @@ export default function ConciliacaoBancaria({ currentUser }) {
 
   const desfazer = async (l: any) => {
     if (!await confirmar('Desfazer a conciliação deste lançamento? Ele volta para pendente.')) return;
-    await supabase.from('conciliacao_lancamentos').update({ status: 'pendente', vinculo_tipo: null, vinculo_id: null, vinculo_descricao: null, conciliado_por: null, conciliado_em: null }).eq('id', l.id);
+    const { error } = await supabase.from('conciliacao_lancamentos').update({ status: 'pendente', vinculo_tipo: null, vinculo_id: null, vinculo_descricao: null, conciliado_por: null, conciliado_em: null }).eq('id', l.id);
+    // Etapa 7.36 (04/10/2026): antes o resultado não era conferido e a lista recarregava como se tivesse desfeito.
+    if (error) { alert('Não foi possível desfazer a conciliação: ' + error.message); return; }
     carregar();
   };
 
@@ -346,7 +368,7 @@ export default function ConciliacaoBancaria({ currentUser }) {
         <Kpi rotulo="Entradas" valor={brl(entradas)} cor="#15803d" />
         <Kpi rotulo="Saídas" valor={brl(Math.abs(saidas))} cor="#b91c1c" />
         <Kpi rotulo="Resultado do mês" valor={brl(entradas + saidas)} cor={entradas + saidas >= 0 ? '#0f766e' : '#b91c1c'} />
-        <Kpi rotulo="Pendentes" valor={String(pendentes.length)} cor="#b45309" sub={pendentes.length ? brl(pendentes.reduce((s, l) => s + Math.abs(Number(l.valor)), 0)) + ' a conciliar' : 'tudo conciliado'} />
+        <Kpi rotulo="Pendentes" valor={String(pendentes.length)} cor="#b45309" sub={erroLista ? 'leitura falhou' : pendentes.length ? brl(pendentes.reduce((s, l) => s + Math.abs(Number(l.valor)), 0)) + ' a conciliar' : 'tudo conciliado'} />
         <Kpi rotulo="Conciliados" valor={lancs.length ? `${Math.round(resolvidos / lancs.length * 100)}%` : '—'} cor="#2563eb" sub={`${resolvidos} de ${lancs.length}`} />
       </div>
 
@@ -374,9 +396,11 @@ export default function ConciliacaoBancaria({ currentUser }) {
         <button className="acn-btn" style={{ background: '#0f766e', marginLeft: 'auto' }} onClick={() => setImportar(true)}>📥 Importar extrato</button>
       </div>
 
+      {erroLista && <Faixa tom="erro">{erroLista}</Faixa>}
+      {erroApoio && <Faixa tom="erro">{erroApoio}</Faixa>}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto' }}>
         {carregando ? <div className="acn-empty">Carregando...</div> : lista.length === 0 ? (
-          <div className="acn-empty">
+          erroLista ? null : <div className="acn-empty">
             {lancs.length === 0 ? 'Nenhum lançamento neste mês. Importe o extrato do banco (OFX ou CSV).' : 'Nada nesta situação.'}
           </div>
         ) : (
@@ -416,7 +440,7 @@ export default function ConciliacaoBancaria({ currentUser }) {
                   </tr>
                   {aberto === l.id && (
                     <tr><td colSpan={6} style={{ padding: 0 }}>
-                      <PainelConciliar l={l} candidatos={candidatos} jaUsados={usados} currentUser={currentUser}
+                      <PainelConciliar l={l} candidatos={candidatos} jaUsados={usados} leituraFalhou={sugestoesIncompletas} currentUser={currentUser}
                         onFeito={() => { setAberto(null); carregar(); }} onFechar={() => setAberto(null)} />
                     </td></tr>
                   )}
