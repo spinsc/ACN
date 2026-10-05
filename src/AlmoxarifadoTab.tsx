@@ -16,6 +16,7 @@ import { indicePendencias, travaKit100, travaRecebimento, textoFaltando, Checkli
 import { confirmar, mostrarAviso } from './Feedback';
 import { formatarCep, soDigitosCep, cepComFormatoValido, consultarCep } from './Cep';
 import { normalizarBusca } from './SearchUtils';
+import { diaBR } from './Interface';
 import { PainelEstoque, PainelFabricacaoRecebimento, baixarKitDaOp, textoDaBaixa, faltaDeEstoqueNoKit, textoFaltaEstoque, reservaDeOutrasNoKit, textoReservaDeOutras, saldosDoKit } from './Estoque';
 
 const semDado = (v) => !v || !String(v).trim();
@@ -632,7 +633,8 @@ Embalar e enviar assim mesmo?`)) return;
     }
   };
 
-  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  // Data de entrada da OP é coluna do tipo date: o dia vem do texto (R16, 05/10/2026). Antes era `new Date(d)`, que mostrava o dia anterior (0 de 4 batiam com o banco).
+  const fmtDt = (d) => diaBR(d);
 
   return (
     <div>

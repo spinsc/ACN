@@ -17,9 +17,11 @@ import { carregarDossie, buscarOps } from './OpVinculos';
 import { QuadroItensOp } from './OpItens';
 import { fluxoLabel, fluxoEfetivo } from './FluxoEntrega';
 import { OplProgressBar } from './AcnTabShared';
+import { diaBR } from './Interface';
 import { OndeEstaAgora } from './OndeEstaAgora';
 
-const fmtD   = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
+// Entrada, prazo e data do pedido são colunas do tipo date, e a data dos vínculos mistura date e data com hora: `diaBR` lê do texto a data pura e converte a que tem hora (R16, 05/10/2026; antes `new Date(d)`: 0 de 32 batiam com o banco).
+const fmtD   = (d) => diaBR(d);
 const fmtDH  = (d) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const fmtR   = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const fmtH   = (h) => `${Number(h || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;

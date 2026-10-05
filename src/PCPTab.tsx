@@ -12,7 +12,7 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio, SETORES_FABRICACAO } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
-import { MenuAcoes, Botao } from './Interface';
+import { MenuAcoes, Botao, diaBR } from './Interface';
 import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
 
 
@@ -275,7 +275,8 @@ export default function PCPTab({ currentUser }) {
   // Devolução (Almoxarifado ou Engenharia): ver DevolverOp.tsx
 
 
-  const fmtDt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  // Data de entrada e previsão de entrega da OP são colunas do tipo date: o dia vem do texto (R16, 05/10/2026). Antes era `new Date(d)`, que mostrava o dia anterior (0 de 6 batiam com o banco).
+  const fmtDt = (d) => diaBR(d);
   const fmtDtHr = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
 
   const liberarAlmox = async (opl) => {
