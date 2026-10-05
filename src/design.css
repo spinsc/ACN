@@ -994,3 +994,39 @@ html body .modal-box.acn-modal-cadastro.acn-cli-jan { width: min(640px, 96vw); }
 .acn-cli-pf-corpo { flex: 1; min-width: 0; }
 .acn-cli-pf-dados { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 @media (max-width: 480px) { .acn-cli-g11, .acn-cli-g21, .acn-cli-g211 { grid-template-columns: 1fr; } }
+
+/* ── Vistorias de pátio (Etapa 12e8, 05/10/2026): só aparência ─────────────────────────────────────────── */
+/* o formulário de envio abre dentro do cartão: blocos com respiro e uma linha separando da lista */
+.acn-vis-form { display: grid; gap: 12px; border-bottom: 1px solid var(--acn-line); }
+.acn-vis-campos .form-row { margin: 0; }
+html body .acn-vis-campos .form-row > .form-group { flex: 1 1 150px; min-width: 0; margin: 0; }
+html body .acn-vis-campos .form-row > .form-group.acn-vis-dobro { flex: 2 1 150px; }
+/* celular: o campo de data e hora não cabe na metade da linha (a hora ficava cortada) */
+@media (max-width: 480px) { html body .acn-vis-campos .form-row > .form-group.acn-vis-dobro, html body .acn-vis-campos .form-row > .form-group.acn-vis-data { flex: 1 1 100%; } }
+/* fotos de saída: miniaturas com o × para tirar */
+.acn-vis-miniaturas { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.acn-vis-miniatura { position: relative; }
+.acn-vis-mini { display: block; width: 64px; height: 64px; object-fit: cover; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-vis-x { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; padding: 0; border: none; border-radius: 50%; background: var(--acn-bad); color: #fff; font-size: 11px; line-height: 18px; cursor: pointer; }
+.acn-vis-add-foto { height: 44px; }
+/* assinaturas (o desenho continua num <canvas>; o fundo branco é o "papel": a tinta é escura nos dois modos) */
+.acn-vis-sigs { display: flex; gap: 16px; flex-wrap: wrap; }
+.acn-vis-sig { flex: 1 1 200px; min-width: 0; }
+.acn-vis-sig-rotulo { font-size: 12px; margin-bottom: 4px; }
+.acn-vis-canvas { display: block; max-width: 100%; height: auto; border: 2px dashed var(--acn-line); border-radius: var(--acn-r2); background: #fff; cursor: crosshair; touch-action: none; }
+.acn-vis-sig-acoes { display: flex; gap: 6px; margin-top: 6px; }
+.acn-vis-sig-salva { text-align: center; }
+.acn-vis-sig-img { max-width: 100%; height: 80px; object-fit: contain; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: #fff; }
+/* "Registrar saída": o botão principal à direita, como no rodapé das janelas */
+.acn-vis-acoes { display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 8px; }
+/* a janela "Ver": ficha de campo e valor, fotos e assinaturas */
+html body .modal-box.acn-modal-cadastro.acn-vis-jan { width: min(720px, 95vw); }
+.acn-vis-ficha { width: 100%; }
+.acn-vis-chave { width: 1%; white-space: nowrap; font-weight: 600; color: var(--acn-muted); }
+.acn-vis-rotulo { font-size: 12px; margin-bottom: 6px; }
+.acn-vis-fotos { display: flex; gap: 6px; flex-wrap: wrap; }
+.acn-vis-foto { display: block; width: 80px; height: 60px; object-fit: cover; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-vis-sig-ver { display: block; height: 60px; max-width: 100%; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: #fff; }
+/* histórico: o que já foi visto fica um pouco apagado (o que mudou e ainda não foi visto ganha a marca amarela) */
+.acn-vis-lida { opacity: .8; }
+.acn-vis-nota { margin-top: 8px; }

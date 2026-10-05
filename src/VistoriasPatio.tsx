@@ -3,8 +3,16 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
-import { hojeISO, diaISO, Faixa, Botao } from './Interface';
+import { hojeISO, diaISO, Faixa, Botao, Selo } from './Interface';
 import { confirmar } from './Feedback';
+import Icone from './Icone';
+import { mdiCarSearchOutline, mdiMapMarkerPath, mdiHistory, mdiFilePdfBox } from '@mdi/js';
+
+// Etapa 12e8 (05/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, a janela do sistema, o
+// quadro e as classes acn-tabela / acn-vis-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os campos, os
+// textos, as consultas, as gravações e as regras são os da Etapa 7.41.
+// Cor do estado: "Saiu" (em campo) pede atenção; "Retornou" está resolvido.
+const FAMILIA_STATUS = { Saiu: 'atencao', Retornou: 'ok' };
 
 
 const TIPOS_SERVICO = [
@@ -62,23 +70,22 @@ function SignatureCanvas({ label, onSave, savedUrl, onRascunho }) {
 
   if (savedUrl) {
     return (
-      <div style={{textAlign:'center'}}>
-        <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>{label}</div>
-        <img src={savedUrl} alt="assinatura" style={{border:'1px solid #e2e8f0',borderRadius:4,maxWidth:300,height:80,objectFit:'contain',background:'white'}} />
+      <div className="acn-vis-sig-salva">
+        <div className="acn-ajuda">{label}</div>
+        <img src={savedUrl} alt="assinatura" className="acn-vis-sig-img" />
       </div>
     );
   }
 
   return (
-    <div style={{flex:1,minWidth:200}}>
-      <div style={{fontSize:10,fontWeight:600,color:'#1e293b',marginBottom:4}}>{label}</div>
-      <canvas ref={ref} width={280} height={90}
-        style={{border:'2px dashed #94a3b8',borderRadius:4,cursor:'crosshair',background:'white',display:'block'}}
+    <div className="acn-vis-sig">
+      <div className="acn-forte acn-vis-sig-rotulo">{label}</div>
+      <canvas ref={ref} width={280} height={90} className="acn-vis-canvas"
         onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
         onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
-      <div style={{display:'flex',gap:4,marginTop:4}}>
-        <button className="acn-btn" style={{background:'#94a3b8',fontSize:10}} onClick={clear}>Limpar</button>
-        <button className="acn-btn" style={{background:'#22c55e',fontSize:10,opacity:has?1:0.5}} onClick={save} disabled={!has}>Salvar</button>
+      <div className="acn-vis-sig-acoes">
+        <Botao pequeno onClick={clear}>Limpar</Botao>
+        <Botao pequeno variante="primario" onClick={save} disabled={!has}>Salvar</Botao>
       </div>
     </div>
   );
@@ -117,55 +124,60 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
 
   return (
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)fechar();}}>
-      <div className="modal-box" style={{maxWidth: 980,width:'95vw',maxHeight:'90vh',overflowY:'auto'}}>
-        <div className="modal-title">Vistoria — {v.veiculo_placa}</div>
-        <table style={{fontSize:11,marginBottom:10,width:'100%'}}>
-          <tbody>
-            {linhas.map(([campo,k,val],i) => (
-              <tr key={i} style={{borderBottom:'1px solid #f1f5f9', ...campoDestaque(campo)}}>
-                <td style={{fontWeight:600,color:'#64748b',padding:'4px 8px',whiteSpace:'nowrap'}}>{k}</td>
-                <td style={{padding:'4px 8px'}}>{val}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {/* Fotos */}
-        {Array.isArray(v.fotos_saida) && v.fotos_saida.length > 0 && (
-          <div style={{marginBottom:10}}>
-            <div style={{fontSize:10,fontWeight:600,marginBottom:6}}>Fotos de Saida:</div>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              {v.fotos_saida.map((url,i) => (
-                <a key={i} href={url} target="_blank" rel="noreferrer">
-                  <img src={url} alt="foto" style={{width:80,height:60,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* Assinaturas */}
-        <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:10}}>
-          {v.assinatura_envio_url && (
-            <div>
-              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Envio:</div>
-              <img src={v.assinatura_envio_url} alt="sig envio" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
-            </div>
-          )}
-          {v.assinatura_recebimento_url && (
-            <div>
-              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Recebimento:</div>
-              <img src={v.assinatura_recebimento_url} alt="sig receb" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
-            </div>
-          )}
-          {v.assinatura_retorno_url && (
-            <div>
-              <div style={{fontSize:9,color:'#64748b',marginBottom:2}}>Assinatura Retorno:</div>
-              <img src={v.assinatura_retorno_url} alt="sig retorno" style={{height:60,border:'1px solid #e2e8f0',borderRadius:4,background:'white'}} />
-            </div>
-          )}
+      <div className="modal-box acn-modal-cadastro acn-vis-jan">
+        <div className="acn-modal-cab">
+          <span className="modal-title">Vistoria — {v.veiculo_placa}</span>
         </div>
-        <div style={{display:'flex',gap:8}}>
-          <button className="acn-btn" style={{background:'#2563eb',flex:1}} onClick={()=>gerarPDF(v)}>Gerar PDF</button>
-          <button className="acn-btn" style={{background:'#94a3b8'}} onClick={fechar}>Fechar</button>
+        <div className="acn-modal-corpo">
+          {/* o realce vindo da auditoria (campo alterado e ainda não visto) é dinâmico: continua como estilo da linha */}
+          <table className="acn-tabela acn-compacta acn-vis-ficha">
+            <tbody>
+              {linhas.map(([campo,k,val],i) => (
+                <tr key={i} style={campoDestaque(campo)}>
+                  <td className="acn-vis-chave">{k}</td>
+                  <td>{val}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Fotos */}
+          {Array.isArray(v.fotos_saida) && v.fotos_saida.length > 0 && (
+            <div>
+              <div className="acn-forte acn-vis-rotulo">Fotos de Saida:</div>
+              <div className="acn-vis-fotos">
+                {v.fotos_saida.map((url,i) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer">
+                    <img src={url} alt="foto" className="acn-vis-foto" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Assinaturas */}
+          {(v.assinatura_envio_url || v.assinatura_recebimento_url || v.assinatura_retorno_url) && <div className="acn-vis-sigs">
+            {v.assinatura_envio_url && (
+              <div>
+                <div className="acn-ajuda">Assinatura Envio:</div>
+                <img src={v.assinatura_envio_url} alt="sig envio" className="acn-vis-sig-ver" />
+              </div>
+            )}
+            {v.assinatura_recebimento_url && (
+              <div>
+                <div className="acn-ajuda">Assinatura Recebimento:</div>
+                <img src={v.assinatura_recebimento_url} alt="sig receb" className="acn-vis-sig-ver" />
+              </div>
+            )}
+            {v.assinatura_retorno_url && (
+              <div>
+                <div className="acn-ajuda">Assinatura Retorno:</div>
+                <img src={v.assinatura_retorno_url} alt="sig retorno" className="acn-vis-sig-ver" />
+              </div>
+            )}
+          </div>}
+        </div>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" icone={mdiFilePdfBox} onClick={()=>gerarPDF(v)}>Gerar PDF</Botao>
+          <Botao onClick={fechar}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -174,7 +186,8 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
 
 export default function VistoriasPatio({ currentUser }) {
   const [vistorias, setVistorias] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // começa "carregando": sem isso o primeiro desenho da tela dizia "Nenhuma vistoria registrada" antes de a leitura começar
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(() => formVazio(currentUser));
   const [fotos, setFotos] = useState([]);
@@ -428,7 +441,6 @@ export default function VistoriasPatio({ currentUser }) {
   };
 
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
-  const corStatus = (s) => ({ 'Saiu':'#f59e0b', 'Retornou':'#22c55e' })[s] || '#94a3b8';
   const pendentes = vistorias.filter(v => v.status !== 'Retornou');
   const concluidas = vistorias.filter(v => v.status === 'Retornou');
   const { naoLidoSet: vistoriasNaoLidas } = useUnreadMap('vistorias_patio', vistorias.map(v => v.id), currentUser);
@@ -437,40 +449,42 @@ export default function VistoriasPatio({ currentUser }) {
     <div>
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>Vistoria de Patio — Envio/Retorno de Veiculos e Servicos</span>
+          <span className="acn-cab-titulo"><Icone path={mdiCarSearchOutline} size={16} /> Vistoria de Patio — Envio/Retorno de Veiculos e Servicos</span>
           {!showForm && (
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setForm(formVazio(currentUser));setFotos([]);setSigEnvio(null);setSigRecebimento(null);setShowForm(true);}}>
-              + Novo Envio
-            </button>
+            <div className="acn-cab-filtros">
+              <Botao variante="primario" pequeno onClick={()=>{setForm(formVazio(currentUser));setFotos([]);setSigEnvio(null);setSigRecebimento(null);setShowForm(true);}}>
+                + Novo Envio
+              </Botao>
+            </div>
           )}
         </div>
 
         {showForm && (
-          <div className="sec-body" style={{borderBottom:'1px solid #e2e8f0'}}>
+          <div className="sec-body acn-form-cheio acn-vis-form acn-vis-campos">
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">Tipo de Servico</label>
-                <select className="acn-input" style={{width:'100%'}} value={form.tipo_servico} onChange={e=>setForm({...form,tipo_servico:e.target.value})}>
+                <select className="acn-input" value={form.tipo_servico} onChange={e=>setForm({...form,tipo_servico:e.target.value})}>
                   {TIPOS_SERVICO.map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="acn-label">Placa *</label>
-                <input className="acn-input" style={{width:'100%'}} placeholder="ABC-1234" value={form.veiculo_placa} onChange={e=>setForm({...form,veiculo_placa:e.target.value.toUpperCase()})} />
+                <input className="acn-input" placeholder="ABC-1234" value={form.veiculo_placa} onChange={e=>setForm({...form,veiculo_placa:e.target.value.toUpperCase()})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Modelo/Descricao</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.veiculo_modelo} onChange={e=>setForm({...form,veiculo_modelo:e.target.value})} />
+                <input className="acn-input" value={form.veiculo_modelo} onChange={e=>setForm({...form,veiculo_modelo:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">KM Saida</label>
-                <input type="number" className="acn-input" style={{width:'100%'}} value={form.km_saida} onChange={e=>setForm({...form,km_saida:e.target.value})} />
+                <input type="number" className="acn-input" value={form.km_saida} onChange={e=>setForm({...form,km_saida:e.target.value})} />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="acn-label">Tipo de Documento</label>
-                <select className="acn-input" style={{width:'100%'}} value={form.tipo_documento} onChange={e=>setForm({...form,tipo_documento:e.target.value})}>
+                <select className="acn-input" value={form.tipo_documento} onChange={e=>setForm({...form,tipo_documento:e.target.value})}>
                   <option>OPL</option>
                   <option>OPD</option>
                   <option>PV</option>
@@ -479,64 +493,64 @@ export default function VistoriasPatio({ currentUser }) {
               </div>
               <div className="form-group">
                 <label className="acn-label">Nº OPL / OPD / PV</label>
-                <input className="acn-input" style={{width:'100%'}} placeholder="Ex: 1230" value={form.numero_documento} onChange={e=>setForm({...form,numero_documento:e.target.value.toUpperCase()})} />
+                <input className="acn-input" placeholder="Ex: 1230" value={form.numero_documento} onChange={e=>setForm({...form,numero_documento:e.target.value.toUpperCase()})} />
               </div>
-              <div className="form-group" style={{flex:2}}>
+              <div className="form-group acn-vis-dobro">
                 <label className="acn-label">Solicitante do Envio</label>
-                <input className="acn-input" style={{width:'100%'}} placeholder="Nome do solicitante..." value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
+                <input className="acn-input" placeholder="Nome do solicitante..." value={form.solicitante} onChange={e=>setForm({...form,solicitante:e.target.value})} />
               </div>
             </div>
             <div className="form-row">
-              <div className="form-group" style={{flex:2}}>
+              <div className="form-group acn-vis-dobro">
                 <label className="acn-label">Destino / Oficina</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.destino} onChange={e=>setForm({...form,destino:e.target.value})} />
+                <input className="acn-input" value={form.destino} onChange={e=>setForm({...form,destino:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Responsavel pelo Envio *</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.responsavel_envio} onChange={e=>setForm({...form,responsavel_envio:e.target.value})} />
+                <input className="acn-input" value={form.responsavel_envio} onChange={e=>setForm({...form,responsavel_envio:e.target.value})} />
               </div>
-              <div className="form-group">
+              <div className="form-group acn-vis-data">
                 <label className="acn-label">Data/Hora Saida</label>
-                <input type="datetime-local" className="acn-input" style={{width:'100%'}} value={form.data_saida} onChange={e=>setForm({...form,data_saida:e.target.value})} />
+                <input type="datetime-local" className="acn-input" value={form.data_saida} onChange={e=>setForm({...form,data_saida:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Previsao de Retorno</label>
-                <input type="date" className="acn-input" style={{width:'100%'}} value={form.previsao_retorno} onChange={e=>setForm({...form,previsao_retorno:e.target.value})} />
+                <input type="date" className="acn-input" value={form.previsao_retorno} onChange={e=>setForm({...form,previsao_retorno:e.target.value})} />
               </div>
             </div>
-            <div style={{marginBottom:8}}>
+            <div>
               <label className="acn-label">Observacoes</label>
-              <input className="acn-input" style={{width:'100%'}} value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})} />
+              <input className="acn-input" value={form.observacoes} onChange={e=>setForm({...form,observacoes:e.target.value})} />
             </div>
 
             {/* FOTOS */}
-            <div style={{marginBottom:10}}>
+            <div>
               <label className="acn-label">Fotos de Saida (max 6)</label>
-              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4,alignItems:'center'}}>
+              <div className="acn-vis-miniaturas">
                 {fotos.map((f,i) => (
-                  <div key={i} style={{position:'relative'}}>
-                    <img src={URL.createObjectURL(f)} alt="foto" style={{width:64,height:64,objectFit:'cover',borderRadius:4,border:'1px solid #e2e8f0'}} />
-                    <button onClick={()=>setFotos(p=>p.filter((_,j)=>j!==i))} style={{position:'absolute',top:-4,right:-4,background:'#ef4444',color:'white',border:'none',borderRadius:'50%',width:16,height:16,fontSize:10,cursor:'pointer',padding:0,lineHeight:'16px'}}>x</button>
+                  <div key={i} className="acn-vis-miniatura">
+                    <img src={URL.createObjectURL(f)} alt="foto" className="acn-vis-mini" />
+                    <button type="button" className="acn-vis-x" title="Tirar esta foto" onClick={()=>setFotos(p=>p.filter((_,j)=>j!==i))}>x</button>
                   </div>
                 ))}
                 {fotos.length < 6 && (
-                  <button className="acn-btn" style={{background:'#475569',height:44}} onClick={()=>fileRef.current?.click()}>+ Foto</button>
+                  <Botao className="acn-vis-add-foto" onClick={()=>fileRef.current?.click()}>+ Foto</Botao>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" multiple style={{display:'none'}} onChange={e=>setFotos(p=>[...p,...Array.from(e.target.files||[])].slice(0,6))} />
+                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e=>setFotos(p=>[...p,...Array.from(e.target.files||[])].slice(0,6))} />
               </div>
             </div>
 
             {/* ASSINATURAS */}
-            <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:12}}>
+            <div className="acn-vis-sigs">
               <SignatureCanvas label="Assinatura — Responsavel pelo Envio" onSave={setSigEnvio} savedUrl={sigEnvio} onRascunho={marcaRascunho('envio')} />
               <SignatureCanvas label="Assinatura — Responsavel pelo Recebimento (Destino)" onSave={setSigRecebimento} savedUrl={sigRecebimento} onRascunho={marcaRascunho('receb')} />
             </div>
 
-            <div style={{display:'flex',gap:6}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'7px',opacity:uploading?0.6:1}} onClick={salvar} disabled={uploading}>
+            <div className="acn-vis-acoes">
+              <Botao variante="primario" onClick={salvar} disabled={uploading}>
                 {uploading ? 'Salvando...' : 'Registrar Saida'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>{setShowForm(false);setFotos([]);}}>Cancelar</button>
+              </Botao>
+              <Botao onClick={()=>{setShowForm(false);setFotos([]);}}>Cancelar</Botao>
             </div>
           </div>
         )}
@@ -547,39 +561,42 @@ export default function VistoriasPatio({ currentUser }) {
           Não foi possível ler as vistorias ({erroLista}). Isso não quer dizer que não haja veículos em campo.
         </Faixa>
       )}
+      {loading && vistorias.length === 0 && <div className="acn-empty">Carregando...</div>}
+      {!loading && !erroLista && vistorias.length === 0 && <div className="acn-empty">Nenhuma vistoria registrada ainda.</div>}
 
       {/* PENDENTES */}
       {pendentes.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#fef3c7',borderBottom:'2px solid #f59e0b'}}>
-            <span style={{color:'#92400e'}}>Veiculos/Servicos em Campo ({pendentes.length})</span>
+          <div className="sec-hdr">
+            <span className="acn-cab-titulo"><Icone path={mdiMapMarkerPath} size={16} /> Veiculos/Servicos em Campo ({pendentes.length})</span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
-            <table>
+          <div className="sec-body acn-rolagem">
+            <table className="acn-tabela acn-compacta">
               <thead><tr>
                 <th>Tipo Servico</th><th>Documento</th><th>Solicitante</th><th>Placa</th><th>Modelo</th><th>Destino</th><th>Saida</th>
                 <th>Prev. Retorno</th><th>Status</th><th>Acoes</th>
               </tr></thead>
               <tbody>
                 {pendentes.map(v => (
-                  <tr key={v.id} style={vistoriasNaoLidas.has(String(v.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : undefined}>
+                  <tr key={v.id} className={vistoriasNaoLidas.has(String(v.id)) ? 'acn-linha-nova' : undefined}>
                     <td>{v.tipo_servico}</td>
-                    <td>{v.tipo_documento}: <strong>{v.numero_documento||'—'}</strong></td>
+                    <td className="acn-nowrap">{v.tipo_documento}: <strong className="acn-forte">{v.numero_documento||'—'}</strong></td>
                     <td>{v.solicitante||'—'}</td>
-                    <td><strong>{v.veiculo_placa}</strong></td>
+                    <td className="acn-nowrap"><strong className="acn-forte">{v.veiculo_placa}</strong></td>
                     <td>{v.veiculo_modelo||'—'}</td>
                     <td>{v.destino||'—'}</td>
                     <td>{fmtDt(v.data_saida)}</td>
                     {/* atrasado = o dia previsto já passou; o próprio dia previsto ainda está no prazo (antes ficava vermelho o dia todo) */}
-                    <td style={{color: v.previsao_retorno && String(v.previsao_retorno).slice(0,10) < hojeISO() ? '#ef4444' : undefined}}>
-                      {fmtDia(v.previsao_retorno)}
+                    {/* a cor vai num span: a regra geral das tabelas pinta o próprio td por cima de qualquer classe */}
+                    <td className="acn-nowrap">
+                      <span className={v.previsao_retorno && String(v.previsao_retorno).slice(0,10) < hojeISO() ? 'acn-txt-erro' : undefined}>{fmtDia(v.previsao_retorno)}</span>
                     </td>
-                    <td><span className="acn-badge" style={{background:corStatus(v.status)}}>{v.status}</span></td>
+                    <td><Selo familia={FAMILIA_STATUS[v.status] || 'neutro'}>{v.status}</Selo></td>
                     <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>setModalVer(v)}>VER</button>
-                        <button className="acn-btn" style={{background:'#22c55e',fontSize:10}} onClick={()=>{setModalRetorno(v);setRetornoForm({km_retorno:'',obs_retorno:'',responsavel_recebimento:currentUser?.nome||''});setSigRet(null);}}>RETORNO</button>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>gerarPDF(v)}>PDF</button>
+                      <div className="acn-acoes-linha">
+                        <Botao pequeno onClick={()=>setModalVer(v)}>VER</Botao>
+                        <Botao pequeno variante="primario" onClick={()=>{setModalRetorno(v);setRetornoForm({km_retorno:'',obs_retorno:'',responsavel_recebimento:currentUser?.nome||''});setSigRet(null);}}>RETORNO</Botao>
+                        <Botao pequeno onClick={()=>gerarPDF(v)}>PDF</Botao>
                       </div>
                     </td>
                   </tr>
@@ -593,28 +610,28 @@ export default function VistoriasPatio({ currentUser }) {
       {/* HISTORICO */}
       {concluidas.length > 0 && (
         <div className="sec-card">
-          <div className="sec-hdr" style={{background:'#f0fdf4',borderBottom:'2px solid #22c55e'}}>
-            <span style={{color:'#166534'}}>Historico — Retornados ({concluidas.length})</span>
+          <div className="sec-hdr">
+            <span className="acn-cab-titulo"><Icone path={mdiHistory} size={16} /> Historico — Retornados ({concluidas.length})</span>
           </div>
-          <div className="sec-body" style={{overflowX:'auto'}}>
-            <table>
+          <div className="sec-body acn-rolagem">
+            <table className="acn-tabela acn-compacta">
               <thead><tr>
                 <th>Tipo Servico</th><th>Placa</th><th>Modelo</th><th>Destino</th><th>Saida</th><th>Retorno</th><th>Resp. Retorno</th><th>Acoes</th>
               </tr></thead>
               <tbody>
                 {concluidas.slice(0,30).map(v => (
-                  <tr key={v.id} style={vistoriasNaoLidas.has(String(v.id)) ? {background:'#fffdf0',borderLeft:'3px solid #eab308'} : {opacity:0.8}}>
+                  <tr key={v.id} className={vistoriasNaoLidas.has(String(v.id)) ? 'acn-linha-nova' : 'acn-vis-lida'}>
                     <td>{v.tipo_servico}</td>
-                    <td><strong>{v.veiculo_placa}</strong></td>
+                    <td><strong className="acn-forte">{v.veiculo_placa}</strong></td>
                     <td>{v.veiculo_modelo||'—'}</td>
                     <td>{v.destino||'—'}</td>
                     <td>{fmtDt(v.data_saida)}</td>
                     <td>{fmtDt(v.data_retorno)}</td>
                     <td>{v.responsavel_recebimento||'—'}</td>
                     <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="acn-btn" style={{background:'#475569',fontSize:10}} onClick={()=>setModalVer(v)}>VER</button>
-                        <button className="acn-btn" style={{background:'#2563eb',fontSize:10}} onClick={()=>gerarPDF(v)}>PDF</button>
+                      <div className="acn-acoes-linha">
+                        <Botao pequeno onClick={()=>setModalVer(v)}>VER</Botao>
+                        <Botao pequeno onClick={()=>gerarPDF(v)}>PDF</Botao>
                       </div>
                     </td>
                   </tr>
@@ -622,7 +639,7 @@ export default function VistoriasPatio({ currentUser }) {
               </tbody>
             </table>
             {concluidas.length > 30 && (
-              <div style={{fontSize:11,color:'#64748b',marginTop:6}}>Mostrando os 30 retornos mais recentes de {concluidas.length}.</div>
+              <div className="acn-ajuda acn-vis-nota">Mostrando os 30 retornos mais recentes de {concluidas.length}.</div>
             )}
           </div>
         </div>
@@ -636,34 +653,40 @@ export default function VistoriasPatio({ currentUser }) {
       {/* MODAL RETORNO */}
       {modalRetorno && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:480}}>
-            <div className="modal-title">Registrar Retorno — {modalRetorno.veiculo_placa}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10,background:'#f8fafc',padding:'8px',borderRadius:4}}>
-              Saiu: {fmtDt(modalRetorno.data_saida)} | Destino: {modalRetorno.destino||'—'}
+          <div className="modal-box acn-modal-cadastro">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Registrar Retorno — {modalRetorno.veiculo_placa}</span>
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="acn-label">KM Retorno</label>
-                <input type="number" className="acn-input" style={{width:'100%'}} value={retornoForm.km_retorno}
-                  onChange={e=>setRetornoForm({...retornoForm,km_retorno:e.target.value})} />
+            <div className="acn-modal-corpo acn-form-cheio acn-vis-campos">
+              <div className="acn-quadro acn-ajuda">
+                Saiu: {fmtDt(modalRetorno.data_saida)} | Destino: {modalRetorno.destino||'—'}
               </div>
-              <div className="form-group" style={{flex:2}}>
-                <label className="acn-label">Responsavel pelo Recebimento *</label>
-                <input className="acn-input" style={{width:'100%'}} value={retornoForm.responsavel_recebimento}
-                  onChange={e=>setRetornoForm({...retornoForm,responsavel_recebimento:e.target.value})} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="acn-label">KM Retorno</label>
+                  <input type="number" className="acn-input" value={retornoForm.km_retorno}
+                    onChange={e=>setRetornoForm({...retornoForm,km_retorno:e.target.value})} />
+                </div>
+                <div className="form-group acn-vis-dobro">
+                  <label className="acn-label">Responsavel pelo Recebimento *</label>
+                  <input className="acn-input" value={retornoForm.responsavel_recebimento}
+                    onChange={e=>setRetornoForm({...retornoForm,responsavel_recebimento:e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="acn-label">Observacoes de Retorno</label>
+                <textarea className="acn-input" rows={2}
+                  value={retornoForm.obs_retorno} onChange={e=>setRetornoForm({...retornoForm,obs_retorno:e.target.value})} />
+              </div>
+              <div className="acn-vis-sigs">
+                <SignatureCanvas label="Assinatura de Retorno" onSave={setSigRet} savedUrl={sigRet} onRascunho={marcaRascunho('ret')} />
               </div>
             </div>
-            <label className="acn-label">Observacoes de Retorno</label>
-            <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              value={retornoForm.obs_retorno} onChange={e=>setRetornoForm({...retornoForm,obs_retorno:e.target.value})} />
-            <div style={{marginBottom:12}}>
-              <SignatureCanvas label="Assinatura de Retorno" onSave={setSigRet} savedUrl={sigRet} onRascunho={marcaRascunho('ret')} />
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px',opacity:retornando?0.6:1}} onClick={registrarRetorno} disabled={retornando}>
+            <div className="acn-modal-rodape acn-sac-rodape">
+              <Botao variante="primario" onClick={registrarRetorno} disabled={retornando}>
                 {retornando ? 'Registrando...' : 'CONFIRMAR RETORNO'}
-              </button>
-              <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalRetorno(null)}>Cancelar</button>
+              </Botao>
+              <Botao onClick={()=>setModalRetorno(null)}>Cancelar</Botao>
             </div>
           </div>
         </div>
