@@ -13,6 +13,7 @@ import { EquipeDaOpModal, situacaoDaEquipe, faltaApontar } from './EquipeDaOp';
 import { podeEditarEquipeDaOp } from './utils/permissoes';
 
 const semDado = (v) => !v || !String(v).trim();
+const STATUS_FATURADA = ['Faturado e Disponivel para Entrega', 'Faturado'];
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
@@ -40,13 +41,17 @@ export default function FiscalTab({ currentUser }) {
   const [nfServicoLote, setNfServicoLote] = useState('');
   const [faturandoLote, setFaturandoLote] = useState(false);
   const [faturandoId, setFaturandoId] = useState(null);
-  const jaPreselecionou = React.useRef(false);
+  // Todas as unidades de cada lote, em qualquer fase (base -> [{id, opl, status_geral, numero_nf}]).
+  // null = ainda não carregou: o bloco do lote não acusa "faltam unidades" sem ter certeza.
+  const [unidadesDoLote, setUnidadesDoLote] = useState(null);
+  const [lotesDesmarcados, setLotesDesmarcados] = useState(() => new Set());   // unidades que o Fiscal tirou da nota
+  const [lotesAbertos, setLotesAbertos] = useState({});
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const [oplsRes, osRes] = await Promise.all([
+    const [oplsRes, osRes, lotesRes] = await Promise.all([
       supabase.from('oples').select('*')
         .in('status_geral', ['Aguarda Emissao NF','Faturado e Disponivel para Entrega'])
         .order('data_liberacao_comercial', { ascending: true }),
@@ -54,7 +59,13 @@ export default function FiscalTab({ currentUser }) {
         .in('status', ['Aguardando Emissão NF','Faturada - Aguardando Entrega'])
         .eq('is_manutencao_veicular', true)
         .order('data_cq', { ascending: true }),
+      // todas as unidades com sufixo /NN, de qualquer fase, para o bloco do lote saber
+      // quantas já chegaram, quantas já foram faturadas e quantas ainda faltam
+      supabase.from('oples').select('id,opl,status_geral,numero_nf').like('opl', '%/%'),
     ]);
+    const porBase = {};
+    (lotesRes.data || []).forEach(u => { if (/\/\d+$/.test(u.opl || '')) { const b = baseOplDe(u.opl); (porBase[b] = porBase[b] || []).push(u); } });
+    setUnidadesDoLote(porBase);
     setOpls(oplsRes.data || []);
     setOrdensOS(osRes.data || []);
     situacaoDaEquipe((oplsRes.data || []).filter(o => o.status_geral === 'Aguarda Emissao NF').map(o => o.id))
@@ -62,37 +73,18 @@ export default function FiscalTab({ currentUser }) {
     if (!silent) setLoading(false);
   };
 
-  // Pré-marca automaticamente, só na primeira carga, as OPs cujo lote (mesmo
-  // número base) tem mais de 1 unidade aguardando NF-e ao mesmo tempo — nos
-  // refreshes automáticos de 30s não mexe mais na seleção, pra não atropelar
-  // um ajuste manual do usuário.
-  useEffect(() => {
-    if (jaPreselecionou.current) return;
-    const aguardandoAgora = opls.filter(o => o.status_geral === 'Aguarda Emissao NF');
-    if (aguardandoAgora.length === 0) return;
-    jaPreselecionou.current = true;
-    const porBase = {};
-    aguardandoAgora.forEach(o => { const b = baseOplDe(o.opl); (porBase[b] = porBase[b] || []).push(o); });
-    const novo = new Set();
-    Object.values(porBase).forEach(irmaos => { if (irmaos.length > 1) irmaos.forEach(o => novo.add(o.id)); });
-    setSelecionados(novo);
-  }, [opls]);
-
-  // ── Faturar em grupo — 1 NF-e cobrindo todas as OPs marcadas ────────────────
+  // ── Faturar em grupo — 1 NF-e cobrindo todas as OPs de uma lista ─────────────
   // Trava contra faturar 2x o mesmo chassi (cada linha oples = 1 veículo):
   // o .eq('status_geral','Aguarda Emissao NF') vai junto no UPDATE, então só
   // "pega" quem ainda estiver de fato aguardando NF-e naquele instante — se
   // outra aba/usuário já faturou entre o carregamento da lista e o clique
   // aqui, o update não afeta a linha (retorna vazio) e ela é pulada, em vez
   // de sobrescrever um numero_nf que já existe.
-  const faturarSelecionados = async () => {
-    const nf = nfLote.trim();
-    const nfServ = nfServicoLote.trim();
-    if (!nf) { alert('Informe o numero da NF-e!'); return; }
-    const itens = opls.filter(o => selecionados.has(o.id) && o.status_geral === 'Aguarda Emissao NF');
-    if (itens.length === 0) return;
-    if (!await confirmar(`Faturar ${itens.length} OP(s) com a NF-e ${nf}${nfServ ? ` e a NFS-e ${nfServ}` : ''}?`)) return;
-    setFaturandoLote(true);
+  //
+  // Este é o miolo, usado pelas duas portas de entrada: a barra de OPs avulsas
+  // marcadas (faturarSelecionados) e o bloco do lote (faturarLote). Quem chama
+  // pergunta, valida e limpa a tela; aqui só se grava.
+  const executarFaturamento = async ({ itens, nf, nfServ, notaNoHistorico = '' }) => {
     const agora = new Date().toISOString();
     const obsCombinado = itens.length > 1
       ? itens.map(o => {
@@ -125,23 +117,74 @@ export default function FiscalTab({ currentUser }) {
         oldRow: o, newRow: { ...o, ...novoRow }, user: currentUser });
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
-        evento: itens.length > 1
+        evento: (itens.length > 1
           ? `NF-e emitida em lote: ${nf}${nfServ ? ` · NFS-e ${nfServ}` : ''} (junto com ${itens.length - 1} outra(s) unidade(s): ${itens.map(x=>x.opl).filter(n=>n!==o.opl).join(', ')}).`
-          : `NF-e emitida: ${nf}${nfServ ? ` · NFS-e ${nfServ}` : ''}. Disponivel para entrega.`,
+          : `NF-e emitida: ${nf}${nfServ ? ` · NFS-e ${nfServ}` : ''}. Disponivel para entrega.`) + notaNoHistorico,
         status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
     }
     if (faturadas.length > 0) {
-      notificarEvento('fiscal_nf_emitida', msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), nf, currentUser?.nome));
+      notificarEvento('fiscal_nf_emitida',
+        msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), nfServ ? `${nf} + NFS-e ${nfServ}` : nf, currentUser?.nome));
     }
     if (jaFaturadasPorOutro.length > 0) {
       alert(`Atenção: ${jaFaturadasPorOutro.join(', ')} já ${jaFaturadasPorOutro.length>1?'foram faturadas':'foi faturada'} por outra sessão enquanto você selecionava — não foram faturadas de novo. Confira a lista atualizada.`);
     }
+    return faturadas;
+  };
+
+  // Barra de baixo: OPs AVULSAS marcadas à mão (vendas diferentes na mesma nota).
+  // As unidades de um lote não passam por aqui — têm o bloco próprio.
+  const faturarSelecionados = async () => {
+    const nf = nfLote.trim();
+    const nfServ = nfServicoLote.trim();
+    if (!nf) { alert('Informe o numero da NF-e!'); return; }
+    const itens = opls.filter(o => selecionados.has(o.id) && o.status_geral === 'Aguarda Emissao NF');
+    if (itens.length === 0) return;
+    if (!await confirmar(`Faturar ${itens.length} OP(s) com a NF-e ${nf}${nfServ ? ` e a NFS-e ${nfServ}` : ''}?`)) return;
+    setFaturandoLote(true);
+    await executarFaturamento({ itens, nf, nfServ });
     setSelecionados(new Set());
     setNfLote('');
     setNfServicoLote('');
     setFaturandoLote(false);
+    fetchAll();
+  };
+
+  // ── Faturar um LOTE como uma venda só (05/10/2026) ─────────────────────────
+  // O lote existe para a produção; para a nota, a venda é uma só. Por isso o
+  // padrão é a nota cobrir o lote inteiro. Mas há casos de nota 1 a 1, de
+  // algumas unidades juntas e de cliente que só aceita tudo junto — então o
+  // parcial é possível, só que DE PROPÓSITO: o botão muda de cara e a pergunta
+  // de confirmação diz o que vai ficar de fora e que vai precisar de outra nota.
+  const faturarLote = async ({ base, chegaram, faltam }) => {
+    const chave = `lote:${base}`;
+    const nf = (nfs[chave] || '').trim();
+    const nfServ = (nfsServico[chave] || '').trim();
+    const marcadas = chegaram.filter(u => !lotesDesmarcados.has(u.id));
+    const deFora = chegaram.filter(u => lotesDesmarcados.has(u.id));
+    if (!nf) { alert('Informe o numero da NF-e do lote!'); return; }
+    if (marcadas.length === 0) { alert('Marque ao menos uma unidade do lote para faturar.'); return; }
+    const parcial = faltam.length > 0 || deFora.length > 0;
+    const notas = `NF-e ${nf}${nfServ ? ` e NFS-e ${nfServ}` : ''}`;
+    const textoFalta = faltam.length ? `Ainda não chegaram ao Fiscal: ${faltam.map(u => `${u.opl} (${u.status_geral})`).join(', ')}.` : '';
+    const textoFora = deFora.length ? `Você deixou de fora: ${deFora.map(u => u.opl).join(', ')}.` : '';
+    const pergunta = parcial
+      ? [`FATURAMENTO PARCIAL do lote ${base}.`, textoFalta, textoFora,
+         `Estas ${marcadas.length} unidade(s) saem na ${notas}; as demais vão precisar de OUTRA nota.`,
+         `Se o cliente exige nota única, espere o lote completo.`, '\nFaturar assim mesmo?'].filter(Boolean).join('\n')
+      : `Faturar o lote ${base} inteiro — ${marcadas.length} unidade(s), uma venda só — com a ${notas}?`;
+    if (!await confirmar(pergunta)) return;
+    setFaturandoId(chave);
+    await executarFaturamento({
+      itens: marcadas, nf, nfServ,
+      notaNoHistorico: parcial ? ` Faturamento PARCIAL do lote ${base}${faltam.length ? `; faltavam: ${faltam.map(u => u.opl).join(', ')}` : ''}${deFora.length ? `; deixadas de fora: ${deFora.map(u => u.opl).join(', ')}` : ''}.` : '',
+    });
+    setNfs(prev => { const n = {...prev}; delete n[chave]; return n; });
+    setNfsServico(prev => { const n = {...prev}; delete n[chave]; return n; });
+    setLotesDesmarcados(prev => { const n = new Set(prev); marcadas.forEach(u => n.delete(u.id)); return n; });
+    setFaturandoId(null);
     fetchAll();
   };
 
@@ -266,12 +309,149 @@ export default function FiscalTab({ currentUser }) {
 
   const contagemPorBase = {};
   aguardando.forEach(o => { const b = baseOplDe(o.opl); contagemPorBase[b] = (contagemPorBase[b]||0) + 1; });
-  const ehLote = (o) => contagemPorBase[baseOplDe(o.opl)] > 1;
+  const ehLote = (o) => /\/\d+$/.test(o.opl || '');
   const toggleSelecionado = (id) => setSelecionados(prev => {
     const n = new Set(prev);
     n.has(id) ? n.delete(id) : n.add(id);
     return n;
   });
+
+  // ── O LOTE NA FILA: uma venda, um bloco (05/10/2026) ────────────────────────
+  // Antes o lote só era tratado como lote quando 2 ou mais unidades estavam na
+  // fila AO MESMO TEMPO. Como o Comercial libera unidade por unidade, a primeira
+  // a chegar parecia uma OP comum, com campo de NF próprio — e era faturada
+  // sozinha, depois a /02 de novo. Agora toda unidade com sufixo /NN é de lote,
+  // chegue sozinha ou junto, e o lote aparece num bloco só com a nota no cabeçalho.
+  const ehDeLote = (o) => /\/\d+$/.test(o.opl || '');
+  const visiveisAguardando = filtrarOpls(aguardando, busca);
+  const unicasAguardando = visiveisAguardando.filter(o => !ehDeLote(o));
+  const basesDeLote = [...new Set(visiveisAguardando.filter(ehDeLote).map(o => baseOplDe(o.opl)))];
+
+  const renderLote = (base) => {
+    const chave = `lote:${base}`;
+    const chegaram = aguardando.filter(o => ehDeLote(o) && baseOplDe(o.opl) === base)
+      .sort((a, b) => sufixoNum(a.opl) - sufixoNum(b.opl));
+    // todas as unidades do lote, em qualquer fase — null = ainda não carregou (sem falso alarme)
+    const todas = unidadesDoLote ? (unidadesDoLote[base] || []) : null;
+    const idsChegaram = new Set(chegaram.map(o => o.id));
+    const ativas = todas ? todas.filter(u => u.status_geral !== 'Cancelado') : chegaram;
+    const jaFaturadas = todas ? ativas.filter(u => STATUS_FATURADA.includes(u.status_geral)) : [];
+    const faltam = todas
+      ? ativas.filter(u => !idsChegaram.has(u.id) && !STATUS_FATURADA.includes(u.status_geral))
+          .sort((a, b) => sufixoNum(a.opl) - sufixoNum(b.opl))
+      : [];
+    const marcadas = chegaram.filter(u => !lotesDesmarcados.has(u.id));
+    const parcial = faltam.length > 0 || marcadas.length < chegaram.length;
+    const aberto = lotesAbertos[base] ?? (chegaram.length <= 6);
+    const faturando = faturandoId === chave;
+    const nfsJaEmitidas = [...new Set(jaFaturadas.map(u => u.numero_nf).filter(Boolean))];
+    const totalVenda = ativas.length;
+    const naoLida = chegaram.some(o => oplsNaoLidas.has(String(o.id)));
+    const alternar = (id) => setLotesDesmarcados(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+    return (
+      <React.Fragment key={chave}>
+        <tr className={naoLida ? 'acn-linha-nova' : 'acn-linha-marca'}>
+          <td colSpan={8}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => setLotesAbertos(p => ({ ...p, [base]: !aberto }))}
+                title={aberto ? 'Esconder as unidades' : 'Ver as unidades'}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: 0 }}>{aberto ? '▾' : '▸'}</button>
+              <strong className="acn-forte">🔗 {base}</strong>
+              <Tag title="O lote é da produção; a nota é de uma venda só">Lote · {totalVenda || chegaram.length} unidades</Tag>
+              <span className="acn-fraco">{chegaram[0]?.cliente_nome || ''}</span>
+            </div>
+            <div className="acn-fraco" style={{ marginTop: 3, fontSize: 10 }}>
+              {chegaram.length} aguardando nota
+              {jaFaturadas.length > 0 && <> · {jaFaturadas.length} já faturada(s){nfsJaEmitidas.length ? ` (NF-e ${nfsJaEmitidas.join(', ')})` : ''}</>}
+              {faltam.length > 0 && (
+                <span style={{ marginLeft: 6 }}>
+                  <Selo familia="atencao" ponto={false}
+                    title={faltam.map(u => `${u.opl} — ${u.status_geral}`).join('\n')}>
+                    Faltam {faltam.length} chegar ao Fiscal
+                  </Selo>
+                </span>
+              )}
+              {jaFaturadas.length > 0 && (
+                <span style={{ marginLeft: 6 }}>
+                  <Selo familia="atencao" ponto={false}
+                    title="Parte deste lote já saiu em outra nota. Conferir se o cliente aceita notas separadas.">
+                    Lote já faturado em parte
+                  </Selo>
+                </span>
+              )}
+            </div>
+          </td>
+          <td>
+            <input className="acn-input" style={{ width: 118 }} placeholder="NF-e do lote"
+              value={nfs[chave] || ''}
+              onChange={e => setNfs(prev => ({ ...prev, [chave]: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && faturarLote({ base, chegaram, faltam })} />
+          </td>
+          <td>
+            <input className="acn-input" style={{ width: 118 }} placeholder="NFS-e (se houver)"
+              value={nfsServico[chave] || ''}
+              onChange={e => setNfsServico(prev => ({ ...prev, [chave]: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && faturarLote({ base, chegaram, faltam })} />
+          </td>
+          <td>
+            <div className="acn-acoes-linha">
+              <Botao pequeno variante={parcial ? 'secundario' : 'primario'} disabled={faturando || marcadas.length === 0}
+                title={parcial
+                  ? 'Faturamento parcial: nem todas as unidades do lote entram nesta nota'
+                  : 'Fatura o lote inteiro, como uma venda só'}
+                onClick={() => faturarLote({ base, chegaram, faltam })}>
+                {faturando ? '...' : parcial
+                  ? `Faturar ${marcadas.length} de ${totalVenda || chegaram.length}`
+                  : `Faturar lote inteiro (${marcadas.length})`}
+              </Botao>
+            </div>
+          </td>
+        </tr>
+        {aberto && chegaram.map(o => (
+          <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : undefined}>
+            <td>
+              <input type="checkbox" checked={!lotesDesmarcados.has(o.id)} onChange={() => alternar(o.id)}
+                title="Desmarque para deixar esta unidade fora da nota (vira faturamento parcial)" />
+            </td>
+            <td style={{ paddingLeft: 22 }}>
+              <LinkOpl opl={o} currentUser={currentUser} />
+              {situacaoEquipe && faltaApontar(o, situacaoEquipe[o.id]).algum && (
+                <div>
+                  <Selo familia="atencao" ponto={false}
+                    title="Tem mão de obra lançada e ninguém apontado para recebê-la: sem isso não sai comissão. Depois de faturar, a equipe trava. Use ⋯ › Equipe.">
+                    Equipe não apontada
+                  </Selo>
+                </div>
+              )}
+            </td>
+            <td><VeiculoOuEnvio o={o} /></td>
+            <td><span className={'acn-num ' + ((o.quantidade||1)>1 ? 'acn-forte' : 'acn-fraco')}>{o.quantidade||1}</span></td>
+            <td>{o.tipo_projeto}</td>
+            <td>{o.cliente_nome || '—'}</td>
+            <td className="acn-num">{fmtDt(o.data_liberacao_comercial)}</td>
+            <td>
+              {o.seriais_equipamentos ? (
+                <div className="acn-nota-mono"><Linkify text={o.seriais_equipamentos} /></div>
+              ) : (
+                <Selo familia="atencao" ponto={false} title="Não informado pelo Almoxarifado no kiting: os seriais / nº dos equipamentos não foram preenchidos">Sem serial</Selo>
+              )}
+            </td>
+            <td colSpan={2} />
+            <td>
+              <div className="acn-acoes-linha">
+                <MenuAcoes rotulo="Mais ações da OP" itens={[
+                  { rotulo: 'Ver detalhes', icone: mdiEyeOutline, onClick: () => setModalVer(o) },
+                  { rotulo: 'Equipe (quem trabalhou)', icone: mdiAccountMultipleOutline, onClick: () => setModalEquipe(o), oculto: !podeEditarEquipeDaOp(currentUser) },
+                  { rotulo: 'Devolver ao Comercial', icone: mdiUndoVariant, perigo: true, onClick: () => { setModalDevolver(o); setObsDevolver(''); } },
+                ]} />
+              </div>
+            </td>
+          </tr>
+        ))}
+      </React.Fragment>
+    );
+  };
 
   // Etapa 11 do plano de UX (30/09/2026): a parte visual desta tela passou para as peças do design system
   // (Botao, Selo, Tag, MenuAcoes e as classes acn-kpi / acn-tabela / acn-barra-selecao / acn-linha-*), no lugar
@@ -311,7 +491,8 @@ export default function FiscalTab({ currentUser }) {
                 <th title="Seriais / nº de equipamentos, informados pelo Almoxarifado no kiting">Seriais</th><th title="Número da NF-e de venda de material">NF-e (material)</th><th title="Número da NFS-e de serviço — só quando o faturamento sai com as duas notas">NFS-e (serviço)</th><th>Ação</th>
               </tr></thead>
               <tbody>
-                {filtrarOpls(aguardando, busca).map(o => (
+                {basesDeLote.map(renderLote)}
+                {unicasAguardando.map(o => (
                   <tr key={o.id} className={oplsNaoLidas.has(String(o.id)) ? 'acn-linha-nova' : ehLote(o) ? 'acn-linha-marca' : undefined}>
                     <td>
                       <input type="checkbox" checked={selecionados.has(o.id)} onChange={()=>toggleSelecionado(o.id)} />
@@ -502,7 +683,7 @@ export default function FiscalTab({ currentUser }) {
       <OplMovimentadas setor="Fiscal" />
       <DemandaFooter setor="Fiscal" />
 
-      {/* BARRA DE FATURAMENTO EM LOTE — OPs desmembradas (mesmo lote), uma NF-e para todas as marcadas */}
+      {/* BARRA DE OPs AVULSAS — uma NF-e para várias vendas marcadas à mão. O lote tem o bloco próprio, com a nota no cabeçalho. */}
       {selecionados.size > 0 && (
         <div className="acn-barra-selecao">
           <strong className="acn-num">{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
