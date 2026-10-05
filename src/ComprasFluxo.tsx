@@ -28,6 +28,8 @@ import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import { Botao, Selo, Faixa } from './Interface';
 import { confirmar } from './Feedback';
 import { ItensDemandaEditor, itemVazio, itensPreenchidos } from './DemandaItens';
+import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
+import { AvisoSaldoCentro } from './CentroCustoUso';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
@@ -542,6 +544,7 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
     link_url: pedido.link_url || '',
     observacoes: pedido.observacoes || '',
     vinculo: pedido.vinculo_tipo ? { tipo: pedido.vinculo_tipo, id: pedido.vinculo_id, descricao: pedido.vinculo_descricao } : null,
+    centroId: pedido.centro_custo_id || null,
   });
   // A lista de material é a mesma de quando se abre a solicitação (05/10/2026): dá para completar a de uma requisição antiga que nasceu sem lista.
   const [itens, setItens] = useState<any[]>(() => (Array.isArray(pedido.itens) && pedido.itens.length ? pedido.itens : [itemVazio()]));
@@ -557,14 +560,22 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
     if (!(qtd > 0)) { alert('Informe uma quantidade maior que zero.'); return; }
     const chave = (l: any[]) => JSON.stringify((l || []).filter((i: any) => String(i?.nome || '').trim()).map((i: any) => [String(i.nome).trim(), Number(i.quantidade) || 1, String(i.descricao || '').trim(), i.valor_unitario ?? null]));
     const itensMudaram = chave(itensNovos) !== chave(pedido.itens);
+    // Etapa 15c (05/10/2026): o centro de custo também se corrige aqui (antes só no Financeiro); o texto antigo acompanha o código
+    const centroMudou = (form.centroId || null) !== (pedido.centro_custo_id || null);
+    let centroTexto = pedido.centro_custo ?? null;
+    if (centroMudou) {
+      if (form.centroId) { const cs = await fetchCentrosCusto(true); const cc = cs.find((x: any) => x.id === form.centroId); centroTexto = cc ? `${cc.codigo} — ${cc.nome}` : null; }
+      else centroTexto = null;
+    }
     const novo: any = {
       descricao_material: form.descricao_material.trim(), quantidade: qtd,
       ...(itensMudaram ? { itens: itensNovos } : {}),
       fornecedor: form.fornecedor.trim() || null, link_url: form.link_url.trim() || null,
       observacoes: form.observacoes.trim() || null,
       vinculo_tipo: form.vinculo?.tipo || null, vinculo_id: form.vinculo?.id || null, vinculo_descricao: form.vinculo?.descricao || null,
+      ...(centroMudou ? { centro_custo_id: form.centroId || null, centro_custo: centroTexto } : {}),
     };
-    const NOMES: Record<string, string> = { descricao_material: 'Descrição', quantidade: 'Quantidade', fornecedor: 'Fornecedor sugerido', link_url: 'Link', observacoes: 'Observações', vinculo_descricao: 'Vínculo' };
+    const NOMES: Record<string, string> = { descricao_material: 'Descrição', quantidade: 'Quantidade', fornecedor: 'Fornecedor sugerido', link_url: 'Link', observacoes: 'Observações', vinculo_descricao: 'Vínculo', ...(centroMudou ? { centro_custo: 'Centro de custo' } : {}) };
     const campos = Object.keys(NOMES).filter(k => String(pedido[k] ?? '') !== String(novo[k] ?? ''))
       .map(k => ({ campo: NOMES[k], de: pedido[k], para: novo[k] }));
     if (itensMudaram) campos.push({ campo: 'Itens a comprar', de: `${(pedido.itens || []).length} item(ns)`, para: `${itensNovos.length} item(ns)` });
@@ -598,6 +609,12 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
             : <input className="acn-input" type="number" min={0} step="any" style={{ width: '100%' }} value={form.quantidade} onChange={e => set('quantidade', e.target.value)} />}</div>
         <div><Rotulo>Fornecedor sugerido</Rotulo>
           <input className="acn-input" style={{ width: '100%' }} value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} /></div>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <Rotulo>Centro de custo</Rotulo>
+        <CentroCustoSelect value={form.centroId} onChange={v => set('centroId', v)} style={{ width: '100%' }} />
+        {/* Etapa 15c: aviso (só aviso) quando o centro já usou 80% do orçamento do mês ou do ano */}
+        <AvisoSaldoCentro centroId={form.centroId} />
       </div>
       <div style={{ marginTop: 10 }}>
         <Rotulo>Vincular a um processo (opcional)</Rotulo>

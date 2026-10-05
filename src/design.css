@@ -1076,8 +1076,8 @@ html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw)
 @media (max-width: 820px) { .acn-kb { grid-template-columns: 1fr; } .acn-kb-corpo { max-height: none; } }
 
 /* ── Centros de custo · ficha completa (Etapa 15a, 05/10/2026): só aparência ───────────────────────────────────── */
-html body .modal-box.acn-modal-cadastro.acn-cc-ficha { width: min(780px, 95vw); }
-html body .modal-box.acn-modal-cadastro.acn-cc-tipos { width: min(620px, 95vw); }
+html body .modal-box.acn-modal-cadastro.acn-cc-ficha { width: min(780px, 95vw); max-width: 780px; }
+html body .modal-box.acn-modal-cadastro.acn-cc-tipos { width: min(620px, 95vw); max-width: 620px; }
 .acn-cc-ficha .form-group, .acn-cc-tipos .form-group { margin-bottom: 0; }
 .acn-cc-linha { display: flex; gap: 10px; flex-wrap: wrap; }
 html body .acn-cc-linha > .form-group { flex: 1 1 170px; min-width: 0; }
@@ -1102,7 +1102,7 @@ html body .acn-input.acn-cc-orc-anual { width: 230px; }
 html body .acn-cc-tipo-linha .acn-input { flex: 1 1 180px; width: auto; min-width: 0; }
 
 /* ── Centros de custo · painel do centro (Etapa 15b, 05/10/2026): só aparência ─────────────────────────────────── */
-html body .modal-box.acn-modal-cadastro.acn-cc-painel { width: min(1040px, 96vw); }
+html body .modal-box.acn-modal-cadastro.acn-cc-painel { width: min(1040px, 96vw); max-width: 1040px; }
 .acn-cc-painel-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .acn-cc-painel-selos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .acn-cc-periodos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -1128,6 +1128,12 @@ body.dark .acn-cc-kpi.negativo strong { color: #fca5a5; }
 html body .acn-main table.acn-tabela tr.acn-cc-mes-atual > td { background: var(--acn-brand-soft) !important; font-weight: 600; }
 /* por fornecedor: nome, barra proporcional e valor */
 .acn-cc-forn { display: grid; gap: 6px; }
+/* Etapa 15c (05/10/2026): regras de uso, aviso de saldo e a tela "Compras sem centro" */
+.acn-cc-regras { margin: 0 0 8px; }
+.acn-cc-aviso-saldo { display: grid; gap: 6px; margin-top: 6px; }
+.acn-cc-sem-lote { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+html body .modal-box.acn-modal-cadastro.acn-cc-sem { width: min(1100px, 96vw); max-width: 1100px; }
+html body .acn-input.acn-cc-sem-sel { min-width: 240px; width: 100%; }
 .acn-cc-forn-linha { display: grid; grid-template-columns: minmax(90px, 1.2fr) 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
 .acn-cc-forn-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--acn-ink); }
 .acn-cc-forn-barra { display: block; height: 8px; background: var(--acn-neutral-soft); border-radius: 999px; overflow: hidden; }

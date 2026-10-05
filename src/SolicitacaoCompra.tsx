@@ -20,6 +20,7 @@ import React, { useState } from 'react';
 import { criarRequisicaoCompra, enviarAnexosCompra, EscolherAnexos } from './ComprasFluxo';
 import { ItensDemandaEditor, itemVazio, itensPreenchidos } from './DemandaItens';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
+import { AvisoSaldoCentro, useCentroObrigatorio, lerCentroObrigatorio, MSG_CENTRO_OBRIGATORIO } from './CentroCustoUso';
 import { VinculoPicker } from './VinculoPicker';
 import MencaoTextarea, { salvarMencoes } from './MencaoTextarea';
 import { ColaboradorSelect } from './ColaboradorSelect';
@@ -32,9 +33,13 @@ export const solicitacaoCompraVazia = (inicial: any = {}) => ({
   ...inicial,
 });
 
-/** Devolve o que falta preencher (texto para a pessoa) ou null se está pronta para enviar. */
-export function validarSolicitacaoCompra(v: any): string | null {
+/**
+ * Devolve o que falta preencher (texto para a pessoa) ou null se está pronta para enviar.
+ * `centroObrigatorio`: a regra "exigir o centro de custo" (Admin › Centros de Custo; Etapa 15c, 05/10/2026) — vem de useCentroObrigatorio().
+ */
+export function validarSolicitacaoCompra(v: any, centroObrigatorio = false): string | null {
   if (!String(v?.titulo || '').trim()) return 'Informe o título — o que está sendo comprado.';
+  if (centroObrigatorio && !v?.centroCustoId) return MSG_CENTRO_OBRIGATORIO;
   // A lista é o que o Compras cota e confere no recebimento; sem ela a pessoa acabava escrevendo o material na descrição.
   if (!itensPreenchidos(v?.itens || []).length) return 'Informe pelo menos um item a comprar (se for um serviço, o nome do serviço serve de item).';
   return null;
@@ -45,6 +50,7 @@ const PRIORIDADES = ['Alta', 'Média', 'Baixa'];
 /** Os campos da solicitação, iguais em qualquer lugar. Controlado: `valor` e `onChange` vêm de quem usa. */
 export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onChange: (v: any) => void }) {
   const set = (k: string, v: any) => onChange({ ...valor, [k]: v });
+  const centroObrigatorio = useCentroObrigatorio();
   return (
     <>
       <div className="form-group">
@@ -73,9 +79,11 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
         <input className="acn-input" type="date" value={valor.prazo} onChange={e => set('prazo', e.target.value)} />
       </div>
       <div className="form-group">
-        <label className="acn-label">Centro de custo (opcional)</label>
+        <label className="acn-label">{centroObrigatorio ? 'Centro de custo *' : 'Centro de custo (opcional)'}</label>
         <CentroCustoSelect value={valor.centroCustoId} onChange={v => set('centroCustoId', v)} style={{ width: '100%' }} />
-        <div className="acn-ajuda">Onde a compra será apontada. Dá para deixar em branco e informar depois.</div>
+        <div className="acn-ajuda">{centroObrigatorio ? 'Obrigatório: onde a compra será apontada.' : 'Onde a compra será apontada. Dá para deixar em branco e informar depois.'}</div>
+        {/* Etapa 15c: aviso (só aviso) quando o centro já usou 80% do orçamento do mês ou do ano */}
+        <AvisoSaldoCentro centroId={valor.centroCustoId} />
       </div>
       <div className="form-group">
         <label className="acn-label">Vincular a um processo (opcional)</label>
@@ -114,6 +122,8 @@ export function CamposSolicitacaoCompra({ valor, onChange }: { valor: any; onCha
  * `contexto` entra no começo das observações (ex.: de qual oportunidade ou licitação veio); `opl` é o número da OP em texto quando não há vínculo.
  */
 export async function enviarSolicitacaoCompra({ valor, currentUser, origemSetor = 'Demanda geral', oportunidadeId = null, opl = null, contexto = '' }: any) {
+  // a regra vale para TODA solicitação, venha de onde vier (a janela confere antes; esta é a garantia final)
+  if (!valor.centroCustoId && await lerCentroObrigatorio()) return { erro: MSG_CENTRO_OBRIGATORIO };
   const itens = itensPreenchidos(valor.itens || []);
   let centro: string | null = null;
   if (valor.centroCustoId) {
@@ -148,9 +158,10 @@ export function ModalSolicitarCompra({ currentUser, titulo = 'Solicitar compra',
   const [valor, setValor] = useState(() => solicitacaoCompraVazia(valorInicial));
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  const centroObrigatorio = useCentroObrigatorio();
 
   const enviar = async () => {
-    const falta = validarSolicitacaoCompra(valor);
+    const falta = validarSolicitacaoCompra(valor, centroObrigatorio);
     if (falta) { setErro(falta); return; }
     setSalvando(true); setErro('');
     const r: any = await enviarSolicitacaoCompra({ valor, currentUser, origemSetor, oportunidadeId, opl, contexto });

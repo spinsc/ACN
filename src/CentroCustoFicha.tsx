@@ -24,6 +24,7 @@ import {
   ordenarArvore, idsComDescendentes, sugerirCodigoCentro, siglaDoCodigo, foraDaVigencia, orcamentoDoCentro,
   lerValorBR, dividirAnualIgual, EMPRESAS_CENTRO, ModalLancarDespesa,
 } from './CentroCustoShared';
+import { lerCentroObrigatorio, gravarCentroObrigatorio, contarComprasSemCentro, ModalComprasSemCentro } from './CentroCustoUso';
 import { PainelCentroCusto, carregarMovimentosCentros, normalizarMovimentos, calcularCentro, somarPeriodo, faixaDoConsumo } from './CentroCustoPainel';
 import { mdiTagOutline, mdiPlus, mdiPencilOutline, mdiCashPlus, mdiMagnify, mdiShapeOutline, mdiRefresh, mdiArrowUp, mdiArrowDown, mdiContentCopy, mdiChartBoxOutline } from '@mdi/js';
 
@@ -52,6 +53,11 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
   const [painel, setPainel] = useState<string | null>(null);   // id do centro com o painel aberto
   const [itensMov, setItensMov] = useState<any[]>([]);          // compras, pagamentos e despesas já separados em realizado/comprometido (15b)
   const [erroMov, setErroMov] = useState('');
+  // Etapa 15c: regra "exigir o centro de custo na solicitação de compra" e a contagem das compras sem centro
+  const [obrigatorio, setObrigatorio] = useState(false);
+  const [salvandoRegra, setSalvandoRegra] = useState(false);
+  const [semCentro, setSemCentro] = useState<number | null>(null);
+  const [semCentroAberto, setSemCentroAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -69,6 +75,8 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     setCarregando(false);
     // a coluna "% usado" vem das compras e despesas; se essa leitura falhar, a lista continua e a coluna avisa
     carregarMovimentosCentros().then(m => { setItensMov(normalizarMovimentos(m)); setErroMov(''); }).catch(e => setErroMov(e?.message || String(e)));
+    lerCentroObrigatorio(true).then(setObrigatorio);
+    contarComprasSemCentro().then(setSemCentro);
   }, [ano]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -100,6 +108,16 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     carregar();
   };
 
+  const podeMudarRegra = currentUser?.perfil === 'Admin';
+  const mudarRegra = async (v: boolean) => {
+    setSalvandoRegra(true);
+    const { error } = await gravarCentroObrigatorio(v, currentUser);
+    setSalvandoRegra(false);
+    if (error) { mostrarAviso('Não foi possível salvar a regra: ' + error.message, 'erro'); return; }
+    setObrigatorio(v);
+    logChange({ module: 'centros_custo', entityType: 'configuracao', entityId: 'centro_custo_obrigatorio_compra', changeType: 'UPDATE', oldRow: { centro_obrigatorio_na_compra: obrigatorio }, newRow: { centro_obrigatorio_na_compra: v }, user: currentUser });
+    mostrarAviso(v ? 'Agora toda solicitação de compra exige o centro de custo.' : 'O centro de custo voltou a ser opcional na solicitação de compra.', 'ok');
+  };
   const anos = Array.from(new Set([anoAtual - 1, anoAtual, anoAtual + 1, ano])).sort();
   const textoVigencia = (c: any) => {
     const i = c.vigencia_inicio, f = c.vigencia_fim;
@@ -139,6 +157,22 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
         <Chips rotulo="Situação" ativo={situacao} onChange={setSituacao} itens={[
           { id: 'ativos', rotulo: 'Ativos' }, { id: 'inativos', rotulo: 'Inativos' }, { id: 'todos', rotulo: 'Todos' },
         ]} />
+      </div>
+
+      <div className="acn-quadro acn-cc-regras">
+        <div className="acn-quadro-titulo">Regras de uso</div>
+        <label className={'acn-sac-opcao' + (obrigatorio ? ' on' : '')} title={podeMudarRegra ? undefined : 'Só o Admin muda esta regra'}>
+          <input type="checkbox" checked={obrigatorio} disabled={!podeMudarRegra || salvandoRegra} onChange={e => mudarRegra(e.target.checked)} />
+          Exigir o centro de custo ao solicitar uma compra
+        </label>
+        <div className="acn-ajuda">
+          {obrigatorio ? 'Ligado: a solicitação de compra (CRM, Licitações e Demandas) não envia sem centro de custo.'
+            : 'Desligado: o centro de custo é opcional na solicitação de compra (como sempre foi). Ligue depois de corrigir as compras que estão sem centro.'}
+        </div>
+        <div className="acn-acoes-linha quebra">
+          <Botao pequeno onClick={() => setSemCentroAberto(true)}>Compras sem centro{semCentro == null ? '' : ` (${semCentro})`}</Botao>
+          {semCentro != null && semCentro > 0 && <span className="acn-fraco">Compras que não estão ligadas a nenhum centro — elas ficam fora do painel e dos totais por centro.</span>}
+        </div>
       </div>
 
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler os centros de custo: {erro}.</Faixa>}
@@ -210,6 +244,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
         <FichaCentro centro={ficha.centro} centros={centros} tipos={tipos} anoInicial={ano} currentUser={currentUser}
           onClose={() => setFicha(null)} onSalvo={carregar} />
       )}
+      {semCentroAberto && <ModalComprasSemCentro currentUser={currentUser} onClose={() => setSemCentroAberto(false)} onGravou={carregar} />}
       {painel && <PainelCentroCusto centroId={painel} centros={centros} anoInicial={ano} onClose={() => setPainel(null)} />}
       {tiposAberto && <TiposCentroModal tipos={tipos} centros={centros} currentUser={currentUser} onClose={() => setTiposAberto(false)} onMudou={carregar} />}
       {modalDespesa && <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser} onClose={() => setModalDespesa(null)} />}

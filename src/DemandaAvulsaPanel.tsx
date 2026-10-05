@@ -9,6 +9,7 @@ import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from './PinturaSerralheria';
 import { CamposSolicitacaoCompra, solicitacaoCompraVazia, validarSolicitacaoCompra, enviarSolicitacaoCompra } from './SolicitacaoCompra';
+import { useCentroObrigatorio } from './CentroCustoUso';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
@@ -1141,6 +1142,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [itens, setItens] = useState<any[]>([itemVazio()]);
   // Compras: a solicitação é a mesma de todo o sistema (SolicitacaoCompra.tsx) — mesmo formulário e mesma gravação (05/10/2026)
   const [sc, setSc] = useState(() => solicitacaoCompraVazia({ vinculo: vinculoInicial || null }));
+  const centroObrigatorio = useCentroObrigatorio(); // regra "exigir o centro de custo" (Etapa 15c)
   const [anexos, setAnexos] = useState<File[]>([]);   // foto, planilha, PDF... enviados junto com a demanda
   const [salvando, setSalvando] = useState(false);
   const [centroCustoId, setCentroCustoId] = useState<string | null>(null);
@@ -1179,7 +1181,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
     // Compras não tem mais lista própria de demanda: o pedido entra direto no quadro de Requisições, com cotação e aprovação
     // (decidido em 21/09/2026) — e, desde 05/10/2026, pelo MESMO formulário e pela MESMA gravação de toda solicitação de compra.
     if (setorAlvo === 'Compras') {
-      const falta = validarSolicitacaoCompra(sc);
+      const falta = validarSolicitacaoCompra(sc, centroObrigatorio);
       if (falta) { alert(falta); return; }
       setSalvando(true);
       const r: any = await enviarSolicitacaoCompra({ valor: sc, currentUser, origemSetor: origem || 'Demanda geral' });

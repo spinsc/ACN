@@ -6,6 +6,7 @@ import { ETAPAS_COMPRA, COR_ETAPA_COMPRA } from './ComprasFluxo';
 import { labelHierarquico, ModalLancarMedicao,
   ModalEditarLancamento, ModalEditarPedidoCompra, podeEditarLancamento } from './CentroCustoShared';
 import { CentrosCustoManager } from './CentroCustoFicha';
+import { ModalComprasSemCentro } from './CentroCustoUso';
 import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avaliarAlertasDeConsumo } from './CentroCustoPainel';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
@@ -437,6 +438,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [modalCompras, setModalCompras] = useState<any>(null);
   const [abaFin, setAbaFin] = useState('centros');
   const [painelCentro, setPainelCentro] = useState<string | null>(null); // Etapa 15b: id do centro com o painel aberto
+  const [semCentroAberto, setSemCentroAberto] = useState(false);            // Etapa 15c: tela "Compras sem centro"
 
   // Filtros
   const now = new Date();
@@ -552,7 +554,9 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   // "Concluído" das tarefas do Kanban desta mesma aba, que é outra coisa.
   const totalRecebidas = comprasFiltradas.filter(p => p.status_compra === 'Recebido').length;
   const totalPendentes  = comprasFiltradas.filter(p => p.status_compra === 'Pendente').length;
-  const totalSemCentro  = comprasFiltradas.filter(p => !p.centro_custo).length;
+  // Etapa 15c (05/10/2026): "sem centro" passa a ser o que a tela de correção lista — compra SEM VÍNCULO com centro (centro_custo_id), em qualquer período,
+  // sem as descartadas. Antes contava o texto vazio, dentro do período, e misturava compras que têm centro com compras que não têm.
+  const totalSemCentro  = compras.filter(p => !p.centro_custo_id && p.status_compra !== 'Descartada').length;
 
   // Bar chart simples (SVG)
   const maxBarVal = listacentros.length > 0 ? Math.max(...listacentros.map(c => c.total)) : 1;
@@ -649,10 +653,11 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
               { label: 'Centros Ativos', value: String(centros.filter(c => c.ativo).length), sub: 'centros de custo', cor: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '🏷️' },
               { label: 'Recebidas', value: String(totalRecebidas), sub: 'compras recebidas', cor: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '✅' },
               { label: 'Pendentes', value: String(totalPendentes), sub: 'aguardando', cor: '#b45309', bg: '#fef9c3', border: '#fde68a', icon: '⏳' },
-              { label: 'Sem Centro', value: String(totalSemCentro), sub: 'sem alocação', cor: '#dc2626', bg: '#fef2f2', border: '#fca5a5', icon: '⚠️' },
-            ].map(k => (
+              { label: 'Sem Centro', value: String(totalSemCentro), sub: 'sem centro vinculado — clique para corrigir', cor: '#dc2626', bg: '#fef2f2', border: '#fca5a5', icon: '⚠️', onClick: () => setSemCentroAberto(true) },
+            ].map((k: any) => (
               <div key={k.label} style={{ background: k.bg, border: `1px solid ${k.border}`,
-                borderRadius: 8, padding: '10px 14px' }}>
+                borderRadius: 8, padding: '10px 14px', cursor: k.onClick ? 'pointer' : undefined }}
+                {...(k.onClick ? { onClick: k.onClick, role: 'button', tabIndex: 0, 'aria-label': `${k.label}: ${k.value}. ${k.sub}`, onKeyDown: (e: any) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k.onClick(); } } } : {})}>
                 <div style={{ fontSize: 16, marginBottom: 2 }}>{k.icon}</div>
                 <div style={{ fontSize: 9, fontWeight: 700, color: k.cor, textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 2 }}>{k.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: k.cor }}>{k.value}</div>
@@ -810,6 +815,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
           onAtualizar={carregar}
         />
       )}
+
+      {semCentroAberto && <ModalComprasSemCentro currentUser={currentUser} onClose={() => setSemCentroAberto(false)} onGravou={carregar} />}
 
       {painelCentro && (
         <PainelCentroCusto centroId={painelCentro} centros={centros} onClose={() => setPainelCentro(null)}
