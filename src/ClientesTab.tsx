@@ -5,6 +5,11 @@ import { ClienteAutocomplete, fmtTelefones, fmtEmails } from './ClienteUtils';
 import RichTextInput from './RichTextInput';
 import { buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
+import { Faixa } from './Interface';
+import { temPoderDeGerente, podeDeletarRegistro } from './utils/permissoes';
+
+// A tela lê no máximo este tanto de clientes por vez (a busca e o filtro afinam). Antes o corte era silencioso.
+const LIMITE_LISTA = 200;
 
 const CLIENTE_VAZIO = {
   nome: '', tipo: 'PF', documento: '', nome_contato: '', cargo_contato: '',
@@ -84,6 +89,8 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
   // Contatos PF vinculados (só para PJ com id)
   const [contatosVinculados, setContatosVinculados] = useState<any[]>([]);
   const [loadingContatos, setLoadingContatos] = useState(false);
+  // Etapa 7.40 (04/10/2026): leitura que falha não pode virar "nenhum contato vinculado".
+  const [erroContatos, setErroContatos] = useState('');
 
   useEffect(() => {
     if (f.tipo === 'PJ' && initial?.id) {
@@ -91,8 +98,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
       supabase.from('clientes').select('id,nome,documento,cargo_contato,telefones,emails')
         .eq('empresa_id', initial.id)
         .order('nome')
-        .then(({ data }) => {
+        .then(({ data, error }) => {
           setContatosVinculados(data || []);
+          setErroContatos(error ? error.message : '');
           setLoadingContatos(false);
         });
     }
@@ -123,13 +131,17 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
       observacoes:   f.observacoes || null,
       atualizado_em: new Date().toISOString(),
     };
+    // Etapa 7.40 (04/10/2026): o resultado da gravação não era conferido. Com ela recusada, a janela fechava, o que foi digitado se
+    // perdia e a lista recarregava como se o cliente tivesse sido salvo. Agora avisa o erro e a janela continua aberta com os dados.
+    let error;
     if (initial?.id) {
-      await supabase.from('clientes').update(payload).eq('id', initial.id);
+      ({ error } = await supabase.from('clientes').update(payload).eq('id', initial.id));
     } else {
       payload.criado_em = new Date().toISOString();
-      await supabase.from('clientes').insert([payload]);
+      ({ error } = await supabase.from('clientes').insert([payload]));
     }
     setSalvando(false);
+    if (error) { alert('Não foi possível salvar o cliente: ' + error.message); return; }
     onSave();
   };
 
@@ -296,6 +308,10 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
           </div>
           {loadingContatos ? (
             <div style={{ fontSize:10, color:'#94a3b8' }}>Carregando...</div>
+          ) : erroContatos ? (
+            <div style={{ fontSize:10, color:'#94a3b8', fontStyle:'italic' }}>
+              Não foi possível ler os contatos vinculados ({erroContatos}).
+            </div>
           ) : contatosVinculados.length === 0 ? (
             <div style={{ fontSize:10, color:'#94a3b8', fontStyle:'italic' }}>
               Nenhum contato PF vinculado a esta empresa ainda.
@@ -354,7 +370,12 @@ export default function ClientesTab({ currentUser }) {
   const [modalForm, setModalForm] = useState<any>(null); // null | {} | cliente
   const [modoForm, setModoForm]   = useState<'novo'|'editar'|'ver'>('ver');
 
-  const podeEditar = currentUser?.perfil === 'Admin' || currentUser?.pode_editar_clientes === true;
+  // Quem cria e edita: Admin, gerentes e a equipe de Comercial/CRM e Licitações (a regra do sistema de 17/09/2026, escolha do
+  // usuário em 04/10/2026, Etapa 7.40). Antes só Admin: a tela lia uma marca `pode_editar_clientes` que não existe no cadastro
+  // de usuários nem é gravada em lugar nenhum. Excluir continua só com o Admin.
+  const podeEditar = temPoderDeGerente(currentUser);
+  const podeExcluir = podeDeletarRegistro(currentUser);
+  const [erroLista, setErroLista] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -363,8 +384,10 @@ export default function ClientesTab({ currentUser }) {
     let q = supabase.from('clientes').select('*, empresa_vinculada:empresa_id(id,nome)').order('nome');
     if (busca.length >= 2) q = buscarPorPalavras(q, ['nome_norm', 'documento_norm', 'empresa_norm', 'cidade_norm'], busca);
     if (filtroTipo) q = q.eq('tipo', filtroTipo);
-    const { data } = await q.limit(200);
-    setClientes(data || []);
+    const { data, error } = await q.limit(LIMITE_LISTA);
+    // Etapa 7.40: leitura que falha não pode virar "Nenhum cliente cadastrado ainda"; a faixa diz o que aconteceu.
+    setClientes(error ? [] : (data || []));
+    setErroLista(error ? error.message : '');
     setLoading(false);
   };
 
@@ -375,17 +398,24 @@ export default function ClientesTab({ currentUser }) {
 
   const excluir = async (c: any) => {
     if (!await confirmar(`Excluir cliente "${c.nome}"? Esta ação não pode ser desfeita.`)) return;
-    await supabase.from('clientes').delete().eq('id', c.id);
+    const { error } = await supabase.from('clientes').delete().eq('id', c.id);
+    // Etapa 7.40: o resultado não era conferido. Cliente com oportunidade ou venda no CRM (119 oportunidades apontam para clientes)
+    // é recusado pelo banco (chave estrangeira); a tela recarregava como se tivesse excluído e o cliente seguia na lista, sem aviso.
+    if (error) {
+      alert(error.code === '23503'
+        ? `O cliente "${c.nome}" não pode ser excluído: está ligado a oportunidades ou vendas do CRM.`
+        : 'Não foi possível excluir o cliente: ' + error.message);
+      return;
+    }
     load();
   };
 
   // Abre cliente pelo id (para "Ver empresa →" e "Ver contato →" dos vínculos)
   const abrirPorId = async (id: string) => {
-    const { data } = await supabase.from('clientes').select('*, empresa_vinculada:empresa_id(id,nome)').eq('id', id).single();
-    if (data) {
-      setModalForm({ ...data, _empresa_nome: data.empresa_vinculada?.nome || '' });
-      setModoForm('ver');
-    }
+    const { data, error } = await supabase.from('clientes').select('*, empresa_vinculada:empresa_id(id,nome)').eq('id', id).single();
+    if (error || !data) { alert('Não foi possível abrir o cadastro: ' + (error?.message || 'cadastro não encontrado')); return; }
+    setModalForm({ ...data, _empresa_nome: data.empresa_vinculada?.nome || '' });
+    setModoForm('ver');
   };
 
   const abrirModal = (c: any, modo: 'novo'|'editar'|'ver') => {
@@ -397,7 +427,7 @@ export default function ClientesTab({ currentUser }) {
     <div>
       <div className="sec-card">
         <div className="sec-hdr" style={{ background:'#f0fdf4', borderBottom:'2px solid #0f766e' }}>
-          <span style={{ color:'#064e3b', fontWeight:700 }}>👥 Cadastro de Clientes ({clientes.length})</span>
+          <span style={{ color:'#064e3b', fontWeight:700 }}>👥 Cadastro de Clientes ({clientes.length}{clientes.length >= LIMITE_LISTA ? '+' : ''})</span>
           <div style={{ display:'flex', gap:8 }}>
             {podeEditar && (
               <button className="acn-btn" style={{ background:'#0f766e' }}
@@ -431,10 +461,14 @@ export default function ClientesTab({ currentUser }) {
             ))}
           </div>
 
+          {erroLista && <Faixa tom="erro">Não foi possível ler os clientes ({erroLista}).</Faixa>}
+          {clientes.length >= LIMITE_LISTA && (
+            <Faixa tom="atencao">Mostrando só os primeiros {LIMITE_LISTA} clientes. Use a busca ou o filtro para achar os outros.</Faixa>
+          )}
           {loading ? (
             <div className="acn-empty">Carregando...</div>
           ) : clientes.length === 0 ? (
-            <div className="acn-empty">
+            erroLista ? null : <div className="acn-empty">
               {busca ? 'Nenhum cliente encontrado para esta busca.' : 'Nenhum cliente cadastrado ainda.'}
             </div>
           ) : (
@@ -508,10 +542,12 @@ export default function ClientesTab({ currentUser }) {
                                 onClick={() => abrirModal(c, 'editar')}>
                                 ✏️
                               </button>
-                              <button className="acn-btn" style={{ background:'#ef4444', fontSize:9 }}
-                                onClick={() => excluir(c)}>
-                                🗑
-                              </button>
+                              {podeExcluir && (
+                                <button className="acn-btn" style={{ background:'#ef4444', fontSize:9 }}
+                                  onClick={() => excluir(c)}>
+                                  🗑
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
