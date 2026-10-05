@@ -868,7 +868,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       {semCentroAberto && <ModalComprasSemCentro currentUser={currentUser} onClose={() => setSemCentroAberto(false)} onGravou={carregar} />}
 
       {painelCentro && (
-        <PainelCentroCusto centroId={painelCentro} centros={centros} onClose={() => setPainelCentro(null)}
+        <PainelCentroCusto centroId={painelCentro} centros={centros} currentUser={currentUser} onClose={() => setPainelCentro(null)}
           onVerLancamentos={(centro: any) => {
             const chave = labelHierarquico(centro, centros) + ' — ' + centro.nome;
             const linha = porCentro[chave];

@@ -265,7 +265,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
           onClose={() => setFicha(null)} onSalvo={carregar} />
       )}
       {semCentroAberto && <ModalComprasSemCentro currentUser={currentUser} onClose={() => setSemCentroAberto(false)} onGravou={carregar} />}
-      {painel && <PainelCentroCusto centroId={painel} centros={centros} anoInicial={ano} onClose={() => setPainel(null)} />}
+      {painel && <PainelCentroCusto centroId={painel} centros={centros} anoInicial={ano} currentUser={currentUser} onClose={() => setPainel(null)} />}
       {tiposAberto && <TiposCentroModal tipos={tipos} centros={centros} currentUser={currentUser} onClose={() => setTiposAberto(false)} onMudou={carregar} />}
       {modalDespesa && <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser} onClose={() => setModalDespesa(null)} onSalvo={carregar} />}
       {categoriasAberto && <ListaConfiguravelModal tabela="centro_custo_categorias" entidade="centro_custo_categorias" itens={categorias} usosPorId={usosCategorias} textos={TEXTOS_CATEGORIA}

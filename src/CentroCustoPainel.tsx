@@ -28,7 +28,9 @@ import { idsComDescendentes, orcamentoDoCentro, foraDaVigencia, ordenarArvore } 
 import { abrirVinculo } from './VinculoPicker';
 import { baixarPlanilha } from './ExportarPlanilha';
 import { lerFechamentos, fechamentoVigente } from './CentroCustoFechamento';
-import { mdiOpenInNew, mdiArrowLeft, mdiSubdirectoryArrowRight, mdiFileExcelOutline, mdiArrowTopRight, mdiArrowBottomRight, mdiMinus } from '@mdi/js';
+import { confirmar, mostrarAviso } from './Feedback';
+import { ehAdminOuGerente } from './utils/permissoes';
+import { mdiOpenInNew, mdiArrowLeft, mdiSubdirectoryArrowRight, mdiFileExcelOutline, mdiArrowTopRight, mdiArrowBottomRight, mdiMinus, mdiEmailOutline } from '@mdi/js';
 
 export const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -310,6 +312,57 @@ export function folhasDoPainel(d: any) {
   return folhas;
 }
 
+// ─── RESUMO POR E-MAIL (Etapa 15e-3, 05/10/2026) ───────────────────────────────
+// Decisão do usuário (05/10/2026): o resumo sai por um BOTÃO "Enviar resumo" no painel, ao responsável do centro; nada sai sozinho.
+// O envio usa a função `send-email` (SMTP que o Admin configura em Config. Email). Hoje nenhum centro tem responsável e o SMTP não está
+// configurado: a tela diz o que falta em vez de tentar. O texto é montado aqui (função pura) com os MESMOS números que o painel mostra.
+const esc = (t: any) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const assuntoDoResumo = (centro: any, ano: number, mes: number) => `Resumo de ${MESES[mes - 1].toLowerCase()}/${ano} — centro ${centro.codigo} (${centro.nome})`;
+
+/** O corpo (HTML) do e-mail: o mês e o ano (orçado, realizado, comprometido, saldo, uso), o comparativo, os maiores fornecedores e as OPs que mais custaram. */
+export function htmlDoResumo(d: any) {
+  const { centro, ano, mes, sMes, sAno, comp, fornecedores, ops, mesFechado, quemEnviou } = d;
+  const celula = 'padding:6px 10px;border:1px solid #e2e8f0;text-align:right;white-space:nowrap';
+  const cab = 'padding:6px 10px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left';
+  const th = (...t: string[]) => `<tr>${t.map(x => `<th style="${cab}">${esc(x)}</th>`).join('')}</tr>`;
+  const td = (...t: any[]) => `<tr>${t.map((x, i) => `<td style="${i === 0 ? celula.replace('text-align:right', 'text-align:left') : celula}">${esc(x)}</td>`).join('')}</tr>`;
+  const pct = (p: number | null) => (p == null ? '—' : `${p.toLocaleString('pt-BR')}%`);
+  const periodo = (rotulo: string, s: any) => td(rotulo, s.orcado ? reais(s.orcado) : '—', reais(s.realizado), reais(s.comprometido), s.orcado ? reais(s.saldo) : '—', pct(s.pct));
+  const sinal = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '');
+  const variacaoTxt = (p: any) => (p.delta === 0 && p.usado === 0 ? 'sem gasto nos dois' : `${sinal(p.delta)}${reais(Math.abs(p.delta))}${p.pct == null ? ' (sem base para comparar)' : ` (${sinal(p.pct)}${Math.abs(p.pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)`}`);
+  const tabela = (cabecalho: string, linhas: string) => `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin:6px 0 14px">${cabecalho}${linhas}</table>`;
+  let h = `<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;font-size:14px">`;
+  h += `<h2 style="margin:0 0 4px">Resumo de ${esc(MESES[mes - 1].toLowerCase())} de ${ano}</h2>`;
+  h += `<p style="margin:0 0 12px;color:#475569">Centro de custo <strong>${esc(centro.codigo)} — ${esc(centro.nome)}</strong>${centro.empresa ? ` · ${esc(centro.empresa)}` : ''}${mesFechado ? ' · <strong>mês fechado</strong>' : ''}</p>`;
+  h += `<p style="margin:0 0 8px">Olá${centro.responsavel_nome ? `, ${esc(centro.responsavel_nome)}` : ''}. Segue o resumo do seu centro de custo.</p>`;
+  h += tabela(th('Período', 'Orçado', 'Realizado', 'Comprometido', 'Saldo', 'Uso'), periodo(`${MESES[mes - 1]} de ${ano}`, sMes) + periodo(`Ano de ${ano}`, sAno));
+  if (sMes.previsto > 0 || sAno.previsto > 0) h += `<p style="margin:0 0 12px;color:#475569;font-size:12px">Pedidos ainda sem aprovação (previsto, fora do saldo): ${esc(reais(sMes.previsto))} no mês e ${esc(reais(sAno.previsto))} no ano.</p>`;
+  if (comp) {
+    h += `<h3 style="margin:10px 0 0;font-size:14px">Comparativo</h3>`;
+    h += tabela(th('Período', 'Total gasto', `${MESES[mes - 1]} de ${ano} em relação a ele`), td(`${MESES[comp.atual.mes - 1]} de ${comp.atual.ano}`, reais(comp.atual.usado), 'este mês')
+      + td(`${MESES[comp.anterior.mes - 1]} de ${comp.anterior.ano} (mês anterior)`, reais(comp.anterior.usado), variacaoTxt(comp.anterior))
+      + td(`${MESES[comp.anoAnterior.mes - 1]} de ${comp.anoAnterior.ano} (mesmo mês, ano anterior)`, reais(comp.anoAnterior.usado), variacaoTxt(comp.anoAnterior)));
+  }
+  if (fornecedores?.length) {
+    h += `<h3 style="margin:10px 0 0;font-size:14px">Maiores gastos por fornecedor — ${ano}</h3>`;
+    h += tabela(th('Fornecedor', 'Lançamentos', 'Total gasto'), fornecedores.slice(0, 5).map((f: any) => td(f.nome, f.n, reais(f.total))).join(''));
+  }
+  if (ops?.length) {
+    h += `<h3 style="margin:10px 0 0;font-size:14px">OPs que mais custaram — ${ano}</h3>`;
+    h += tabela(th('OP', 'Compras', 'Total gasto'), ops.slice(0, 5).map((o: any) => td([numeroDaOp(o.rotulo), restoDaOp(o.rotulo)].filter(Boolean).join(' — ') || '(sem número)', o.compras, reais(o.total))).join(''));
+  }
+  h += `<p style="margin:12px 0 0;color:#64748b;font-size:12px">Gasto = realizado (pago) + comprometido (aprovado, comprado ou recebido e ainda não pago). A compra entra no mês em que foi criada.${quemEnviou ? ` Enviado por ${esc(quemEnviou)} pelo sistema ACN Sinal Verde.` : ''}</p>`;
+  return h + '</div>';
+}
+
+/** O sistema de e-mail está configurado? true/false; null se a leitura falhar (então tenta enviar e a função diz). */
+export async function smtpConfigurado(): Promise<boolean | null> {
+  const { data, error } = await supabase.from('configuracoes_sistema').select('valor').eq('chave', 'smtp_configurado').maybeSingle();
+  return error ? null : String(data?.valor ?? '').toLowerCase() === 'true';
+}
+
 // ─── AVISO DE CONSUMO (menção ao responsável) ─────────────────────────────────
 // Uma menção por faixa e por mês: o registro em centros_custo_alertas (único por centro/ano/mês/faixa) decide, no banco,
 // mesmo que duas pessoas abram a tela ao mesmo tempo. Só avisa — nunca bloqueia. Só centro com RESPONSÁVEL cadastrado
@@ -383,7 +436,7 @@ function Quatro({ titulo, s }: any) {
  * `centros`: todos os centros (com os campos da ficha). `onVerLancamentos(centro)` é opcional: quando vem, aparece o
  * botão que abre a janela de compras e despesas que a tela do Financeiro já tem.
  */
-export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos, anoInicial }: any) {
+export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos, anoInicial, currentUser }: any) {
   const agora = new Date();
   const [atualId, setAtualId] = useState(centroId);
   const [ano, setAno] = useState(anoInicial || agora.getFullYear());
@@ -459,6 +512,35 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
   const codigoDe = (id: string) => centros.find((c: any) => c.id === id)?.codigo || '';
   const maxFornecedor = Math.max(1, ...porFornecedor.map(f => f.total));
   const maxCategoria = Math.max(1, ...porCategoria.map(f => f.total));
+
+  // Etapa 15e-3: "Enviar resumo" — o e-mail do mês escolhido ao responsável do centro. Só Admin e gerentes; nada sai sozinho.
+  const [enviando, setEnviando] = useState(false);
+  const podeEnviar = ehAdminOuGerente(currentUser);
+  const enviarResumo = async () => {
+    if (!calc || !sMes || !sAno || enviando) return;
+    if (!podeEnviar) { mostrarAviso('Só Admin e gerentes enviam o resumo do centro.', 'atencao'); return; }
+    const para = String(centro.responsavel_email || '').trim();
+    if (!para) { mostrarAviso(`O centro ${centro.codigo} não tem responsável cadastrado. Cadastre na ficha do centro (Admin › Centros de Custo) para poder enviar o resumo. Nada foi enviado.`, 'atencao'); return; }
+    if (!EMAIL_VALIDO.test(para)) { mostrarAviso(`O e-mail do responsável do centro ${centro.codigo} (“${para}”) não parece válido. Corrija na ficha do centro. Nada foi enviado.`, 'atencao'); return; }
+    setEnviando(true);
+    try {
+      if ((await smtpConfigurado()) === false) { mostrarAviso('O e-mail do sistema ainda não está configurado (Admin › Config. Email). Nada foi enviado.', 'atencao'); return; }
+      const nomeDest = centro.responsavel_nome ? `${centro.responsavel_nome} (${para})` : para;
+      if (!await confirmar(`Enviar o resumo de ${MESES[mes - 1].toLowerCase()} de ${ano} do centro ${centro.codigo} — ${centro.nome} para ${nomeDest}?`)) return;
+      const html = htmlDoResumo({ centro, ano, mes, sMes, sAno, comp, fornecedores: fornecedoresTodos, ops: opsTodas, mesFechado: !!fechamentoVigente(fechamentos, { ano, mes }), quemEnviou: currentUser?.nome });
+      const { data, error } = await supabase.functions.invoke('send-email', { body: { to: para, subject: assuntoDoResumo(centro, ano, mes), html } });
+      if (error || data?.error) {
+        // a função responde o motivo no corpo (ex.: 412 "SMTP não configurado"); o supabase-js só dá a mensagem genérica de "não 2xx"
+        let motivo = data?.error || '';
+        if (!motivo && error?.context?.json) { try { const j = await error.context.json(); motivo = j?.error || j?.message || ''; } catch (_) { /* fica a mensagem genérica */ } }
+        mostrarAviso(`Não foi possível enviar o resumo: ${String(motivo || error?.message || 'erro desconhecido').replace(/[.\s]+$/, '')}. Nada foi enviado.`, 'erro');
+        return;
+      }
+      mostrarAviso(`Resumo de ${MESES[mes - 1].toLowerCase()} enviado para ${nomeDest}.`, 'ok');
+    } catch (e: any) {
+      mostrarAviso(`Não foi possível enviar o resumo: ${e?.message || e}. Nada foi enviado.`, 'erro');
+    } finally { setEnviando(false); }
+  };
 
   // Etapa 15e: baixa a planilha do que o painel mostra (ver `folhasDoPainel`: onde a tela só mostra os maiores, a planilha traz a lista toda)
   const exportar = () => {
@@ -692,6 +774,7 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
           <Botao variante="primario" onClick={onClose}>Fechar</Botao>
           {onVerLancamentos && <Botao icone={mdiOpenInNew} onClick={() => onVerLancamentos(centro)}>Ver compras e despesas</Botao>}
           {calc && <Botao icone={mdiFileExcelOutline} onClick={exportar} title="Baixa uma planilha com o que o painel mostra (a lista toda onde a tela só mostra os maiores)">Exportar para Excel</Botao>}
+          {calc && <Botao icone={mdiEmailOutline} onClick={enviarResumo} disabled={enviando || !podeEnviar} title={podeEnviar ? 'Envia por e-mail o resumo deste mês ao responsável do centro' : 'Só Admin e gerentes enviam o resumo'}>{enviando ? 'Enviando…' : 'Enviar resumo'}</Botao>}
         </div>
       </div>
     </div>
