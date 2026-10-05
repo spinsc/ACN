@@ -12,7 +12,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
 import { hojeISO } from './Interface';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
@@ -20,6 +20,28 @@ export async function fetchCentrosCusto(incluirInativos = false) {
   if (!incluirInativos) q = q.eq('ativo', true);
   const { data } = await q;
   return data || [];
+}
+
+// CÓDIGO DO CENTRO DE CUSTO — formato decidido com o usuário em 05/10/2026 (pergunta clicável):
+//   raiz  = SIGLA-NNN           ex.: PROD-002   (a sigla é a área; NNN é o próximo número livre daquela sigla)
+//   filho = CÓDIGO-DO-PAI.NN    ex.: PROD-002.01
+// O sistema SUGERE o código ao criar e a pessoa pode editar. Ao trocar o código de um centro que já existe, o banco troca também o texto
+// gravado nas compras, faturamentos, demandas e OPs (função renomear_codigo_centro_custo) — os códigos dos filhos NÃO mudam sozinhos.
+const escaparRegex = (s: string) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const siglaDoCodigo = (codigo: string) => (String(codigo || '').match(/^([A-Z]+)-/) || [])[1] || '';
+export function sugerirCodigoCentro(centros: any[], parentId: string | null, sigla: string): string {
+  if (parentId) {
+    const pai = centros.find(c => c.id === parentId);
+    if (!pai) return '';
+    const re = new RegExp('^' + escaparRegex(pai.codigo) + '\\.(\\d+)$');
+    const maior = Math.max(0, ...centros.map(c => Number((String(c.codigo).match(re) || [])[1] || 0)));
+    return `${pai.codigo}.${String(maior + 1).padStart(2, '0')}`;
+  }
+  const s = String(sigla || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (!s) return '';
+  const re = new RegExp('^' + s + '-(\\d+)$');
+  const maior = Math.max(0, ...centros.map(c => Number((String(c.codigo).match(re) || [])[1] || 0)));
+  return `${s}-${String(maior + 1).padStart(3, '0')}`;
 }
 
 // Retorna a lista em ordem de árvore (pai imediatamente antes dos filhos),
@@ -91,6 +113,9 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
   const [centros, setCentros]   = useState<any[]>([]);
   const [loading, setLoading]   = useState(false);
   const [form, setForm]         = useState({ codigo:'', nome:'', descricao:'', parent_id:'' });
+  // sigla da área (só para centro RAIZ novo) e se a pessoa já mexeu no código — enquanto não mexeu, o sistema continua sugerindo
+  const [sigla, setSigla]       = useState('');
+  const [codigoManual, setCodigoManual] = useState(false);
   const [editando, setEditando] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -104,22 +129,42 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Enquanto a pessoa não digitou o código, ele é sugerido pela regra (pai escolhido → PAI.NN; sem pai → SIGLA-NNN)
+  useEffect(() => {
+    if (editando || codigoManual || !showForm) return;
+    setForm(f => ({ ...f, codigo: sugerirCodigoCentro(centros, f.parent_id || null, sigla) }));
+  }, [centros, form.parent_id, sigla, codigoManual, editando, showForm]);
+
+  const abrirNovo = () => { setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setSigla(''); setCodigoManual(false); setEditando(null); setShowForm(true); };
+
   const salvar = async () => {
     if (!form.codigo.trim() || !form.nome.trim()) { alert('Informe código e nome.'); return; }
     if (editando && form.parent_id === editando.id) { alert('Um centro não pode ser pai de si mesmo.'); return; }
+    const codigo = form.codigo.trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9./-]*$/.test(codigo)) { alert('Código inválido: use letras maiúsculas, números, ponto, barra ou hífen (ex.: PROD-002.01).'); return; }
+    if (centros.some(c => c.codigo === codigo && c.id !== editando?.id)) { alert(`Já existe um centro de custo com o código ${codigo}.`); return; }
     setSalvando(true);
     const payload: any = {
-      codigo: form.codigo.trim().toUpperCase(),
       nome: form.nome.trim(),
       descricao: form.descricao.trim() || null,
       parent_id: form.parent_id || null,
     };
     if (editando) {
-      await supabase.from('centros_custo').update(payload).eq('id', editando.id);
+      // trocar o código passa pela função do banco, que acompanha o texto gravado nas compras, faturamentos, demandas e OPs
+      if (codigo !== editando.codigo) {
+        const { data: r, error: errCod } = await supabase.rpc('renomear_codigo_centro_custo', { p_id: editando.id, p_novo: codigo });
+        if (errCod) { setSalvando(false); alert('Não foi possível trocar o código: ' + errCod.message); return; }
+        const soma = (r?.compras || 0) + (r?.faturamentos || 0) + (r?.demandas_setores || 0) + (r?.demandas_avulsas || 0) + (r?.ops || 0);
+        mostrarAviso(`Código trocado: ${editando.codigo} → ${codigo}.${soma ? ` Atualizados ${soma} registro(s) onde ele estava escrito.` : ''}`, 'ok');
+        logChange({ module: 'centros_custo', entityType: 'centros_custo', entityId: editando.id, changeType: 'UPDATE', oldRow: { codigo: editando.codigo }, newRow: { codigo }, user: currentUser });
+      }
+      const { error } = await supabase.from('centros_custo').update(payload).eq('id', editando.id);
+      if (error) { setSalvando(false); alert('Não foi possível salvar: ' + error.message); return; }
     } else {
-      await supabase.from('centros_custo').insert([{ ...payload, ativo: true }]);
+      const { error } = await supabase.from('centros_custo').insert([{ ...payload, codigo, ativo: true }]);
+      if (error) { setSalvando(false); alert('Não foi possível salvar: ' + error.message); return; }
     }
-    setForm({ codigo:'', nome:'', descricao:'', parent_id:'' });
+    setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setSigla(''); setCodigoManual(false);
     setEditando(null); setShowForm(false); setSalvando(false);
     load();
   };
@@ -152,7 +197,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
       {!showForm && (
         <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
           <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
-            onClick={() => { setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setEditando(null); setShowForm(true); }}>
+            onClick={abrirNovo}>
             + Novo Centro de Custo
           </button>
         </div>
@@ -163,14 +208,28 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
           <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
             {editando ? '✏️ Editar Centro de Custo' : '+ Novo Centro de Custo'}
           </div>
+          {!editando && !form.parent_id && (
+            <div style={{ marginBottom:8 }}>
+              <label className="acn-label">Sigla da área (para sugerir o código)</label>
+              <input className="acn-input" style={{ width:'100%' }} list="siglas-centro-custo" placeholder="Ex: PROD, ADM, ATV"
+                value={sigla} onChange={e => { setSigla(e.target.value.toUpperCase().replace(/[^A-Z]/g, '')); setCodigoManual(false); }} autoFocus />
+              <datalist id="siglas-centro-custo">
+                {[...new Set(centros.map(c => siglaDoCodigo(c.codigo)).filter(Boolean))].sort().map(s => <option key={s} value={s} />)}
+              </datalist>
+            </div>
+          )}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8, marginBottom:8 }}>
             <div>
               <label className="acn-label">Código *</label>
               <input className="acn-input" style={{ width:'100%' }}
-                placeholder="Ex: RH, TI, PROD"
+                placeholder={form.parent_id ? 'Sugerido pelo pai' : 'Digite a sigla acima'}
                 value={form.codigo}
-                onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                autoFocus />
+                onChange={e => { setCodigoManual(true); setForm(f => ({ ...f, codigo: e.target.value.toUpperCase() })); }} />
+              <div className="acn-ajuda" style={{ fontSize:9, marginTop:2 }}>
+                {editando
+                  ? 'Ao trocar o código, o texto gravado nas compras, demandas e OPs acompanha. Os códigos dos filhos não mudam sozinhos.'
+                  : 'Gerado pelo sistema — pode editar.'}
+              </div>
             </div>
             <div>
               <label className="acn-label">Nome *</label>
@@ -183,7 +242,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
           <div style={{ marginBottom:8 }}>
             <label className="acn-label">Centro de Custo Pai (opcional)</label>
             <select className="acn-input" style={{ width:'100%' }}
-              value={form.parent_id} onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}>
+              value={form.parent_id} onChange={e => { setCodigoManual(false); setForm(f => ({ ...f, parent_id: e.target.value })); }}>
               <option value="">— Nenhum (é um centro raiz) —</option>
               {paisDisponiveis.map(c => (
                 <option key={c.id} value={c.id}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}</option>
@@ -229,6 +288,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
               <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: c.ativo ? 1 : 0.45 }}>
                 <td style={{ padding:'8px 8px', fontWeight:700, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color:'#0f766e' }}>
                   {'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo}
+                  {c.codigo_anterior && <div style={{ fontSize:8, fontWeight:400, color:'#94a3b8' }} title="Código que o centro tinha antes da última troca">antes: {c.codigo_anterior}</div>}
                 </td>
                 <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
                 <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, wordBreak:'break-word' }} title={c.descricao || ''}>
@@ -252,7 +312,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
                       {c.ativo ? 'Desativar' : 'Ativar'}
                     </button>
                     <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
-                      onClick={() => { setForm({ codigo:c.codigo, nome:c.nome, descricao:c.descricao||'', parent_id:c.parent_id||'' }); setEditando(c); setShowForm(true); }}>
+                      onClick={() => { setForm({ codigo:c.codigo, nome:c.nome, descricao:c.descricao||'', parent_id:c.parent_id||'' }); setCodigoManual(true); setEditando(c); setShowForm(true); }}>
                       ✏️
                     </button>
                   </div>
