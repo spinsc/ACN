@@ -11,13 +11,16 @@ import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avalia
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
-import { hojeISO } from './Interface';
+import { hojeISO, Botao } from './Interface';
+import CustoPorOpTab from './CentroCustoRelatorios';
+import { baixarPlanilha } from './ExportarPlanilha';
+import { mdiFileExcelOutline } from '@mdi/js';
 
-// Abas do Financeiro: centros de custo (o que já existia), conciliação bancária e o kanban de tarefas
+// Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP
 function AbasFinanceiro({ aba, setAba }: any) {
   return (
-    <div role="tablist" style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '2px solid #0f172a', maxWidth: 680 }}>
-      {[['centros', '🏷️ Centros de custo'], ['conciliacao', '🏦 Conciliação bancária'], ['kanban', '📋 Tarefas']].map(([id, rotulo]) => (
+    <div role="tablist" style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '2px solid #0f172a', maxWidth: 900 }}>
+      {[['centros', '🏷️ Centros de custo'], ['conciliacao', '🏦 Conciliação bancária'], ['kanban', '📋 Tarefas'], ['custoop', '🧾 Custo por OP']].map(([id, rotulo]) => (
         <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
           style={{ flex: 1, padding: '8px', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
             background: aba === id ? '#0f172a' : '#fff', color: aba === id ? '#fff' : '#0f172a' }}>
@@ -583,6 +586,29 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     );
   }
 
+  if (abaFin === 'custoop') {
+    return (
+      <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
+        <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
+        <CustoPorOpTab currentUser={currentUser} />
+      </div>
+    );
+  }
+
+  // Etapa 15e (05/10/2026): a tabela "Consolidado por Centro" como está na tela (com o total) numa planilha
+  const exportarConsolidado = () => {
+    try {
+      baixarPlanilha(`Consolidado_por_centro_${filtroAno || 'todos'}${filtroMes ? '-' + filtroMes : ''}`, [{
+        nome: 'Consolidado por centro',
+        colunas: [{ rotulo: 'Centro de Custo', largura: 48 }, { rotulo: 'Qtd. Compras', formato: 'inteiro' }, { rotulo: 'Total Gasto', formato: 'moeda' }, { rotulo: 'Recebidas', formato: 'inteiro' }, { rotulo: 'Pendentes', formato: 'inteiro' }],
+        linhas: [
+          ...listacentros.map(c => [c.nome, c.count, c.total, c.compras.filter((p: any) => p.status_compra === 'Recebido').length, c.compras.filter((p: any) => p.status_compra === 'Pendente').length]),
+          ['TOTAL GERAL', comprasFiltradas.length + despesasFiltradas.length, totalGasto, null, null],
+        ],
+      }]);
+    } catch (e: any) { alert('Não foi possível gerar a planilha: ' + (e?.message || e)); }
+  };
+
   return (
     <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
       <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
@@ -710,8 +736,11 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
               <div style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
                 🗂️ Consolidado por Centro de Custo
               </div>
-              <div style={{ fontSize: 9, color: '#64748b' }}>
-                Clique em um centro para ver o painel (orçado × realizado × comprometido); "Ver" abre as compras
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ fontSize: 9, color: '#64748b' }}>
+                  Clique em um centro para ver o painel (orçado × realizado × comprometido); "Ver" abre as compras
+                </div>
+                <Botao pequeno icone={mdiFileExcelOutline} onClick={exportarConsolidado} disabled={listacentros.length === 0}>Exportar para Excel</Botao>
               </div>
             </div>
 

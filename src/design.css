@@ -1148,3 +1148,12 @@ html body .acn-input.acn-cc-pct { width: 90px; }
 .acn-cc-forn-barra { display: block; height: 8px; background: var(--acn-neutral-soft); border-radius: 999px; overflow: hidden; }
 .acn-cc-forn-barra > span { display: block; height: 100%; background: var(--acn-brand); border-radius: 999px; }
 @media (max-width: 760px) { .acn-cc-periodos { grid-template-columns: 1fr; } }
+
+/* ── Centros de custo · 15e (05/10/2026): comparativo, custo por OP e exportar para Excel ─────────────────────── */
+/* variação do comparativo: seta, valor e percentual na mesma linha */
+.acn-cc-var { display: inline-flex; align-items: center; gap: 6px; }
+/* aba "Custo por OP" do Financeiro */
+.acn-cc-op-filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.acn-cc-op-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-bottom: 12px; }
+html body .acn-main table.acn-tabela tr.acn-cc-op-detalhe > td { background: var(--acn-surface-2) !important; }
+.acn-cc-op-detalhe table { margin: 4px 0; }
