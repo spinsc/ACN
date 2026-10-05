@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
 import { confirmar, pedirTexto } from './Feedback';
+import { diaBR } from './Interface';
 import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 
 // O dossiê importa OplProgressBar deste arquivo; para não fechar um ciclo de
@@ -817,7 +818,9 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
     }
   };
 
-  const fmtDt  = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  // Só colunas do tipo date (entrada, recebimento do veículo, previsão, prazos, aceite): o dia vem do texto (R16, 05/10/2026).
+  // Antes era `new Date(d)`, que mostrava o dia anterior em 95 de 95 datas conferidas com o banco.
+  const fmtDt  = (d: any) => diaBR(d);
   const fmtDtH = (d: any) => d
     ? new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     : '—';

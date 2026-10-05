@@ -242,6 +242,20 @@ export function hojeISO(): string {
   return diaISO(new Date());
 }
 
+// O dia de uma coluna do tipo *date* (AAAA-MM-DD) escrito como dd/mm/aaaa, LIDO DIRETO DO TEXTO.
+//
+// R16 do plano de UX (resposta do usuário em 01/10/2026; regra da Etapa 7.10): `new Date("2026-09-30")` é a
+// meia-noite de Londres, que no Brasil ainda é 29/09 — a tela mostrava o dia anterior. Quem recebe uma coluna *date*
+// (data de entrada, previsão de entrega, prazos, aceite...) usa esta função e nunca `new Date(texto)`.
+// Data com hora (coluna timestamptz) NÃO passa por aqui: essa o `new Date` converte certo para o fuso de quem usa.
+export function diaBR(d: any): string {
+  if (d == null || d === '') return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('pt-BR');
+}
+
 // Dias de atraso de uma data (AAAA-MM-DD) em relação a hoje; 0 quando no prazo
 export function diasAtraso(data: string | null | undefined): number {
   if (!data) return 0;
