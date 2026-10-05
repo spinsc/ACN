@@ -1074,3 +1074,29 @@ html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw)
 .acn-kb-equip { color: var(--acn-ink); font-weight: 600; overflow-wrap: anywhere; }
 .acn-kb-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 @media (max-width: 820px) { .acn-kb { grid-template-columns: 1fr; } .acn-kb-corpo { max-height: none; } }
+
+/* ── Centros de custo · ficha completa (Etapa 15a, 05/10/2026): só aparência ───────────────────────────────────── */
+html body .modal-box.acn-modal-cadastro.acn-cc-ficha { width: min(780px, 95vw); }
+html body .modal-box.acn-modal-cadastro.acn-cc-tipos { width: min(620px, 95vw); }
+.acn-cc-ficha .form-group, .acn-cc-tipos .form-group { margin-bottom: 0; }
+.acn-cc-linha { display: flex; gap: 10px; flex-wrap: wrap; }
+html body .acn-cc-linha > .form-group { flex: 1 1 170px; min-width: 0; }
+html body .acn-cc-linha > .form-group.acn-cc-dobro { flex: 2 1 220px; }
+.acn-cc-barra { margin-bottom: 8px; justify-content: flex-end; }
+html body .acn-input.acn-cc-filtro { width: auto; min-width: 150px; }
+.acn-cc-codigo { font-weight: 700; color: var(--acn-brand); white-space: nowrap; }
+.acn-cc-antes { font-size: 11px; }
+/* orçamento: 12 meses em 4 colunas (2 no celular); o total e os atalhos ficam em cima e embaixo */
+.acn-cc-orc-topo { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.acn-cc-orc-ano { display: grid; gap: 2px; }
+.acn-cc-orc-atalhos { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+html body .acn-input.acn-cc-orc-anual { width: 230px; }
+.acn-cc-orc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.acn-cc-orc label { display: grid; gap: 2px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-cc-orc-leitura { padding: 7px 10px; border: 1px solid var(--acn-line); border-radius: var(--acn-r2); background: var(--acn-surface); font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--acn-ink); }
+.acn-cc-orc-total { font-size: 13px; color: var(--acn-ink); }
+@media (max-width: 560px) { .acn-cc-orc { grid-template-columns: repeat(2, minmax(0, 1fr)); } html body .acn-input.acn-cc-orc-anual { width: 100%; } }
+/* tipos: nome editável à esquerda, ações à direita */
+.acn-cc-tipo-linha { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-cc-tipo-linha.inativo .acn-input { opacity: .6; }
+html body .acn-cc-tipo-linha .acn-input { flex: 1 1 180px; width: auto; min-width: 0; }

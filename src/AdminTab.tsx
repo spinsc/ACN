@@ -5,7 +5,7 @@ import { invalidarCacheNotif } from './whatsappHelper';
 import Linkify from './Linkify';
 import { criadoEmLabel, paraCampoDataHora } from './AvisoSistemaWidget';
 import { podePublicarAviso, podeMexerNoAviso } from './utils/permissoes';
-import { CentrosCustoManager } from './CentroCustoShared';
+import { CentrosCustoManager } from './CentroCustoFicha';
 import { confirmar } from './Feedback';
 import PainelFeriados from './FeriadosAdmin';
 import { PainelFipeSync } from './Veiculos';
@@ -3525,7 +3525,8 @@ export default function AdminTab() {
       {abaAtiva === 'usuarios'     && <PainelUsuarios />}
       {abaAtiva === 'perfis'       && <PainelPerfis />}
       {abaAtiva === 'plataformas'  && <PainelPlataformas />}
-      {abaAtiva === 'centros_custo' && <CentrosCustoManager />}
+      {/* o usuário vai junto para o histórico de alterações e o autor das despesas lançadas aqui (Etapa 15a, 05/10/2026) */}
+      {abaAtiva === 'centros_custo' && <CentrosCustoManager currentUser={JSON.parse(localStorage.getItem('user') || '{}')} />}
       {abaAtiva === 'alcadas_aprovacao' && <PainelAlcadasAprovacao />}
       {abaAtiva === 'alcadas_aprovacao_fretes' && <PainelAlcadasAprovacaoFretes />}
       {abaAtiva === 'departamentos_compras' && <PainelDepartamentosCompras />}

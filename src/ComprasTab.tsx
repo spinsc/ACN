@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import MencaoTextarea, { salvarMencoes, resolverMencoesRespondidas, resolverMencoesDeTodos } from './MencaoTextarea';
 import OplAcompModal from './OplAcompModal';
 import Linkify from './Linkify';
-import { CentrosCustoManager, ordenarArvore, labelHierarquico } from './CentroCustoShared';
+import { centrosParaApontar, motivoBloqueio, labelHierarquico } from './CentroCustoShared';
+import { CentrosCustoManager } from './CentroCustoFicha';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { abrirVinculo, VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import KanbanColuna from './KanbanColuna';
@@ -2205,9 +2206,10 @@ export default function ComprasTab({ currentUser }) {
                   </div>
                 ) : (
                   <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10,maxHeight:200,overflowY:'auto'}}>
-                    {ordenarArvore(centrosCusto).map((c:any)=>(
-                      <div key={c.id} onClick={()=>setCentroCustom(c.id)} style={{
-                        padding:'8px 12px',marginLeft:c.nivel*16,borderRadius:6,cursor:'pointer',fontSize:11,
+                    {/* Etapa 15a (05/10/2026): centro que só agrupa ou está fora da vigência aparece apagado e não se escolhe */}
+                    {centrosParaApontar(centrosCusto, centroCustom).map((c:any)=>(
+                      <div key={c.id} onClick={()=>{ if(!c.bloqueado) setCentroCustom(c.id); }} title={c.bloqueado?`Não recebe lançamento (${motivoBloqueio(c)})`:undefined} style={{
+                        padding:'8px 12px',marginLeft:c.nivel*16,borderRadius:6,cursor:c.bloqueado?'not-allowed':'pointer',fontSize:11,opacity:c.bloqueado?0.5:1,
                         border:centroCustom===c.id?'2px solid #6366f1':'1.5px solid #e2e8f0',
                         background:centroCustom===c.id?'#eef2ff':'white',
                       }}>
@@ -2215,6 +2217,7 @@ export default function ComprasTab({ currentUser }) {
                         <strong style={{color:'#4f46e5'}}>{c.codigo}</strong>
                         <span style={{marginLeft:8}}>{c.nome}</span>
                         {c.descricao && <span style={{color:'#94a3b8',marginLeft:6,fontSize:9}}>{c.descricao}</span>}
+                        {c.bloqueado && <span style={{color:'#94a3b8',marginLeft:6,fontSize:9}}>({motivoBloqueio(c)})</span>}
                       </div>
                     ))}
                   </div>

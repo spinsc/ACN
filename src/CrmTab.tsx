@@ -42,6 +42,7 @@ import { OndeEstaCelula } from './OndeEstaAgora';
 import { desdeQuandoEmLote, desdeQuandoDaLista, COLUNAS_MARCOS_OP, diasDesde, textoDias, resumoDasOps } from './EtapasOp';
 import { indicePendencias, travaConclusaoProducao } from './OpPendencias';
 import { VeiculoDaOp } from './VeiculoCadastro';
+import { centroDisponivel } from './CentroCustoShared';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -486,8 +487,9 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   }, []);
 
   useEffect(() => {
-    supabase.from('centros_custo').select('codigo,nome').eq('ativo', true).order('codigo')
-      .then(({ data }) => setCentrosCusto(data || []));
+    // Etapa 15a (05/10/2026): só os que recebem lançamento e estão na vigência (o código já gravado na OP continua aparecendo no campo)
+    supabase.from('centros_custo').select('codigo,nome,ativo,recebe_lancamento,vigencia_inicio,vigencia_fim').eq('ativo', true).order('codigo')
+      .then(({ data }) => setCentrosCusto((data || []).filter(centroDisponivel)));
   }, []);
 
   useEffect(() => {

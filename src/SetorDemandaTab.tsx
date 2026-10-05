@@ -5,7 +5,7 @@ import { OplMovimentadas, DemandaFooter } from './AcnTabShared';
 import AnaliseWidget from './AnaliseWidget';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import Linkify from './Linkify';
-import { ordenarArvore, labelHierarquico } from './CentroCustoShared';
+import { centrosParaApontar, motivoBloqueio, labelHierarquico } from './CentroCustoShared';
 import { notificarEvento } from './whatsappHelper';
 import { horasUteis } from './utils/horasUteis';
 import { abrirVinculo, TIPO_LABEL } from './VinculoPicker';
@@ -1104,8 +1104,9 @@ export default function SetorDemandaTab({ currentUser, setor, cor, layoutUnico =
                 value={compraForm.centro_custo_id||''}
                 onChange={e=>setCompraForm(f=>({...f,centro_custo_id:e.target.value}))}>
                 <option value="">— Selecionar —</option>
-                {ordenarArvore(centrosCusto).map(c => (
-                  <option key={c.id} value={c.id}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}</option>
+                {/* Etapa 15a (05/10/2026): só agrupa / fora da vigência não é oferecido (o que já está gravado continua visível) */}
+                {centrosParaApontar(centrosCusto, compraForm.centro_custo_id || null).map(c => (
+                  <option key={c.id} value={c.id} disabled={c.bloqueado}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}{c.bloqueado ? ` (${motivoBloqueio(c)})` : ''}</option>
                 ))}
               </select>
             </div>

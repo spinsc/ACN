@@ -3,8 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
 import { ETAPAS_COMPRA, COR_ETAPA_COMPRA } from './ComprasFluxo';
-import { CentrosCustoManager, labelHierarquico, ModalLancarMedicao,
+import { labelHierarquico, ModalLancarMedicao,
   ModalEditarLancamento, ModalEditarPedidoCompra, podeEditarLancamento } from './CentroCustoShared';
+import { CentrosCustoManager } from './CentroCustoFicha';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';

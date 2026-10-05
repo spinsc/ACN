@@ -27,6 +27,7 @@ import { confirmar } from './Feedback';
 import { criarRequisicaoCompra } from './ComprasFluxo';
 import { SelectBusca, MenuAcoes } from './Interface';
 import { itensAtivosDoCatalogo } from './ConfigEstrutura';
+import { centroDisponivel } from './CentroCustoShared';
 import { mdiPencilOutline, mdiCloseCircleOutline } from '@mdi/js';
 
 /** Requisição de reposição aberta = ainda não virou material na prateleira.
@@ -1381,8 +1382,9 @@ export function ModalRetirada({ currentUser, onClose, onFeito }: any) {
         .then(({ data }) => setOpls(data || []));
     }
     if (destino === 'centro' && !centros.length) {
-      supabase.from('centros_custo').select('id,codigo,nome').eq('ativo', true).order('nome')
-        .then(({ data }) => setCentros(data || []));
+      // Etapa 15a (05/10/2026): só os que recebem lançamento e estão na vigência
+      supabase.from('centros_custo').select('id,codigo,nome,ativo,recebe_lancamento,vigencia_inicio,vigencia_fim').eq('ativo', true).order('nome')
+        .then(({ data }) => setCentros((data || []).filter(centroDisponivel)));
     }
   }, [destino]);
 

@@ -7,12 +7,14 @@
 // centraliza: helpers de árvore/hierarquia, um <select> reutilizável com
 // indentação (CentroCustoSelect) para usar em formulários, e o painel de
 // gestão completo (CentrosCustoManager) reaproveitado nos 3 lugares.
+// Etapa 15a (05/10/2026): o painel de gestão, agora com a ficha completa do centro (tipo, empresa, responsável,
+// vigência, orçamento mensal), mora em CentroCustoFicha.tsx — aqui ficam as regras e as peças que as outras telas usam.
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
-import { confirmar, mostrarAviso } from './Feedback';
+import { confirmar } from './Feedback';
 import { hojeISO } from './Interface';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
@@ -89,257 +91,97 @@ export function idsComDescendentes(centroId: string, todosCentros: any[]): strin
   return resultado;
 }
 
+// ─── REGRAS DA FICHA DO CENTRO (Etapa 15a, 05/10/2026) ─────────────────────
+// Empresas que o centro pode ter. Ponto de partida decidido com o usuário (as mesmas duas das OS do SAC);
+// o campo grava texto livre, então acrescentar uma empresa é só incluí-la aqui.
+export const EMPRESAS_CENTRO = ['ACN', 'DETECH'];
+
+/** Vigência vencida ou ainda não começada (datas em AAAA-MM-DD, comparadas como texto — coluna *date*, sem new Date). */
+export function foraDaVigencia(c: any, hoje: string = hojeISO()): boolean {
+  const ini = c?.vigencia_inicio ? String(c.vigencia_inicio).slice(0, 10) : '';
+  const fim = c?.vigencia_fim ? String(c.vigencia_fim).slice(0, 10) : '';
+  return (!!ini && ini > hoje) || (!!fim && fim < hoje);
+}
+
+/** O centro pode receber um apontamento novo (compra, despesa, demanda)? Só agrupa → não; fora da vigência → não; inativo → não. */
+export function centroDisponivel(c: any, hoje: string = hojeISO()): boolean {
+  if (!c || c.ativo === false) return false;
+  if (c.recebe_lancamento === false) return false;
+  return !foraDaVigencia(c, hoje);
+}
+
+// A lista para escolher o centro de um apontamento, na ordem da árvore. Regra decidida com o usuário (15a):
+//  • centro que só AGRUPA ou fora da vigência não é oferecido;
+//  • o que JÁ está gravado no registro continua aparecendo (senão a tela mostraria outro centro no lugar);
+//  • um pai que só agrupa continua na lista, desativado, quando algum filho pode receber — senão o filho perderia o recuo.
+export function centrosParaApontar(centros: any[], valorAtual: string | null = null) {
+  const hoje = hojeISO();
+  const porId = Object.fromEntries(centros.map(c => [c.id, c]));
+  const pode = (c: any) => centroDisponivel(c, hoje) || c.id === valorAtual;
+  const visivel = new Set<string>();
+  for (const c of centros) {
+    if (!pode(c)) continue;
+    let a = c, guarda = 0;
+    while (a && !visivel.has(a.id) && guarda++ < 12) { visivel.add(a.id); a = a.parent_id ? porId[a.parent_id] : null; }
+  }
+  return ordenarArvore(centros.filter(c => visivel.has(c.id))).map(c => ({ ...c, bloqueado: !pode(c) }));
+}
+/** Por que um centro aparece desativado na lista de escolha. */
+export const motivoBloqueio = (c: any) => c.recebe_lancamento === false ? 'só agrupa' : 'fora da vigência';
+
+/** Lê um valor em reais digitado pela pessoa. "" → null; inválido → NaN. Aceita 1.234,56 · 1234,56 · 1234.56 · 12.000 (ponto de milhar). */
+export function lerValorBR(txt: any): number | null {
+  const s = String(txt ?? '').trim().replace(/\s/g, '').replace(/^R\$/i, '');
+  if (!s) return null;
+  // com vírgula, o ponto é milhar; sem vírgula, "12.000" é doze mil (padrão de milhar), mas "12.5" é doze e meio
+  const n = s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.'))
+    : /^\d{1,3}(\.\d{3})+$/.test(s) ? Number(s.replace(/\./g, '')) : Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+/** "Dividir igual": o valor anual em 12 partes, em centavos; a sobra de centavos vai toda para dezembro (a soma fecha exata). */
+export function dividirAnualIgual(total: number): number[] {
+  const cent = Math.round((Number(total) || 0) * 100);
+  const base = Math.floor(cent / 12);
+  const resto = cent - base * 12;
+  return Array.from({ length: 12 }, (_, i) => (i === 11 ? base + resto : base) / 100);
+}
+
+/**
+ * O orçamento do centro mês a mês (12 valores) num ano. `linhas` são as linhas de centros_custo_orcamento DAQUELE ano.
+ * Centro com orçamento próprio usa o que está digitado nele; pai em "soma dos filhos" soma os filhos ATIVOS (recursivo,
+ * e cada filho vale pelo seu próprio modo). Mês sem linha conta como zero — e centro sem nenhuma linha fica sem alerta (15b).
+ */
+export function orcamentoDoCentro(centro: any, centros: any[], linhas: any[]): number[] {
+  const proprio: Record<string, number[]> = {};
+  for (const l of linhas || []) {
+    const m = Number(l.mes);
+    if (m >= 1 && m <= 12) (proprio[l.centro_id] ||= Array(12).fill(0))[m - 1] = Number(l.valor) || 0;
+  }
+  const calc = (c: any, visitados: Set<string>): number[] => {
+    if (visitados.has(c.id)) return Array(12).fill(0); // guarda contra ciclo acidental
+    if (c.orcamento_modo !== 'soma_filhos') return proprio[c.id] ? [...proprio[c.id]] : Array(12).fill(0);
+    const soma = Array(12).fill(0);
+    const v = new Set(visitados).add(c.id);
+    centros.filter(f => f.parent_id === c.id && f.ativo !== false).forEach(f => calc(f, v).forEach((x, i) => { soma[i] += x; }));
+    return soma;
+  };
+  return calc(centro, new Set()).map(v => Math.round(v * 100) / 100);
+}
+
 // ─── SELECT REUTILIZÁVEL (formulários de pedido/demanda) ──────────────────
 export function CentroCustoSelect({ value, onChange, permitirNenhum = true, style, className }: any) {
   const [centros, setCentros] = useState<any[]>([]);
   useEffect(() => { fetchCentrosCusto().then(setCentros); }, []);
-  const arvore = ordenarArvore(centros);
+  const arvore = centrosParaApontar(centros, value || null);
   return (
     <select className={className} value={value || ''} onChange={e => onChange(e.target.value || null)}
       style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, ...style }}>
       {permitirNenhum && <option value="">— Não informar —</option>}
       {arvore.map(c => (
-        <option key={c.id} value={c.id}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}</option>
+        <option key={c.id} value={c.id} disabled={c.bloqueado}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}{c.bloqueado ? ` (${motivoBloqueio(c)})` : (c.id === value && !centroDisponivel(c) ? ` (${motivoBloqueio(c)})` : '')}</option>
       ))}
     </select>
-  );
-}
-
-// ─── PAINEL DE GESTÃO COMPLETO ─────────────────────────────────────────────
-// `embutido` — quando true, renderiza sem o wrapper "sec-card" (uso dentro
-// de um modal já existente em Compras/Financeiro); quando false (padrão),
-// monta como card de página inteira (uso no Admin).
-export function CentrosCustoManager({ embutido = false, currentUser }: any = {}) {
-  const [centros, setCentros]   = useState<any[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [form, setForm]         = useState({ codigo:'', nome:'', descricao:'', parent_id:'' });
-  // sigla da área (só para centro RAIZ novo) e se a pessoa já mexeu no código — enquanto não mexeu, o sistema continua sugerindo
-  const [sigla, setSigla]       = useState('');
-  const [codigoManual, setCodigoManual] = useState(false);
-  const [editando, setEditando] = useState<any>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [modalDespesa, setModalDespesa] = useState<any>(null); // centro selecionado para lançar despesa
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase.from('centros_custo').select('*').order('codigo');
-    setCentros(data || []);
-    setLoading(false);
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  // Enquanto a pessoa não digitou o código, ele é sugerido pela regra (pai escolhido → PAI.NN; sem pai → SIGLA-NNN)
-  useEffect(() => {
-    if (editando || codigoManual || !showForm) return;
-    setForm(f => ({ ...f, codigo: sugerirCodigoCentro(centros, f.parent_id || null, sigla) }));
-  }, [centros, form.parent_id, sigla, codigoManual, editando, showForm]);
-
-  const abrirNovo = () => { setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setSigla(''); setCodigoManual(false); setEditando(null); setShowForm(true); };
-
-  const salvar = async () => {
-    if (!form.codigo.trim() || !form.nome.trim()) { alert('Informe código e nome.'); return; }
-    if (editando && form.parent_id === editando.id) { alert('Um centro não pode ser pai de si mesmo.'); return; }
-    const codigo = form.codigo.trim().toUpperCase();
-    if (!/^[A-Z0-9][A-Z0-9./-]*$/.test(codigo)) { alert('Código inválido: use letras maiúsculas, números, ponto, barra ou hífen (ex.: PROD-002.01).'); return; }
-    if (centros.some(c => c.codigo === codigo && c.id !== editando?.id)) { alert(`Já existe um centro de custo com o código ${codigo}.`); return; }
-    setSalvando(true);
-    const payload: any = {
-      nome: form.nome.trim(),
-      descricao: form.descricao.trim() || null,
-      parent_id: form.parent_id || null,
-    };
-    if (editando) {
-      // trocar o código passa pela função do banco, que acompanha o texto gravado nas compras, faturamentos, demandas e OPs
-      if (codigo !== editando.codigo) {
-        const { data: r, error: errCod } = await supabase.rpc('renomear_codigo_centro_custo', { p_id: editando.id, p_novo: codigo });
-        if (errCod) { setSalvando(false); alert('Não foi possível trocar o código: ' + errCod.message); return; }
-        const soma = (r?.compras || 0) + (r?.faturamentos || 0) + (r?.demandas_setores || 0) + (r?.demandas_avulsas || 0) + (r?.ops || 0);
-        mostrarAviso(`Código trocado: ${editando.codigo} → ${codigo}.${soma ? ` Atualizados ${soma} registro(s) onde ele estava escrito.` : ''}`, 'ok');
-        logChange({ module: 'centros_custo', entityType: 'centros_custo', entityId: editando.id, changeType: 'UPDATE', oldRow: { codigo: editando.codigo }, newRow: { codigo }, user: currentUser });
-      }
-      const { error } = await supabase.from('centros_custo').update(payload).eq('id', editando.id);
-      if (error) { setSalvando(false); alert('Não foi possível salvar: ' + error.message); return; }
-    } else {
-      const { error } = await supabase.from('centros_custo').insert([{ ...payload, codigo, ativo: true }]);
-      if (error) { setSalvando(false); alert('Não foi possível salvar: ' + error.message); return; }
-    }
-    setForm({ codigo:'', nome:'', descricao:'', parent_id:'' }); setSigla(''); setCodigoManual(false);
-    setEditando(null); setShowForm(false); setSalvando(false);
-    load();
-  };
-
-  const toggleAtivo = async (c: any) => {
-    await supabase.from('centros_custo').update({ ativo: !c.ativo }).eq('id', c.id);
-    load();
-  };
-
-  const arvore = ordenarArvore(centros);
-  // Ao editar, um centro não pode virar filho de si mesmo nem de um dos
-  // seus próprios descendentes (evitaria ciclo).
-  const descendentesDe = (id: string): Set<string> => {
-    const s = new Set<string>();
-    const filhos = centros.filter(c => c.parent_id === id);
-    filhos.forEach(f => { s.add(f.id); descendentesDe(f.id).forEach(x => s.add(x)); });
-    return s;
-  };
-  const paisDisponiveis = editando
-    ? arvore.filter(c => c.id !== editando.id && !descendentesDe(editando.id).has(c.id))
-    : arvore;
-
-  const conteudo = (
-    <>
-      <p style={{ fontSize:10, color:'#64748b', marginBottom:12 }}>
-        Usados para classificar pedidos de compra e apontar custos. Um centro pode ter um "pai"
-        (ex: FLUTUANTE {'>'}  PIER {'>'} ILHA) — o filho aparece indentado abaixo do pai na lista.
-      </p>
-
-      {!showForm && (
-        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:10 }}>
-          <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
-            onClick={abrirNovo}>
-            + Novo Centro de Custo
-          </button>
-        </div>
-      )}
-
-      {showForm && (
-        <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6, padding:12, marginBottom:12 }}>
-          <div style={{ fontWeight:700, fontSize:11, marginBottom:10 }}>
-            {editando ? '✏️ Editar Centro de Custo' : '+ Novo Centro de Custo'}
-          </div>
-          {!editando && !form.parent_id && (
-            <div style={{ marginBottom:8 }}>
-              <label className="acn-label">Sigla da área (para sugerir o código)</label>
-              <input className="acn-input" style={{ width:'100%' }} list="siglas-centro-custo" placeholder="Ex: PROD, ADM, ATV"
-                value={sigla} onChange={e => { setSigla(e.target.value.toUpperCase().replace(/[^A-Z]/g, '')); setCodigoManual(false); }} autoFocus />
-              <datalist id="siglas-centro-custo">
-                {[...new Set(centros.map(c => siglaDoCodigo(c.codigo)).filter(Boolean))].sort().map(s => <option key={s} value={s} />)}
-              </datalist>
-            </div>
-          )}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:8, marginBottom:8 }}>
-            <div>
-              <label className="acn-label">Código *</label>
-              <input className="acn-input" style={{ width:'100%' }}
-                placeholder={form.parent_id ? 'Sugerido pelo pai' : 'Digite a sigla acima'}
-                value={form.codigo}
-                onChange={e => { setCodigoManual(true); setForm(f => ({ ...f, codigo: e.target.value.toUpperCase() })); }} />
-              <div className="acn-ajuda" style={{ fontSize:9, marginTop:2 }}>
-                {editando
-                  ? 'Ao trocar o código, o texto gravado nas compras, demandas e OPs acompanha. Os códigos dos filhos não mudam sozinhos.'
-                  : 'Gerado pelo sistema — pode editar.'}
-              </div>
-            </div>
-            <div>
-              <label className="acn-label">Nome *</label>
-              <input className="acn-input" style={{ width:'100%' }}
-                placeholder="Nome completo do centro"
-                value={form.nome}
-                onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
-            </div>
-          </div>
-          <div style={{ marginBottom:8 }}>
-            <label className="acn-label">Centro de Custo Pai (opcional)</label>
-            <select className="acn-input" style={{ width:'100%' }}
-              value={form.parent_id} onChange={e => { setCodigoManual(false); setForm(f => ({ ...f, parent_id: e.target.value })); }}>
-              <option value="">— Nenhum (é um centro raiz) —</option>
-              {paisDisponiveis.map(c => (
-                <option key={c.id} value={c.id}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ marginBottom:10 }}>
-            <label className="acn-label">Descrição</label>
-            <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical' }}
-              placeholder="Observações sobre o uso deste centro de custo (opcional)"
-              value={form.descricao}
-              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} />
-          </div>
-          <div style={{ display:'flex', gap:8 }}>
-            <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
-              {salvando ? 'Salvando...' : 'SALVAR'}
-            </button>
-            <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={() => { setShowForm(false); setEditando(null); }}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {loading && <div style={{ textAlign:'center', padding:20, color:'#64748b', fontSize:11 }}>Carregando...</div>}
-      {!loading && centros.length === 0 && (
-        <div style={{ textAlign:'center', padding:20, color:'#9ca3af', fontSize:11 }}>
-          Nenhum centro de custo cadastrado. Clique em <strong>+ Novo Centro de Custo</strong> para começar.
-        </div>
-      )}
-
-      {centros.length > 0 && (
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
-          <thead>
-            <tr style={{ background:'#f8fafc' }}>
-              <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Código</th>
-              <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Nome</th>
-              <th style={{ padding:'6px 8px', textAlign:'left', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Descrição</th>
-              <th style={{ padding:'6px 8px', textAlign:'center', fontWeight:700, fontSize:9, color:'#475569', borderBottom:'1px solid #e2e8f0' }}>Status</th>
-              <th style={{ padding:'6px 8px', borderBottom:'1px solid #e2e8f0' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {arvore.map(c => (
-              <tr key={c.id} style={{ borderBottom:'1px solid #f1f5f9', opacity: c.ativo ? 1 : 0.45 }}>
-                <td style={{ padding:'8px 8px', fontWeight:700, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color:'#0f766e' }}>
-                  {'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo}
-                  {c.codigo_anterior && <div style={{ fontSize:8, fontWeight:400, color:'#94a3b8' }} title="Código que o centro tinha antes da última troca">antes: {c.codigo_anterior}</div>}
-                </td>
-                <td style={{ padding:'8px 8px', fontWeight:700 }}>{c.nome}</td>
-                <td style={{ padding:'8px 8px', color:'#64748b', maxWidth:220, wordBreak:'break-word' }} title={c.descricao || ''}>
-                  {c.descricao || '—'}
-                </td>
-                <td style={{ padding:'8px 8px', textAlign:'center' }}>
-                  <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:10,
-                    background: c.ativo ? '#dcfce7' : '#f1f5f9',
-                    color:      c.ativo ? '#16a34a'  : '#94a3b8' }}>
-                    {c.ativo ? 'Ativo' : 'Inativo'}
-                  </span>
-                </td>
-                <td style={{ padding:'8px 6px' }}>
-                  <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
-                    <button className="acn-btn" style={{ background:'#16a34a', fontSize:9, padding:'2px 8px' }}
-                      onClick={() => setModalDespesa(c)} title="Lançar despesa avulsa neste centro">
-                      💰
-                    </button>
-                    <button className="acn-btn" style={{ background: c.ativo ? '#f59e0b' : '#16a34a', fontSize:9, padding:'2px 8px' }}
-                      onClick={() => toggleAtivo(c)}>
-                      {c.ativo ? 'Desativar' : 'Ativar'}
-                    </button>
-                    <button className="acn-btn" style={{ background:'#0891b2', fontSize:9, padding:'2px 8px' }}
-                      onClick={() => { setForm({ codigo:c.codigo, nome:c.nome, descricao:c.descricao||'', parent_id:c.parent_id||'' }); setCodigoManual(true); setEditando(c); setShowForm(true); }}>
-                      ✏️
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </>
-  );
-
-  const modalDespesaEl = modalDespesa && (
-    <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser}
-      onClose={() => setModalDespesa(null)} />
-  );
-
-  if (embutido) return <div>{conteudo}{modalDespesaEl}</div>;
-
-  return (
-    <div className="sec-card">
-      <div className="sec-header">
-        <span>🏷️ Centros de Custo</span>
-      </div>
-      <div className="sec-body">{conteudo}</div>
-      {modalDespesaEl}
-    </div>
   );
 }
 
@@ -398,7 +240,7 @@ function CampoParcelas({ parcelas, onChange, total, feitas = 0 }: any) {
   );
 }
 
-function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
+export function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
   const [parcelado, setParcelado] = useState(false);
   const [parcelas, setParcelas] = useState('');
   const [valor, setValor] = useState('');
