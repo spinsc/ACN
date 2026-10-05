@@ -5,8 +5,14 @@ import { ClienteAutocomplete, fmtTelefones, fmtEmails } from './ClienteUtils';
 import RichTextInput from './RichTextInput';
 import { buscarPorPalavras } from './SearchUtils';
 import { confirmar } from './Feedback';
-import { Faixa } from './Interface';
+import { Faixa, Botao, Selo, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiAccountGroupOutline, mdiAccountOutline, mdiDomain, mdiEyeOutline, mdiLinkVariant, mdiMapMarkerOutline } from '@mdi/js';
 import { temPoderDeGerente, podeDeletarRegistro } from './utils/permissoes';
+
+// Etapa 12e7 (04/10/2026): a parte visual desta tela passou para as peças do design system (Botao, Selo, Chips, Faixa, a janela do
+// sistema, o quadro e as classes acn-tabela / acn-cli-*), no lugar do estilo pintado à mão em cada elemento. Só aparência: os
+// campos, os textos, os filtros, as consultas, as gravações e a regra de quem pode o quê são os de antes.
 
 // A tela lê no máximo este tanto de clientes por vez (a busca e o filtro afinam). Antes o corte era silencioso.
 const LIMITE_LISTA = 200;
@@ -26,25 +32,25 @@ function TelefoneList({ list, setList, readonly }) {
   return (
     <div>
       {list.map((t, i) => (
-        <div key={i} style={{ display:'flex', gap:6, marginBottom:6 }}>
-          <input className="acn-input" style={{ flex:2 }} placeholder="Telefone / WhatsApp"
+        <div key={i} className="acn-cli-linha">
+          <input className="acn-input acn-cli-in2" placeholder="Telefone / WhatsApp"
             value={t.numero} disabled={readonly}
             onChange={e => setList(l => l.map((x, j) => j===i ? {...x, numero:e.target.value} : x))} />
-          <select className="acn-input" style={{ flex:1 }} value={t.tipo} disabled={readonly}
+          <select className="acn-input acn-cli-in1" value={t.tipo} disabled={readonly}
             onChange={e => setList(l => l.map((x, j) => j===i ? {...x, tipo:e.target.value} : x))}>
             {['Principal','Celular','WhatsApp','Fixo','Comercial','Outro'].map(o => <option key={o}>{o}</option>)}
           </select>
           {!readonly && list.length > 1 && (
-            <button style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:16 }}
-              onClick={() => setList(l => l.filter((_,j) => j!==i))}>×</button>
+            <Botao pequeno variante="perigo-sec"
+              onClick={() => setList(l => l.filter((_,j) => j!==i))}>×</Botao>
           )}
         </div>
       ))}
       {!readonly && (
-        <button className="acn-btn" style={{ background:'#e2e8f0', color:'#1e293b', fontSize:10 }}
+        <Botao pequeno
           onClick={() => setList(l => [...l, { numero:'', tipo:'Celular' }])}>
           + Telefone
-        </button>
+        </Botao>
       )}
     </div>
   );
@@ -55,32 +61,32 @@ function EmailList({ list, setList, readonly }) {
   return (
     <div>
       {list.map((e, i) => (
-        <div key={i} style={{ display:'flex', gap:6, marginBottom:6 }}>
-          <input type="email" className="acn-input" style={{ flex:2 }} placeholder="email@exemplo.com"
+        <div key={i} className="acn-cli-linha">
+          <input type="email" className="acn-input acn-cli-in2" placeholder="email@exemplo.com"
             value={e.email} disabled={readonly}
             onChange={ev => setList(l => l.map((x,j) => j===i ? {...x, email:ev.target.value} : x))} />
-          <select className="acn-input" style={{ flex:1 }} value={e.tipo} disabled={readonly}
+          <select className="acn-input acn-cli-in1" value={e.tipo} disabled={readonly}
             onChange={ev => setList(l => l.map((x,j) => j===i ? {...x, tipo:ev.target.value} : x))}>
             {['Principal','Comercial','NFe','Contato','Outro'].map(o => <option key={o}>{o}</option>)}
           </select>
           {!readonly && list.length > 1 && (
-            <button style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:16 }}
-              onClick={() => setList(l => l.filter((_,j) => j!==i))}>×</button>
+            <Botao pequeno variante="perigo-sec"
+              onClick={() => setList(l => l.filter((_,j) => j!==i))}>×</Botao>
           )}
         </div>
       ))}
       {!readonly && (
-        <button className="acn-btn" style={{ background:'#e2e8f0', color:'#1e293b', fontSize:10 }}
+        <Botao pequeno
           onClick={() => setList(l => [...l, { email:'', tipo:'Contato' }])}>
           + Email
-        </button>
+        </Botao>
       )}
     </div>
   );
 }
 
 // ─── FormCliente ──────────────────────────────────────────────────────────────
-function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado }) {
+function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado, topo }) {
   const [f, setF]               = useState({ ...CLIENTE_VAZIO, ...initial });
   const [telefones, setTelefones] = useState(initial?.telefones?.length ? initial.telefones : [{ numero:'', tipo:'Principal' }]);
   const [emails,    setEmails]    = useState(initial?.emails?.length    ? initial.emails    : [{ email:'', tipo:'Principal' }]);
@@ -147,27 +153,28 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
 
   const lbl = (txt) => <label className="acn-label">{txt}</label>;
   const inp = (k, placeholder?, type?) => (
-    <input type={type||'text'} className="acn-input" style={{ width:'100%' }}
+    <input type={type||'text'} className="acn-input"
       value={f[k]||''} placeholder={placeholder||''} disabled={readonly}
       onChange={e => set(k, e.target.value)} />
   );
 
+  // O corpo rola e os botões ficam fixos no rodapé da janela (a janela é a do sistema); o aviso e o botão "Editar este cadastro"
+  // do modo "ver" chegam em `topo` e ficam no começo do corpo, como antes.
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+    <>
+    <div className="acn-modal-corpo acn-form-cheio">
+      {topo}
 
       {/* Tipo */}
       <div>
         {lbl('Tipo de Pessoa')}
-        <div style={{ display:'flex', gap:8 }}>
+        <div className="acn-cli-tipo">
           {['PF','PJ'].map(t => (
-            <button key={t} disabled={readonly}
-              style={{ flex:1, padding:'7px', border:`2px solid ${f.tipo===t ? '#0f766e' : '#e5e7eb'}`,
-                borderRadius:6, background: f.tipo===t ? '#f0fdf4' : 'white',
-                fontWeight:700, fontSize:12, cursor: readonly ? 'default' : 'pointer',
-                color: f.tipo===t ? '#0f766e' : '#6b7280' }}
+            <Botao key={t} disabled={readonly} variante={f.tipo===t ? 'primario' : 'secundario'} aria-pressed={f.tipo===t}
+              icone={t === 'PF' ? mdiAccountOutline : mdiDomain}
               onClick={() => !readonly && set('tipo', t)}>
-              {t === 'PF' ? '👤 Pessoa Física' : '🏢 Pessoa Jurídica'}
-            </button>
+              {t === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+            </Botao>
           ))}
         </div>
       </div>
@@ -180,7 +187,7 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
 
       {/* PJ: nome do contato e cargo */}
       {f.tipo === 'PJ' && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        <div className="acn-cli-g11">
           <div>{lbl('Nome do Contato Principal')}{inp('nome_contato', 'Responsável...')}</div>
           <div>{lbl('Cargo')}{inp('cargo_contato', 'Cargo...')}</div>
         </div>
@@ -210,23 +217,22 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
 
       {/* ── PF: Vínculo com empresa PJ do cadastro ── */}
       {f.tipo === 'PF' && (
-        <div style={{ padding:'10px 12px', background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8 }}>
-          <div style={{ fontWeight:700, fontSize:10, color:'#0369a1', marginBottom:8, textTransform:'uppercase' }}>
-            🔗 Empresa Vinculada no Cadastro
+        <div className="acn-quadro tom-info">
+          <div className="acn-quadro-titulo acn-cab-titulo">
+            <Icone path={mdiLinkVariant} size={14} /> Empresa Vinculada no Cadastro
           </div>
           {readonly ? (
             f.empresa_id ? (
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:11, fontWeight:700, color:'#0369a1' }}>🏢 {f._empresa_nome || f.empresa}</span>
+              <div className="acn-cli-vinc">
+                <span className="acn-forte"><Icone path={mdiDomain} size={14} /> {f._empresa_nome || f.empresa}</span>
                 {onEditarVinculado && (
-                  <button className="acn-btn" style={{ background:'#0891b2', fontSize:9 }}
-                    onClick={() => onEditarVinculado(f.empresa_id)}>
+                  <Botao pequeno onClick={() => onEditarVinculado(f.empresa_id)}>
                     Ver empresa →
-                  </button>
+                  </Botao>
                 )}
               </div>
             ) : (
-              <span style={{ fontSize:10, color:'#94a3b8' }}>Nenhuma empresa vinculada</span>
+              <span className="acn-ajuda">Nenhuma empresa vinculada</span>
             )
           ) : (
             <>
@@ -239,15 +245,15 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
                 permitirCriar={true}
               />
               {f.empresa_id && (
-                <div style={{ fontSize:8, color:'#059669', marginTop:4, display:'flex', gap:6, alignItems:'center' }}>
+                <div className="acn-cli-vinc acn-txt-ok">
                   ✓ Vinculado ao cadastro da empresa
-                  <button style={{ fontSize:8, color:'#ef4444', background:'none', border:'none', cursor:'pointer' }}
+                  <Botao pequeno variante="perigo-sec"
                     onClick={() => { set('empresa_id', null); set('_empresa_nome', ''); }}>
                     ✕ Remover vínculo
-                  </button>
+                  </Botao>
                 </div>
               )}
-              <div style={{ fontSize:8, color:'#64748b', marginTop:4 }}>
+              <div className="acn-ajuda">
                 Opcional. Conecta este contato PF à empresa PJ correspondente no cadastro.
               </div>
             </>
@@ -268,21 +274,21 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
       </div>
 
       {/* Endereço */}
-      <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:10 }}>
-        <div style={{ fontWeight:700, fontSize:10, color:'#475569', textTransform:'uppercase', marginBottom:8 }}>📍 Endereço</div>
-        <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:8, marginBottom:8 }}>
+      <div className="acn-cli-secao">
+        <div className="acn-quadro-titulo acn-cab-titulo"><Icone path={mdiMapMarkerOutline} size={14} /> Endereço</div>
+        <div className="acn-cli-g21">
           <div>{lbl('Logradouro')}{inp('endereco', 'Rua, Av...')}</div>
           <div>{lbl('Número')}{inp('numero', '123')}</div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+        <div className="acn-cli-g11">
           <div>{lbl('Complemento')}{inp('complemento', 'Apto, Sala...')}</div>
           <div>{lbl('Bairro')}{inp('bairro', 'Bairro...')}</div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:8 }}>
+        <div className="acn-cli-g211">
           <div>{lbl('Cidade')}{inp('cidade', 'Cidade...')}</div>
           <div>
             {lbl('Estado')}
-            <select className="acn-input" style={{ width:'100%' }} value={f.estado||''} disabled={readonly}
+            <select className="acn-input" value={f.estado||''} disabled={readonly}
               onChange={e => set('estado', e.target.value)}>
               <option value="">UF</option>
               {ESTADOS_BR.map(u => <option key={u}>{u}</option>)}
@@ -302,30 +308,29 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
 
       {/* ── PJ: Contatos vinculados (PF) ── */}
       {f.tipo === 'PJ' && initial?.id && (
-        <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:12 }}>
-          <div style={{ fontWeight:700, fontSize:10, color:'#475569', textTransform:'uppercase', marginBottom:8 }}>
-            👥 Contatos Pessoas Físicas Vinculados
+        <div className="acn-cli-secao">
+          <div className="acn-quadro-titulo acn-cab-titulo">
+            <Icone path={mdiAccountGroupOutline} size={14} /> Contatos Pessoas Físicas Vinculados
           </div>
           {loadingContatos ? (
-            <div style={{ fontSize:10, color:'#94a3b8' }}>Carregando...</div>
+            <div className="acn-ajuda">Carregando...</div>
           ) : erroContatos ? (
-            <div style={{ fontSize:10, color:'#94a3b8', fontStyle:'italic' }}>
+            <div className="acn-ajuda">
               Não foi possível ler os contatos vinculados ({erroContatos}).
             </div>
           ) : contatosVinculados.length === 0 ? (
-            <div style={{ fontSize:10, color:'#94a3b8', fontStyle:'italic' }}>
+            <div className="acn-ajuda">
               Nenhum contato PF vinculado a esta empresa ainda.
               <br />Para vincular, edite um cadastro PF e selecione esta empresa no campo "Empresa Vinculada".
             </div>
           ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            <div className="acn-cli-pfs">
               {contatosVinculados.map(pf => (
-                <div key={pf.id} style={{ display:'flex', alignItems:'center', gap:10,
-                  padding:'7px 10px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:6 }}>
-                  <span style={{ fontSize:14 }}>👤</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:'#1e293b' }}>{pf.nome}</div>
-                    <div style={{ fontSize:9, color:'#64748b', display:'flex', gap:8 }}>
+                <div key={pf.id} className="acn-cli-pf">
+                  <Icone path={mdiAccountOutline} size={18} />
+                  <div className="acn-cli-pf-corpo">
+                    <div className="acn-forte">{pf.nome}</div>
+                    <div className="acn-ajuda acn-cli-pf-dados">
                       {pf.cargo_contato && <span>{pf.cargo_contato}</span>}
                       {fmtTelefones(pf.telefones) && <span>📱 {fmtTelefones(pf.telefones)}</span>}
                       {fmtEmails(pf.emails) && <span>✉️ {fmtEmails(pf.emails)}</span>}
@@ -333,10 +338,9 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
                     </div>
                   </div>
                   {onEditarVinculado && (
-                    <button className="acn-btn" style={{ background:'#475569', fontSize:9 }}
-                      onClick={() => onEditarVinculado(pf.id)}>
+                    <Botao pequeno onClick={() => onEditarVinculado(pf.id)}>
                       Ver →
-                    </button>
+                    </Botao>
                   )}
                 </div>
               ))}
@@ -344,20 +348,23 @@ function FormCliente({ initial, onSave, onCancel, readonly, onEditarVinculado })
           )}
         </div>
       )}
-
-      {/* Botões */}
-      {!readonly && (
-        <div style={{ display:'flex', gap:8, paddingTop:4 }}>
-          <button className="acn-btn" style={{ background:'#0f766e', flex:1 }} onClick={salvar} disabled={salvando}>
-            {salvando ? 'Salvando...' : initial?.id ? '✓ Salvar Alterações' : '✓ Cadastrar Cliente'}
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onCancel}>Cancelar</button>
-        </div>
-      )}
-      {readonly && (
-        <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onCancel}>Fechar</button>
-      )}
     </div>
+
+    {/* Botões */}
+    {!readonly && (
+      <div className="acn-modal-rodape acn-sac-rodape">
+        <Botao variante="primario" onClick={salvar} disabled={salvando}>
+          {salvando ? 'Salvando...' : initial?.id ? '✓ Salvar Alterações' : '✓ Cadastrar Cliente'}
+        </Botao>
+        <Botao onClick={onCancel}>Cancelar</Botao>
+      </div>
+    )}
+    {readonly && (
+      <div className="acn-modal-rodape acn-sac-rodape">
+        <Botao onClick={onCancel}>Fechar</Botao>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -426,39 +433,31 @@ export default function ClientesTab({ currentUser }) {
   return (
     <div>
       <div className="sec-card">
-        <div className="sec-hdr" style={{ background:'#f0fdf4', borderBottom:'2px solid #0f766e' }}>
-          <span style={{ color:'#064e3b', fontWeight:700 }}>👥 Cadastro de Clientes ({clientes.length}{clientes.length >= LIMITE_LISTA ? '+' : ''})</span>
-          <div style={{ display:'flex', gap:8 }}>
+        <div className="sec-hdr">
+          <span className="acn-cab-titulo"><Icone path={mdiAccountGroupOutline} size={16} /> Cadastro de Clientes ({clientes.length}{clientes.length >= LIMITE_LISTA ? '+' : ''})</span>
+          <div className="acn-cab-filtros">
             {podeEditar && (
-              <button className="acn-btn" style={{ background:'#0f766e' }}
+              <Botao variante="primario" pequeno
                 onClick={() => { setModalForm({}); setModoForm('novo'); }}>
                 + Novo Cliente
-              </button>
+              </Botao>
             )}
-            <button className="acn-btn" style={{ background:'#475569', fontSize:10 }} onClick={load}>↻</button>
+            <Botao pequeno onClick={load}>↻</Botao>
           </div>
         </div>
 
         <div className="sec-body">
           {/* Filtros */}
-          <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap', alignItems:'center' }}>
-            <input className="acn-input" style={{ flex:1, minWidth:220, maxWidth:400 }}
+          <div className="acn-cli-filtros">
+            <input className="acn-input acn-cli-busca"
               placeholder="Buscar por nome, CNPJ/CPF, empresa, cidade..."
               value={busca} onChange={e => setBusca(e.target.value)} />
             {/* Filtro tipo */}
-            {[
-              { label:'Todos', val:'' },
-              { label:'👤 PF', val:'PF' },
-              { label:'🏢 PJ', val:'PJ' },
-            ].map(opt => (
-              <button key={opt.val} onClick={() => setFiltroTipo(opt.val as any)}
-                style={{ padding:'4px 12px', border:`1.5px solid ${filtroTipo===opt.val ? '#0f766e' : '#e2e8f0'}`,
-                  borderRadius:16, fontSize:10, fontWeight:700, cursor:'pointer',
-                  background: filtroTipo===opt.val ? '#0f766e' : 'white',
-                  color: filtroTipo===opt.val ? 'white' : '#64748b' }}>
-                {opt.label}
-              </button>
-            ))}
+            <Chips rotulo="Tipo" ativo={filtroTipo} onChange={setFiltroTipo as any} itens={[
+              { id: '', rotulo: 'Todos' },
+              { id: 'PF', rotulo: 'PF', icone: mdiAccountOutline },
+              { id: 'PJ', rotulo: 'PJ', icone: mdiDomain },
+            ]} />
           </div>
 
           {erroLista && <Faixa tom="erro">Não foi possível ler os clientes ({erroLista}).</Faixa>}
@@ -472,8 +471,8 @@ export default function ClientesTab({ currentUser }) {
               {busca ? 'Nenhum cliente encontrado para esta busca.' : 'Nenhum cliente cadastrado ainda.'}
             </div>
           ) : (
-            <div style={{ overflowX:'auto' }}>
-              <table>
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
                 <thead>
                   <tr>
                     <th>Tipo</th>
@@ -490,63 +489,60 @@ export default function ClientesTab({ currentUser }) {
                   {clientes.map(c => (
                     <tr key={c.id}>
                       <td>
-                        <span style={{ fontSize:9, background: c.tipo==='PJ' ? '#dbeafe' : '#f0fdf4',
-                          color: c.tipo==='PJ' ? '#1e40af' : '#065f46',
-                          padding:'2px 6px', borderRadius:10, fontWeight:700 }}>
-                          {c.tipo === 'PJ' ? '🏢 PJ' : '👤 PF'}
-                        </span>
+                        <Selo familia={c.tipo === 'PJ' ? 'info' : 'ok'} ponto={false}>
+                          <Icone path={c.tipo === 'PJ' ? mdiDomain : mdiAccountOutline} size={14} /> {c.tipo === 'PJ' ? 'PJ' : 'PF'}
+                        </Selo>
                       </td>
-                      <td><strong style={{ color:'#0f766e' }}>{c.nome}</strong>
-                        {c.nome_contato && <div style={{ fontSize:9, color:'#94a3b8' }}>{c.nome_contato}{c.cargo_contato && ` · ${c.cargo_contato}`}</div>}
+                      <td><strong className="acn-forte">{c.nome}</strong>
+                        {c.nome_contato && <div className="acn-fraco">{c.nome_contato}{c.cargo_contato && ` · ${c.cargo_contato}`}</div>}
                       </td>
-                      <td style={{ fontSize:10 }}>
-                        {c.empresa && <div style={{ fontWeight:600 }}>{c.empresa}</div>}
-                        {c.documento && <div style={{ color:'#94a3b8' }}>{c.documento}</div>}
+                      <td>
+                        {c.empresa && <div className="acn-forte">{c.empresa}</div>}
+                        {c.documento && <div className="acn-fraco">{c.documento}</div>}
                       </td>
                       {/* Coluna vínculo */}
-                      <td style={{ fontSize:10 }}>
+                      <td>
                         {c.tipo === 'PF' && c.empresa_id && (
-                          <button style={{ background:'none', border:'none', cursor:'pointer',
-                            color:'#0369a1', fontSize:10, fontWeight:700, padding:0, textAlign:'left' }}
+                          <Botao pequeno variante="discreto" icone={mdiDomain}
                             onClick={() => abrirPorId(c.empresa_id)}
                             title="Ver empresa vinculada">
-                            🏢 {c.empresa_vinculada?.nome || '—'}
-                          </button>
+                            {c.empresa_vinculada?.nome || '—'}
+                          </Botao>
                         )}
                         {c.tipo === 'PJ' && (
-                          <span style={{ fontSize:9, color:'#64748b' }}>
+                          <span className="acn-fraco acn-cab-titulo">
                             {/* contador de PFs vinculados é carregado somente na abertura do card */}
-                            👥 ver contatos
+                            <Icone path={mdiAccountGroupOutline} size={14} /> ver contatos
                           </span>
                         )}
                         {c.tipo === 'PF' && !c.empresa_id && (
-                          <span style={{ color:'#cbd5e1', fontSize:9 }}>—</span>
+                          <span className="acn-fraco">—</span>
                         )}
                       </td>
-                      <td style={{ fontSize:10 }}>{fmtTel(c.telefones) || '—'}</td>
-                      <td style={{ fontSize:10, maxWidth:150, wordBreak:'break-word' }}>
+                      <td>{fmtTel(c.telefones) || '—'}</td>
+                      <td className="acn-cli-email">
                         {fmtEml(c.emails) || '—'}
                       </td>
-                      <td style={{ fontSize:10 }}>
+                      <td>
                         {c.cidade ? `${c.cidade}${c.estado ? ` / ${c.estado}` : ''}` : '—'}
                       </td>
                       <td>
-                        <div style={{ display:'flex', gap:4 }}>
-                          <button className="acn-btn" style={{ background:'#475569', fontSize:9 }}
+                        <div className="acn-acoes-linha">
+                          <Botao pequeno icone={mdiEyeOutline}
                             onClick={() => abrirModal(c, 'ver')}>
-                            👁 Ver
-                          </button>
+                            Ver
+                          </Botao>
                           {podeEditar && (
                             <>
-                              <button className="acn-btn" style={{ background:'#0f766e', fontSize:9 }}
+                              <Botao pequeno
                                 onClick={() => abrirModal(c, 'editar')}>
                                 ✏️
-                              </button>
+                              </Botao>
                               {podeExcluir && (
-                                <button className="acn-btn" style={{ background:'#ef4444', fontSize:9 }}
+                                <Botao pequeno variante="perigo-sec"
                                   onClick={() => excluir(c)}>
                                   🗑
-                                </button>
+                                </Botao>
                               )}
                             </>
                           )}
@@ -564,30 +560,31 @@ export default function ClientesTab({ currentUser }) {
       {/* Modal form */}
       {modalForm !== null && (
         <div className="modal-overlay" onClick={e => { if (e.target===e.currentTarget) setModalForm(null); }}>
-          <div className="modal-box" style={{ maxWidth:640, width:'96vw', maxHeight:'92vh', overflowY:'auto' }}>
-            <div className="modal-title">
-              {modoForm==='novo' ? '+ Novo Cliente' : modoForm==='editar' ? '✏️ Editar Cliente' : '👁 Dados do Cliente'}
+          <div className="modal-box acn-modal-cadastro acn-cli-jan">
+            <div className="acn-modal-cab">
+              <span className="modal-title">
+                {modoForm==='novo' ? '+ Novo Cliente' : modoForm==='editar' ? '✏️ Editar Cliente' : <><Icone path={mdiEyeOutline} size={18} /> Dados do Cliente</>}
+              </span>
             </div>
-            {modoForm==='ver' && !podeEditar && (
-              <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:4, padding:'6px 10px', marginBottom:12, fontSize:10, color:'#713f12' }}>
-                🔒 Acesso somente de visualização. Contate um administrador para editar.
-              </div>
-            )}
-            {/* Botão editar no modo ver (para quem pode) */}
-            {modoForm==='ver' && podeEditar && (
-              <div style={{ marginBottom:10 }}>
-                <button className="acn-btn" style={{ background:'#0f766e', fontSize:10 }}
-                  onClick={() => setModoForm('editar')}>
-                  ✏️ Editar este cadastro
-                </button>
-              </div>
-            )}
             <FormCliente
               initial={modoForm==='novo' ? {} : modalForm}
               readonly={modoForm==='ver'}
               onSave={() => { setModalForm(null); load(); }}
               onCancel={() => setModalForm(null)}
               onEditarVinculado={id => abrirPorId(id)}
+              topo={<>
+                {modoForm==='ver' && !podeEditar && (
+                  <Faixa tom="atencao">Acesso somente de visualização. Contate um administrador para editar.</Faixa>
+                )}
+                {/* Botão editar no modo ver (para quem pode) */}
+                {modoForm==='ver' && podeEditar && (
+                  <div>
+                    <Botao pequeno onClick={() => setModoForm('editar')}>
+                      ✏️ Editar este cadastro
+                    </Botao>
+                  </div>
+                )}
+              </>}
             />
           </div>
         </div>

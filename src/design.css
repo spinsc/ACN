@@ -969,3 +969,28 @@ html body .acn-form-cheio .acn-input.acn-cal-hora-campo { flex: none; width: 120
 .acn-cal-novo { justify-content: center; width: 100%; }
 /* celular: sete colunas estreitas; letra um pouco menor e a célula mais baixa */
 @media (max-width: 480px) { .acn-cal-dia { min-height: 64px; padding: 2px 3px; } .acn-cal-ev, .acn-cal-evsem, .acn-cal-mais { font-size: 10px; } .acn-cal-titulo { font-size: 13px; } }
+/* ── Clientes (Etapa 12e7, 04/10/2026): só aparência ───────────────────────────────────────────────────── */
+.acn-cli-filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.acn-cli-busca { flex: 1; min-width: 220px; max-width: 400px; }
+/* o e-mail pode ser uma sequência colada, sem espaço: quebra em qualquer ponto em vez de esticar a tabela */
+.acn-cli-email { min-width: 130px; max-width: 200px; overflow-wrap: anywhere; }
+/* a janela do cadastro (640 px; o formulário é largo) */
+html body .modal-box.acn-modal-cadastro.acn-cli-jan { width: min(640px, 96vw); }
+.acn-cli-tipo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* no modo "ver" os dois botões estão desligados: o tipo escolhido continua legível, o outro fica apagado */
+.acn-cli-tipo .acn-b[aria-pressed="true"]:disabled { opacity: .9; }
+.acn-cli-g11, .acn-cli-g21, .acn-cli-g211 { display: grid; gap: 8px; }
+.acn-cli-g11 { grid-template-columns: 1fr 1fr; }
+.acn-cli-g21 { grid-template-columns: 2fr 1fr; }
+.acn-cli-g211 { grid-template-columns: 2fr 1fr 1fr; }
+.acn-cli-secao { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--acn-line); }
+/* telefone e e-mail: o campo (2 partes), o tipo (1 parte) e o × que tira a linha */
+.acn-cli-linha { display: flex; gap: 6px; margin-bottom: 6px; }
+.acn-cli-in2 { flex: 2; min-width: 0; }
+.acn-cli-in1 { flex: 1 0 118px; }
+.acn-cli-vinc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acn-cli-pfs { display: grid; gap: 6px; }
+.acn-cli-pf { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--acn-surface-2); border: 1px solid var(--acn-line); border-radius: 6px; }
+.acn-cli-pf-corpo { flex: 1; min-width: 0; }
+.acn-cli-pf-dados { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+@media (max-width: 480px) { .acn-cli-g11, .acn-cli-g21, .acn-cli-g211 { grid-template-columns: 1fr; } }
