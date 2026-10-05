@@ -13,6 +13,7 @@ import AgendaWidget from './AgendaWidget';
 import { logChange, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
 import { Abas, Botao, Selo, Chips, MenuAcoes, Faixa, hojeISO } from './Interface';
+import { mdiFormatListBulleted, mdiViewColumnOutline } from '@mdi/js';
 import Icone from './Icone';
 import { mdiClipboardTextOutline, mdiCellphoneNfc, mdiCogOutline, mdiRefresh, mdiPhoneOutline, mdiDomain, mdiPlay, mdiCheck, mdiNoteEditOutline, mdiClose, mdiContentSaveOutline, mdiPlus, mdiPencilOutline, mdiCarOutline, mdiRadioHandheld, mdiShapeOutline, mdiClipboardListOutline,
   mdiMessageTextOutline, mdiSendOutline, mdiEyeOutline, mdiTruckDeliveryOutline, mdiAccountEditOutline, mdiPaperclip, mdiClipboardCheckOutline, mdiAlertOutline, mdiAccessPoint, mdiMapMarkerOutline, mdiMenuUp, mdiMenuDown, mdiCurrencyUsd, mdiTimerOutline, mdiWrenchOutline, mdiArrowRight, mdiPrinterOutline, mdiBankOutline, mdiBriefcaseOutline, mdiLinkVariant, mdiUpload, mdiFileDocumentOutline, mdiCloseCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
@@ -209,6 +210,9 @@ export default function SacTab({ currentUser }) {
   const [categorias, setCategorias]     = useState<any[]>([]);
   const [loading, setLoading]           = useState(false);
   const [filtroStatus, setFiltroStatus]       = useState('');
+  // Visão da aba Ordens de Serviço: a lista de sempre ou o quadro Kanban de 3 colunas (pedido do usuário em 05/10/2026). A escolha fica lembrada neste computador.
+  const [visaoOS, setVisaoOS] = useState<'lista' | 'kanban'>(() => { try { return localStorage.getItem('acn-sac-visao') === 'kanban' ? 'kanban' : 'lista'; } catch { return 'lista'; } });
+  const trocarVisaoOS = (v: string) => { setVisaoOS(v as any); try { localStorage.setItem('acn-sac-visao', v); } catch { /* sem armazenamento: vale só nesta sessão */ } };
   const [filtroTipo, setFiltroTipo]         = useState('');
   const [filtroAvaliacao, setFiltroAvaliacao] = useState('');
   const [filtroEmpresa, setFiltroEmpresa]     = useState('');
@@ -921,6 +925,29 @@ OK = ACN   |   Cancelar = DETECH`;
     if (busca) return combinaBusca([o.numero_os, o.cliente_nome, o.equipamento_nome], busca);
     return true;
   });
+
+  // KANBAN, 3 colunas, "só pela etapa de trabalho" (escolha do usuário em pergunta clicável, 05/10/2026):
+  // PENDENTE = Aberta e Diagnóstico · CONCLUÍDO = Concluído, Entregue e Faturada · EM ANDAMENTO = tudo o que está entre o orçamento e a entrega.
+  // Reprovado fica FORA do quadro (vê-se na lista, no filtro de status). Uma situação que ninguém classificou cai em EM ANDAMENTO, para nenhuma OS sumir do quadro.
+  const colunaKanban = (status: string): 'pendente' | 'andamento' | 'concluido' | null => {
+    if (status === 'Reprovado') return null;
+    if (['Aberta', 'Diagnóstico'].includes(status)) return 'pendente';
+    if (['Concluído', 'Entregue', 'Faturada - Aguardando Entrega'].includes(status)) return 'concluido';
+    return 'andamento';
+  };
+  const COLUNAS_KANBAN = [
+    { id: 'pendente', rotulo: 'PENDENTE', familia: 'atencao' },
+    { id: 'andamento', rotulo: 'EM ANDAMENTO', familia: 'info' },
+    { id: 'concluido', rotulo: 'CONCLUÍDO', familia: 'ok' },
+  ];
+  const reprovadasFiltradas = ordensFiltradas.filter(o => colunaKanban(o.status) === null).length;
+  // o mesmo valor que a lista mostra: o do orçamento, ou a soma dos itens da cotação
+  const valorDaOS = (o: any) => {
+    const v = Number(o.valor_orcamento) || 0;
+    const itensTotal = Array.isArray(o.itens_cotacao) && o.itens_cotacao.length
+      ? o.itens_cotacao.reduce((acc: number, i: any) => acc + (Number(i.quantidade) || 1) * (Number(i.valor_unitario) || 0), 0) : 0;
+    return v > 0 ? v : (itensTotal > 0 ? itensTotal : null);
+  };
 
   const fmtDt  = fmtDataSAC;
   const fmtVal = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits:2 })}` : '—';
@@ -1663,10 +1690,16 @@ OK = ACN   |   Cancelar = DETECH`;
       <div className="sec-card">
         <div className="sec-hdr">
           <span className="acn-cab-titulo"><Icone path={mdiClipboardTextOutline} size={16} /> SAC — Ordens de Serviço ({ordensFiltradas.length})</span>
+          <div className="acn-cab-filtros">
+          <Chips rotulo="Visão" ativo={visaoOS} onChange={trocarVisaoOS} itens={[
+            { id: 'lista', rotulo: 'Lista', icone: mdiFormatListBulleted },
+            { id: 'kanban', rotulo: 'Kanban', icone: mdiViewColumnOutline },
+          ]} />
           <Botao variante="primario" icone={mdiPlus} // Etapa 7.24 (01/10/2026): só as fotos eram zeradas ao abrir; o documento escolhido numa abertura CANCELADA ficava na memória (o contador mostrava "1 arquivo(s)" com o campo vazio) e ia junto da OS seguinte
             onClick={()=>{setForm({...FORM_VAZIO});setFotosEntradaFiles([]);setArquivosEntradaFiles([]);setAcessInput('');setEquipLista([{...EQUIP_VAZIO}]);setModalNova(true);}}>
             Nova OS
           </Botao>
+          </div>
         </div>
 
         {/* Legenda de fluxo */}
@@ -1707,8 +1740,57 @@ OK = ACN   |   Cancelar = DETECH`;
           <Botao pequeno onClick={()=>{setFiltroStatus('');setFiltroTipo('');setFiltroAvaliacao('');setFiltroEmpresa('');setBusca('');}}>Limpar</Botao>
         </div>
 
+        {/* ── KANBAN (05/10/2026) ── */}
+        {visaoOS === 'kanban' && (
+          <div className="sec-body">
+            {reprovadasFiltradas > 0 && (
+              <Faixa tom="atencao" acao={<Botao pequeno onClick={() => { setFiltroStatus('Reprovado'); trocarVisaoOS('lista'); }}>Ver na lista</Botao>}>
+                {reprovadasFiltradas} OS reprovada(s) ficam fora do quadro — estão na lista, no filtro de status.
+              </Faixa>
+            )}
+            {loading ? <div className="acn-empty">Carregando...</div> : (
+              <div className="acn-kb">
+                {COLUNAS_KANBAN.map(col => {
+                  const cards = ordensFiltradas.filter(o => colunaKanban(o.status) === col.id);
+                  return (
+                    <div key={col.id} className={'acn-kb-col ' + col.id} aria-label={col.rotulo}>
+                      <div className="acn-kb-cab"><span>{col.rotulo}</span><Selo familia={col.familia} ponto={false}>{cards.length}</Selo></div>
+                      <div className="acn-kb-corpo">
+                        {cards.length === 0 && <div className="acn-empty">Nenhuma OS</div>}
+                        {cards.map(o => {
+                          const valor = valorDaOS(o);
+                          return (
+                            <div key={o.id} className={'acn-kb-card' + (ordensNaoLidas.has(String(o.id)) ? ' nova' : '')}>
+                              <div className="acn-kb-topo">
+                                <strong className="acn-forte">{o.numero_os}</strong>
+                                <EtiquetaEmpresaOS os={o} onTrocar={trocarEmpresaOS} />
+                              </div>
+                              <div className="acn-kb-equip">{o.equipamento_nome}{o.modelo ? ' · ' + o.modelo : ''}</div>
+                              {o.cliente_nome && <div className="acn-fraco">{o.cliente_nome}</div>}
+                              <div className="acn-kb-meta">
+                                <Selo familia={FAMILIA_STATUS_SAC[o.status] || 'neutro'}>{o.status}</Selo>
+                                {o.tipo_servico && <span className="acn-fraco">{o.tipo_servico}</span>}
+                              </div>
+                              <div className="acn-kb-meta acn-fraco">
+                                <span>Abertura {fmtDt(o.data_abertura)}</span>
+                                {o.prazo_orcamento && <span>Prazo orç. {fmtDt(o.prazo_orcamento)}</span>}
+                                {valor != null && <span>{fmtVal(valor)}</span>}
+                              </div>
+                              <div className="acn-acoes-linha quebra">{renderAcoes(o)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── TABELA ── */}
-        <div className="sec-body acn-rolagem acn-sem-recuo">
+        {visaoOS === 'lista' && <div className="sec-body acn-rolagem acn-sem-recuo">
           {loading ? <div className="acn-empty">Carregando...</div> : ordensFiltradas.length === 0 ? (
             <div className="acn-empty">Nenhuma OS encontrada.</div>
           ) : (
@@ -1783,7 +1865,7 @@ OK = ACN   |   Cancelar = DETECH`;
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ════════ MODAL NOVA OS ════════ */}
