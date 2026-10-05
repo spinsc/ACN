@@ -377,7 +377,9 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
 
   const calcFimGarantia = (dataEntrega: string, meses: number) => {
     if (!dataEntrega) return '';
-    const d = new Date(dataEntrega);
+    // R16 (05/10/2026): a entrega é coluna date ("AAAA-MM-DD"); `new Date(texto)` é a meia-noite de Londres, que no Brasil
+    // ainda é o dia anterior — o fim da garantia saía gravado UM DIA ANTES do certo. Com a hora local o dia fica o mesmo.
+    const d = new Date(dataEntrega + 'T00:00:00');
     d.setMonth(d.getMonth() + Number(meses));
     return diaISO(d);
   };
@@ -563,7 +565,7 @@ function ModalVeiculo({ veiculo, onClose, onSalvo }) {
                         </select>
                       </td>
                       <td style={{ padding:'4px 6px', textAlign:'center', fontWeight:700, color: p.data_fim_garantia ? '#166534' : '#9ca3af' }}>
-                        {p.data_fim_garantia ? new Date(p.data_fim_garantia).toLocaleDateString('pt-BR') : '—'}
+                        {fmtData(p.data_fim_garantia)}
                       </td>
                       <td style={{ padding:'2px' }}>
                         <button onClick={() => setProdGar(g => g.filter((_, j) => j !== i))}
@@ -775,14 +777,16 @@ function PainelDetalhe({ veiculo, baseUrl, portalBaseUrl, isAdmin, onEditar, onD
                 </thead>
                 <tbody>
                   {(veiculo.produtos_instalados || []).map((p, i) => {
-                    const ativa = p.data_fim_garantia ? new Date(p.data_fim_garantia) > new Date() : null;
+                    // O fim da garantia vale até o fim do dia (R16, 05/10/2026): a mesma conta do selo da lista (`calcGarantia`).
+                    // Antes, `new Date("AAAA-MM-DD")` era a meia-noite de Londres e a garantia virava "Expirada" no último dia.
+                    const ativa = calcGarantia(p.data_fim_garantia);
                     return (
                       <tr key={i} style={{ borderBottom:'1px solid #d1fae5' }}>
                         <td style={{ padding:'4px 6px', color:'#1e293b' }}>{p.produto_nome}</td>
                         <td style={{ padding:'4px 6px', textAlign:'center', color:'#64748b' }}>{p.garantia_meses}m</td>
                         <td style={{ padding:'4px 6px', textAlign:'center', fontWeight:700,
                           color: ativa === false ? '#dc2626' : '#166534' }}>
-                          {p.data_fim_garantia ? new Date(p.data_fim_garantia).toLocaleDateString('pt-BR') : '—'}
+                          {fmtData(p.data_fim_garantia)}
                         </td>
                         <td style={{ padding:'4px 6px', textAlign:'center' }}>
                           {ativa === true && <span style={{ background:'#dcfce7', color:'#166534', fontWeight:700, fontSize:8, padding:'1px 6px', borderRadius:10 }}>✅ Ativa</span>}
