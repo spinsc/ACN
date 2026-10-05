@@ -121,7 +121,7 @@ function lerCsv(texto: string) {
 // ── Candidatos do sistema para conciliar ─────────────────────────────────────
 async function carregarCandidatos() {
   const [ops, fats, compras, despesas] = await Promise.all([
-    supabase.from('oples').select('id,opl,cliente_nome,valor_total,numero_nf,data_emissao_nf,data_nf,status_geral')
+    supabase.from('oples').select('id,opl,cliente_nome,valor_total,numero_nf,numero_nf_servico,data_emissao_nf,data_nf,status_geral')
       .not('valor_total', 'is', null).or('numero_nf.not.is.null,status_geral.ilike.Faturado%'),
     supabase.from('pcp_pedidos_faturamento').select('id,numero_pedido,numero_oc,fornecedor,valor,data_pagamento,recebimento_confirmado_em,criado_em,nf_fornecedor_numero'),
     supabase.from('pcp_pedidos_compra').select('id,numero_pedido,numero_oc,fornecedor,valor_compra,data_prevista_recebimento,data_criacao,status_compra').not('valor_compra', 'is', null),
@@ -133,7 +133,7 @@ async function carregarCandidatos() {
     .filter(([, r]: any) => r.error).map(([nome, r]: any) => `${nome} (${r.error.message})`);
   const lista = [
     ...(ops.data || []).map((o: any) => ({ sentido: 1, tipo: 'opl', id: String(o.id), valor: Number(o.valor_total), data: diaDoRegistro(o.data_emissao_nf || o.data_nf),
-      descricao: `OP ${o.opl} — ${o.cliente_nome || ''}${o.numero_nf ? ` · NF ${o.numero_nf}` : ''}` })),
+      descricao: `OP ${o.opl} — ${o.cliente_nome || ''}${o.numero_nf ? ` · NF ${o.numero_nf}` : ''}${o.numero_nf_servico ? ` · NFS-e ${o.numero_nf_servico}` : ''}` })),
     ...(fats.data || []).map((f: any) => ({ sentido: -1, tipo: 'faturamento_compra', id: String(f.id), valor: Number(f.valor), data: diaDoRegistro(f.data_pagamento || f.recebimento_confirmado_em || f.criado_em),
       descricao: `Faturamento ${f.numero_oc || f.numero_pedido || ''} — ${f.fornecedor || ''}${f.nf_fornecedor_numero ? ` · NF ${f.nf_fornecedor_numero}` : ''}` })),
     ...(compras.data || []).map((p: any) => ({ sentido: -1, tipo: 'compra', id: String(p.id), valor: Number(p.valor_compra), data: diaDoRegistro(p.data_prevista_recebimento || p.data_criacao),

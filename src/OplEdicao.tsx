@@ -42,6 +42,7 @@ export const CAMPOS_OPL: Campo[] = [
   { grupo: 'Identificação', campo: 'faturamento_empresa', rotulo: 'Empresa (faturamento)', tipo: 'select', opcoes: ['ACN', 'Detech'] },
   { grupo: 'Identificação', campo: 'quantidade', rotulo: 'Quantidade', tipo: 'numero' },
   { grupo: 'Identificação', campo: 'numero_nf', rotulo: 'NF-e', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'numero_nf_servico', rotulo: 'NFS-e (serviço)', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'veiculo_id', rotulo: 'Veículo (catálogo)', tipo: 'veiculo' },
   { grupo: 'Veículo / envio', campo: 'modelo', rotulo: 'Modelo', tipo: 'texto' },
   { grupo: 'Veículo / envio', campo: 'chassi', rotulo: 'Chassi', tipo: 'texto' },
@@ -323,6 +324,7 @@ export const CAMPOS_OPL_COMERCIAL: CampoCom[] = [
   { grupo: 'Identificação', campo: 'edital', rotulo: 'Edital', tipo: 'texto' },
   { grupo: 'Identificação', campo: 'proposta', rotulo: 'Proposta', tipo: 'texto' },
   { grupo: 'Identificação', campo: 'numero_nf', rotulo: 'NF-e', tipo: 'texto' },
+  { grupo: 'Identificação', campo: 'numero_nf_servico', rotulo: 'NFS-e (serviço)', tipo: 'texto' },
 
   // ── Veículo / envio ──
   { grupo: 'Veículo / envio', campo: 'fluxo_entrega', rotulo: '🚦 Fluxo de entrega', tipo: 'select',

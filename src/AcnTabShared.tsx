@@ -1006,7 +1006,8 @@ export function OplDetalheModal({ opl: oplProp, onClose, currentUser }: { opl: a
           <Campo label="Tipo de Projeto"   value={opl.tipo_projeto} />
           <Campo label="Cliente"           value={opl.cliente_nome} />
           <Campo label="Qtd. Veículos"     value={opl.quantidade} />
-          <Campo label="NF-e"              value={opl.numero_nf} />
+          <Campo label="NF-e (material)"   value={opl.numero_nf} />
+          {opl.numero_nf_servico && <Campo label="NFS-e (serviço)" value={opl.numero_nf_servico} />}
           <Campo label="Criado por"        value={opl.criado_por_nome || opl.criado_por} />
           {/* a coluna é data_criacao; "criado_em" não existe em oples e o campo saía sempre vazio (29/09/2026) */}
           <Campo label="Cadastrado em"     value={fmtDtH(opl.data_criacao || opl.criado_em)} />
