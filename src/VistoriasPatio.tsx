@@ -3,20 +3,36 @@ import { supabase } from './supabaseClient';
 import React, { useState, useEffect, useRef } from 'react';
 import { DemandaFooter } from './AcnTabShared';
 import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
-import { hojeISO } from './Interface';
+import { hojeISO, diaISO, Faixa, Botao } from './Interface';
+import { confirmar } from './Feedback';
 
 
 const TIPOS_SERVICO = [
   'Mecanica','Eletrica','Funilaria/Pintura','Lavagem','Plotagem','Servico Externo (Terceiro)','Pecas para Pintura','Outros'
 ];
-const FORM_VAZIO = {
+
+// Corrigido em 05/10/2026 (Etapa 7.41): o padrão da hora de saída era calculado UMA vez, quando o arquivo
+// carregava (ficava velho com o sistema aberto), e saía pelo toISOString, que é a hora de Londres: o campo
+// mostrava 3h à frente. Agora é "agora" no relógio de quem está na tela, a cada novo envio.
+const agoraLocal = () => {
+  const d = new Date(); const dois = (n) => String(n).padStart(2, '0');
+  return `${diaISO(d)}T${dois(d.getHours())}:${dois(d.getMinutes())}`;
+};
+// O responsável já nasce com o nome de quem está logado: antes o campo "voltava" para o nome ao ser apagado.
+const formVazio = (usuario) => ({
   tipo_servico: 'Mecanica', veiculo_placa: '', veiculo_modelo: '', km_saida: '',
   numero_documento: '', tipo_documento: 'OPL', solicitante: '',
-  destino: '', responsavel_envio: '', data_saida: new Date().toISOString().slice(0,16),
+  destino: '', responsavel_envio: usuario?.nome || '', data_saida: agoraLocal(),
   previsao_retorno: '', observacoes: '',
-};
+});
 
-function SignatureCanvas({ label, onSave, savedUrl }) {
+// A previsão de retorno é coluna "date" (AAAA-MM-DD). new Date('2026-09-30') é meia-noite de Londres, que no
+// Brasil ainda é 29/09: a lista, a janela e o PDF mostravam o dia anterior (R16, decidida em 01/10/2026: o dia
+// sai direto do texto, nunca de new Date(texto)).
+const fmtDia = (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+const AVISO_ASSINATURA = 'Há uma assinatura desenhada que ainda não foi salva (botão "Salvar" logo abaixo do quadro). Registrar mesmo assim, sem ela?';
+
+function SignatureCanvas({ label, onSave, savedUrl, onRascunho }) {
   const ref = useRef(null);
   const drawing = useRef(false);
   const [has, setHas] = useState(false);
@@ -26,6 +42,10 @@ function SignatureCanvas({ label, onSave, savedUrl }) {
     const ctx = ref.current.getContext('2d');
     ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
   }, []);
+  // Avisa a tela quando há assinatura desenhada e ainda não salva: quem desenhava e ia direto para "Registrar"
+  // perdia a assinatura sem aviso (no banco real: 1 de 7 saídas e 3 de 7 retornos têm assinatura).
+  useEffect(() => { onRascunho?.(has && !savedUrl); }, [has, savedUrl]);
+  useEffect(() => () => onRascunho?.(false), []);
 
   const getXY = (e) => {
     const r = ref.current.getBoundingClientRect();
@@ -84,7 +104,7 @@ function ModalVerVistoria({ vistoria: v, onClose, currentUser, fmtDt, gerarPDF }
     ['destino', 'Destino', v.destino||'—'],
     ['responsavel_envio', 'Resp. Envio', v.responsavel_envio||'—'],
     ['data_saida', 'Data Saida', fmtDt(v.data_saida)],
-    ['previsao_retorno', 'Prev. Retorno', v.previsao_retorno ? new Date(v.previsao_retorno).toLocaleDateString('pt-BR') : '—'],
+    ['previsao_retorno', 'Prev. Retorno', fmtDia(v.previsao_retorno)],
     ['status', 'Status', v.status],
     ...(v.status==='Retornou' ? [
       ['data_retorno', 'Data Retorno', fmtDt(v.data_retorno)],
@@ -156,7 +176,7 @@ export default function VistoriasPatio({ currentUser }) {
   const [vistorias, setVistorias] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(FORM_VAZIO);
+  const [form, setForm] = useState(() => formVazio(currentUser));
   const [fotos, setFotos] = useState([]);
   const [sigEnvio, setSigEnvio] = useState(null);
   const [sigRecebimento, setSigRecebimento] = useState(null);
@@ -165,19 +185,32 @@ export default function VistoriasPatio({ currentUser }) {
   const [modalRetorno, setModalRetorno] = useState(null);
   const [retornoForm, setRetornoForm] = useState({ km_retorno:'', obs_retorno:'', responsavel_recebimento:'' });
   const [sigRet, setSigRet] = useState(null);
+  const [retornando, setRetornando] = useState(false);
+  // leitura da lista que falhou: sem isso a tela ficava em branco e parecia "nenhum veículo em campo"
+  const [erroLista, setErroLista] = useState('');
+  // assinatura desenhada e ainda não salva, por quadro (envio, recebimento no destino, retorno)
+  const [rascunho, setRascunho] = useState({ envio: false, receb: false, ret: false });
+  const marcaRascunho = (qual) => (v) => setRascunho(r => r[qual] === v ? r : { ...r, [qual]: v });
+  // trava de clique duplo (o estado só vale depois do próximo desenho da tela; a trava vale na hora)
+  const salvandoRef = useRef(false);
+  const retornandoRef = useRef(false);
   const fileRef = useRef(null);
 
   useEffect(() => { fetchAll(); }, []);
 
   const fetchAll = async () => {
     setLoading(true);
-    const { data } = await supabase.from('vistorias_patio').select('*').order('data_saida',{ascending:false});
-    setVistorias(data || []);
+    const { data, error } = await supabase.from('vistorias_patio').select('*').order('data_saida',{ascending:false});
+    // se a leitura falhar, fica a lista que já estava na tela (não troca por "vazia")
+    if (error) setErroLista(error.message || 'erro desconhecido');
+    else { setErroLista(''); setVistorias(data || []); }
     setLoading(false);
   };
 
+  // Foto ou assinatura que não sobe NÃO é mais descartada em silêncio (Etapa 7.41, 05/10/2026): o envio
+  // para e o motivo aparece, em vez de registrar a saída "sem foto" sem ninguém saber.
   const uploadFotos = async (files, prefix) => {
-    const urls = [];
+    const urls = []; const falhas = [];
     for (const f of files) {
       const ext = f.name.split('.').pop();
       const path = `vistorias/${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
@@ -185,8 +218,9 @@ export default function VistoriasPatio({ currentUser }) {
       if (!error) {
         const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
         urls.push(pub?.publicUrl || path);
-      }
+      } else falhas.push(`${f.name} (${error.message})`);
     }
+    if (falhas.length) throw new Error((falhas.length === 1 ? 'a foto ' : 'as fotos ') + falhas.join(', '));
     return urls;
   };
 
@@ -196,55 +230,75 @@ export default function VistoriasPatio({ currentUser }) {
       const blob = await (await fetch(dataUrl)).blob();
       const path = `assinaturas/vistoria_${name}_${Date.now()}.png`;
       const { error } = await supabase.storage.from('acn-media').upload(path, blob, { contentType:'image/png', upsert:true });
-      if (!error) {
-        const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
-        return pub?.publicUrl;
-      }
-    } catch(e) { console.warn(e); }
-    return null;
+      if (error) throw error;
+      const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(path);
+      return pub?.publicUrl;
+    } catch(e) { console.warn(e); throw new Error('a assinatura (' + (e?.message || 'falha no envio') + ')'); }
   };
 
   const salvar = async () => {
-    const respEnvio = form.responsavel_envio || currentUser?.nome || '';
-    if (!form.veiculo_placa || !respEnvio) { alert('Preencha placa e responsavel!'); return; }
-    setUploading(true);
-    const fotosUrls = await uploadFotos(fotos, 'saida');
-    const sigEnvioUrl = await uploadSig(sigEnvio, 'envio');
-    const sigRecebUrl = await uploadSig(sigRecebimento, 'recebimento_inicial');
+    if (salvandoRef.current) return;
+    if (!form.veiculo_placa || !form.responsavel_envio) { alert('Preencha placa e responsavel!'); return; }
+    salvandoRef.current = true;
+    try {
+      if ((rascunho.envio || rascunho.receb) && !(await confirmar(AVISO_ASSINATURA))) return;
+      setUploading(true);
+      let fotosUrls, sigEnvioUrl, sigRecebUrl;
+      try {
+        fotosUrls = await uploadFotos(fotos, 'saida');
+        sigEnvioUrl = await uploadSig(sigEnvio, 'envio');
+        sigRecebUrl = await uploadSig(sigRecebimento, 'recebimento_inicial');
+      } catch (e) { alert('Não foi possível enviar ' + e.message + '. A saída não foi registrada: tente de novo.'); return; }
 
-    const novoRow = {
-      ...form,
-      responsavel_envio: respEnvio,
-      fotos_saida: fotosUrls,
-      assinatura_envio_url: sigEnvioUrl,
-      assinatura_recebimento_url: sigRecebUrl,
-      status: 'Saiu',
-      criado_por: currentUser?.email,
-      criado_por_nome: currentUser?.nome,
-    };
-    const { data: nova, error } = await supabase.from('vistorias_patio').insert([novoRow]).select('id').single();
-    if (error) { alert('Erro ao salvar: ' + error.message); setUploading(false); return; }
-    if (nova?.id) logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: nova.id, changeType: 'CREATE', newRow: novoRow, user: currentUser });
-    setForm(FORM_VAZIO); setFotos([]); setSigEnvio(null); setSigRecebimento(null);
-    setShowForm(false); fetchAll();
-    setUploading(false);
+      const novoRow = {
+        ...form,
+        // previsão em branco vai como "sem data" (null): "" numa coluna de data o banco recusa, e ninguém
+        // conseguia registrar uma saída sem previsão. A hora digitada é a hora de quem está na tela, então
+        // vira o instante certo (antes ia sem fuso e o banco lia como hora de Londres: 3h de diferença).
+        previsao_retorno: form.previsao_retorno || null,
+        data_saida: form.data_saida ? new Date(form.data_saida).toISOString() : new Date().toISOString(),
+        fotos_saida: fotosUrls,
+        assinatura_envio_url: sigEnvioUrl,
+        assinatura_recebimento_url: sigRecebUrl,
+        status: 'Saiu',
+        criado_por: currentUser?.email,
+        criado_por_nome: currentUser?.nome,
+      };
+      const { data: nova, error } = await supabase.from('vistorias_patio').insert([novoRow]).select('id').single();
+      if (error) { alert('Erro ao salvar: ' + error.message); return; }
+      if (nova?.id) logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: nova.id, changeType: 'CREATE', newRow: novoRow, user: currentUser });
+      setForm(formVazio(currentUser)); setFotos([]); setSigEnvio(null); setSigRecebimento(null);
+      setShowForm(false); fetchAll();
+    } finally { salvandoRef.current = false; setUploading(false); }
   };
 
+  // Antes: a resposta do banco não era conferida. Retorno recusado fechava a janela como se tivesse dado certo
+  // e o histórico de auditoria registrava uma alteração que não aconteceu (Etapa 7.41, 05/10/2026).
   const registrarRetorno = async () => {
-    const v = modalRetorno;
-    const sigRetUrl = await uploadSig(sigRet, 'retorno');
-    const novoRow = {
-      status: 'Retornou',
-      km_retorno: retornoForm.km_retorno,
-      obs_retorno: retornoForm.obs_retorno,
-      responsavel_recebimento: retornoForm.responsavel_recebimento,
-      data_retorno: new Date().toISOString(),
-      assinatura_retorno_url: sigRetUrl,
-    };
-    await supabase.from('vistorias_patio').update(novoRow).eq('id', v.id);
-    logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: v.id, changeType: 'UPDATE',
-      oldRow: v, newRow: { ...v, ...novoRow }, user: currentUser });
-    setModalRetorno(null); setSigRet(null); setRetornoForm({km_retorno:'',obs_retorno:'',responsavel_recebimento:''}); fetchAll();
+    if (retornandoRef.current) return;
+    retornandoRef.current = true; setRetornando(true);
+    try {
+      const v = modalRetorno;
+      // o rótulo já dizia "Responsavel pelo Recebimento *", mas nada exigia
+      if (!retornoForm.responsavel_recebimento.trim()) { alert('Preencha o responsavel pelo recebimento!'); return; }
+      if (rascunho.ret && !(await confirmar(AVISO_ASSINATURA))) return;
+      let sigRetUrl = null;
+      try { sigRetUrl = await uploadSig(sigRet, 'retorno'); }
+      catch (e) { alert('Não foi possível enviar ' + e.message + '. O retorno não foi registrado: tente de novo.'); return; }
+      const novoRow = {
+        status: 'Retornou',
+        km_retorno: retornoForm.km_retorno,
+        obs_retorno: retornoForm.obs_retorno,
+        responsavel_recebimento: retornoForm.responsavel_recebimento,
+        data_retorno: new Date().toISOString(),
+        assinatura_retorno_url: sigRetUrl,
+      };
+      const { error } = await supabase.from('vistorias_patio').update(novoRow).eq('id', v.id);
+      if (error) { alert('Não foi possível registrar o retorno: ' + error.message); return; }
+      logChange({ module: 'vistorias', entityType: 'vistorias_patio', entityId: v.id, changeType: 'UPDATE',
+        oldRow: v, newRow: { ...v, ...novoRow }, user: currentUser });
+      setModalRetorno(null); setSigRet(null); setRetornoForm({km_retorno:'',obs_retorno:'',responsavel_recebimento:''}); fetchAll();
+    } finally { retornandoRef.current = false; setRetornando(false); }
   };
 
   const carregarScript = (url) => new Promise((res, rej) => {
@@ -263,7 +317,7 @@ export default function VistoriasPatio({ currentUser }) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const fmtD = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
-    const fmtData = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+    const fmtData = fmtDia;
 
     // Cabecalho
     doc.setFillColor(30, 41, 59);
@@ -385,7 +439,7 @@ export default function VistoriasPatio({ currentUser }) {
         <div className="sec-hdr">
           <span>Vistoria de Patio — Envio/Retorno de Veiculos e Servicos</span>
           {!showForm && (
-            <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setForm(FORM_VAZIO);setFotos([]);setSigEnvio(null);setSigRecebimento(null);setShowForm(true);}}>
+            <button className="acn-btn" style={{background:'#1e293b'}} onClick={()=>{setForm(formVazio(currentUser));setFotos([]);setSigEnvio(null);setSigRecebimento(null);setShowForm(true);}}>
               + Novo Envio
             </button>
           )}
@@ -439,7 +493,7 @@ export default function VistoriasPatio({ currentUser }) {
               </div>
               <div className="form-group">
                 <label className="acn-label">Responsavel pelo Envio *</label>
-                <input className="acn-input" style={{width:'100%'}} value={form.responsavel_envio||currentUser?.nome} onChange={e=>setForm({...form,responsavel_envio:e.target.value})} />
+                <input className="acn-input" style={{width:'100%'}} value={form.responsavel_envio} onChange={e=>setForm({...form,responsavel_envio:e.target.value})} />
               </div>
               <div className="form-group">
                 <label className="acn-label">Data/Hora Saida</label>
@@ -474,8 +528,8 @@ export default function VistoriasPatio({ currentUser }) {
 
             {/* ASSINATURAS */}
             <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:12}}>
-              <SignatureCanvas label="Assinatura — Responsavel pelo Envio" onSave={setSigEnvio} savedUrl={sigEnvio} />
-              <SignatureCanvas label="Assinatura — Responsavel pelo Recebimento (Destino)" onSave={setSigRecebimento} savedUrl={sigRecebimento} />
+              <SignatureCanvas label="Assinatura — Responsavel pelo Envio" onSave={setSigEnvio} savedUrl={sigEnvio} onRascunho={marcaRascunho('envio')} />
+              <SignatureCanvas label="Assinatura — Responsavel pelo Recebimento (Destino)" onSave={setSigRecebimento} savedUrl={sigRecebimento} onRascunho={marcaRascunho('receb')} />
             </div>
 
             <div style={{display:'flex',gap:6}}>
@@ -487,6 +541,12 @@ export default function VistoriasPatio({ currentUser }) {
           </div>
         )}
       </div>
+
+      {erroLista && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={fetchAll}>Tentar de novo</Botao>}>
+          Não foi possível ler as vistorias ({erroLista}). Isso não quer dizer que não haja veículos em campo.
+        </Faixa>
+      )}
 
       {/* PENDENTES */}
       {pendentes.length > 0 && (
@@ -510,8 +570,9 @@ export default function VistoriasPatio({ currentUser }) {
                     <td>{v.veiculo_modelo||'—'}</td>
                     <td>{v.destino||'—'}</td>
                     <td>{fmtDt(v.data_saida)}</td>
-                    <td style={{color: v.previsao_retorno && new Date(v.previsao_retorno)<new Date() ? '#ef4444' : undefined}}>
-                      {v.previsao_retorno ? new Date(v.previsao_retorno).toLocaleDateString('pt-BR') : '—'}
+                    {/* atrasado = o dia previsto já passou; o próprio dia previsto ainda está no prazo (antes ficava vermelho o dia todo) */}
+                    <td style={{color: v.previsao_retorno && String(v.previsao_retorno).slice(0,10) < hojeISO() ? '#ef4444' : undefined}}>
+                      {fmtDia(v.previsao_retorno)}
                     </td>
                     <td><span className="acn-badge" style={{background:corStatus(v.status)}}>{v.status}</span></td>
                     <td>
@@ -560,6 +621,9 @@ export default function VistoriasPatio({ currentUser }) {
                 ))}
               </tbody>
             </table>
+            {concluidas.length > 30 && (
+              <div style={{fontSize:11,color:'#64748b',marginTop:6}}>Mostrando os 30 retornos mais recentes de {concluidas.length}.</div>
+            )}
           </div>
         </div>
       )}
@@ -593,11 +657,11 @@ export default function VistoriasPatio({ currentUser }) {
             <textarea className="acn-input" rows={2} style={{width:'100%',resize:'vertical',marginBottom:10}}
               value={retornoForm.obs_retorno} onChange={e=>setRetornoForm({...retornoForm,obs_retorno:e.target.value})} />
             <div style={{marginBottom:12}}>
-              <SignatureCanvas label="Assinatura de Retorno" onSave={setSigRet} savedUrl={sigRet} />
+              <SignatureCanvas label="Assinatura de Retorno" onSave={setSigRet} savedUrl={sigRet} onRascunho={marcaRascunho('ret')} />
             </div>
             <div style={{display:'flex',gap:8}}>
-              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px'}} onClick={registrarRetorno}>
-                CONFIRMAR RETORNO
+              <button className="acn-btn" style={{background:'#22c55e',flex:1,padding:'9px',opacity:retornando?0.6:1}} onClick={registrarRetorno} disabled={retornando}>
+                {retornando ? 'Registrando...' : 'CONFIRMAR RETORNO'}
               </button>
               <button className="acn-btn" style={{background:'#94a3b8'}} onClick={()=>setModalRetorno(null)}>Cancelar</button>
             </div>
