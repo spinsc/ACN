@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { pedirTexto, confirmar } from './Feedback';
+import { diaBR } from './Interface';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES DE SETORES
@@ -563,6 +564,10 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
   const [uploadando, setUploadando] = useState<string|null>(null); // solicitacao_id sendo uploadado
   const [anexos, setAnexos]         = useState<Record<string,any[]>>({});
   const [collapsed, setCollapsed]   = useState(false);
+  // Pedido do usuário em 05/10/2026 (só a tela do Telecom): ordenar as análises pela data de disputa do processo de origem.
+  // "Mais recente" = a data mais nova primeiro; "menos recente" = a mais antiga primeiro. A escolha fica lembrada neste computador.
+  const [ordem, setOrdem] = useState(() => { try { return localStorage.getItem('acn-analise-ordem') || 'padrao'; } catch { return 'padrao'; } });
+  const [disputas, setDisputas] = useState<Record<string, any>>({});   // origem_id → { quando, texto }
 
   const load = useCallback(async (silent=false) => {
     if (!silent) setLoading(true);
@@ -576,6 +581,20 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
     const items = (data || []).filter(i => i.analise_solicitacoes?.status === 'em_andamento');
     setAnalises(items);
     if (!silent) setLoading(false);
+    // Data de disputa do processo de origem, só para ordenar a lista do Telecom: licitação = `licitacoes.data_disputa` (com hora);
+    // processo do CRM = `crm_oportunidades.data_sessao` (só o dia) + `hora_sessao` (texto). Sem data = vai para o fim da lista, nas duas ordens.
+    if (setor === 'Telecom' && items.length) {
+      const idsDe = (o: string) => [...new Set(items.map((i: any) => i.analise_solicitacoes).filter((s: any) => s?.origem === o && s?.origem_id).map((s: any) => s.origem_id))];
+      const lic = idsDe('licitacao'), crm = idsDe('crm');
+      const [rl, rc] = await Promise.all([
+        lic.length ? supabase.from('licitacoes').select('id,data_disputa').in('id', lic) : Promise.resolve({ data: [] }),
+        crm.length ? supabase.from('crm_oportunidades').select('id,data_sessao,hora_sessao').in('id', crm) : Promise.resolve({ data: [] }),
+      ]);
+      const mapa: Record<string, any> = {};
+      (rl.data || []).forEach((l: any) => { if (l.data_disputa) mapa[l.id] = { quando: new Date(l.data_disputa), texto: new Date(l.data_disputa).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }; });
+      (rc.data || []).forEach((c: any) => { if (c.data_sessao) mapa[c.id] = { quando: new Date(String(c.data_sessao).slice(0, 10) + 'T00:00:00'), texto: diaBR(c.data_sessao) + (c.hora_sessao ? ' ' + c.hora_sessao : '') }; });
+      setDisputas(mapa);
+    }
     // carrega anexos para cada solicitação
     if (items.length) {
       const ids = [...new Set(items.map((i:any) => i.analise_solicitacoes?.id).filter(Boolean))];
@@ -637,6 +656,19 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
 
   const cor = SETOR_COR[setor] || '#374151';
 
+  // Lista na ordem escolhida (só Telecom; nos outros setores segue a ordem de sempre)
+  const lista = (() => {
+    if (setor !== 'Telecom' || ordem === 'padrao') return analises;
+    const quando = (i: any) => disputas[i.analise_solicitacoes?.origem_id]?.quando?.getTime();
+    return [...analises].sort((a: any, b: any) => {
+      const ta = quando(a), tb = quando(b);
+      if (ta == null && tb == null) return 0;
+      if (ta == null) return 1;
+      if (tb == null) return -1;
+      return ordem === 'disputa_recente' ? tb - ta : ta - tb;
+    });
+  })();
+
   return (
     <div style={{ margin:'0 0 16px 0', border:`1px solid ${cor}30`, borderLeft:`4px solid ${cor}`, borderRadius:6, background:'#fff', overflow:'hidden' }}>
       {/* Header */}
@@ -671,7 +703,19 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {analises.map(item => {
+              {setor === 'Telecom' && analises.length > 1 && (
+                <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:10, color:'#475569' }}>
+                  <label htmlFor="analise-ordem" style={{ fontWeight:700 }}>Ordenar por</label>
+                  <select id="analise-ordem" value={ordem}
+                    onChange={e => { setOrdem(e.target.value); try { localStorage.setItem('acn-analise-ordem', e.target.value); } catch {} }}
+                    style={{ padding:'3px 6px', border:`1px solid ${cor}50`, borderRadius:4, fontSize:10 }}>
+                    <option value="padrao">Padrão</option>
+                    <option value="disputa_recente">Data de disputa — mais recente primeiro</option>
+                    <option value="disputa_antiga">Data de disputa — menos recente primeiro</option>
+                  </select>
+                </div>
+              )}
+              {lista.map(item => {
                 const sol = item.analise_solicitacoes;
                 const solId = sol?.id;
                 const isExp = expandido === item.id;
@@ -705,6 +749,9 @@ export default function AnaliseWidget({ setor, currentUser, onAbrirOrigem }: { s
                         </span>
                       </div>
                       <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, marginLeft:8 }}>
+                        {setor === 'Telecom' && disputas[sol?.origem_id] && (
+                          <span style={{ fontSize:9, color:'#7c3aed', fontWeight:700 }} title="Data de disputa do processo">🗓 Disputa {disputas[sol.origem_id].texto}</span>
+                        )}
                         <span style={{ fontSize:9, color:'#9ca3af' }}>
                           {sol?.criado_em ? new Date(sol.criado_em).toLocaleDateString('pt-BR') : ''}
                         </span>
