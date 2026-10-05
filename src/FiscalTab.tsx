@@ -14,6 +14,10 @@ import { podeEditarEquipeDaOp } from './utils/permissoes';
 
 const semDado = (v) => !v || !String(v).trim();
 const STATUS_FATURADA = ['Faturado e Disponivel para Entrega', 'Faturado'];
+// A nota informada pode ser a NF-e de material, a NFS-e de serviço ou as duas: às vezes vende-se só serviço,
+// às vezes só material, às vezes os dois juntos (regra definida com o usuário em 05/10/2026). Pelo menos uma.
+const descricaoNotas = (nf, nfServ) => [nf && `NF-e ${nf}`, nfServ && `NFS-e ${nfServ}`].filter(Boolean).join(' · ');
+const AVISO_SEM_NOTA = 'Informe ao menos uma nota: a NF-e (material) ou a NFS-e (serviço).';
 const baseOplDe = (opl) => (opl || '').replace(/\/\d+$/, '');
 const sufixoNum = (opl) => { const m = (opl || '').match(/\/(\d+)$/); return m ? parseInt(m[1], 10) : 0; };
 
@@ -61,7 +65,7 @@ export default function FiscalTab({ currentUser }) {
         .order('data_cq', { ascending: true }),
       // todas as unidades com sufixo /NN, de qualquer fase, para o bloco do lote saber
       // quantas já chegaram, quantas já foram faturadas e quantas ainda faltam
-      supabase.from('oples').select('id,opl,status_geral,numero_nf').like('opl', '%/%'),
+      supabase.from('oples').select('id,opl,status_geral,numero_nf,numero_nf_servico').like('opl', '%/%'),
     ]);
     const porBase = {};
     (lotesRes.data || []).forEach(u => { if (/\/\d+$/.test(u.opl || '')) { const b = baseOplDe(u.opl); (porBase[b] = porBase[b] || []).push(u); } });
@@ -102,7 +106,7 @@ export default function FiscalTab({ currentUser }) {
       const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
       const novoRow = {
         status_geral: 'Faturado e Disponivel para Entrega',
-        numero_nf: nf,
+        numero_nf: nf || null,
         numero_nf_servico: nfServ || null,
         data_emissao_nf: agora,
         responsavel_fiscal: currentUser?.nome,
@@ -118,15 +122,15 @@ export default function FiscalTab({ currentUser }) {
       await supabase.from('logs_movimentacao_opl').insert([{
         opl_id: o.id, numero_opl: o.opl, setor: 'Fiscal',
         evento: (itens.length > 1
-          ? `NF-e emitida em lote: ${nf}${nfServ ? ` · NFS-e ${nfServ}` : ''} (junto com ${itens.length - 1} outra(s) unidade(s): ${itens.map(x=>x.opl).filter(n=>n!==o.opl).join(', ')}).`
-          : `NF-e emitida: ${nf}${nfServ ? ` · NFS-e ${nfServ}` : ''}. Disponivel para entrega.`) + notaNoHistorico,
+          ? `Faturado em lote: ${descricaoNotas(nf, nfServ)} (junto com ${itens.length - 1} outra(s) unidade(s): ${itens.map(x=>x.opl).filter(n=>n!==o.opl).join(', ')}).`
+          : `Faturado: ${descricaoNotas(nf, nfServ)}. Disponivel para entrega.`) + notaNoHistorico,
         status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
         usuario_nome: currentUser?.nome, data_hora: agora,
       }]);
     }
     if (faturadas.length > 0) {
       notificarEvento('fiscal_nf_emitida',
-        msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), nfServ ? `${nf} + NFS-e ${nfServ}` : nf, currentUser?.nome));
+        msg.nfEmitida(faturadas.map(o=>o.opl).join(', '), descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     }
     if (jaFaturadasPorOutro.length > 0) {
       alert(`Atenção: ${jaFaturadasPorOutro.join(', ')} já ${jaFaturadasPorOutro.length>1?'foram faturadas':'foi faturada'} por outra sessão enquanto você selecionava — não foram faturadas de novo. Confira a lista atualizada.`);
@@ -139,10 +143,10 @@ export default function FiscalTab({ currentUser }) {
   const faturarSelecionados = async () => {
     const nf = nfLote.trim();
     const nfServ = nfServicoLote.trim();
-    if (!nf) { alert('Informe o numero da NF-e!'); return; }
+    if (!nf && !nfServ) { alert(AVISO_SEM_NOTA); return; }
     const itens = opls.filter(o => selecionados.has(o.id) && o.status_geral === 'Aguarda Emissao NF');
     if (itens.length === 0) return;
-    if (!await confirmar(`Faturar ${itens.length} OP(s) com a NF-e ${nf}${nfServ ? ` e a NFS-e ${nfServ}` : ''}?`)) return;
+    if (!await confirmar(`Faturar ${itens.length} OP(s) com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?`)) return;
     setFaturandoLote(true);
     await executarFaturamento({ itens, nf, nfServ });
     setSelecionados(new Set());
@@ -164,10 +168,10 @@ export default function FiscalTab({ currentUser }) {
     const nfServ = (nfsServico[chave] || '').trim();
     const marcadas = chegaram.filter(u => !lotesDesmarcados.has(u.id));
     const deFora = chegaram.filter(u => lotesDesmarcados.has(u.id));
-    if (!nf) { alert('Informe o numero da NF-e do lote!'); return; }
+    if (!nf && !nfServ) { alert(AVISO_SEM_NOTA); return; }
     if (marcadas.length === 0) { alert('Marque ao menos uma unidade do lote para faturar.'); return; }
     const parcial = faltam.length > 0 || deFora.length > 0;
-    const notas = `NF-e ${nf}${nfServ ? ` e NFS-e ${nfServ}` : ''}`;
+    const notas = descricaoNotas(nf, nfServ).replace(' · ', ' e ');
     const textoFalta = faltam.length ? `Ainda não chegaram ao Fiscal: ${faltam.map(u => `${u.opl} (${u.status_geral})`).join(', ')}.` : '';
     const textoFora = deFora.length ? `Você deixou de fora: ${deFora.map(u => u.opl).join(', ')}.` : '';
     const pergunta = parcial
@@ -189,17 +193,17 @@ export default function FiscalTab({ currentUser }) {
   };
 
   const faturar = async (opl) => {
-    const nf = nfs[opl.id];
+    const nf = (nfs[opl.id] || '').trim();
     const nfServ = (nfsServico[opl.id] || '').trim();
-    if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
-    if (!await confirmar(`Confirmar o faturamento da OP ${opl.opl} com a NF-e ${nf.trim()}${nfServ ? ` e a NFS-e ${nfServ}` : ''}?`)) return;
+    if (!nf && !nfServ) { alert(AVISO_SEM_NOTA); return; }
+    if (!await confirmar(`Confirmar o faturamento da OP ${opl.opl} com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?`)) return;
     setFaturandoId(opl.id);
     const agora = new Date().toISOString();
     const inicioFiscal = opl.data_liberacao_comercial ? new Date(opl.data_liberacao_comercial) : null;
     const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
     const novoRow = {
       status_geral: 'Faturado e Disponivel para Entrega',
-      numero_nf: nf.trim(),
+      numero_nf: nf || null,
       numero_nf_servico: nfServ || null,
       data_emissao_nf: agora,
       responsavel_fiscal: currentUser?.nome,
@@ -217,11 +221,11 @@ export default function FiscalTab({ currentUser }) {
       oldRow: opl, newRow: { ...opl, ...novoRow }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Fiscal',
-      evento: `NF-e emitida: ${nf.trim()}${nfServ ? ` · NFS-e ${nfServ}` : ''}. Disponivel para entrega.`,
+      evento: `Faturado: ${descricaoNotas(nf, nfServ)}. Disponivel para entrega.`,
       status_anterior: 'Aguarda Emissao NF', status_novo: 'Faturado e Disponivel para Entrega',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
-    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, nfServ ? `${nf.trim()} + NFS-e ${nfServ}` : nf.trim(), currentUser?.nome));
+    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(opl.opl, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[opl.id]; return n; });
     setNfsServico(prev => { const n={...prev}; delete n[opl.id]; return n; });
     setFaturandoId(null);
@@ -229,16 +233,16 @@ export default function FiscalTab({ currentUser }) {
   };
 
   const faturarOS = async (os) => {
-    const nf = nfs[os.id];
+    const nf = (nfs[os.id] || '').trim();
     const nfServ = (nfsServico[os.id] || '').trim();
-    if (!nf || !nf.trim()) { alert('Informe o numero da NF-e!'); return; }
-    if (!await confirmar(`Confirmar o faturamento da OS ${os.numero_os || ''} com a NF-e ${nf.trim()}${nfServ ? ` e a NFS-e ${nfServ}` : ''}?`)) return;
+    if (!nf && !nfServ) { alert(AVISO_SEM_NOTA); return; }
+    if (!await confirmar(`Confirmar o faturamento da OS ${os.numero_os || ''} com ${descricaoNotas(nf, nfServ).replace(' · ', ' e ')}?`)) return;
     const agora = new Date().toISOString();
     const inicioFiscal = os.data_cq ? new Date(os.data_cq) : null;
     const tempoFiscal = inicioFiscal ? horasUteis(inicioFiscal, new Date()) : null;
     const novoRow = {
       status: 'Faturada - Aguardando Entrega',
-      numero_nf: nf.trim(),
+      numero_nf: nf || null,
       numero_nf_servico: nfServ || null,
       data_emissao_nf: agora,
       responsavel_fiscal: currentUser?.nome,
@@ -248,7 +252,7 @@ export default function FiscalTab({ currentUser }) {
     await supabase.from('sac_ordens_servico').update(novoRow).eq('id', os.id);
     logChange({ module: 'fiscal', entityType: 'sac_ordens_servico', entityId: os.id, changeType: 'UPDATE',
       oldRow: os, newRow: { ...os, ...novoRow }, user: currentUser });
-    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, nfServ ? `${nf.trim()} + NFS-e ${nfServ}` : nf.trim(), currentUser?.nome));
+    notificarEvento('fiscal_nf_emitida', msg.nfEmitida(os.numero_os, descricaoNotas(nf, nfServ).replace(' · ', ' + '), currentUser?.nome));
     setNfs(prev => { const n={...prev}; delete n[os.id]; return n; });
     setNfsServico(prev => { const n={...prev}; delete n[os.id]; return n; });
     fetchAll();
@@ -344,7 +348,7 @@ export default function FiscalTab({ currentUser }) {
     const parcial = faltam.length > 0 || marcadas.length < chegaram.length;
     const aberto = lotesAbertos[base] ?? (chegaram.length <= 6);
     const faturando = faturandoId === chave;
-    const nfsJaEmitidas = [...new Set(jaFaturadas.map(u => u.numero_nf).filter(Boolean))];
+    const nfsJaEmitidas = [...new Set(jaFaturadas.map(u => descricaoNotas(u.numero_nf, u.numero_nf_servico)).filter(Boolean))];
     const totalVenda = ativas.length;
     const naoLida = chegaram.some(o => oplsNaoLidas.has(String(o.id)));
     const alternar = (id) => setLotesDesmarcados(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -363,7 +367,7 @@ export default function FiscalTab({ currentUser }) {
             </div>
             <div className="acn-fraco" style={{ marginTop: 3, fontSize: 10 }}>
               {chegaram.length} aguardando nota
-              {jaFaturadas.length > 0 && <> · {jaFaturadas.length} já faturada(s){nfsJaEmitidas.length ? ` (NF-e ${nfsJaEmitidas.join(', ')})` : ''}</>}
+              {jaFaturadas.length > 0 && <> · {jaFaturadas.length} já faturada(s){nfsJaEmitidas.length ? ` (${nfsJaEmitidas.join('; ')})` : ''}</>}
               {faltam.length > 0 && (
                 <span style={{ marginLeft: 6 }}>
                   <Selo familia="atencao" ponto={false}
@@ -383,13 +387,13 @@ export default function FiscalTab({ currentUser }) {
             </div>
           </td>
           <td>
-            <input className="acn-input" style={{ width: 118 }} placeholder="NF-e do lote"
+            <input className="acn-input" style={{ width: 118 }} placeholder="NF-e (material)"
               value={nfs[chave] || ''}
               onChange={e => setNfs(prev => ({ ...prev, [chave]: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && faturarLote({ base, chegaram, faltam })} />
           </td>
           <td>
-            <input className="acn-input" style={{ width: 118 }} placeholder="NFS-e (se houver)"
+            <input className="acn-input" style={{ width: 118 }} placeholder="NFS-e (serviço)"
               value={nfsServico[chave] || ''}
               onChange={e => setNfsServico(prev => ({ ...prev, [chave]: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && faturarLote({ base, chegaram, faltam })} />
@@ -477,18 +481,18 @@ export default function FiscalTab({ currentUser }) {
       {/* AGUARDANDO EMISSÃO */}
       <div className="sec-card">
         <div className="sec-hdr">
-          <span>OPs aguardando emissão de NF-e <Selo familia="atencao" ponto={false}>{filtrarOpls(aguardando, busca).length}</Selo></span>
+          <span>OPs aguardando emissão de nota fiscal <Selo familia="atencao" ponto={false}>{filtrarOpls(aguardando, busca).length}</Selo></span>
         </div>
         <BuscaOplInput busca={busca} setBusca={setBusca} />
 
         <div className="sec-body" style={{overflowX:'auto'}}>
           {loading ? <div className="acn-empty">Carregando...</div> : aguardando.length === 0 ? (
-            <div className="acn-empty">Nenhuma OP aguardando emissão de NF-e.</div>
+            <div className="acn-empty">Nenhuma OP aguardando emissão de nota fiscal.</div>
           ) : (
             <table className="acn-tabela">
               <thead><tr>
                 <th></th><th>OP</th><th>Veículo</th><th>Qtd</th><th>Tipo de projeto</th><th>Cliente</th><th>Lib. comercial</th>
-                <th title="Seriais / nº de equipamentos, informados pelo Almoxarifado no kiting">Seriais</th><th title="Número da NF-e de venda de material">NF-e (material)</th><th title="Número da NFS-e de serviço — só quando o faturamento sai com as duas notas">NFS-e (serviço)</th><th>Ação</th>
+                <th title="Seriais / nº de equipamentos, informados pelo Almoxarifado no kiting">Seriais</th><th title="NF-e de venda de material — informe esta, a de serviço ou as duas">NF-e (material)</th><th title="NFS-e de serviço — informe esta, a de material ou as duas">NFS-e (serviço)</th><th>Ação</th>
               </tr></thead>
               <tbody>
                 {basesDeLote.map(renderLote)}
@@ -525,7 +529,7 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td>
                       <input className="acn-input" style={{width:118}}
-                        placeholder="NF-e 000000000"
+                        placeholder="NF-e (material)"
                         value={nfs[o.id] || ''}
                         onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturar(o)}
@@ -533,7 +537,7 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td>
                       <input className="acn-input" style={{width:118}}
-                        placeholder="NFS-e (se houver)"
+                        placeholder="NFS-e (serviço)"
                         value={nfsServico[o.id] || ''}
                         onChange={e => setNfsServico(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturar(o)}
@@ -579,7 +583,7 @@ export default function FiscalTab({ currentUser }) {
                     </td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>
-                      <Selo familia="ok" ponto={false} title="NF-e de venda de material">NF-e #{o.numero_nf}</Selo>
+                      {o.numero_nf && <Selo familia="ok" ponto={false} title="NF-e de venda de material">NF-e #{o.numero_nf}</Selo>}
                       {o.numero_nf_servico && (
                         <div style={{marginTop:3}}><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
                       )}
@@ -609,7 +613,7 @@ export default function FiscalTab({ currentUser }) {
       {osAguardando.length > 0 && (
         <div className="sec-card">
           <div className="sec-hdr">
-            <span>OS veiculares aguardando emissão de NF-e <Selo familia="atencao" ponto={false}>{osAguardando.length}</Selo></span>
+            <span>OS veiculares aguardando emissão de nota fiscal <Selo familia="atencao" ponto={false}>{osAguardando.length}</Selo></span>
           </div>
           <div className="sec-body" style={{overflowX:'auto'}}>
             <table className="acn-tabela">
@@ -626,13 +630,13 @@ export default function FiscalTab({ currentUser }) {
                       </div>
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:130}} placeholder="NF-e 000000000"
+                      <input className="acn-input" style={{width:130}} placeholder="NF-e (material)"
                         value={nfs[o.id] || ''}
                         onChange={e => setNfs(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturarOS(o)} />
                     </td>
                     <td>
-                      <input className="acn-input" style={{width:130}} placeholder="NFS-e (se houver)"
+                      <input className="acn-input" style={{width:130}} placeholder="NFS-e (serviço)"
                         value={nfsServico[o.id] || ''}
                         onChange={e => setNfsServico(prev => ({...prev,[o.id]:e.target.value}))}
                         onKeyDown={e => e.key === 'Enter' && faturarOS(o)} />
@@ -665,7 +669,7 @@ export default function FiscalTab({ currentUser }) {
                     <td><strong className="acn-forte">{o.numero_os}</strong></td>
                     <td>{o.cliente_nome || '—'}</td>
                     <td>
-                      <Selo familia="ok" ponto={false} title="NF-e de venda de material">NF-e #{o.numero_nf}</Selo>
+                      {o.numero_nf && <Selo familia="ok" ponto={false} title="NF-e de venda de material">NF-e #{o.numero_nf}</Selo>}
                       {o.numero_nf_servico && (
                         <div style={{marginTop:3}}><Selo familia="ok" ponto={false} title="NFS-e de serviço">NFS-e #{o.numero_nf_servico}</Selo></div>
                       )}
@@ -687,11 +691,11 @@ export default function FiscalTab({ currentUser }) {
       {selecionados.size > 0 && (
         <div className="acn-barra-selecao">
           <strong className="acn-num">{selecionados.size} selecionada{selecionados.size!==1?'s':''}</strong>
-          <input className="acn-input" style={{width:150}} placeholder="NF-e 000000000"
+          <input className="acn-input" style={{width:150}} placeholder="NF-e (material)"
             value={nfLote} onChange={e=>setNfLote(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
-          <input className="acn-input" style={{width:150}} placeholder="NFS-e (se houver)"
-            title="Nota de serviço do mesmo lote — deixe em branco se o faturamento só tem a NF-e de material"
+          <input className="acn-input" style={{width:150}} placeholder="NFS-e (serviço)"
+            title="Nota de serviço — informe uma das duas notas, ou as duas"
             value={nfServicoLote} onChange={e=>setNfServicoLote(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && faturarSelecionados()} />
           <Botao pequeno variante="primario" icone={mdiReceiptTextCheckOutline} disabled={faturandoLote} onClick={faturarSelecionados}>
@@ -730,8 +734,9 @@ export default function FiscalTab({ currentUser }) {
           <div className="modal-box">
             <div className="modal-title">Confirmar entrega — {modalEntregue.opl}</div>
             <div className="acn-fraco" style={{marginBottom:12}}>
-              NF-e: <strong className="acn-forte">#{modalEntregue.numero_nf}</strong>
-              {modalEntregue.numero_nf_servico && <> · NFS-e: <strong className="acn-forte">#{modalEntregue.numero_nf_servico}</strong></>}
+              {modalEntregue.numero_nf && <>NF-e: <strong className="acn-forte">#{modalEntregue.numero_nf}</strong></>}
+              {modalEntregue.numero_nf && modalEntregue.numero_nf_servico && ' · '}
+              {modalEntregue.numero_nf_servico && <>NFS-e: <strong className="acn-forte">#{modalEntregue.numero_nf_servico}</strong></>}
             </div>
             <label className="acn-label">Nome completo de quem recebeu o equipamento</label>
             <input className="acn-input" style={{width:'100%',marginBottom:14}}

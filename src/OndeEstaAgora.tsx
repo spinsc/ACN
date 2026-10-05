@@ -78,6 +78,7 @@ export function OndeEstaAgora({ op, vinculos = [], logs = [], onAbrirDossie = nu
 
         {frete && <span style={chip}>🚚 Frete: {frete.status || 'em andamento'}</span>}
         {nf && <span style={chip}>🧾 NF {nf}</span>}
+        {op.numero_nf_servico && <span style={chip}>🧾 NFS-e {op.numero_nf_servico}</span>}
         {et.concluida && op.data_entrega && <span style={chip}>📦 Entregue em {textoData(op.data_entrega)}</span>}
       </div>
     </div>

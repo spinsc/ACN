@@ -318,7 +318,7 @@ async function gerarPdfDossie(d, setGerando) {
       ['Chassi', o.chassi || '—', 'Placa', o.placa || '—'],
       ['Entrada', fmtD(o.data_entrada), 'Prazo', fmtD(o.prazo_entrega_comercial || o.data_prevista_entrega)],
       ['Comercial', o.responsavel_comercial || o.vendedor || '—', 'Empresa', o.faturamento_empresa || '—'],
-      ['Destino', [o.destino_cidade, o.destino_uf].filter(Boolean).join('/') || '—', 'NF-e', [o.numero_nf || o.nfe || '—', o.numero_nf_servico ? 'NFS-e ' + o.numero_nf_servico : ''].filter(Boolean).join(' · ')],
+      ['Destino', [o.destino_cidade, o.destino_uf].filter(Boolean).join('/') || '—', 'NF-e', [o.numero_nf || o.nfe, o.numero_nf_servico ? 'NFS-e ' + o.numero_nf_servico : ''].filter(Boolean).join(' · ') || '—'],
     ]);
 
     titulo('ORIGEM DA VENDA', [29, 78, 216]);
