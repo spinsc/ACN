@@ -1030,3 +1030,24 @@ html body .modal-box.acn-modal-cadastro.acn-vis-jan { width: min(720px, 95vw); }
 /* histórico: o que já foi visto fica um pouco apagado (o que mudou e ainda não foi visto ganha a marca amarela) */
 .acn-vis-lida { opacity: .8; }
 .acn-vis-nota { margin-top: 8px; }
+
+/* ── Cor de texto dentro de tabela (Etapa 7.42, 05/10/2026) ─────────────────────────────────────────────────────
+   As classes de cor do sistema (acn-txt-erro/ok/info/atencao, acn-fraco, acn-forte) não pintavam nada quando postas
+   DIRETO na célula (<td>): no modo claro a regra geral das células (`.acn-main:not(...) table td`, mais forte que uma
+   classe sozinha) devolvia a cor comum do texto; no modo escuro a regra `body.dark .acn-main table td` (DashboardTab,
+   com !important) faz o mesmo e ainda manda span/strong/p/div de dentro da célula herdarem a cor. Medido em 05/10/2026
+   com o dado real: 477 de 477 células com classe de cor pintavam a cor comum (o "atrasada" dos Relatórios, o débito e o
+   saldo do banco de horas do RH, os totais da Logística...). Estas regras devolvem a cor que a classe diz, só dentro
+   de tabela e fora do Painel TV. É um remendo da Etapa 13 (o modo escuro hex-a-hex some quando ela vier). */
+html body:not(.dark) .acn-main:not(.acn-main-tv) table td.acn-txt-erro { color: var(--acn-bad); }
+html body:not(.dark) .acn-main:not(.acn-main-tv) table td.acn-txt-ok { color: var(--acn-ok); }
+html body:not(.dark) .acn-main:not(.acn-main-tv) table td.acn-txt-info { color: var(--acn-info); }
+html body:not(.dark) .acn-main:not(.acn-main-tv) table td.acn-txt-atencao { color: var(--acn-warn); }
+html body:not(.dark) .acn-main:not(.acn-main-tv) table td.acn-forte { color: var(--acn-ink); }
+html body:not(.dark) .acn-main:not(.acn-main-tv) table td.acn-fraco { color: var(--acn-muted); }
+html body.dark .acn-main:not(.acn-main-tv) table td.acn-txt-erro, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-txt-erro { color: #fca5a5 !important; }
+html body.dark .acn-main:not(.acn-main-tv) table td.acn-txt-ok, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-txt-ok { color: var(--acn-ok) !important; }
+html body.dark .acn-main:not(.acn-main-tv) table td.acn-txt-info, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-txt-info { color: var(--acn-info) !important; }
+html body.dark .acn-main:not(.acn-main-tv) table td.acn-txt-atencao, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-txt-atencao { color: var(--acn-warn) !important; }
+html body.dark .acn-main:not(.acn-main-tv) table td.acn-forte, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-forte { color: var(--acn-ink) !important; }
+html body.dark .acn-main:not(.acn-main-tv) table td.acn-fraco, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-fraco { color: var(--acn-muted) !important; }
