@@ -1100,3 +1100,36 @@ html body .acn-input.acn-cc-orc-anual { width: 230px; }
 .acn-cc-tipo-linha { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .acn-cc-tipo-linha.inativo .acn-input { opacity: .6; }
 html body .acn-cc-tipo-linha .acn-input { flex: 1 1 180px; width: auto; min-width: 0; }
+
+/* ── Centros de custo · painel do centro (Etapa 15b, 05/10/2026): só aparência ─────────────────────────────────── */
+html body .modal-box.acn-modal-cadastro.acn-cc-painel { width: min(1040px, 96vw); }
+.acn-cc-painel-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.acn-cc-painel-selos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.acn-cc-periodos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.acn-cc-duas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+.acn-cc-periodo { margin: 0; }
+/* 2 × 2: com os dois períodos lado a lado cada cartão tem ~160 px, o que cabe "R$ 60.000,00" sem quebrar */
+.acn-cc-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.acn-cc-kpi { display: grid; gap: 1px; padding: 8px 10px; background: var(--acn-surface); border: 1px solid var(--acn-line); border-radius: var(--acn-r2); min-width: 0; }
+.acn-cc-kpi span { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-cc-kpi strong { font-size: 15px; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-cc-kpi em { font-size: 11px; font-style: normal; color: var(--acn-muted); }
+.acn-cc-kpi.negativo strong { color: var(--acn-bad); }
+body.dark .acn-cc-kpi.negativo strong { color: #fca5a5; }
+/* barra de consumo: a trilha, o preenchimento que muda de cor por faixa e a marca de 80% */
+.acn-cc-consumo-bloco { display: grid; gap: 4px; }
+.acn-cc-consumo { position: relative; height: 12px; background: var(--acn-neutral-soft); border: 1px solid var(--acn-line); border-radius: 999px; overflow: hidden; }
+.acn-cc-consumo-preenchido { height: 100%; border-radius: 999px; background: var(--acn-ok); min-width: 0; transition: width .3s; }
+.acn-cc-consumo-preenchido.faixa-atencao { background: var(--acn-warn); }
+.acn-cc-consumo-preenchido.faixa-estouro { background: var(--acn-bad); }
+.acn-cc-consumo-preenchido.faixa-sem { background: transparent; }
+.acn-cc-consumo-marca { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--acn-muted); opacity: .6; }
+.acn-cc-consumo-legenda { font-size: 12px; }
+html body .acn-main table.acn-tabela tr.acn-cc-mes-atual > td { background: var(--acn-brand-soft) !important; font-weight: 600; }
+/* por fornecedor: nome, barra proporcional e valor */
+.acn-cc-forn { display: grid; gap: 6px; }
+.acn-cc-forn-linha { display: grid; grid-template-columns: minmax(90px, 1.2fr) 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.acn-cc-forn-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--acn-ink); }
+.acn-cc-forn-barra { display: block; height: 8px; background: var(--acn-neutral-soft); border-radius: 999px; overflow: hidden; }
+.acn-cc-forn-barra > span { display: block; height: 100%; background: var(--acn-brand); border-radius: 999px; }
+@media (max-width: 760px) { .acn-cc-periodos { grid-template-columns: 1fr; } }

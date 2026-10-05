@@ -6,6 +6,7 @@ import { ETAPAS_COMPRA, COR_ETAPA_COMPRA } from './ComprasFluxo';
 import { labelHierarquico, ModalLancarMedicao,
   ModalEditarLancamento, ModalEditarPedidoCompra, podeEditarLancamento } from './CentroCustoShared';
 import { CentrosCustoManager } from './CentroCustoFicha';
+import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avaliarAlertasDeConsumo } from './CentroCustoPainel';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
@@ -435,6 +436,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [modalCentros, setModalCentros] = useState(false);
   const [modalCompras, setModalCompras] = useState<any>(null);
   const [abaFin, setAbaFin] = useState('centros');
+  const [painelCentro, setPainelCentro] = useState<string | null>(null); // Etapa 15b: id do centro com o painel aberto
 
   // Filtros
   const now = new Date();
@@ -457,6 +459,25 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     setFaturamentos(fData || []);
     setDespesas(dData || []);
     setLoading(false);
+    // Etapa 15b (05/10/2026): centro com responsável e orçamento no mês, a partir de 80% / 100% → menção, uma vez por faixa e mês.
+    // Só avisa. Falha aqui não pode atrapalhar a tela: o aviso tenta de novo na próxima vez que o Financeiro abrir.
+    try {
+      const hoje = new Date();
+      if ((cData || []).some((c: any) => c.ativo && c.responsavel_email)) {
+        const orcLinhas = await carregarOrcamentoDoAno(hoje.getFullYear());
+        const itens = normalizarMovimentos({ compras: pData || [], faturamentos: fData || [], despesas: dData || [] });
+        await avaliarAlertasDeConsumo({ centros: cData || [], itens, orcLinhas, ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 });
+      }
+    } catch (e) { console.warn('Aviso de consumo do orçamento não avaliado:', e); }
+  }, []);
+
+  // a menção "orçamento do centro" abre o painel do centro (a caixa de menções guarda o destino no global e dispara este evento)
+  useEffect(() => {
+    const abrir = (d: any) => { if (d?.contexto === 'centro_custo' && d?.contextoId) setPainelCentro(String(d.contextoId)); };
+    abrir((window as any).__acnDeepLink);
+    const ouvir = (e: any) => abrir(e?.detail);
+    window.addEventListener('acn:abrir-registro', ouvir);
+    return () => window.removeEventListener('acn:abrir-registro', ouvir);
   }, []);
 
   useEffect(() => { carregar(); }, [carregar]);
@@ -491,10 +512,10 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     while (atual && guarda++ < 10) { cadeia.push(atual); atual = atual.parent_id ? centrosPorId[atual.parent_id] : null; }
     return cadeia;
   };
-  const porCentro: Record<string, { nome: string; total: number; count: number; compras: any[] }> = {};
+  const porCentro: Record<string, { nome: string; total: number; count: number; compras: any[]; centroId?: string }> = {};
   const addAoCentro = (centro: any, valor: number, item: any) => {
     const key = labelHierarquico(centro, centros) + ' — ' + centro.nome;
-    if (!porCentro[key]) porCentro[key] = { nome: key, total: 0, count: 0, compras: [] };
+    if (!porCentro[key]) porCentro[key] = { nome: key, total: 0, count: 0, compras: [], centroId: centro.id };
     porCentro[key].total += valor;
     porCentro[key].count++;
     porCentro[key].compras.push(item);
@@ -684,7 +705,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                 🗂️ Consolidado por Centro de Custo
               </div>
               <div style={{ fontSize: 9, color: '#64748b' }}>
-                Clique em um centro para ver as compras
+                Clique em um centro para ver o painel (orçado × realizado × comprometido); "Ver" abre as compras
               </div>
             </div>
 
@@ -713,7 +734,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
                           cursor: 'pointer', transition: 'background .1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#fafafa'}
-                          onClick={() => setModalCompras({ centro: { nome: c.nome }, compras: c.compras })}>
+                          title={c.centroId ? 'Abrir o painel deste centro' : undefined}
+                          onClick={() => (c.centroId ? setPainelCentro(c.centroId) : setModalCompras({ centro: { nome: c.nome }, compras: c.compras }))}>
                           <td style={{ padding: '7px 10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               {semCC && <span style={{ color: '#dc2626' }}>⚠️</span>}
@@ -787,6 +809,16 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
           onClose={() => setModalCentros(false)}
           onAtualizar={carregar}
         />
+      )}
+
+      {painelCentro && (
+        <PainelCentroCusto centroId={painelCentro} centros={centros} onClose={() => setPainelCentro(null)}
+          onVerLancamentos={(centro: any) => {
+            const chave = labelHierarquico(centro, centros) + ' — ' + centro.nome;
+            const linha = porCentro[chave];
+            setPainelCentro(null);
+            setModalCompras({ centro: { nome: chave }, compras: linha?.compras || [] });
+          }} />
       )}
 
       {modalCompras && (

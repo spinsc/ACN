@@ -23,6 +23,7 @@ const ABA_LABEL: Record<string, string> = {
   sac:         'SAC',
   rh:          'RH',
   compras:     'Compras',
+  financeiro:  'Financeiro',
   admin:       'Admin',
 };
 
@@ -34,6 +35,7 @@ const CONTEXTO_LABEL: Record<string, string> = {
   demanda_avulsa:   'Demanda Avulsa',
   sac:              'SAC',
   compra:           'Compra',
+  centro_custo:     'Centro de custo',
   licitacao:        'Licitação',
   compra_aprovacao: 'Aprovação de Compra',
   hora_extra:       'Hora extra',

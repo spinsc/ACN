@@ -24,7 +24,8 @@ import {
   ordenarArvore, idsComDescendentes, sugerirCodigoCentro, siglaDoCodigo, foraDaVigencia, orcamentoDoCentro,
   lerValorBR, dividirAnualIgual, EMPRESAS_CENTRO, ModalLancarDespesa,
 } from './CentroCustoShared';
-import { mdiTagOutline, mdiPlus, mdiPencilOutline, mdiCashPlus, mdiMagnify, mdiShapeOutline, mdiRefresh, mdiArrowUp, mdiArrowDown, mdiContentCopy } from '@mdi/js';
+import { PainelCentroCusto, carregarMovimentosCentros, normalizarMovimentos, calcularCentro, somarPeriodo, faixaDoConsumo } from './CentroCustoPainel';
+import { mdiTagOutline, mdiPlus, mdiPencilOutline, mdiCashPlus, mdiMagnify, mdiShapeOutline, mdiRefresh, mdiArrowUp, mdiArrowDown, mdiContentCopy, mdiChartBoxOutline } from '@mdi/js';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const reais = (v: any) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -48,6 +49,9 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
   const [ficha, setFicha] = useState<any>(null);       // { centro } — centro null = novo
   const [tiposAberto, setTiposAberto] = useState(false);
   const [modalDespesa, setModalDespesa] = useState<any>(null);
+  const [painel, setPainel] = useState<string | null>(null);   // id do centro com o painel aberto
+  const [itensMov, setItensMov] = useState<any[]>([]);          // compras, pagamentos e despesas já separados em realizado/comprometido (15b)
+  const [erroMov, setErroMov] = useState('');
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -63,6 +67,8 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     if (!t.error) setTipos(t.data || []);
     if (!o.error) setOrc(o.data || []);
     setCarregando(false);
+    // a coluna "% usado" vem das compras e despesas; se essa leitura falhar, a lista continua e a coluna avisa
+    carregarMovimentosCentros().then(m => { setItensMov(normalizarMovimentos(m)); setErroMov(''); }).catch(e => setErroMov(e?.message || String(e)));
   }, [ano]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -73,6 +79,12 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     centros.forEach(c => { m[c.id] = somar(orcamentoDoCentro(c, centros, orc)); });
     return m;
   }, [centros, orc]);
+  // "% usado" do ano mostrado: (realizado + comprometido) ÷ orçado, com a subárvore inteira (como o Financeiro faz)
+  const usoPorCentro = useMemo(() => {
+    const m: Record<string, any> = {};
+    centros.forEach(c => { m[c.id] = somarPeriodo(calcularCentro({ centro: c, centros, itens: itensMov, orcLinhas: orc, ano }).meses, 0); });
+    return m;
+  }, [centros, itensMov, orc, ano]);
   const totalOrcado = useMemo(() => somar(centros.filter(c => !c.parent_id && c.ativo).map(c => orcAnual[c.id])), [centros, orcAnual]);
   const hoje = hojeISO();
 
@@ -130,6 +142,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
       </div>
 
       {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>Não foi possível ler os centros de custo: {erro}.</Faixa>}
+      {erroMov && <Faixa tom="atencao">Não foi possível ler as compras e despesas ({erroMov}): a coluna "% usado" ficou vazia.</Faixa>}
 
       {carregando && !centros.length ? <div className="acn-empty">Carregando…</div>
         : !erro && centros.length === 0 ? <div className="acn-empty">Nenhum centro de custo cadastrado. Clique em <strong>Novo centro de custo</strong> para começar.</div>
@@ -138,7 +151,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
           <div className="acn-rolagem">
             <table className="acn-tabela acn-compacta">
               <thead><tr>
-                <th>Código</th><th>Nome</th><th>Tipo</th><th>Empresa</th><th>Responsável</th><th>Vigência</th><th>Orçamento {ano}</th><th>Status</th><th />
+                <th>Código</th><th>Nome</th><th>Tipo</th><th>Empresa</th><th>Responsável</th><th>Vigência</th><th>Orçamento {ano}</th><th>% usado</th><th>Status</th><th />
               </tr></thead>
               <tbody>
                 {visiveis.map(c => (
@@ -163,9 +176,18 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
                       {orcAnual[c.id] ? reais(orcAnual[c.id]) : <span className="acn-fraco">—</span>}
                       {c.orcamento_modo === 'soma_filhos' && <div className="acn-fraco">soma dos filhos</div>}
                     </td>
+                    <td className="acn-nowrap">
+                      {(() => {
+                        const u = usoPorCentro[c.id];
+                        if (!u || u.pct == null) return <span className="acn-fraco" title={u?.usado ? 'Há gasto, mas o centro não tem orçamento neste ano' : undefined}>—</span>;
+                        const fx = faixaDoConsumo(u.usado, u.orcado);
+                        return <Selo familia={fx === 'estouro' ? 'erro' : fx === 'atencao' ? 'atencao' : 'ok'} title={`${reais(u.usado)} de ${reais(u.orcado)} (realizado + comprometido)`}>{u.pct.toLocaleString('pt-BR')}%</Selo>;
+                      })()}
+                    </td>
                     <td><Selo familia={c.ativo ? 'ok' : 'neutro'}>{c.ativo ? 'Ativo' : 'Inativo'}</Selo></td>
                     <td>
                       <div className="acn-acoes-linha">
+                        <Botao pequeno icone={mdiChartBoxOutline} onClick={() => setPainel(c.id)} aria-label={`Abrir o painel do centro ${c.codigo}`}>Painel</Botao>
                         <Botao pequeno icone={mdiPencilOutline} onClick={() => setFicha({ centro: c })} aria-label={`Editar o centro ${c.codigo}`}>Editar</Botao>
                         <Botao pequeno icone={mdiCashPlus} disabled={c.recebe_lancamento === false}
                           title={c.recebe_lancamento === false ? 'Este centro só agrupa: não recebe despesa' : 'Lançar despesa avulsa neste centro'}
@@ -188,6 +210,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
         <FichaCentro centro={ficha.centro} centros={centros} tipos={tipos} anoInicial={ano} currentUser={currentUser}
           onClose={() => setFicha(null)} onSalvo={carregar} />
       )}
+      {painel && <PainelCentroCusto centroId={painel} centros={centros} anoInicial={ano} onClose={() => setPainel(null)} />}
       {tiposAberto && <TiposCentroModal tipos={tipos} centros={centros} currentUser={currentUser} onClose={() => setTiposAberto(false)} onMudou={carregar} />}
       {modalDespesa && <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser} onClose={() => setModalDespesa(null)} />}
     </>
