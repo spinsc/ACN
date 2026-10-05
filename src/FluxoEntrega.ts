@@ -104,20 +104,23 @@ export const STATUS_COTACAO_FRETE = 'Aguardando Cotacao Frete';
 // Por que isto importa: cinco pontos do sistema reconheciam os dois nomes, mas
 // os Relatórios e o Marketing só o longo — OP com o nome curto sumia de
 // "Finalizadas". Por isso ninguém compara com o texto solto: use
-// aguardaLiberacaoComercial() ou STATUS_LIBERACAO_COMERCIAL_TODOS.
+// aguardaLiberacaoComercial() ou STATUS_AGUARDANDO_LIBERACAO_COMERCIAL.
 //
-// O nome antigo continua RECONHECIDO de propósito, por dois motivos: (1) os
-// históricos (logs_movimentacao_opl, audit_log) o guardam como foi escrito na
-// época e não se reescreve história; (2) uma aba antiga ainda aberta no
-// navegador pode gravá-lo depois de uma publicação. Só se tira o nome antigo da
-// lista abaixo depois de conferir no banco que nenhuma OP voltou a tê-lo.
+// Etapa 5.1c, 05/10/2026: o código foi APERTADO. Os dois nomes só eram aceitos
+// porque uma aba antiga ainda aberta no navegador podia gravar o nome longo
+// depois da publicação. Medido no banco em 05/10/2026, seis dias depois: 15
+// aprovações no CQ desde o deploy (de duas pessoas, em dois dias), TODAS com o
+// nome oficial, nenhuma gravação do nome antigo e nenhuma OP com ele. Por isso,
+// para o STATUS DE UMA OP existe um nome só (`aguardaLiberacaoComercial`).
+// O nome antigo continua conhecido APENAS para ler HISTÓRICO
+// (logs_movimentacao_opl, audit_log): ali ele foi escrito como era na época e não
+// se reescreve história (`eraLiberacaoComercial`, usada por `mesmaEtapa`).
 export const STATUS_AGUARDANDO_LIBERACAO_COMERCIAL = 'Aguardando Liberacao Comercial';
 export const STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO = 'Aprovado CQ - Aguardando Liberacao Comercial';
-export const STATUS_LIBERACAO_COMERCIAL_TODOS: string[] = [
-  STATUS_AGUARDANDO_LIBERACAO_COMERCIAL,
-  STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO,
-];
-export const aguardaLiberacaoComercial = (s: any): boolean => STATUS_LIBERACAO_COMERCIAL_TODOS.includes(s);
+export const aguardaLiberacaoComercial = (s: any): boolean => s === STATUS_AGUARDANDO_LIBERACAO_COMERCIAL;
+/** Só para ler HISTÓRICO: o registro pode trazer o nome oficial ou o antigo. */
+export const eraLiberacaoComercial = (s: any): boolean =>
+  s === STATUS_AGUARDANDO_LIBERACAO_COMERCIAL || s === STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO;
 
 /** Termina com a mercadoria saindo daqui — ou seja, em algum momento precisa
  *  de embalagem e frete. Só as duas adaptações ficam de fora. */

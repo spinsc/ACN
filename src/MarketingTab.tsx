@@ -44,12 +44,12 @@ function PipelineStatus({ opl }) {
     },
     {
       label: 'Producao',
-      ok: !!(s.includes('Aguardando CQ') || s.includes('Aprovado CQ') || s.includes('Faturado') || s.includes('Retrabalho') || aguardaLiberacaoComercial(s)),
+      ok: !!(s.includes('Aguardando CQ') || s.includes('Faturado') || s.includes('Retrabalho') || aguardaLiberacaoComercial(s)),
       atual: s.includes('Em Producao') || s.includes('Inicio Producao'),
     },
     {
       label: 'CQ',
-      ok: !!(s.includes('Aprovado CQ') || s.includes('Liberacao Comercial') || s.includes('Faturado')),
+      ok: !!(aguardaLiberacaoComercial(s) || s.includes('Faturado')),
       atual: s.includes('Aguardando CQ'),
     },
   ];
@@ -151,7 +151,7 @@ function OplCard({ opl, currentUser, intervencoes, leituraFalhou, onAddIntervenc
   // As mesmas faixas de cor de antes (verde, azul, âmbar e cinza), agora pelas famílias do design system.
   const familiaDaOp = (s) => {
     if (!s) return 'neutro';
-    if (s.includes('Faturado') || s.includes('Aprovado CQ') || aguardaLiberacaoComercial(s)) return 'ok';
+    if (s.includes('Faturado') || aguardaLiberacaoComercial(s)) return 'ok';
     if (s.includes('Producao') || s.includes('CQ')) return 'info';
     if (s.includes('PCP') || s.includes('Almox')) return 'atencao';
     return 'neutro';
@@ -280,7 +280,7 @@ export default function MarketingTab({ currentUser }) {
 
   const oplsFiltradas = filtroStatus === 'Todos' ? opls
     : filtroStatus === 'Em Producao' ? opls.filter(o => (o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('CQ'))
-    : filtroStatus === 'Concluidas' ? opls.filter(o => (o.status_geral||'').includes('Faturado') || (o.status_geral||'').includes('Aprovado CQ') || aguardaLiberacaoComercial(o.status_geral))
+    : filtroStatus === 'Concluidas' ? opls.filter(o => (o.status_geral||'').includes('Faturado') || aguardaLiberacaoComercial(o.status_geral))
     : opls.filter(o => !((o.status_geral||'').includes('Producao') || (o.status_geral||'').includes('Faturado')));
 
   const itensFalha = [falhas.opls && `as OPs liberadas (${falhas.opls})`, falhas.interv && `as intervenções (${falhas.interv})`, falhas.pedidos && `os pedidos de registro (${falhas.pedidos})`].filter(Boolean);

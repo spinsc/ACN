@@ -32,7 +32,7 @@ import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutl
   mdiRestore, mdiGavel, mdiTrashCanOutline, mdiChevronUp, mdiChevronDown, mdiPencilOutline, mdiViewColumnOutline, mdiCalendarMonthOutline,
   mdiHistory, mdiChartBar, mdiCashMultiple, mdiCardAccountDetailsOutline, mdiClose, mdiCalendarClockOutline } from '@mdi/js';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
-import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO, STATUS_LIBERACAO_COMERCIAL_TODOS, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { fluxoLabel, soEnvio, STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, aguardaLiberacaoComercial } from './FluxoEntrega';
 import { podeAlterarNumeroOplPv, perfilComPoderes } from './utils/permissoes';
 import { renomearOpl } from './RenomearOpl';
 import { origemDeOportunidade } from './OrigemVenda';
@@ -2911,7 +2911,6 @@ const SUB_STATUS_COR: Record<string,string> = {
           'Em Espera PCP':                               '#0891b2',
           'Em Analise PCP':                              '#0891b2',
           'Em Producao':                                 '#d97706',
-          [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL_ANTIGO]:'#16a34a',
           [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL]:       '#16a34a',
           'Aguarda Emissao NF':                          '#0ea5e9',
           'Faturado e Disponivel para Entrega':          '#0284c7',
@@ -2992,7 +2991,7 @@ const SUB_STATUS_COR: Record<string,string> = {
         // Libera para o Fiscal todas as selecionadas de uma vez — mesma
         // regra do botão individual (só as que aguardam a liberação comercial;
         // ignora as demais).
-        const LIBERAVEIS_FISCAL = STATUS_LIBERACAO_COMERCIAL_TODOS;
+        const LIBERAVEIS_FISCAL = [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL];
         const liberarFiscalEmLote = async () => {
           const alvos = oplsEmAberto.filter((o: any) => oplsSelecionadas.has(o.id) && LIBERAVEIS_FISCAL.includes(o.status_geral));
           if (alvos.length === 0) { alert('Nenhuma das OPs selecionadas está pronta para liberação ao Fiscal.'); return; }

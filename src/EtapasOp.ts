@@ -12,7 +12,7 @@
 // `setor` e `estado` são novos e valem só para a faixa: `setor` é quem tem a OP na
 // mão agora; `estado` diz o que ela está esperando, sem repetir o setor.
 // ─────────────────────────────────────────────────────────────────────────────
-import { STATUS_LIBERACAO_COMERCIAL_TODOS, aguardaLiberacaoComercial } from './FluxoEntrega';
+import { STATUS_AGUARDANDO_LIBERACAO_COMERCIAL, eraLiberacaoComercial } from './FluxoEntrega';
 import { marcosDaOp } from './OpVinculos';
 import { diaISO, hojeISO } from './Interface';
 import { supabase } from './supabaseClient';
@@ -45,7 +45,7 @@ export const ETAPAS_OP: EtapaOp[] = [
   // Fluxos que terminam em envio: produzido -> embalar -> frete.
   { match: ['Aguardando Embalagem'], pct: 80, label: 'Embalagem — Almoxarifado', setor: 'Almoxarifado', estado: 'aguardando embalar' },
   { match: ['Aguardando Cotacao Frete'], pct: 85, label: 'Cotação de Frete — Logística', setor: 'Logística', estado: 'cotando o frete' },
-  { match: STATUS_LIBERACAO_COMERCIAL_TODOS, pct: 90, label: 'Aguardando Liberação Comercial', setor: 'Comercial', estado: 'pronta, aguardando liberar para o Fiscal' },
+  { match: [STATUS_AGUARDANDO_LIBERACAO_COMERCIAL], pct: 90, label: 'Aguardando Liberação Comercial', setor: 'Comercial', estado: 'pronta, aguardando liberar para o Fiscal' },
   { match: ['Aguarda Emissao NF'], pct: 95, label: 'Fiscal — Emissão de NF', setor: 'Fiscal', estado: 'aguardando emitir a NF' },
   { match: ['Faturado e Disponivel para Entrega'], pct: 100, label: 'Faturado', setor: 'Comercial', estado: 'faturada, aguardando confirmar a entrega' },
   { match: ['Faturado'], pct: 100, label: 'Faturado', setor: null, estado: 'entregue, ciclo fechado', concluida: true },
@@ -59,9 +59,11 @@ export function etapaDaOp(status: string): EtapaOp {
 
 /** Dois nomes de status são a mesma etapa? O histórico (logs, auditoria) guarda o nome
  *  antigo da liberação comercial — "Aprovado CQ - …" — e não se reescreve história;
- *  por isso quem lê histórico compara por aqui e nunca com `===` (Etapa 5.1). */
+ *  por isso quem lê histórico compara por aqui e nunca com `===` (Etapa 5.1). Esta é a
+ *  ÚNICA leitura que ainda conhece o nome antigo (Etapa 5.1c, 05/10/2026): o status de
+ *  uma OP viva já só tem o nome oficial. */
 export const mesmaEtapa = (a: any, b: any) =>
-  a === b || (aguardaLiberacaoComercial(a) && aguardaLiberacaoComercial(b));
+  a === b || (eraLiberacaoComercial(a) && eraLiberacaoComercial(b));
 
 // ── Desde quando ─────────────────────────────────────────────────────────────
 
