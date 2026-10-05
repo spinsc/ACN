@@ -17,6 +17,7 @@ import RichTextInput, { htmlSeguro, pareceHtmlFormatado } from './RichTextInput'
 import { logChange, useUnreadChanges, useMarkAsRead, useUnreadMap } from './AuditSystem';
 import { confirmar, pedirTexto } from './Feedback';
 import { CabecalhoTela, Botao, Chips, Selo, diaISO } from './Interface';
+import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { mdiPlus, mdiClose, mdiChartBar, mdiArrowLeft, mdiHistory, mdiUpdate } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1119,7 +1120,7 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   // ── Status / fluxo ────────────────────────────────────────────────────────
   const [showModalSolicitar, setShowModalSolicitar] = useState(false);
   const [showAcoesVencida, setShowAcoesVencida] = useState(false);
-  const [emitindoPedido, setEmitindoPedido] = useState(false);
+  const [modalCompraAberto, setModalCompraAberto] = useState(false);
   const [pedidoEmitido, setPedidoEmitido] = useState<string|null>(null);
   const [salvando, setSalvando] = useState(false);
   const [obsEncerramento, setObsEncerramento] = useState('');
@@ -1454,27 +1455,10 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
   };
 
   // ── Emitir Pedido de Compra ───────────────────────────────────────────────
-  const emitirPedidoCompra = async () => {
-    setEmitindoPedido(true);
-    const agora = new Date().toISOString();
-    const numRef = licit.numero ? licit.numero.replace(/\D/g,'').slice(-6) : Date.now().toString().slice(-6);
-    const numero = `PC-L${numRef}`;
-    const obs = [
-      `Pedido de Compra Direta — ${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} Vencida`,
-      `Nome do Projeto: ${licit.numero || '—'}`, `Nome do Órgão: ${licit.nome_projeto || '—'}`,
-      `Portal: ${licit.orgao || '—'}`, `Tipo: ${licit.tipo_objeto || licit.objeto_principal || '—'}`,
-      `Solicitado por: ${currentUser?.nome || '—'}`, `Data: ${new Date().toLocaleString('pt-BR')}`,
-    ].join('\n');
-    const { error } = await supabase.from('pcp_pedidos_compra').insert([{
-      numero_pedido: numero, opl: licit.numero || null,
-      descricao_material: licit.numero || licit.tipo_objeto || licit.objeto_principal || '—',
-      quantidade: 1, status_compra: 'Pendente', observacoes_compra: obs, data_criacao: agora,
-      criado_por: currentUser?.email || null, criado_por_nome: currentUser?.nome || null, criado_por_setor: currentUser?.perfil || null,
-    }]);
-    setEmitindoPedido(false);
-    if (error) { alert('Erro ao emitir pedido de compra: ' + error.message); return; }
-    setPedidoEmitido(numero);
-  };
+  // 05/10/2026: abre a MESMA solicitação de compra de todo o sistema (lista de itens, prioridade, anexos...). Antes gravava uma linha com o
+  // número da licitação como "material" e quantidade 1, e quem precisava listar o material escrevia na descrição.
+  const emitirPedidoCompra = () => setModalCompraAberto(true);
+  const aoCriarCompraLicit = (r: any) => setPedidoEmitido(r.numero_pedido);
 
   // ── Toggle marcador ───────────────────────────────────────────────────────
   const alternar = (lista: string[], m: string) =>
@@ -1895,6 +1879,21 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
           {/* Footer */}
           <div style={{ borderTop:'1px solid #e2e8f0', padding:'10px 14px', flexShrink:0, display:'flex', flexDirection:'column', gap:6 }}>
 
+            {modalCompraAberto && (
+              <ModalSolicitarCompra currentUser={currentUser}
+                titulo="Emitir pedido de compra"
+                subtitulo={`${licit.classificacao === 'Direta' ? 'Venda direta' : 'Licitação'} vencida — ${licit.numero || licit.nome_projeto || ''}`}
+                valorInicial={{ titulo: `Compra — ${licit.numero || licit.tipo_objeto || licit.objeto_principal || ''}`.replace(/ — $/, '') }}
+                origemSetor={currentUser?.perfil || 'Licitações'}
+                opl={licit.numero || null}
+                contexto={[
+                  `Pedido de Compra Direta — ${licit.classificacao === 'Direta' ? 'Venda Direta' : 'Licitação'} Vencida`,
+                  `Nome do Projeto: ${licit.numero || '—'}`, `Nome do Órgão: ${licit.nome_projeto || '—'}`,
+                  `Portal: ${licit.orgao || '—'}`, `Tipo: ${licit.tipo_objeto || licit.objeto_principal || '—'}`,
+                ].join('\n')}
+                onClose={() => setModalCompraAberto(false)} onCriada={aoCriarCompraLicit} />
+            )}
+
             {showAcoesVencida && (
               <div style={{ background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:6, padding:10, marginBottom:4 }}>
                 <div style={{ fontWeight:700, color:'#166534', fontSize:12, marginBottom:6 }}>🏆 VENCIDA! Emita os documentos:</div>
@@ -1903,9 +1902,9 @@ function LicitacaoModal({ licit: licitProp, currentUser, onClose, onRefresh, onE
                     ✅ Pedido {pedidoEmitido} emitido!
                   </div>
                 ) : (
-                  <button onClick={emitirPedidoCompra} disabled={emitindoPedido}
-                    style={{ width:'100%', background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4, opacity:emitindoPedido?.6:1 }}>
-                    {emitindoPedido ? 'Emitindo...' : '📦 Emitir Pedido de Compra'}
+                  <button onClick={emitirPedidoCompra}
+                    style={{ width:'100%', background:'#0369a1', color:'#fff', border:'none', borderRadius:4, padding:'6px', fontWeight:700, fontSize:10, cursor:'pointer', marginBottom:4 }}>
+                    📦 Emitir Pedido de Compra
                   </button>
                 )}
                 <button onClick={() => { setTabDir('entregas'); if (modoSplit === 'esquerda') setModoSplit('dividido'); }}

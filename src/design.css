@@ -1051,3 +1051,5 @@ html body.dark .acn-main:not(.acn-main-tv) table td.acn-txt-info, html body.dark
 html body.dark .acn-main:not(.acn-main-tv) table td.acn-txt-atencao, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-txt-atencao { color: var(--acn-warn) !important; }
 html body.dark .acn-main:not(.acn-main-tv) table td.acn-forte, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-forte { color: var(--acn-ink) !important; }
 html body.dark .acn-main:not(.acn-main-tv) table td.acn-fraco, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-fraco { color: var(--acn-muted) !important; }
+/* ── Solicitação de compra única (05/10/2026): a janela é a mesma em todo o sistema; um pouco mais larga que a de cadastro (500 px) por causa da lista de itens ── */
+html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw); max-width: 640px; }

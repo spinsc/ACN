@@ -8,7 +8,7 @@ import Linkify from './Linkify';
 import { combinaBusca, normalizarBusca } from './SearchUtils';
 import { CentroCustoSelect, fetchCentrosCusto } from './CentroCustoShared';
 import { PinturaCampos, PinturaSelo, abrirPedidoPintura, ehSerralheria } from './PinturaSerralheria';
-import { criarRequisicaoCompra } from './ComprasFluxo';
+import { CamposSolicitacaoCompra, solicitacaoCompraVazia, validarSolicitacaoCompra, enviarSolicitacaoCompra } from './SolicitacaoCompra';
 
 // ─── Campos próprios de cada setor ───────────────────────────────────────────
 // A demanda avulsa é a mesma para todo mundo, mas cada setor precisa de uma
@@ -435,6 +435,7 @@ function ModalDetalhe({ demanda: initial, currentUser, onClose, onRefresh }) {
       opl: v0?.tipo === 'op' ? String(v0.descricao || '').split(' — ')[0] : null,
       descricao_material: [d.titulo, listaItens].filter(Boolean).join('\n'),
       quantidade: itens.length === 1 ? Number(itens[0].quantidade) || 1 : 1,
+      itens: itensPreenchidos(itens),   // a lista de material vai junto, como em toda solicitação de compra (05/10/2026)
       status_compra: 'Pendente',
       observacoes_compra: [d.descricao && `Motivo: ${d.descricao}`, `Demanda avulsa de Compras: ${d.titulo}`].filter(Boolean).join('\n'),
       centro_custo_id: d.centro_custo_id || null, centro_custo: d.centro_custo || null,
@@ -1138,6 +1139,8 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   const [vinculos, setVinculos] = useState<VinculoValue[]>(vinculoInicial ? [vinculoInicial] : []);
   const vinculo = vinculos[0] || null;
   const [itens, setItens] = useState<any[]>([itemVazio()]);
+  // Compras: a solicitação é a mesma de todo o sistema (SolicitacaoCompra.tsx) — mesmo formulário e mesma gravação (05/10/2026)
+  const [sc, setSc] = useState(() => solicitacaoCompraVazia({ vinculo: vinculoInicial || null }));
   const [anexos, setAnexos] = useState<File[]>([]);   // foto, planilha, PDF... enviados junto com a demanda
   const [salvando, setSalvando] = useState(false);
   const [centroCustoId, setCentroCustoId] = useState<string | null>(null);
@@ -1172,8 +1175,22 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
   };
 
   const salvar = async () => {
-    if (!form.titulo.trim()) { alert('Informe o título!'); return; }
     if (!setorAlvo) { alert('Selecione o setor de destino!'); return; }
+    // Compras não tem mais lista própria de demanda: o pedido entra direto no quadro de Requisições, com cotação e aprovação
+    // (decidido em 21/09/2026) — e, desde 05/10/2026, pelo MESMO formulário e pela MESMA gravação de toda solicitação de compra.
+    if (setorAlvo === 'Compras') {
+      const falta = validarSolicitacaoCompra(sc);
+      if (falta) { alert(falta); return; }
+      setSalvando(true);
+      const r: any = await enviarSolicitacaoCompra({ valor: sc, currentUser, origemSetor: origem || 'Demanda geral' });
+      setSalvando(false);
+      if (r.erro) { alert('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
+      if (r.errosAnexos?.length) alert('A requisição foi criada, mas alguns anexos não foram enviados: ' + r.errosAnexos.join('; '));
+      alert(`Requisição ${r.numero_pedido} aberta no quadro do Compras.`);
+      onSaved(); onClose();
+      return;
+    }
+    if (!form.titulo.trim()) { alert('Informe o título!'); return; }
     if (qtdEtapas > 1) {
       for (let i = 0; i < etapas.length; i++) {
         if (!etapas[i].responsavel_nome.trim()) { alert(`Informe o responsável da Etapa ${i+1}!`); return; }
@@ -1213,25 +1230,6 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       payload.responsavel_nome = etapas[0].responsavel_nome || null;
       payload.responsavel_email = etapas[0].responsavel_email || emails[etapas[0].responsavel_nome] || null;
       payload.prazo = etapas[0].prazo ? dateToISO(etapas[0].prazo) : null;
-    }
-    // Compras não tem mais lista própria de demanda: o pedido entra direto no
-    // quadro de Requisições, com cotação e aprovação (decidido em 21/09/2026).
-    if (setorAlvo === 'Compras') {
-      const r = await criarRequisicaoCompra({
-        titulo: form.titulo, descricao: form.descricao, itens: itensPreenchidos(itens),
-        prioridade: form.prioridade, prazo: etapas[0]?.prazo ? dateToISO(etapas[0].prazo) : null,
-        observacoes: form.observacoes,
-        centro_custo: campos.centroCusto ? nomeCentro(centroCustoId) : null,
-        centro_custo_id: campos.centroCusto ? centroCustoId : null,
-        vinculo: vinculos[0] || null,
-        responsavel_nome: etapas[0]?.responsavel_nome || null,
-        origemSetor: origem || 'Demanda geral', currentUser,
-      });
-      setSalvando(false);
-      if (r.erro) { alert('Não foi possível abrir a requisição de compra: ' + r.erro); return; }
-      alert(`Requisição ${r.numero_pedido} aberta no quadro do Compras.`);
-      onSaved(); onClose();
-      return;
     }
     const { data: nova } = await supabase.from('demandas_avulsas').insert([payload]).select('id').single();
     if (nova?.id && anexos.length) {
@@ -1274,7 +1272,7 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background:'#fff', borderRadius:8, width:'min(560px,97vw)', maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 8px 32px #0004' }}>
         <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', fontWeight:700, fontSize:14, display:'flex', justifyContent:'space-between', flexShrink:0 }}>
-          <span>+ Nova Demanda Avulsa</span>
+          <span>{setorAlvo === 'Compras' ? '+ Nova solicitação de compra' : '+ Nova Demanda Avulsa'}</span>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:16, cursor:'pointer', color:'#6b7280' }}>✕</button>
         </div>
 
@@ -1300,6 +1298,10 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
             </div>
           )}
 
+          {/* Compras: a solicitação inteira (lista de itens, prioridade, prazo, centro de custo, vínculo, fornecedor, link, anexos e observações) é o formulário compartilhado */}
+          {setorAlvo === 'Compras' ? (
+            <CamposSolicitacaoCompra valor={sc} onChange={setSc} />
+          ) : (<>
           {/* Campo do setor de destino — Compras: centro de custo */}
           {campos.centroCusto && (
             <div>
@@ -1430,13 +1432,14 @@ export function NovaDemandaModal({ currentUser, setor, setoresDestino, vinculoIn
               </div>
             ))}
           </div>
+          </>)}
         </div>
 
         <div style={{ padding:'10px 16px', borderTop:'1px solid #e2e8f0', display:'flex', gap:8, justifyContent:'flex-end', flexShrink:0 }}>
           <button onClick={onClose} style={{ padding:'7px 16px', border:'1px solid #d1d5db', borderRadius:6, background:'#fff', fontSize:11, cursor:'pointer' }}>Cancelar</button>
           <button onClick={salvar} disabled={salvando}
             style={{ padding:'7px 20px', background:'#2563eb', color:'#fff', border:'none', borderRadius:6, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-            {salvando ? 'Salvando...' : `+ Criar${qtdEtapas > 1 ? ` (${qtdEtapas} etapas)` : ''}`}
+            {salvando ? 'Salvando...' : setorAlvo === 'Compras' ? 'Enviar para Compras' : `+ Criar${qtdEtapas > 1 ? ` (${qtdEtapas} etapas)` : ''}`}
           </button>
         </div>
       </div>

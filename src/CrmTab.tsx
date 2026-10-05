@@ -25,7 +25,7 @@ import { useModoSplit, estilosSplit, SeletorModoSplit } from './ModoSplit';
 import AgendaWidget from './AgendaWidget';
 import { notificarEvento, msg } from './whatsappHelper';
 import { abrirVinculo, VinculoPicker } from './VinculoPicker';
-import { EscolherAnexos, enviarAnexosCompra } from './ComprasFluxo';
+import { ModalSolicitarCompra } from './SolicitacaoCompra';
 import { carregarMarkupPorProcesso, carregarBandasMarkupPorTipo, MarkupBadge, MarkupBarraDistribuicao, TIPOS_NEGOCIO_CRM, BANDA_MARKUP_PADRAO } from './MarkupTermometro';
 import { CabecalhoTela, Abas, Botao, MenuAcoes, Faixa, Selo, Tag, hojeISO } from './Interface';
 import { mdiUpdate, mdiFolderOpenOutline, mdiClipboardTextOutline, mdiWrenchOutline, mdiPlus, mdiPackageVariantClosed, mdiLinkVariant,
@@ -153,15 +153,6 @@ const TIPOS_PROJETO_OPL = [
   'Reboque',
 ];
 
-const VAZIO_COMPRA: any = {
-  descricao_material: '',
-  quantidade: 1,
-  fornecedor: '',
-  observacoes_compra: '',
-  vinculo: null as any,   // PV/OP/OS/outra compra/OFI (VinculoPicker)
-  link_url: '',
-  anexos: [] as File[],   // foto, planilha, PDF... enviados junto com a solicitação
-};
 
 // Monta o estado editável (formOp) a partir de uma linha crua do banco —
 // usado em todo lugar que abre o modal de oportunidade, pra garantir que
@@ -354,7 +345,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   const [veiculosConv, setVeiculosConv]     = useState<{chassi:string,placa:string}[]>([]);
   // ── compras ──
   const [modalCompras, setModalCompras]     = useState<any|null>(null); // op para criar pedido compra
-  const [formCompras, setFormCompras]       = useState({ ...VAZIO_COMPRA });
   const [centrosCusto, setCentrosCusto]     = useState<any[]>([]); // cadastrados em Admin > Centros de Custo
   const [pedidosCompra, setPedidosCompra]   = useState<any[]>([]);
   // { pct ponderado pelo custo, min, max } por processo — ver MarkupTermometro
@@ -362,7 +352,6 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // Cortes de markup por tipo de negócio (Revenda/Venda/Pós-vendas), configurados
   // em Admin → Faixas de Markup — ver MarkupTermometro.carregarBandasMarkupPorTipo
   const [bandasMarkup, setBandasMarkup]     = useState<Record<string, any>>({});
-  const [salvandoCompra, setSalvandoCompra] = useState(false);
   // ── solicitar análise ──
   const [modalSolicitarAnalise, setModalSolicitarAnalise] = useState<any|null>(null); // op selecionada
   // ── andamento ──
@@ -771,77 +760,21 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
   // ─────────────────────────────────────────────────────────────────────────
   // EMITIR PEDIDO DE COMPRA (vinculado ao card CRM)
   // ─────────────────────────────────────────────────────────────────────────
-  const emitirPedidoCompraCrm = async () => {
-    if (!modalCompras) return;
-    setSalvandoCompra(true);
-    const agora = new Date().toISOString();
-    // _oplText: presente quando o modal é aberto a partir da tabela "OPLs em
-    // Aberto" (vínculo real ao número da OP) — nesse caso prevalece sobre
-    // numero_edital (que só faz sentido pra oportunidades de licitação).
-    const oplRef = modalCompras._oplText || modalCompras.numero_edital || null;
-    const numRef = oplRef ? oplRef.replace(/\D/g,'').slice(-6) : Date.now().toString().slice(-6);
-    const numeroPedido = `PC-CRM-${numRef}`;
-    const obsCompleta = [
-      `Pedido de Compra — CRM: ${modalCompras.titulo || '—'}`,
-      `Órgão: ${modalCompras.orgao || '—'}`,
-      formCompras.observacoes_compra || '',
-      `Solicitado por: ${currentUser?.nome || '—'}`,
-    ].filter(Boolean).join('\n');
-
-    const { data: criado, error } = await supabase.from('pcp_pedidos_compra').insert([{
-      numero_pedido:        numeroPedido,
-      opl:                  oplRef,
-      descricao_material:   formCompras.descricao_material || modalCompras.titulo || '—',
-      quantidade:           formCompras.quantidade || 1,
-      fornecedor:           formCompras.fornecedor || null,
-      status_compra:        'Pendente',
-      observacoes_compra:   obsCompleta,
-      oportunidade_id:      modalCompras.id || null,
-      vinculo_tipo:         formCompras.vinculo?.tipo || null,
-      vinculo_id:           formCompras.vinculo?.id || null,
-      vinculo_descricao:    formCompras.vinculo?.descricao || null,
-      link_url:             String(formCompras.link_url || '').trim() || null,
-      data_criacao:         agora,
-      // quem solicitou recebe os avisos do andamento (aprovação, reprocesso, descarte)
-      criado_por:           currentUser?.email || null,
-      criado_por_nome:      currentUser?.nome || null,
-      criado_por_setor:     currentUser?.perfil || null,
-    }]).select('id').maybeSingle();
-    if (!error && criado?.id && formCompras.anexos?.length) {
-      const erros = await enviarAnexosCompra(criado.id, formCompras.anexos, currentUser);
-      if (erros.length) alert('A solicitação foi criada, mas alguns anexos não foram enviados: ' + erros.join('; '));
-    }
-    setSalvandoCompra(false);
-    if (error) { alert('Erro ao emitir pedido: ' + error.message); return; }
-    // Menção/histórico ficam vinculados à oportunidade CRM — só fazem
-    // sentido quando o pedido foi aberto a partir de um card com id real
-    // (a tela "OPLs em Aberto" pode não ter uma oportunidade associada).
-    if (modalCompras.id) {
-      // Salva @menções das observações da compra
-      if (formCompras.observacoes_compra?.trim()) {
-        await salvarMencoes({
-          texto: formCompras.observacoes_compra,
-          mencionanteId: String(currentUser?.id || ''),
-          mencionanteNome: currentUser?.nome || 'Sistema',
-          contexto: 'crm',
-          contextoId: String(modalCompras.id),
-          contextoDescricao: `Compra CRM: ${modalCompras.titulo || '—'}`,
-          campo: 'observacoes_compra',
-          abaDestino: 'compras',
-        });
-      }
-      // Nota no histórico do card
+  // 05/10/2026: a janela e a gravação da solicitação de compra são as mesmas de todo o sistema (ver SolicitacaoCompra.tsx) — lista de itens,
+  // prioridade, prazo, centro de custo, vínculo, fornecedor, link, anexos e observações com @menção. O que é só do CRM fica aqui: a nota no
+  // histórico do card, que só faz sentido quando a compra saiu de um card com id real (a tela "OPLs em Aberto" pode não ter oportunidade).
+  const aoCriarCompraCrm = async (r: any) => {
+    if (modalCompras?.id) {
       await supabase.from('crm_historico').insert({
         oportunidade_id: modalCompras.id,
         tipo: 'observacao',
-        texto: `Pedido de Compra ${numeroPedido} emitido para o setor Compras.`,
+        texto: `Pedido de Compra ${r.numero_pedido} emitido para o setor Compras.`,
         usuario_nome: currentUser?.nome || 'Sistema',
-        criado_em: agora,
+        criado_em: new Date().toISOString(),
       });
     }
-    alert(`Pedido ${numeroPedido} criado! Acompanhe na aba Compras.`);
+    alert(`Pedido ${r.numero_pedido} criado! Acompanhe na aba Compras.`);
     setModalCompras(null);
-    setFormCompras({ ...VAZIO_COMPRA });
     load(true);
   };
 
@@ -2096,7 +2029,7 @@ export default function CrmTab({ currentUser, autoOpenOpId, onAutoOpenConsumed }
       { rotulo: opsDoCard.length ? 'Lançar outra OP' : 'Lançar OP', icone: mdiClipboardTextOutline, onClick: lancarOp, oculto: !ganho },
       { rotulo: 'Lançar OS', icone: mdiWrenchOutline, onClick: () => { setModalConverter(op); setTipoConverter('os'); setNumOp(''); }, oculto: !(ganho && funil === 'venda_direta') },
       { rotulo: 'Nova venda', icone: mdiPlus, onClick: () => { setModalVenda({ op, venda: null }); setFormVenda({ ...VAZIO_VENDA, operador_nome: op.responsavel_nome || '' }); }, oculto: !ganho },
-      { rotulo: 'Compras', icone: mdiPackageVariantClosed, onClick: () => { setModalCompras(op); setFormCompras({ ...VAZIO_COMPRA }); }, oculto: !ganho },
+      { rotulo: 'Compras', icone: mdiPackageVariantClosed, onClick: () => setModalCompras(op), oculto: !ganho },
       { rotulo: op.licitacao_processo_id ? 'Processo vinculado' : 'Vincular a processo licitatório', icone: mdiLinkVariant,
         onClick: () => { setModalVincularLicit(op); setBuscaVincularLicit(''); setResultVincularLicit([]); }, oculto: !ganho },
       { rotulo: 'Reativar', icone: mdiRestore, onClick: () => reativarOp(op), oculto: !desistiu },
@@ -3327,8 +3260,8 @@ const SUB_STATUS_COR: Record<string,string> = {
                                   onClick={() => {
                                     setModalCompras({ id: o.crm_oportunidade_id || null,
                                       titulo: `OP ${o.opl} — ${o.cliente_nome || o.modelo || ''}`,
-                                      orgao: null, _oplText: o.opl });
-                                    setFormCompras({ ...VAZIO_COMPRA });
+                                      orgao: null, _oplText: o.opl, _oplId: o.id,
+                                      _oplDescricao: `${o.opl} — ${o.cliente_nome || o.modelo || ''}`.replace(/ — $/, '') });
                                   }}
                                   style={{ fontSize:9, padding:'2px 7px', background:'#0369a1', color:'white', border:'none', borderRadius:3, cursor:'pointer', fontWeight:700 }}>
                                   📦 Compra
@@ -4233,76 +4166,19 @@ const SUB_STATUS_COR: Record<string,string> = {
 
       {/* ── Modal Compras ─────────────────────────────────────────── */}
       {modalCompras && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'#fff', borderRadius:8, padding:20, width:420, maxWidth:'95vw', boxShadow:'0 8px 32px rgba(0,0,0,.3)' }}>
-            <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#0f766e' }}>
-              📦 Solicitar Compra — {modalCompras.titulo || '(sem título)'}
-            </div>
-
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Descrição do Material / Serviço *</div>
-              <input value={formCompras.descricao_material}
-                onChange={e => setFormCompras(f => ({...f, descricao_material:e.target.value}))}
-                placeholder="Ex: Câmeras IP, instalação elétrica..."
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-              />
-            </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-              <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Quantidade</div>
-                <input type="number" min={1} value={formCompras.quantidade}
-                  onChange={e => setFormCompras(f => ({...f, quantidade: Number(e.target.value)||1 }))}
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-                />
-              </div>
-              <div>
-                <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Fornecedor (opcional)</div>
-                <input value={formCompras.fornecedor}
-                  onChange={e => setFormCompras(f => ({...f, fornecedor:e.target.value}))}
-                  placeholder="Nome do fornecedor..."
-                  style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Vincular a outro registro (opcional)</div>
-              <VinculoPicker value={formCompras.vinculo} onSelect={v => setFormCompras(f => ({ ...f, vinculo: v }))}
-                onClear={() => setFormCompras(f => ({ ...f, vinculo: null }))} />
-              <div style={{ fontSize:8, color:'#94a3b8', marginTop:2 }}>A compra já fica ligada a esta oportunidade; aqui dá para ligar também a uma OP, OS, outra compra...</div>
-            </div>
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Link (opcional)</div>
-              <input value={formCompras.link_url || ''} onChange={e => setFormCompras(f => ({ ...f, link_url: e.target.value }))}
-                placeholder="https://... (página do produto, especificação, cotação online)"
-                style={{ width:'100%', padding:'5px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, boxSizing:'border-box' }} />
-            </div>
-
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Anexos (opcional)</div>
-              <EscolherAnexos arquivos={formCompras.anexos || []} onChange={arqs => setFormCompras(f => ({ ...f, anexos: arqs }))} />
-            </div>
-
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'#475569', marginBottom:3 }}>Observações</div>
-              <MencaoTextarea value={formCompras.observacoes_compra||''} rows={2}
-                placeholder="Especificações técnicas, urgência, referências... @Nome para mencionar"
-                onChange={v => setFormCompras(f => ({...f, observacoes_compra:v}))} />
-            </div>
-
-            <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-              <button className="acn-btn" style={{ background:'#94a3b8', fontSize:10, padding:'4px 12px' }}
-                onClick={() => { setModalCompras(null); setFormCompras({...VAZIO_COMPRA}); }}>
-                Cancelar
-              </button>
-              <button className="acn-btn" style={{ background:'#0f766e', fontSize:10, padding:'4px 12px', opacity: salvandoCompra?.5:1 }}
-                onClick={emitirPedidoCompraCrm} disabled={salvandoCompra || !formCompras.descricao_material.trim()}>
-                {salvandoCompra ? 'Enviando...' : '📦 Enviar para Compras'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ModalSolicitarCompra currentUser={currentUser}
+          titulo={`Solicitar compra — ${modalCompras.titulo || '(sem título)'}`}
+          valorInicial={{
+            titulo: modalCompras._oplText ? `Compra para a OP ${modalCompras._oplText}` : (modalCompras.titulo || ''),
+            // saindo de uma OP da lista, a compra já nasce ligada a ela (aparece como "Demanda de OP")
+            vinculo: modalCompras._oplId ? { tipo: 'op', id: String(modalCompras._oplId), descricao: modalCompras._oplDescricao } : null,
+          }}
+          origemSetor={currentUser?.perfil || 'Comercial'}
+          oportunidadeId={modalCompras.id || null}
+          // número da OP (lista de OPs em aberto) ou do edital (card de licitação): o que o pedido sempre guardou em "opl"
+          opl={modalCompras._oplText || modalCompras.numero_edital || null}
+          contexto={[`Pedido de Compra — CRM: ${modalCompras.titulo || '—'}`, modalCompras.orgao ? `Órgão: ${modalCompras.orgao}` : ''].filter(Boolean).join('\n')}
+          onClose={() => setModalCompras(null)} onCriada={aoCriarCompraCrm} />
       )}
       {/* ══════ MODAL ABRIR — split-screen ══════ */}
       {modalAbrir && abrirMinimized && (

@@ -153,6 +153,8 @@ export default function PCPTab({ currentUser }) {
         numero_pedido: `PC-ALX-${Date.now()}`,
         descricao_material: `${sol.item_nome}${sol.motivo ? ' — ' + sol.motivo : ''}`,
         quantidade: sol.quantidade, status_compra: 'Pendente',
+        // a lista de material vai junto, como em toda solicitação de compra (05/10/2026)
+        itens: [{ nome: sol.item_nome, quantidade: Number(sol.quantidade) || 1, descricao: sol.motivo || '', item_id: sol.item_id || null }],
         criado_por: sol.criado_por, criado_por_nome: sol.criado_por_nome, criado_por_setor: 'Almoxarifado',
         data_criacao: agora,
       }]).select('id').single();

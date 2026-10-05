@@ -27,6 +27,7 @@ import { horasUteis } from './utils/horasUteis';
 import { VinculoPicker, TIPO_LABEL } from './VinculoPicker';
 import { Botao, Selo, Faixa } from './Interface';
 import { confirmar } from './Feedback';
+import { ItensDemandaEditor, itemVazio, itensPreenchidos } from './DemandaItens';
 import { mdiPaperclip, mdiTrashCanOutline, mdiUpload } from '@mdi/js';
 
 // A última etapa se chama RECEBIDO (era "Concluído" até 22/09/2026): o que
@@ -542,16 +543,23 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
     observacoes: pedido.observacoes || '',
     vinculo: pedido.vinculo_tipo ? { tipo: pedido.vinculo_tipo, id: pedido.vinculo_id, descricao: pedido.vinculo_descricao } : null,
   });
+  // A lista de material é a mesma de quando se abre a solicitação (05/10/2026): dá para completar a de uma requisição antiga que nasceu sem lista.
+  const [itens, setItens] = useState<any[]>(() => (Array.isArray(pedido.itens) && pedido.itens.length ? pedido.itens : [itemVazio()]));
   const [salvando, setSalvando] = useState(false);
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
   const temCotacaoOuCompra = ['Aprovado', 'Comprado', 'Recebido'].includes(pedido.status_compra);
 
   const salvar = async () => {
     if (!form.descricao_material.trim()) { alert('A descrição não pode ficar vazia.'); return; }
-    const qtd = Number(String(form.quantidade).replace(',', '.'));
+    const itensNovos = itensPreenchidos(itens);
+    // com lista de itens a quantidade é a soma deles (como na criação); sem lista, vale o campo
+    const qtd = itensNovos.length ? itensNovos.reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0) : Number(String(form.quantidade).replace(',', '.'));
     if (!(qtd > 0)) { alert('Informe uma quantidade maior que zero.'); return; }
+    const chave = (l: any[]) => JSON.stringify((l || []).filter((i: any) => String(i?.nome || '').trim()).map((i: any) => [String(i.nome).trim(), Number(i.quantidade) || 1, String(i.descricao || '').trim(), i.valor_unitario ?? null]));
+    const itensMudaram = chave(itensNovos) !== chave(pedido.itens);
     const novo: any = {
       descricao_material: form.descricao_material.trim(), quantidade: qtd,
+      ...(itensMudaram ? { itens: itensNovos } : {}),
       fornecedor: form.fornecedor.trim() || null, link_url: form.link_url.trim() || null,
       observacoes: form.observacoes.trim() || null,
       vinculo_tipo: form.vinculo?.tipo || null, vinculo_id: form.vinculo?.id || null, vinculo_descricao: form.vinculo?.descricao || null,
@@ -559,6 +567,7 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
     const NOMES: Record<string, string> = { descricao_material: 'Descrição', quantidade: 'Quantidade', fornecedor: 'Fornecedor sugerido', link_url: 'Link', observacoes: 'Observações', vinculo_descricao: 'Vínculo' };
     const campos = Object.keys(NOMES).filter(k => String(pedido[k] ?? '') !== String(novo[k] ?? ''))
       .map(k => ({ campo: NOMES[k], de: pedido[k], para: novo[k] }));
+    if (itensMudaram) campos.push({ campo: 'Itens a comprar', de: `${(pedido.itens || []).length} item(ns)`, para: `${itensNovos.length} item(ns)` });
     if (!campos.length && String(pedido.vinculo_tipo ?? '') === String(novo.vinculo_tipo ?? '')) { onClose?.(); return; }
     setSalvando(true);
     const { error } = await supabase.from('pcp_pedidos_compra').update(novo).eq('id', pedido.id);
@@ -578,9 +587,15 @@ export function ModalEditarSolicitacao({ pedido, currentUser, onClose, onFeito }
       )}
       <Rotulo>Descrição do material / serviço *</Rotulo>
       <Texto value={form.descricao_material} onChange={e => set('descricao_material', e.target.value)} rows={3} />
+      <div style={{ marginTop: 10 }}>
+        <ItensDemandaEditor itens={itens} onChange={setItens} titulo="Itens a comprar" comValor
+          dica="Valor é opcional: se não souber, o comprador completa." />
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10, marginTop: 10 }}>
         <div><Rotulo>Quantidade *</Rotulo>
-          <input className="acn-input" type="number" min={0} step="any" style={{ width: '100%' }} value={form.quantidade} onChange={e => set('quantidade', e.target.value)} /></div>
+          {itensPreenchidos(itens).length
+            ? <div className="acn-ajuda">{itensPreenchidos(itens).reduce((s: number, i: any) => s + (Number(i.quantidade) || 0), 0)} (soma dos itens)</div>
+            : <input className="acn-input" type="number" min={0} step="any" style={{ width: '100%' }} value={form.quantidade} onChange={e => set('quantidade', e.target.value)} />}</div>
         <div><Rotulo>Fornecedor sugerido</Rotulo>
           <input className="acn-input" style={{ width: '100%' }} value={form.fornecedor} onChange={e => set('fornecedor', e.target.value)} /></div>
       </div>
@@ -802,6 +817,8 @@ export async function criarRequisicaoCompra({
   titulo, descricao = '', itens = [], prioridade = '', prazo = null, observacoes = '',
   centro_custo = null, centro_custo_id = null, vinculo = null, opl = null,
   responsavel_nome = null, origemSetor = 'Demanda geral', demandaAvulsaId = null, currentUser,
+  // fornecedor sugerido, link e a oportunidade do CRM de onde veio (05/10/2026: a solicitação é a mesma em todo lugar — ver SolicitacaoCompra.tsx)
+  fornecedor = null, linkUrl = '', oportunidadeId = null,
 }: any) {
   const agora = new Date().toISOString();
   const lista = (itens || []).filter((i: any) => String(i?.nome || '').trim());
@@ -820,6 +837,9 @@ export async function criarRequisicaoCompra({
     vinculo_tipo: vinculo?.tipo || null, vinculo_id: vinculo?.id || null, vinculo_descricao: vinculo?.descricao || null,
     opl: opl || (vinculo?.tipo === 'op' ? String(vinculo.descricao || '').split(' — ')[0] : null),
     comprador_nome: responsavel_nome || null,
+    fornecedor: String(fornecedor || '').trim() || null,
+    link_url: String(linkUrl || '').trim() || null,
+    oportunidade_id: oportunidadeId || null,
     demanda_avulsa_id: demandaAvulsaId,
     // quem pediu recebe os avisos do andamento (aprovação, reprocesso, descarte)
     criado_por: currentUser?.email || null,
