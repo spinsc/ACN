@@ -11,10 +11,12 @@ import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avalia
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
-import { hojeISO, Botao } from './Interface';
+import { hojeISO, Botao, Faixa } from './Interface';
 import CustoPorOpTab from './CentroCustoRelatorios';
+import ModalFechamentoMes from './CentroCustoFechamentoTela';
+import { lerFechamentos, fechamentoVigente, nomeDoMes } from './CentroCustoFechamento';
 import { baixarPlanilha } from './ExportarPlanilha';
-import { mdiFileExcelOutline } from '@mdi/js';
+import { mdiFileExcelOutline, mdiLockOutline } from '@mdi/js';
 
 // Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP
 function AbasFinanceiro({ aba, setAba }: any) {
@@ -442,6 +444,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   const [abaFin, setAbaFin] = useState('centros');
   const [painelCentro, setPainelCentro] = useState<string | null>(null); // Etapa 15b: id do centro com o painel aberto
   const [semCentroAberto, setSemCentroAberto] = useState(false);            // Etapa 15c: tela "Compras sem centro"
+  const [modalFechamento, setModalFechamento] = useState(false);            // Etapa 15e-2: janela "Fechamento do mês"
+  const [fechamentos, setFechamentos] = useState<any[]>([]);                // Etapa 15e-2: para a faixa "mês fechado" (a trava de verdade é conferida no banco, ao gravar)
 
   // Filtros
   const now = new Date();
@@ -464,6 +468,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     setFaturamentos(fData || []);
     setDespesas(dData || []);
     setLoading(false);
+    // Etapa 15e-2: a faixa "mês fechado" — se a leitura falhar, só não mostra a faixa (a trava é conferida no banco ao gravar)
+    lerFechamentos().then(setFechamentos).catch(() => setFechamentos([]));
     // Etapa 15b (05/10/2026): centro com responsável e orçamento no mês, a partir de 80% / 100% → menção, uma vez por faixa e mês.
     // Só avisa. Falha aqui não pode atrapalhar a tela: o aviso tenta de novo na próxima vez que o Financeiro abrir.
     try {
@@ -631,6 +637,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
               🏷️ Gerenciar Centros
             </button>
           )}
+          <Botao pequeno icone={mdiLockOutline} onClick={() => setModalFechamento(true)} title="Fechar o mês (trava despesas e a correção de compras) ou ver o que já foi fechado">Fechamento do mês</Botao>
           <button onClick={carregar}
             style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0',
               borderRadius: 5, cursor: 'pointer', fontSize: 9, color: '#64748b' }}>
@@ -638,6 +645,16 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
           </button>
         </div>
       </div>
+
+      {/* Etapa 15e-2: o mês que o filtro mostra está fechado? */}
+      {(() => {
+        const f = filtroMes && filtroAno ? fechamentoVigente(fechamentos, { ano: Number(filtroAno), mes: Number(filtroMes) }) : null;
+        return f ? (
+          <div style={{ marginBottom: 12 }}>
+            <Faixa tom="info">{nomeDoMes({ ano: f.ano, mes: f.mes })} está <strong>fechado</strong>{f.fechado_por_nome ? ` (por ${f.fechado_por_nome}, em ${new Date(f.fechado_em).toLocaleDateString('pt-BR')})` : ''}: despesas avulsas e a correção das compras criadas nele estão travadas. Só o Admin reabre (Fechamento do mês).</Faixa>
+          </div>
+        ) : null;
+      })()}
 
       {/* Filtros */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
@@ -845,6 +862,8 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
           onAtualizar={carregar}
         />
       )}
+
+      {modalFechamento && <ModalFechamentoMes currentUser={currentUser} onClose={() => setModalFechamento(false)} onMudou={carregar} />}
 
       {semCentroAberto && <ModalComprasSemCentro currentUser={currentUser} onClose={() => setSemCentroAberto(false)} onGravou={carregar} />}
 

@@ -15,8 +15,9 @@ import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
 import { confirmar } from './Feedback';
-import { hojeISO } from './Interface';
+import { hojeISO, Faixa } from './Interface';
 import { AnexosDespesa } from './DespesaAnexos';
+import { conferirMesesAbertos, mesDe, mesDoLancamento, mesDaCompra } from './CentroCustoFechamento';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
   let q = supabase.from('centros_custo').select('*').order('codigo');
@@ -275,6 +276,9 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
   const salvar = async () => {
     if (!vNum || vNum <= 0) { alert('Informe um valor válido.'); return; }
     setSalvando(true);
+    // Etapa 15e-2 (05/10/2026): a medição vale no mês da sua data; mês fechado não recebe (conferido no banco agora)
+    const trava = await conferirMesesAbertos([mesDe(data)]);
+    if (!trava.ok) { setSalvando(false); alert(trava.mensagem); return; }
     const { error } = await supabase.from('centro_custo_despesas').insert([{
       centro_custo_id: contrato.centro_custo_id, despesa_pai_id: contrato.id, valor: vNum,
       descricao: obs.trim() || (nParcelas ? `Parcela ${numeroDaParcela}/${nParcelas} — ${contrato.descricao || ''}` : `Medição — ${contrato.descricao || ''}`), data,
@@ -383,6 +387,11 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
    */
   const [ehContrato, setEhContrato] = useState(eraContrato);
   const trocouForma = ehContrato !== eraContrato;
+  // Etapa 15e-2 (05/10/2026): despesa de mês fechado não se edita nem se exclui. A tela avisa ao abrir; a conferência de verdade é no banco,
+  // na hora de gravar (e também barra mudar a competência/data PARA um mês fechado). Falha ao ler o fechamento só avisa aqui; ao gravar, barra.
+  const [travaMes, setTravaMes] = useState<any>(null);
+  useEffect(() => { conferirMesesAbertos([mesDoLancamento(lancamento)]).then(r => setTravaMes(r.ok ? null : r)); }, [lancamento?.id]);
+  const mesFechado = !!travaMes && !travaMes.falhaLeitura;
 
   const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
   const v = num(valor);
@@ -396,6 +405,9 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
     if (!centroId) { alert('Escolha o centro de custo.'); return; }
     const pp = lerParcelas(parcelas);
     if (ehContrato && !pp.ok) { alert(MSG_PARCELAS); return; }
+    // o mês de onde sai e o mês para onde vai (competência; sem ela, a data): nenhum dos dois pode estar fechado
+    const trava = await conferirMesesAbertos([mesDoLancamento(lancamento), competencia ? mesDe(competencia) : mesDe(data)]);
+    if (!trava.ok) { alert(trava.mensagem); return; }
     // menos parcelas do que as medições já lançadas: pode ser renegociação ou erro de digitação — pergunta
     if (ehContrato && pp.n && medicoes > pp.n && !await confirmar(
       `Já existem ${medicoes} medições lançadas neste contrato, e você combinou ${pp.n} parcelas.\n\n` +
@@ -453,6 +465,8 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
   };
 
   const excluir = async () => {
+    const travaEx = await conferirMesesAbertos([mesDoLancamento(lancamento)]);
+    if (!travaEx.ok) { alert(travaEx.mensagem); return; }
     const quanto = ehContrato ? lancamento.valor_total_negociado : lancamento.valor;
     const aviso = ehContrato && jaPago > 0
       ? `\n\nATENÇÃO: este contrato tem ${moeda(jaPago)} em medições lançadas. Elas NÃO são apagadas e vão ficar sem contrato — confira a lista depois.`
@@ -473,6 +487,8 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
 
   // Rateio: apagar só uma parte deixaria as outras com a divisão errada; o caminho é apagar o rateio inteiro (todas as partes)
   const excluirRateio = async () => {
+    const travaRat = await conferirMesesAbertos([mesDoLancamento(lancamento)]);
+    if (!travaRat.ok) { alert(travaRat.mensagem); return; }
     const partes = irmaos.length || 1;
     const somaTotal = irmaos.reduce((s: number, x: any) => s + (Number(x.valor) || 0), 0);
     if (!await confirmar(`Excluir o rateio inteiro?\n\n${lancamento.descricao}\n${partes} parte(s), ${moeda(somaTotal)} no total.\n\nTodas as partes saem dos totais dos centros na hora. Fica registrado na auditoria quem excluiu.`)) return;
@@ -497,6 +513,7 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
           {lancamento.criado_em ? ` em ${new Date(lancamento.criado_em).toLocaleDateString('pt-BR')}` : ''}.
           A alteração fica na auditoria com o valor de antes.
         </div>
+        {mesFechado && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">{travaMes.mensagem.replace(' Nada foi gravado.', '')}</Faixa></div>}
 
         {/* Medição é o pagamento de um contrato, não um lançamento que possa
             mudar de forma — por isso a escolha não aparece para ela. */}
@@ -596,17 +613,17 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
         <AnexosDespesa despesaId={lancamento.id} currentUser={currentUser} podeEditar />
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button className="acn-btn" style={{ background: '#dc2626' }} disabled={salvando} onClick={excluir}>
+          <button className="acn-btn" style={{ background: '#dc2626' }} disabled={salvando || mesFechado} onClick={excluir}>
             Excluir
           </button>
           {lancamento?.rateio_grupo_id && (
-            <button className="acn-btn" style={{ background: '#b91c1c' }} disabled={salvando} onClick={excluirRateio} title="Apaga todas as partes do rateio">
+            <button className="acn-btn" style={{ background: '#b91c1c' }} disabled={salvando || mesFechado} onClick={excluirRateio} title="Apaga todas as partes do rateio">
               Excluir o rateio todo
             </button>
           )}
           <div style={{ flex: 1 }} />
           <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
-          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando} onClick={salvar}>
+          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando || mesFechado} onClick={salvar}>
             {salvando ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
@@ -635,6 +652,11 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
   const [data, setData] = useState(String(pedido?.data_solicitacao || '').slice(0, 10));
   const [centroId, setCentroId] = useState(pedido?.centro_custo_id || '');
   const [salvando, setSalvando] = useState(false);
+  // Etapa 15e-2 (05/10/2026): compra criada num mês fechado não tem valor, centro nem data corrigidos por aqui (o mês é o da criação).
+  // A tela avisa ao abrir; a conferência de verdade é no banco, na hora de gravar.
+  const [travaMes, setTravaMes] = useState<any>(null);
+  useEffect(() => { conferirMesesAbertos([mesDaCompra(pedido)]).then(r => setTravaMes(r.ok ? null : r)); }, [pedido?.id]);
+  const mesFechado = !!travaMes && !travaMes.falhaLeitura;
 
   const num = (v: any) => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
   const v = num(valor);
@@ -644,6 +666,8 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
     if (!descricao.trim()) { alert('Informe a descrição do material.'); return; }
     if (valor !== '' && (!Number.isFinite(v) || v < 0)) { alert('Informe um valor válido.'); return; }
     setSalvando(true);
+    const trava = await conferirMesesAbertos([mesDaCompra(pedido)]);
+    if (!trava.ok) { setSalvando(false); alert(trava.mensagem); return; }
     const antes = {
       descricao_material: pedido.descricao_material, valor_compra: pedido.valor_compra,
       data_solicitacao: pedido.data_solicitacao, centro_custo_id: pedido.centro_custo_id,
@@ -673,6 +697,7 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
           {pedido.numero_oc ? ` · OC ${pedido.numero_oc}` : ''}.
           A alteração fica na auditoria com o valor de antes.
         </div>
+        {mesFechado && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">{travaMes.mensagem.replace(' Nada foi gravado.', '')}</Faixa></div>}
 
         <label className="acn-label">Descrição do material *</label>
         <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', marginBottom: 8, boxSizing: 'border-box' }}
@@ -707,7 +732,7 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
           <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
-          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando} onClick={salvar}>
+          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando || mesFechado} onClick={salvar}>
             {salvando ? 'Salvando...' : 'Salvar'}
           </button>
         </div>

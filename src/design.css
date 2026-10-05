@@ -1157,3 +1157,8 @@ html body .acn-input.acn-cc-pct { width: 90px; }
 .acn-cc-op-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-bottom: 12px; }
 html body .acn-main table.acn-tabela tr.acn-cc-op-detalhe > td { background: var(--acn-surface-2) !important; }
 .acn-cc-op-detalhe table { margin: 4px 0; }
+
+/* ── Centros de custo · 15e-2 (05/10/2026): fechamento do mês ─────────────────────────────────────────────── */
+html body .modal-box.acn-modal-cadastro.acn-cc-fech { width: min(760px, 95vw); max-width: 760px; }
+/* a janela do fechamento: o corpo rola inteiro (a tabela dos 12 meses não encolhe nem ganha rolagem própria) */
+.acn-cc-fech .acn-modal-corpo > * { flex-shrink: 0; }

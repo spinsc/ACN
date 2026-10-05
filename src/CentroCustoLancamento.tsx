@@ -22,6 +22,7 @@ import { centrosParaApontar, motivoBloqueio, lerValorBR, lerParcelas, MSG_PARCEL
 import { EscolherAnexos } from './ComprasFluxo';
 import { enviarAnexosDespesa } from './DespesaAnexos';
 import { ehAdminOuGerente } from './utils/permissoes';
+import { conferirMesesAbertos, mesDe } from './CentroCustoFechamento';
 import { mdiPlus, mdiTrashCanOutline, mdiRefresh } from '@mdi/js';
 
 export const MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -130,6 +131,9 @@ export function ModalLancarDespesa({ centro, currentUser, onClose, onSalvo }: an
     }
 
     setSalvando(true);
+    // Etapa 15e-2 (05/10/2026): mês fechado não recebe despesa — conferido no banco AGORA, antes de criar qualquer coisa (nem a recorrência)
+    const trava = await conferirMesesAbertos([mesDe(competencia)]);
+    if (!trava.ok) { setSalvando(false); setErro(trava.mensagem); return; }
     const quem = { criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema' };
     // 1) o modelo da recorrência, quando for o caso (o lançamento deste mês já nasce ligado a ele, para o botão do mês não lançar de novo)
     let recId: string | null = null;
@@ -398,6 +402,9 @@ export function ModalRecorrencias({ currentUser, onClose, onMudou }: any) {
 
   const lancar = async () => {
     setResultado(''); setErro('');
+    // Etapa 15e-2: não lança recorrente em mês fechado
+    const trava = await conferirMesesAbertos([{ ano, mes }]);
+    if (!trava.ok) { setErro(trava.mensagem); return; }
     const ini = `${ano}-${p2(mes)}-01`; const ultimo = ultimoDiaDoMes(ano, mes); const fimMes = `${ano}-${p2(mes)}-${p2(ultimo)}`;
     const vigentes = recs.filter(r => r.ativo && String(r.inicio).slice(0, 10) <= fimMes && (!r.fim || String(r.fim).slice(0, 10) >= ini));
     setOcupado(true);

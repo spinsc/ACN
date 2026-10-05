@@ -27,6 +27,7 @@ import { Botao, Selo, Faixa, diaBR, diaISO } from './Interface';
 import { idsComDescendentes, orcamentoDoCentro, foraDaVigencia, ordenarArvore } from './CentroCustoShared';
 import { abrirVinculo } from './VinculoPicker';
 import { baixarPlanilha } from './ExportarPlanilha';
+import { lerFechamentos, fechamentoVigente } from './CentroCustoFechamento';
 import { mdiOpenInNew, mdiArrowLeft, mdiSubdirectoryArrowRight, mdiFileExcelOutline, mdiArrowTopRight, mdiArrowBottomRight, mdiMinus } from '@mdi/js';
 
 export const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -394,6 +395,9 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
   const [tentativa, setTentativa] = useState(0);
   const [categorias, setCategorias] = useState<any[]>([]);
   useEffect(() => { supabase.from('centro_custo_categorias').select('id,nome').then(({ data }) => setCategorias(data || [])); }, []);
+  // Etapa 15e-2: o selo "Mês fechado" (se a leitura falhar, só não aparece o selo)
+  const [fechamentos, setFechamentos] = useState<any[]>([]);
+  useEffect(() => { lerFechamentos().then(setFechamentos).catch(() => setFechamentos([])); }, [tentativa]);
 
   useEffect(() => {
     let vivo = true;
@@ -490,6 +494,7 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
               <select className="acn-input acn-cc-filtro" value={mes} onChange={e => setMes(Number(e.target.value))} aria-label="Mês do painel">
                 {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
+              {fechamentoVigente(fechamentos, { ano, mes }) && <Selo familia="info" ponto={false} title="Este mês está fechado: despesas e a correção de compras dele estão travadas">Mês fechado</Selo>}
             </div>
           </div>
 

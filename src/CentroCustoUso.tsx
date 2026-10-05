@@ -21,6 +21,7 @@ import { combinaBusca } from './SearchUtils';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { centrosParaApontar, centroDisponivel, motivoBloqueio, fetchCentrosCusto } from './CentroCustoShared';
 import { carregarMovimentosCentros, carregarOrcamentoDoAno, normalizarMovimentos, calcularCentro, somarPeriodo, faixaDoConsumo } from './CentroCustoPainel';
+import { lerFechamentos, fechamentoVigente, conferirMesesAbertos, mesDaCompra } from './CentroCustoFechamento';
 import { mdiMagnify, mdiRefresh } from '@mdi/js';
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -144,6 +145,8 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Etapa 15e-2 (05/10/2026): compra criada num mês FECHADO não recebe centro por aqui (mudaria o centro de um mês já fechado). O Admin reabre o mês se precisar.
+  const [fechamentos, setFechamentos] = useState<any[]>([]);
   const escolhasRef = useRef<Record<string, string>>({});
   const sugeridosRef = useRef<Record<string, boolean>>({});
   escolhasRef.current = escolhas; sugeridosRef.current = sugeridos;
@@ -158,6 +161,7 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
     const falha = c.error || k.error;
     if (falha) { setErro(falha.message); setCarregando(false); return; }
     setCompras(c.data || []); setCentros(k.data || []);
+    try { setFechamentos(await lerFechamentos()); } catch (_) { setFechamentos([]); } // se não ler, a conferência na hora de gravar barra do mesmo jeito
     // o que a pessoa já escolheu e continua sem centro fica; o resto recebe a sugestão pelo texto (nada é gravado por isso).
     // As duas marcas são calculadas FORA de uma função de atualização de estado (dentro dela o React perdia a de "sugerido").
     const prev = escolhasRef.current; const prevSug = sugeridosRef.current;
@@ -176,8 +180,10 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
   const centroPorId = useMemo(() => Object.fromEntries(centros.map(c => [c.id, c])), [centros]);
   const rotuloCentro = (id: string) => { const c = centroPorId[id]; return c ? `${c.codigo} — ${c.nome}` : '?'; };
   const visiveis = compras.filter(p => !busca.trim() || combinaBusca(`${p.numero_pedido} ${p.descricao_material} ${p.fornecedor || ''} ${p.centro_custo || ''} ${p.status_compra}`, busca));
-  const comEscolha = compras.filter(p => escolhas[p.id]);
-  const nMarcadas = visiveis.filter(p => marcadas[p.id]).length;
+  const fechadaPorId: Record<string, boolean> = useMemo(() => Object.fromEntries(compras.map(p => [p.id, !!fechamentoVigente(fechamentos, mesDaCompra(p))])), [compras, fechamentos]);
+  const nFechadas = compras.filter(p => fechadaPorId[p.id]).length;
+  const comEscolha = compras.filter(p => escolhas[p.id] && !fechadaPorId[p.id]);
+  const nMarcadas = visiveis.filter(p => marcadas[p.id] && !fechadaPorId[p.id]).length;
   // mesma regra de quem corrige o centro de uma compra no Financeiro (podeEditarLancamento): Admin e gerentes
   const podeGravar = ehAdminOuGerente(currentUser);
 
@@ -187,8 +193,8 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
   };
   const aplicarAsMarcadas = () => {
     if (!centroLote) { setAviso('Escolha o centro que vai para as compras marcadas.'); return; }
-    const ids = visiveis.filter(p => marcadas[p.id]).map(p => p.id);
-    if (!ids.length) { setAviso('Marque as compras que recebem esse centro.'); return; }
+    const ids = visiveis.filter(p => marcadas[p.id] && !fechadaPorId[p.id]).map(p => p.id);
+    if (!ids.length) { setAviso('Marque as compras que recebem esse centro (as de mês fechado não entram).'); return; }
     setAviso('');
     setEscolhas(e => { const n = { ...e }; ids.forEach(id => { n[id] = centroLote; }); return n; });
     setSugeridos(s => { const n = { ...s }; ids.forEach(id => delete n[id]); return n; });
@@ -198,6 +204,9 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
   const gravar = async () => {
     const itens = comEscolha.map(p => ({ pedido_id: p.id, centro_id: escolhas[p.id] }));
     if (!itens.length) { setAviso('Escolha o centro de pelo menos uma compra.'); return; }
+    // a conferência de verdade é no banco, agora: o mês pode ter sido fechado depois que a lista foi lida
+    const trava = await conferirMesesAbertos(comEscolha.map(p => mesDaCompra(p)));
+    if (!trava.ok) { setErro(trava.mensagem + ' Atualize a lista: as compras desse mês saem do lote.'); try { setFechamentos(await lerFechamentos()); } catch (_) { /* a conferência acima já barrou */ } return; }
     // CONFERÊNCIA antes de gravar: a pessoa vê cada compra e o centro que vai receber
     const linhas = comEscolha.slice(0, 15).map(p => `${p.numero_pedido}  →  ${rotuloCentro(escolhas[p.id])}`);
     const mais = comEscolha.length > 15 ? `\n… e mais ${comEscolha.length - 15} compra(s)` : '';
@@ -235,6 +244,7 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
           {erro && <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>{erro}</Faixa>}
           {aviso && <Faixa tom="atencao">{aviso}</Faixa>}
           {!podeGravar && <Faixa tom="info">Só Admin e gerentes gravam o centro das compras; você pode olhar a lista.</Faixa>}
+          {nFechadas > 0 && <Faixa tom="info">{nFechadas} compra(s) são de mês fechado e não recebem centro por aqui (ficam fora do lote). Para dar centro a elas, o Admin reabre o mês em Financeiro › Fechamento do mês.</Faixa>}
 
           {carregando && !compras.length ? <div className="acn-empty">Carregando…</div>
             : !erro && compras.length === 0 ? <div className="acn-empty">Nenhuma compra sem centro. Tudo está vinculado a um centro de custo.</div>
@@ -270,7 +280,8 @@ export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
                         <td className="acn-nowrap">{p.valor_compra ? reais(p.valor_compra) : <span className="acn-fraco">—</span>}</td>
                         <td className="acn-texto-longo">{p.centro_custo ? <span title="O que estava escrito no campo antigo de centro de custo">{p.centro_custo}</span> : <span className="acn-fraco">—</span>}</td>
                         <td>
-                          <select className="acn-input acn-cc-sem-sel" value={escolhas[p.id] || ''} onChange={e => escolher(p.id, e.target.value)} disabled={!podeGravar} aria-label={`Centro de ${p.numero_pedido}`}>
+                          {fechadaPorId[p.id] && <div><Selo familia="info" ponto={false} title="O mês desta compra está fechado">mês fechado</Selo></div>}
+                          <select className="acn-input acn-cc-sem-sel" value={escolhas[p.id] || ''} onChange={e => escolher(p.id, e.target.value)} disabled={!podeGravar || fechadaPorId[p.id]} aria-label={`Centro de ${p.numero_pedido}`}>
                             <option value="">— escolher —</option>
                             {centrosParaApontar(centros, escolhas[p.id] || null).map(c => <option key={c.id} value={c.id} disabled={c.bloqueado}>{'　'.repeat(c.nivel)}{c.nivel > 0 ? '└ ' : ''}{c.codigo} — {c.nome}{c.bloqueado ? ` (${motivoBloqueio(c)})` : ''}</option>)}
                           </select>
