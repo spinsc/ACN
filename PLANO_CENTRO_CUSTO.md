@@ -1,6 +1,14 @@
-# Plano — Centros de custo mais completos
+# Anexo — Centros de custo mais completos: pesquisa e proposta
 
-> **Documento vivo.** Nasceu de um pedido do usuário em 05/10/2026: *"Centro de custos deve passar por
+> **ESTE ARQUIVO É O ANEXO (pesquisa e proposta de 05/10/2026). O ACOMPANHAMENTO DAS ETAPAS
+> VIVE NA ETAPA 15 DO `PLANO_UX_FLUXO_TRABALHO.md`** (subetapas 15a a 15e, com o estado, as respostas do usuário
+> às 6 perguntas e o que cada uma entrega). Em 05/10/2026 o usuário decidiu tratar os centros de custo como
+> **uma etapa do `/ux-fluxo`, com PRIORIDADE antes do resto do plano**, e respondeu as perguntas da seção 4
+> (resumo: todos os pacotes na ordem sugerida; orçamento por mês com atalho de valor anual dividido igual e
+> pai à escolha; responsável opcional e visão por gerente como está; tipos configuráveis; estouro só avisa;
+> comprometido sim). **Não mantenha o estado aqui: atualize a Etapa 15.**
+
+> *(texto original abaixo)* **Documento vivo.** Nasceu de um pedido do usuário em 05/10/2026: *"Centro de custos deve passar por
 > melhorias, tendo mais detalhamento e informações mais completas, está muito raso. Faça uma pesquisa de tudo
 > que normalmente se tem em uma tela/programa de centros de custos e melhore."*
 > **Combinado com ele (pergunta clicável):** primeiro **pesquisar e propor**; **nada é construído até ele

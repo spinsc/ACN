@@ -12,7 +12,7 @@ com outras tarefas. O estado **não está na sua memória** — está no arquivo
 ## Como conduzir
 
 1. **Leia `PLANO_UX_FLUXO_TRABALHO.md` inteiro** antes de qualquer coisa. Ele
-   traz o mapa do fluxo, os achados (A a F), as 14 etapas e quais já estão ✅.
+   traz o mapa do fluxo, os achados (A a F), as 15 etapas e quais já estão ✅.
 
 1b. **Leia a seção "Respostas a aplicar" do plano** (rodada de perguntas de
    01/10/2026: o usuário respondeu todas as perguntas que estavam em aberto,
@@ -28,7 +28,12 @@ com outras tarefas. O estado **não está na sua memória** — está no arquivo
    "Decisões tomadas" e sai da seção.
 
 2. **Escolha a etapa.** Se o usuário deu um número (`/ux-fluxo 3`), é essa.
-   Sem número, é a primeira que não estiver ✅. A ordem do plano é uma
+   **PRIORIDADE (decidida pelo usuário em 05/10/2026): enquanto a Etapa 15
+   (Centros de custo, subetapas 15a a 15e) não estiver ✅, ela é a próxima** —
+   pegue a primeira subetapa ⬜ dela, **antes** de qualquer outra etapa, de
+   telas a migrar, de R19, R4 e R9. Só depois que a 15e estiver ✅ o resto do
+   plano segue "de forma natural". Sem número e sem a Etapa 15 pendente, é a
+   primeira que não estiver ✅. A ordem do plano é uma
    sugestão do usuário aceita em 29/09/2026: bug funcional primeiro, depois
    o que atrapalha entender, depois visualização, por fim polimento.
 
@@ -77,6 +82,17 @@ com outras tarefas. O estado **não está na sua memória** — está no arquivo
 - **Etapas 11 a 13 (design system):** uma tela por vez, sempre pelo que já
   existe em `Interface.tsx` e `Feedback.tsx`. Não mude regra de negócio no
   meio de uma migração visual.
+
+- **Etapa 15 (centros de custo, 15a a 15e):** as respostas do usuário às 6
+  perguntas estão no quadro da própria etapa — **não repergunte**; pergunte só
+  o que a subetapa lista em "Perguntas ao começar". **Telas e janelas novas já
+  nascem no visual novo** (`Interface.tsx`); a migração do resto do Financeiro
+  é depois da 15e. **Dado real** (classificar os 38 centros, preencher compras
+  "sem centro", competência das despesas antigas): só com o OK explícito dele,
+  mostrando a lista e relatando a contagem. O **realizado** e o **comprometido**
+  seguem a definição do plano (e o total precisa bater com o "Total gasto" da
+  tela de hoje, conferido contra o banco). O alerta de estouro **só avisa**,
+  nunca bloqueia. Visão por gerente está **fora** da etapa.
 
 ## O que não fazer
 

@@ -14,7 +14,9 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 >
 > Outro projeto longo: [PLANO_UX_FLUXO_TRABALHO.md](PLANO_UX_FLUXO_TRABALHO.md)
 > — visualização do fluxo do PV à entrega e polimento de UX, em etapas. Retomado
-> pelo comando `/ux-fluxo`, de qualquer máquina.
+> pelo comando `/ux-fluxo`, de qualquer máquina. **A Etapa 15 (centros de custo mais
+> completos — ficha, painel, controle de uso, lançamento e relatórios; pesquisa em
+> [PLANO_CENTRO_CUSTO.md](PLANO_CENTRO_CUSTO.md)) é a PRIORIDADE: vem antes do resto do plano.**
 
 ---
 
