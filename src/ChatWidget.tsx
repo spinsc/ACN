@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import Linkify from './Linkify';
 import { normalizarBusca, combinaBusca } from './SearchUtils';
-import { confirmar } from './Feedback';
+import { confirmar, mostrarAviso } from './Feedback';
 
 const BROADCAST_CH = 'acn-chat-v1';
 
@@ -138,11 +138,31 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     return g;
   };
 
+  // Apagar "para todos" (pedido do usuário em 05/10/2026, como o WhatsApp): só quem enviou, e só enquanto a mensagem é recente (48 h).
+  // A mensagem não sai do banco — fica marcada (apagada_em / anexo_apagado_em) e a tela mostra "mensagem apagada" para todos.
+  const JANELA_APAGAR_MS = 48 * 60 * 60 * 1000;
+  const podeApagar = (m: any) => !m._temp && !m.apagada_em && String(m.remetente_id) === uid
+    && (Date.now() - new Date(m.criado_em).getTime()) <= JANELA_APAGAR_MS;
+  const apagarMensagem = async (m: any, soAnexo = false) => {
+    if (!podeApagar(m)) { mostrarAviso('Só dá para apagar a sua mensagem em até 2 dias depois de enviada.', 'atencao'); return; }
+    const pergunta = soAnexo
+      ? `Apagar só o anexo "${m.anexo_nome || ''}" para todos?\n\nO texto da mensagem continua.`
+      : 'Apagar esta mensagem para todos?\n\nAs outras pessoas passam a ver "Esta mensagem foi apagada".';
+    if (!await confirmar(pergunta)) return;
+    const agora = new Date().toISOString();
+    const marca = soAnexo ? { anexo_apagado_em: agora } : { apagada_em: agora, apagada_por: uid };
+    const { error } = await supabase.from('chat_mensagens').update(marca).eq('id', m.id).eq('remetente_id', uid);
+    if (error) { mostrarAviso('Não foi possível apagar: ' + error.message, 'erro'); return; }
+    setMensagens(prev => prev.map((x: any) => x.id === m.id ? { ...x, ...marca } : x));
+    atualizarContadorEPreview();
+  };
+
   // Texto de prévia da última mensagem (estilo WhatsApp: "Você: ...", anexo/
   // referência viram um rótulo curto em vez do texto cru).
   const previewMsg = (m: any) => {
     if (!m) return '';
     const prefixo = String(m.remetente_id) === uid ? 'Você: ' : '';
+    if (m.apagada_em) return `${prefixo}🚫 Mensagem apagada`;
     if (m.ref_desc) return `${prefixo}🔗 ${m.ref_desc}`;
     if (m.anexo_nome) return `${prefixo}📎 ${m.anexo_nome}`;
     return `${prefixo}${m.texto || ''}`;
@@ -235,7 +255,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     let data = lista;
     if (!data) {
       const res = await supabase.from('chat_mensagens')
-        .select('id,sala_id,remetente_id,remetente_nome,texto,anexo_nome,ref_desc,criado_em')
+        .select('id,sala_id,remetente_id,remetente_nome,texto,anexo_nome,ref_desc,criado_em,apagada_em')
         .in('sala_id', idsMinhasSalas)
         .order('criado_em', { ascending: false })
         .limit(500);
@@ -263,7 +283,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
     const idsMinhasSalas = salasRef.current.map((s: any) => s.id);
     if (idsMinhasSalas.length === 0) { setNaoLidas(0); setNaoLidasPorSala({}); prevCountRef.current = 0; return; }
     const { data } = await supabase.from('chat_mensagens')
-      .select('id,sala_id,remetente_id,remetente_nome,texto,anexo_nome,ref_desc,criado_em')
+      .select('id,sala_id,remetente_id,remetente_nome,texto,anexo_nome,ref_desc,criado_em,apagada_em')
       .in('sala_id', idsMinhasSalas)
       .order('criado_em', { ascending: false })
       .limit(500);
@@ -367,9 +387,11 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
       if (!data) return;
       setMensagens(prev => {
         const real = prev.filter((m: any) => !m._temp);
-        if (data.length <= real.length) return prev;
+        // Assinatura: quantas mensagens e quantas apagadas (mensagem ou anexo). Apagar não muda a contagem, então só ela não bastava (05/10/2026).
+        const assinatura = (l: any[]) => l.length + ':' + l.filter((m: any) => m.apagada_em || m.anexo_apagado_em).length;
+        if (assinatura(data) === assinatura(real) || data.length < real.length) return prev;
         const ultima = data.at(-1);
-        markRead(salaId, ultima?.criado_em);
+        if (data.length > real.length) markRead(salaId, ultima?.criado_em);
         atualizarContadorEPreview();
         return data;
       });
@@ -938,8 +960,15 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                               </div>
                             )}
 
+                            {/* Mensagem apagada pelo autor (para todos) */}
+                            {m.apagada_em && (
+                              <div style={{ fontStyle: 'italic', fontSize: 11, color: '#94a3b8', padding: '8px 12px', border: '1px dashed #cbd5e1', borderRadius: 14, background: '#f8fafc' }}>
+                                🚫 {proprio ? 'Você apagou esta mensagem' : 'Esta mensagem foi apagada'}
+                              </div>
+                            )}
+
                             {/* Referência a processo/demanda — cartão clicável */}
-                            {m.ref_contexto_id && (
+                            {!m.apagada_em && m.ref_contexto_id && (
                               <div onClick={() => abrirReferencia(m)} style={{
                                 background: proprio ? '#0d5c56' : '#fff', border: `1px solid ${proprio ? 'rgba(255,255,255,.25)' : '#e2e8f0'}`,
                                 borderRadius: '12px 12px 4px 12px', padding: '9px 11px', cursor: 'pointer',
@@ -959,8 +988,15 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                               </div>
                             )}
 
+                            {/* Anexo apagado (só o anexo; o texto continua) */}
+                            {!m.apagada_em && m.anexo_url && m.anexo_apagado_em && (
+                              <div style={{ fontStyle: 'italic', fontSize: 11, color: '#94a3b8', padding: '6px 10px', border: '1px dashed #cbd5e1', borderRadius: 10, background: '#f8fafc', marginBottom: 2 }}>
+                                🚫 Anexo apagado
+                              </div>
+                            )}
+
                             {/* Anexo */}
-                            {m.anexo_url && (
+                            {!m.apagada_em && m.anexo_url && !m.anexo_apagado_em && (
                               ehImagem(m.anexo_tipo) ? (
                                 <a href={m.anexo_url} target="_blank" rel="noreferrer" style={{ display: 'block', marginBottom: 2 }}>
                                   <img src={m.anexo_url} alt={m.anexo_nome} style={{ maxWidth: 200, maxHeight: 200, borderRadius: 10, display: 'block', objectFit: 'cover' }} />
@@ -980,7 +1016,7 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                             )}
 
                             {/* Texto (se houver) */}
-                            {m.texto && (
+                            {!m.apagada_em && m.texto && (
                               <div style={{
                                 background: proprio ? '#0f766e' : '#f1f5f9',
                                 color: proprio ? 'white' : '#1e293b',
@@ -995,6 +1031,22 @@ export default function ChatWidget({ currentUser, onNavigate }: any) {
                             )}
                             <div style={{ fontSize: 9, color: '#b0bac5', marginTop: 3, textAlign: proprio ? 'right' : 'left', padding: '0 3px' }}>
                               {m._temp ? '⏳ enviando…' : fmtHora(m.criado_em)}
+                              {podeApagar(m) && (
+                                <>
+                                  {' · '}
+                                  <span role="button" tabIndex={0} aria-label="Apagar mensagem" title="Apagar para todos (até 2 dias depois de enviada)"
+                                    onClick={() => apagarMensagem(m)} onKeyDown={e => { if (e.key === 'Enter') apagarMensagem(m); }}
+                                    style={{ cursor: 'pointer', color: '#94a3b8', textDecoration: 'underline' }}>Apagar</span>
+                                  {m.anexo_url && !m.anexo_apagado_em && m.texto && (
+                                    <>
+                                      {' · '}
+                                      <span role="button" tabIndex={0} aria-label="Apagar só o anexo" title="Apagar só o anexo para todos"
+                                        onClick={() => apagarMensagem(m, true)} onKeyDown={e => { if (e.key === 'Enter') apagarMensagem(m, true); }}
+                                        style={{ cursor: 'pointer', color: '#94a3b8', textDecoration: 'underline' }}>Apagar só o anexo</span>
+                                    </>
+                                  )}
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
