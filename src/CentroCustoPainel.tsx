@@ -52,7 +52,7 @@ export async function carregarMovimentosCentros() {
   const [compras, faturamentos, despesas] = await Promise.all([
     lerPaginado(() => supabase.from('pcp_pedidos_compra').select('id,numero_pedido,descricao_material,fornecedor,status_compra,valor_compra,centro_custo_id,data_criacao').order('id')),
     lerPaginado(() => supabase.from('pcp_pedidos_faturamento').select('id,pedido_id,valor,data_pagamento').order('id')),
-    lerPaginado(() => supabase.from('centro_custo_despesas').select('id,centro_custo_id,valor,descricao,data,parcelado,valor_total_negociado,despesa_pai_id,num_parcelas').order('id')),
+    lerPaginado(() => supabase.from('centro_custo_despesas').select('id,centro_custo_id,valor,descricao,data,parcelado,valor_total_negociado,despesa_pai_id,num_parcelas,categoria_id,competencia,fornecedor,numero_nf').order('id')),
   ]);
   return { compras, faturamentos, despesas };
 }
@@ -87,7 +87,7 @@ export function normalizarMovimentos({ compras, faturamentos, despesas }: any) {
     } else previsto = valor;
     itens.push({
       chave: 'c' + p.id, tipo: 'compra', centroId: p.centro_custo_id, data, ano: Number(data.slice(0, 4)), mes: Number(data.slice(5, 7)),
-      numero: p.numero_pedido || '', descricao: primeiraLinha(p.descricao_material), fornecedor: String(p.fornecedor || '').trim(),
+      numero: p.numero_pedido || '', descricao: primeiraLinha(p.descricao_material), fornecedor: String(p.fornecedor || '').trim(), categoriaId: null,
       status: p.status_compra, valor, realizado: r2(realizado), comprometido: r2(comprometido), previsto: r2(previsto),
     });
   }
@@ -96,7 +96,9 @@ export function normalizarMovimentos({ compras, faturamentos, despesas }: any) {
   for (const d of despesas || []) {
     if (!d.centro_custo_id) continue;
     const data = String(d.data || '').slice(0, 10); // coluna *date*: lida do texto
-    const base = { centroId: d.centro_custo_id, data, ano: Number(data.slice(0, 4)), mes: Number(data.slice(5, 7)), numero: '', descricao: d.descricao || '', fornecedor: '', previsto: 0 };
+    // Etapa 15d (05/10/2026): a despesa conta no mês da COMPETÊNCIA; sem competência (as de antes), no mês da data
+    const mesRef = d.competencia ? String(d.competencia).slice(0, 10) : data;
+    const base = { centroId: d.centro_custo_id, data, ano: Number(mesRef.slice(0, 4)), mes: Number(mesRef.slice(5, 7)), numero: d.numero_nf ? `NF ${d.numero_nf}` : '', descricao: d.descricao || '', fornecedor: String(d.fornecedor || '').trim(), categoriaId: d.categoria_id || null, previsto: 0 };
     if (d.parcelado) {
       // contrato parcelado: o que já foi medido é realizado (as medições são linhas próprias); o que falta do combinado é comprometido
       const falta = Math.max(0, (Number(d.valor_total_negociado) || 0) - (medido[d.id] || 0));
@@ -227,6 +229,8 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [tentativa, setTentativa] = useState(0);
+  const [categorias, setCategorias] = useState<any[]>([]);
+  useEffect(() => { supabase.from('centro_custo_categorias').select('id,nome').then(({ data }) => setCategorias(data || [])); }, []);
 
   useEffect(() => {
     let vivo = true;
@@ -257,16 +261,29 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
     for (const it of calc.itens) {
       const gasto = it.realizado + it.comprometido;
       if (!gasto) continue;
-      const nome = it.tipo === 'compra' ? (it.fornecedor || '(sem fornecedor)') : 'Despesas avulsas (sem fornecedor)';
+      const nome = it.fornecedor || (it.tipo === 'compra' ? '(sem fornecedor)' : 'Despesas avulsas (sem fornecedor)');
       (m[nome] ||= { nome, total: 0, n: 0 }).total += gasto; m[nome].n++;
     }
     return Object.values(m).map(x => ({ ...x, total: r2(x.total) })).sort((a, b) => b.total - a.total).slice(0, 8);
   }, [calc]);
+  // por categoria (15d): a despesa tem a sua; compra não tem categoria e entra junta como "Compras (pedidos)"
+  const porCategoria = useMemo(() => {
+    if (!calc) return [];
+    const m: Record<string, { nome: string; total: number }> = {};
+    for (const it of calc.itens) {
+      const gasto = it.realizado + it.comprometido;
+      if (!gasto) continue;
+      const nome = it.tipo === 'compra' ? 'Compras (pedidos)' : (categorias.find((c: any) => c.id === it.categoriaId)?.nome || 'Despesas sem categoria');
+      (m[nome] ||= { nome, total: 0 }).total += gasto;
+    }
+    return Object.values(m).map(x => ({ ...x, total: r2(x.total) })).sort((a, b) => b.total - a.total).slice(0, 10);
+  }, [calc, categorias]);
   const ultimos = useMemo(() => (calc ? [...calc.itens].sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.chave).localeCompare(String(a.chave))).slice(0, 12) : []), [calc]);
   const nenhumPagamento = !!calc && calc.itens.some(i => i.tipo === 'compra' && i.comprometido > 0) && !calc.itens.some(i => i.tipo === 'compra' && i.realizado > 0);
   const anos = Array.from(new Set([agora.getFullYear() - 1, agora.getFullYear(), agora.getFullYear() + 1, ano])).sort();
   const codigoDe = (id: string) => centros.find((c: any) => c.id === id)?.codigo || '';
   const maxFornecedor = Math.max(1, ...porFornecedor.map(f => f.total));
+  const maxCategoria = Math.max(1, ...porCategoria.map(f => f.total));
 
   if (!centro) return null;
   return (
@@ -378,6 +395,20 @@ export function PainelCentroCusto({ centroId, centros, onClose, onVerLancamentos
                       <div key={f.nome} className="acn-cc-forn-linha">
                         <span className="acn-cc-forn-nome" title={f.nome}>{f.nome}</span>
                         <span className="acn-cc-forn-barra"><span style={{ width: (f.total / maxFornecedor * 100) + '%' }} /></span>
+                        <strong className="acn-nowrap">{reais(f.total)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="acn-quadro">
+                <div className="acn-quadro-titulo">Por categoria — {ano}</div>
+                {porCategoria.length === 0 ? <div className="acn-ajuda">Nenhum gasto neste centro em {ano}.</div> : (
+                  <div className="acn-cc-forn">
+                    {porCategoria.map(f => (
+                      <div key={f.nome} className="acn-cc-forn-linha">
+                        <span className="acn-cc-forn-nome" title={f.nome}>{f.nome}</span>
+                        <span className="acn-cc-forn-barra"><span style={{ width: (f.total / maxCategoria * 100) + '%' }} /></span>
                         <strong className="acn-nowrap">{reais(f.total)}</strong>
                       </div>
                     ))}

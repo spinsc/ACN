@@ -16,6 +16,7 @@ import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
 import { confirmar } from './Feedback';
 import { hojeISO } from './Interface';
+import { AnexosDespesa } from './DespesaAnexos';
 
 export async function fetchCentrosCusto(incluirInativos = false) {
   let q = supabase.from('centros_custo').select('*').order('codigo');
@@ -200,13 +201,13 @@ export function CentroCustoSelect({ value, onChange, permitirNenhum = true, styl
 // `num_parcelas` (vazio = ainda não combinado; é o caso de todos os contratos anteriores).
 // Não gera cronograma: as parcelas continuam sendo lançadas uma a uma como medições, na data em que
 // são pagas — o número só serve de régua para conferir e sugerir o valor.
-const lerParcelas = (txt: any): { ok: boolean; n: number | null } => {
+export const lerParcelas = (txt: any): { ok: boolean; n: number | null } => {
   const s = String(txt ?? '').trim();
   if (!s) return { ok: true, n: null };
   const n = Number(s);
   return Number.isInteger(n) && n >= 2 && n <= 120 ? { ok: true, n } : { ok: false, n: null };
 };
-const MSG_PARCELAS = 'Em quantas vezes: informe um número inteiro de 2 a 120, ou deixe em branco se ainda não foi combinado.';
+export const MSG_PARCELAS = 'Em quantas vezes: informe um número inteiro de 2 a 120, ou deixe em branco se ainda não foi combinado.';
 
 // escopo de módulo de propósito: declarado dentro de um modal, remontaria o campo a cada tecla
 function CampoParcelas({ parcelas, onChange, total, feitas = 0 }: any) {
@@ -236,75 +237,6 @@ function CampoParcelas({ parcelas, onChange, total, feitas = 0 }: any) {
           Já lançadas: <b>{feitas}</b>{n ? ` de ${n}` : ''}{n && feitas > n ? ' — há mais medições do que parcelas combinadas.' : '.'}
         </div>
       )}
-    </div>
-  );
-}
-
-export function ModalLancarDespesa({ centro, currentUser, onClose }: any) {
-  const [parcelado, setParcelado] = useState(false);
-  const [parcelas, setParcelas] = useState('');
-  const [valor, setValor] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [data, setData] = useState(() => hojeISO());
-  const [salvando, setSalvando] = useState(false);
-
-  const salvar = async () => {
-    const v = parseFloat(String(valor).replace(',', '.'));
-    if (!v || v <= 0) { alert(parcelado ? 'Informe o valor total negociado.' : 'Informe um valor válido.'); return; }
-    if (!descricao.trim()) { alert('Informe a descrição da despesa.'); return; }
-    const p = lerParcelas(parcelas);
-    if (parcelado && !p.ok) { alert(MSG_PARCELAS); return; }
-    setSalvando(true);
-    const payload: any = parcelado
-      ? { centro_custo_id: centro.id, valor: 0, valor_total_negociado: v, parcelado: true, num_parcelas: p.n, descricao: descricao.trim(), data }
-      : { centro_custo_id: centro.id, valor: v, descricao: descricao.trim(), data };
-    const { error } = await supabase.from('centro_custo_despesas').insert([{
-      ...payload, criado_por: currentUser?.email, criado_por_nome: currentUser?.nome || 'Sistema',
-    }]);
-    setSalvando(false);
-    if (error) { alert('Erro ao lançar despesa: ' + error.message); return; }
-    alert(parcelado ? 'Contrato parcelado criado! Lance as medições (pagamentos) depois, na lista de despesas do centro.' : 'Despesa lançada!');
-    onClose();
-  };
-
-  return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:400 }}>
-        <div className="modal-title">💰 Lançar Despesa — {centro.codigo}</div>
-        <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>{centro.nome}</div>
-        <div style={{ display:'flex', gap:4, marginBottom:12 }}>
-          {([[false,'À Vista'],[true,'Parcelado']] as const).map(([v,label]) => (
-            <button key={label} type="button" onClick={() => setParcelado(v)}
-              style={{ flex:1, padding:'6px', fontSize:10, fontWeight:700, borderRadius:4, cursor:'pointer',
-                border:`1.5px solid ${parcelado===v ? '#0f766e' : '#d1d5db'}`,
-                background: parcelado===v ? '#ccfbf1' : '#fff', color: parcelado===v ? '#0f766e' : '#6b7280' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <label className="acn-label">{parcelado ? 'Valor Total Negociado (R$) *' : 'Valor (R$) *'}</label>
-        <input className="acn-input" style={{ width:'100%', marginBottom:10 }} placeholder="0,00" inputMode="decimal"
-          value={valor} onChange={e => setValor(e.target.value)} autoFocus />
-        {parcelado && (
-          <div style={{ fontSize:9, color:'#0f766e', marginTop:-6, marginBottom:10 }}>
-            Isso só registra o valor combinado. Os pagamentos parciais (medições) são lançados depois, um a um.
-          </div>
-        )}
-        {parcelado && <CampoParcelas parcelas={parcelas} onChange={setParcelas} total={parseFloat(String(valor).replace(',', '.')) || 0} />}
-        <label className="acn-label">Descrição *</label>
-        <textarea className="acn-input" rows={3} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
-          placeholder="Ex: Manutenção do compressor, material extra..."
-          value={descricao} onChange={e => setDescricao(e.target.value)} />
-        <label className="acn-label">Data</label>
-        <input type="date" className="acn-input" style={{ width:'100%', marginBottom:14 }}
-          value={data} onChange={e => setData(e.target.value)} />
-        <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando}>
-            {salvando ? 'Salvando...' : parcelado ? '💾 Criar Contrato' : '💾 Lançar Despesa'}
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -424,6 +356,19 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
     (eraContrato ? lancamento?.valor_total_negociado : lancamento?.valor) ?? '').replace('.', ','));
   const [data, setData] = useState(String(lancamento?.data || '').slice(0, 10));
   const [centroId, setCentroId] = useState(lancamento?.centro_custo_id || '');
+  // Etapa 15d (05/10/2026): os campos novos do lançamento. Vazio continua vazio: despesa de antes não ganha competência sozinha (vale pelo mês da data).
+  const [categoriaId, setCategoriaId] = useState(lancamento?.categoria_id || '');
+  const [fornecedor, setFornecedor] = useState(lancamento?.fornecedor || '');
+  const [numeroNf, setNumeroNf] = useState(lancamento?.numero_nf || '');
+  const [competencia, setCompetencia] = useState(String(lancamento?.competencia || '').slice(0, 7));
+  const [categorias, setCategorias] = useState<any[]>([]);
+  const [irmaos, setIrmaos] = useState<any[]>([]); // as outras partes, quando o lançamento é uma parte de um rateio
+  useEffect(() => {
+    supabase.from('centro_custo_categorias').select('*').order('ordem').order('nome').then(({ data: d }) => setCategorias(d || []));
+    if (lancamento?.rateio_grupo_id) {
+      supabase.from('centro_custo_despesas').select('id,centro_custo_id,valor,rateio_percentual').eq('rateio_grupo_id', lancamento.rateio_grupo_id).then(({ data: d }) => setIrmaos(d || []));
+    }
+  }, [lancamento?.id]);
   const [salvando, setSalvando] = useState(false);
   /**
    * À VISTA ↔ PARCELADO TAMBÉM NA EDIÇÃO (28/09/2026)
@@ -482,10 +427,17 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
       descricao: lancamento.descricao, data: lancamento.data, centro_custo_id: lancamento.centro_custo_id,
       valor: lancamento.valor, valor_total_negociado: lancamento.valor_total_negociado,
       parcelado: lancamento.parcelado, num_parcelas: lancamento.num_parcelas ?? null,
+      categoria_id: lancamento.categoria_id ?? null, fornecedor: lancamento.fornecedor ?? null, numero_nf: lancamento.numero_nf ?? null, competencia: lancamento.competencia ?? null,
     };
     // no contrato o dinheiro mora em valor_total_negociado e `valor` fica 0 —
     // é o que faz o contrato não inflar a soma do centro (ver ModalLancarDespesa)
     const depois: any = { descricao: descricao.trim(), data, centro_custo_id: centroId };
+    // só o que a pessoa mexeu (campo novo vazio fica como está; o texto vazio vira null)
+    const compNova = competencia ? `${competencia}-01` : null, compAntiga = lancamento.competencia ? String(lancamento.competencia).slice(0, 10) : null;
+    if ((categoriaId || null) !== (lancamento.categoria_id || null)) depois.categoria_id = categoriaId || null;
+    if ((fornecedor.trim() || null) !== (lancamento.fornecedor || null)) depois.fornecedor = fornecedor.trim() || null;
+    if ((numeroNf.trim() || null) !== (lancamento.numero_nf || null)) depois.numero_nf = numeroNf.trim() || null;
+    if (compNova !== compAntiga) depois.competencia = compNova;
     if (ehContrato) { depois.parcelado = true;  depois.valor_total_negociado = v; depois.valor = 0; }
     else            { depois.parcelado = false; depois.valor = v; depois.valor_total_negociado = null; }
     // o número de parcelas é do contrato: a medição não tem, e virar à vista o zera
@@ -519,10 +471,24 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
     onClose();
   };
 
+  // Rateio: apagar só uma parte deixaria as outras com a divisão errada; o caminho é apagar o rateio inteiro (todas as partes)
+  const excluirRateio = async () => {
+    const partes = irmaos.length || 1;
+    const somaTotal = irmaos.reduce((s: number, x: any) => s + (Number(x.valor) || 0), 0);
+    if (!await confirmar(`Excluir o rateio inteiro?\n\n${lancamento.descricao}\n${partes} parte(s), ${moeda(somaTotal)} no total.\n\nTodas as partes saem dos totais dos centros na hora. Fica registrado na auditoria quem excluiu.`)) return;
+    setSalvando(true);
+    const { error } = await supabase.from('centro_custo_despesas').delete().eq('rateio_grupo_id', lancamento.rateio_grupo_id);
+    setSalvando(false);
+    if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+    irmaos.forEach((x: any) => logChange({ module: 'financeiro', entityType: 'centro_custo_despesas', entityId: x.id, changeType: 'DELETE', oldRow: { ...lancamento, id: x.id, centro_custo_id: x.centro_custo_id, valor: x.valor }, newRow: null, user: currentUser }));
+    onSalvo?.();
+    onClose();
+  };
+
   return (
     <div className="modal-overlay" style={{ zIndex: 2300 }}
       onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 460 }}>
+      <div className="modal-box" style={{ maxWidth: 520, maxHeight: '92vh', overflowY: 'auto' }}>
         <div className="modal-title">
           ✏️ Editar lançamento{eraContrato ? ' — contrato parcelado' : ehMedicao ? ' — medição' : ''}
         </div>
@@ -597,10 +563,47 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
           </div>
         )}
 
+        {/* Etapa 15d: categoria, competência, fornecedor, NF, comprovante e o aviso do rateio */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+          <div>
+            <label className="acn-label">Categoria</label>
+            <select className="acn-input" style={{ width: '100%' }} value={categoriaId} onChange={e => setCategoriaId(e.target.value)}>
+              <option value="">— Sem categoria —</option>
+              {categorias.filter((c: any) => c.ativo || c.id === categoriaId).map((c: any) => <option key={c.id} value={c.id}>{c.nome}{c.ativo ? '' : ' (desativada)'}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="acn-label">Competência (mês)</label>
+            <input type="month" className="acn-input" style={{ width: '100%' }} value={competencia} onChange={e => setCompetencia(e.target.value)} />
+          </div>
+          <div>
+            <label className="acn-label">Fornecedor</label>
+            <input className="acn-input" style={{ width: '100%' }} value={fornecedor} onChange={e => setFornecedor(e.target.value)} />
+          </div>
+          <div>
+            <label className="acn-label">Nº da NF</label>
+            <input className="acn-input" style={{ width: '100%' }} value={numeroNf} onChange={e => setNumeroNf(e.target.value)} />
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>Sem competência, a despesa conta no mês da data (como as de antes).</div>
+        {lancamento?.rateio_grupo_id && (
+          <div style={{ fontSize: 11, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, padding: '6px 8px', marginTop: 8 }}>
+            Esta despesa é uma parte de um <b>rateio</b>{irmaos.length ? ` (${irmaos.length} partes: ${irmaos.map((x: any) => `${x.centro_custo_id === lancamento.centro_custo_id ? 'esta' : 'outra'} ${moeda(x.valor)}${x.rateio_percentual != null ? ` · ${String(Number(x.rateio_percentual)).replace('.', ',')}%` : ''}`).join(' | ')})` : ''}.
+            Mudar o valor ou o centro de uma parte não refaz as outras.
+          </div>
+        )}
+        <label className="acn-label" style={{ marginTop: 8 }}>Comprovante</label>
+        <AnexosDespesa despesaId={lancamento.id} currentUser={currentUser} podeEditar />
+
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button className="acn-btn" style={{ background: '#dc2626' }} disabled={salvando} onClick={excluir}>
             Excluir
           </button>
+          {lancamento?.rateio_grupo_id && (
+            <button className="acn-btn" style={{ background: '#b91c1c' }} disabled={salvando} onClick={excluirRateio} title="Apaga todas as partes do rateio">
+              Excluir o rateio todo
+            </button>
+          )}
           <div style={{ flex: 1 }} />
           <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
           <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando} onClick={salvar}>

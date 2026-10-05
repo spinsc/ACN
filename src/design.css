@@ -1134,6 +1134,15 @@ html body .acn-main table.acn-tabela tr.acn-cc-mes-atual > td { background: var(
 .acn-cc-sem-lote { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 html body .modal-box.acn-modal-cadastro.acn-cc-sem { width: min(1100px, 96vw); max-width: 1100px; }
 html body .acn-input.acn-cc-sem-sel { min-width: 240px; width: 100%; }
+/* Etapa 15d (05/10/2026): lançar despesa (categoria, competência, rateio, recorrência) e a lista das recorrentes */
+html body .modal-box.acn-modal-cadastro.acn-cc-desp { width: min(760px, 95vw); max-width: 760px; }
+html body .modal-box.acn-modal-cadastro.acn-cc-recorr { width: min(1000px, 96vw); max-width: 1000px; }
+.acn-cc-desp .form-group, .acn-cc-recorr .form-group { margin-bottom: 0; }
+html body .acn-input.acn-cc-parc { width: 90px; }
+.acn-cc-parte { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+html body .acn-cc-parte > select.acn-input { flex: 1 1 220px; width: auto; min-width: 0; }
+html body .acn-input.acn-cc-pct { width: 90px; }
+.acn-cc-parte-valor { min-width: 96px; text-align: right; font-weight: 600; color: var(--acn-ink); }
 .acn-cc-forn-linha { display: grid; grid-template-columns: minmax(90px, 1.2fr) 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
 .acn-cc-forn-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--acn-ink); }
 .acn-cc-forn-barra { display: block; height: 8px; background: var(--acn-neutral-soft); border-radius: 999px; overflow: hidden; }

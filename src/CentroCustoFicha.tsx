@@ -22,11 +22,13 @@ import { Botao, Chips, Selo, Faixa, MenuAcoes, diaBR, hojeISO } from './Interfac
 import { combinaBusca } from './SearchUtils';
 import {
   ordenarArvore, idsComDescendentes, sugerirCodigoCentro, siglaDoCodigo, foraDaVigencia, orcamentoDoCentro,
-  lerValorBR, dividirAnualIgual, EMPRESAS_CENTRO, ModalLancarDespesa,
+  lerValorBR, dividirAnualIgual, EMPRESAS_CENTRO,
 } from './CentroCustoShared';
+import { ModalLancarDespesa, ModalRecorrencias } from './CentroCustoLancamento';
+import { ListaConfiguravelModal } from './ListaConfiguravel';
 import { lerCentroObrigatorio, gravarCentroObrigatorio, contarComprasSemCentro, ModalComprasSemCentro } from './CentroCustoUso';
 import { PainelCentroCusto, carregarMovimentosCentros, normalizarMovimentos, calcularCentro, somarPeriodo, faixaDoConsumo } from './CentroCustoPainel';
-import { mdiTagOutline, mdiPlus, mdiPencilOutline, mdiCashPlus, mdiMagnify, mdiShapeOutline, mdiRefresh, mdiArrowUp, mdiArrowDown, mdiContentCopy, mdiChartBoxOutline } from '@mdi/js';
+import { mdiTagOutline, mdiPlus, mdiPencilOutline, mdiCashPlus, mdiMagnify, mdiShapeOutline, mdiRefresh, mdiContentCopy, mdiChartBoxOutline } from '@mdi/js';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const reais = (v: any) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -58,6 +60,11 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
   const [salvandoRegra, setSalvandoRegra] = useState(false);
   const [semCentro, setSemCentro] = useState<number | null>(null);
   const [semCentroAberto, setSemCentroAberto] = useState(false);
+  // Etapa 15d: categorias de despesa (lista configurável) e as despesas recorrentes
+  const [categoriasAberto, setCategoriasAberto] = useState(false);
+  const [categorias, setCategorias] = useState<any[]>([]);
+  const [usosCategorias, setUsosCategorias] = useState<Record<string, number>>({});
+  const [recorrenciasAberto, setRecorrenciasAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -76,6 +83,7 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     // a coluna "% usado" vem das compras e despesas; se essa leitura falhar, a lista continua e a coluna avisa
     carregarMovimentosCentros().then(m => { setItensMov(normalizarMovimentos(m)); setErroMov(''); }).catch(e => setErroMov(e?.message || String(e)));
     lerCentroObrigatorio(true).then(setObrigatorio);
+    supabase.from('centro_custo_categorias').select('*').order('ordem').order('nome').then(({ data }) => setCategorias(data || []));
     contarComprasSemCentro().then(setSemCentro);
   }, [ano]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -100,6 +108,14 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     (situacao === 'todos' || (situacao === 'ativos' ? c.ativo : !c.ativo))
     && (!tipoFiltro || (tipoFiltro === '__sem' ? !c.tipo_id : c.tipo_id === tipoFiltro))
     && (!busca.trim() || combinaBusca(`${c.codigo} ${c.nome} ${c.descricao || ''} ${c.responsavel_nome || ''} ${c.empresa || ''} ${tipoPorId[c.tipo_id]?.nome || ''}`, busca)));
+
+  // quantas despesas usam cada categoria (para a janela das categorias dizer "N lançamento(s)")
+  const abrirCategorias = async () => {
+    const { data } = await supabase.from('centro_custo_despesas').select('categoria_id').not('categoria_id', 'is', null);
+    const m: Record<string, number> = {};
+    (data || []).forEach((d: any) => { m[d.categoria_id] = (m[d.categoria_id] || 0) + 1; });
+    setUsosCategorias(m); setCategoriasAberto(true);
+  };
 
   const alternarAtivo = async (c: any) => {
     const { error } = await supabase.from('centros_custo').update({ ativo: !c.ativo }).eq('id', c.id);
@@ -129,6 +145,10 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
     <>
       <Botao pequeno icone={mdiRefresh} onClick={carregar} disabled={carregando}>Atualizar</Botao>
       <Botao pequeno icone={mdiShapeOutline} onClick={() => setTiposAberto(true)}>Tipos de centro</Botao>
+      <MenuAcoes rotulo="Despesas" itens={[
+        { rotulo: 'Categorias de despesa', onClick: abrirCategorias },
+        { rotulo: 'Despesas recorrentes (e lançar as do mês)', onClick: () => setRecorrenciasAberto(true) },
+      ]} />
       <Botao pequeno variante="primario" icone={mdiPlus} onClick={() => setFicha({ centro: null })}>Novo centro de custo</Botao>
     </>
   );
@@ -247,7 +267,10 @@ export function CentrosCustoManager({ embutido = false, currentUser }: any = {})
       {semCentroAberto && <ModalComprasSemCentro currentUser={currentUser} onClose={() => setSemCentroAberto(false)} onGravou={carregar} />}
       {painel && <PainelCentroCusto centroId={painel} centros={centros} anoInicial={ano} onClose={() => setPainel(null)} />}
       {tiposAberto && <TiposCentroModal tipos={tipos} centros={centros} currentUser={currentUser} onClose={() => setTiposAberto(false)} onMudou={carregar} />}
-      {modalDespesa && <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser} onClose={() => setModalDespesa(null)} />}
+      {modalDespesa && <ModalLancarDespesa centro={modalDespesa} currentUser={currentUser} onClose={() => setModalDespesa(null)} onSalvo={carregar} />}
+      {categoriasAberto && <ListaConfiguravelModal tabela="centro_custo_categorias" entidade="centro_custo_categorias" itens={categorias} usosPorId={usosCategorias} textos={TEXTOS_CATEGORIA}
+        currentUser={currentUser} onClose={() => setCategoriasAberto(false)} onMudou={carregar} />}
+      {recorrenciasAberto && <ModalRecorrencias currentUser={currentUser} onClose={() => setRecorrenciasAberto(false)} onMudou={carregar} />}
     </>
   );
 
@@ -612,78 +635,25 @@ function FichaCentro({ centro, centros, tipos, anoInicial, currentUser, onClose,
 // ─── TIPOS DE CENTRO (lista configurável) ─────────────────────────────────────
 // Decisão do usuário (05/10/2026): "configurável conforme a necessidade". Não há exclusão: tipo que não serve mais é
 // DESATIVADO (some das escolhas novas; os centros que já o usam continuam com ele) — apagar um tipo apagaria a classificação.
+// Desde a Etapa 15d a janela é a ListaConfiguravelModal, a mesma das categorias de despesa (mesmos textos de antes).
+const TEXTOS_TIPO = {
+  titulo: 'Tipos de centro de custo',
+  ajuda: 'Os tipos classificam os centros (ex.: Produção, Administrativo). Mude os nomes, a ordem ou crie outros quando precisar. Tipo que não serve mais é desativado — os centros que já o usam continuam com ele.',
+  vazio: 'Nenhum tipo cadastrado ainda.',
+  nomeDe: (n: string) => `Nome do tipo ${n}`, subir: (n: string) => `Subir o tipo ${n}`, descer: (n: string) => `Descer o tipo ${n}`,
+  novoRotulo: 'Nome do novo tipo', digiteNome: 'Digite o nome do novo tipo.', nomeEmBranco: 'O nome do tipo não pode ficar em branco.',
+  duplicado: 'Já existe um tipo com esse nome.', uso: (n: number) => `${n} centro(s)`,
+};
+const TEXTOS_CATEGORIA = {
+  titulo: 'Categorias de despesa',
+  ajuda: 'As categorias classificam as despesas (ex.: Material, Serviço, Aluguel) e aparecem no painel de cada centro. Mude os nomes, a ordem ou crie outras quando precisar. Categoria que não serve mais é desativada — as despesas que já a usam continuam com ela.',
+  vazio: 'Nenhuma categoria cadastrada ainda.',
+  nomeDe: (n: string) => `Nome da categoria ${n}`, subir: (n: string) => `Subir a categoria ${n}`, descer: (n: string) => `Descer a categoria ${n}`,
+  novoRotulo: 'Nome da nova categoria', digiteNome: 'Digite o nome da nova categoria.', nomeEmBranco: 'O nome da categoria não pode ficar em branco.',
+  duplicado: 'Já existe uma categoria com esse nome.', uso: (n: number) => `${n} lançamento(s)`,
+};
 function TiposCentroModal({ tipos, centros, currentUser, onClose, onMudou }: any) {
-  const [nomes, setNomes] = useState<Record<string, string>>({});
-  const [novo, setNovo] = useState('');
-  const [erro, setErro] = useState('');
-  const [ocupado, setOcupado] = useState(false);
-  useEffect(() => { setNomes(Object.fromEntries(tipos.map((t: any) => [t.id, t.nome]))); }, [tipos]);
-
-  const usos = (id: string) => centros.filter((c: any) => c.tipo_id === id).length;
-  const duplicado = (nome: string, ignorar?: string) => tipos.some((t: any) => t.id !== ignorar && t.nome.trim().toLowerCase() === nome.trim().toLowerCase());
-  const traduzir = (e: any) => /duplicate|unique|23505/i.test(`${e?.code} ${e?.message}`) ? 'Já existe um tipo com esse nome.' : e.message;
-
-  const rodar = async (fn: () => Promise<any>) => {
-    setOcupado(true); setErro('');
-    const r = await fn();
-    setOcupado(false);
-    const e = Array.isArray(r) ? r.find((x: any) => x?.error)?.error : r?.error;
-    if (e) { setErro('Não foi possível salvar: ' + traduzir(e)); return false; }
-    onMudou();
-    return true;
-  };
-
-  const adicionar = async () => {
-    const nome = novo.trim();
-    if (!nome) { setErro('Digite o nome do novo tipo.'); return; }
-    if (duplicado(nome)) { setErro('Já existe um tipo com esse nome.'); return; }
-    const ok = await rodar(() => supabase.from('centros_custo_tipos').insert([{ nome, ordem: (Math.max(0, ...tipos.map((t: any) => t.ordem || 0)) + 1) }]));
-    if (ok) { setNovo(''); logChange({ module: 'centros_custo', entityType: 'centros_custo_tipos', entityId: nome, changeType: 'CREATE', newRow: { nome }, user: currentUser }); }
-  };
-  const renomear = async (t: any) => {
-    const nome = (nomes[t.id] || '').trim();
-    if (!nome) { setErro('O nome do tipo não pode ficar em branco.'); return; }
-    if (duplicado(nome, t.id)) { setErro('Já existe um tipo com esse nome.'); return; }
-    const ok = await rodar(() => supabase.from('centros_custo_tipos').update({ nome }).eq('id', t.id));
-    if (ok) logChange({ module: 'centros_custo', entityType: 'centros_custo_tipos', entityId: t.id, changeType: 'UPDATE', oldRow: { nome: t.nome }, newRow: { nome }, user: currentUser });
-  };
-  const alternar = async (t: any) => {
-    const ok = await rodar(() => supabase.from('centros_custo_tipos').update({ ativo: !t.ativo }).eq('id', t.id));
-    if (ok) logChange({ module: 'centros_custo', entityType: 'centros_custo_tipos', entityId: t.id, changeType: 'UPDATE', oldRow: { ativo: t.ativo }, newRow: { ativo: !t.ativo }, user: currentUser });
-  };
-  const mover = async (i: number, d: number) => {
-    const j = i + d;
-    if (j < 0 || j >= tipos.length) return;
-    const nova = [...tipos]; [nova[i], nova[j]] = [nova[j], nova[i]];
-    await rodar(() => Promise.all(nova.map((t: any, k: number) => (t.ordem === k + 1 ? null : supabase.from('centros_custo_tipos').update({ ordem: k + 1 }).eq('id', t.id))).filter(Boolean)));
-  };
-
-  return (
-    <div className="modal-overlay" style={{ zIndex: 2600 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box acn-modal-cadastro acn-cc-tipos" role="dialog" aria-label="Tipos de centro de custo">
-        <div className="acn-modal-cab"><span className="modal-title">Tipos de centro de custo</span></div>
-        <div className="acn-modal-corpo acn-form-cheio">
-          <div className="acn-ajuda">Os tipos classificam os centros (ex.: Produção, Administrativo). Mude os nomes, a ordem ou crie outros quando precisar. Tipo que não serve mais é desativado — os centros que já o usam continuam com ele.</div>
-          {tipos.length === 0 && <div className="acn-empty">Nenhum tipo cadastrado ainda.</div>}
-          {tipos.map((t: any, i: number) => (
-            <div key={t.id} className={'acn-cc-tipo-linha' + (t.ativo ? '' : ' inativo')}>
-              <input className="acn-input" value={nomes[t.id] ?? t.nome} onChange={e => setNomes(n => ({ ...n, [t.id]: e.target.value }))} aria-label={`Nome do tipo ${t.nome}`} disabled={ocupado} />
-              <span className="acn-fraco acn-nowrap">{usos(t.id)} centro(s)</span>
-              {(nomes[t.id] ?? t.nome).trim() !== t.nome && <Botao pequeno variante="primario" onClick={() => renomear(t)} disabled={ocupado}>Salvar nome</Botao>}
-              <Botao pequeno icone={mdiArrowUp} aria-label={`Subir o tipo ${t.nome}`} title="Subir" disabled={ocupado || i === 0} onClick={() => mover(i, -1)} />
-              <Botao pequeno icone={mdiArrowDown} aria-label={`Descer o tipo ${t.nome}`} title="Descer" disabled={ocupado || i === tipos.length - 1} onClick={() => mover(i, 1)} />
-              <Botao pequeno onClick={() => alternar(t)} disabled={ocupado}>{t.ativo ? 'Desativar' : 'Ativar'}</Botao>
-            </div>
-          ))}
-          <div className="acn-cc-tipo-linha">
-            <input className="acn-input" placeholder="Nome do novo tipo" value={novo} onChange={e => setNovo(e.target.value)} aria-label="Nome do novo tipo"
-              onKeyDown={e => { if (e.key === 'Enter') adicionar(); }} disabled={ocupado} />
-            <Botao pequeno variante="primario" icone={mdiPlus} onClick={adicionar} disabled={ocupado}>Adicionar</Botao>
-          </div>
-          {erro && <Faixa tom="erro">{erro}</Faixa>}
-        </div>
-        <div className="acn-modal-rodape acn-sac-rodape"><Botao onClick={onClose}>Fechar</Botao></div>
-      </div>
-    </div>
-  );
+  const usos = Object.fromEntries(tipos.map((t: any) => [t.id, centros.filter((c: any) => c.tipo_id === t.id).length]));
+  return <ListaConfiguravelModal tabela="centros_custo_tipos" entidade="centros_custo_tipos" itens={tipos} usosPorId={usos} textos={TEXTOS_TIPO}
+    currentUser={currentUser} onClose={onClose} onMudou={onMudou} />;
 }

@@ -493,9 +493,10 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     return okMes && okAno && okStatus;
   });
 
-  // Despesas avulsas do mesmo período (data, não data_criacao)
+  // Despesas avulsas do mesmo período: pela COMPETÊNCIA (o mês a que a despesa pertence — Etapa 15d, 05/10/2026); sem competência (as de antes), pela data
   const despesasFiltradas = despesas.filter(d => {
-    const dt = d.data ? new Date(d.data + 'T12:00:00') : null;
+    const ref = d.competencia || d.data;
+    const dt = ref ? new Date(String(ref).slice(0, 10) + 'T12:00:00') : null;
     const okMes = !filtroMes || !dt || String(dt.getMonth() + 1).padStart(2, '0') === filtroMes;
     const okAno = !filtroAno || !dt || String(dt.getFullYear()) === filtroAno;
     return okMes && okAno;
