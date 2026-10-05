@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import EngenhariaTab from './EngenhariaTab';
 import AjustesProjetoTab from './AjustesProjetoTab';
+import MinhasSolicitacoesTab from './MinhasSolicitacoesTab';
 import PCPTab from './PCPTab';
 import AlmoxarifadoTab from './AlmoxarifadoTab';
 import ProducaoTab from './ProducaoTab';
@@ -38,7 +39,7 @@ import {
   mdiViewDashboardOutline, mdiCalendarMonthOutline, mdiHandshakeOutline, mdiGavel, mdiFileDocumentOutline,
   mdiAccountGroupOutline, mdiBullhornOutline, mdiRulerSquareCompass, mdiClipboardCheckOutline, mdiWarehouse,
   mdiCarWrench, mdiTelevision, mdiHammerWrench, mdiCableData, mdiFlaskOutline, mdiShieldCheckOutline,
-  mdiRadioTower, mdiTruckOutline, mdiCarSearchOutline, mdiClipboardTextOutline, mdiCartOutline, mdiCashMultiple,
+  mdiRadioTower, mdiTruckOutline, mdiCarSearchOutline, mdiClipboardTextOutline, mdiClipboardListOutline, mdiCartOutline, mdiCashMultiple,
   mdiPackageVariantClosed, mdiTagMultipleOutline, mdiAccountTieOutline, mdiCurrencyUsd, mdiReceiptTextOutline,
   mdiChartBoxOutline, mdiCalculatorVariantOutline, mdiHeadset, mdiNfcVariant, mdiShieldAccountOutline,
   mdiMagnify, mdiMenu, mdiClose, mdiAt, mdiBellOutline, mdiClipboardSearchOutline, mdiChevronRight,
@@ -55,7 +56,7 @@ const ICONE_ABA: Record<string, string> = {
   engenharia: mdiRulerSquareCompass, pcp: mdiClipboardCheckOutline, almoxarifado: mdiWarehouse,
   producao: mdiCarWrench, painel_tv: mdiTelevision, serralheria: mdiHammerWrench, chicotes: mdiCableData,
   laboratorio: mdiFlaskOutline, qualidade: mdiShieldCheckOutline, telecom: mdiRadioTower,
-  logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, compras: mdiCartOutline,
+  logistica: mdiTruckOutline, vistorias: mdiCarSearchOutline, ajustes: mdiClipboardTextOutline, minhas_solicitacoes: mdiClipboardListOutline, compras: mdiCartOutline,
   financeiro: mdiCashMultiple, cadastro_itens: mdiPackageVariantClosed, cadastro_produtos: mdiTagMultipleOutline,
   rh: mdiAccountTieOutline, comissoes_tecnicos: mdiCurrencyUsd, fiscal: mdiReceiptTextOutline, relatorios: mdiChartBoxOutline,
   formacao_precos: mdiCalculatorVariantOutline, sac: mdiHeadset, nfc: mdiNfcVariant, admin: mdiShieldAccountOutline,
@@ -94,6 +95,7 @@ const SIDEBAR_GROUPS = [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'calendario', label: 'Calendário' },
       { id: 'ajustes',    label: 'Demandas gerais' },
+      { id: 'minhas_solicitacoes', label: 'Minhas solicitações' },
     ],
   },
   {
@@ -226,7 +228,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 .acn-logo-botao:focus-visible { outline:2px solid #0f766e; outline-offset:2px; }
 /* Etapa 14b (02/10/2026): menu um pouco mais denso no computador (item de 32 para 30 px, título dos grupos 14/4 → 8/3 px, sem folga entre itens) para a lista, com o maior grupo aberto, caber sem rolar em notebook de tela 768; o celular tem os seus tamanhos no responsivo.css */
 .acn-nav-lista { flex:1; overflow-y:auto; padding:8px 8px 8px; display:flex; flex-direction:column; gap:0; }
-.sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px 10px 3px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
+.sidebar-section { display:flex; align-items:center; justify-content:space-between; width:100%; padding:6px 10px 3px; border:none; background:none; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#8a96a3; cursor:pointer; text-align:left; }
 .sidebar-section:hover { color:#3b4856; }
 .sidebar-item { display:flex; align-items:center; gap:10px; width:100%; min-height:30px; padding:0 10px; border:none; background:none; border-radius:6px; font-size:13px; color:#3b4856; cursor:pointer; text-align:left; user-select:none; transition:background .1s, color .1s; white-space:nowrap; }
 .sidebar-item .sidebar-icone { color:#8a96a3; }
@@ -1038,6 +1040,8 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
     // Painel de TV e so leitura e serve a producao inteira (gerente e tecnicos),
     // entao fica visivel a todos, independente das abas liberadas.
     if (id === 'painel_tv') return true;
+    // "Minhas solicitações" (pedido do usuário em 05/10/2026) é de todos: cada pessoa vê só o que ela mesma pediu, então não depende das abas liberadas.
+    if (id === 'minhas_solicitacoes') return true;
     const abas = currentUser?.abas_permitidas;
     if (!abas || !Array.isArray(abas) || abas.length === 0) return true;
     return abas.includes(id);
@@ -1049,6 +1053,7 @@ export default function DashboardTab({ currentUser: currentUserProp, onLogout }:
       case 'engenharia':   return <EngenhariaTab currentUser={currentUser} />;
       case 'telecom':      return <SetorDemandaTab currentUser={currentUser} setor="Telecom" cor="#0891b2" />;
       case 'ajustes':      return <AjustesProjetoTab currentUser={currentUser} />;
+      case 'minhas_solicitacoes': return <MinhasSolicitacoesTab currentUser={currentUser} />;
       case 'pcp':          return <PCPTab currentUser={currentUser} />;
       case 'serralheria':  return <SetorDemandaTab currentUser={currentUser} setor="Serralheria" cor="#ea580c" />;
       case 'chicotes':     return <SetorDemandaTab currentUser={currentUser} setor="Chicotes" cor="#7c3aed" />;

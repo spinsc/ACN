@@ -1053,3 +1053,13 @@ html body.dark .acn-main:not(.acn-main-tv) table td.acn-forte, html body.dark .a
 html body.dark .acn-main:not(.acn-main-tv) table td.acn-fraco, html body.dark .acn-main:not(.acn-main-tv) table td :is(span, strong, p, div).acn-fraco { color: var(--acn-muted) !important; }
 /* ── Solicitação de compra única (05/10/2026): a janela é a mesma em todo o sistema; um pouco mais larga que a de cadastro (500 px) por causa da lista de itens ── */
 html body .modal-box.acn-modal-cadastro.acn-compra-jan { width: min(640px, 95vw); max-width: 640px; }
+/* ── Minhas solicitações (05/10/2026): só aparência da tela e do detalhe ── */
+.acn-ms-filtros { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 12px; }
+.acn-ms-busca { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 220px; max-width: 420px; color: var(--acn-muted); }
+.acn-ms-busca .acn-input { flex: 1; }
+.acn-ms-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acn-ms-campo { display: flex; flex-direction: column; gap: 2px; }
+.acn-ms-rot { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--acn-muted); }
+.acn-ms-val { font-size: 13px; color: var(--acn-ink); }
+.acn-ms-texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+.acn-ms-itens { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
