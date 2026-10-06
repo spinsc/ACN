@@ -2452,6 +2452,22 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **O que ficou de fora:** o `CentroCustoSelect` (o seletor de centro, compartilhado com outros formulários) lê os centros sem olhar o erro: se falhar, mostra só "— Não informar —" e a escolha de antes não muda; **não mexi** (tela de outras etapas).
 
+### ✅ Etapa 7.48 — Tarefas do Financeiro: mover, excluir e anexar seguiam como se tivesse dado certo, o clique duplo criava duas "próximas" e as leituras que falhavam pareciam "nenhuma tarefa"
+
+**Feito em:** 06/10/2026 (sessão autônoma da tarde). **Achados** ao ler `FinanceiroKanban.tsx` para migrá-la (12e11), **corrigidos antes** do "antes" da migração visual, em commit à parte. **Nenhum dado foi alterado.**
+
+**Os defeitos** (`FinanceiroKanban.tsx`):
+
+1. **Mover uma tarefa de coluna ignorava a resposta do banco:** se a gravação fosse recusada, o cartão trocava de coluna **só na tela** (e a auditoria registrava a mudança que não houve). Agora avisa "Não foi possível mover a tarefa: …", **não troca de coluna e não audita**.
+2. **Clique duplo em "Concluído →" numa tarefa que se repete criava DUAS próximas ocorrências** (o cartão só muda de coluna depois da resposta do banco, então o segundo clique passava). Agora **uma tarefa por vez**: o segundo clique é ignorado enquanto o primeiro não terminou.
+3. **Excluir tarefa, apagar anexo e tirar um tipo** seguiam como se tivessem dado certo quando o banco recusava (a tarefa sumia da tela, voltando ao reabrir). Agora cada um avisa e mantém o que estava.
+4. **Anexar:** o arquivo subia, mas se a linha em `financeiro_tarefa_anexos` não gravasse, **não aparecia na lista e ninguém era avisado**. Agora avisa que "subiu, mas não foi registrado na tarefa".
+5. **Leituras que falhavam pareciam vazio:** as tarefas e os tipos (o quadro mostrava "Vazio" em todas as colunas), os anexos (parecia "Anexos (0)", e a pessoa subiria o boleto de novo) e a permissão "vê todas as tarefas" (a pessoa passava a ver só as suas, sem saber). Agora a faixa vermelha diz o motivo, com "Tentar de novo"; **se já havia tarefas na tela, elas ficam** em vez de esvaziar o quadro.
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ — **não há nenhuma tarefa real no banco hoje**; `kb.cjs`, 50 cenários, a versão de antes × a corrigida): **39 de 50 cenários iguais; os 10 que diferem são exatamente os defeitos acima** (tirar tipo recusado, apagar anexo recusado, anexar com a linha recusada, anexos que não carregam, mover recusado, **clique duplo: 2 gravações e 2 próximas antes, 1 depois**, excluir recusado e as três leituras que falham); o 11º é só o "destaque de não lido" do app, que muda a cada rodada. Iguais nas duas versões: o quadro, a agenda, o filtro, o painel de avisos, a janela dos tipos, nova tarefa e editar (inclusive anotar e anexar), mover, concluir tarefa recorrente (a próxima nasce com a data certa), a janela obrigatória das vencidas e seus 3 avisos de validação. `npx vite build` ok.
+
+**O que ficou de fora:** a leitura do quadro vem **sem paginar** (`select('*')`); hoje são 0 tarefas, longe do corte de 1.000.
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.

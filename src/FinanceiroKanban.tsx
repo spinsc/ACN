@@ -22,6 +22,7 @@ import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
+import { Faixa, Botao } from './Interface';
 
 const ETAPAS = ['A Fazer', 'Em Andamento', 'Concluído'];
 const COR_ETAPA = { 'A Fazer': '#64748b', 'Em Andamento': '#2563eb', 'Concluído': '#16a34a' };
@@ -221,9 +222,14 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
   const [subindo, setSubindo] = useState(false);
   const entrada = useRef(null);
 
+  // Etapa 7.48 (06/10/2026): leitura que falha não pode parecer "Anexos (0)" — a pessoa
+  // acharia que o boleto não foi anexado e subiria de novo.
+  const [erroLeitura, setErroLeitura] = useState('');
   const carregar = useCallback(async () => {
-    const { data } = await supabase.from('financeiro_tarefa_anexos')
+    const { data, error } = await supabase.from('financeiro_tarefa_anexos')
       .select('*').eq('tarefa_id', tarefaId).order('criado_em', { ascending: false });
+    if (error) { setErroLeitura(error.message); return; }
+    setErroLeitura('');
     setLista(data || []);
   }, [tarefaId]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -245,10 +251,12 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
       const { error } = await supabase.storage.from('acn-media').upload(caminho, f, { upsert: false });
       if (error) { alert(`Não subiu "${f.name}": ${error.message}`); continue; }
       const { data: pub } = supabase.storage.from('acn-media').getPublicUrl(caminho);
-      await supabase.from('financeiro_tarefa_anexos').insert([{
+      // 7.48: se a linha não grava, o arquivo subiu mas não aparece na lista — a pessoa precisa saber
+      const { error: erroLinha } = await supabase.from('financeiro_tarefa_anexos').insert([{
         tarefa_id: tarefaId, nome: f.name, url: pub.publicUrl, tamanho: f.size,
         criado_por: currentUser?.email, criado_por_nome: currentUser?.nome,
       }]);
+      if (erroLinha) alert(`"${f.name}" subiu, mas não foi registrado na tarefa: ${erroLinha.message}`);
     }
     setSubindo(false);
     if (entrada.current) entrada.current.value = '';
@@ -259,7 +267,8 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
   // errou o arquivo, os outros não (mesma regra dos anexos de Engenharia)
   const apagar = async (a) => {
     if (!await confirmar(`Apagar o anexo "${a.nome}"?`)) return;
-    await supabase.from('financeiro_tarefa_anexos').delete().eq('id', a.id);
+    const { error } = await supabase.from('financeiro_tarefa_anexos').delete().eq('id', a.id);
+    if (error) { alert('Não foi possível apagar o anexo: ' + error.message); return; }
     carregar();
   };
   const fmtTam = (n) => {
@@ -275,6 +284,11 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
       <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
         Anexos ({lista.length})
       </label>
+      {erroLeitura && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
+          Não foi possível ler os anexos desta tarefa ({erroLeitura}).
+        </Faixa>
+      )}
       {lista.map(a => (
         <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, marginBottom: 3 }}>
           <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: '#0f766e', textDecoration: 'none' }}>
@@ -469,7 +483,8 @@ function ModalTiposTarefa({ tipos, currentUser, onClose, onMudou }) {
   // desligar em vez de apagar: tarefa antiga continua sabendo o seu tipo
   const desligar = async (t) => {
     if (!await confirmar(`Tirar "${t.nome}" da lista? As tarefas que já usam continuam como estão.`)) return;
-    await supabase.from('financeiro_tipos_tarefa').update({ ativo: false }).eq('id', t.id);
+    const { error } = await supabase.from('financeiro_tipos_tarefa').update({ ativo: false }).eq('id', t.id);
+    if (error) { alert('Não foi possível tirar o tipo: ' + error.message); return; }
     onMudou();
   };
 
@@ -648,21 +663,32 @@ export default function FinanceiroKanban({ currentUser }) {
   const [veTudo, setVeTudo] = useState(false);
   const isAdmin = veTudo;
 
+  // Etapa 7.48 (06/10/2026): leitura que falha não pode parecer "nenhuma tarefa" nem "você só vê as suas".
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [erroPermissao, setErroPermissao] = useState('');
+
   useEffect(() => {
     if (!currentUser?.email) return;
     supabase.from('auth_usuarios').select('ve_todas_tarefas_financeiro,perfil')
       .eq('email', currentUser.email).maybeSingle()
-      .then(({ data }) => setVeTudo(!!data?.ve_todas_tarefas_financeiro || data?.perfil === 'Admin'));
+      .then(({ data, error }) => {
+        if (error) { setErroPermissao(error.message); return; }
+        setErroPermissao('');
+        setVeTudo(!!data?.ve_todas_tarefas_financeiro || data?.perfil === 'Admin');
+      });
   }, [currentUser?.email]);
 
   const carregar = useCallback(async () => {
     setLoading(true);
-    const [{ data }, { data: tp }] = await Promise.all([
+    const [{ data, error }, { data: tp, error: erroTipos }] = await Promise.all([
       supabase.from('financeiro_tarefas').select('*').order('data_vencimento', { ascending: true, nullsFirst: false }),
       supabase.from('financeiro_tipos_tarefa').select('*').eq('ativo', true).order('nome'),
     ]);
-    setTarefas(data || []);
-    setTipos(tp || []);
+    const falha = error || erroTipos;
+    setErroLeitura(falha ? falha.message : '');
+    // se a leitura falhou, fica o que já estava na tela em vez de esvaziar o quadro
+    if (!error) setTarefas(data || []);
+    if (!erroTipos) setTipos(tp || []);
     setLoading(false);
   }, []);
 
@@ -675,10 +701,26 @@ export default function FinanceiroKanban({ currentUser }) {
   const responsaveis = [...new Set(tarefas.map(t => t.responsavel_nome).filter(Boolean))].sort();
   const nomeTipo = (id) => tipos.find(t => t.id === id)?.nome || '';
 
+  // 7.48: um clique duplo em "Concluído →" de uma tarefa que se repete criava DUAS próximas
+  // ocorrências (o cartão só muda de coluna depois da resposta do banco). Uma tarefa por vez.
+  const movendo = useRef(new Set());
+
   const mover = async (tarefa, novaEtapa) => {
+    if (movendo.current.has(tarefa.id)) return;
+    movendo.current.add(tarefa.id);
+    try {
+      await moverTarefa(tarefa, novaEtapa);
+    } finally {
+      movendo.current.delete(tarefa.id);
+    }
+  };
+
+  const moverTarefa = async (tarefa, novaEtapa) => {
     const patch = { etapa: novaEtapa, atualizado_em: new Date().toISOString(),
       ...(novaEtapa === 'Concluído' ? { concluido_em: new Date().toISOString() } : {}) };
-    await supabase.from('financeiro_tarefas').update(patch).eq('id', tarefa.id);
+    const { error: erroMover } = await supabase.from('financeiro_tarefas').update(patch).eq('id', tarefa.id);
+    // 7.48: gravação recusada seguia como se tivesse movido (o cartão trocava de coluna só na tela)
+    if (erroMover) { alert('Não foi possível mover a tarefa: ' + erroMover.message); return; }
     logChange({ module: 'financeiro', entityType: 'financeiro_tarefas', entityId: tarefa.id, changeType: 'UPDATE',
       oldRow: { etapa: tarefa.etapa }, newRow: patch, user: currentUser });
     setTarefas(prev => prev.map(t => t.id === tarefa.id ? { ...t, ...patch } : t));
@@ -703,7 +745,8 @@ export default function FinanceiroKanban({ currentUser }) {
 
   const excluir = async (tarefa) => {
     if (!await confirmar(`Excluir a tarefa "${tarefa.titulo}"?`)) return;
-    await supabase.from('financeiro_tarefas').delete().eq('id', tarefa.id);
+    const { error } = await supabase.from('financeiro_tarefas').delete().eq('id', tarefa.id);
+    if (error) { alert('Não foi possível excluir a tarefa: ' + error.message); return; }
     setTarefas(prev => prev.filter(t => t.id !== tarefa.id));
   };
 
@@ -746,6 +789,14 @@ export default function FinanceiroKanban({ currentUser }) {
           + Nova tarefa
         </button>
       </div>
+
+      {(erroLeitura || erroPermissao) && (
+        <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
+          {erroLeitura
+            ? `Não foi possível carregar as tarefas (${erroLeitura}). O quadro pode estar incompleto.`
+            : `Não foi possível conferir a sua permissão (${erroPermissao}). Você pode estar vendo só as suas tarefas.`}
+        </Faixa>
+      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>Carregando...</div>
