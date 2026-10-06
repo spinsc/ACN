@@ -1408,3 +1408,33 @@ html body .modal-box.acn-modal-cadastro.acn-set-ver { width: min(560px, 95vw); m
 .acn-set-barra-valor { min-width: 70px; text-align: right; font-size: 12px; font-weight: 700; color: var(--acn-f); }
 .acn-fin-barra-trilho[data-acn-familia] > i { background: var(--acn-f); }
 .acn-kpi .rot i[data-acn-familia] { background: var(--acn-f); }
+
+/* ── Produção · 12e16 (06/10/2026): a fila de adaptação (lista, filtros e janelas de iniciar, editar responsável e devolver) ── */
+.acn-prod-opl { white-space: normal; max-width: 150px; }
+.acn-prod-mkt { color: var(--acn-f) !important; }
+.acn-prod-veic { min-width: 190px; max-width: min(280px, 19vw); }
+.acn-prod-cli { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(280px, 19vw); }
+.acn-prod-nowrap { white-space: nowrap; }
+.acn-prod-pequeno { font-size: 12px; }
+.acn-prod-resp { min-width: 96px; }
+.acn-prod-duas-ini { align-items: flex-start; }
+.acn-prod-faixa-cel { padding: 4px 12px 8px !important; }
+.acn-prod-th-chk { width: 36px; }
+.acn-prod-f-busca { width: 210px; }
+.acn-prod-f-status { width: 170px; }
+.acn-prod-f-tecnico { width: 150px; }
+.acn-prod-f-cliente { width: 200px; }
+.acn-prod-f-data { width: auto; }
+.acn-prod-f-rotulo { margin-left: 8px; }
+.acn-prod-filtros-mais { background: var(--acn-surface-2); }
+.acn-prod-filtros-mais .acn-label { margin: 0; }
+.acn-prod-filtros-mais .acn-label.acn-prod-f-rotulo { margin-left: 8px; }
+.acn-prod-dica { margin-bottom: 8px; font-size: 12px; }
+.sec-body.acn-prod-tabela { padding: 0; }
+.sec-body.acn-prod-tabela[hidden] { display: none; }
+html body .modal-box.acn-modal-cadastro.acn-prod-jan { width: min(440px, 95vw); max-width: 440px; max-height: 92vh; }
+.acn-prod-jan .form-group { margin-bottom: 0; }
+.acn-prod-jan .acn-modal-corpo > * { flex-shrink: 0; }
+.acn-prod-equipes { display: flex; flex-direction: column; gap: 6px; }
+.acn-prod-equipe { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 13px; background: var(--acn-surface); border: 1.5px solid var(--acn-line); border-radius: var(--acn-r2); }
+.acn-prod-equipe.sel { border: 2px solid var(--acn-brand); background: var(--acn-brand-soft); }

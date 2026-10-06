@@ -113,44 +113,43 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
     <>
       <tr className={classeLinha}>
         {onToggleSelecionar && (
-          <td style={{textAlign:'center'}}>
-            <input type="checkbox" checked={!!selecionado} onChange={()=>onToggleSelecionar(o.id)} style={{cursor:'pointer'}} aria-label={`Selecionar ${o.opl}`} />
+          <td className="acn-centro">
+            <input type="checkbox" checked={!!selecionado} onChange={()=>onToggleSelecionar(o.id)} aria-label={`Selecionar ${o.opl}`} />
           </td>
         )}
         <td>
           <div className="acn-duas">
-            <span className={(String(o.opl || '').length <= 14 ? 'acn-mono ' : '') + 'acn-forte'} style={{ whiteSpace:'normal', maxWidth:150 }}>
+            <span className={(String(o.opl || '').length <= 14 ? 'acn-mono ' : '') + 'acn-forte acn-prod-opl'}>
               <LinkOpl opl={o} currentUser={currentUser} color="var(--acn-brand-ink)" />
             </span>
             {qtd > 1 && <small>{qtd} unidades</small>}
             {qtdAnexos > 0 && <small>{qtdAnexos} anexo{qtdAnexos !== 1 ? 's' : ''}</small>}
-            {o.liberado_divulgacao && !retrabalho && !emRetrab && <small style={{ color:'#6d28d9' }}>Autorização de marketing</small>}
+            {o.liberado_divulgacao && !retrabalho && !emRetrab && <small data-acn-familia="marca" className="acn-prod-mkt">Autorização de marketing</small>}
             {/* Andamento da serralheria — visível em qualquer fila, porque numa
                 adaptação ela é etapa e quem acompanha precisa ver ali mesmo. */}
-            {temSerralheria(o) && <span style={{ marginTop:2 }}><Tag title={motivoSerralheria(o)}>Serralheria · {rotuloStatus(serralheriaAtual)}</Tag></span>}
+            {temSerralheria(o) && <span className="acn-eng-selo-linha"><Tag title={motivoSerralheria(o)}>Serralheria · {rotuloStatus(serralheriaAtual)}</Tag></span>}
           </div>
         </td>
-        <td style={{ minWidth:190, maxWidth:'min(280px, 19vw)' }}>
+        <td className="acn-prod-veic">
           <VeiculoCompacto o={o}>
-            <small title={[o.cliente_nome, o.tipo_projeto].filter(Boolean).join(' · ')}
-              style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'min(280px, 19vw)' }}>
+            <small title={[o.cliente_nome, o.tipo_projeto].filter(Boolean).join(' · ')} className="acn-prod-cli">
               {o.cliente_nome || 'Sem cliente'}{o.tipo_projeto ? ` · ${o.tipo_projeto}` : ''}
             </small>
           </VeiculoCompacto>
         </td>
-        <td className="acn-num" style={{ whiteSpace:'nowrap' }}>
+        <td className="acn-num acn-prod-nowrap">
           {!o.data_prevista_entrega ? <span className="acn-fraco">Sem data</span>
             : isNaN(new Date(o.data_prevista_entrega+'T00:00:00').getTime()) ? <span className="acn-fraco" title={String(o.data_prevista_entrega)}>Data inválida</span>
-            : <span style={atraso > 0 ? { color:'var(--acn-bad)', fontWeight:500 } : undefined} title={atraso > 0 ? `${atraso} dia(s) após a entrega prevista` : undefined}>
+            : <span className={atraso > 0 ? 'acn-txt-erro' : undefined} title={atraso > 0 ? `${atraso} dia(s) após a entrega prevista` : undefined}>
                 {new Date(o.data_prevista_entrega+'T00:00:00').toLocaleDateString('pt-BR')}{atraso > 0 ? ` · ${atraso} d` : ''}
               </span>}
         </td>
-        <td style={{ minWidth:96 }}>{responsavel || <span className="acn-fraco">Sem responsável</span>}</td>
+        <td className="acn-prod-resp">{responsavel || <span className="acn-fraco">Sem responsável</span>}</td>
         <td>
-          <div className="acn-duas" style={{ alignItems:'flex-start' }}>
+          <div className="acn-duas acn-prod-duas-ini">
             <Selo status={o.status_geral} />
             {timer && (
-              <small className="acn-mono" style={{ whiteSpace:'nowrap', ...(o.pausado ? { color:'var(--acn-warn)' } : {}) }}>
+              <small className={'acn-mono acn-prod-nowrap' + (o.pausado ? ' acn-txt-atencao' : '')}>
                 {o.pausado ? 'Pausado · ' : ''}{timer}
               </small>
             )}
@@ -171,10 +170,10 @@ function OplRow({ o, onAction, currentUser, selecionado, onToggleSelecionar, nao
       {/* Linha extra: motivo da reprovação CQ */}
       {(retrabalho || emRetrab) && o.obs_reprovacao_cq && (
         <tr className="acn-linha-alerta">
-          <td colSpan={onToggleSelecionar ? 7 : 6} style={{ padding:'4px 12px 8px' }}>
-            <Faixa tom="erro" acao={o.tempo_retrabalho_horas ? <span className="acn-num" style={{ fontSize:12, whiteSpace:'nowrap' }}>Retrabalho anterior: {Number(o.tempo_retrabalho_horas).toFixed(1)} h</span> : null}>
+          <td colSpan={onToggleSelecionar ? 7 : 6} className="acn-prod-faixa-cel">
+            <Faixa tom="erro" acao={o.tempo_retrabalho_horas ? <span className="acn-num acn-prod-nowrap acn-prod-pequeno">Retrabalho anterior: {Number(o.tempo_retrabalho_horas).toFixed(1)} h</span> : null}>
               <b>Motivo da reprovação no CQ</b> · Auditor: {o.cq_auditor || '—'}
-              <div style={{ marginTop:2 }}>{o.obs_reprovacao_cq}</div>
+              <div className="acn-eng-selo-linha">{o.obs_reprovacao_cq}</div>
             </Faixa>
           </td>
         </tr>
@@ -2612,23 +2611,23 @@ export default function ProducaoTab({ currentUser }) {
 
       <div className="sec-card">
         <div className="acn-filtros">
-          <input className="acn-input" style={{ width:210 }} value={filtroBusca} onChange={e=>setFiltroBusca(e.target.value)}
+          <input className="acn-input acn-prod-f-busca" value={filtroBusca} onChange={e=>setFiltroBusca(e.target.value)}
             placeholder="OP, chassi ou cliente" aria-label="Buscar (OP, chassi, cliente)" />
-          <select className="acn-input" style={{ width:170 }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)} aria-label="Status">
+          <select className="acn-input acn-prod-f-status" value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)} aria-label="Status">
             <option value="Todos">Status: Todos</option>
             <option value="Aguardando Inicio Producao">Aguardando Início Produção</option>
             <option value="Em Producao">Em Produção</option>
             <option value="Retrabalho">Retrabalho</option>
             <option value="Em Retrabalho">Em Retrabalho</option>
           </select>
-          <select className="acn-input" style={{ width:150 }} value={filtroTecnico} onChange={e=>setFiltroTecnico(e.target.value)} aria-label="Técnico / Equipe">
+          <select className="acn-input acn-prod-f-tecnico" value={filtroTecnico} onChange={e=>setFiltroTecnico(e.target.value)} aria-label="Técnico / Equipe">
             <option value="Todos">Técnico: Todos</option>
             {tecnicosDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <Botao pequeno variante={maisFiltros || filtroCliente || filtroEntregaDe || filtroEntregaAte ? 'secundario' : 'discreto'} icone={mdiFilterVariant}
             onClick={() => setMaisFiltros(v => !v)} aria-expanded={maisFiltros}>Mais filtros</Botao>
           {filtrosAtivos && <Botao pequeno variante="discreto" icone={mdiClose} onClick={limparFiltros}>Limpar filtros</Botao>}
-          {oplsFiltradas.length !== opls.length && <span className="acn-fraco acn-num" style={{ fontSize:12 }}>{oplsFiltradas.length} de {opls.length}</span>}
+          {oplsFiltradas.length !== opls.length && <span className="acn-fraco acn-num acn-prod-pequeno">{oplsFiltradas.length} de {opls.length}</span>}
           {/* Filas — separam adaptação de fabricação e de envio. Item que só
               será separado e enviado não polui mais a fila de quem adapta. */}
           <Chips rotulo="Fila" className="acn-filtros-dir" ativo={filaAtiva} onChange={setFilaAtiva}
@@ -2641,19 +2640,19 @@ export default function ProducaoTab({ currentUser }) {
             ] as const).map(([v, rotulo, titulo]) => ({ id: v, rotulo, titulo, contagem: v === 'todas' ? opls.length : contaFila(v) }))} />
         </div>
         {maisFiltros && (
-          <div className="acn-filtros" style={{ background:'var(--acn-surface-2)' }}>
-            <label className="acn-label" style={{ margin:0 }}>Cliente</label>
-            <input className="acn-input" style={{ width:200 }} value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Nome do cliente..." />
-            <label className="acn-label" style={{ margin:'0 0 0 8px' }}>Entrega prevista de</label>
-            <input className="acn-input" type="date" style={{ width:'auto' }} value={filtroEntregaDe} onChange={e=>setFiltroEntregaDe(e.target.value)} />
-            <label className="acn-label" style={{ margin:0 }}>até</label>
-            <input className="acn-input" type="date" style={{ width:'auto' }} value={filtroEntregaAte} onChange={e=>setFiltroEntregaAte(e.target.value)} />
+          <div className="acn-filtros acn-prod-filtros-mais">
+            <label className="acn-label" htmlFor="prod-f-cliente">Cliente</label>
+            <input id="prod-f-cliente" className="acn-input acn-prod-f-cliente" value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} placeholder="Nome do cliente..." />
+            <label className="acn-label acn-prod-f-rotulo" htmlFor="prod-f-de">Entrega prevista de</label>
+            <input id="prod-f-de" className="acn-input acn-prod-f-data" type="date" value={filtroEntregaDe} onChange={e=>setFiltroEntregaDe(e.target.value)} />
+            <label className="acn-label" htmlFor="prod-f-ate">até</label>
+            <input id="prod-f-ate" className="acn-input acn-prod-f-data" type="date" value={filtroEntregaAte} onChange={e=>setFiltroEntregaAte(e.target.value)} />
           </div>
         )}
 
       {visao === 'kanban' && (
           <div className="sec-body">
-            <div className="acn-fraco" style={{ fontSize:12, marginBottom:8 }}>Ordenado por data de entrega · prioridade desempata o mesmo dia</div>
+            <div className="acn-fraco acn-prod-dica">Ordenado por data de entrega · prioridade desempata o mesmo dia</div>
             {loading ? <div className="acn-empty">Carregando...</div>
               : <ProducaoKanban opls={oplsFiltradas} onAction={handleAction}
                   onPrioridade={definirPrioridade} currentUser={currentUser}
@@ -2661,13 +2660,13 @@ export default function ProducaoTab({ currentUser }) {
           </div>
       )}
 
-        <div className="sec-body" style={{ overflowX:'auto', padding:0, display: visao === 'tabela' ? undefined : 'none' }}>
+        <div className="sec-body acn-rolagem acn-prod-tabela" hidden={visao !== 'tabela'}>
           {loading ? <div className="acn-empty">Carregando...</div> : oplsFiltradas.length === 0 ? (
             <div className="acn-empty">{opls.length === 0 ? 'Nenhuma OP em produção no momento.' : 'Nenhuma OP encontrada para os filtros aplicados.'}</div>
           ) : (
             <table className="acn-tabela">
               <thead><tr>
-                <th style={{ width:36 }}></th><th>OP</th><th>Veículo e cliente</th><th>Entrega</th><th>Responsável</th><th>Status</th><th style={{ textAlign:'right' }}>Ações</th>
+                <th className="acn-prod-th-chk"></th><th>OP</th><th>Veículo e cliente</th><th>Entrega</th><th>Responsável</th><th>Status</th><th className="acn-dir">Ações</th>
               </tr></thead>
               <tbody>
                 {(() => {
@@ -2700,13 +2699,13 @@ export default function ProducaoTab({ currentUser }) {
                     return (
                       <React.Fragment key={grupo.base}>
                         <tr className={loteNaoLido ? 'acn-linha-nova' : 'acn-linha-marca'}>
-                          <td style={{textAlign:'center'}}>
+                          <td className="acn-centro">
                             <input type="checkbox" checked={todosSelecionados} title="Selecionar todas as unidades deste lote"
                               onChange={()=>setSelecionados(prev => {
                                 const novo = new Set(prev);
                                 grupo.irmaos.forEach((o:any) => { if (todosSelecionados) novo.delete(o.id); else novo.add(o.id); });
                                 return novo;
-                              })} style={{cursor:'pointer'}} />
+                              })} />
                           </td>
                           <td>
                             <div className="acn-duas">
@@ -2715,7 +2714,7 @@ export default function ProducaoTab({ currentUser }) {
                             </div>
                           </td>
                           <td colSpan={4}>
-                            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                            <div className="acn-selos">
                               {qtdAguardando > 0 && <Selo familia="neutro">{qtdAguardando} aguardando início</Selo>}
                               {qtdEmProducao > 0 && <Selo familia="info">{qtdEmProducao} em produção</Selo>}
                               {qtdRetrabalho > 0 && <Selo familia="erro">{qtdRetrabalho} em retrabalho</Selo>}
@@ -2755,80 +2754,83 @@ export default function ProducaoTab({ currentUser }) {
       {/* MODAL INICIAR */}
       {modalIniciar && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">Iniciar produção — OP {modalIniciar.opl}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Tipo: {modalIniciar.tipo_projeto} | Chassi: {modalIniciar.chassi || '—'}
+          <div className="modal-box acn-modal-cadastro acn-prod-jan" role="dialog" aria-label="Iniciar produção">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Iniciar produção — OP {modalIniciar.opl}</span>
             </div>
-            {modalIniciar.liberado_divulgacao && (
-              <div style={{background:'#faf5ff',border:'1px solid #c4b5fd',borderRadius:4,padding:'7px 10px',marginBottom:10,fontSize:10,color:'#5b21b6'}}>
-                📸 <strong>OP liberada para divulgacao pelo Marketing.</strong> Avise o MKT.
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Tipo: {modalIniciar.tipo_projeto} | Chassi: {modalIniciar.chassi || '—'}
               </div>
-            )}
+              {modalIniciar.liberado_divulgacao && (
+                <Faixa tom="marca" icone={mdiCameraOutline}>
+                  <strong>OP liberada para divulgacao pelo Marketing.</strong> Avise o MKT.
+                </Faixa>
+              )}
 
-            {/* Seletor de modo */}
-            <label className="acn-label">Modo de Execução</label>
-            <div style={{ marginBottom:14 }}>
-              <Chips rotulo="Modo de execução" ativo={modoExecucao} onChange={setModoExecucao} itens={MODOS_EXECUCAO} />
-            </div>
+              {/* Seletor de modo */}
+              <div className="form-group">
+                <label className="acn-label">Modo de Execução</label>
+                <Chips rotulo="Modo de execução" ativo={modoExecucao} onChange={setModoExecucao} itens={MODOS_EXECUCAO} />
+              </div>
 
-            {/* Individual */}
-            {modoExecucao === 'individual' && (
-              <>
-                <label className="acn-label">Técnico Responsável</label>
-                <ColaboradorSelect value={respNome}
-                  onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
-                  placeholder="Selecione o técnico"
-                  className="acn-input" style={{width:'100%',marginBottom:12}} autoFocus />
-              </>
-            )}
+              {/* Individual */}
+              {modoExecucao === 'individual' && (
+                <div className="form-group">
+                  <label className="acn-label">Técnico Responsável</label>
+                  <ColaboradorSelect value={respNome}
+                    onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
+                    placeholder="Selecione o técnico"
+                    className="acn-input" autoFocus />
+                </div>
+              )}
 
-            {/* Dupla */}
-            {modoExecucao === 'dupla' && (
-              <>
-                <label className="acn-label">Técnico 1</label>
-                <ColaboradorSelect value={respNome}
-                  onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
-                  placeholder="Selecione o 1º técnico"
-                  className="acn-input" style={{width:'100%',marginBottom:8}} />
-                <label className="acn-label">Técnico 2</label>
-                <ColaboradorSelect value={respNome2}
-                  onChange={nome=>{ setRespNome2(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId2(c?.id||null); }}
-                  placeholder="Selecione o 2º técnico"
-                  className="acn-input" style={{width:'100%',marginBottom:12}} />
-              </>
-            )}
-
-            {/* Equipe */}
-            {modoExecucao === 'equipe' && (
-              <>
-                <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
-                {erroEquipes && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchEquipes}>Tentar de novo</Botao>}>Não foi possível ler as equipes ({erroEquipes}).</Faixa>}
-                {equipes.length === 0 ? (
-                  <div style={{fontSize:10,color:'#ef4444',marginBottom:12}}>Nenhuma equipe cadastrada. Vá em 🏷️ Equipes para criar.</div>
-                ) : (
-                  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:12}}>
-                    {equipes.map(eq => (
-                      <div key={eq.id} onClick={()=>setEquipeSel(eq)} style={{
-                        padding:'9px 12px', borderRadius:6, cursor:'pointer', fontSize:11,
-                        border: equipeSel?.id===eq.id ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
-                        background: equipeSel?.id===eq.id ? '#eff6ff' : 'white',
-                      }}>
-                        <strong>{eq.nome}</strong>
-                        <span style={{color:'#475569',marginLeft:8,fontSize:10}}>Head: {eq.head_line_nome}</span>
-                        {(eq.membros||[]).length>0 && (
-                          <span style={{color:'#6366f1',marginLeft:8,fontSize:9}}>+{eq.membros.length} membros</span>
-                        )}
-                      </div>
-                    ))}
+              {/* Dupla */}
+              {modoExecucao === 'dupla' && (
+                <>
+                  <div className="form-group">
+                    <label className="acn-label">Técnico 1</label>
+                    <ColaboradorSelect value={respNome}
+                      onChange={nome=>{ setRespNome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId(c?.id||null); }}
+                      placeholder="Selecione o 1º técnico"
+                      className="acn-input" />
                   </div>
-                )}
-              </>
-            )}
+                  <div className="form-group">
+                    <label className="acn-label">Técnico 2</label>
+                    <ColaboradorSelect value={respNome2}
+                      onChange={nome=>{ setRespNome2(nome); const c=colaboradoresList.find(x=>x.nome===nome); setRespId2(c?.id||null); }}
+                      placeholder="Selecione o 2º técnico"
+                      className="acn-input" />
+                  </div>
+                </>
+              )}
 
-            <div style={{display:'flex',gap:8}}>
+              {/* Equipe */}
+              {modoExecucao === 'equipe' && (
+                <div className="form-group">
+                  <label className="acn-label">Selecione a Equipe (pelo Head Line)</label>
+                  {erroEquipes && <Faixa tom="erro" acao={<Botao pequeno onClick={fetchEquipes}>Tentar de novo</Botao>}>Não foi possível ler as equipes ({erroEquipes}).</Faixa>}
+                  {equipes.length === 0 ? (
+                    <div className="acn-txt-erro">Nenhuma equipe cadastrada. Vá em Equipes para criar.</div>
+                  ) : (
+                    <div className="acn-prod-equipes">
+                      {equipes.map(eq => (
+                        <div key={eq.id} onClick={()=>setEquipeSel(eq)} className={'acn-prod-equipe' + (equipeSel?.id===eq.id ? ' sel' : '')}>
+                          <strong>{eq.nome}</strong>
+                          <span className="acn-ajuda">Head: {eq.head_line_nome}</span>
+                          {(eq.membros||[]).length>0 && (
+                            <span className="acn-ajuda">+{eq.membros.length} membros</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape">
               <Botao variante="secundario" onClick={()=>setModalIniciar(null)}>Cancelar</Botao>
-              <Botao variante="primario" icone={mdiPlay} style={{flex:1}} onClick={iniciarProducao}>Iniciar produção</Botao>
+              <Botao variante="primario" icone={mdiPlay} onClick={iniciarProducao}>Iniciar produção</Botao>
             </div>
           </div>
         </div>
@@ -2837,67 +2839,70 @@ export default function ProducaoTab({ currentUser }) {
       {/* MODAL EDITAR RESPONSÁVEL */}
       {modalEditResp && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{maxWidth:440}}>
-            <div className="modal-title">Editar responsável — OP {modalEditResp.opl}</div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:10}}>
-              Atual: <strong>{modalEditResp.responsavel_producao || '—'}</strong>
-              {modalEditResp.tecnico_producao_2_nome && <> + <strong>{modalEditResp.tecnico_producao_2_nome}</strong></>}
-              {modalEditResp.equipe_nome && <> · Equipe: <strong>{modalEditResp.equipe_nome}</strong></>}
+          <div className="modal-box acn-modal-cadastro acn-prod-jan" role="dialog" aria-label="Editar responsável">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Editar responsável — OP {modalEditResp.opl}</span>
             </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="acn-ajuda">
+                Atual: <strong>{modalEditResp.responsavel_producao || '—'}</strong>
+                {modalEditResp.tecnico_producao_2_nome && <> + <strong>{modalEditResp.tecnico_producao_2_nome}</strong></>}
+                {modalEditResp.equipe_nome && <> · Equipe: <strong>{modalEditResp.equipe_nome}</strong></>}
+              </div>
 
-            <label className="acn-label">Modo de Execução</label>
-            <div style={{ marginBottom:14 }}>
-              <Chips rotulo="Modo de execução" ativo={editModo} onChange={setEditModo} itens={MODOS_EXECUCAO} />
-            </div>
+              <div className="form-group">
+                <label className="acn-label">Modo de Execução</label>
+                <Chips rotulo="Modo de execução" ativo={editModo} onChange={setEditModo} itens={MODOS_EXECUCAO} />
+              </div>
 
-            {editModo === 'individual' && (
-              <>
-                <label className="acn-label">Técnico Responsável</label>
-                <ColaboradorSelect value={editResp1Nome}
-                  onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
-                  placeholder="Selecione o técnico"
-                  className="acn-input" style={{width:'100%',marginBottom:12}} />
-              </>
-            )}
-            {editModo === 'dupla' && (
-              <>
-                <label className="acn-label">Técnico 1</label>
-                <ColaboradorSelect value={editResp1Nome}
-                  onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
-                  placeholder="Selecione o 1º técnico"
-                  className="acn-input" style={{width:'100%',marginBottom:8}} />
-                <label className="acn-label">Técnico 2</label>
-                <ColaboradorSelect value={editResp2Nome}
-                  onChange={nome=>{ setEditResp2Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp2Id(c?.id||null); }}
-                  placeholder="Selecione o 2º técnico"
-                  className="acn-input" style={{width:'100%',marginBottom:12}} />
-              </>
-            )}
-            {editModo === 'equipe' && (
-              <>
-                <label className="acn-label">Selecione a Equipe</label>
-                {equipes.length === 0 ? (
-                  <div style={{fontSize:10,color:'#ef4444',marginBottom:12}}>Nenhuma equipe cadastrada.</div>
-                ) : (
-                  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:12}}>
-                    {equipes.map(eq => (
-                      <div key={eq.id} onClick={()=>setEditEquipeSel(eq)} style={{
-                        padding:'9px 12px', borderRadius:6, cursor:'pointer', fontSize:11,
-                        border: editEquipeSel?.id===eq.id ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
-                        background: editEquipeSel?.id===eq.id ? '#eef2ff' : 'white',
-                      }}>
-                        <strong>{eq.nome}</strong>
-                        <span style={{color:'#475569',marginLeft:8,fontSize:10}}>Head: {eq.head_line_nome}</span>
-                      </div>
-                    ))}
+              {editModo === 'individual' && (
+                <div className="form-group">
+                  <label className="acn-label">Técnico Responsável</label>
+                  <ColaboradorSelect value={editResp1Nome}
+                    onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
+                    placeholder="Selecione o técnico"
+                    className="acn-input" />
+                </div>
+              )}
+              {editModo === 'dupla' && (
+                <>
+                  <div className="form-group">
+                    <label className="acn-label">Técnico 1</label>
+                    <ColaboradorSelect value={editResp1Nome}
+                      onChange={nome=>{ setEditResp1Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp1Id(c?.id||null); }}
+                      placeholder="Selecione o 1º técnico"
+                      className="acn-input" />
                   </div>
-                )}
-              </>
-            )}
-
-            <div style={{display:'flex',gap:8}}>
+                  <div className="form-group">
+                    <label className="acn-label">Técnico 2</label>
+                    <ColaboradorSelect value={editResp2Nome}
+                      onChange={nome=>{ setEditResp2Nome(nome); const c=colaboradoresList.find(x=>x.nome===nome); setEditResp2Id(c?.id||null); }}
+                      placeholder="Selecione o 2º técnico"
+                      className="acn-input" />
+                  </div>
+                </>
+              )}
+              {editModo === 'equipe' && (
+                <div className="form-group">
+                  <label className="acn-label">Selecione a Equipe</label>
+                  {equipes.length === 0 ? (
+                    <div className="acn-txt-erro">Nenhuma equipe cadastrada.</div>
+                  ) : (
+                    <div className="acn-prod-equipes">
+                      {equipes.map(eq => (
+                        <div key={eq.id} onClick={()=>setEditEquipeSel(eq)} className={'acn-prod-equipe' + (editEquipeSel?.id===eq.id ? ' sel' : '')}>
+                          <strong>{eq.nome}</strong>
+                          <span className="acn-ajuda">Head: {eq.head_line_nome}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="acn-modal-rodape">
               <Botao variante="secundario" onClick={()=>setModalEditResp(null)}>Cancelar</Botao>
-              <Botao variante="primario" style={{flex:1}} onClick={editarResponsavel}>Salvar alteração</Botao>
+              <Botao variante="primario" onClick={editarResponsavel}>Salvar alteração</Botao>
             </div>
           </div>
         </div>
@@ -2945,14 +2950,20 @@ export default function ProducaoTab({ currentUser }) {
       {/* MODAL DEVOLVER PCP */}
       {modalDevolver && (
         <div className="modal-overlay">
-          <div className="modal-box">
-            <div className="modal-title">Devolver para PCP — OP {modalDevolver.opl}</div>
-            <label className="acn-label">Motivo / Problema *</label>
-            <textarea className="acn-input" rows={3} style={{width:'100%',resize:'vertical',marginBottom:10}}
-              value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
-            <div style={{display:'flex',gap:8}}>
+          <div className="modal-box acn-modal-cadastro acn-prod-jan" role="dialog" aria-label="Devolver ao PCP">
+            <div className="acn-modal-cab">
+              <span className="modal-title">Devolver para PCP — OP {modalDevolver.opl}</span>
+            </div>
+            <div className="acn-modal-corpo acn-form-cheio">
+              <div className="form-group">
+                <label className="acn-label" htmlFor="prod-dev">Motivo / Problema *</label>
+                <textarea id="prod-dev" className="acn-input" rows={3}
+                  value={obsDevolver} onChange={e=>setObsDevolver(e.target.value)} />
+              </div>
+            </div>
+            <div className="acn-modal-rodape">
               <Botao variante="secundario" onClick={()=>setModalDevolver(null)}>Cancelar</Botao>
-              <Botao variante="perigo" style={{flex:1}} onClick={devolverPCP}>Devolver ao PCP</Botao>
+              <Botao variante="perigo" onClick={devolverPCP}>Devolver ao PCP</Botao>
             </div>
           </div>
         </div>
