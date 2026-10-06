@@ -2509,6 +2509,22 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **O que ficou de fora:** `pausarOpl`/`retomarOpl` (`PausaWidget.tsx`) e `criarDemandaDesenvolvimento` (`DesenvolvimentoPecasTab.tsx`) **não foram revistos** (outros arquivos).
 
+### ✅ Etapa 7.52 — PCP: liberar kiting, produção, embalagem, sanar pendência e reposição seguiam como se tivessem gravado quando o banco recusava; o clique duplo gravava duas vezes
+
+**Feito em:** 06/10/2026 (sessão autônoma da tarde). **Achados** ao ler `PCPTab.tsx` para migrá-lo (12e14), **corrigidos antes** do "antes" da migração visual, em commit à parte. **Nenhum dado foi alterado.**
+
+**Os defeitos** (`PCPTab.tsx`):
+
+1. **Nenhuma liberação olhava a resposta do banco.** Se a OP não gravasse: **"Liberar kiting"** **reservava o estoque** para uma OP que não saiu do PCP, avisava o Almoxarifado e abria as demandas de fabricação; **"Liberar produção"** e **"Liberar embalagem"** avisavam a Produção/o Almoxarifado no WhatsApp com a OP parada no banco; **"Sanar pendência"** e **"Sanar serralheria"** sumiam da tela. Agora cada uma **avisa o motivo e para** (sem reserva, sem WhatsApp, sem demanda; na janela do kiting, ela fica aberta para tentar de novo).
+2. **As liberações em lote** (kiting, produção e embalagem) seguiam para as unidades seguintes e **gravavam o histórico, a reserva e o WhatsApp de todas**, mesmo sem nenhuma ter gravado. Agora **o lote para na primeira que falha**, diz até onde foi, e **tudo o mais vale só para as que gravaram**.
+3. **A liberação da solicitação de reposição do Almoxarifado**: (a) se a **leitura do cadastro do item falhasse**, a solicitação ia **sempre para Compras**, mesmo sendo item de fabricação interna (OFI) — agora para e avisa; (b) se a **OFI ou o pedido de compra nascesse** mas a solicitação **não fosse marcada como liberada**, ela continuava na fila e **liberar de novo abria uma segunda OFI/pedido** — agora avisa **para não liberar de novo**.
+4. **Clique duplo** em "Liberar kiting" (a janela), "Liberar produção", "Liberar embalagem" e "Sanar pendência" **gravava duas vezes** (dois históricos, dois WhatsApp e, no kiting, duas reservas de estoque). Agora **uma ação por vez, por OP e tipo**.
+5. **Leituras que falhavam pareciam "nenhuma OP em triagem" / "nada em falta"** (e a atualização de 30 s que falhasse esvaziava a tela): agora faixa vermelha com o motivo e "Tentar de novo", e **cada bloco só troca o que já tinha se a leitura dele deu certo**.
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ — 13 OPs entre espera, kit OK, com pendência, envio, falta de material, 2 lotes, devolvida e retrabalho, 2 OPs em falta/pendência, 2 de serralheria e 2 solicitações de reposição (uma OFI, uma Compras); `pcp.cjs`, 41 cenários, a versão de antes × a corrigida): **23 de 41 iguais; os 18 que diferem são os de propósito** — kiting recusado, **kiting, produção, embalagem e sanar com clique duplo (2 gravações antes, 1 depois)**, kiting/produção/embalagem em lote recusados (**antes**: seguia e avisava o Almoxarifado; **depois**: para na 1ª), sanar pendência e serralheria recusados, **reposição com a marca recusada** e **com o cadastro do item que não lê (antes: ia para Compras; depois: para)**, as três leituras que falham; **mais a janela "Ver detalhes" (um texto de progresso que muda com o relógio)**. Iguais: a lista, a busca, o lote, o menu, a faixa de prioridades, todas as janelas abertas, **os caminhos que gravam com sucesso** (kiting, kiting em lote, produção, com pendência, embalagem, lotes, sanar pendência, sanar serralheria, reposição para OFI e para Compras), a OFI recusada e a lista vazia. As gravações diferem só em `tempo_pcp_horas` (relógio), mascarado nas duas. `npx vite build` ok.
+
+**O que ficou de fora:** a leitura das **pendências de fabricação/compra** (`indicePendencias`, em `OpPendencias.tsx`) e a reserva de estoque (`reservarParaOp`, `Estoque.tsx`) **não foram revistas** (outros arquivos).
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.

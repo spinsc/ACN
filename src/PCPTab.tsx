@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { soEnvio, fluxoLabel, fluxoEfetivo, STATUS_EMBALAGEM, SERRALHERIA_SANADO } from './FluxoEntrega';
 import { indicePendencias, ChecklistPendencias, travaConclusaoProducao, liberaveisPeloPcp } from './OpPendencias';
@@ -12,7 +12,7 @@ import DemandaAvulsaPanel from './DemandaAvulsaPanel';
 import { FabricacaoInternaEditor, gerarDemandasFabricacao, fabricacaoVazia, temFabricacao, sugerirFabricacao, itemVazio, SETORES_FABRICACAO } from './DemandaItens';
 import { ModalDevolverOp } from './DevolverOp';
 import { confirmar } from './Feedback';
-import { MenuAcoes, Botao, diaBR } from './Interface';
+import { MenuAcoes, Botao, Faixa, diaBR } from './Interface';
 import { reservarParaOp, textoPedidosDaReserva } from './Estoque';
 
 
@@ -102,6 +102,18 @@ export default function PCPTab({ currentUser }) {
 
   useEffect(() => { fetchAll(); const t = setInterval(()=>fetchAll(true),30000); return ()=>clearInterval(t); }, []);
 
+  // Etapa 7.52 (06/10/2026): leitura que falha não pode parecer "nenhuma OP em triagem" nem "nada em falta" (e a atualização de
+  // 30 s que falha não pode esvaziar a tela): cada bloco só troca o que já tinha quando a leitura dele deu certo.
+  const [erroLeitura, setErroLeitura] = useState('');
+  // 7.52: um clique duplo em "Liberar …" gravava duas vezes (duas linhas de histórico, dois avisos, duas reservas de estoque).
+  // Uma ação por vez, por OP e tipo.
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
+  };
+
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
     const [oplsRes, faltaRes, serralheriaRes, solicRes] = await Promise.all([
@@ -115,11 +127,13 @@ export default function PCPTab({ currentUser }) {
       supabase.from('almoxarifado_solicitacoes_reposicao').select('*')
         .eq('status', 'Aguardando Liberação PCP').order('criado_em', { ascending: false }),
     ]);
-    setOpls(oplsRes.data || []);
-    setOplsFalta(faltaRes.data || []);
+    const falhas = [oplsRes, faltaRes, serralheriaRes, solicRes].map(r => r.error).filter(Boolean);
+    setErroLeitura(falhas.length ? falhas[0].message : '');
+    if (!oplsRes.error) setOpls(oplsRes.data || []);
+    if (!faltaRes.error) setOplsFalta(faltaRes.data || []);
     carregarPendenciasAbertas();
-    setOplsSerralheria(serralheriaRes.data || []);
-    setSolicitacoesAlmox(solicRes.data || []);
+    if (!serralheriaRes.error) setOplsSerralheria(serralheriaRes.data || []);
+    if (!solicRes.error) setSolicitacoesAlmox(solicRes.data || []);
     if (!silent) setLoading(false);
   };
 
@@ -130,8 +144,10 @@ export default function PCPTab({ currentUser }) {
     setLiberandoSolic(sol.id);
     const agora = new Date().toISOString();
     const nome = currentUser?.nome || currentUser?.email || 'PCP';
-    const { data: itemRow } = await supabase.from('cadastro_itens')
+    const { data: itemRow, error: erroItem } = await supabase.from('cadastro_itens')
       .select('origem_producao,setor_fabricante').eq('id', sol.item_id).maybeSingle();
+    // 7.52: sem ler o cadastro do item a solicitação ia sempre para Compras, mesmo quando o item é fabricado aqui dentro (OFI)
+    if (erroItem) { alert('Não foi possível ler o cadastro do item (' + erroItem.message + '). A solicitação não foi liberada.'); setLiberandoSolic(null); return; }
 
     if (itemRow?.origem_producao === 'interna' && itemRow?.setor_fabricante) {
       const { data: ofi, error } = await supabase.from('ofis').insert([{
@@ -144,9 +160,11 @@ export default function PCPTab({ currentUser }) {
         criado_por: sol.criado_por, criado_por_nome: sol.criado_por_nome,
       }]).select('id').single();
       if (error) { alert('Erro ao criar OFI: ' + error.message); setLiberandoSolic(null); return; }
-      await supabase.from('almoxarifado_solicitacoes_reposicao').update({
+      const { error: erroSol } = await supabase.from('almoxarifado_solicitacoes_reposicao').update({
         status: 'Roteado OFI', ofi_id: ofi.id, liberado_por_nome: nome, liberado_em: agora,
       }).eq('id', sol.id);
+      // 7.52: a OFI já nasceu; se a solicitação não for marcada, ela continua na fila e liberar de novo abriria uma segunda OFI
+      if (erroSol) alert('A OFI foi aberta, mas a solicitação não foi marcada como liberada (' + erroSol.message + '). NÃO libere de novo: abriria uma segunda OFI.');
       notificarEvento('pcp_libera_reposicao', `PCP liberou reposição de "${sol.item_nome}" — OFI aberta para ${itemRow.setor_fabricante}. Liberado por: ${nome}`);
     } else {
       const { data: pedido, error } = await supabase.from('pcp_pedidos_compra').insert([{
@@ -159,9 +177,11 @@ export default function PCPTab({ currentUser }) {
         data_criacao: agora,
       }]).select('id').single();
       if (error) { alert('Erro ao criar pedido de compra: ' + error.message); setLiberandoSolic(null); return; }
-      await supabase.from('almoxarifado_solicitacoes_reposicao').update({
+      const { error: erroSol } = await supabase.from('almoxarifado_solicitacoes_reposicao').update({
         status: 'Roteado Compras', pedido_compra_id: pedido.id, liberado_por_nome: nome, liberado_em: agora,
       }).eq('id', sol.id);
+      // 7.52: o pedido de compra já nasceu; liberar de novo abriria um segundo pedido
+      if (erroSol) alert('O pedido de compra foi aberto, mas a solicitação não foi marcada como liberada (' + erroSol.message + '). NÃO libere de novo: abriria um segundo pedido.');
       notificarEvento('pcp_libera_reposicao', `PCP liberou reposição de "${sol.item_nome}" — pedido enviado a Compras. Liberado por: ${nome}`);
     }
     setLiberandoSolic(null);
@@ -172,7 +192,8 @@ export default function PCPTab({ currentUser }) {
     setSanandoSerralheria(opl.id);
     const agora = new Date().toISOString();
     // 'Sanado' é o passo final da liberação parcial de BOM (ver SERRALHERIA_SANADO em FluxoEntrega.ts)
-    await supabase.from('oples').update({ serralheria_status: SERRALHERIA_SANADO }).eq('id', opl.id);
+    const { error: erroSan } = await supabase.from('oples').update({ serralheria_status: SERRALHERIA_SANADO }).eq('id', opl.id);
+    if (erroSan) { alert(`Não foi possível sanar a pendência de Serralheria da OP ${opl.opl}: ${erroSan.message}`); setSanandoSerralheria(null); return; }   // 7.52
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
       evento: `PCP sanou a pendência de Serralheria (serviço concluído e conferido).`,
@@ -193,10 +214,11 @@ export default function PCPTab({ currentUser }) {
     setPendPorOp(mapa);
     const ids = [...mapa.keys()];
     if (!ids.length) { setOplsPendencia([]); return; }
-    const { data } = await supabase.from('oples')
+    const { data, error } = await supabase.from('oples')
       .select('id,opl,cliente_nome,modelo,chassi,placa,status_geral,status_almox,pendencias_kit,quantidade,fluxo_entrega,tipo_projeto')
       .in('id', ids)
       .not('status_geral', 'in', '("Faturado","Faturado e Disponivel para Entrega","Cancelado")');
+    if (error) { setErroLeitura(error.message); return; }   // 7.52: fica o bloco que já estava na tela
     // só as que realmente têm etapa faltando
     setOplsPendencia((data || []).filter(o => travaConclusaoProducao(mapa.get(String(o.id)) || [], o).length));
   };
@@ -205,12 +227,14 @@ export default function PCPTab({ currentUser }) {
     const agora = new Date().toISOString();
     const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
     const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
-    await supabase.from('oples').update({
+    const { error: erroLib } = await supabase.from('oples').update({
       status_geral: 'Aguardando Inicio Producao',
       data_liberacao_pcp: agora,
       liberado_producao_por: currentUser?.nome,
       ...(tempoPcp != null ? { tempo_pcp_horas: tempoPcp } : {}),
     }).eq('id', opl.id);
+    // 7.52: a gravação recusada seguia como se a OP tivesse ido para a Produção (WhatsApp enviado, linha sumindo só na tela)
+    if (erroLib) { alert(`Não foi possível liberar a OP ${opl.opl} para a Produção: ${erroLib.message}`); return; }
     logChange({ module: 'pcp', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguardando Inicio Producao' }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -222,6 +246,7 @@ export default function PCPTab({ currentUser }) {
     notificarEvento('pcp_libera_producao', msg.oplEnviada(opl.opl,'Produção',currentUser?.nome));
     fetchAll();
   };
+  const liberarProducaoUmaVez = (opl) => umaVez('producao-' + opl.id, liberarProducao)(opl);
 
   // OP de envio não passa por produção: do PCP ela vai para a embalagem no
   // Almoxarifado, que pesa, mede e abre a cotação de frete (ver FluxoEntrega.ts).
@@ -231,12 +256,13 @@ export default function PCPTab({ currentUser }) {
     const agora = new Date().toISOString();
     const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
     const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
-    await supabase.from('oples').update({
+    const { error: erroEmb } = await supabase.from('oples').update({
       status_geral: STATUS_EMBALAGEM,
       data_liberacao_pcp: agora,
       liberado_producao_por: currentUser?.nome,
       ...(tempoPcp != null ? { tempo_pcp_horas: tempoPcp } : {}),
     }).eq('id', opl.id);
+    if (erroEmb) { alert(`Não foi possível liberar a embalagem da OP ${opl.opl}: ${erroEmb.message}`); return; }   // 7.52
     logChange({ module: 'pcp', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: STATUS_EMBALAGEM }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -248,6 +274,7 @@ export default function PCPTab({ currentUser }) {
     notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl, 'Almoxarifado (embalagem)', currentUser?.nome));
     fetchAll();
   };
+  const liberarEmbalagemUmaVez = (opl) => umaVez('embalagem-' + opl.id, liberarEmbalagem)(opl);
 
   const liberarEmbalagemLote = async (grupo) => {
     const pendentes = grupo.irmaos.filter(o => prontoParaEmbalagem(o));
@@ -256,18 +283,24 @@ export default function PCPTab({ currentUser }) {
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {
+      // 7.52: para na primeira que não grava; histórico e WhatsApp valem só para as que gravaram
+      const liberadas = [];
       for (const opl of pendentes) {
-        await supabase.from('oples').update({
+        const { error } = await supabase.from('oples').update({
           status_geral: STATUS_EMBALAGEM, data_liberacao_pcp: agora, liberado_producao_por: currentUser?.nome,
         }).eq('id', opl.id);
+        if (error) { alert(`Não foi possível liberar a embalagem da OP ${opl.opl}: ${error.message}\n\nO lote parou aqui: ${liberadas.length} unidade(s) foram liberadas e as demais continuam como estavam.`); break; }
+        liberadas.push(opl);
       }
-      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+      if (liberadas.length) {
+      await supabase.from('logs_movimentacao_opl').insert(liberadas.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-        evento: `OP de envio liberada para embalagem em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
+        evento: `OP de envio liberada para embalagem em lote (${liberadas.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
         status_anterior: opl.status_geral, status_novo: STATUS_EMBALAGEM,
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('pcp_libera_almox', `*Embalagem liberada em lote* — ${grupo.base}\n${pendentes.length} OPs de envio no Almoxarifado.\nPor: ${currentUser?.nome}`);
+      notificarEvento('pcp_libera_almox', `*Embalagem liberada em lote* — ${grupo.base}\n${liberadas.length} OPs de envio no Almoxarifado.\nPor: ${currentUser?.nome}`);
+      }
     } finally {
       setProcessandoLote(false);
       fetchAll();
@@ -283,11 +316,13 @@ export default function PCPTab({ currentUser }) {
 
   const liberarAlmox = async (opl) => {
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroAlm } = await supabase.from('oples').update({
       status_geral: 'Aguardando Almox',
       data_liberacao_pcp: agora,
       liberado_producao_por: currentUser?.nome,
     }).eq('id', opl.id);
+    // 7.52: a gravação recusada seguia: o material era RESERVADO para uma OP que não saiu do PCP e o Almoxarifado era avisado
+    if (erroAlm) { alert(`Não foi possível liberar a OP ${opl.opl} para o Kiting: ${erroAlm.message}`); return false; }
     logChange({ module: 'pcp', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral }, newRow: { status_geral: 'Aguardando Almox' }, user: currentUser });
     await supabase.from('logs_movimentacao_opl').insert([{
@@ -304,6 +339,7 @@ export default function PCPTab({ currentUser }) {
     else if (res?.pedidos?.length) alert(textoPedidosDaReserva(res.pedidos));
     notificarEvento('pcp_libera_almox', msg.oplEnviada(opl.opl,'Almoxarifado (Kiting)',currentUser?.nome));
     fetchAll();
+    return true;
   };
 
   // Numero base de uma OP desmembrada: "A1419.2607/02" -> "A1419.2607".
@@ -373,11 +409,14 @@ export default function PCPTab({ currentUser }) {
     setFabPedidos(depois);
   };
   const alternarSugestao = (a, i) => aplicarSugestoes([i], !fabPedidos.has(i));
-  const confirmarKiting = async () => {
+  const confirmarKiting = umaVez('kiting', async () => {
     const { ops, grupo } = modalKiting;
+    if (liberandoKiting) return;   // 7.52: clique duplo
     setLiberandoKiting(true);
     try {
-      if (grupo) await liberarKitingLote(grupo, true); else await liberarAlmox(ops[0]);
+      const liberou = grupo ? await liberarKitingLote(grupo, true) : await liberarAlmox(ops[0]);
+      // 7.52: se a liberação não gravou, não abre demanda de fabricação e a janela fica aberta para tentar de novo
+      if (!liberou) { setLiberandoKiting(false); return; }
       if (temFabricacao(fabKiting)) {
         const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabKiting, ops, origem: 'pcp_kiting', currentUser, pintura: pinturaKiting });
         if (criadas.length) await supabase.from('logs_movimentacao_opl').insert(ops.map(opl => ({
@@ -393,7 +432,7 @@ export default function PCPTab({ currentUser }) {
       setModalKiting(null);
       fetchAll();
     }
-  };
+  });
 
   const liberarKitingLote = async (grupo, jaConfirmado = false) => {
     const pendentes = grupo.irmaos.filter(o => o.status_geral === 'Em Espera PCP');
@@ -401,14 +440,19 @@ export default function PCPTab({ currentUser }) {
     if (!jaConfirmado && !await confirmar(`Liberar kiting (Almoxarifado) para ${pendentes.length} unidade(s) de ${grupo.base}?`)) return;
     setProcessandoLote(true);
     const agora = new Date().toISOString();
+    let liberouAlguma = false;
     try {
       const falhasReserva: string[] = [], pedidosDoLote: string[] = [];
+      // 7.52: para na primeira que não grava; reserva, histórico e WhatsApp valem só para as que gravaram
+      const liberadas = [];
       for (const opl of pendentes) {
-        await supabase.from('oples').update({
+        const { error: erroKit } = await supabase.from('oples').update({
           status_geral: 'Aguardando Almox',
           data_liberacao_pcp: agora,
           liberado_producao_por: currentUser?.nome,
         }).eq('id', opl.id);
+        if (erroKit) { alert(`Não foi possível liberar a OP ${opl.opl} para o Kiting: ${erroKit.message}\n\nO lote parou aqui: ${liberadas.length} unidade(s) foram liberadas e as demais continuam como estavam.`); break; }
+        liberadas.push(opl);
         // mesma reserva da liberação individual — o lote não pode ser um
         // caminho por onde o material escapa sem dono
         const res = await reservarParaOp({ oplId: opl.id, currentUser });
@@ -426,17 +470,21 @@ export default function PCPTab({ currentUser }) {
       if (falhasReserva.length) {
         alert(`As OPs foram liberadas, mas a reserva de estoque falhou em:\n${falhasReserva.join('\n')}`);
       }
-      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
-        opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-        evento: `Liberado para Kiting em lote (${pendentes.length} OPs do grupo ${grupo.base}). PCP: ${currentUser?.nome}.`,
-        status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
-        usuario_nome: currentUser?.nome, data_hora: agora,
-      })));
-      notificarEvento('pcp_libera_almox', `*Kiting liberado em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para o Almoxarifado.\nPor: ${currentUser?.nome}`);
+      if (liberadas.length) {
+        await supabase.from('logs_movimentacao_opl').insert(liberadas.map(opl => ({
+          opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
+          evento: `Liberado para Kiting em lote (${liberadas.length} OPs do grupo ${grupo.base}). PCP: ${currentUser?.nome}.`,
+          status_anterior: opl.status_geral, status_novo: 'Aguardando Almox',
+          usuario_nome: currentUser?.nome, data_hora: agora,
+        })));
+        notificarEvento('pcp_libera_almox', `*Kiting liberado em lote* — ${grupo.base}\n${liberadas.length} OPs enviadas para o Almoxarifado.\nPor: ${currentUser?.nome}`);
+      }
+      liberouAlguma = liberadas.length > 0;
     } finally {
       setProcessandoLote(false);
       fetchAll();
     }
+    return liberouAlguma;
   };
 
   const liberarProducaoLote = async (grupo) => {
@@ -446,23 +494,29 @@ export default function PCPTab({ currentUser }) {
     setProcessandoLote(true);
     const agora = new Date().toISOString();
     try {
+      // 7.52: para na primeira que não grava; histórico e WhatsApp valem só para as que gravaram
+      const liberadas = [];
       for (const opl of pendentes) {
         const inicioPcp = opl.data_liberacao_bom ? new Date(opl.data_liberacao_bom) : null;
         const tempoPcp = inicioPcp ? horasUteis(inicioPcp, new Date()) : null;
-        await supabase.from('oples').update({
+        const { error } = await supabase.from('oples').update({
           status_geral: 'Aguardando Inicio Producao',
           data_liberacao_pcp: agora,
           liberado_producao_por: currentUser?.nome,
           ...(tempoPcp != null ? { tempo_pcp_horas: tempoPcp } : {}),
         }).eq('id', opl.id);
+        if (error) { alert(`Não foi possível liberar a OP ${opl.opl} para a Produção: ${error.message}\n\nO lote parou aqui: ${liberadas.length} unidade(s) foram liberadas e as demais continuam como estavam.`); break; }
+        liberadas.push(opl);
       }
-      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+      if (liberadas.length) {
+      await supabase.from('logs_movimentacao_opl').insert(liberadas.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
-        evento: `OP liberada para Producao em lote (${pendentes.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
+        evento: `OP liberada para Producao em lote (${liberadas.length} OPs do grupo ${grupo.base}) por ${currentUser?.nome}.`,
         status_anterior: opl.status_geral, status_novo: 'Aguardando Inicio Producao',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('pcp_libera_producao', `*Produção liberada em lote* — ${grupo.base}\n${pendentes.length} OPs enviadas para Produção.\nPor: ${currentUser?.nome}`);
+      notificarEvento('pcp_libera_producao', `*Produção liberada em lote* — ${grupo.base}\n${liberadas.length} OPs enviadas para Produção.\nPor: ${currentUser?.nome}`);
+      }
     } finally {
       setProcessandoLote(false);
       fetchAll();
@@ -471,11 +525,12 @@ export default function PCPTab({ currentUser }) {
 
   const sanarPendenciaPCP = async (opl) => {
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroSanar } = await supabase.from('oples').update({
       status_almox: 'Kit OK',
       status_geral: 'Kit OK - Aguardando PCP',
       obs_almox: 'Pendencia/falta sanada pelo PCP.',
     }).eq('id', opl.id);
+    if (erroSanar) { alert(`Não foi possível sanar a pendência da OP ${opl.opl}: ${erroSanar.message}`); return; }   // 7.52
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'PCP',
       evento: `Pendencia/falta de material sanada. Kit liberado. PCP: ${currentUser?.nome}`,
@@ -484,6 +539,7 @@ export default function PCPTab({ currentUser }) {
     }]);
     fetchAll();
   };
+  const sanarPendenciaPCPUmaVez = (opl) => umaVez('sanar-' + opl.id, sanarPendenciaPCP)(opl);
 
   const statusCor = (s) => ({
     'Em Espera PCP':       '#f59e0b',
@@ -536,6 +592,13 @@ export default function PCPTab({ currentUser }) {
 
   return (
     <div>
+      {erroLeitura && (
+        <div style={{ marginBottom: 12 }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
+            Não foi possível ler tudo do PCP ({erroLeitura}). Isso não quer dizer que não haja OP em triagem, material em falta ou solicitação; os blocos abaixo mostram a última leitura que deu certo.
+          </Faixa>
+        </div>
+      )}
       {temBlocoDeAlerta && (
         <div data-pcp-faixa style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: .4, marginBottom: 6 }}>O que pede o PCP agora</div>
@@ -632,14 +695,14 @@ export default function PCPTab({ currentUser }) {
                           {podeLiberar(o) && (
                             <button className="acn-btn"
                               style={{background: o.status_almox==='Kit OK' ? '#22c55e' : '#f97316'}}
-                              onClick={()=>liberarProducao(o)}>
+                              onClick={()=>liberarProducaoUmaVez(o)}>
                               {o.status_almox==='Kit OK' ? 'LIBERAR PRODUCAO' : 'LIBERAR C/ PENDENCIA'}
                             </button>
                           )}
                           {prontoParaEmbalagem(o) && (
                             <button className="acn-btn" style={{background:'#0f766e'}}
                               title="OP de envio não passa por produção: vai para a embalagem no Almoxarifado"
-                              onClick={()=>liberarEmbalagem(o)}>
+                              onClick={()=>liberarEmbalagemUmaVez(o)}>
                               📦 LIBERAR EMBALAGEM
                             </button>
                           )}
@@ -760,7 +823,7 @@ export default function PCPTab({ currentUser }) {
                     <td>
                       <div style={{display:'flex',gap:4}}>
                         <button className="acn-btn" style={{background:'#22c55e',fontSize:10}}
-                          onClick={()=>sanarPendenciaPCP(o)}>
+                          onClick={()=>sanarPendenciaPCPUmaVez(o)}>
                           SANAR PENDENCIA
                         </button>
                         <MenuAcoes rotulo="Mais ações da OP" itens={[{ rotulo: '👁 Ver detalhes', onClick: () => setModalVer(o) }]} />
@@ -995,7 +1058,7 @@ export default function PCPTab({ currentUser }) {
                         {prontoParaEmbalagem(o) && (
                           <button className="acn-btn" style={{background:'#0f766e',fontWeight:700}}
                             title="Kit conferido: segue para o Almoxarifado pesar, medir, embalar e abrir a cotação de frete"
-                            onClick={()=>liberarEmbalagem(o)}>
+                            onClick={()=>liberarEmbalagemUmaVez(o)}>
                             📦 LIBERAR EMBALAGEM
                           </button>
                         )}
