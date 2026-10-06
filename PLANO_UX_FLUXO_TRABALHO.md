@@ -2493,6 +2493,22 @@ Existia **antes** da migração visual (a 12c1 só trocou a seta duplicada).
 
 **O que ficou de fora:** `PainelEstoque`, `PainelFabricacaoRecebimento`, `ConferenciaKit` e `ChecklistPendencias` (outros arquivos, com leituras e gravações próprias) **não foram revistos**; a gravação do acompanhamento da OP na embalagem (`op_acompanhamentos`) segue sem checar erro (é recado, não estado).
 
+### ✅ Etapa 7.51 — Engenharia: iniciar, liberar BOM, devolver, observações e lotes seguiam como se tivessem gravado quando o banco recusava; a data de entrada saía um dia antes
+
+**Feito em:** 06/10/2026 (sessão autônoma da tarde). **Achados** ao ler `EngenhariaTab.tsx` para migrá-lo (12e13), **corrigidos antes** do "antes" da migração visual, em commit à parte. **Nenhum dado foi alterado.**
+
+**Os defeitos** (`EngenhariaTab.tsx`):
+
+1. **Nenhuma gravação da tela olhava a resposta do banco.** Se a OP não gravasse: **"Liberar BOM"** fechava a janela, **avisava o PCP no WhatsApp** e abria as demandas de fabricação com a OP ainda na Engenharia; **"Iniciar"** fechava a janela e abria a demanda de desenvolvimento sem a análise ter começado; **"Devolver ao Comercial"** avisava o Comercial por WhatsApp sem a OP ter voltado; as **observações** (da OP e do acompanhamento de OS veiculares) sumiam da janela como se salvas. Agora **cada uma avisa o motivo e para** (janela aberta, sem WhatsApp, sem demanda). O histórico de movimentação que falha avisa (a OP já mudou). Na **liberação parcial para a Serralheria**, se a demanda abre mas a marca "Liberado Parcial" não grava na OP, a pessoa é avisada **para não enviar de novo** (abriria uma segunda demanda).
+2. **Os lotes** ("Iniciar em lote" e "Liberar BOM em lote") seguiam para as unidades seguintes e **gravavam o histórico e o WhatsApp de todas** mesmo sem nenhuma ter gravado. Agora **o lote para na primeira que falha**, diz até onde foi, e **histórico, WhatsApp e demandas de fabricação valem só para as que gravaram** (com o número real).
+3. **Clique duplo** em "Confirmar início", "Liberar BOM" e "Devolver" **gravava duas vezes** (duas linhas de histórico e dois WhatsApp para o PCP/Comercial). Agora **uma ação por vez, por tipo**.
+4. **Leituras que falhavam pareciam "Nenhuma OP aguardando Engenharia"** (e a atualização de 30 s que falhasse esvaziava a lista): agora faixa vermelha com o motivo e "Tentar de novo", **mantendo a lista que já estava na tela**; o mesmo para o acompanhamento de OS veiculares.
+5. **R16 — a "Data Entrada" de cada OP saía um dia antes e com hora ("29/09/2026, 21:00:00" para o dia 30/09).** `data_entrada` é coluna do tipo *date* e o formatador usava `new Date(x).toLocaleString`. Passa a usar `diaBR` (o dia vem do texto): **"30/09/2026"**. *(A 7.44 tinha conferido só a `data_abertura` da OS neste arquivo; a data de entrada da lista tinha ficado de fora.)* **A coluna "Inicio" (`data_inicio_engenharia`, data com hora) está certa e não mudou.**
+
+**Como foi testado** (navegador, **gravações bloqueadas**, dado inventado ZZ — 9 OPs entre espera, análise, devolvida, lote, envio direto, atrasada há 48 h, liberada parcial e pausada, e uma OS veicular; `eng.cjs`, 44 cenários, a versão de antes × a corrigida): com a data de entrada normalizada nas duas, **29 de 44 iguais; os 15 que diferem são os de propósito** — iniciar recusado, **iniciar com clique duplo (2 gravações antes, 1 depois)**, iniciar em lote recusado, liberar BOM recusado, **liberar BOM com clique duplo (2 PATCH e 4 WhatsApp antes; 1 e 2 depois)**, liberar em lote recusado, observação recusada (OP e OS), liberação parcial com a marca recusada, devolver recusado, **devolver com clique duplo (2 históricos antes, 1 depois)** e as duas leituras que falham; **mais 2 (liberar BOM e liberar BOM em lote, confirmados) que diferem só em `tempo_engenharia_horas`, calculado com o relógio do momento**. Iguais: a lista, a busca, o lote, os menus, todas as janelas abertas, **os caminhos que gravam com sucesso** (iniciar, com desenvolvimento, em lote, liberar BOM, liberar em lote, observação, liberação parcial, devolver, observação da OS), as validações e as sub-abas Desenvolvimento e Horas/Tarefas. `npx vite build` ok.
+
+**O que ficou de fora:** `pausarOpl`/`retomarOpl` (`PausaWidget.tsx`) e `criarDemandaDesenvolvimento` (`DesenvolvimentoPecasTab.tsx`) **não foram revistos** (outros arquivos).
+
 ### ✅ Etapa 8 — Painel "Esperando a sua aprovação" em Compras
 
 **Feito em:** 30/09/2026.

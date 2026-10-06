@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase } from './supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { OplMovimentadas, DemandaFooter, DemandasSetorWidget, OplDetalheModal, LinkOpl, BuscaOplInput, filtrarOpls, VeiculoOuEnvio } from './AcnTabShared';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import DemandaAvulsaPanel, { NovaDemandaModal } from './DemandaAvulsaPanel';
@@ -21,7 +21,7 @@ import { BomEditor, CopiarBomDeOutraOp, bomPreenchida, sugerirBom } from './OpIt
 import { PainelConferenciaEstrutura } from './AplicarEstrutura';
 import { AvisoRespostasDiferentes } from './RespostasEmLote';
 import { indicePendencias } from './OpPendencias';
-import { MenuAcoes } from './Interface';
+import { MenuAcoes, Faixa, Botao, diaBR } from './Interface';
 
 const semDado = (v) => !v || !String(v).trim();
 
@@ -194,21 +194,38 @@ export default function EngenhariaTab({ currentUser }) {
 
   useEffect(() => { fetchAll(); fetchOsAcomp(); const t = setInterval(()=>{ fetchAll(true); fetchOsAcomp(); }, 30000); return () => clearInterval(t); }, []);
 
+  // Etapa 7.51 (06/10/2026): leitura que falha não pode parecer "nenhuma OP aguardando Engenharia" (e a atualização de 30 s que
+  // falha não pode esvaziar a lista que já estava na tela).
+  const [erroLeitura, setErroLeitura] = useState('');
+  const [erroOsAcomp, setErroOsAcomp] = useState('');
   const fetchAll = async (silent=false) => {
     if (!silent) setLoading(true);
-    const { data } = await supabase.from('oples').select('*')
+    const { data, error } = await supabase.from('oples').select('*')
       .in('status_geral', ['Em Espera Engenharia', 'Em Analise Engenharia', 'Devolvida para Engenharia'])
       .order('data_entrada', { ascending: false });
+    if (error) { setErroLeitura(error.message); if (!silent) setLoading(false); return; }
+    setErroLeitura('');
     setOpls(data || []);
     if (!silent) setLoading(false);
   };
 
   const fetchOsAcomp = async () => {
-    const { data } = await supabase.from('sac_ordens_servico').select('*')
+    const { data, error } = await supabase.from('sac_ordens_servico').select('*')
       .eq('acompanhamento_engenharia', true)
       .not('status', 'in', '("Entregue","Reprovado")')
       .order('data_abertura', { ascending: false });
+    if (error) { setErroOsAcomp(error.message); return; }
+    setErroOsAcomp('');
     setOsAcomp(data || []);
+  };
+
+  // 7.51: um clique duplo em "Confirmar", "Liberar BOM" ou "Devolver" gravava duas vezes (duas linhas de histórico e dois
+  // avisos no WhatsApp). Uma ação por vez, por tipo.
+  const emAcao = useRef(new Set());
+  const umaVez = (chave, fn) => async (...args) => {
+    if (emAcao.current.has(chave)) return;
+    emAcao.current.add(chave);
+    try { return await fn(...args); } finally { emAcao.current.delete(chave); }
   };
 
   const addObsAcompanhamento = async () => {
@@ -216,7 +233,8 @@ export default function EngenhariaTab({ currentUser }) {
     const os = modalObsAcomp;
     const logs = Array.isArray(os.logs_acompanhamento_eng) ? [...os.logs_acompanhamento_eng] : [];
     logs.push({ texto: novaObsAcomp, usuario: currentUser?.nome || currentUser?.email, hora: new Date().toISOString() });
-    await supabase.from('sac_ordens_servico').update({ logs_acompanhamento_eng: logs }).eq('id', os.id);
+    const { error } = await supabase.from('sac_ordens_servico').update({ logs_acompanhamento_eng: logs }).eq('id', os.id);
+    if (error) { alert('Não foi possível salvar a observação: ' + error.message); return; }   // 7.51: seguia como se tivesse salvo
     setNovaObsAcomp(''); setModalObsAcomp(null); fetchOsAcomp();
   };
 
@@ -227,39 +245,43 @@ export default function EngenhariaTab({ currentUser }) {
     setDescDesenvolvimento('');
   };
 
-  const confirmarIniciarEng = async () => {
+  const confirmarIniciarEng = umaVez('iniciar', async () => {
     if (!responsavelEng.trim()) { alert('Informe o responsavel pela execucao!'); return; }
     if (precisaDesenvolvimento && !descDesenvolvimento.trim()) { alert('Descreva o que precisa ser desenvolvido!'); return; }
     const opl = modalIniciar;
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroIni } = await supabase.from('oples').update({
       status_geral: 'Em Analise Engenharia',
       responsavel_engenharia: responsavelEng,
       data_inicio_engenharia: agora,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    // 7.51: gravação recusada seguia como se a análise tivesse começado (janela fechada, demanda de desenvolvimento aberta)
+    if (erroIni) { alert(`Não foi possível iniciar a análise da OP ${opl.opl}: ${erroIni.message}`); return; }
     logChange({ module: 'engenharia', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral, responsavel_engenharia: opl.responsavel_engenharia },
       newRow: { status_geral: 'Em Analise Engenharia', responsavel_engenharia: responsavelEng }, user: currentUser });
-    await supabase.from('logs_movimentacao_opl').insert([{
+    const { error: erroLogIni } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
       evento: `Inicio da analise de engenharia. Responsavel: ${responsavelEng}`,
       status_anterior: opl.status_geral, status_novo: 'Em Analise Engenharia',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    if (erroLogIni) alert(`A análise foi iniciada, mas o histórico de movimentação não foi gravado: ${erroLogIni.message}`);
     if (precisaDesenvolvimento) {
       await criarDemandaDesenvolvimento({ opl, descricao: descDesenvolvimento.trim(), currentUser });
     }
     setModalIniciar(null); setResponsavelEng(''); setPrecisaDesenvolvimento(false); setDescDesenvolvimento('');
     fetchAll();
-  };
+  });
 
   const addObs = async () => {
     if (!novaObs.trim()) return;
     const opl = modalObs;
     const logs = opl.logs_engenharia || [];
     logs.push({ texto: novaObs, usuario: currentUser?.nome, hora: new Date().toISOString() });
-    await supabase.from('oples').update({ logs_engenharia: logs }).eq('id', opl.id);
+    const { error } = await supabase.from('oples').update({ logs_engenharia: logs }).eq('id', opl.id);
+    if (error) { alert('Não foi possível salvar a observação: ' + error.message); return; }   // 7.51
     setNovaObs(''); setModalObs(null); fetchAll();
   };
 
@@ -290,7 +312,7 @@ export default function EngenhariaTab({ currentUser }) {
       'Liberar a BOM mesmo assim? As demandas seguem abertas, e o Almoxarifado vai encontrá-las na hora de fechar o kit.');
   };
 
-  const liberarBOM = async () => {
+  const liberarBOM = umaVez('liberar-bom', async () => {
     const opl = modalBom;
     const bom = bomPreenchida(bomLinhas);
     if (!bom.length) { alert('Preencha a BOM com pelo menos 1 item: o material que será usado nesta OP.'); return; }
@@ -298,7 +320,7 @@ export default function EngenhariaTab({ currentUser }) {
     const agora = new Date().toISOString();
     const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
     const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : null;
-    await supabase.from('oples').update({
+    const { error: erroBom } = await supabase.from('oples').update({
       status_geral: 'Em Espera PCP',
       status_bom: 'BOM Liberado',
       obs_liberacao_bom: obsBom,
@@ -307,15 +329,19 @@ export default function EngenhariaTab({ currentUser }) {
       tempo_engenharia_horas: tempo,
       pausado: false, data_pausa: null, tempo_pausado_horas: 0,
     }).eq('id', opl.id);
+    // 7.51: a gravação recusada seguia como se a BOM tivesse sido liberada: aviso ao PCP no WhatsApp, demandas de fabricação abertas e
+    // a janela fechada com a OP ainda na Engenharia. Agora para aqui e a janela fica aberta com a BOM digitada.
+    if (erroBom) { alert(`Não foi possível liberar a BOM da OP ${opl.opl}: ${erroBom.message}`); return; }
     logChange({ module: 'engenharia', entityType: 'oples', entityId: opl.id, changeType: 'UPDATE',
       oldRow: { status_geral: opl.status_geral, status_bom: opl.status_bom, obs_liberacao_bom: opl.obs_liberacao_bom },
       newRow: { status_geral: 'Em Espera PCP', status_bom: 'BOM Liberado', obs_liberacao_bom: obsBom }, user: currentUser });
-    await supabase.from('logs_movimentacao_opl').insert([{
+    const { error: erroLogBom } = await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
       evento: `BOM liberado para PCP/Almoxarifado (${bom.length} item(ns)). Qtd: ${opl.quantidade||1} un. Obs: ${obsBom || 'Sem observacoes'}.`,
       status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
       usuario_nome: currentUser?.nome, data_hora: agora,
     }]);
+    if (erroLogBom) alert(`A BOM foi liberada, mas o histórico de movimentação não foi gravado: ${erroLogBom.message}`);
     notificarEvento('engenharia_libera_pcp', msg.oplEnviada(opl.opl,'PCP',currentUser?.nome));
     if (temFabricacao(fabBom)) {
       const { criadas, falhas } = await gerarDemandasFabricacao({ valor: fabBom, ops: [opl], origem: 'engenharia_bom', currentUser, pintura: pinturaBom });
@@ -327,7 +353,7 @@ export default function EngenhariaTab({ currentUser }) {
       if (falhas.length) alert('BOM liberada, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
     }
     setModalBom(null); setObsBom(''); setFabBom(fabricacaoVazia()); fetchAll();
-  };
+  });
 
   // Libera só a parte da Serralheria (metálica/estrutural), antecipando o
   // serviço sem esperar o resto do BOM ficar pronto. Não mexe no
@@ -351,7 +377,9 @@ export default function EngenhariaTab({ currentUser }) {
       logs_demanda: [{ texto: `Liberação parcial de BOM (Engenharia): ${obsSerralheria.trim()}`, usuario: currentUser?.nome, hora: agora }],
     }]);
     if (errDemanda) { alert('Erro ao criar demanda para Serralheria: ' + errDemanda.message); setEnviandoSerralheria(false); return; }
-    await supabase.from('oples').update({ serralheria_status: 'Pendente' }).eq('id', opl.id);
+    // 7.51: a demanda já nasceu; se a marca na OP não gravar, o selo "Liberado Parcial" não aparece e a conclusão da Serralheria não sincroniza
+    const { error: erroMarca } = await supabase.from('oples').update({ serralheria_status: 'Pendente' }).eq('id', opl.id);
+    if (erroMarca) alert(`A demanda foi aberta para a Serralheria, mas a OP não foi marcada como "Liberado Parcial": ${erroMarca.message}\n\nAvise o PCP/Admin: não envie de novo (abriria uma segunda demanda).`);
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
       evento: `Liberação parcial de BOM para Serralheria. Obs: ${obsSerralheria.trim()}`,
@@ -394,16 +422,23 @@ export default function EngenhariaTab({ currentUser }) {
     setIniciandoLote(true);
     const agora = new Date().toISOString();
     try {
+      // 7.51: para na primeira que não grava e diz até onde foi (antes seguia para as outras e gravava o histórico de todas)
+      const iniciadas = [];
       for (const opl of pendentes) {
-        await supabase.from('oples').update({
+        const { error } = await supabase.from('oples').update({
           status_geral: 'Em Analise Engenharia',
           responsavel_engenharia: currentUser?.nome,
           data_inicio_engenharia: agora,
         }).eq('id', opl.id);
+        if (error) {
+          alert(`Não foi possível iniciar a OP ${opl.opl}: ${error.message}\n\nO lote parou aqui: ${iniciadas.length} unidade(s) foram iniciadas e as demais continuam como estavam.`);
+          break;
+        }
+        iniciadas.push(opl);
       }
-      await supabase.from('logs_movimentacao_opl').insert(pendentes.map(opl => ({
+      if (iniciadas.length) await supabase.from('logs_movimentacao_opl').insert(iniciadas.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
-        evento: `Inicio de analise em lote (${pendentes.length} OPs do grupo ${grupo.base}). Responsavel: ${currentUser?.nome}.`,
+        evento: `Inicio de analise em lote (${iniciadas.length} OPs do grupo ${grupo.base}). Responsavel: ${currentUser?.nome}.`,
         status_anterior: opl.status_geral, status_novo: 'Em Analise Engenharia',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
@@ -423,10 +458,12 @@ export default function EngenhariaTab({ currentUser }) {
     setLiberandoLote(true);
     const agora = new Date().toISOString();
     try {
+      // 7.51: para na primeira OP que não grava; histórico, WhatsApp e demandas de fabricação só valem para as que gravaram
+      const liberadas = [];
       for (const opl of selecionados) {
         const inicio = opl.data_inicio_engenharia ? new Date(opl.data_inicio_engenharia) : null;
         const tempo = inicio ? Math.max(0, horasUteis(inicio, new Date()) - (Number(opl.tempo_pausado_horas) || 0)) : 0;
-        await supabase.from('oples').update({
+        const { error: erroLib } = await supabase.from('oples').update({
           status_geral: 'Em Espera PCP',
           status_bom: 'BOM Liberado',
           obs_liberacao_bom: obsBomLote,
@@ -437,17 +474,24 @@ export default function EngenhariaTab({ currentUser }) {
           data_inicio_engenharia: opl.data_inicio_engenharia || agora,
           pausado: false, data_pausa: null, tempo_pausado_horas: 0,
         }).eq('id', opl.id);
+        if (erroLib) {
+          alert(`Não foi possível liberar a BOM da OP ${opl.opl}: ${erroLib.message}\n\nO lote parou aqui: ${liberadas.length} unidade(s) foram liberadas e as demais continuam na Engenharia.`);
+          break;
+        }
+        liberadas.push(opl);
       }
-      await supabase.from('logs_movimentacao_opl').insert(selecionados.map(opl => ({
+      if (liberadas.length) {
+      await supabase.from('logs_movimentacao_opl').insert(liberadas.map(opl => ({
         opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
-        evento: `BOM liberado em lote (${selecionados.length} OPs do grupo ${modalBomLote.base}). Obs: ${obsBomLote || 'Sem observacoes'}.`,
+        evento: `BOM liberado em lote (${liberadas.length} OPs do grupo ${modalBomLote.base}). Obs: ${obsBomLote || 'Sem observacoes'}.`,
         status_anterior: opl.status_geral, status_novo: 'Em Espera PCP',
         usuario_nome: currentUser?.nome, data_hora: agora,
       })));
-      notificarEvento('engenharia_libera_pcp', `*BOM liberado em lote* — ${modalBomLote.base}\n${selecionados.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
+      notificarEvento('engenharia_libera_pcp', `*BOM liberado em lote* — ${modalBomLote.base}\n${liberadas.length} OPs enviadas para PCP.\nPor: ${currentUser?.nome}`);
       if (temFabricacao(fabBomLote)) {
-        const { falhas } = await gerarDemandasFabricacao({ valor: fabBomLote, ops: selecionados, origem: 'engenharia_bom', currentUser, pintura: pinturaBomLote });
+        const { falhas } = await gerarDemandasFabricacao({ valor: fabBomLote, ops: liberadas, origem: 'engenharia_bom', currentUser, pintura: pinturaBomLote });
         if (falhas.length) alert('BOM liberada, mas não foi possível abrir a demanda de fabricação:\n' + falhas.join('\n'));
+      }
       }
     } finally {
       setLiberandoLote(false);
@@ -456,13 +500,15 @@ export default function EngenhariaTab({ currentUser }) {
     }
   };
 
-  const devolverComercial = async () => {
+  const devolverComercial = umaVez('devolver', async () => {
     const opl = modalDevolver;
     const agora = new Date().toISOString();
-    await supabase.from('oples').update({
+    const { error: erroDev } = await supabase.from('oples').update({
       status_geral: 'Devolvida Comercial',
       obs_devolucao: obsDevolver,
     }).eq('id', opl.id);
+    // 7.51: gravação recusada seguia como se a OP tivesse voltado ao Comercial (WhatsApp enviado, janela fechada)
+    if (erroDev) { alert(`Não foi possível devolver a OP ${opl.opl}: ${erroDev.message}`); return; }
     await supabase.from('logs_movimentacao_opl').insert([{
       opl_id: opl.id, numero_opl: opl.opl, setor: 'Engenharia',
       evento: `OP devolvida para Comercial. Motivo: ${obsDevolver}`,
@@ -471,9 +517,11 @@ export default function EngenhariaTab({ currentUser }) {
     }]);
     notificarEvento('engenharia_devolve_comerc', msg.oplDevolvida(opl.opl,'Comercial',obsDevolver,currentUser?.nome));
     setModalDevolver(null); setObsDevolver(''); fetchAll();
-  };
+  });
 
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+  // R16 (06/10/2026): `data_entrada` é coluna do tipo *date*; `new Date('2026-09-30')` vira 29/09 às 21h em Brasília. O dia vem do texto.
+  const fmtDia = (d) => diaBR(d);
   const fmtH = (h) => h ? `${Number(h).toFixed(1)}h` : '—';
 
   const TIPOS_ENVIO_DIRETO = ['Envio de Material para Terceiro','Envio de Produto Vendido','Demanda Direta para Engenharia'];
@@ -507,6 +555,20 @@ export default function EngenhariaTab({ currentUser }) {
       <div style={{ padding:'12px 12px 0' }}>
         <AgendaWidget setor="engenharia" currentUser={currentUser} />
       </div>
+      {erroLeitura && (
+        <div style={{ padding: '12px 12px 0' }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={() => fetchAll()}>Tentar de novo</Botao>}>
+            Não foi possível ler as OPs da Engenharia ({erroLeitura}). Isso não quer dizer que não haja OP aguardando{opls.length ? '; a lista abaixo é a da última leitura que deu certo' : ''}.
+          </Faixa>
+        </div>
+      )}
+      {erroOsAcomp && (
+        <div style={{ padding: '12px 12px 0' }}>
+          <Faixa tom="erro" acao={<Botao pequeno onClick={fetchOsAcomp}>Tentar de novo</Botao>}>
+            Não foi possível ler o acompanhamento de OS veiculares ({erroOsAcomp}).
+          </Faixa>
+        </div>
+      )}
       {/* OPLs em Espera ou Devolvidas */}
       <div className="sec-card">
         <div className="sec-hdr">
@@ -566,7 +628,7 @@ export default function EngenhariaTab({ currentUser }) {
                     return (
                       <React.Fragment key={o.id}>
                       <tr className={comInfo ? 'acn-eng-linha' : undefined} style={rowStyle}>
-                        <td>{fmtDt(o.data_entrada)}</td>
+                        <td>{fmtDia(o.data_entrada)}</td>
                         <td>
                           <LinkOpl opl={o} currentUser={currentUser} />
                           {envioDireto && (
@@ -667,7 +729,7 @@ export default function EngenhariaTab({ currentUser }) {
                     return (
                       <React.Fragment key={base}>
                         <tr className="acn-eng-linha" style={{background:'#f5f3ff',borderLeft:'4px solid #7c3aed'}}>
-                          <td>{fmtDt(rep.data_entrada)}</td>
+                          <td>{fmtDia(rep.data_entrada)}</td>
                           <td>
                             <strong style={{color:'#6d28d9'}}>🔗 {base}</strong>
                             <div style={{marginTop:2}}>
