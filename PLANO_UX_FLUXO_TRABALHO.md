@@ -3919,7 +3919,7 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 | R1 | OP automática: campos obrigatórios e "Devolvida Comercial" | 🔴 | G | **a Etapa 12 acabou em 02/10: pronto para desenhar com o usuário** (junto de R8 e R3: o "fluxo da OP até a Engenharia"); perguntado ao fim da sessão de 04/10/2026 | ⬜ |
 | R2 | Selo "onde está" em qualquer coluna com OP | 🟢 | P | **agora** (02/10/2026): pedido do usuário de seguir com as respostas pequenas | ✅ aplicada em 02/10/2026 (Etapa 7.30) |
 | R3 | OP devolvida: contador + notificar quem abriu e o gerente | 🔴 | M | junto de R1 e R8 | ⬜ |
-| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | rodada própria, **depois da 12e3 e da 12e4** (04/10/2026) — **medir de novo antes** (dado real, 5 OPs). *05/10/2026: as duas fatias já saíram; entra **logo depois da migração do Financeiro** (uma coisa por vez)* | ⬜ |
+| R4 | Corrigir 5 OPs com defeito de digitação | 🟠 | P | rodada própria, **depois da 12e3 e da 12e4** (04/10/2026) — **medir de novo antes** (dado real, 5 OPs). *05/10/2026: as duas fatias já saíram; entra **logo depois da migração do Financeiro** (uma coisa por vez)*. **06/10/2026: aplicada em parte** — a data `62026-10-20` da OP `1516.2608` virou **2026-10-20** (1 linha, conferida); **os 4 números de OP com espaço NÃO foram aparados**: medido, o número com espaço está também em **`logs_movimentacao_opl` (50 linhas), `cq_auditorias.numero_opl` (1) e `opl_anexos.opl_numero` (1)** — aparar só a `oples` quebraria o histórico, o CQ e o anexo dessas OPs. Autorização do usuário era "só se nenhuma outra tabela guardar com espaço"; **falta ele decidir** se aparo as 4 tabelas juntas (4 + 52 linhas, na mesma migração) | 🟡 parcial (1 de 5) |
 | R5 | Erro fica até fechar | 🟢 | P | **agora** (02/10/2026): pedido do usuário de seguir com as respostas pequenas | ✅ aplicada em 02/10/2026 (Etapa 7.31) |
 | R6 | Painel de aprovação: contador no menu + alçadas | 🔴 | M | depois, **desenhar com o usuário** (confirmar quem aprova cada alçada) | ⬜ |
 | R7 | `ver_valores` valendo (+ ligar a marca de Fernando e Luiz) | 🔴 + 🟠 | G | depois, **desenhar com o usuário**; testar a sessão como o login a monta; **medir de novo** antes das 2 linhas do Admin | ⬜ |
@@ -3954,6 +3954,8 @@ Palavras dele, resumidas por mim sem mudar o sentido:
 - **Quem é o "gerente de quem abriu" (R3):** existe esse vínculo no cadastro de usuários? Se não, quem o define?
 - **A OP da "leticia" sem sobrenome (R14):** entra na linha "Sem responsável"?
 - **Quem aprova cada alçada (R6):** a alçada por valor/departamento tem aprovador próprio, ou vale "qualquer aprovador resolve"?
+- **Os 4 números de OP com espaço (R4, medido em 06/10/2026):** aparo as quatro tabelas juntas (`oples` 4 linhas, `logs_movimentacao_opl` 50, `cq_auditorias` 1 e `opl_anexos` 1)? Foi o que impediu de aparar sozinho. Obs.: três deles trazem também o nome do cliente no campo do número (`" A 1453.2607 - ESL AUTO CENTER"`) — aparar o espaço não tira isso.
+- **R9 (decisão do usuário em 06/10/2026: "não mexer agora"):** a ficha antiga "Toro" **não foi desativada**; as fichas curtas pendentes são **3** (Renegade 4x4, Titano 4x4 e C3), não 2.
 - **As duas datas suspeitas (R4):** o prazo de produção `0001-01-01` da OP `A 1470.2607` e a previsão `2027-07-14` da `D 710.2607` — quais são as datas certas?
 
 ---
