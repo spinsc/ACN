@@ -131,7 +131,8 @@ export async function contarComprasSemCentro(): Promise<number | null> {
   return error ? null : (count ?? 0);
 }
 
-const FAMILIA_COMPRA: Record<string, string> = { 'Pendente': 'atencao', 'Em Andamento': 'info', 'Aguardando Aprovação': 'marca', 'Aprovado': 'info', 'Comprado': 'ok', 'Recebido': 'ok' };
+// Etapa 12e9 (05/10/2026): exportada para o Financeiro usar a mesma cor de etapa da compra (uma família por etapa, igual em todas as telas do centro de custo)
+export const FAMILIA_COMPRA: Record<string, string> = { 'Pendente': 'atencao', 'Em Andamento': 'info', 'Aguardando Aprovação': 'marca', 'Aprovado': 'info', 'Comprado': 'ok', 'Recebido': 'ok' };
 
 export function ModalComprasSemCentro({ currentUser, onClose, onGravou }: any) {
   const [compras, setCompras] = useState<any[]>([]);

@@ -1162,3 +1162,49 @@ html body .acn-main table.acn-tabela tr.acn-cc-op-detalhe > td { background: var
 html body .modal-box.acn-modal-cadastro.acn-cc-fech { width: min(760px, 95vw); max-width: 760px; }
 /* a janela do fechamento: o corpo rola inteiro (a tabela dos 12 meses não encolhe nem ganha rolagem própria) */
 .acn-cc-fech .acn-modal-corpo > * { flex-shrink: 0; }
+
+/* ── Financeiro · 12e9 (05/10/2026): a tela dos centros de custo no molde do guia ───────────────────────── */
+/* o respiro de 10 px em volta da tela, igual ao de antes (valia para as quatro abas) */
+.acn-fin { padding: 10px; }
+.acn-fin > .acn-abas { margin-bottom: 10px; }
+.acn-fin-espaco { margin-bottom: 12px; }
+/* a linha do consolidado abre o painel do centro: parece clicável */
+html body .acn-main table.acn-tabela tr.acn-fin-linha { cursor: pointer; }
+html body .acn-main table.acn-tabela tr.acn-fin-linha:hover > td { background: var(--acn-neutral-soft); }
+.acn-fin-c { text-align: center !important; }
+.acn-fin-centro { display: flex; align-items: center; gap: 6px; }
+/* barras do gráfico "Despesas por Centro de Custo" (uma cor só: a da marca) */
+.acn-fin-barras { display: flex; flex-direction: column; gap: 8px; }
+.acn-fin-barra { display: flex; align-items: center; gap: 10px; }
+.acn-fin-barra-nome { width: 120px; flex-shrink: 0; text-align: right; font-size: 12px; font-weight: 600; color: var(--acn-ink); overflow-wrap: anywhere; }
+.acn-fin-barra-trilho { flex: 1; height: 20px; overflow: hidden; border-radius: var(--acn-r1); background: var(--acn-neutral-soft); }
+.acn-fin-barra-trilho > i { display: block; height: 100%; border-radius: var(--acn-r1); background: var(--acn-brand); transition: width .4s; }
+.acn-fin-barra-trilho > i.tem { min-width: 4px; }
+.acn-fin-barra-valor { width: 110px; flex-shrink: 0; text-align: right; font-size: 12px; font-weight: 700; color: var(--acn-ink); }
+.acn-fin-barra-qtd { width: 30px; flex-shrink: 0; text-align: right; font-size: 11px; color: var(--acn-muted); }
+/* faturamento de compras: número da NF, arquivo e "Pago" na mesma linha */
+.acn-fin-acao { min-width: 220px; }
+.acn-fin-nf { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.acn-fin-nf .acn-input { width: 120px; }
+.acn-fin-nf input[type="file"] { width: 230px; font-size: 12px; }
+/* janelas: a lista de centros (1080) e as compras de um centro (1180, são 8 colunas). Ficam abaixo das janelas que abrem por dentro delas (2300, 2600) */
+.modal-overlay.acn-fin-sobre-centros { z-index: 2000; }
+.modal-overlay.acn-fin-sobre-compras { z-index: 2100; }
+html body .modal-box.acn-modal-cadastro.acn-fin-centros { width: min(1080px, 95vw); max-width: 1080px; max-height: 85vh; }
+html body .modal-box.acn-modal-cadastro.acn-fin-compras { width: min(1180px, 96vw); max-width: 1180px; max-height: 88vh; }
+.acn-fin-compras .acn-modal-corpo > * { flex-shrink: 0; }
+/* a descrição não pode esticar a linha: duas linhas e reticências (o texto inteiro vai na dica) */
+.acn-fin-2linhas { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 250px; line-height: 1.35; }
+.acn-fin-oc { display: flex; align-items: center; gap: 6px; }
+/* contrato parcelado: "pago x de y" com a barra de andamento */
+.acn-fin-contrato { min-width: 130px; font-size: 12px; }
+.acn-fin-progresso { height: 5px; margin: 2px 0; overflow: hidden; border-radius: 4px; background: var(--acn-neutral-soft); }
+.acn-fin-progresso > i { display: block; height: 100%; background: var(--acn-ok); }
+.acn-fin-progresso > i.estouro { background: var(--acn-bad); }
+@media (max-width: 480px) {
+  .acn-fin-barra { flex-wrap: wrap; }
+  .acn-fin-barra-nome { width: 100%; text-align: left; }
+  .acn-fin-barra-trilho { flex-basis: 100%; order: 2; }
+  .acn-fin-barra-valor { order: 3; width: auto; flex: 1; text-align: left; }
+  .acn-fin-barra-qtd { order: 4; }
+}

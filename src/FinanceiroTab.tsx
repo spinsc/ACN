@@ -2,34 +2,35 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { imprimirOrdemCompra } from './ComprasTab';
-import { ETAPAS_COMPRA, COR_ETAPA_COMPRA } from './ComprasFluxo';
+import { ETAPAS_COMPRA } from './ComprasFluxo';
 import { labelHierarquico, ModalLancarMedicao,
   ModalEditarLancamento, ModalEditarPedidoCompra, podeEditarLancamento } from './CentroCustoShared';
 import { CentrosCustoManager } from './CentroCustoFicha';
-import { ModalComprasSemCentro } from './CentroCustoUso';
+import { ModalComprasSemCentro, FAMILIA_COMPRA } from './CentroCustoUso';
 import { PainelCentroCusto, carregarOrcamentoDoAno, normalizarMovimentos, avaliarAlertasDeConsumo } from './CentroCustoPainel';
 import { logChange, useUnreadMap, useMarkAsRead } from './AuditSystem';
 import ConciliacaoBancaria from './ConciliacaoBancaria';
 import FinanceiroKanban from './FinanceiroKanban';
-import { hojeISO, diaBR, Botao, Faixa } from './Interface';
+import { hojeISO, diaBR, Abas, Botao, Faixa, Selo } from './Interface';
+import Icone from './Icone';
 import CustoPorOpTab from './CentroCustoRelatorios';
 import ModalFechamentoMes from './CentroCustoFechamentoTela';
 import { lerFechamentos, fechamentoVigente, nomeDoMes } from './CentroCustoFechamento';
 import { baixarPlanilha } from './ExportarPlanilha';
-import { mdiFileExcelOutline, mdiLockOutline } from '@mdi/js';
+import { mdiFileExcelOutline, mdiLockOutline, mdiTagOutline, mdiBankOutline, mdiFormatListChecks, mdiReceiptTextOutline,
+  mdiCashMultiple, mdiRefresh, mdiChartBar, mdiFolderOutline, mdiFileDocumentOutline, mdiCartOutline, mdiPencilOutline,
+  mdiPrinterOutline, mdiCurrencyUsd, mdiAlertOutline } from '@mdi/js';
 
-// Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP
+// Abas do Financeiro: centros de custo (o que já existia), conciliação bancária, o kanban de tarefas e (Etapa 15e) o custo por OP.
+// Etapa 12e9 (05/10/2026): o seletor escuro escrito à mão virou as abas do guia (`Abas`); os nomes e a ordem são os de antes.
 function AbasFinanceiro({ aba, setAba }: any) {
   return (
-    <div role="tablist" style={{ display: 'flex', gap: 0, marginBottom: 10, borderRadius: 6, overflow: 'hidden', border: '2px solid #0f172a', maxWidth: 900 }}>
-      {[['centros', '🏷️ Centros de custo'], ['conciliacao', '🏦 Conciliação bancária'], ['kanban', '📋 Tarefas'], ['custoop', '🧾 Custo por OP']].map(([id, rotulo]) => (
-        <button key={id} role="tab" aria-selected={aba === id} onClick={() => setAba(id)}
-          style={{ flex: 1, padding: '8px', border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
-            background: aba === id ? '#0f172a' : '#fff', color: aba === id ? '#fff' : '#0f172a' }}>
-          {rotulo}
-        </button>
-      ))}
-    </div>
+    <Abas ativa={aba} onChange={setAba} itens={[
+      { id: 'centros', rotulo: 'Centros de custo', icone: mdiTagOutline },
+      { id: 'conciliacao', rotulo: 'Conciliação bancária', icone: mdiBankOutline },
+      { id: 'kanban', rotulo: 'Tarefas', icone: mdiFormatListChecks },
+      { id: 'custoop', rotulo: 'Custo por OP', icone: mdiReceiptTextOutline },
+    ]} />
   );
 }
 
@@ -51,25 +52,25 @@ const fmtDt = (d: string) => diaBR(d);
 // 'Concluído' — nome antigo, trocado por 'Recebido' em 22/09/2026 — e sem a cor
 // de 'Recebido': as compras recebidas apareciam em cinza (corrigido em
 // 29/09/2026, Etapa 5.2 do PLANO_UX_FLUXO_TRABALHO.md).
+// Etapa 12e9 (05/10/2026): a etapa agora é um `Selo` do guia, na família de `FAMILIA_COMPRA`
+// (CentroCustoUso), a mesma da tela "Compras sem centro".
 
 // ─── Modal CRUD de Centros de Custo ──────────────────────────────────────────
 function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
+  const fechar = () => { onAtualizar(); onClose(); };
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2000,
-      display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => { if (e.target === e.currentTarget) { onAtualizar(); onClose(); } }}>
+    <div className="modal-overlay acn-fin-sobre-centros" onClick={e => { if (e.target === e.currentTarget) fechar(); }}>
       {/* 1080, não 560: a lista de centros tem código, nome, hierarquia e ações
           na mesma linha, e em 560 tudo se amassava (28/09/2026). */}
-      <div style={{ background: '#fff', borderRadius: 10, width: 1080, maxWidth: '95vw',
-        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 16px 48px rgba(0,0,0,.28)' }}>
-        <div style={{ background: '#0f766e', color: '#fff', padding: '12px 16px',
-          borderRadius: '10px 10px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 13 }}>🏷️ Gerenciar Centros de Custo</div>
-          <button onClick={() => { onAtualizar(); onClose(); }} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
+      <div className="modal-box acn-modal-cadastro acn-fin-centros" role="dialog" aria-label="Gerenciar Centros de Custo">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiTagOutline} size={16} /> Gerenciar Centros de Custo</span>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        <div className="acn-modal-corpo">
           <CentrosCustoManager embutido currentUser={currentUser} />
+        </div>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao onClick={fechar}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -77,12 +78,6 @@ function ModalCentros({ onClose, onAtualizar, currentUser }: any) {
 }
 
 // ─── Modal: compras de um centro de custo ─────────────────────────────────────
-/** Duas linhas e reticências: o texto inteiro fica no rótulo do mouse. */
-const celaTexto: React.CSSProperties = {
-  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-  overflow: 'hidden', maxWidth: 250, lineHeight: 1.35,
-};
-
 function ModalComprasCentro({ centro, compras, todasDespesas, onClose, currentUser, onAtualizar }: any) {
   const total = compras.reduce((s: number, p: any) => s + (Number(p.despesaAvulsa ? p.valor : p.valor_compra) || 0), 0);
   const [modalMedicao, setModalMedicao] = useState<any>(null); // contrato "Parcelado" selecionado
@@ -101,185 +96,144 @@ function ModalComprasCentro({ centro, compras, todasDespesas, onClose, currentUs
     }
   });
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2100,
-      display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-overlay acn-fin-sobre-compras" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       {/* 1180, não 700: são 8 colunas e em 700 a tabela rolava na horizontal
           (28/09/2026). */}
-      <div style={{ background: '#fff', borderRadius: 10, width: 1180, maxWidth: '96vw',
-        maxHeight: '88vh', display: 'flex', flexDirection: 'column',
-        boxShadow: '0 16px 48px rgba(0,0,0,.28)' }}>
-        <div style={{ background: '#1e3a5f', color: '#fff', padding: '12px 16px',
-          borderRadius: '10px 10px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+      <div className="modal-box acn-modal-cadastro acn-fin-compras" role="dialog" aria-label="Compras do centro de custo">
+        <div className="acn-modal-cab">
           <div>
-            <div style={{ fontWeight: 800, fontSize: 13 }}>🛒 Compras — {centro.nome || centro}</div>
-            <div style={{ fontSize: 9, opacity: .8 }}>{compras.length} lançamento(s) · Total: {fmtR(total)}</div>
+            <span className="modal-title"><Icone path={mdiCartOutline} size={16} /> Compras — {centro.nome || centro}</span>
+            <div className="acn-ajuda">{compras.length} lançamento(s) · Total: {fmtR(total)}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+        <div className="acn-modal-corpo">
           {compras.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 32, color: '#9ca3af', fontSize: 11 }}>
-              Nenhuma compra neste centro de custo.
-            </div>
+            <div className="acn-empty">Nenhuma compra neste centro de custo.</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
-                  {['Nº Pedido', 'Descrição', 'Fornecedor', 'Status', 'Ordem de Compra', 'Valor', 'Data', 'Ações'].map(h => (
-                    <th key={h} style={{ padding: '6px 8px', fontSize: 9, fontWeight: 700, textAlign: 'left' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {compras.map((p: any, i: number) => p.despesaAvulsa ? (
-                  <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>—</td>
-                    {/* A DESCRIÇÃO NÃO PODE ESTICAR A LINHA (28/09/2026)
-                        Uma despesa com texto longo quebrava uma palavra por
-                        linha, a linha ficava mais alta que o modal inteiro e o
-                        cabeçalho parecia travado no topo. Agora mostra duas
-                        linhas e o resto vem no rótulo, passando o mouse. */}
-                    <td style={{ padding: '5px 8px', fontSize: 10 }}
-                        title={[p.despesa_pai_id ? 'Medição —' : '', p.descricao || 'Despesa avulsa'].filter(Boolean).join(' ')}>
-                      <div style={celaTexto}>
-                        {p.despesa_pai_id ? <span style={{ color:'#94a3b8' }}>↳ medição — </span> : null}
-                        {p.descricao || 'Despesa avulsa'}
-                      </div>
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.criado_por_nome || '—'}</td>
-                    <td style={{ padding: '5px 8px' }}>
-                      {p.parcelado ? (
-                        (() => {
-                          const totalNeg = Number(p.valor_total_negociado) || 0;
-                          const pago = pagoPorContrato[p.id] || 0;
-                          const pct = totalNeg > 0 ? Math.min(100, Math.round(pago / totalNeg * 100)) : 0;
-                          return (
-                            <div style={{ minWidth:130 }}>
-                              <div style={{ fontSize:9, fontWeight:700, color: pago > totalNeg ? '#dc2626' : '#0f766e', marginBottom:2 }}>
-                                🧾 Pago {fmtR(pago)} de {fmtR(totalNeg)} ({pct}%)
-                              </div>
-                              <div style={{ background:'#e2e8f0', borderRadius:4, height:5, overflow:'hidden' }}>
-                                <div style={{ width:`${pct}%`, background: pago > totalNeg ? '#dc2626' : '#0f766e', height:'100%' }} />
-                              </div>
-                              {/* "pagas x de N" — só quando o número de parcelas foi combinado (29/09/2026) */}
-                              {(Number(p.num_parcelas) > 0 || medicoesPorContrato[p.id] > 0) && (
-                                <div style={{ fontSize:9, color: Number(p.num_parcelas) > 0 && medicoesPorContrato[p.id] > Number(p.num_parcelas) ? '#dc2626' : '#64748b', marginTop:2 }}>
-                                  {Number(p.num_parcelas) > 0
-                                    ? `${medicoesPorContrato[p.id] || 0} de ${p.num_parcelas} parcelas`
-                                    : `${medicoesPorContrato[p.id]} medição(ões)`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()
-                      ) : p.despesa_pai_id ? (
-                        <span style={{ background:'#f1f5f9', color:'#64748b',
-                          padding:'2px 7px', borderRadius:10, fontSize:9, fontWeight:700 }}>
-                          Medição
-                        </span>
-                      ) : (
-                        <span style={{ background: '#fef3c722', color: '#b45309',
-                          padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                          💰 Despesa avulsa
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10 }}>
-                      <span style={{ color: '#9ca3af' }}>—</span>
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
-                      {p.parcelado ? '—' : fmtR(Number(p.valor) || 0)}
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
-                      {fmtDt(p.data)}
-                    </td>
-                    <td style={{ padding: '5px 8px' }}>
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        {p.parcelado && (
-                          <button onClick={() => setModalMedicao(p)}
-                            style={{ background:'#0f766e', color:'#fff', border:'none', borderRadius:4,
-                              padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                            + Medição
-                          </button>
-                        )}
-                        {/* corrigir valor, descrição, data ou centro errado —
-                            só Admin e gerente, e tudo vai para a auditoria */}
-                        {podeEditarLancamento(currentUser) && (
-                          <button onClick={() => setModalEditar(p)} title="Editar ou excluir este lançamento"
-                            style={{ background:'#fff', color:'#334155', border:'1px solid #cbd5e1', borderRadius:4,
-                              padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                            ✏️ Editar
-                          </button>
-                        )}
-                      </div>
-                    </td>
+            <div className="acn-rolagem">
+              <table className="acn-tabela acn-compacta">
+                <thead>
+                  <tr>
+                    {['Nº Pedido', 'Descrição', 'Fornecedor', 'Status', 'Ordem de Compra', 'Valor', 'Data', 'Ações'].map(h => (
+                      <th key={h} className={h === 'Valor' ? 'acn-dir' : undefined}>{h}</th>
+                    ))}
                   </tr>
-                ) : (
-                  <tr key={p.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 600, color: '#1e3a5f' }}>{p.numero_pedido || '—'}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10 }} title={p.descricao_material || ''}>
-                      <div style={celaTexto}>{p.descricao_material || '—'}</div>
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>{p.fornecedor || '—'}</td>
-                    <td style={{ padding: '5px 8px' }}>
-                      <span style={{ background: (COR_ETAPA_COMPRA[p.status_compra]||'#6b7280') + '22',
-                        color: COR_ETAPA_COMPRA[p.status_compra] || '#6b7280',
-                        padding: '2px 7px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                        {p.status_compra || '—'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10 }}>
-                      {p.numero_oc ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: '#7c3aed', fontWeight: 700, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>✓ {p.numero_oc}</span>
-                          <button onClick={() => imprimirOrdemCompra(p)} title="Imprimir Ordem de Compra"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>🖨️</button>
+                </thead>
+                <tbody>
+                  {compras.map((p: any) => p.despesaAvulsa ? (
+                    <tr key={p.id}>
+                      <td className="acn-forte">—</td>
+                      {/* A DESCRIÇÃO NÃO PODE ESTICAR A LINHA (28/09/2026)
+                          Uma despesa com texto longo quebrava uma palavra por
+                          linha, a linha ficava mais alta que o modal inteiro e o
+                          cabeçalho parecia travado no topo. Agora mostra duas
+                          linhas e o resto vem no rótulo, passando o mouse. */}
+                      <td title={[p.despesa_pai_id ? 'Medição —' : '', p.descricao || 'Despesa avulsa'].filter(Boolean).join(' ')}>
+                        <div className="acn-fin-2linhas">
+                          {p.despesa_pai_id ? <span className="acn-fraco">↳ medição — </span> : null}
+                          {p.descricao || 'Despesa avulsa'}
                         </div>
-                      ) : (
-                        <span style={{ color: '#9ca3af' }}>— aguardando aprovação</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, color: '#15803d', textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
-                      {p.valor_compra ? fmtR(Number(p.valor_compra)) : '—'}
-                    </td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, color: '#6b7280' }}>
-                      {fmtDt(p.data_criacao)}
-                    </td>
-                    {/* O pedido de compra também precisa de ação: é nele que
-                        aparece o erro de centro errado ou valor diferente do
-                        pago, e até 28/09/2026 esta célula ficava vazia. */}
-                    <td style={{ padding: '5px 8px' }}>
-                      {podeEditarLancamento(currentUser) && (
-                        <button onClick={() => setModalPedido(p)} title="Corrigir centro, valor, descrição ou data"
-                          style={{ background:'#fff', color:'#334155', border:'1px solid #cbd5e1', borderRadius:4,
-                            padding:'3px 8px', fontSize:9, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                          ✏️ Editar
-                        </button>
-                      )}
-                    </td>
+                      </td>
+                      <td className="acn-fraco">{p.criado_por_nome || '—'}</td>
+                      <td>
+                        {p.parcelado ? (
+                          (() => {
+                            const totalNeg = Number(p.valor_total_negociado) || 0;
+                            const pago = pagoPorContrato[p.id] || 0;
+                            const pct = totalNeg > 0 ? Math.min(100, Math.round(pago / totalNeg * 100)) : 0;
+                            const estouro = pago > totalNeg;
+                            return (
+                              <div className="acn-fin-contrato">
+                                <div className={estouro ? 'acn-txt-erro' : 'acn-txt-ok'}>
+                                  Pago {fmtR(pago)} de {fmtR(totalNeg)} ({pct}%)
+                                </div>
+                                <div className="acn-fin-progresso"><i className={estouro ? 'estouro' : ''} style={{ width: `${pct}%` }} /></div>
+                                {/* "pagas x de N" — só quando o número de parcelas foi combinado (29/09/2026) */}
+                                {(Number(p.num_parcelas) > 0 || medicoesPorContrato[p.id] > 0) && (
+                                  <div className={Number(p.num_parcelas) > 0 && medicoesPorContrato[p.id] > Number(p.num_parcelas) ? 'acn-txt-erro' : 'acn-fraco'}>
+                                    {Number(p.num_parcelas) > 0
+                                      ? `${medicoesPorContrato[p.id] || 0} de ${p.num_parcelas} parcelas`
+                                      : `${medicoesPorContrato[p.id]} medição(ões)`}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : p.despesa_pai_id ? (
+                          <Selo familia="neutro" ponto={false}>Medição</Selo>
+                        ) : (
+                          <Selo familia="atencao" ponto={false}>Despesa avulsa</Selo>
+                        )}
+                      </td>
+                      <td className="acn-fraco">—</td>
+                      <td className="acn-dir acn-nowrap acn-num">
+                        {p.parcelado ? '—' : fmtR(Number(p.valor) || 0)}
+                      </td>
+                      <td className="acn-nowrap">{fmtDt(p.data)}</td>
+                      <td>
+                        <div className="acn-acoes-linha">
+                          {p.parcelado && (
+                            <Botao pequeno variante="primario" onClick={() => setModalMedicao(p)}>+ Medição</Botao>
+                          )}
+                          {/* corrigir valor, descrição, data ou centro errado —
+                              só Admin e gerente, e tudo vai para a auditoria */}
+                          {podeEditarLancamento(currentUser) && (
+                            <Botao pequeno icone={mdiPencilOutline} onClick={() => setModalEditar(p)} title="Editar ou excluir este lançamento">Editar</Botao>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={p.id}>
+                      <td className="acn-forte">{p.numero_pedido || '—'}</td>
+                      <td title={p.descricao_material || ''}>
+                        <div className="acn-fin-2linhas">{p.descricao_material || '—'}</div>
+                      </td>
+                      <td className="acn-fraco">{p.fornecedor || '—'}</td>
+                      <td><Selo familia={FAMILIA_COMPRA[p.status_compra] || 'neutro'} ponto={false}>{p.status_compra || '—'}</Selo></td>
+                      <td>
+                        {p.numero_oc ? (
+                          <div className="acn-fin-oc">
+                            <span className="acn-forte">✓ {p.numero_oc}</span>
+                            <Botao pequeno variante="discreto" icone={mdiPrinterOutline} onClick={() => imprimirOrdemCompra(p)} title="Imprimir Ordem de Compra" aria-label="Imprimir Ordem de Compra" />
+                          </div>
+                        ) : (
+                          <span className="acn-fraco">— aguardando aprovação</span>
+                        )}
+                      </td>
+                      <td className="acn-dir acn-nowrap acn-num">
+                        {p.valor_compra ? fmtR(Number(p.valor_compra)) : '—'}
+                      </td>
+                      <td className="acn-nowrap">{fmtDt(p.data_criacao)}</td>
+                      {/* O pedido de compra também precisa de ação: é nele que
+                          aparece o erro de centro errado ou valor diferente do
+                          pago, e até 28/09/2026 esta célula ficava vazia. */}
+                      <td>
+                        {podeEditarLancamento(currentUser) && (
+                          <div className="acn-acoes-linha">
+                            <Botao pequeno icone={mdiPencilOutline} onClick={() => setModalPedido(p)} title="Corrigir centro, valor, descrição ou data">Editar</Botao>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* TOTAL LEGÍVEL (28/09/2026) — o valor só aparecia ao passar o mouse (texto escuro sobre faixa escura).
+                    Etapa 12e9: a linha de total é a do guia (`acn-linha-total`), clara nos dois modos. */}
+                <tfoot>
+                  <tr className="acn-linha-total">
+                    <td colSpan={5} className="acn-dir">TOTAL</td>
+                    <td className="acn-dir acn-nowrap acn-num">{fmtR(total)}</td>
+                    <td />
+                    <td />
                   </tr>
-                ))}
-              </tbody>
-              {/* TOTAL LEGÍVEL (28/09/2026)
-                  A faixa era azul-escura com a cor do texto vinda do `tr`. Só
-                  que `.acn-main table td` fixa a cor do td em cinza-escuro, e
-                  o td ganha do tr — texto escuro sobre fundo escuro. O valor
-                  só aparecia ao passar o mouse, quando o fundo da linha muda.
-                  Agora é faixa clara com texto escuro, e a cor vai em cada td. */}
-              <tfoot>
-                <tr style={{ background: '#f1f5f9' }}>
-                  <td colSpan={5} style={{ padding: '8px', fontWeight: 700, fontSize: 11, textAlign: 'right',
-                    color: '#475569', borderTop: '2px solid #cbd5e1' }}>TOTAL</td>
-                  <td style={{ padding: '8px', fontWeight: 800, fontSize: 14, textAlign: 'right',
-                    color: '#0f172a', borderTop: '2px solid #cbd5e1',
-                    fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{fmtR(total)}</td>
-                  <td style={{ borderTop: '2px solid #cbd5e1' }} />
-                  <td style={{ borderTop: '2px solid #cbd5e1' }} />
-                </tr>
-              </tfoot>
-            </table>
+                </tfoot>
+              </table>
+            </div>
           )}
+        </div>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
       </div>
       {modalMedicao && (
@@ -305,10 +259,11 @@ function ModalComprasCentro({ centro, compras, todasDespesas, onClose, currentUs
 }
 
 // ─── Faturamento de Compras (Fase 3 — Conferência Técnica) ───────────────────
-const STATUS_FAT_LABEL: Record<string, { label: string; cor: string; bg: string }> = {
-  aguardando_recebimento: { label: '🔒 Aguardando recebimento', cor: '#78716c', bg: '#f5f5f4' },
-  liberado:                { label: '🔓 Liberado p/ pagamento',  cor: '#0369a1', bg: '#f0f9ff' },
-  pago:                    { label: '✅ Pago',                   cor: '#15803d', bg: '#f0fdf4' },
+// Etapa 12e9: cada situação é um `Selo` do guia (o emoji decorativo de antes saiu; o texto é o mesmo)
+const STATUS_FAT_LABEL: Record<string, { label: string; familia: string }> = {
+  aguardando_recebimento: { label: 'Aguardando recebimento', familia: 'neutro' },
+  liberado:                { label: 'Liberado p/ pagamento',  familia: 'info' },
+  pago:                    { label: 'Pago',                   familia: 'ok' },
 };
 
 async function uploadNfFornecedor(file: File): Promise<{ url: string; error?: string }> {
@@ -360,35 +315,28 @@ function LinhaFaturamento({ f, onAtualizar, currentUser, naoLido, marcarLidoLoca
   const st = STATUS_FAT_LABEL[f.status_faturamento] || STATUS_FAT_LABEL.aguardando_recebimento;
 
   return (
-    <tr onClick={marcarVisto} style={{ borderBottom: '1px solid #f1f5f9',
-      background: naoLido ? '#fffdf0' : 'transparent',
-      boxShadow: naoLido ? 'inset 3px 0 0 #eab308' : 'none' }}>
-      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, color: '#7c3aed', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>{f.numero_oc || '—'}</td>
-      <td style={{ padding: '6px 8px', fontSize: 10 }}>{f.numero_pedido || '—'}</td>
-      <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.fornecedor || '—'}</td>
-      <td style={{ padding: '6px 8px', fontSize: 10, color: '#6b7280' }}>{f.centro_custo || '—'}</td>
-      <td style={{ padding: '6px 8px', fontSize: 10, fontWeight: 700, textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", color: '#15803d' }}>{fmtR(f.valor)}</td>
-      <td style={{ padding: '6px 8px' }}>
-        <span style={{ background: st.bg, color: st.cor, padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>{st.label}</span>
-      </td>
-      <td style={{ padding: '6px 8px', minWidth: 220 }}>
+    <tr onClick={marcarVisto} className={naoLido ? 'acn-linha-nova' : undefined}>
+      <td className="acn-nowrap acn-forte">{f.numero_oc || '—'}</td>
+      <td className="acn-nowrap">{f.numero_pedido || '—'}</td>
+      <td className="acn-fraco">{f.fornecedor || '—'}</td>
+      <td className="acn-fraco">{f.centro_custo || '—'}</td>
+      <td className="acn-dir acn-nowrap acn-num">{fmtR(f.valor)}</td>
+      <td><Selo familia={st.familia} ponto={false}>{st.label}</Selo></td>
+      <td className="acn-fin-acao">
         {!f.recebimento_confirmado ? (
-          <span style={{ fontSize: 9, color: '#9ca3af' }}>—</span>
+          <span className="acn-fraco">—</span>
         ) : f.status_faturamento === 'pago' ? (
-          <span style={{ fontSize: 9, color: '#15803d' }}>
+          <span className="acn-txt-ok">
             NF {f.nf_fornecedor_numero} · pago em {fmtDt(f.data_pagamento)}
             {f.nf_fornecedor_url && <> · <a href={f.nf_fornecedor_url} target="_blank" rel="noreferrer">ver</a></>}
           </span>
         ) : (
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input value={nfNumero} onChange={e => setNfNumero(e.target.value)} placeholder="Nº NF fornecedor"
-              style={{ padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 9, width: 100 }} />
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setArquivo(e.target.files?.[0] || null)}
-              style={{ fontSize: 9, width: 90 }} />
-            <button onClick={marcarPago} disabled={salvando}
-              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
-              {salvando ? '...' : '💰 Pago'}
-            </button>
+          <div className="acn-fin-nf">
+            <input className="acn-input" value={nfNumero} onChange={e => setNfNumero(e.target.value)} placeholder="Nº NF fornecedor" />
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setArquivo(e.target.files?.[0] || null)} />
+            <Botao pequeno variante="primario" icone={mdiCurrencyUsd} onClick={marcarPago} disabled={salvando}>
+              {salvando ? '...' : 'Pago'}
+            </Botao>
           </div>
         )}
       </td>
@@ -402,11 +350,10 @@ function SecaoFaturamentoCompras({ faturamentos, onAtualizar, currentUser }: any
   const filtrados = filtro ? faturamentos.filter((f: any) => f.status_faturamento === filtro) : faturamentos;
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', marginTop: 14 }}>
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>📑 Faturamento de Compras — NF do Fornecedor</div>
-        <select value={filtro} onChange={e => setFiltro(e.target.value)}
-          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
+    <div className="sec-card">
+      <div className="sec-hdr no-collapse">
+        <span className="acn-cab-titulo"><Icone path={mdiFileDocumentOutline} size={16} /> Faturamento de Compras — NF do Fornecedor</span>
+        <select className="acn-input acn-select-mini" value={filtro} onChange={e => setFiltro(e.target.value)} aria-label="Situação do faturamento">
           <option value="">Todos os status</option>
           <option value="aguardando_recebimento">Aguardando recebimento</option>
           <option value="liberado">Liberado p/ pagamento</option>
@@ -414,14 +361,14 @@ function SecaoFaturamentoCompras({ faturamentos, onAtualizar, currentUser }: any
         </select>
       </div>
       {filtrados.length === 0 ? (
-        <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>Nenhum registro de faturamento.</div>
+        <div className="acn-empty">Nenhum registro de faturamento.</div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="acn-rolagem">
+          <table className="acn-tabela acn-compacta">
             <thead>
-              <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
+              <tr>
                 {['OC', 'Nº Pedido', 'Fornecedor', 'Centro de Custo', 'Valor', 'Status', 'Ação'].map(h => (
-                  <th key={h} style={{ padding: '6px 8px', fontSize: 9, fontWeight: 700, textAlign: h === 'Valor' ? 'right' : 'left' }}>{h}</th>
+                  <th key={h} className={h === 'Valor' ? 'acn-dir' : undefined}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -589,15 +536,15 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
   // sem as descartadas. Antes contava o texto vazio, dentro do período, e misturava compras que têm centro com compras que não têm.
   const totalSemCentro  = compras.filter(p => !p.centro_custo_id && p.status_compra !== 'Descartada').length;
 
-  // Bar chart simples (SVG)
+  // Barras do gráfico: o comprimento é o total do centro em relação ao maior (Etapa 12e9: todas na cor da marca;
+  // as 8 cores de antes só diferenciavam uma barra da outra, e o nome do centro já faz isso)
   const maxBarVal = listacentros.length > 0 ? Math.max(...listacentros.map(c => c.total)) : 1;
-  const BAR_COLORS = ['#0f766e', '#0369a1', '#7c3aed', '#b45309', '#16a34a', '#dc2626', '#0891b2', '#9333ea'];
 
   const anos = Array.from({ length: 5 }, (_, i) => String(now.getFullYear() - i));
 
   if (abaFin === 'conciliacao') {
     return (
-      <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
+      <div className="acn-fin">
         <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
         <ConciliacaoBancaria currentUser={currentUser} />
       </div>
@@ -606,7 +553,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
 
   if (abaFin === 'kanban') {
     return (
-      <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
+      <div className="acn-fin">
         <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
         <FinanceiroKanban currentUser={currentUser} />
       </div>
@@ -615,7 +562,7 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
 
   if (abaFin === 'custoop') {
     return (
-      <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
+      <div className="acn-fin">
         <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
         <CustoPorOpTab currentUser={currentUser} />
       </div>
@@ -636,34 +583,32 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
     } catch (e: any) { alert('Não foi possível gerar a planilha: ' + (e?.message || e)); }
   };
 
+  const kpis = [
+    { label: 'Total Gasto', value: fmtR(totalGasto), sub: 'no período filtrado', tom: 'ok' },
+    { label: 'Centros Ativos', value: String(centros.filter(c => c.ativo).length), sub: 'centros de custo', tom: 'info' },
+    { label: 'Recebidas', value: String(totalRecebidas), sub: 'compras recebidas', tom: 'ok' },
+    { label: 'Pendentes', value: String(totalPendentes), sub: 'aguardando', tom: 'atencao' },
+    { label: 'Sem Centro', value: String(totalSemCentro), sub: 'sem centro vinculado — clique para corrigir', tom: 'erro', onClick: () => setSemCentroAberto(true) },
+  ];
+
   return (
-    <div style={{ padding: 10, fontFamily: "'ACN Icones', 'IBM Plex Sans', system-ui, sans-serif" }}>
+    <div className="acn-fin">
       <AbasFinanceiro aba={abaFin} setAba={setAbaFin} />
 
       {/* Header */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-        padding: '10px 14px', marginBottom: 12,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>💰 Financeiro — Centro de Custos</div>
-          <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
-            Controle de despesas de compras por centro de custo
+      <div className="sec-card">
+        <div className="sec-hdr no-collapse">
+          <div>
+            <span className="acn-cab-titulo"><Icone path={mdiCashMultiple} size={16} /> Financeiro — Centro de Custos</span>
+            <div className="acn-ajuda">Controle de despesas de compras por centro de custo</div>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {isAdmin && (
-            <button onClick={() => setModalCentros(true)}
-              style={{ padding: '6px 14px', background: '#0f766e', color: '#fff', border: 'none',
-                borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 11 }}>
-              🏷️ Gerenciar Centros
-            </button>
-          )}
-          <Botao pequeno icone={mdiLockOutline} onClick={() => setModalFechamento(true)} title="Fechar o mês (trava despesas e a correção de compras) ou ver o que já foi fechado">Fechamento do mês</Botao>
-          <button onClick={carregar}
-            style={{ padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0',
-              borderRadius: 5, cursor: 'pointer', fontSize: 9, color: '#64748b' }}>
-            🔄
-          </button>
+          <div className="acn-cab-filtros">
+            {isAdmin && (
+              <Botao pequeno variante="primario" icone={mdiTagOutline} onClick={() => setModalCentros(true)}>Gerenciar Centros</Botao>
+            )}
+            <Botao pequeno icone={mdiLockOutline} onClick={() => setModalFechamento(true)} title="Fechar o mês (trava despesas e a correção de compras) ou ver o que já foi fechado">Fechamento do mês</Botao>
+            <Botao pequeno icone={mdiRefresh} onClick={carregar} title="Atualizar" aria-label="Atualizar" />
+          </div>
         </div>
       </div>
 
@@ -671,48 +616,46 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       {(() => {
         const f = filtroMes && filtroAno ? fechamentoVigente(fechamentos, { ano: Number(filtroAno), mes: Number(filtroMes) }) : null;
         return f ? (
-          <div style={{ marginBottom: 12 }}>
+          <div className="acn-fin-espaco">
             <Faixa tom="info">{nomeDoMes({ ano: f.ano, mes: f.mes })} está <strong>fechado</strong>{f.fechado_por_nome ? ` (por ${f.fechado_por_nome}, em ${new Date(f.fechado_em).toLocaleDateString('pt-BR')})` : ''}: despesas avulsas e a correção das compras criadas nele estão travadas. Só o Admin reabre (Fechamento do mês).</Faixa>
           </div>
         ) : null;
       })()}
 
       {/* Filtros */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-        padding: '8px 12px', marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Filtrar por:</div>
-        <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)}
-          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          <option value="">Todos os meses</option>
-          {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
-            <option key={m} value={m}>{new Date(2000, Number(m)-1, 1).toLocaleString('pt-BR',{month:'long'})}</option>
-          ))}
-        </select>
-        <select value={filtroAno} onChange={e => setFiltroAno(e.target.value)}
-          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          <option value="">Todos os anos</option>
-          {anos.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-          style={{ padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11 }}>
-          <option value="">Todos os status</option>
-          {/* lista vinda de ComprasFluxo em vez de copiada: era a cópia que
-              ficava para trás quando uma etapa mudava de nome (24/09/2026) */}
-          {ETAPAS_COMPRA.map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        {/* Etapa 7.46: sem nenhuma leitura boa, "0 compra(s)" seria mentira */}
-        {!(erroCarga && !carregouUmaVez) && (
-          <span style={{ fontSize: 10, color: '#64748b', marginLeft: 'auto' }}>
-            {comprasFiltradas.length} compra(s) no período
-          </span>
-        )}
+      <div className="sec-card">
+        <div className="acn-filtros">
+          <span className="acn-label">Filtrar por:</span>
+          <select className="acn-input acn-select-mini" value={filtroMes} onChange={e => setFiltroMes(e.target.value)} aria-label="Mês">
+            <option value="">Todos os meses</option>
+            {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
+              <option key={m} value={m}>{new Date(2000, Number(m)-1, 1).toLocaleString('pt-BR',{month:'long'})}</option>
+            ))}
+          </select>
+          <select className="acn-input acn-select-mini" value={filtroAno} onChange={e => setFiltroAno(e.target.value)} aria-label="Ano">
+            <option value="">Todos os anos</option>
+            {anos.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select className="acn-input acn-select-mini" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} aria-label="Etapa da compra">
+            <option value="">Todos os status</option>
+            {/* lista vinda de ComprasFluxo em vez de copiada: era a cópia que
+                ficava para trás quando uma etapa mudava de nome (24/09/2026) */}
+            {ETAPAS_COMPRA.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          {/* Etapa 7.46: sem nenhuma leitura boa, "0 compra(s)" seria mentira */}
+          {!(erroCarga && !carregouUmaVez) && (
+            <span className="acn-ajuda acn-filtros-dir">
+              {comprasFiltradas.length} compra(s) no período
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Etapa 7.46: a leitura falhou — avisa em vez de mostrar zeros */}
       {erroCarga && (
-        <div style={{ marginBottom: 12 }}>
+        <div className="acn-fin-espaco">
           <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
             Não foi possível ler o Financeiro ({erroCarga}). Isso não quer dizer que não haja compras ou despesas.{carregouUmaVez ? ' Os números abaixo são os da última leitura que deu certo.' : ''}
           </Faixa>
@@ -720,161 +663,108 @@ export default function FinanceiroTab({ currentUser }: { currentUser: any }) {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 11 }}>Carregando...</div>
+        <div className="acn-empty">Carregando...</div>
       ) : (erroCarga && !carregouUmaVez) ? null : (
         <>
           {/* KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 14 }}>
-            {[
-              { label: 'Total Gasto', value: fmtR(totalGasto), sub: 'no período filtrado', cor: '#0f766e', bg: '#f0fdf4', border: '#86efac', icon: '💰' },
-              { label: 'Centros Ativos', value: String(centros.filter(c => c.ativo).length), sub: 'centros de custo', cor: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '🏷️' },
-              { label: 'Recebidas', value: String(totalRecebidas), sub: 'compras recebidas', cor: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '✅' },
-              { label: 'Pendentes', value: String(totalPendentes), sub: 'aguardando', cor: '#b45309', bg: '#fef9c3', border: '#fde68a', icon: '⏳' },
-              { label: 'Sem Centro', value: String(totalSemCentro), sub: 'sem centro vinculado — clique para corrigir', cor: '#dc2626', bg: '#fef2f2', border: '#fca5a5', icon: '⚠️', onClick: () => setSemCentroAberto(true) },
-            ].map((k: any) => (
-              <div key={k.label} style={{ background: k.bg, border: `1px solid ${k.border}`,
-                borderRadius: 8, padding: '10px 14px', cursor: k.onClick ? 'pointer' : undefined }}
+          <div className="acn-kpis">
+            {kpis.map((k: any) => (
+              <div key={k.label} className={'acn-kpi' + (k.onClick ? ' clicavel' : '')}
                 {...(k.onClick ? { onClick: k.onClick, role: 'button', tabIndex: 0, 'aria-label': `${k.label}: ${k.value}. ${k.sub}`, onKeyDown: (e: any) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k.onClick(); } } } : {})}>
-                <div style={{ fontSize: 16, marginBottom: 2 }}>{k.icon}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: k.cor, textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 2 }}>{k.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: k.cor }}>{k.value}</div>
-                <div style={{ fontSize: 8, color: '#6b7280', marginTop: 1 }}>{k.sub}</div>
+                <span className="rot"><i data-acn-familia={k.tom} />{k.label}</span>
+                <span className="val acn-num">{k.value}</span>
+                <span className="sub">{k.sub}</span>
               </div>
             ))}
           </div>
 
           {/* Gráfico de barras */}
           {listacentros.length > 0 && (
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-              padding: '12px 14px', marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 12 }}>
-                📊 Despesas por Centro de Custo
+            <div className="sec-card">
+              <div className="sec-hdr no-collapse">
+                <span className="acn-cab-titulo"><Icone path={mdiChartBar} size={16} /> Despesas por Centro de Custo</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {listacentros.slice(0, 10).map((c, i) => (
-                  <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 120, fontSize: 10, fontWeight: 600, color: '#374151',
-                      textAlign: 'right', wordBreak: 'break-word',
-                      flexShrink: 0 }}>
-                      {c.nome}
+              <div className="sec-body">
+                <div className="acn-fin-barras">
+                  {listacentros.slice(0, 10).map(c => (
+                    <div key={c.key} className="acn-fin-barra">
+                      <div className="acn-fin-barra-nome">{c.nome}</div>
+                      <div className="acn-fin-barra-trilho">
+                        <i className={c.total > 0 ? 'tem' : ''} style={{ width: `${maxBarVal > 0 ? (c.total / maxBarVal * 100) : 0}%` }} />
+                      </div>
+                      <div className="acn-fin-barra-valor acn-num">{fmtR(c.total)}</div>
+                      <div className="acn-fin-barra-qtd">{c.count}pc</div>
                     </div>
-                    <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 4, height: 20, overflow: 'hidden' }}>
-                      <div style={{
-                        width: `${maxBarVal > 0 ? (c.total / maxBarVal * 100) : 0}%`,
-                        background: BAR_COLORS[i % BAR_COLORS.length],
-                        height: '100%', borderRadius: 4,
-                        transition: 'width .4s',
-                        minWidth: c.total > 0 ? 4 : 0,
-                      }} />
-                    </div>
-                    <div style={{ width: 110, fontWeight: 700, fontSize: 10, color: '#15803d',
-                      fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace", textAlign: 'right', flexShrink: 0 }}>
-                      {fmtR(c.total)}
-                    </div>
-                    <div style={{ width: 30, fontSize: 9, color: '#9ca3af', textAlign: 'right', flexShrink: 0 }}>
-                      {c.count}pc
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
           {/* Tabela de centros */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-            <div style={{ padding: '10px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>
-                🗂️ Consolidado por Centro de Custo
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ fontSize: 9, color: '#64748b' }}>
+          <div className="sec-card">
+            <div className="sec-hdr no-collapse">
+              <span className="acn-cab-titulo"><Icone path={mdiFolderOutline} size={16} /> Consolidado por Centro de Custo</span>
+              <div className="acn-cab-filtros">
+                <span className="acn-ajuda">
                   Clique em um centro para ver o painel (orçado × realizado × comprometido); "Ver" abre as compras
-                </div>
+                </span>
                 <Botao pequeno icone={mdiFileExcelOutline} onClick={exportarConsolidado} disabled={listacentros.length === 0}>Exportar para Excel</Botao>
               </div>
             </div>
 
             {listacentros.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 11 }}>
-                Nenhuma compra encontrada no período.
-              </div>
+              <div className="acn-empty">Nenhuma compra encontrada no período.</div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="acn-rolagem">
+                <table className="acn-tabela acn-compacta">
                   <thead>
-                    <tr style={{ background: '#1e293b', color: '#cbd5e1' }}>
+                    <tr>
                       {['Centro de Custo', 'Qtd. Compras', 'Total Gasto', 'Recebidas', 'Pendentes', 'Ver'].map(h => (
-                        <th key={h} style={{ padding: '7px 10px', fontSize: 9, fontWeight: 700,
-                          textAlign: h === 'Total Gasto' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} className={h === 'Total Gasto' ? 'acn-dir' : (h === 'Centro de Custo' ? undefined : 'acn-fin-c')}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {listacentros.map((c, i) => {
+                    {listacentros.map(c => {
                       const recebidas = c.compras.filter(p => p.status_compra === 'Recebido').length;
                       const pend  = c.compras.filter(p => p.status_compra === 'Pendente').length;
                       const semCC = c.key === '(Sem Centro)';
                       return (
-                        <tr key={c.key} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa',
-                          cursor: 'pointer', transition: 'background .1s' }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
-                          onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#fff' : '#fafafa'}
+                        <tr key={c.key} className="acn-fin-linha"
                           title={c.centroId ? 'Abrir o painel deste centro' : undefined}
                           onClick={() => (c.centroId ? setPainelCentro(c.centroId) : setModalCompras({ centro: { nome: c.nome }, compras: c.compras }))}>
-                          <td style={{ padding: '7px 10px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              {semCC && <span style={{ color: '#dc2626' }}>⚠️</span>}
+                          <td>
+                            <div className="acn-fin-centro">
+                              {semCC && <span className="acn-txt-erro"><Icone path={mdiAlertOutline} size={16} /></span>}
                               <div>
-                                <div style={{ fontWeight: 700, fontSize: 11, color: semCC ? '#dc2626' : '#0f766e' }}>
+                                <div className={semCC ? 'acn-txt-erro' : 'acn-cc-codigo'}>
                                   {c.nome}
                                 </div>
-                                {semCC && <div style={{ fontSize: 9, color: '#9ca3af' }}>Sem centro de custo alocado</div>}
+                                {semCC && <div className="acn-fraco">Sem centro de custo alocado</div>}
                               </div>
                             </div>
                           </td>
-                          <td style={{ padding: '7px 10px', fontSize: 11, color: '#475569', textAlign: 'center' }}>
-                            {c.count}
+                          <td className="acn-fin-c">{c.count}</td>
+                          <td className="acn-dir acn-nowrap acn-num"><strong className="acn-forte">{fmtR(c.total)}</strong></td>
+                          <td className="acn-fin-c">
+                            {recebidas > 0 && <Selo familia="ok" ponto={false}>{recebidas}</Selo>}
                           </td>
-                          <td style={{ padding: '7px 10px', fontSize: 11, fontWeight: 800, color: '#15803d',
-                            textAlign: 'right', fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
-                            {fmtR(c.total)}
+                          <td className="acn-fin-c">
+                            {pend > 0 && <Selo familia="atencao" ponto={false}>{pend}</Selo>}
                           </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                            {recebidas > 0 && (
-                              <span style={{ background: '#dcfce7', color: '#15803d',
-                                padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                                {recebidas}
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                            {pend > 0 && (
-                              <span style={{ background: '#fef9c3', color: '#92400e',
-                                padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700 }}>
-                                {pend}
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' }}>
-                            <button onClick={e => { e.stopPropagation(); setModalCompras({ centro: { nome: c.nome }, compras: c.compras }); }}
-                              style={{ background: '#0369a1', color: '#fff', border: 'none',
-                                borderRadius: 4, padding: '3px 10px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
-                              Ver
-                            </button>
+                          <td className="acn-fin-c">
+                            <Botao pequeno onClick={e => { e.stopPropagation(); setModalCompras({ centro: { nome: c.nome }, compras: c.compras }); }}>Ver</Botao>
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr style={{ background: '#1e293b', color: '#fff' }}>
-                      <td style={{ padding: '8px 10px', fontWeight: 700, fontSize: 11 }}>TOTAL GERAL</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700 }}>
-                        {comprasFiltradas.length + despesasFiltradas.length}
-                      </td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, fontSize: 13, fontFamily: "'ACN Icones', 'IBM Plex Mono', monospace" }}>
-                        {fmtR(totalGasto)}
-                      </td>
+                    <tr className="acn-linha-total">
+                      <td>TOTAL GERAL</td>
+                      <td className="acn-fin-c">{comprasFiltradas.length + despesasFiltradas.length}</td>
+                      <td className="acn-dir acn-nowrap acn-num">{fmtR(totalGasto)}</td>
                       <td colSpan={3} />
                     </tr>
                   </tfoot>
