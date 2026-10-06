@@ -5,9 +5,10 @@ import { logChange, useFieldHighlight, useUnreadMap } from './AuditSystem';
 import { combinaBusca } from './SearchUtils';
 import { confirmar } from './Feedback';
 import { baseOplDe, lerDivisorPorBaseDeLote } from './OpLotes';
+import { montarModeloTecnicos, emitirDocumento, dataBR as dataDocBR } from './ComissaoDocumento';
 import { hojeISO, diaISO, Botao, Selo, Chips, Faixa } from './Interface';
 import Icone from './Icone';
-import { mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
+import { mdiFilePdfBox, mdiPlus, mdiClipboardTextOutline, mdiPrinterOutline, mdiChevronDown, mdiChevronRight, mdiChevronUp, mdiPencilOutline, mdiTrashCanOutline, mdiAccountGroupOutline, mdiAccountOffOutline, mdiTimerOutline, mdiChartBoxOutline, mdiClose, mdiCheck, mdiInformationOutline, mdiTshirtCrewOutline, mdiFileDocumentOutline, mdiCalendarRange, mdiAccountOutline, mdiAccountWrenchOutline, mdiCashMultiple, mdiMagnify, mdiCheckCircleOutline, mdiClockOutline, mdiAccountMultipleOutline } from '@mdi/js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTES
@@ -1791,6 +1792,11 @@ function ComissoesRH({ funcionarios, currentUser }) {
   const [filtroOrigem, setFiltroOrigem] = useState<'todos'|'adaptacao'>('todos');
   const [dados, setDados] = useState<any[]>([]);
   const [grupos, setGrupos] = useState<any[]>([]); // pipeline por técnico/dupla/equipe
+  // Documento detalhado (05/10/2026): OP/OS do período SEM técnico apontado (antes sumiam da tela, e parecia que a nota não vinha) e o que foi calculado (para o PDF dizer
+  // exatamente o período, a situação e a origem DO CÁLCULO, mesmo que a pessoa mexa nos filtros depois)
+  const [semTecnico, setSemTecnico] = useState<any[]>([]);
+  const [rotuloCalculo, setRotuloCalculo] = useState<any>(null);
+  const [emitindo, setEmitindo] = useState(false);
   const [fechamentos, setFechamentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [aprovando, setAprovando] = useState<string|null>(null);
@@ -1824,7 +1830,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
     // dentro do período). A Faturar: já concluído na produção dentro do
     // período, mas ainda sem NF emitida — dá visão do que vem pela frente.
     let opQuery = supabase.from('oples')
-      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome');
+      .select('id,opl,cliente_nome,tecnico_producao_id,responsavel_producao,valor_total,valor_mao_de_obra,valor_mao_de_obra_serralheria,data_emissao_nf,data_conclusao_producao,modo_execucao,equipe_id,equipe_nome,tecnico_producao_2_id,tecnico_producao_2_nome,numero_nf,nfe,numero_nf_servico,data_entrega');
     // Antes havia aqui `.not('tecnico_producao_id','is',null)`: OP sem o técnico principal nem entrava na
     // conta. Desde 30/09/2026 a equipe pode ser apontada ou corrigida depois (EquipeDaOp.tsx), inclusive
     // numa OP que nunca teve técnico principal — e quem manda é a lista em `responsaveis_producao`, não
@@ -1879,6 +1885,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
         valor_mao_de_obra_serralheria:unit(op.valor_mao_de_obra_serralheria),
         qtdVeiculosLote: divisor > 1 ? divisor : undefined,
         data_faturamento: modoFatura === 'faturada' ? op.data_emissao_nf : op.data_conclusao_producao,
+        nf: op.numero_nf || op.nfe, nf_servico: op.numero_nf_servico, data_conclusao: op.data_conclusao_producao, data_entrega: op.data_entrega,
         modo_execucao:op.modo_execucao, equipe_id:op.equipe_id, equipe_nome:op.equipe_nome,
         tecnico_producao_id:op.tecnico_producao_id, tecnico_producao_2_id:op.tecnico_producao_2_id, tecnico_producao_2_nome:op.tecnico_producao_2_nome,
       };
@@ -1887,6 +1894,7 @@ function ComissoesRH({ funcionarios, currentUser }) {
       tipo:'OS', id:os.id, numero:os.numero_os, cliente:os.cliente_nome,
       valor_total:os.valor_total, valor_mao_de_obra:os.valor_mao_de_obra,
       data_faturamento: modoFatura === 'faturada' ? os.data_faturamento : os.data_conclusao_manutencao,
+      data_conclusao: os.data_conclusao_manutencao,
       modo_execucao:os.modo_execucao, equipe_id:os.equipe_id, equipe_nome:os.equipe_nome,
       tecnico_producao_id:os.tecnico_producao_id, tecnico_producao_2_id:os.tecnico_producao_2_id, tecnico_producao_2_nome:os.tecnico_producao_2_nome,
     }; });
@@ -2008,6 +2016,16 @@ function ComissoesRH({ funcionarios, currentUser }) {
       });
     });
 
+    // OP/OS do período que nenhum técnico foi apontado: não geram comissão de produção e, antes, não apareciam em lugar nenhum
+    const cobertos = new Set<string>();
+    Object.values(mapa).forEach((tec: any) => [...tec.ops, ...tec.oss].forEach((i: any) => cobertos.add(i.id)));
+    setSemTecnico(Object.values(itemById).filter((i: any) => !cobertos.has(i.id))
+      .sort((a: any, b: any) => String(a.tipo).localeCompare(String(b.tipo)) || String(a.numero).localeCompare(String(b.numero), 'pt-BR', { numeric: true })));
+    setRotuloCalculo({
+      periodo: modoPeriodo === 'mes' ? `${mesNome(mes)}/${ano}` : `${dataDocBR(dataDe)} a ${dataDocBR(dataAte)}`,
+      situacao: modoFatura === 'faturada' ? 'OPs/OSs com NF emitida no período (faturadas)' : 'OPs/OSs concluídas na produção no período, NF ainda não emitida (valores estimados)',
+      origem: filtroOrigem === 'adaptacao' ? 'só Adaptação — OPs (transformação veicular) + OS de manutenção veicular' : 'todas as origens (OPs e OS)',
+    });
     setDados(Object.values(mapa));
     // Empate em nº de OP/OS: desempata pelo nome (30/09/2026). Antes a ordem dos cartões empatados era a
     // ordem em que o banco devolvia as linhas da equipe — que muda sozinha quando a consulta muda — e
@@ -2043,6 +2061,18 @@ function ComissoesRH({ funcionarios, currentUser }) {
   };
 
   const jaAprovado = (tecId: string) => fechamentos.find((f:any) => f.tecnico_id === tecId && f.status === 'aprovado');
+
+  // Documento detalhado em PDF (pedido do usuário em 05/10/2026), do que está calculado na tela
+  const emitirDocumentoPdf = async () => {
+    setEmitindo(true);
+    try {
+      const aprovados: Record<string, any> = {};
+      fechamentos.filter((f: any) => f.status === 'aprovado').forEach((f: any) => { aprovados[f.tecnico_id] = f; });
+      const modelo = montarModeloTecnicos({ ...rotuloCalculo, tecnicos: dados, grupos, semTecnico, aprovados, emitidoPor: currentUser?.nome });
+      await emitirDocumento(modelo);
+    } catch (e: any) { alert('Não foi possível gerar o documento: ' + (e?.message || e)); }
+    setEmitindo(false);
+  };
 
   // Etapa 12c4 (01/10/2026): o quadro vira cartão como os outros do RH (a classe de recolhido segue o estado, regra da Etapa 7.16) e as peças pintadas
   // à mão viram as do sistema. Só aparência: o cálculo, o período, os filtros, o "Aprovar" e a gravação são os de antes. O número, o selo de apoio / serralheria /
@@ -2095,6 +2125,10 @@ function ComissoesRH({ funcionarios, currentUser }) {
             <Botao variante="primario" pequeno icone={mdiMagnify} onClick={calcular} disabled={loading}>
               {loading ? 'Calculando...' : 'Calcular'}
             </Botao>
+            <Botao pequeno icone={mdiFilePdfBox} onClick={emitirDocumentoPdf} disabled={emitindo || loading || !rotuloCalculo || (dados.length === 0 && semTecnico.length === 0)}
+              title="PDF com cada OP/OS, as datas, a base e a comissão de cada técnico do período calculado">
+              {emitindo ? 'Gerando…' : 'Emitir documento (PDF)'}
+            </Botao>
           </div>
           <div className="acn-ajuda acn-com-resumo">
             Período: {modoPeriodo==='mes' ? `${mesNome(mes)}/${ano}` : `${dataDe||'—'} até ${dataAte||'—'}`} ·{' '}
@@ -2128,6 +2162,14 @@ function ComissoesRH({ funcionarios, currentUser }) {
                 ))}
               </div>
             </div>
+          )}
+
+          {semTecnico.length > 0 && (
+            <Faixa tom="atencao">
+              <strong>{semTecnico.length} OP/OS com faturamento no período SEM técnico apontado (não geram comissão de produção):</strong>{' '}
+              {semTecnico.slice(0, 12).map((i: any) => i.numero).join(', ')}{semTecnico.length > 12 ? ` e mais ${semTecnico.length - 12}` : ''}.
+              {' '}Aponte quem trabalhou em "Equipe" da OP/OS (Produção) e calcule de novo.
+            </Faixa>
           )}
 
           {dados.length === 0 && !loading && (
