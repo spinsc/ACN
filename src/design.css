@@ -1208,3 +1208,16 @@ html body .modal-box.acn-modal-cadastro.acn-fin-compras { width: min(1180px, 96v
   .acn-fin-barra-valor { order: 3; width: auto; flex: 1; text-align: left; }
   .acn-fin-barra-qtd { order: 4; }
 }
+
+/* ── Financeiro · 12e10 (05/10/2026): as janelas que abrem por dentro da lista de compras do centro ──────────────────── */
+/* "Lançar medição" (estreita) e "Editar lançamento" / "Editar pedido de compra" (média) */
+html body .modal-box.acn-modal-cadastro.acn-cc-medicao { width: min(440px, 95vw); max-width: 440px; }
+html body .modal-box.acn-modal-cadastro.acn-cc-edit { width: min(560px, 95vw); max-width: 560px; max-height: 92vh; }
+.acn-cc-medicao .form-group, .acn-cc-edit .form-group { margin-bottom: 0; }
+/* no celular a regra geral dá a cada campo uma base de 140 px; numa coluna isso vira altura — o campo cresce só até o que precisa */
+.acn-cc-medicao .acn-modal-corpo > .form-group, .acn-cc-edit .acn-modal-corpo > .form-group { flex: 0 0 auto; }
+/* acima da lista de compras do centro (2100), de onde abrem, e abaixo da ficha do centro (2600) */
+.modal-overlay.acn-fin-sobre-edicao { z-index: 2300; }
+/* "Excluir" à esquerda, "Cancelar" e "Salvar" à direita */
+.acn-fin-rodape-editar { justify-content: flex-start; flex-wrap: wrap; }
+.acn-fin-rodape-editar .cresce { flex: 1; }

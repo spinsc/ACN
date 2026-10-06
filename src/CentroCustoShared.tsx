@@ -15,7 +15,9 @@ import { supabase } from './supabaseClient';
 import { ehAdminOuGerente } from './utils/permissoes';
 import { logChange } from './AuditSystem';
 import { confirmar } from './Feedback';
-import { hojeISO, diaISO, Faixa, Botao } from './Interface';
+import { hojeISO, diaISO, Faixa, Botao, Chips } from './Interface';
+import Icone from './Icone';
+import { mdiReceiptTextOutline, mdiPencilOutline, mdiCartOutline, mdiContentSaveOutline } from '@mdi/js';
 import { AnexosDespesa } from './DespesaAnexos';
 import { conferirMesesAbertos, mesDe, mesDoLancamento, mesDaCompra } from './CentroCustoFechamento';
 
@@ -172,13 +174,15 @@ export function orcamentoDoCentro(centro: any, centros: any[], linhas: any[]): n
 }
 
 // ─── SELECT REUTILIZÁVEL (formulários de pedido/demanda) ──────────────────
-export function CentroCustoSelect({ value, onChange, permitirNenhum = true, style, className }: any) {
+// `semEstilo` (Etapa 12e10, 05/10/2026): sem o estilo de caixa escrito à mão — quem usa já passa a classe do guia (`acn-input`).
+// Quem não passa continua com o estilo de sempre (os formulários de Compras e Demandas ainda não foram migrados).
+export function CentroCustoSelect({ value, onChange, permitirNenhum = true, style, className, semEstilo = false }: any) {
   const [centros, setCentros] = useState<any[]>([]);
   useEffect(() => { fetchCentrosCusto().then(setCentros); }, []);
   const arvore = centrosParaApontar(centros, value || null);
   return (
     <select className={className} value={value || ''} onChange={e => onChange(e.target.value || null)}
-      style={{ padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, ...style }}>
+      style={semEstilo ? undefined : { padding:'4px 8px', border:'1px solid #d1d5db', borderRadius:4, fontSize:10, ...style }}>
       {permitirNenhum && <option value="">— Não informar —</option>}
       {arvore.map(c => (
         <option key={c.id} value={c.id} disabled={c.bloqueado}>{'　'.repeat(c.nivel)}{c.nivel>0?'└ ':''}{c.codigo} — {c.nome}{c.bloqueado ? ` (${motivoBloqueio(c)})` : (c.id === value && !centroDisponivel(c) ? ` (${motivoBloqueio(c)})` : '')}</option>
@@ -214,28 +218,25 @@ export const MSG_PARCELAS = 'Em quantas vezes: informe um número inteiro de 2 a
 function CampoParcelas({ parcelas, onChange, total, feitas = 0 }: any) {
   const { ok, n } = lerParcelas(parcelas);
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div className="form-group">
       <label className="acn-label">Em quantas vezes?</label>
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input className="acn-input" style={{ width: 72 }} inputMode="numeric" placeholder="ex: 6" aria-label="Número de parcelas"
+      <div className="acn-acoes-linha quebra">
+        <input className="acn-input acn-cc-parc" inputMode="numeric" placeholder="ex: 6" aria-label="Número de parcelas"
           value={parcelas} onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 3))} />
         {[2, 3, 4, 6, 10, 12].map(q => (
-          <button key={q} type="button" onClick={() => onChange(String(q))}
-            style={{ padding: '4px 8px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-              border: `1.5px solid ${n === q ? '#0f766e' : '#d1d5db'}`,
-              background: n === q ? '#ccfbf1' : '#fff', color: n === q ? '#0f766e' : '#6b7280' }}>{q}x</button>
+          <Botao key={q} pequeno variante={n === q ? 'primario' : 'secundario'} aria-pressed={n === q} onClick={() => onChange(String(q))}>{q}x</Botao>
         ))}
       </div>
-      {!ok && <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 4 }}>{MSG_PARCELAS}</div>}
+      {!ok && <div className="acn-txt-erro">{MSG_PARCELAS}</div>}
       {ok && n && total > 0 && (
-        <div style={{ fontSize: 10, color: '#0f766e', marginTop: 4 }}>
-          Cada parcela: <b>{moeda(total / n)}</b> ({moeda(total)} ÷ {n}). As parcelas entram depois, uma a uma, como medições.
+        <div className="acn-ajuda">
+          Cada parcela: <strong>{moeda(total / n)}</strong> ({moeda(total)} ÷ {n}). As parcelas entram depois, uma a uma, como medições.
         </div>
       )}
-      {ok && !n && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>Deixe em branco se ainda não foi combinado.</div>}
+      {ok && !n && <div className="acn-ajuda">Deixe em branco se ainda não foi combinado.</div>}
       {ok && feitas > 0 && (
-        <div style={{ fontSize: 10, marginTop: 2, color: n && feitas > n ? '#b91c1c' : '#64748b' }}>
-          Já lançadas: <b>{feitas}</b>{n ? ` de ${n}` : ''}{n && feitas > n ? ' — há mais medições do que parcelas combinadas.' : '.'}
+        <div className={n && feitas > n ? 'acn-txt-erro' : 'acn-ajuda'}>
+          Já lançadas: <strong>{feitas}</strong>{n ? ` de ${n}` : ''}{n && feitas > n ? ' — há mais medições do que parcelas combinadas.' : '.'}
         </div>
       )}
     </div>
@@ -299,49 +300,55 @@ export function ModalLancarMedicao({ contrato, currentUser, onClose, onSaved }: 
     onSaved?.();
   };
 
+  // Etapa 12e10 (05/10/2026): na moldura das janelas do sistema (título, corpo, rodapé com o botão principal à direita).
+  // Sem z-index próprio, de propósito: ela abre DENTRO da janela "Compras — centro" e fica por cima dela pela ordem no documento.
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth:400 }}>
-        <div className="modal-title">🧾 Lançar Medição — {contrato.descricao}</div>
-        <div style={{ fontSize:11, color:'#64748b', marginBottom:12 }}>
-          Total negociado: <strong>R$ {totalNegociado.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
-          {' · '}Já pago: <strong>{jaPago == null ? '...' : `R$ ${jaPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}</strong>
-          {nParcelas > 0 && jaPago != null && (
-            <div style={{ marginTop: 4, color: qtdFeitas >= nParcelas ? '#b45309' : '#0f766e', fontWeight: 700 }}>
-              {qtdFeitas >= nParcelas
-                ? `As ${nParcelas} parcelas combinadas já foram lançadas (${qtdFeitas}).`
-                : `Parcela ${numeroDaParcela} de ${nParcelas}${sugestao(jaPago, qtdFeitas) > 0 ? ` — sugestão: R$ ${sugestao(jaPago, qtdFeitas).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : ''}`}
-            </div>
-          )}
+      <div className="modal-box acn-modal-cadastro acn-cc-medicao" role="dialog" aria-label="Lançar medição">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiReceiptTextOutline} size={16} /> Lançar Medição — {contrato.descricao}</span>
         </div>
-        {erroLeitura && (
-          <div style={{ marginBottom: 10 }}>
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-ajuda">
+            Total negociado: <strong>R$ {totalNegociado.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong>
+            {' · '}Já pago: <strong>{jaPago == null ? '...' : `R$ ${jaPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}</strong>
+            {nParcelas > 0 && jaPago != null && (
+              <div className={qtdFeitas >= nParcelas ? 'acn-txt-atencao' : 'acn-txt-ok'}>
+                {qtdFeitas >= nParcelas
+                  ? `As ${nParcelas} parcelas combinadas já foram lançadas (${qtdFeitas}).`
+                  : `Parcela ${numeroDaParcela} de ${nParcelas}${sugestao(jaPago, qtdFeitas) > 0 ? ` — sugestão: R$ ${sugestao(jaPago, qtdFeitas).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : ''}`}
+              </div>
+            )}
+          </div>
+          {erroLeitura && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={lerJaPago}>Tentar de novo</Botao>}>
               Não foi possível conferir o que já foi pago neste contrato ({erroLeitura}). Nada pode ser lançado antes disso.
             </Faixa>
+          )}
+          <div className="form-group">
+            <label className="acn-label" htmlFor="mm-valor">Valor desta Medição (R$) *</label>
+            <input id="mm-valor" className="acn-input" placeholder="0,00" inputMode="decimal"
+              value={valor} onChange={e => setValor(e.target.value)} autoFocus />
           </div>
-        )}
-        <label className="acn-label">Valor desta Medição (R$) *</label>
-        <input className="acn-input" style={{ width:'100%', marginBottom:6 }} placeholder="0,00" inputMode="decimal"
-          value={valor} onChange={e => setValor(e.target.value)} autoFocus />
-        {vNum > 0 && excedente > 0 && (
-          <div style={{ fontSize:10, fontWeight:700, color:'#dc2626', background:'#fef2f2', border:'1px solid #fecaca',
-            borderRadius:4, padding:'6px 8px', marginBottom:10 }}>
-            ⚠️ Isso ultrapassa o valor total negociado em R$ {excedente.toLocaleString('pt-BR',{minimumFractionDigits:2})}.
+          {vNum > 0 && excedente > 0 && (
+            <Faixa tom="atencao">Isso ultrapassa o valor total negociado em R$ {excedente.toLocaleString('pt-BR',{minimumFractionDigits:2})}.</Faixa>
+          )}
+          <div className="form-group">
+            <label className="acn-label" htmlFor="mm-obs">Observação</label>
+            <textarea id="mm-obs" className="acn-input" rows={2}
+              placeholder={nParcelas ? `Ex: referente à etapa X (sem texto, vai como "Parcela ${numeroDaParcela}/${nParcelas}")` : 'Ex: 1ª parcela, referente à etapa X...'}
+              value={obs} onChange={e => setObs(e.target.value)} />
           </div>
-        )}
-        <label className="acn-label">Observação</label>
-        <textarea className="acn-input" rows={2} style={{ width:'100%', resize:'vertical', marginBottom:10, boxSizing:'border-box' }}
-          placeholder={nParcelas ? `Ex: referente à etapa X (sem texto, vai como "Parcela ${numeroDaParcela}/${nParcelas}")` : 'Ex: 1ª parcela, referente à etapa X...'}
-          value={obs} onChange={e => setObs(e.target.value)} />
-        <label className="acn-label">Data</label>
-        <input type="date" className="acn-input" style={{ width:'100%', marginBottom:14 }}
-          value={data} onChange={e => setData(e.target.value)} />
-        <div style={{ display:'flex', gap:8 }}>
-          <button className="acn-btn" style={{ background:'#16a34a', flex:1 }} onClick={salvar} disabled={salvando || !!erroLeitura}>
-            {salvando ? 'Salvando...' : '💾 Lançar Medição'}
-          </button>
-          <button className="acn-btn" style={{ background:'#94a3b8' }} onClick={onClose}>Cancelar</button>
+          <div className="form-group">
+            <label className="acn-label" htmlFor="mm-data">Data</label>
+            <input id="mm-data" type="date" className="acn-input" value={data} onChange={e => setData(e.target.value)} />
+          </div>
+        </div>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" icone={mdiContentSaveOutline} onClick={salvar} disabled={salvando || !!erroLeitura}>
+            {salvando ? 'Salvando...' : 'Lançar Medição'}
+          </Botao>
+          <Botao onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>
@@ -531,139 +538,127 @@ export function ModalEditarLancamento({ lancamento, jaPago = 0, medicoes = 0, cu
     onClose();
   };
 
+  // Etapa 12e10 (05/10/2026): na moldura das janelas do sistema. O z-index (2300) é o de antes, por classe: fica acima da lista de
+  // compras do centro (2100), que é de onde esta janela abre, e abaixo da ficha do centro (2600).
   return (
-    <div className="modal-overlay" style={{ zIndex: 2300 }}
+    <div className="modal-overlay acn-fin-sobre-edicao"
       onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 520, maxHeight: '92vh', overflowY: 'auto' }}>
-        <div className="modal-title">
-          ✏️ Editar lançamento{eraContrato ? ' — contrato parcelado' : ehMedicao ? ' — medição' : ''}
+      <div className="modal-box acn-modal-cadastro acn-cc-edit" role="dialog" aria-label="Editar lançamento">
+        <div className="acn-modal-cab">
+          <span className="modal-title">
+            <Icone path={mdiPencilOutline} size={16} /> Editar lançamento{eraContrato ? ' — contrato parcelado' : ehMedicao ? ' — medição' : ''}
+          </span>
         </div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
-          Lançado por {lancamento.criado_por_nome || '—'}
-          {lancamento.criado_em ? ` em ${new Date(lancamento.criado_em).toLocaleDateString('pt-BR')}` : ''}.
-          A alteração fica na auditoria com o valor de antes.
-        </div>
-        {mesFechado && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">{travaMes.mensagem.replace(' Nada foi gravado.', '')}</Faixa></div>}
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-ajuda">
+            Lançado por {lancamento.criado_por_nome || '—'}
+            {lancamento.criado_em ? ` em ${new Date(lancamento.criado_em).toLocaleDateString('pt-BR')}` : ''}.
+            A alteração fica na auditoria com o valor de antes.
+          </div>
+          {mesFechado && <Faixa tom="atencao">{travaMes.mensagem.replace(' Nada foi gravado.', '')}</Faixa>}
 
-        {/* Medição é o pagamento de um contrato, não um lançamento que possa
-            mudar de forma — por isso a escolha não aparece para ela. */}
-        {!ehMedicao && (
-          <>
-            <label className="acn-label">Forma</label>
-            <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
-              {([[false, 'À Vista'], [true, 'Parcelado']] as const).map(([v, label]) => (
-                <button key={label} type="button" onClick={() => setEhContrato(v)}
-                  style={{ flex: 1, padding: '6px', fontSize: 10, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
-                    border: `1.5px solid ${ehContrato === v ? '#0f766e' : '#d1d5db'}`,
-                    background: ehContrato === v ? '#ccfbf1' : '#fff',
-                    color: ehContrato === v ? '#0f766e' : '#6b7280' }}>
-                  {label}
-                </button>
-              ))}
+          {/* Medição é o pagamento de um contrato, não um lançamento que possa
+              mudar de forma — por isso a escolha não aparece para ela. */}
+          {!ehMedicao && (
+            <div className="form-group">
+              <label className="acn-label">Forma</label>
+              <Chips rotulo="Forma" ativo={ehContrato ? 'parcelado' : 'vista'} onChange={id => setEhContrato(id === 'parcelado')}
+                itens={[{ id: 'vista', rotulo: 'À Vista' }, { id: 'parcelado', rotulo: 'Parcelado' }]} />
+              {trocouForma && (
+                <Faixa tom="atencao">
+                  {ehContrato
+                    ? 'Vira contrato: o valor passa a ser o total negociado e os pagamentos entram depois como medições.'
+                    : 'Vira despesa à vista: o valor passa a contar direto no total do centro de custo.'}
+                </Faixa>
+              )}
             </div>
-            {trocouForma && (
-              <div style={{ fontSize: 10, color: '#b45309', background: '#fffbeb',
-                border: '1px solid #fcd34d', borderRadius: 5, padding: '6px 8px', marginBottom: 10 }}>
-                {ehContrato
-                  ? 'Vira contrato: o valor passa a ser o total negociado e os pagamentos entram depois como medições.'
-                  : 'Vira despesa à vista: o valor passa a contar direto no total do centro de custo.'}
-              </div>
-            )}
-          </>
-        )}
+          )}
 
-        <label className="acn-label">Descrição *</label>
-        <input className="acn-input" style={{ width: '100%', marginBottom: 8 }} autoFocus
-          value={descricao} onChange={e => setDescricao(e.target.value)} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div>
-            <label className="acn-label">{ehContrato ? 'Valor total negociado (R$) *' : 'Valor (R$) *'}</label>
-            <input className="acn-input" style={{ width: '100%' }} inputMode="decimal"
-              value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+          <div className="form-group">
+            <label className="acn-label" htmlFor="el-desc">Descrição *</label>
+            <input id="el-desc" className="acn-input" autoFocus value={descricao} onChange={e => setDescricao(e.target.value)} />
           </div>
-          <div>
-            <label className="acn-label">Data *</label>
-            <input type="date" className="acn-input" style={{ width: '100%' }}
-              value={data} onChange={e => setData(e.target.value)} />
-          </div>
-        </div>
 
-        {/* Em quantas vezes: só no contrato parcelado (medição é o pagamento de UMA parcela) */}
-        {ehContrato && !ehMedicao && (
-          <div style={{ marginTop: 8 }}>
+          <div className="acn-cc-linha">
+            <div className="form-group">
+              <label className="acn-label" htmlFor="el-valor">{ehContrato ? 'Valor total negociado (R$) *' : 'Valor (R$) *'}</label>
+              <input id="el-valor" className="acn-input" inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="form-group">
+              <label className="acn-label" htmlFor="el-data">Data *</label>
+              <input id="el-data" type="date" className="acn-input" value={data} onChange={e => setData(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Em quantas vezes: só no contrato parcelado (medição é o pagamento de UMA parcela) */}
+          {ehContrato && !ehMedicao && (
             <CampoParcelas parcelas={parcelas} onChange={setParcelas} total={Number.isFinite(v) ? v : 0} feitas={medicoes} />
-          </div>
-        )}
-        {ehContrato && jaPago > 0 && (
-          <div style={{ fontSize: 10, color: abaixoDoPago ? '#b91c1c' : '#64748b', marginTop: 6 }}>
-            Já lançado em medições: <b>{moeda(jaPago)}</b>
-            {abaixoDoPago ? ' — o novo total fica abaixo disso, e o contrato vai passar de 100% pago.' : ''}
-          </div>
-        )}
+          )}
+          {ehContrato && jaPago > 0 && (
+            <div className={abaixoDoPago ? 'acn-txt-erro' : 'acn-ajuda'}>
+              Já lançado em medições: <strong>{moeda(jaPago)}</strong>
+              {abaixoDoPago ? ' — o novo total fica abaixo disso, e o contrato vai passar de 100% pago.' : ''}
+            </div>
+          )}
 
-        <label className="acn-label" style={{ marginTop: 8 }}>Centro de custo *</label>
-        <CentroCustoSelect value={centroId} onChange={setCentroId} permitirNenhum={false} />
-        {trocouCentro && (
-          <div style={{ fontSize: 10, color: '#b45309', marginTop: 4 }}>
-            O valor sai do centro atual e entra no novo — os dois totais mudam.
+          <div className="form-group">
+            <label className="acn-label">Centro de custo *</label>
+            <CentroCustoSelect value={centroId} onChange={setCentroId} permitirNenhum={false} className="acn-input" semEstilo />
+            {trocouCentro && (
+              <div className="acn-ajuda atencao">O valor sai do centro atual e entra no novo — os dois totais mudam.</div>
+            )}
           </div>
-        )}
 
-        {/* Etapa 15d: categoria, competência, fornecedor, NF, comprovante e o aviso do rateio */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-          <div>
-            <label className="acn-label">Categoria</label>
-            <select className="acn-input" style={{ width: '100%' }} value={categoriaId} onChange={e => setCategoriaId(e.target.value)}>
-              <option value="">— Sem categoria —</option>
-              {categorias.filter((c: any) => c.ativo || c.id === categoriaId).map((c: any) => <option key={c.id} value={c.id}>{c.nome}{c.ativo ? '' : ' (desativada)'}</option>)}
-            </select>
+          {/* Etapa 15d: categoria, competência, fornecedor, NF, comprovante e o aviso do rateio */}
+          <div className="acn-cc-linha">
+            <div className="form-group">
+              <label className="acn-label" htmlFor="el-cat">Categoria</label>
+              <select id="el-cat" className="acn-input" value={categoriaId} onChange={e => setCategoriaId(e.target.value)}>
+                <option value="">— Sem categoria —</option>
+                {categorias.filter((c: any) => c.ativo || c.id === categoriaId).map((c: any) => <option key={c.id} value={c.id}>{c.nome}{c.ativo ? '' : ' (desativada)'}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="acn-label" htmlFor="el-comp">Competência (mês)</label>
+              <input id="el-comp" type="month" className="acn-input" value={competencia} onChange={e => setCompetencia(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <label className="acn-label">Competência (mês)</label>
-            <input type="month" className="acn-input" style={{ width: '100%' }} value={competencia} onChange={e => setCompetencia(e.target.value)} />
+          <div className="acn-cc-linha">
+            <div className="form-group">
+              <label className="acn-label" htmlFor="el-forn">Fornecedor</label>
+              <input id="el-forn" className="acn-input" value={fornecedor} onChange={e => setFornecedor(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label" htmlFor="el-nf">Nº da NF</label>
+              <input id="el-nf" className="acn-input" value={numeroNf} onChange={e => setNumeroNf(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <label className="acn-label">Fornecedor</label>
-            <input className="acn-input" style={{ width: '100%' }} value={fornecedor} onChange={e => setFornecedor(e.target.value)} />
-          </div>
-          <div>
-            <label className="acn-label">Nº da NF</label>
-            <input className="acn-input" style={{ width: '100%' }} value={numeroNf} onChange={e => setNumeroNf(e.target.value)} />
-          </div>
-        </div>
-        <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>Sem competência, a despesa conta no mês da data (como as de antes).</div>
-        {erroCategorias && <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 4 }}>Não foi possível ler as categorias ({erroCategorias}). A categoria atual não muda ao salvar.</div>}
-        {lancamento?.rateio_grupo_id && erroIrmaos && (
-          <div style={{ marginTop: 8 }}>
+          <div className="acn-ajuda">Sem competência, a despesa conta no mês da data (como as de antes).</div>
+          {erroCategorias && <div className="acn-txt-erro">Não foi possível ler as categorias ({erroCategorias}). A categoria atual não muda ao salvar.</div>}
+          {lancamento?.rateio_grupo_id && erroIrmaos && (
             <Faixa tom="erro" acao={<Botao pequeno onClick={lerIrmaos}>Tentar de novo</Botao>}>
               Não foi possível ler as outras partes do rateio ({erroIrmaos}). Enquanto isso, "Excluir o rateio todo" fica desligado.
             </Faixa>
-          </div>
-        )}
-        {lancamento?.rateio_grupo_id && (
-          <div style={{ fontSize: 11, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, padding: '6px 8px', marginTop: 8 }}>
-            Esta despesa é uma parte de um <b>rateio</b>{irmaos.length ? ` (${irmaos.length} partes: ${irmaos.map((x: any) => `${x.centro_custo_id === lancamento.centro_custo_id ? 'esta' : 'outra'} ${moeda(x.valor)}${x.rateio_percentual != null ? ` · ${String(Number(x.rateio_percentual)).replace('.', ',')}%` : ''}`).join(' | ')})` : ''}.
-            Mudar o valor ou o centro de uma parte não refaz as outras.
-          </div>
-        )}
-        <label className="acn-label" style={{ marginTop: 8 }}>Comprovante</label>
-        <AnexosDespesa despesaId={lancamento.id} currentUser={currentUser} podeEditar />
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button className="acn-btn" style={{ background: '#dc2626' }} disabled={salvando || mesFechado} onClick={excluir}>
-            Excluir
-          </button>
-          {lancamento?.rateio_grupo_id && (
-            <button className="acn-btn" style={{ background: '#b91c1c' }} disabled={salvando || mesFechado || !irmaosLidos} onClick={excluirRateio} title="Apaga todas as partes do rateio">
-              Excluir o rateio todo
-            </button>
           )}
-          <div style={{ flex: 1 }} />
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
-          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando || mesFechado} onClick={salvar}>
-            {salvando ? 'Salvando...' : 'Salvar'}
-          </button>
+          {lancamento?.rateio_grupo_id && (
+            <Faixa tom="info">
+              Esta despesa é uma parte de um <strong>rateio</strong>{irmaos.length ? ` (${irmaos.length} partes: ${irmaos.map((x: any) => `${x.centro_custo_id === lancamento.centro_custo_id ? 'esta' : 'outra'} ${moeda(x.valor)}${x.rateio_percentual != null ? ` · ${String(Number(x.rateio_percentual)).replace('.', ',')}%` : ''}`).join(' | ')})` : ''}.
+              Mudar o valor ou o centro de uma parte não refaz as outras.
+            </Faixa>
+          )}
+          <div className="form-group">
+            <label className="acn-label">Comprovante</label>
+            <AnexosDespesa despesaId={lancamento.id} currentUser={currentUser} podeEditar />
+          </div>
+        </div>
+        <div className="acn-modal-rodape acn-fin-rodape-editar">
+          <Botao variante="perigo" disabled={salvando || mesFechado} onClick={excluir}>Excluir</Botao>
+          {lancamento?.rateio_grupo_id && (
+            <Botao variante="perigo-sec" disabled={salvando || mesFechado || !irmaosLidos} onClick={excluirRateio} title="Apaga todas as partes do rateio">Excluir o rateio todo</Botao>
+          )}
+          <span className="cresce" />
+          <Botao disabled={salvando} onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" disabled={salvando || mesFechado} onClick={salvar}>{salvando ? 'Salvando...' : 'Salvar'}</Botao>
         </div>
       </div>
     </div>
@@ -731,54 +726,56 @@ export function ModalEditarPedidoCompra({ pedido, currentUser, onClose, onSalvo 
     onClose();
   };
 
+  // Etapa 12e10 (05/10/2026): na moldura das janelas do sistema; o z-index (2300) é o de antes, por classe
   return (
-    <div className="modal-overlay" style={{ zIndex: 2300 }}
+    <div className="modal-overlay acn-fin-sobre-edicao"
       onClick={e => { if (e.target === e.currentTarget && !salvando) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 520 }}>
-        <div className="modal-title">🛒 Editar pedido de compra — {pedido.numero_pedido || '—'}</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
-          Fornecedor {pedido.fornecedor || '—'} · status {pedido.status_compra || '—'}
-          {pedido.numero_oc ? ` · OC ${pedido.numero_oc}` : ''}.
-          A alteração fica na auditoria com o valor de antes.
+      <div className="modal-box acn-modal-cadastro acn-cc-edit" role="dialog" aria-label="Editar pedido de compra">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiCartOutline} size={16} /> Editar pedido de compra — {pedido.numero_pedido || '—'}</span>
         </div>
-        {mesFechado && <div style={{ marginBottom: 10 }}><Faixa tom="atencao">{travaMes.mensagem.replace(' Nada foi gravado.', '')}</Faixa></div>}
-
-        <label className="acn-label">Descrição do material *</label>
-        <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', marginBottom: 8, boxSizing: 'border-box' }}
-          value={descricao} onChange={e => setDescricao(e.target.value)} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div>
-            <label className="acn-label">Valor da compra (R$)</label>
-            <input className="acn-input" style={{ width: '100%' }} inputMode="decimal"
-              value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="acn-ajuda">
+            Fornecedor {pedido.fornecedor || '—'} · status {pedido.status_compra || '—'}
+            {pedido.numero_oc ? ` · OC ${pedido.numero_oc}` : ''}.
+            A alteração fica na auditoria com o valor de antes.
           </div>
-          <div>
-            <label className="acn-label">Data</label>
-            <input type="date" className="acn-input" style={{ width: '100%' }}
-              value={data} onChange={e => setData(e.target.value)} />
+          {mesFechado && <Faixa tom="atencao">{travaMes.mensagem.replace(' Nada foi gravado.', '')}</Faixa>}
+
+          <div className="form-group">
+            <label className="acn-label" htmlFor="ep-desc">Descrição do material *</label>
+            <textarea id="ep-desc" className="acn-input" rows={3} value={descricao} onChange={e => setDescricao(e.target.value)} />
+          </div>
+
+          <div className="acn-cc-linha">
+            <div className="form-group">
+              <label className="acn-label" htmlFor="ep-valor">Valor da compra (R$)</label>
+              <input id="ep-valor" className="acn-input" inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="form-group">
+              <label className="acn-label" htmlFor="ep-data">Data</label>
+              <input id="ep-data" type="date" className="acn-input" value={data} onChange={e => setData(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="acn-label">Centro de custo</label>
+            <CentroCustoSelect value={centroId} onChange={setCentroId} permitirNenhum={true} className="acn-input" semEstilo />
+            {trocouCentro && (
+              <div className="acn-ajuda atencao">O valor sai do centro atual e entra no novo — os dois totais mudam.</div>
+            )}
+          </div>
+
+          <div className="acn-quadro">
+            <div className="acn-ajuda">
+              Fornecedor, cotação, aprovação e Ordem de Compra são alterados no módulo de Compras,
+              onde cada um tem o seu fluxo e o seu histórico.
+            </div>
           </div>
         </div>
-
-        <label className="acn-label" style={{ marginTop: 8 }}>Centro de custo</label>
-        <CentroCustoSelect value={centroId} onChange={setCentroId} permitirNenhum={true} />
-        {trocouCentro && (
-          <div style={{ fontSize: 10, color: '#b45309', marginTop: 4 }}>
-            O valor sai do centro atual e entra no novo — os dois totais mudam.
-          </div>
-        )}
-
-        <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 10, background: '#f8fafc',
-          border: '1px solid #e2e8f0', borderRadius: 5, padding: '6px 8px' }}>
-          Fornecedor, cotação, aprovação e Ordem de Compra são alterados no módulo de Compras,
-          onde cada um tem o seu fluxo e o seu histórico.
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
-          <button className="acn-btn" style={{ background: '#94a3b8' }} disabled={salvando} onClick={onClose}>Cancelar</button>
-          <button className="acn-btn" style={{ background: '#16a34a' }} disabled={salvando || mesFechado} onClick={salvar}>
-            {salvando ? 'Salvando...' : 'Salvar'}
-          </button>
+        <div className="acn-modal-rodape acn-sac-rodape">
+          <Botao variante="primario" disabled={salvando || mesFechado} onClick={salvar}>{salvando ? 'Salvando...' : 'Salvar'}</Botao>
+          <Botao disabled={salvando} onClick={onClose}>Cancelar</Botao>
         </div>
       </div>
     </div>

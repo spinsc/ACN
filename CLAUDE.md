@@ -17,9 +17,9 @@ React 19 + TypeScript + Vite, Supabase como banco, publicado no GitHub Pages.
 > pelo comando `/ux-fluxo`, de qualquer máquina. A Etapa 15 (centros de custo mais
 > completos — ficha, painel, controle de uso, lançamento e relatórios; pesquisa em
 > [PLANO_CENTRO_CUSTO.md](PLANO_CENTRO_CUSTO.md)) foi a prioridade e está **concluída
-> (05/10/2026)**; a tela do Financeiro já foi migrada para o design system (12e9) e o
-> `/ux-fluxo` segue pelo resto do plano: as janelas do `CentroCustoShared` (12e10) e
-> a aba Tarefas (12e11), depois R4/R9 e as telas médias.
+> (05/10/2026)**; a tela do Financeiro e as janelas do centro de custo já foram migradas
+> para o design system (12e9 e 12e10) e o `/ux-fluxo` segue pelo resto do plano: a aba
+> Tarefas (12e11), depois R4/R9 e as telas médias.
 
 ---
 
