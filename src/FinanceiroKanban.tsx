@@ -22,10 +22,17 @@ import { supabase } from './supabaseClient';
 import { logChange } from './AuditSystem';
 import { ColaboradorSelect } from './ColaboradorSelect';
 import { confirmar } from './Feedback';
-import { Faixa, Botao } from './Interface';
+import { Faixa, Botao, Selo, Tag } from './Interface';
+import Icone from './Icone';
+import {
+  mdiClipboardTextOutline, mdiCalendarMonthOutline, mdiTagOutline, mdiBellOutline, mdiRepeat,
+  mdiAccountOutline, mdiCommentOutline, mdiCalendarOutline, mdiAlertOutline, mdiArrowLeft, mdiArrowRight,
+  mdiTrashCanOutline, mdiPaperclip, mdiClose,
+} from '@mdi/js';
 
 const ETAPAS = ['A Fazer', 'Em Andamento', 'Concluído'];
-const COR_ETAPA = { 'A Fazer': '#64748b', 'Em Andamento': '#2563eb', 'Concluído': '#16a34a' };
+// Etapa 12e11 (06/10/2026): a cor de cada coluna sai do guia (uma família por etapa), não mais de hex escrito à mão.
+const FAMILIA_ETAPA = { 'A Fazer': 'neutro', 'Em Andamento': 'info', 'Concluído': 'ok' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TAREFA QUE SE REPETE (28/09/2026)
@@ -123,22 +130,20 @@ function CartaoVencida({ tarefa, currentUser, onResolvida }) {
   };
 
   return (
-    <div style={{ border: '1px solid #fca5a5', borderLeft: '3px solid #dc2626', borderRadius: 8, padding: '8px 10px', background: '#fff' }}>
-      <div style={{ fontWeight: 700, fontSize: 12, color: '#0f172a' }}>{tarefa.titulo}</div>
-      <div style={{ fontSize: 10, color: '#b91c1c', marginTop: 2, fontWeight: 700 }}>
+    <div className="acn-quadro tom-erro">
+      <div className="acn-kb-nome">{tarefa.titulo}</div>
+      <div className="acn-txt-erro">
         Venceu em {fmtDt(tarefa.data_vencimento)} — {diasAte(tarefa.data_vencimento) * -1} dia(s) de atraso
       </div>
-      <textarea className="acn-input" rows={2} style={{ width: '100%', marginTop: 6, resize: 'vertical', boxSizing: 'border-box' }}
+      <textarea className="acn-input acn-kb-largo" rows={2} aria-label="Motivo do atraso"
         placeholder="Motivo do atraso *" value={motivo} onChange={e => setMotivo(e.target.value)} />
-      <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
-        <label style={{ fontSize: 9, fontWeight: 700, color: '#475569' }}>Nova data de conclusão *</label>
-        <input type="date" className="acn-input" style={{ width: 150 }} min={hojeISO()}
+      <div className="acn-kb-linha">
+        <label className="acn-label" htmlFor={`kb-nova-${tarefa.id}`}>Nova data de conclusão *</label>
+        <input id={`kb-nova-${tarefa.id}`} type="date" className="acn-input acn-kb-data" min={hojeISO()}
           value={novaData} onChange={e => setNovaData(e.target.value)} />
-        <button onClick={salvar} disabled={salvando}
-          style={{ marginLeft: 'auto', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 5,
-            padding: '6px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+        <Botao variante="perigo" onClick={salvar} disabled={salvando} className="acn-kb-empurra">
           {salvando ? 'Salvando...' : 'Registrar e replanejar'}
-        </button>
+        </Botao>
       </div>
     </div>
   );
@@ -150,14 +155,14 @@ function JanelaVencidasObrigatoria({ tarefas, currentUser, onMudou }) {
   if (!minhas.length) return null;
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 560, width: '95vw', maxHeight: '85vh', overflowY: 'auto' }}>
-        <div className="modal-title" style={{ color: '#dc2626' }}>
-          ⚠️ {minhas.length} tarefa(s) sua(s) vencida(s) no Financeiro
+      <div className="modal-box acn-modal-cadastro acn-kb-jan acn-kb-jan-vencidas" role="dialog" aria-label="Tarefas vencidas">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiAlertOutline} size={16} /> {minhas.length} tarefa(s) sua(s) vencida(s) no Financeiro</span>
         </div>
-        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-          Antes de continuar, registre o motivo do atraso e uma nova data de conclusão de cada uma.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="acn-modal-corpo">
+          <div className="acn-ajuda">
+            Antes de continuar, registre o motivo do atraso e uma nova data de conclusão de cada uma.
+          </div>
           {minhas.map(a => <CartaoVencida key={a.tarefa.id} tarefa={a.tarefa} currentUser={currentUser} onResolvida={onMudou} />)}
         </div>
       </div>
@@ -172,33 +177,31 @@ function PainelAvisos({ tarefas, currentUser, isAdmin, onClose }) {
   const listaBase = isAdmin ? todos : meus;
   const porTipo = (tipo) => listaBase.filter(a => a.tipo === tipo);
   const LABEL = { amanha: 'Vencem amanhã', hoje: 'Vencem hoje', vencida: 'Vencidas' };
-  const COR = { amanha: '#b45309', hoje: '#b45309', vencida: '#dc2626' };
+  const FAMILIA = { amanha: 'atencao', hoje: 'atencao', vencida: 'erro' };
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 3100, display: 'flex', justifyContent: 'flex-end' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,.35)' }} onClick={onClose} />
-      <div style={{ position: 'relative', width: 440, maxWidth: '100vw', height: '100%', background: '#f8fafc',
-        boxShadow: '-4px 0 20px rgba(0,0,0,.15)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 16px', background: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Avisos — Financeiro</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>
+    <div className="acn-kb-lateral" role="dialog" aria-label="Avisos — Financeiro">
+      <div className="acn-kb-lateral-fundo" onClick={onClose} />
+      <div className="acn-kb-lateral-caixa">
+        <div className="acn-kb-lateral-cab">
+          <div className="acn-kb-cresce">
+            <div className="acn-kb-lateral-titulo">Avisos — Financeiro</div>
+            <div className="acn-ajuda">
               {isAdmin ? 'Toda a equipe' : 'Suas tarefas'} · {listaBase.length ? `${listaBase.length} aviso(s)` : 'nada pendente'}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#64748b' }}>✕</button>
+          <Botao variante="discreto" pequeno icone={mdiClose} aria-label="Fechar" title="Fechar" onClick={onClose} />
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="acn-kb-lateral-corpo">
           {listaBase.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 11, padding: 20 }}>Nada por aqui.</div>
+            <div className="acn-kb-vazio">Nada por aqui.</div>
           )}
           {['vencida', 'hoje', 'amanha'].map(tipo => porTipo(tipo).length > 0 && (
-            <div key={tipo}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: COR[tipo], textTransform: 'uppercase', marginBottom: 4 }}>{LABEL[tipo]}</div>
+            <div key={tipo} className="acn-kb-aviso-grupo">
+              <div className="acn-quadro-titulo" data-acn-familia={FAMILIA[tipo]}>{LABEL[tipo]}</div>
               {porTipo(tipo).map(a => (
-                <div key={a.tarefa.id} style={{ border: '1px solid #e2e8f0', borderLeft: `3px solid ${COR[tipo]}`, borderRadius: 6,
-                  padding: '6px 10px', background: '#fff', marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{a.tarefa.titulo}</div>
-                  <div style={{ fontSize: 9, color: '#64748b' }}>
+                <div key={a.tarefa.id} className="acn-kb-aviso" data-acn-familia={FAMILIA[tipo]}>
+                  <div className="acn-kb-nome">{a.tarefa.titulo}</div>
+                  <div className="acn-ajuda">
                     {a.tarefa.responsavel_nome || 'sem responsável'} · vencimento {fmtDt(a.tarefa.data_vencimento)}
                     {tipo === 'vencida' ? ` · ${a.dias} dia(s) de atraso` : ''}
                   </div>
@@ -280,30 +283,29 @@ function AnexosTarefaFinanceiro({ tarefaId, currentUser }) {
   };
 
   return (
-    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 9, marginBottom: 10 }}>
-      <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
+    <div className="acn-quadro">
+      <div className="acn-quadro-titulo">
         Anexos ({lista.length})
-      </label>
+      </div>
       {erroLeitura && (
         <Faixa tom="erro" acao={<Botao pequeno onClick={carregar}>Tentar de novo</Botao>}>
           Não foi possível ler os anexos desta tarefa ({erroLeitura}).
         </Faixa>
       )}
       {lista.map(a => (
-        <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, marginBottom: 3 }}>
-          <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, color: '#0f766e', textDecoration: 'none' }}>
-            📎 {a.nome} <span style={{ color: '#94a3b8' }}>{fmtTam(a.tamanho)}</span>
+        <div key={a.id} className="acn-kb-anexo">
+          <a href={a.url} target="_blank" rel="noopener noreferrer" className="acn-kb-anexo-link">
+            <Icone path={mdiPaperclip} size={14} /> {a.nome} <span className="acn-ajuda">{fmtTam(a.tamanho)}</span>
           </a>
-          <span style={{ fontSize: 8.5, color: '#94a3b8' }}>{a.criado_por_nome}</span>
+          <span className="acn-ajuda">{a.criado_por_nome}</span>
           {a.criado_por === currentUser?.email && (
-            <button onClick={() => apagar(a)} title="Apagar"
-              style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 10 }}>✕</button>
+            <Botao variante="perigo-sec" pequeno icone={mdiClose} onClick={() => apagar(a)} title="Apagar" aria-label="Apagar" />
           )}
         </div>
       ))}
-      <input ref={entrada} type="file" multiple onChange={subir} disabled={subindo}
-        style={{ fontSize: 10, marginTop: 5 }} />
-      {subindo && <div style={{ fontSize: 9, color: '#0f766e' }}>Subindo...</div>}
+      <input ref={entrada} type="file" multiple onChange={subir} disabled={subindo} className="acn-kb-arquivo"
+        aria-label="Anexar arquivos" />
+      {subindo && <div className="acn-txt-ok">Subindo...</div>}
     </div>
   );
 }
@@ -365,99 +367,98 @@ function ModalTarefa({ tarefa, tipos = [], currentUser, onClose, onSalvo }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 460, width: '95vw' }}>
-        <div className="modal-title">{editando ? 'Editar tarefa' : '+ Nova tarefa'}</div>
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Título *</label>
-          <input className="acn-input" style={{ width: '100%', boxSizing: 'border-box' }} value={titulo}
-            onChange={e => setTitulo(e.target.value)} autoFocus />
+      <div className="modal-box acn-modal-cadastro acn-kb-jan acn-kb-tarefa" role="dialog" aria-label={editando ? 'Editar tarefa' : 'Nova tarefa'}>
+        <div className="acn-modal-cab">
+          <span className="modal-title">{editando ? 'Editar tarefa' : '+ Nova tarefa'}</span>
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Descrição</label>
-          <textarea className="acn-input" rows={3} style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box' }}
-            value={descricao} onChange={e => setDescricao(e.target.value)} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Responsável</label>
-            <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="financeiro" />
+        <div className="acn-modal-corpo acn-form-cheio">
+          <div className="form-group">
+            <label className="acn-label" htmlFor="kb-titulo">Título *</label>
+            <input id="kb-titulo" className="acn-input" value={titulo}
+              onChange={e => setTitulo(e.target.value)} autoFocus />
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Vencimento</label>
-            <input type="date" className="acn-input" style={{ width: '100%', boxSizing: 'border-box' }}
-              value={vencimento || ''} onChange={e => setVencimento(e.target.value)} />
+          <div className="form-group">
+            <label className="acn-label" htmlFor="kb-desc">Descrição</label>
+            <textarea id="kb-desc" className="acn-input" rows={3}
+              value={descricao} onChange={e => setDescricao(e.target.value)} />
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Tipo</label>
-            <select className="acn-input" style={{ width: '100%', boxSizing: 'border-box' }}
-              value={tipoId} onChange={e => setTipoId(e.target.value)}>
-              <option value="">— sem tipo —</option>
-              {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 3 }}>Repete</label>
-            <select className="acn-input" style={{ width: '100%', boxSizing: 'border-box' }}
-              value={recorrencia} onChange={e => setRecorrencia(e.target.value)}>
-              {RECORRENCIAS.map(r => <option key={r.valor} value={r.valor}>{r.rotulo}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {recorrencia && (
-          <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 6, padding: '7px 10px', marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: '#0f766e' }}>
-              Ao concluir esta tarefa, a próxima nasce sozinha
-              {vencimento ? <> para <b>{fmtDt(proximaData(vencimento, recorrencia))}</b></> : null},
-              com o mesmo responsável. Dá para trocar o responsável em qualquer ocorrência.
+          <div className="acn-kb-grade">
+            <div className="form-group">
+              <label className="acn-label">Responsável</label>
+              <ColaboradorSelect value={responsavel} onChange={setResponsavel} incluirUsuariosDaAba="financeiro" />
             </div>
-            {editando && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontSize: 10, cursor: 'pointer', color: '#0f766e' }}>
-                <input type="checkbox" checked={recAtiva} onChange={e => setRecAtiva(e.target.checked)} />
-                Continuar repetindo — desmarque para encerrar a corrente depois desta
-              </label>
-            )}
+            <div className="form-group">
+              <label className="acn-label" htmlFor="kb-venc">Vencimento</label>
+              <input id="kb-venc" type="date" className="acn-input"
+                value={vencimento || ''} onChange={e => setVencimento(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="acn-label" htmlFor="kb-tipo">Tipo</label>
+              <select id="kb-tipo" className="acn-input"
+                value={tipoId} onChange={e => setTipoId(e.target.value)}>
+                <option value="">— sem tipo —</option>
+                {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="acn-label" htmlFor="kb-rep">Repete</label>
+              <select id="kb-rep" className="acn-input"
+                value={recorrencia} onChange={e => setRecorrencia(e.target.value)}>
+                {RECORRENCIAS.map(r => <option key={r.valor} value={r.valor}>{r.rotulo}</option>)}
+              </select>
+            </div>
           </div>
-        )}
 
-        {/* Observações e anexos só depois que a tarefa existe: precisam do id */}
-        {editando && (
-          <>
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 9, marginBottom: 9 }}>
-              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 4 }}>
-                Observações ({obs.length})
-              </label>
-              <div style={{ maxHeight: 120, overflowY: 'auto', marginBottom: 6 }}>
-                {obs.length === 0 && <div style={{ fontSize: 10, color: '#94a3b8' }}>Nenhuma anotação ainda.</div>}
-                {obs.map((o, i) => (
-                  <div key={i} style={{ fontSize: 10, borderLeft: '2px solid #e2e8f0', paddingLeft: 7, marginBottom: 5 }}>
-                    <div style={{ color: '#0f172a' }}>{o.texto}</div>
-                    <div style={{ fontSize: 8.5, color: '#94a3b8' }}>
-                      {o.usuario} · {o.hora ? new Date(o.hora).toLocaleString('pt-BR') : ''}
+          {recorrencia && (
+            <div className="acn-quadro tom-info">
+              <div>
+                Ao concluir esta tarefa, a próxima nasce sozinha
+                {vencimento ? <> para <b>{fmtDt(proximaData(vencimento, recorrencia))}</b></> : null},
+                com o mesmo responsável. Dá para trocar o responsável em qualquer ocorrência.
+              </div>
+              {editando && (
+                <label className="acn-cad-check">
+                  <input type="checkbox" checked={recAtiva} onChange={e => setRecAtiva(e.target.checked)} />
+                  Continuar repetindo — desmarque para encerrar a corrente depois desta
+                </label>
+              )}
+            </div>
+          )}
+
+          {/* Observações e anexos só depois que a tarefa existe: precisam do id */}
+          {editando && (
+            <>
+              <div className="acn-quadro">
+                <div className="acn-quadro-titulo">
+                  Observações ({obs.length})
+                </div>
+                <div className="acn-kb-obs-lista">
+                  {obs.length === 0 && <div className="acn-ajuda">Nenhuma anotação ainda.</div>}
+                  {obs.map((o, i) => (
+                    <div key={i} className="acn-kb-obs">
+                      <div>{o.texto}</div>
+                      <div className="acn-ajuda">
+                        {o.usuario} · {o.hora ? new Date(o.hora).toLocaleString('pt-BR') : ''}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <div className="acn-kb-linha">
+                  <input className="acn-input acn-kb-cresce" value={novaObs}
+                    onChange={e => setNovaObs(e.target.value)} onKeyDown={e => e.key === 'Enter' && anotar()}
+                    aria-label="Nova anotação" placeholder="anotar alguma coisa nesta tarefa" />
+                  <Botao onClick={anotar} disabled={!novaObs.trim()}>Anotar</Botao>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input className="acn-input" style={{ flex: 1 }} value={novaObs}
-                  onChange={e => setNovaObs(e.target.value)} onKeyDown={e => e.key === 'Enter' && anotar()}
-                  placeholder="anotar alguma coisa nesta tarefa" />
-                <button onClick={anotar} disabled={!novaObs.trim()}
-                  style={{ background: '#475569', color: '#fff', border: 'none', borderRadius: 5,
-                    padding: '6px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Anotar</button>
-              </div>
-            </div>
-            <AnexosTarefaFinanceiro tarefaId={tarefa.id} currentUser={currentUser} />
-          </>
-        )}
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #d1d5db',
-            borderRadius: 5, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
-          <button onClick={salvar} disabled={salvando} style={{ background: '#0f766e', color: '#fff', border: 'none',
-            borderRadius: 5, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              <AnexosTarefaFinanceiro tarefaId={tarefa.id} currentUser={currentUser} />
+            </>
+          )}
+        </div>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Cancelar</Botao>
+          <Botao variante="primario" onClick={salvar} disabled={salvando}>
             {salvando ? 'Salvando...' : editando ? 'Salvar' : 'Criar tarefa'}
-          </button>
+          </Botao>
         </div>
       </div>
     </div>
@@ -490,31 +491,31 @@ function ModalTiposTarefa({ tipos, currentUser, onClose, onMudou }) {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-box" style={{ maxWidth: 420, width: '95vw' }}>
-        <div className="modal-title">🏷️ Tipos de tarefa do Financeiro</div>
-        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 10 }}>
-          Guia, conciliação, folha, balanço — o que o setor precisar. Serve para agrupar e achar depois.
+      <div className="modal-box acn-modal-cadastro acn-kb-jan acn-kb-tipos" role="dialog" aria-label="Tipos de tarefa do Financeiro">
+        <div className="acn-modal-cab">
+          <span className="modal-title"><Icone path={mdiTagOutline} size={16} /> Tipos de tarefa do Financeiro</span>
         </div>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-          <input className="acn-input" style={{ flex: 1 }} value={novo} autoFocus
-            onChange={e => setNovo(e.target.value)} onKeyDown={e => e.key === 'Enter' && criar()}
-            placeholder="ex.: Guia de imposto" />
-          <button onClick={criar} disabled={salvando || !novo.trim()}
-            style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 5,
-              padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Adicionar</button>
+        <div className="acn-modal-corpo">
+          <div className="acn-ajuda">
+            Guia, conciliação, folha, balanço — o que o setor precisar. Serve para agrupar e achar depois.
+          </div>
+          <div className="acn-kb-linha">
+            <input className="acn-input acn-kb-cresce" value={novo} autoFocus
+              onChange={e => setNovo(e.target.value)} onKeyDown={e => e.key === 'Enter' && criar()}
+              aria-label="Novo tipo" placeholder="ex.: Guia de imposto" />
+            <Botao variante="primario" onClick={criar} disabled={salvando || !novo.trim()}>Adicionar</Botao>
+          </div>
+          {tipos.length === 0
+            ? <div className="acn-kb-vazio">Nenhum tipo cadastrado ainda.</div>
+            : tipos.map(t => (
+              <div key={t.id} className="acn-kb-tipo-linha">
+                <span className="acn-kb-cresce">{t.nome}</span>
+                <Botao variante="perigo-sec" pequeno onClick={() => desligar(t)}>tirar</Botao>
+              </div>
+            ))}
         </div>
-        {tipos.length === 0
-          ? <div style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', padding: 12 }}>Nenhum tipo cadastrado ainda.</div>
-          : tipos.map(t => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '1px solid #f1f5f9' }}>
-              <span style={{ flex: 1, fontSize: 11 }}>{t.nome}</span>
-              <button onClick={() => desligar(t)} style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px',
-                border: '1px solid #fca5a5', borderRadius: 4, background: '#fff', color: '#dc2626', cursor: 'pointer' }}>tirar</button>
-            </div>
-          ))}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-          <button onClick={onClose} style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #d1d5db',
-            borderRadius: 5, padding: '7px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Fechar</button>
+        <div className="acn-modal-rodape">
+          <Botao onClick={onClose}>Fechar</Botao>
         </div>
       </div>
     </div>
@@ -537,30 +538,28 @@ function AgendaTarefas({ tarefas, nomeTipo, onEditar }) {
     .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   if (!pendentes.length && !semData.length) {
-    return <div style={{ textAlign: 'center', padding: 30, color: '#94a3b8', fontSize: 11 }}>Nada em aberto na agenda.</div>;
+    return <div className="acn-kb-vazio">Nada em aberto na agenda.</div>;
   }
   return (
     <div>
       {[...grupos.entries()].map(([mes, lista]) => (
-        <div key={mes} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#0f172a', textTransform: 'capitalize', marginBottom: 6 }}>
-            {nomeMes(mes)} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({lista.length})</span>
+        <div key={mes} className="acn-kb-mes">
+          <div className="acn-kb-mes-titulo">
+            {nomeMes(mes)} <span className="acn-ajuda">({lista.length})</span>
           </div>
           {lista.map(t => {
             const dias = diasAte(t.data_vencimento);
-            const cor = dias < 0 ? '#dc2626' : dias <= 1 ? '#b45309' : '#64748b';
+            const familia = dias < 0 ? 'erro' : dias <= 1 ? 'atencao' : 'neutro';
             return (
-              <div key={t.id} onClick={() => onEditar(t)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', background: '#fff',
-                  border: '1px solid #e2e8f0', borderLeft: `3px solid ${cor}`, borderRadius: 6, marginBottom: 5, cursor: 'pointer' }}>
-                <div style={{ width: 62, fontSize: 10, fontWeight: 800, color: cor }}>{fmtDt(t.data_vencimento)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700 }}>{t.titulo}</div>
-                  <div style={{ fontSize: 9, color: '#64748b' }}>
+              <div key={t.id} onClick={() => onEditar(t)} className="acn-kb-agenda-item" data-acn-familia={familia}>
+                <div className={'acn-kb-agenda-data ' + (dias < 0 ? 'acn-txt-erro' : dias <= 1 ? 'acn-txt-atencao' : 'acn-ajuda')}>{fmtDt(t.data_vencimento)}</div>
+                <div className="acn-kb-cresce">
+                  <div className="acn-kb-nome">{t.titulo}</div>
+                  <div className="acn-ajuda">
                     {[nomeTipo(t.tipo_id), t.responsavel_nome, rotuloRecorrencia(t.recorrencia)].filter(Boolean).join(' · ') || '—'}
                   </div>
                 </div>
-                <span style={{ fontSize: 9, color: '#94a3b8' }}>{t.etapa}</span>
+                <span className="acn-ajuda">{t.etapa}</span>
               </div>
             );
           })}
@@ -568,12 +567,10 @@ function AgendaTarefas({ tarefas, nomeTipo, onEditar }) {
       ))}
       {semData.length > 0 && (
         <div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', marginBottom: 6 }}>Sem data marcada ({semData.length})</div>
+          <div className="acn-kb-mes-titulo acn-ajuda">Sem data marcada ({semData.length})</div>
           {semData.map(t => (
-            <div key={t.id} onClick={() => onEditar(t)}
-              style={{ padding: '6px 10px', background: '#fff', border: '1px dashed #e2e8f0', borderRadius: 6,
-                marginBottom: 5, cursor: 'pointer', fontSize: 11 }}>
-              {t.titulo} <span style={{ fontSize: 9, color: '#94a3b8' }}>· {t.responsavel_nome || 'sem responsável'}</span>
+            <div key={t.id} onClick={() => onEditar(t)} className="acn-kb-agenda-item sem-data">
+              {t.titulo} <span className="acn-ajuda">· {t.responsavel_nome || 'sem responsável'}</span>
             </div>
           ))}
         </div>
@@ -588,56 +585,49 @@ function CartaoTarefa({ tarefa, tipo, onEditar, onMover, onExcluir, podeExcluir 
   const vencida = tarefa.etapa !== 'Concluído' && dias != null && dias < 0;
   const urgente = tarefa.etapa !== 'Concluído' && dias != null && dias <= 1 && dias >= 0;
   const idx = ETAPAS.indexOf(tarefa.etapa);
+  // a lateral do cartão: vermelha se vencida, âmbar se vence hoje ou amanhã, senão a cor da etapa
+  const familia = vencida ? 'erro' : urgente ? 'atencao' : FAMILIA_ETAPA[tarefa.etapa];
   return (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderLeft: `3px solid ${vencida ? '#dc2626' : urgente ? '#f59e0b' : COR_ETAPA[tarefa.etapa]}`,
-      borderRadius: 6, padding: '8px 10px', marginBottom: 8, cursor: 'pointer' }}
-      onClick={() => onEditar(tarefa)}>
-      <div style={{ fontWeight: 700, fontSize: 11, color: '#0f172a' }}>{tarefa.titulo}</div>
-      {tarefa.descricao && <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>{tarefa.descricao.slice(0, 90)}</div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+    <div className="acn-kb-card" data-acn-familia={familia} onClick={() => onEditar(tarefa)}>
+      <div className="acn-kb-nome">{tarefa.titulo}</div>
+      {tarefa.descricao && <div className="acn-ajuda">{tarefa.descricao.slice(0, 90)}</div>}
+      <div className="acn-kb-meta">
         {tipo && (
-          <span style={{ fontSize: 9, background: '#eef2ff', color: '#4338ca', borderRadius: 8, padding: '1px 7px', fontWeight: 700 }}>
-            🏷️ {tipo}
-          </span>
+          <Selo familia="marca" ponto={false}><Icone path={mdiTagOutline} size={12} /> {tipo}</Selo>
         )}
         {tarefa.recorrencia && (
-          <span title={`Ao concluir, a próxima já nasce (${rotuloRecorrencia(tarefa.recorrencia).toLowerCase()})`}
-            style={{ fontSize: 9, background: '#f0fdfa', color: '#0f766e', borderRadius: 8, padding: '1px 7px', fontWeight: 700 }}>
-            🔁 {rotuloRecorrencia(tarefa.recorrencia)}
-          </span>
+          <Selo familia="ok" ponto={false} title={`Ao concluir, a próxima já nasce (${rotuloRecorrencia(tarefa.recorrencia).toLowerCase()})`}>
+            <Icone path={mdiRepeat} size={12} /> {rotuloRecorrencia(tarefa.recorrencia)}
+          </Selo>
         )}
         {tarefa.responsavel_nome && (
-          <span style={{ fontSize: 9, background: '#f1f5f9', color: '#475569', borderRadius: 8, padding: '1px 7px' }}>
-            👤 {tarefa.responsavel_nome}
-          </span>
+          <Tag><Icone path={mdiAccountOutline} size={12} /> {tarefa.responsavel_nome}</Tag>
         )}
         {(tarefa.observacoes?.length > 0) && (
-          <span style={{ fontSize: 9, color: '#64748b' }}>💬 {tarefa.observacoes.length}</span>
+          <span className="acn-ajuda acn-kb-icone-texto"><Icone path={mdiCommentOutline} size={13} /> {tarefa.observacoes.length}</span>
         )}
         {tarefa.data_vencimento && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: vencida ? '#dc2626' : urgente ? '#b45309' : '#64748b' }}>
-            {vencida ? `⚠️ venceu ${fmtDt(tarefa.data_vencimento)}` : `📅 ${fmtDt(tarefa.data_vencimento)}`}
+          <span className={'acn-kb-icone-texto ' + (vencida ? 'acn-txt-erro' : urgente ? 'acn-txt-atencao' : 'acn-ajuda')}>
+            {vencida
+              ? <><Icone path={mdiAlertOutline} size={13} /> {`venceu ${fmtDt(tarefa.data_vencimento)}`}</>
+              : <><Icone path={mdiCalendarOutline} size={13} /> {fmtDt(tarefa.data_vencimento)}</>}
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 4, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+      <div className="acn-kb-acoes" onClick={e => e.stopPropagation()}>
         {idx > 0 && (
-          <button onClick={() => onMover(tarefa, ETAPAS[idx - 1])}
-            style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}>
-            ← {ETAPAS[idx - 1]}
-          </button>
+          <Botao pequeno icone={mdiArrowLeft} onClick={() => onMover(tarefa, ETAPAS[idx - 1])}>
+            {ETAPAS[idx - 1]}
+          </Botao>
         )}
         {idx < ETAPAS.length - 1 && (
-          <button onClick={() => onMover(tarefa, ETAPAS[idx + 1])}
-            style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', border: 'none', borderRadius: 4, background: COR_ETAPA[ETAPAS[idx + 1]], color: '#fff', cursor: 'pointer' }}>
-            {ETAPAS[idx + 1]} →
-          </button>
+          <Botao pequeno variante="primario" onClick={() => onMover(tarefa, ETAPAS[idx + 1])}>
+            {ETAPAS[idx + 1]} <Icone path={mdiArrowRight} size={15} />
+          </Botao>
         )}
         {podeExcluir && (
-          <button onClick={() => onExcluir(tarefa)}
-            style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, padding: '2px 8px', border: '1px solid #fca5a5', borderRadius: 4, background: '#fff', color: '#dc2626', cursor: 'pointer' }}>
-            🗑
-          </button>
+          <Botao pequeno variante="perigo-sec" icone={mdiTrashCanOutline} className="acn-kb-empurra"
+            title="Excluir" aria-label="Excluir" onClick={() => onExcluir(tarefa)} />
         )}
       </div>
     </div>
@@ -662,7 +652,6 @@ export default function FinanceiroKanban({ currentUser }) {
   // isso não pode exigir uma publicação nova.
   const [veTudo, setVeTudo] = useState(false);
   const isAdmin = veTudo;
-
   // Etapa 7.48 (06/10/2026): leitura que falha não pode parecer "nenhuma tarefa" nem "você só vê as suas".
   const [erroLeitura, setErroLeitura] = useState('');
   const [erroPermissao, setErroPermissao] = useState('');
@@ -755,39 +744,29 @@ export default function FinanceiroKanban({ currentUser }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>📋 Tarefas do Financeiro</div>
-        <span style={{ fontSize: 10, color: '#64748b', flex: 1 }}>
+      <div className="acn-kb-cab">
+        <div className="acn-kb-titulo"><Icone path={mdiClipboardTextOutline} size={18} /> Tarefas do Financeiro</div>
+        <span className="acn-ajuda acn-kb-cresce">
           {veTudo ? 'você vê o quadro inteiro' : 'você vê as tarefas de que é responsável'}
         </span>
         {veTudo && responsaveis.length > 1 && (
           <select value={filtroResp} onChange={e => setFiltroResp(e.target.value)} aria-label="Filtrar por responsável"
-            style={{ fontSize: 10, padding: '5px 7px', border: '1px solid #d1d5db', borderRadius: 6 }}>
+            className="acn-input acn-cc-filtro">
             <option value="">Responsável: todos</option>
             {responsaveis.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         )}
-        <button onClick={() => setVista(v => v === 'quadro' ? 'agenda' : 'quadro')}
-          style={{ background: '#fff', color: '#475569', border: '1px solid #d1d5db', borderRadius: 6,
-            padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-          {vista === 'quadro' ? '📅 Agenda' : '📋 Quadro'}
-        </button>
-        <button onClick={() => setModalTipos(true)}
-          style={{ background: '#fff', color: '#475569', border: '1px solid #d1d5db', borderRadius: 6,
-            padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-          🏷️ Tipos
-        </button>
-        <button onClick={() => setPainelAvisos(true)}
-          style={{ background: totalAvisos ? '#fef3c7' : '#fff', color: totalAvisos ? '#b45309' : '#475569',
-            border: `1px solid ${totalAvisos ? '#fcd34d' : '#d1d5db'}`, borderRadius: 6, padding: '6px 12px',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-          🔔 Avisos{totalAvisos ? ` (${totalAvisos})` : ''}
-        </button>
-        <button onClick={() => setModalTarefa({})}
-          style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+        <Botao icone={vista === 'quadro' ? mdiCalendarMonthOutline : mdiClipboardTextOutline}
+          onClick={() => setVista(v => v === 'quadro' ? 'agenda' : 'quadro')}>
+          {vista === 'quadro' ? 'Agenda' : 'Quadro'}
+        </Botao>
+        <Botao icone={mdiTagOutline} onClick={() => setModalTipos(true)}>Tipos</Botao>
+        <Botao icone={mdiBellOutline} className={totalAvisos ? 'acn-kb-avisos-tem' : ''} onClick={() => setPainelAvisos(true)}>
+          Avisos{totalAvisos ? ` (${totalAvisos})` : ''}
+        </Botao>
+        <Botao variante="primario" onClick={() => setModalTarefa({})}>
           + Nova tarefa
-        </button>
+        </Botao>
       </div>
 
       {(erroLeitura || erroPermissao) && (
@@ -799,21 +778,21 @@ export default function FinanceiroKanban({ currentUser }) {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>Carregando...</div>
+        <div className="acn-kb-vazio">Carregando...</div>
       ) : vista === 'agenda' ? (
         <AgendaTarefas tarefas={visiveis} nomeTipo={nomeTipo} onEditar={setModalTarefa} />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${ETAPAS.length}, 1fr)`, gap: 12 }}>
+        <div className="acn-kb-quadro">
           {ETAPAS.map(etapa => {
             const doEtapa = visiveis.filter(t => t.etapa === etapa);
             return (
-              <div key={etapa} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, minHeight: 200 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 99, background: COR_ETAPA[etapa] }} />
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>{etapa}</span>
-                  <span style={{ fontSize: 10, color: '#94a3b8' }}>({doEtapa.length})</span>
+              <div key={etapa} className="acn-kb-col" data-acn-familia={FAMILIA_ETAPA[etapa]}>
+                <div className="acn-kb-col-cab">
+                  <span className="acn-kb-ponto" />
+                  <span className="acn-kb-col-nome">{etapa}</span>
+                  <span className="acn-ajuda">({doEtapa.length})</span>
                 </div>
-                {doEtapa.length === 0 && <div style={{ fontSize: 10, color: '#cbd5e1', textAlign: 'center', padding: 10 }}>Vazio</div>}
+                {doEtapa.length === 0 && <div className="acn-kb-vazio">Vazio</div>}
                 {doEtapa.map(t => (
                   <CartaoTarefa key={t.id} tarefa={t} tipo={nomeTipo(t.tipo_id)} onEditar={setModalTarefa}
                     onMover={mover} onExcluir={excluir} podeExcluir={isAdmin} />
